@@ -14,7 +14,7 @@ What Weave depends on is the separation they describe: a durable contract layer
 that says what a capability means, a replaceable runtime layer that honours it,
 and a loop that owns neither. Whether the runtime package begins as the existing
 AgentFabric code or as a fresh implementation of the same contract is a decision
-for §12, and the architecture above it does not change either way.
+for §13, and the architecture above it does not change either way.
 
 Both are packages in this repository, not separate repositories and not separate
 release cycles. The boundary is a package boundary, enforced by import discipline
@@ -177,8 +177,8 @@ Weave defines the interfaces; adapters implement them.
 | Port | Responsibility | First adapter |
 | --- | --- | --- |
 | `CapabilityHost` | list, describe, invoke, propose, admit, revoke capabilities | `agentfabric` |
-| `DecisionLayer` | weight candidates against a state view | Jev |
-| `InferenceRouter` | select a model for a requested kind of inference | single-model stub |
+| `DecisionLayer` | weight candidates against a state view — one judgment site (§6) | Jev |
+| `InferenceGateway` | classify, route, execute, evaluate, and retry or escalate one inference request (§7) | single-model stub |
 | `ApprovalChannel` | request and receive human authority | CLI prompt |
 | `EvidenceSink` | persist traces, weights, outcomes | JSONL |
 | `Clock` | time, timeouts, deadlines | system clock |
@@ -248,7 +248,31 @@ does not yet exist. Cells are per-ref; candidates touching disjoint refs are
 always compatible. The declared effect vocabulary is the scheduler's lock table,
 which is the practical return on having a contract at all.
 
-## 6. Decision layer contract
+## 6. Judgment sites and the decision layer
+
+Jev is a model type, not a role. It is useful anywhere a fast, typed, bounded
+judgment is worth more than a slow essay, and the loop's weigher is only the
+most visible of those places. The runtime therefore has several **judgment
+sites**, each with its own typed contract, its own eval set, and its own default
+model tier:
+
+| Site | Judgment | Consumer |
+| --- | --- | --- |
+| Frontier weighing | which candidates advance the goal | the cycle (§5) |
+| Request classification | how hard is this inference, what does it need | the gateway (§7) |
+| Response evaluation | does this output meet the declared bar | the gateway (§7) |
+| Failure classification | contract ambiguity or implementation defect | extension stage 6 (§7) |
+| Match residue | which capability a desired operation means, when the typed diff is ambiguous | framing (§7) |
+| Payoff estimation | is this gap worth extending | the extension gate (§10) |
+
+Keeping these distinct matters more than the fact that one model type serves
+them. A site is a place where judgment is requested under a contract, scored
+against its own eval set, and routed on its own history. "Jev said so" is never
+an explanation; "the weighing site returned 0.8 with these candidates in view"
+is.
+
+The decision layer is the site the loop cannot run without, so its contract is
+specified here. The rest follow the same pattern.
 
 Typed in both directions, and stable across models.
 
@@ -283,7 +307,7 @@ Rules that keep this a contract rather than a prompt:
 - Uncertainty is a returnable answer. An abstaining decision layer yields
   clarification or observation, not a coin flip.
 - Every request, response, chosen frontier, and outcome is recorded. The record
-  is the eval corpus (§10).
+  is the eval corpus (§11).
 
 ## 7. Inference flow
 
@@ -294,7 +318,7 @@ Four inference roles, separated by what they may author and what they cost.
 | **Weighing** (the decision layer) | which of these candidates | every cycle | weights and uncertainty, nothing else |
 | **Framing** | what is this goal made of | goal opening, impasse | observations: subgoals, success criteria, open questions, desired operations |
 | **Working** | do this scoped thing | per action | the output its request declared |
-| **Extension** | contract, corpus, implementation | inside an extension thread | artifacts, admitted only by §8 gates |
+| **Extension** | contract, corpus, implementation | inside an extension thread | artifacts, admitted only by §9 gates |
 
 ### The two obvious flows are one dial
 
@@ -349,13 +373,90 @@ from free generation each time becomes a pile of synonyms — `text.summarise`,
 to provide. Near-duplicate search runs before any proposal, and extending an
 existing contract beats minting a sibling.
 
-### Weighing does not route
+### One action, one gateway
 
-The decision layer decides whether to infer and at what quality bar. The
-inference router turns (kind, quality bar, privacy, latency, budget) into a
-model, from eval history. Letting the weigher pick models couples it to
-providers and makes both unevaluable, and the decision layer's own strength —
-fast, typed, cheap judgment — is not model selection.
+`request_inference` is a single action kind. Whatever the loop wants — framing,
+working, extension drafting — it declares a request and the **inference gateway**
+does the rest. The gateway is its own module behind a port, not part of the loop
+and not part of the capability host.
+
+A request is typed and carries its own acceptance terms:
+
+```jsonc
+{
+  "kind": "framing",
+  "output_schema": { },
+  "quality_bar": "adequate",
+  "acceptance": { "checks": ["schema", "cites_state_refs"], "dimensions": ["faithfulness"] },
+  "constraints": { "privacy": "internal", "max_cost": 0.08, "deadline_ms": 4000 },
+  "correlation": "thread:…/cycle:…"
+}
+```
+
+Inside, the gateway runs a fixed pipeline:
+
+1. **Classify.** How hard is this request, what capability does it need, what is
+   the risk of a cheap attempt failing. A judgment site (§6).
+2. **Route.** Deterministic policy turns (kind, class, quality bar, privacy,
+   latency, budget) into a *routed unit* using recorded history.
+3. **Execute.** A provider adapter. The only place a vendor SDK appears.
+4. **Evaluate.** Deterministic checks first — schema, required fields, contract
+   validation, corpus runs where one exists. Model evaluation only for the
+   dimensions no deterministic check covers.
+5. **Decide.** Accept, retry with a tuned prompt, escalate to a stronger routed
+   unit, or fail. Failure is a legitimate return value.
+
+The pipeline emits one observation with the result, plus an evidence record of
+every attempt: routed units tried, evaluations, cost, latency, and why it
+stopped.
+
+### What keeps the gateway from becoming a second loop
+
+This is the real risk in putting retry and escalation behind one action. A
+component that classifies, acts, evaluates its own work, and tries again is an
+agent loop; the difference between it and Weave has to be structural, not
+stylistic.
+
+- **Bounded.** A fixed attempt ceiling and a fixed escalation ladder, plus the
+  request's own cost and deadline limits. No open-ended iteration.
+- **It may re-prompt, never re-scope.** Rewording, restructuring, or adding
+  format guidance is the gateway's business. Changing what is being asked, or
+  what would count as success, is the Weave loop's business and requires a new
+  action.
+- **Acceptance comes from the caller.** The gateway does not invent the bar it
+  grades against. Otherwise "success likelihood" is self-graded, and the tuning
+  loop optimizes for the grader rather than the goal.
+- **It degrades loudly.** If the bar is unreachable within the budget, the
+  gateway returns failure with its evidence. It never silently returns the best
+  of a bad set as though it had succeeded.
+- **The classifier is not itself classified.** Judgment sites declare a fixed
+  default tier, or there is no bottom to the regress.
+
+### Routing is an expected-cost decision
+
+The objective is not the cheapest token price. It is the lowest expected total
+cost of reaching the declared bar, retries and escalation included. A cheap unit
+that meets the bar 40% of the time and escalates the rest is more expensive than
+a mid unit that meets it 90% of the time — and the arithmetic is only available
+if per-site success rates are recorded.
+
+The routed unit is **(prompt template version × model × settings)**, not a model
+alone. Prompt changes shift success rates as much as model changes do, and a
+router that cannot see them will keep attributing one to the other.
+
+Two feedback channels tune it:
+
+- **Live evaluation**, immediate, per response, from the gateway's own checks.
+- **Outcome feedback**, delayed: did the action that consumed this inference
+  succeed, did the contract it drafted validate, did the implementation it wrote
+  go green. The correlation id on the request is what makes this joinable, and
+  this is the signal worth more.
+
+Two disciplines keep tuning honest. Prompt variants are promoted on a held-out
+slice, never on the traffic that selected them — the same trap as tests grading
+themselves. And classification is a gate, not a stage: skip it where a site has
+stable statistics for this shape of request, and spend it on novelty or when
+drift shows up in the live evaluations.
 
 ### Cost gate and how to settle the question
 
@@ -363,7 +464,7 @@ Framing is gated on enumeration coverage: run it when nothing binds above
 threshold, or at an impasse, not on arrival by reflex. Whether
 framing-on-arrival beats framing-on-demand is an empirical question, not an
 architectural one. Both are the same gate at different settings, so the answer
-comes from replay (§10) rather than from a rewrite.
+comes from replay (§11) rather than from a rewrite.
 
 ### Inference inside crystallization
 
@@ -396,7 +497,65 @@ A validated contract with a demonstrated-red corpus and no implementation is a
 legal registry state and a far better starting point the next time that gap
 recurs than nothing at all. Partial crystallization is a saving, not a waste.
 
-## 8. Extension is a thread, not a subroutine
+## 8. Inference below the capability boundary
+
+Judgment is not only the loop's business. A capability that classifies a
+document, extracts fields from unstructured text, or grades a draft needs a model
+inside its implementation. Three ways to allow that:
+
+1. Forbid it — capabilities stay deterministic. Clean, and it makes any operation
+   with a judgment step permanently uncrystallizable.
+2. Give resolvers direct gateway access through their context. Works, and hides
+   non-determinism inside implementation code where nothing declares it.
+3. **Make inference a capability.** A capability that needs judgment declares
+   `inference.request` in `depends_on`, and calls it through the host like any
+   other dependency.
+
+The third is the one that fits the contract model already inherited. Declared
+dependencies are audited, typed, and rejected when undeclared, so a capability
+cannot quietly acquire a model habit. Non-determinism becomes visible in the
+contract graph instead of buried in a resolver, which makes "which capabilities
+are model-backed" a query rather than an audit. And the composition rules that
+already exist do the enforcement.
+
+This needs one contract extension. The 0.1 effect vocabulary describes
+consequences to resources — discover, read, create, write, append, delete —
+and spending inference is none of those. It is a new kind of consequence: it
+costs money, it leaves a provider trace, and it may carry data outside a privacy
+boundary. That is exactly the condition 0.1 names for extending the contract
+rather than a resolver, so a 0.2 revision should add an `infer` effect. Grants
+then bound which principals may spend inference at all, and budget authority
+attaches to the grant rather than to implementation code.
+
+**One gateway, two doors.** The `inference.request` resolver and the Weave
+`InferenceGateway` port call the same module. Routing statistics, evals,
+budgets, and privacy rules are shared, and there is no second router living
+below the capability boundary with its own opinions.
+
+### Generative implementations and the crystallization ladder
+
+Once inference is reachable through a contract, an implementation may be a
+prompt plus a gateway call. That is legal, and it changes what admission
+evidence means:
+
+- Evidence is **distributional** — pass rate over N runs against the corpus at a
+  declared bar, not a single green run.
+- Maturity caps lower than a deterministic implementation can reach, and
+  regresses faster when observed reliability drops.
+- Routing prefers a deterministic implementation of the same contract whenever
+  one exists and meets the bar.
+
+This is the shape the vision's ladder actually takes. Frontier work runs as raw
+inference. The recurring part earns a contract and a corpus. The first admitted
+implementation may well be generative — cheap to produce, honest about its
+variance. A deterministic implementation then replaces it under the same
+contract, inheriting the same corpus as its admission evidence, and the
+generative one stays as fallback or is revoked.
+
+Nothing about that ladder requires the loop to know which rung a capability is
+on. The contract is the identity; the class of implementation is routing.
+
+## 9. Extension is a thread, not a subroutine
 
 Capability extension runs as ordinary actions in the same loop, on a thread with
 declared preconditions. It is therefore interleavable with goal work,
@@ -422,7 +581,7 @@ grows because the registry grew, not because the loop learned something.
 Three gates stay distinct throughout: generation, admission, and authority to
 execute. Admitting a capability grants no grant.
 
-## 9. When to extend at all
+## 10. When to extend at all
 
 Extension costs many inferences. A loop that crystallizes every gap spends its
 life building capabilities it uses once.
@@ -440,7 +599,7 @@ estimated extension cost. Both numbers are recorded and later checked against
 what the capability actually cost and saved. Getting this wrong is the most
 likely way for Weave to look busy and deliver nothing.
 
-## 10. Evidence and evaluation
+## 11. Evidence and evaluation
 
 Every consequential cycle is replayable: state view, candidates, weights,
 policy decisions, frontier, results, and the projection delta. Two uses:
@@ -454,11 +613,11 @@ policy decisions, frontier, results, and the projection delta. Two uses:
 
 The record exists for evaluation and accountability. It is not a growing prompt.
 
-## 11. What a capability host must provide
+## 12. What a capability host must provide
 
-Four requirements on whatever sits behind the capability host port. The current
+Five requirements on whatever sits behind the capability host port. The current
 AgentFabric has none of them, and they are the substance of the "concepts, not
-necessarily code" question in §12: inheriting the model is free, and these four
+necessarily code" question in §13: inheriting the model is free, and these four
 are the work either way. Each belongs below the port, not in the loop.
 
 1. **Substrate-neutral resolver context** (§2) and an out-of-process execution
@@ -470,6 +629,9 @@ are the work either way. Each belongs below the port, not in the loop.
    routing between implementations is empirical.
 4. **Evidence attached to admission.** Corpus revision, red observation, green
    run, sandbox report, approver, provenance.
+5. **Implementation classes.** Deterministic, composed, and generative
+   implementations of one contract, with distributional evidence and a routing
+   preference for the deterministic one (§8).
 
 The test corpus raises a boundary question deliberately left open: the *shape*
 of a test case is expressible purely in contract vocabulary and therefore argues
@@ -477,7 +639,7 @@ for the contract package; the runner, the held-out split, and the mutation
 policy are runtime. The recommendation is to keep both in the runtime package
 until a second runtime needs to read a corpus, then promote only the case shape.
 
-## 12. Inheriting AgentFabric
+## 13. Inheriting AgentFabric
 
 Two things are being inherited and they are separable.
 
@@ -486,7 +648,7 @@ typed input and output, declared effects, and declared authority. A resolver is
 disposable. A reference to a resource is not a locator, and holding one is not
 authority to act on it. A capability may exist unresolved. Failure codes are
 contract and messages are not. Composition is declared, not planned. Every claim
-in this document above §11 rests on that model, and none of it rests on the
+in this document above §12 rests on that model, and none of it rests on the
 existing code.
 
 **The code, an open decision.** The current implementation is roughly 4,000 lines
@@ -497,7 +659,7 @@ one implementation per contract, binds code at crystallisation with no admission
 gate, executes resolvers in-process with ambient authority, and discovers its
 catalogue by walking parent directories.
 
-The four requirements in §11 are the work regardless of which path is taken —
+The requirements in §12 are the work regardless of which path is taken —
 they are not repairs to existing code, they are missing subsystems. So the
 decision is narrower than it looks: adopting the code saves the contract
 validation, the grant and reference model, the catalogue and overlay handling,
@@ -548,7 +710,7 @@ Order of operations, with the symbol-level move map in
 
 What comes along working: the CLI, the MCP binding, `.fabric/` overlays,
 `agentfabric sync`, the harness skills, and the opportunities log Weave reads as
-gap evidence (§9). The Cursor hooks are that repository's own harness adapter;
+gap evidence (§10). The Cursor hooks are that repository's own harness adapter;
 keeping them is a separate decision.
 
 ### If it is not
@@ -560,14 +722,16 @@ existing suite's semantics, it has inherited the model faithfully. That corpus i
 worth keeping either way, because it is what makes "AgentSOP-compatible" a
 checkable claim rather than a compliment.
 
-## 13. Milestones
+## 14. Milestones
 
 - **M0 — loop.** Observation log, projection, state view, deterministic
   enumeration over a fixed catalogue behind a fake capability host, scripted
   decision layer, three action kinds (`invoke_capability`, `ask_user`,
   `complete`), evidence written. No inference, no extension.
 - **M1 — judgment.** Jev behind `DecisionLayer`, real weights, replay eval
-  harness, working inference as an action, concurrent frontier with effect locks.
+  harness, `request_inference` as an action behind a single-model gateway that
+  already records attempts and evaluations, concurrent frontier with effect
+  locks. Routing arrives when there is history to route on.
 - **M2 — gaps.** Framing inference and its coverage gate (§7), desired
   operations, the deterministic registry diff, and gap detection from decision
   inadequacy, inference-scope recurrence, and the host's opportunities log.
@@ -577,11 +741,11 @@ checkable claim rather than a compliment.
 - **M4 — crystallization.** Stages 5–8 behind the sandbox and an explicit human
   admission gate. One capability, end to end, from gap to admitted.
 
-The capability host decision (§12) and the resolver-context shape (§2) settle
+The capability host decision (§13) and the resolver-context shape (§2) settle
 before M3, because M3 is the first point at which generated artifacts reach the
 registry. M0 through M2 run against a fake host and do not force the decision.
 
-## 14. Open questions
+## 15. Open questions
 
 - **Goal scoping of grants.** A goal-scoped principal with grants derived from
   granted authority is the obvious model, but grant lifetime across threads and
@@ -596,8 +760,13 @@ registry. M0 through M2 run against a fake host and do not force the decision.
 - **Whether desired operations are state.** Framing emits them, the registry
   diff consumes them, and a gap may recur across goals. Whether they persist as
   first-class state with their own recurrence count, or stay transient
-  observations whose recurrence is recomputed, decides how gap thresholds (§9)
+  observations whose recurrence is recomputed, decides how gap thresholds (§10)
   are actually measured.
+- **Whether `inference.request` is one capability or several.** One contract with
+  a `kind` field is simplest; separate contracts per kind (`text.classify`,
+  `text.extract`) give the registry sharper types, better corpora, and better
+  routing statistics, at the cost of proliferation. This is the concrete form of
+  the next question.
 - **Where inference scope is declared.** A tightly scoped inference request looks
   like a capability contract with a non-deterministic implementation. Whether
   `request_inference` should literally be an AgentSOP capability is worth

@@ -42,9 +42,13 @@ A causally related sequence of actions and observations within a goal. Threads m
 
 The bounded, typed rendering of state handed to the decision layer for one cycle. A state view is derived from state; it is neither the observation log nor the projection, and it is budgeted so decision quality can be compared across models and across time.
 
+### Judgment site
+
+A place where the runtime requests a bounded, typed judgment under its own contract, scored against its own eval set and routed on its own history. Frontier weighing, request classification, response evaluation, failure classification, match residue, and payoff estimation are distinct sites. Jev is a model type that may serve any of them; name the site, not the model.
+
 ### Decision layer
 
-The fast, typed, uncertainty-aware mechanism that evaluates state against possible actions. Jev is the initial implementation. The decision layer proposes weights; it does not override policy.
+The judgment site that evaluates state against possible actions and returns weights. Jev is the initial model type behind it. The decision layer proposes weights; it does not select models and it does not override policy.
 
 ### Action candidate
 
@@ -70,9 +74,21 @@ The role an inference request plays, which determines its cost, frequency, and w
 
 A framing output describing an operation the goal appears to need: a verb, expected effects, and rough input and output shape. A desired operation is not a capability contract. It is matched against the capability registry by deterministic diff, producing a shortlist and a set of capability gaps.
 
-### Inference router
+### Inference gateway
 
-The deterministic component that selects a model and configuration for a requested kind of inference using eval results, quality requirements, cost, latency, privacy, context, and escalation risk.
+The module behind a single `request_inference` action that classifies a request, routes it, executes it, evaluates the response, and then accepts, retries, escalates, or fails. It is bounded: it may re-prompt but never re-scope, it grades against acceptance terms supplied by the caller, and it returns failure rather than silently lowering the bar.
+
+### Routed unit
+
+What routing actually selects: a prompt template version, a model, and its settings, together. Success statistics attach to the unit, because a prompt change moves them as much as a model change does.
+
+### Routing
+
+The deterministic selection step inside the gateway. It minimizes expected total cost of reaching the declared quality bar — retries and escalation included — using recorded per-site success rates, cost, latency, privacy, and context limits.
+
+### Generative implementation
+
+An implementation of a capability contract that is a prompt and a gateway call rather than deterministic code. Legal, admitted on distributional evidence, capped at lower maturity, and superseded by a deterministic implementation of the same contract when one meets the bar.
 
 ### Policy
 
@@ -177,5 +193,7 @@ The record of where a contract, test, or implementation came from, including sou
 - Say **weight**, not *confidence*, unless the value is explicitly calibrated as confidence.
 - Say **admit**, not *save*, when a capability passes into the registry.
 - Say **state view**, not *prompt* or *context*, for what the decision layer receives.
+- Say **judgment site**, not *Jev*, for a place the runtime asks for judgment. Jev is a model type.
+- Say **routed unit**, not *model*, for what routing selects.
 - Say **action candidate**, not *option*, for an enumerated, bound action.
 - Never use **deterministic** to describe generated tests; their execution is deterministic, while their authorship and correctness require evidence.
