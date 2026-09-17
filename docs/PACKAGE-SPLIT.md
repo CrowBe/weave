@@ -1,9 +1,17 @@
 # Package split: agentsop and agentfabric
 
-AgentFabric folds into this repository as `packages/agentfabric`, and the
-contract it honours separates out as `packages/agentsop`. The fold-in and the
-split are one piece of work; [ARCHITECTURE.md §11](../ARCHITECTURE.md) has the
-order of operations, and this document has the symbol-level move map.
+This document applies **if** the existing AgentFabric code is adopted as Weave's
+capability host. [ARCHITECTURE.md §12](../ARCHITECTURE.md) holds that decision
+and its recommendation; what follows is the symbol-level move map for the path
+where the answer is yes.
+
+On that path AgentFabric folds into this repository as `packages/agentfabric`,
+and the contract it honours separates out as `packages/agentsop`. The fold-in and
+the split are one piece of work.
+
+If the answer is no, the move map still describes the boundary a fresh contract
+package must draw — the split test below is about the contract, not about this
+particular implementation.
 
 AgentFabric today ships one distribution, with the Experimental 0.1 contract
 text and a demo catalogue sitting beside it in `agentsop/`. That arrangement

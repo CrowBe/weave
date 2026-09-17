@@ -9,9 +9,16 @@ narrowing of a decided architecture rather than an invention.
 
 ## 1. Three packages, one repository, one dependency direction
 
-AgentFabric folds into this repository as a package. It is not a separate
-repository and not a separate release cycle. The boundary is a package boundary,
-enforced by import discipline rather than by a repository wall.
+AgentSOP and AgentFabric are inherited as a model first and as code second.
+What Weave depends on is the separation they describe: a durable contract layer
+that says what a capability means, a replaceable runtime layer that honours it,
+and a loop that owns neither. Whether the runtime package begins as the existing
+AgentFabric code or as a fresh implementation of the same contract is a decision
+for §12, and the architecture above it does not change either way.
+
+Both are packages in this repository, not separate repositories and not separate
+release cycles. The boundary is a package boundary, enforced by import discipline
+rather than by a repository wall.
 
 ```
 packages/agentsop     contract: what a capability means, what a resolver must look like
@@ -90,18 +97,21 @@ goal, a cycle, or a state view, the fold-in has failed.
 The loop. Goal, state, cycle, candidate enumeration, decision layer, policy,
 scheduling, evidence, and the threads that extend the capability set.
 
-## 2. The resolver context is the load-bearing change
+## 2. The resolver context decides whether generated code is possible
 
-Today `ResolverContext` exposes `locator(ref) -> Path` and `workspace -> Path`.
-That single design choice forces two consequences:
+This is a constraint on the contract Weave adopts, not a migration order. It is
+stated early because it decides what Weave can do at M4, and because the
+existing implementation is the cautionary example: AgentFabric's
+`ResolverContext` exposes `locator(ref) -> Path` and `workspace -> Path`, and
+that one choice forces two consequences.
 
-1. The resolver contract shape cannot move into `agentsop` as written, because it
-   names a filesystem. A contract that mentions `Path` is not substrate-neutral.
-2. Resolvers must be trusted local Python, because they hold real paths and the
+1. The resolver shape cannot belong to the contract layer, because it names a
+   filesystem. A contract that mentions `Path` is not substrate-neutral.
+2. Resolvers must be trusted local code, because they hold real paths and the
    ambient authority of the host process.
 
-Both dissolve together. If the context is narrowed to operations expressed only
-in contract vocabulary —
+Both dissolve together. If the context is expressed only in contract
+vocabulary —
 
 ```python
 class ResolverContext(Protocol):
@@ -116,13 +126,14 @@ class ResolverContext(Protocol):
 — then the context becomes a boundary that can be served over a pipe. Sandboxing
 stops being a feature to build and becomes a deployment choice: run the resolver
 in a subprocess with no network and no filesystem, and answer its context calls
-from the fabric. The fabric mediates every effect because there is no other way
-for the resolver to reach anything.
+from the host. The host mediates every effect because there is no other route
+out of the process.
 
-This is a prerequisite for Weave, not a refinement. Weave generates
-implementations; generated code cannot be admitted into a process that holds
-ambient authority. Existing built-in resolvers can keep an in-process trusted
-tier, but the shape they are written against must be the narrow one.
+Weave generates implementations, and generated code cannot be admitted into a
+process holding ambient authority. So whichever code the capability host is
+built from, this is the shape it must present. Trusted built-in resolvers can
+keep an in-process tier; the shape they are written against is still the narrow
+one.
 
 ## 3. State
 
@@ -272,9 +283,120 @@ Rules that keep this a contract rather than a prompt:
 - Uncertainty is a returnable answer. An abstaining decision layer yields
   clarification or observation, not a coin flip.
 - Every request, response, chosen frontier, and outcome is recorded. The record
-  is the eval corpus (§9).
+  is the eval corpus (§10).
 
-## 7. Extension is a thread, not a subroutine
+## 7. Inference flow
+
+Four inference roles, separated by what they may author and what they cost.
+
+| Role | Question it answers | When | May author |
+| --- | --- | --- | --- |
+| **Weighing** (the decision layer) | which of these candidates | every cycle | weights and uncertainty, nothing else |
+| **Framing** | what is this goal made of | goal opening, impasse | observations: subgoals, success criteria, open questions, desired operations |
+| **Working** | do this scoped thing | per action | the output its request declared |
+| **Extension** | contract, corpus, implementation | inside an extension thread | artifacts, admitted only by §8 gates |
+
+### The two obvious flows are one dial
+
+A purely reactive flow — goal in, enumerate, weigh, act, repeat — is this machine
+with framing never running. A decomposition-first flow — goal in, deconstruct,
+describe the operations the goal wants, diff against the registry, crystallize
+the gaps, then act — is this machine with framing always running first.
+
+They are not competing architectures. **Framing is a candidate, not a stage.**
+The runtime enumerates `request_inference(kind=framing)` like anything else; the
+decision layer weighs it against doing the work directly. Its weight should rise
+when the candidate set is thin or uniformly low-weighted, and fall when a
+capability already binds the goal. "Append this line to my journal" must not buy
+a decomposition pass.
+
+Hardcoding the decomposition-first pipeline costs three things:
+
+- A mandatory planner ahead of the weigher is model control of the loop in a
+  pipeline costume. Its place is predictable, which makes it feel safe, but the
+  loop can no longer decline it.
+- It pays for framing before knowing whether the goal is one invocation.
+- "Return to step 2 for each subgoal" is a second scheduler inside the first.
+  Subgoals are threads on the same frontier, flat, under one goal budget, with
+  inherited authority that may be narrowed but never widened.
+
+### What the decomposition-first flow is right about
+
+Three mechanisms worth keeping, none of which requires a fixed pipeline.
+
+**Thin state starves enumeration.** A one-line goal binds almost no capability
+input, so the first cycle has nothing to weigh but clarification and framing.
+Framing's real job is to deepen state until enumeration has something to bind —
+not to produce a plan the runtime then executes.
+
+**Describe the wanted operations before failing at them.** Anticipatory gap
+detection beats discovering a gap by stalling on it.
+
+**A gap known early can be extended in parallel** with the goal work that does
+not depend on it.
+
+### Mapping desired operations to capabilities is retrieval, not inference
+
+Framing emits **desired operations** — a verb, expected effects, rough input and
+output shape — never capability documents. Turning those into a capability
+shortlist and a gap list is a typed diff against the registry: id and verb
+proximity, effect-set compatibility, input and output shape compatibility. Run
+it deterministically and hand the decision layer only the ambiguous residue.
+
+Two reasons. It is cheap and stable across runs. And a registry whose names come
+from free generation each time becomes a pile of synonyms — `text.summarise`,
+`text.summarize`, `doc.condense` — which destroys the thing the contract exists
+to provide. Near-duplicate search runs before any proposal, and extending an
+existing contract beats minting a sibling.
+
+### Weighing does not route
+
+The decision layer decides whether to infer and at what quality bar. The
+inference router turns (kind, quality bar, privacy, latency, budget) into a
+model, from eval history. Letting the weigher pick models couples it to
+providers and makes both unevaluable, and the decision layer's own strength —
+fast, typed, cheap judgment — is not model selection.
+
+### Cost gate and how to settle the question
+
+Framing is gated on enumeration coverage: run it when nothing binds above
+threshold, or at an impasse, not on arrival by reflex. Whether
+framing-on-arrival beats framing-on-demand is an empirical question, not an
+architectural one. Both are the same gate at different settings, so the answer
+comes from replay (§10) rather than from a rewrite.
+
+### Inference inside crystallization
+
+One rule holds across every stage: **inference authors, determinism admits.**
+Each stage pairs a generator with a checker, and no stage's generator is its own
+checker.
+
+| Stage | Inference | Deterministic check | Escalation |
+| --- | --- | --- | --- |
+| 1 verb | names the operation only if near-duplicate search finds nothing | id and effect validity | cheapest tier; decision layer weighs extend-existing against mint-new |
+| 2 contract | drafts the capability document | contract validation: schema, authority selectors, effect-set equality, acyclic dependencies | repair loop against the checker, cheap iterations, no human |
+| 3 corpus | N independent authorings from the contract alone | cases must be executable and typed | diversity across models and seeds; contradiction between authorings means the contract is incomplete, so return to stage 2 — never a vote |
+| 4 red | none | corpus must fail a placeholder implementation | a case that passes the placeholder tests nothing and is discarded |
+| 5 implementation | K candidates in parallel | none yet | cheapest tier gets first refusal; escalate on repeated red |
+| 6 validation | classifies failures only: contract ambiguity versus implementation defect | typecheck, corpus, held-out corpus, effect containment, resource limits | classification directs the next iteration; it can return work to stage 2 or 5 and can never turn a red run green |
+| 7 admission | may draft the evidence summary for the approver | evidence completeness | human or policy decides; inference has no vote |
+| 8 capture | none | registry write, digest change | next cycle enumerates differently |
+
+Three independence invariants make the evidence worth having:
+
+- Corpus authors never see an implementation.
+- Implementers never see the held-out split.
+- The classifier at stage 6 may redirect work but may not edit the corpus.
+
+### Abandonment is a partial result
+
+An extension thread can be abandoned at any stage — the goal completed another
+way, the budget ran out, the gap turned out to be a one-off. Keep the artifacts.
+A validated contract with a demonstrated-red corpus and no implementation is a
+legal registry state and a far better starting point the next time that gap
+recurs than nothing at all. Partial crystallization is a saving, not a waste.
+
+## 8. Extension is a thread, not a subroutine
 
 Capability extension runs as ordinary actions in the same loop, on a thread with
 declared preconditions. It is therefore interleavable with goal work,
@@ -300,7 +422,7 @@ grows because the registry grew, not because the loop learned something.
 Three gates stay distinct throughout: generation, admission, and authority to
 execute. Admitting a capability grants no grant.
 
-## 8. When to extend at all
+## 9. When to extend at all
 
 Extension costs many inferences. A loop that crystallizes every gap spends its
 life building capabilities it uses once.
@@ -318,7 +440,7 @@ estimated extension cost. Both numbers are recorded and later checked against
 what the capability actually cost and saved. Getting this wrong is the most
 likely way for Weave to look busy and deliver nothing.
 
-## 9. Evidence and evaluation
+## 10. Evidence and evaluation
 
 Every consequential cycle is replayable: state view, candidates, weights,
 policy decisions, frontier, results, and the projection delta. Two uses:
@@ -332,13 +454,15 @@ policy decisions, frontier, results, and the projection delta. Two uses:
 
 The record exists for evaluation and accountability. It is not a growing prompt.
 
-## 10. What AgentFabric must gain
+## 11. What a capability host must provide
 
-Weave needs four things the current fabric does not have. Each belongs in
-`agentfabric`, not in the loop.
+Four requirements on whatever sits behind the capability host port. The current
+AgentFabric has none of them, and they are the substance of the "concepts, not
+necessarily code" question in §12: inheriting the model is free, and these four
+are the work either way. Each belongs below the port, not in the loop.
 
-1. **Narrow resolver context** (§2) and an out-of-process execution tier for
-   untrusted implementations.
+1. **Substrate-neutral resolver context** (§2) and an out-of-process execution
+   tier for untrusted implementations.
 2. **Proposed and admitted as distinct states.** Today `crystallise` binds code
    immediately. Weave needs `propose(contract)`, `attach(implementation)`,
    `admit(evidence)`, and `revoke(reason)`, with maturity that can regress.
@@ -349,16 +473,44 @@ Weave needs four things the current fabric does not have. Each belongs in
 
 The test corpus raises a boundary question deliberately left open: the *shape*
 of a test case is expressible purely in contract vocabulary and therefore argues
-for `agentsop`; the runner, the held-out split, and the mutation policy are
-fabric. The recommendation is to keep both in `agentfabric` until a second
-runtime needs to read a corpus, then promote only the case shape.
+for the contract package; the runner, the held-out split, and the mutation
+policy are runtime. The recommendation is to keep both in the runtime package
+until a second runtime needs to read a corpus, then promote only the case shape.
 
-## 11. Folding AgentFabric in
+## 12. Inheriting AgentFabric
 
-AgentFabric exists today as its own repository, one distribution, with the
-Experimental 0.1 contract text and a demo catalogue beside it. The fold-in and
-the package split are the same piece of work, and the symbol-level move map is
-in [docs/PACKAGE-SPLIT.md](./docs/PACKAGE-SPLIT.md).
+Two things are being inherited and they are separable.
+
+**The model, inherited unconditionally.** A capability is a durable contract with
+typed input and output, declared effects, and declared authority. A resolver is
+disposable. A reference to a resource is not a locator, and holding one is not
+authority to act on it. A capability may exist unresolved. Failure codes are
+contract and messages are not. Composition is declared, not planned. Every claim
+in this document above §11 rests on that model, and none of it rests on the
+existing code.
+
+**The code, an open decision.** The current implementation is roughly 4,000 lines
+of dependency-free Python with a real test suite, a CLI, an MCP binding, a
+working grant model, and a fallback path that already records recurring
+implementation-level work as capability-gap evidence. Against that: it resolves
+one implementation per contract, binds code at crystallisation with no admission
+gate, executes resolvers in-process with ambient authority, and discovers its
+catalogue by walking parent directories.
+
+The four requirements in §11 are the work regardless of which path is taken —
+they are not repairs to existing code, they are missing subsystems. So the
+decision is narrower than it looks: adopting the code saves the contract
+validation, the grant and reference model, the catalogue and overlay handling,
+and the bindings, all of which are the parts most expensive to get right twice
+and least likely to change. Reimplementing saves nothing structural and loses
+the provenance of every contract decision.
+
+The recommendation is to adopt the code, at M3, when there is first something to
+put behind the port — and to treat everything before M3 as building against the
+port with a fake host, so the decision can be deferred without blocking the loop.
+Nothing in M0 through M2 requires it.
+
+### If the code is adopted
 
 Target layout:
 
@@ -378,53 +530,58 @@ packages/
     tests/
 ```
 
-Order of operations:
+Order of operations, with the symbol-level move map in
+[docs/PACKAGE-SPLIT.md](./docs/PACKAGE-SPLIT.md):
 
-1. **Narrow the resolver context in place** (§2), in the AgentFabric repository,
-   with its current suite green. Behaviour-preserving, and the one change that
-   everything else waits on.
-2. **Fold in with history.** Bring the AgentFabric repository into
-   `packages/agentfabric/` preserving commits, so the provenance of every
-   contract decision survives. The AgentFabric repository stops taking changes at
-   that commit.
-3. **Split `agentsop` out** per the move map. Mechanical once step 1 has landed.
+1. **Narrow the resolver context** (§2) in the AgentFabric repository, with its
+   current suite green. Behaviour-preserving, and the one change everything else
+   waits on.
+2. **Fold in with history**, into `packages/agentfabric/`, so the provenance of
+   every contract decision survives. That repository stops taking changes at the
+   merge commit.
+3. **Split the contract package out** per the move map. Mechanical once step 1
+   has landed.
 4. **Move the demo catalogue** to `packages/agentfabric/examples/capabilities/`;
-   resolve schema and spec from `agentsop` package data instead of walking
-   parent directories for an `agentsop/` folder.
-5. **Add the import-direction check** to CI, at the point where there are three
-   packages to check.
+   resolve schema and spec from package data instead of walking parent
+   directories.
+5. **Add the import-direction check** to CI.
 
-What comes with it and stays working: the CLI, the MCP binding, `.fabric/`
-overlays, `agentfabric sync`, the harness skills, and the opportunities log that
-Weave later reads as gap evidence (§8). The Cursor hooks are an adapter for the
-AgentFabric repository's own harness; whether Weave keeps them is a separate
-decision from the fold-in.
+What comes along working: the CLI, the MCP binding, `.fabric/` overlays,
+`agentfabric sync`, the harness skills, and the opportunities log Weave reads as
+gap evidence (§9). The Cursor hooks are that repository's own harness adapter;
+keeping them is a separate decision.
 
-Steps 1–5 add no behaviour. Weave's own package starts empty and M0 (§12) is its
-first code.
+### If it is not
 
-## 12. Milestones
+The contract layer is written fresh against Experimental 0.1 as a specification,
+and the demo catalogue becomes the conformance corpus — if a fresh implementation
+loads those documents, honours the failure-code precedence, and passes the
+existing suite's semantics, it has inherited the model faithfully. That corpus is
+worth keeping either way, because it is what makes "AgentSOP-compatible" a
+checkable claim rather than a compliment.
+
+## 13. Milestones
 
 - **M0 — loop.** Observation log, projection, state view, deterministic
-  enumeration over the existing catalogue, scripted decision layer, three action
-  kinds (`invoke_capability`, `ask_user`, `complete`), evidence written. No
-  inference, no extension.
+  enumeration over a fixed catalogue behind a fake capability host, scripted
+  decision layer, three action kinds (`invoke_capability`, `ask_user`,
+  `complete`), evidence written. No inference, no extension.
 - **M1 — judgment.** Jev behind `DecisionLayer`, real weights, replay eval
-  harness, `request_inference` as an action, concurrent frontier with effect
-  locks.
-- **M2 — gaps.** Gap detection from decision inadequacy, inference-scope
-  recurrence, and the fabric's opportunities log. Threshold and payoff estimate.
-  No generation yet.
+  harness, working inference as an action, concurrent frontier with effect locks.
+- **M2 — gaps.** Framing inference and its coverage gate (§7), desired
+  operations, the deterministic registry diff, and gap detection from decision
+  inadequacy, inference-scope recurrence, and the host's opportunities log.
+  Threshold and payoff estimate. No generation yet.
 - **M3 — extension.** Stages 1–4: verb, contract, corpus, demonstrated red. Ends
   with a red capability in the registry and no implementation.
 - **M4 — crystallization.** Stages 5–8 behind the sandbox and an explicit human
   admission gate. One capability, end to end, from gap to admitted.
 
-The fold-in and package split (§11) and the resolver-context narrowing (§2) land
-before M3, because M3 is the first point at which generated artifacts enter the
-fabric.
+The capability host decision (§12) and the resolver-context shape (§2) settle
+before M3, because M3 is the first point at which generated artifacts reach the
+registry. M0 through M2 run against a fake host and do not force the decision.
 
-## 13. Open questions
+## 14. Open questions
 
 - **Goal scoping of grants.** A goal-scoped principal with grants derived from
   granted authority is the obvious model, but grant lifetime across threads and
@@ -436,6 +593,11 @@ fabric.
   type-and-effect search, or both is unresolved.
 - **Contract revision.** Changing an admitted contract invalidates a corpus and
   implementations downstream. Versioning exists; the migration path does not.
+- **Whether desired operations are state.** Framing emits them, the registry
+  diff consumes them, and a gap may recur across goals. Whether they persist as
+  first-class state with their own recurrence count, or stay transient
+  observations whose recurrence is recomputed, decides how gap thresholds (§9)
+  are actually measured.
 - **Where inference scope is declared.** A tightly scoped inference request looks
   like a capability contract with a non-deterministic implementation. Whether
   `request_inference` should literally be an AgentSOP capability is worth

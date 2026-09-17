@@ -62,6 +62,14 @@ A decision-layer estimate associated with a candidate action or bounded semantic
 
 Requested model work such as reasoning, synthesis, classification, transformation, or language generation. Inference is an action available to Weave, not the owner of the loop.
 
+### Inference kind
+
+The role an inference request plays, which determines its cost, frequency, and what it may author. *Framing* deepens state from a goal into subgoals, success criteria, and desired operations. *Working* performs a tightly scoped operation. *Extension* authors contracts, test corpora, and implementations inside an extension thread. Weighing is the decision layer's own work and is not an inference kind.
+
+### Desired operation
+
+A framing output describing an operation the goal appears to need: a verb, expected effects, and rough input and output shape. A desired operation is not a capability contract. It is matched against the capability registry by deterministic diff, producing a shortlist and a set of capability gaps.
+
 ### Inference router
 
 The deterministic component that selects a model and configuration for a requested kind of inference using eval results, quality requirements, cost, latency, privacy, context, and escalation risk.
