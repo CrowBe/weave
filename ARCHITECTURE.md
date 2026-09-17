@@ -7,20 +7,46 @@ exactly. Code shapes here are illustrative, not committed signatures.
 Nothing in this document is built yet. It exists so the first milestone is a
 narrowing of a decided architecture rather than an invention.
 
-## 1. Three distributions, one dependency direction
+## 1. Three packages, one repository, one dependency direction
+
+AgentFabric folds into this repository as a package. It is not a separate
+repository and not a separate release cycle. The boundary is a package boundary,
+enforced by import discipline rather than by a repository wall.
 
 ```
-agentsop        contract: what a capability means, what a resolver must look like
-   ↑
-agentfabric     runtime: catalogue, resources, grants, resolution, admission, audit
-   ↑
-weave           runtime: goal, state, cycle, action frontier, policy, evidence
+packages/agentsop     contract: what a capability means, what a resolver must look like
+        ↑
+packages/agentfabric  runtime: catalogue, resources, grants, resolution, admission, audit
+        ↑
+packages/weave        runtime: goal, state, cycle, action frontier, policy, evidence
 ```
 
 Arrows are import directions. `agentsop` imports nothing of the other two.
 `agentfabric` never imports Weave scheduling, goals, or state. Weave imports
 `agentsop` types directly and reaches `agentfabric` only through a port
 (§4), so a second capability host can be substituted without touching the loop.
+
+One checkout, one test run, one version. Changes that cross the boundary land in
+one commit, which is the point of folding it in: at this stage the contract and
+the loop still teach each other, and a two-repository split would pay coordination
+cost for an independence neither package has earned yet.
+
+A package boundary is weaker than a repository boundary only if nothing enforces
+it. What enforces it here:
+
+- Separate `pyproject.toml` per package, declared dependencies, no path escapes.
+- An import-direction check in CI. The wrong import fails the build, which is
+  the same signal a repository split would give and arrives faster.
+- Tests per package. `agentsop` tests run with no fabric installed; `agentfabric`
+  tests run with no Weave runtime; Weave loop tests run against a fake
+  capability host. If a package's suite needs a layer above it, the boundary has
+  already leaked.
+- No shared internal utility package. Duplication below the boundary beats a
+  common module that quietly couples the layers.
+
+Extraction stays available and cheap: both lower packages are publishable as-is
+the day someone else needs them, because nothing in their code knows which
+repository it sits in.
 
 The split test for every symbol is one question:
 
@@ -53,6 +79,11 @@ and the locator table behind it, principals, grants, resolution status,
 invocation, audit, crystallisation, admission, sync, and the CLI and MCP
 bindings. Everything here is replaceable without breaking a capability document
 authored against `agentsop`.
+
+Living in this repository does not make it a Weave subsystem. It keeps its own
+CLI, its own MCP binding, its own `.fabric/` state, and its own tests, and it
+remains usable by a harness that has never heard of Weave. The day it imports a
+goal, a cycle, or a state view, the fold-in has failed.
 
 ### weave
 
@@ -322,7 +353,57 @@ for `agentsop`; the runner, the held-out split, and the mutation policy are
 fabric. The recommendation is to keep both in `agentfabric` until a second
 runtime needs to read a corpus, then promote only the case shape.
 
-## 11. Milestones
+## 11. Folding AgentFabric in
+
+AgentFabric exists today as its own repository, one distribution, with the
+Experimental 0.1 contract text and a demo catalogue beside it. The fold-in and
+the package split are the same piece of work, and the symbol-level move map is
+in [docs/PACKAGE-SPLIT.md](./docs/PACKAGE-SPLIT.md).
+
+Target layout:
+
+```
+packages/
+  agentsop/
+    src/agentsop/            contract types, validation, resolver shape
+    spec/EXPERIMENTAL-0.1.md
+    spec/capability.schema.json
+    tests/
+  agentfabric/
+    src/agentfabric/         runtime, CLI, MCP binding, builtin resolvers
+    examples/capabilities/   demo catalogue (blob.*, text.*, journal.*)
+    tests/
+  weave/
+    src/weave/               goal, state, cycle, ports, adapters
+    tests/
+```
+
+Order of operations:
+
+1. **Narrow the resolver context in place** (§2), in the AgentFabric repository,
+   with its current suite green. Behaviour-preserving, and the one change that
+   everything else waits on.
+2. **Fold in with history.** Bring the AgentFabric repository into
+   `packages/agentfabric/` preserving commits, so the provenance of every
+   contract decision survives. The AgentFabric repository stops taking changes at
+   that commit.
+3. **Split `agentsop` out** per the move map. Mechanical once step 1 has landed.
+4. **Move the demo catalogue** to `packages/agentfabric/examples/capabilities/`;
+   resolve schema and spec from `agentsop` package data instead of walking
+   parent directories for an `agentsop/` folder.
+5. **Add the import-direction check** to CI, at the point where there are three
+   packages to check.
+
+What comes with it and stays working: the CLI, the MCP binding, `.fabric/`
+overlays, `agentfabric sync`, the harness skills, and the opportunities log that
+Weave later reads as gap evidence (§8). The Cursor hooks are an adapter for the
+AgentFabric repository's own harness; whether Weave keeps them is a separate
+decision from the fold-in.
+
+Steps 1–5 add no behaviour. Weave's own package starts empty and M0 (§12) is its
+first code.
+
+## 12. Milestones
 
 - **M0 — loop.** Observation log, projection, state view, deterministic
   enumeration over the existing catalogue, scripted decision layer, three action
@@ -339,10 +420,11 @@ runtime needs to read a corpus, then promote only the case shape.
 - **M4 — crystallization.** Stages 5–8 behind the sandbox and an explicit human
   admission gate. One capability, end to end, from gap to admitted.
 
-Package split (§1) and resolver-context narrowing (§2) land before M3, because
-M3 is the first point at which generated artifacts enter the fabric.
+The fold-in and package split (§11) and the resolver-context narrowing (§2) land
+before M3, because M3 is the first point at which generated artifacts enter the
+fabric.
 
-## 12. Open questions
+## 13. Open questions
 
 - **Goal scoping of grants.** A goal-scoped principal with grants derived from
   granted authority is the obvious model, but grant lifetime across threads and

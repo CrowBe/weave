@@ -90,11 +90,11 @@ The standardized statement of a capability's purpose, inputs, outputs, invariant
 
 ### AgentSOP
 
-The semantic definition system: the capability contract schema, the effect vocabulary, the ResourceRef shape, the result and failure vocabulary, and the resolver contract shape. AgentSOP is a contract, not a runtime. It ships as its own package and knows nothing of Weave, AgentFabric, or any protocol.
+The semantic definition system: the capability contract schema, the effect vocabulary, the ResourceRef shape, the result and failure vocabulary, and the resolver contract shape. AgentSOP is a contract, not a runtime. It is a package in this repository and knows nothing of Weave, AgentFabric, or any protocol.
 
 ### AgentFabric
 
-The capability subsystem that honours AgentSOP: catalogue, resource references, grants, resolution, invocation, admission, revocation, and audit. It ships as its own package and Weave consumes it through a capability host port. AgentFabric does not schedule goals or choose actions, and it does not import Weave.
+The capability subsystem that honours AgentSOP: catalogue, resource references, grants, resolution, invocation, admission, revocation, and audit. It is a package in this repository, behind a package boundary rather than a repository boundary, and Weave reaches it through a capability host port. AgentFabric does not schedule goals or choose actions, and it does not import Weave.
 
 ### Implementation
 
