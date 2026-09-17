@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@weave/agentfabric": ["./packages/agentfabric/src/index.ts"],
+      "@weave/runtime": ["./packages/weave/src/index.ts"]
+    }
+  },
+  "include": ["packages/*/src", "packages/*/tests", "examples"]
+}

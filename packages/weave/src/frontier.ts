@@ -27,10 +27,6 @@ export function buildFrontier(
   const rejected: FrontierRejection[] = [];
   const viable: WeightedAction[] = [];
   for (const item of weighted) {
-    if (item.weight.value < VIABLE_WEIGHT_THRESHOLD) {
-      rejected.push({ action: item.action, weight: item.weight, cause: "below_threshold" });
-      continue;
-    }
     const decision = policy.evaluate(item.action, ctx);
     if (!decision.allowed) {
       rejected.push({
@@ -39,6 +35,10 @@ export function buildFrontier(
         cause: "policy",
         policy: decision,
       });
+      continue;
+    }
+    if (item.weight.value < VIABLE_WEIGHT_THRESHOLD) {
+      rejected.push({ action: item.action, weight: item.weight, cause: "below_threshold" });
       continue;
     }
     viable.push(item);

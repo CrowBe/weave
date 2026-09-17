@@ -1,8 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": ".",
-    "types": ["node"],
     "paths": {
       "@weave/agentfabric": ["../agentfabric/src/index.ts"]
     }

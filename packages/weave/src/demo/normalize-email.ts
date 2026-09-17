@@ -3,7 +3,7 @@ import type {
   ImplementationCandidate,
   TestCorpus,
 } from "@weave/agentfabric";
-import type { InferenceKind } from "./inference.ts";
+import type { InferenceKind } from "../inference.ts";
 
 export const normalizeEmailContract: CapabilityContract = {
   id: "normalize_email",
