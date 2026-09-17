@@ -137,25 +137,42 @@ one.
 
 ## 3. State
 
-State is an append-only **observation** log plus a derived projection. The log is
-the evidence record; the projection is what the runtime reasons over. Both are
-goal-scoped.
+State carries an open-ended set of payload types and serves consumers with very
+different needs, so it is an engine rather than a structure. The specification is
+[docs/STATE-ENGINE.md](./docs/STATE-ENGINE.md); this is what the rest of this
+document depends on.
 
 ```
-Observation  = { seq, ts, thread, kind, payload, caused_by, evidence_ref }
+observations  →  reducers  →  entities  →  slices  →  views + manifests
+   (fact)        (pure)      (interpretation)      (rendering)
 ```
 
-Every observation carries a monotonic `seq`. A cycle reads a snapshot at some
-`seq`; an action executed from that snapshot records it. When a result lands
-against a projection that has moved, the runtime reconciles explicitly —
-continue, supersede, or cancel — instead of applying stale work silently.
+**Capture.** An append-only log of observations. Fixed envelope — seq, goal,
+thread, type, caused_by with a watermark, principal, evidence, cost — and a
+payload validated against a registered, versioned observation type. The same
+move AgentSOP makes for invocations: a small fixed envelope the runtime can
+always reason about, an open payload that extends without touching the core. An
+unregistered type is still captured; the engine records that nothing interpreted
+it. Capture never fails because interpretation lags.
 
-State is written by a single owner. Concurrent actions produce observations;
-they do not mutate the projection.
+**Mutate.** Reducers registered per observation type, pure and total, applied in
+seq order by a single writer, emitting declared mutations rather than imperative
+edits. Actions never write state; they emit observations. That is the structural
+reason a model cannot write to state. The projection is a set of identified,
+typed, provenanced entities — goals, threads, facts, open questions, desired
+operations, gaps, action records, approvals, budgets, risks, artifacts — under
+one rule: **no entity field without a citing observation.**
 
-The projection holds goal and authority envelope, known facts, open questions,
-active threads, capability digest, constraints, approvals, budgets, and risks.
-Conversation is one source of observations, never the projection itself.
+**Represent.** Slices are named, versioned, budgeted queries over entities.
+Every view is built from slices, selection is deterministic, truncation is
+disclosed, and every view carries a manifest of what filled it.
+
+**Reconcile.** A cycle reads at a watermark; a candidate declares the entity
+**read set** its binding depends on. When a result lands the engine compares the
+read set against what changed and applies the action kind's policy — apply,
+recompute, supersede, or cancel. Effect locks (§5) handle write conflicts; read
+sets are their mirror image, and together they make staleness computable instead
+of guessed.
 
 ### State view
 
@@ -175,7 +192,8 @@ State views are budgeted. A capability digest is one compact line per capability
 (id, title, effects, resolution status, cost class, observed reliability); full
 input and output schemas travel only for shortlisted candidates. The stable
 prefix — goal, authority, capability digest — is ordered first so it can be
-cached across cycles.
+cached across cycles, and what was dropped to fit is stated rather than silently
+elided.
 
 The state view schema is versioned, and anything that consumes one pins the
 version it was written against. A view shape that drifts silently invalidates
@@ -192,6 +210,7 @@ Weave defines the interfaces; adapters implement them.
 | `InferenceGateway` | classify, route, execute, evaluate, and retry or escalate one inference request (§7) | single-model stub |
 | `ApprovalChannel` | request and receive human authority | CLI prompt |
 | `EvidenceSink` | persist traces, weights, outcomes | JSONL |
+| `StateStore` | persist the observation log, checkpoints, and entities | JSONL plus in-memory |
 | `Clock` | time, timeouts, deadlines | system clock |
 
 A scripted `DecisionLayer` returning fixed weights makes the whole loop
@@ -909,10 +928,11 @@ checkable claim rather than a compliment.
 
 ## 14. Milestones
 
-- **M0 — loop.** Observation log, projection, state view, deterministic
-  enumeration over a fixed catalogue behind a fake capability host, scripted
-  decision layer, three action kinds (`invoke_capability`, `ask_user`,
-  `complete`), evidence written. No inference, no extension.
+- **M0 — loop.** State engine first: log, reducers, entities, slices,
+  manifests, golden replay. Then deterministic enumeration over a fixed
+  catalogue behind a fake capability host, a scripted decision layer, three
+  action kinds (`invoke_capability`, `ask_user`, `complete`), evidence written.
+  No inference, no extension.
 - **M1 — judgment.** Jev behind `DecisionLayer`, real weights, replay eval
   harness, `request_inference` as an action behind a single-model gateway that
   already records attempts and evaluations, concurrent frontier with effect

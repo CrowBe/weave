@@ -20,6 +20,30 @@ The explicit, evolving representation of what matters to the goal: known facts, 
 
 Anything that updates state: user input, a tool result, an inference result, an approval, an error, a timeout, or an environmental change. Model output is an observation, not a command.
 
+### Observation type
+
+The registered, versioned name and payload schema of an observation. The envelope is fixed; payloads extend through new types rather than through edits to the engine. An unregistered type is still captured, and the failure to interpret it is itself recorded.
+
+### Reducer
+
+The pure, total function registered for an observation type that turns it into declared mutations on state entities. Reducers are applied in sequence order by a single writer, which is what makes replay exact.
+
+### State entity
+
+An identified, typed, provenanced element of the projection — goal, thread, fact, open question, desired operation, capability gap, action record, approval, budget, risk, artifact. Every field cites the observations that produced it.
+
+### Slice
+
+A named, versioned, budgeted query over state entities. Views — state views, context bundles, typed capability inputs — are composed from slices, with deterministic selection, disclosed truncation, and a manifest of what filled them.
+
+### Read set
+
+The state entities an action candidate's binding depends on, declared at enumeration. Read sets are the mirror of effect locks: locks describe what an action will write, read sets what it assumed, and together they make staleness computable when a result lands late.
+
+### Durable knowledge
+
+What survives a goal: the capability registry, observed reliability and cost, routing statistics, the gap ledger, eval history. It holds facts about the system's own behaviour. Content learned under one goal's authority does not cross into another by being written down.
+
 ### Cycle
 
 One passage through observing state, weighing actions, applying policy, executing viable actions, and incorporating resulting observations. Avoid *turn* unless referring specifically to a conversational interface.
