@@ -1,6 +1,6 @@
 import type { Action } from "./action.ts";
 import type { ActionFrontier } from "./frontier.ts";
-import type { Observation } from "./state.ts";
+import type { Observation } from "./state/index.ts";
 
 export interface SchedulerResult {
   executed: string[];

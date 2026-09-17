@@ -10,13 +10,13 @@ function walk(dir: string): string[] {
   });
 }
 
-describe("AgentFabric boundary", () => {
-  it("does not import Weave runtime", () => {
+describe("AgentSOP boundary", () => {
+  it("does not import AgentFabric or Weave", () => {
     const src = fileURLToPath(new URL("../src", import.meta.url));
     const violations = walk(src).filter((file) => {
       if (!file.endsWith(".ts")) return false;
       const text = readFileSync(file, "utf8");
-      return text.includes("@weave/runtime") || text.includes("packages/weave");
+      return text.includes("@weave/agentfabric") || text.includes("@weave/runtime");
     });
     expect(violations).toEqual([]);
   });

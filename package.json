@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "workspaces": [
+    "packages/agentsop",
     "packages/agentfabric",
     "packages/weave"
   ],

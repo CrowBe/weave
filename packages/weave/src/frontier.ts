@@ -1,5 +1,5 @@
 import type { Action } from "./action.ts";
-import type { Weight, WeightedAction } from "./decision.ts";
+import type { Weight, WeightedAction } from "./decision/index.ts";
 import type { Policy, PolicyContext, PolicyDecision } from "./policy.ts";
 
 export const VIABLE_WEIGHT_THRESHOLD = 0.5;

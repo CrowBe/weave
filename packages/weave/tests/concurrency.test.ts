@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  InProcessRuntime,
-  type CapabilityContract,
-  type ImplementationCandidate,
-} from "@weave/agentfabric";
+import { Fabric } from "@weave/agentfabric";
 import {
   HeuristicDecisionLayer,
   Runtime,
@@ -12,78 +8,68 @@ import {
   type Goal,
 } from "../src/index.ts";
 import { ControllableClock } from "../src/ids.ts";
-import { CapabilityRegistry } from "../src/registry.ts";
 import { CheapestSufficientRouter, ScriptedInferenceProvider } from "../src/inference.ts";
 import { localBinding } from "./harness.ts";
 import { runScheduler } from "../src/scheduler.ts";
 import type { Action } from "../src/action.ts";
 import type { ActionFrontier } from "../src/frontier.ts";
-import type { Observation } from "../src/state.ts";
+import type { Observation } from "../src/state/index.ts";
 
-const delayContract: CapabilityContract = {
-  id: "delay_echo",
-  version: "1.0.0",
-  purpose: "Echo after a delay",
-  inputs: {
-    type: "object",
-    properties: { value: { type: "string" } },
-    required: ["value"],
-  },
-  outputs: {
-    type: "object",
-    properties: { value: { type: "string" } },
-    required: ["value"],
-  },
-  invariants: [],
-  failures: [],
-  effects: [],
-  permissions: [],
-  successEvidence: ["echoed value"],
-  executionConstraints: { timeoutMs: 500 },
-};
-
-describe("concurrent execution", () => {
-  it("runs independent capability executions at the same time", async () => {
+describe("concurrent invocation", () => {
+  it("runs independent capability invocations at the same time", async () => {
     let current = 0;
     let max = 0;
-    const implementation: ImplementationCandidate = {
-      id: "delay",
-      contractId: "delay_echo",
-      kind: "function",
-      execute: async (input) => {
+    const fabric = new Fabric();
+    fabric.register({
+      agentsop: "0.1",
+      id: "delay.echo",
+      title: "Echo after a delay",
+      description: "Echo a value.",
+      input: {
+        type: "object",
+        properties: { value: { type: "string" } },
+        required: ["value"],
+        additionalProperties: false,
+      },
+      output: {
+        type: "object",
+        properties: { value: { type: "string" } },
+        required: ["value"],
+        additionalProperties: false,
+      },
+      effects: [],
+      idempotent: true,
+      authority: { resources: [], effects: [] },
+      depends_on: [],
+    });
+    fabric.bind(
+      "delay.echo",
+      async (_ctx, input) => {
         current += 1;
         max = Math.max(max, current);
         await new Promise((resolve) => setTimeout(resolve, 40));
         current -= 1;
         return input;
       },
-      provenance: { origin: "test", generators: [] },
-    };
-    const registry = new CapabilityRegistry();
-    registry.admit({
-      contract: delayContract,
-      implementation,
-      maturity: "provisional",
-      admission: {
-        eligible: true,
-        maturity: "provisional",
-        reasons: ["test"],
-        red: { kind: "demonstrated_red", demonstrated: true, rejectedBy: ["x"], passedUnexpectedly: [], results: [] },
-        green: { kind: "proven_green", proven: true, results: [] },
-        heldOut: { kind: "proven_green", proven: true, results: [] },
-      },
-      admittedAt: "2026-09-17T00:00:00.000Z",
+      "local",
+    );
+    fabric.authority.add({
+      principal: "guest",
+      capability: "delay.echo",
+      resource: "*",
+      effects: ["*"],
     });
     const goal: Goal = {
       id: "parallel",
       statement: "echo two values",
       scope: "test",
+      principal: "guest",
       authority: {
-        canCrystallize: false,
+        canCrystallise: false,
+        canClassify: false,
         canRequestInference: false,
         canCommunicate: false,
         canComplete: true,
-        canExecute: ["delay_echo"],
         inferenceBudget: 0,
       },
       status: "active",
@@ -93,12 +79,11 @@ describe("concurrent execution", () => {
       goal,
       decision: new HeuristicDecisionLayer(),
       policy: corePolicy(),
-      registry,
+      fabric,
       router: new CheapestSufficientRouter([localBinding]),
       providers: new Map([["scripted", new ScriptedInferenceProvider({})]]),
       ids: new SequenceIds("p_"),
       clock: new ControllableClock(new Date("2026-09-17T00:00:00.000Z")),
-      fabricRuntime: new InProcessRuntime(),
     });
     runtime.observe({
       kind: "user_input",
@@ -106,7 +91,7 @@ describe("concurrent execution", () => {
         facts: { values: ["a", "b"] },
         gap: {
           purpose: "echo",
-          capabilityId: "delay_echo",
+          capabilityId: "delay.echo",
           listKey: "values",
           outputPrefix: "echo:",
           inputKey: "value",

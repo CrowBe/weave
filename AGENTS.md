@@ -13,15 +13,18 @@
 - Keep policy deterministic and separate from probabilistic decisions.
 - Preserve explicit state transitions and evidence for consequential decisions.
 - Parallelize independent work; express dependencies instead of serializing by default.
-- Keep AgentFabric as a bounded subsystem that ships with Weave.
-- Do not let AgentFabric import Weave runtime or scheduling concerns.
+- Keep AgentSOP independent of Weave, AgentFabric runtime, and any harness.
+- Keep AgentFabric as a bounded subsystem that honours AgentSOP and ships with Weave.
+- Do not let AgentFabric import Weave runtime, scheduling, or classifier concerns.
+- Do not let AgentSOP import AgentFabric or Weave.
 - Prefer composition of existing capabilities before creating a new primitive.
-- Begin crystallization with a contract, not an implementation.
-- Demonstrate red before generating or accepting implementation code.
+- Begin crystallization with an AgentSOP document, not resolver source.
+- Use the classifier as Weave's trust layer; AgentFabric only binds resolvers.
+- Demonstrate red before generating or accepting resolver code.
 - Validate green with deterministic tests and checks.
-- Treat generated tests and generated code as untrusted until validated.
-- Keep capability generation, admission, and authority to execute as separate gates.
-- Keep the core small; domain-specific behavior belongs in capabilities.
+- Treat generated tests and generated code as untrusted until classified.
+- Keep generation, classification, crystallization, and invocation as separate gates.
+- Keep the core small: assemble state, assemble capabilities, weigh, act. Domain-specific behavior belongs in capabilities.
 
 ## Change discipline
 

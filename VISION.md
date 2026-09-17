@@ -42,7 +42,7 @@ The most capable model is not the default; the least expensive path that reliabl
 
 Caching is part of state and routing, not an afterthought. Stable facts and validated results should not be rediscovered through inference. Cached conclusions retain their evidence, dependencies, and invalidation conditions so reuse never turns stale belief into hidden truth.
 
-## Intent becomes contract; tests admit capability
+## Intent becomes AgentSOP; the classifier trusts resolvers
 
 Weave distinguishes three forms of capability:
 
@@ -50,25 +50,21 @@ Weave distinguishes three forms of capability:
 - **Composed capability** emerges by combining established actions for the current goal without adding new machinery.
 - **Frontier capability** is work the current action space cannot adequately perform and therefore requires exploration, often through generative inference.
 
-The frontier is where models improvise: reasoning about an unfamiliar problem, composing a novel procedure, or writing an action the system does not yet possess. Successful exploration is not automatically learning. It becomes learning only when Weave can extract a reusable contract, test it against examples and counterexamples, constrain its effects, and admit a versioned capability to the registry.
+The frontier is where models improvise: reasoning about an unfamiliar problem, composing a novel procedure, or writing an action the system does not yet possess. Successful exploration is not automatically learning. It becomes learning only when Weave can name the work as an AgentSOP capability and AgentFabric can bind a resolver that later invocations use directly.
 
-Crystallization begins with the contract, not the implementation. When Weave identifies a recurring semantic purpose or a gap in its action space, it establishes the capability's inputs, outputs, invariants, failure modes, effects, permissions, success evidence, and execution constraints. That contract may be induced from successful traces or designed before implementation. Either direction must converge on the same thing: an independently testable statement of what the capability means.
+AgentSOP is that naming. It is a semantic contract: what is being done, to which resource, with which effects, and what success looks like. It does not mention Weave, models, filesystems, or a resolver language. A capability document is durable; a resolver is disposable.
 
-AgentFabric standardizes this boundary between intelligence and software. It defines the capability contract and the lifecycle through which a proposed capability is tested, packaged, versioned, admitted, observed, and revoked. Weave uses that standard; it does not hide capability semantics inside its own scheduler or prompts.
+AgentFabric honours AgentSOP. It holds the catalogue of semantically named capabilities, issues ResourceRefs, evaluates grants, invokes resolvers, and crystallizes by binding a resolver to a name. A capability may exist and still be unresolved. AgentFabric does not schedule goals, choose the next action, or claim that generated code is trustworthy.
 
-Once a contract is established, Weave generates executable tests before implementation. Independent inference can explore examples, boundaries, invariants, failures, permissions, side effects, retries, cancellation, and adversarial cases in parallel. Proposed tests must themselves earn trust: they are checked against known evidence, placeholder or invalid implementations, and mutations where useful. Contradictory tests expose an incomplete contract rather than becoming competing instructions to the implementer.
+Weave is the implementation that uses inference to satisfy an AgentSOP document in the shape AgentFabric requests. Its runtime stays small: assemble state, assemble the live capabilities, submit that structure to the decision layer (Jev is the initial one), and act on the weighted frontier. Domain behaviour belongs in capabilities, not in the loop.
 
-Only then does Weave ask suitable models to produce one or more implementations. Deterministic execution—type checking, tests, static analysis, effect controls, and resource limits—provides the admission evidence. Held-out tests guard against fitting only the visible examples. Probabilistic evaluation classifies unresolved semantic questions and directs the next iteration; it does not turn a failing implementation green.
+Generated resolvers are untrusted. Weave's classifier is the automatic trust layer AgentFabric does not claim: it checks a candidate against the document and a test corpus, observes red against a placeholder, proves green, and uses held-out cases as a guard. Only a trusted candidate may be crystallized. Crystallization still does not grant the principal permission to invoke.
 
-The lifecycle is red-green in real time:
+The lifecycle is:
 
-> identify opportunity → establish contract → generate and validate tests → observe red → generate implementation → prove green → admit capability
+> identify opportunity → establish AgentSOP document → generate and validate tests → observe red → generate a resolver → classifier trusts it → AgentFabric crystallizes → grants permit invocation
 
-Implementation is replaceable; the contract is the stable identity. Several local, remote, composed, or generative implementations may satisfy one contract, and routing among them can be empirical. Capability creation, capability admission, and authority to execute remain separate gates.
-
-Anything the system repeatedly has to reason through is a candidate for software, but not everything should crystallize. Contextual explanation, taste, ambiguity, and genuinely novel judgment may remain generative. Recurrent mechanics, transformations, lookups, and verifiable procedures should be pushed downward into cheaper, narrower, more reliable capabilities.
-
-New capabilities earn trust. They carry provenance, permissions, version, dependencies, contract and test revisions, eval results, observed reliability, cost, and risk. They begin constrained, remain inspectable, and can be disabled or rolled back. Generated code is untrusted until the same evidence that would justify any other capability says otherwise.
+The document is the stable identity. Resolvers are replaceable. Naming a capability, trusting a resolver, binding it, and authorizing invocation remain separate gates.
 
 ## Improvement must be measurable
 
@@ -84,7 +80,7 @@ Progress is not measured by eliminating inference. It is measured by expanding t
 
 Self-building software must not become self-obscuring software. State, policy, action contracts, routing rules, provenance, and capability code remain inspectable and replaceable. Hidden prompts, vendor-specific behavior, and irreproducible model intuition must not become the only explanation for important behavior.
 
-The core should remain small enough to trust: state transitions, policy enforcement, action scheduling, capability contracts, and evidence capture. Domain knowledge and task-specific machinery belong in capabilities around that core. Weave should grow outward through its action vocabulary, not inward through an increasingly magical runtime.
+The core should remain small enough to trust: state assembly, capability assembly, decision, policy, scheduling, and evidence capture. AgentSOP and AgentFabric sit beside that core. Domain knowledge belongs in capabilities. Weave should grow outward through its action vocabulary, not inward through an increasingly magical runtime.
 
 ## Scope
 
@@ -94,12 +90,12 @@ It is not a chatbot framework with a more elaborate tool loop. Conversation is o
 
 It is not a model-training system. Weave improves the software and policy surrounding models; it does not claim that the models themselves learn through use.
 
-It is not permissionless self-modifying software. Capability creation, capability admission, and authority to execute are separate gates.
+It is not permissionless self-modifying software. Naming a capability, classifying a resolver, crystallizing it, and authorizing invocation are separate gates.
 
 It is not a replacement for deterministic application logic. Its purpose is to discover, compose, and extend reliable logic where goals encounter an incomplete action space.
 
 It is not defined by Jev, any generative model, any provider, or any tool protocol. Those are replaceable participants in the architecture.
 
-A change aligns with Weave when it makes evolving state more explicit; improves action weighting or parallel execution; preserves deterministic authority boundaries; makes inference more interchangeable and empirically routed; turns semantic intent into a testable AgentFabric contract; turns repeated reasoning into a constrained, evaluated capability; strengthens provenance, observability, rollback, or evaluation; or expands the reliable action frontier without hiding how.
+A change aligns with Weave when it makes evolving state more explicit; improves action weighting or parallel execution; preserves deterministic authority boundaries; makes inference more interchangeable and empirically routed; turns semantic intent into an AgentSOP document; keeps AgentFabric as the invocation runtime; uses the classifier—not the scheduler—as the trust layer for generated resolvers; turns repeated reasoning into a named, grant-bounded capability; strengthens provenance, observability, rollback, or evaluation; or expands the reliable action frontier without hiding how.
 
-A change should be resisted when it gives a model implicit control of the loop; treats conversation history as the only state; serializes independent work around artificial turns; lets probabilistic judgment override hard policy; equates generated code or generated tests with trusted evidence; crystallizes behavior without a reusable contract, demonstrated red, and deterministic validation; couples the runtime's identity to one model or vendor; optimizes cost at the expense of the required quality; mistakes activity for progress; or makes the system more capable by making it less legible.
+A change should be resisted when it gives a model implicit control of the loop; treats conversation history as the only state; serializes independent work around artificial turns; lets probabilistic judgment override hard policy; equates generated code or generated tests with trusted evidence; crystallizes a resolver without an AgentSOP document and classifier trust; couples the runtime's identity to one model or vendor; optimizes cost at the expense of the required quality; mistakes activity for progress; or makes the system more capable by making it less legible.

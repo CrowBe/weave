@@ -7,6 +7,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      "@weave/agentsop": path.resolve("packages/agentsop/src/index.ts"),
       "@weave/agentfabric": path.resolve("packages/agentfabric/src/index.ts"),
       "@weave/runtime": path.resolve("packages/weave/src/index.ts"),
     },

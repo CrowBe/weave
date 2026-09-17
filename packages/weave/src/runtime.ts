@@ -1,13 +1,7 @@
-import {
-  demonstrateRed,
-  evaluateAdmissionEligibility,
-  evaluateHeldOut,
-  InProcessRuntime,
-  proveGreen,
-  type ImplementationRuntime,
-} from "@weave/agentfabric";
+import { classifyResolver } from "./classifier/index.ts";
+import type { Fabric } from "@weave/agentfabric";
 import { assignActionIds, enumerateActions, type Action } from "./action.ts";
-import type { DecisionLayer } from "./decision.ts";
+import type { DecisionLayer } from "./decision/index.ts";
 import { buildFrontier, type ActionFrontier } from "./frontier.ts";
 import type { Clock, IdGenerator } from "./ids.ts";
 import type {
@@ -17,7 +11,6 @@ import type {
   InferenceRouter,
 } from "./inference.ts";
 import type { Policy } from "./policy.ts";
-import type { CapabilityRegistry } from "./registry.ts";
 import { runScheduler } from "./scheduler.ts";
 import {
   applyObservation,
@@ -26,7 +19,7 @@ import {
   type Goal,
   type Observation,
   type WeaveState,
-} from "./state.ts";
+} from "./state/index.ts";
 
 export interface CycleRecord {
   id: string;
@@ -34,7 +27,7 @@ export interface CycleRecord {
   at: string;
   goalId: string;
   factKeys: string[];
-  crystallizationPhase?: string;
+  classifierPhase?: string;
   actionSpace: Array<{ id: string; kind: string; key: string }>;
   weighted: Array<{
     key: string;
@@ -54,12 +47,12 @@ export interface RuntimeOptions {
   goal: Goal;
   decision: DecisionLayer;
   policy: Policy;
-  registry: CapabilityRegistry;
+  fabric: Fabric;
   router: InferenceRouter;
   providers: Map<string, InferenceProvider>;
   ids: IdGenerator;
   clock: Clock;
-  fabricRuntime?: ImplementationRuntime;
+  crystallisePrincipal?: string;
   onCycle?: (record: CycleRecord, state: WeaveState) => void;
 }
 
@@ -67,26 +60,26 @@ export class Runtime {
   private state: WeaveState;
   private readonly journalEntries: Observation[] = [];
   private readonly cycleRecords: CycleRecord[] = [];
-  private readonly fabricRuntime: ImplementationRuntime;
+  private readonly fabric: Fabric;
   private readonly decision: DecisionLayer;
   private readonly policy: Policy;
-  private readonly registry: CapabilityRegistry;
   private readonly router: InferenceRouter;
   private readonly providers: Map<string, InferenceProvider>;
   private readonly ids: IdGenerator;
   private readonly clock: Clock;
+  private readonly crystallisePrincipal: string;
   private readonly onCycle?: (record: CycleRecord, state: WeaveState) => void;
 
   constructor(options: RuntimeOptions) {
     this.state = createState(options.goal);
     this.decision = options.decision;
     this.policy = options.policy;
-    this.registry = options.registry;
+    this.fabric = options.fabric;
     this.router = options.router;
     this.providers = options.providers;
     this.ids = options.ids;
     this.clock = options.clock;
-    this.fabricRuntime = options.fabricRuntime ?? new InProcessRuntime();
+    this.crystallisePrincipal = options.crystallisePrincipal ?? "operator";
     this.onCycle = options.onCycle;
   }
 
@@ -109,16 +102,28 @@ export class Runtime {
       at: input.at ?? this.clock.now().toISOString(),
     };
     this.state = applyObservation(this.state, observation);
+    if (observation.kind === "approval" && observation.payload.granted === true) {
+      const subject = String(observation.payload.subject);
+      if (this.fabric.has(subject)) {
+        const capability = this.fabric.capability(subject);
+        this.fabric.authority.add({
+          principal: this.state.goal.principal,
+          capability: subject,
+          resource: "*",
+          effects: capability.effects.length > 0 ? [...capability.effects] : ["*"],
+        });
+      }
+    }
     this.journalEntries.push(observation);
     return observation;
   }
 
   plan(): ActionFrontier {
-    const actionSpace = assignActionIds(enumerateActions(this.state, this.registry), this.ids);
+    const actionSpace = assignActionIds(enumerateActions(this.state, this.fabric), this.ids);
     const weighted = this.decision.weigh(this.state, actionSpace);
     return buildFrontier(actionSpace, weighted, this.policy, {
       state: this.state,
-      registry: this.registry,
+      fabric: this.fabric,
     });
   }
 
@@ -134,8 +139,7 @@ export class Runtime {
         replan: () => this.plan(),
         onObservations: (observations) => {
           for (const observation of observations) {
-            const stored = this.observe(observation);
-            resulting.push(stored);
+            resulting.push(this.observe(observation));
           }
         },
       });
@@ -148,7 +152,7 @@ export class Runtime {
       at: this.clock.now().toISOString(),
       goalId: this.state.goal.id,
       factKeys: Object.keys(this.state.facts),
-      crystallizationPhase: this.state.crystallization?.phase,
+      classifierPhase: this.state.classifier?.phase,
       actionSpace: frontier.actionSpace.map((action) => ({
         id: action.id,
         kind: action.kind,
@@ -176,8 +180,8 @@ export class Runtime {
         detail:
           observation.kind === "inference_result"
             ? String(observation.payload.requestKind ?? "")
-            : observation.kind === "crystallization_event"
-              ? String(observation.payload.phase ?? "")
+            : observation.kind === "classifier_event"
+              ? "trust"
               : undefined,
       })),
     };
@@ -199,19 +203,38 @@ export class Runtime {
 
   private async dispatch(action: Action, signal: AbortSignal): Promise<Observation[]> {
     if (signal.aborted) {
-      return [this.cancelledObservation(action)];
+      return [
+        {
+          id: this.ids.next("obs"),
+          at: this.clock.now().toISOString(),
+          kind: "action_cancelled",
+          actionId: action.id,
+          payload: { key: action.key },
+        },
+      ];
     }
     switch (action.kind) {
       case "request_inference":
         return this.dispatchInference(action);
-      case "demonstrate_red":
-        return this.dispatchRed();
-      case "prove_green":
-        return this.dispatchGreen();
-      case "admit_capability":
-        return this.dispatchAdmit();
-      case "execute_capability":
-        return this.dispatchExecute(action, signal);
+      case "register_capability": {
+        const document = action.input.document;
+        const registered = this.fabric.register(document);
+        return [
+          {
+            id: this.ids.next("obs"),
+            at: this.clock.now().toISOString(),
+            kind: "capability_registered",
+            actionId: action.id,
+            payload: { capabilityId: registered.id, document: registered },
+          },
+        ];
+      }
+      case "classify_resolver":
+        return this.dispatchClassify();
+      case "crystallise":
+        return this.dispatchCrystallise();
+      case "invoke_capability":
+        return this.dispatchInvoke(action);
       case "request_approval":
         return [
           {
@@ -219,22 +242,10 @@ export class Runtime {
             at: this.clock.now().toISOString(),
             kind: "approval_requested",
             actionId: action.id,
-            payload: {
-              subject: action.input.capabilityId,
-              reason: action.input.reason,
-            },
+            payload: { subject: action.input.capabilityId, reason: action.input.reason },
           },
         ];
       case "clarify":
-        return [
-          {
-            id: this.ids.next("obs"),
-            at: this.clock.now().toISOString(),
-            kind: "communication",
-            actionId: action.id,
-            payload: { questions: action.input.questions },
-          },
-        ];
       case "communicate":
         return [
           {
@@ -247,15 +258,7 @@ export class Runtime {
         ];
       case "complete_goal":
         if (!successCriteriaMet(this.state)) {
-          return [
-            {
-              id: this.ids.next("obs"),
-              at: this.clock.now().toISOString(),
-              kind: "error",
-              actionId: action.id,
-              payload: { message: "complete_goal dispatched without success evidence" },
-            },
-          ];
+          return [this.errorObs("complete_goal dispatched without success evidence")];
         }
         return [
           {
@@ -271,16 +274,6 @@ export class Runtime {
     }
   }
 
-  private cancelledObservation(action: Action): Observation {
-    return {
-      id: this.ids.next("obs"),
-      at: this.clock.now().toISOString(),
-      kind: "action_cancelled",
-      actionId: action.id,
-      payload: { key: action.key },
-    };
-  }
-
   private async dispatchInference(action: Action): Promise<Observation[]> {
     const request: InferenceRequest = {
       kind: action.input.kind as InferenceKind,
@@ -289,17 +282,7 @@ export class Runtime {
     };
     const binding = this.router.route(request, this.state.goal.authority.inferenceBudget);
     const provider = this.providers.get(binding.providerId);
-    if (!provider) {
-      return [
-        {
-          id: this.ids.next("obs"),
-          at: this.clock.now().toISOString(),
-          kind: "error",
-          actionId: action.id,
-          payload: { message: `no provider registered for ${binding.providerId}` },
-        },
-      ];
-    }
+    if (!provider) return [this.errorObs(`no provider registered for ${binding.providerId}`)];
     const output = await provider.complete(binding, request);
     return [
       {
@@ -318,91 +301,66 @@ export class Runtime {
     ];
   }
 
-  private async dispatchRed(): Promise<Observation[]> {
-    const work = this.state.crystallization;
-    if (!work?.contract || !work.corpus) {
-      return [this.errorObs("demonstrate_red requires a contract and test corpus")];
+  private async dispatchClassify(): Promise<Observation[]> {
+    const work = this.state.classifier;
+    if (!work?.corpus || !work.resolverSource) {
+      return [this.errorObs("classify_resolver requires a corpus and resolver")];
     }
-    const red = await demonstrateRed(work.contract, work.corpus, this.fabricRuntime);
-    return [
-      {
-        id: this.ids.next("obs"),
-        at: this.clock.now().toISOString(),
-        kind: "crystallization_event",
-        payload: { phase: "red", red },
-      },
-    ];
-  }
-
-  private async dispatchGreen(): Promise<Observation[]> {
-    const work = this.state.crystallization;
-    if (!work?.contract || !work.corpus || !work.candidate) {
-      return [this.errorObs("prove_green requires a contract, corpus, and candidate")];
-    }
-    const green = await proveGreen(
-      work.contract,
-      work.corpus,
-      work.candidate,
-      this.fabricRuntime,
-    );
-    return [
-      {
-        id: this.ids.next("obs"),
-        at: this.clock.now().toISOString(),
-        kind: "crystallization_event",
-        payload: { phase: "green", green },
-      },
-    ];
-  }
-
-  private async dispatchAdmit(): Promise<Observation[]> {
-    const work = this.state.crystallization;
-    if (!work?.contract || !work.corpus || !work.candidate || !work.red || !work.green) {
-      return [this.errorObs("admit_capability requires red and green evidence")];
-    }
-    const heldOut = await evaluateHeldOut(
-      work.contract,
-      work.corpus,
-      work.candidate,
-      this.fabricRuntime,
-    );
-    const admission = evaluateAdmissionEligibility({
-      red: work.red,
-      green: work.green,
-      heldOut,
+    const capability = this.fabric.has(work.capabilityId)
+      ? this.fabric.capability(work.capabilityId)
+      : work.document;
+    if (!capability) return [this.errorObs("classify_resolver requires an AgentSOP document")];
+    const trust = await classifyResolver({
+      fabric: this.fabric,
+      principal: this.crystallisePrincipal,
+      capability,
+      source: work.resolverSource,
+      corpus: work.corpus,
     });
-    if (admission.eligible) {
-      this.registry.admit({
-        contract: work.contract,
-        implementation: work.candidate,
-        maturity: admission.maturity,
-        admission,
-        admittedAt: this.clock.now().toISOString(),
-      });
-    }
     return [
       {
         id: this.ids.next("obs"),
         at: this.clock.now().toISOString(),
-        kind: "crystallization_event",
-        payload: { phase: "admission", heldOut, admission },
+        kind: "classifier_event",
+        payload: { trust },
       },
     ];
   }
 
-  private async dispatchExecute(action: Action, signal: AbortSignal): Promise<Observation[]> {
-    if (signal.aborted) return [this.cancelledObservation(action)];
-    const capabilityId = String(action.input.capabilityId ?? "");
-    const admitted = this.registry.get(capabilityId);
-    if (!admitted) {
-      return [this.errorObs(`capability ${capabilityId} is not admitted`)];
+  private dispatchCrystallise(): Observation[] {
+    const work = this.state.classifier;
+    if (!work?.resolverSource || !work.trust?.trusted) {
+      return [this.errorObs("crystallise requires a trusted resolver")];
     }
-    const result = await this.fabricRuntime.execute(
-      admitted.implementation,
+    this.fabric.crystallise(this.crystallisePrincipal, work.capabilityId, work.resolverSource);
+    return [
+      {
+        id: this.ids.next("obs"),
+        at: this.clock.now().toISOString(),
+        kind: "capability_crystallised",
+        payload: { capabilityId: work.capabilityId },
+      },
+    ];
+  }
+
+  private async dispatchInvoke(action: Action): Promise<Observation[]> {
+    const capabilityId = String(action.input.capabilityId ?? "");
+    const result = await this.fabric.invoke(
+      this.state.goal.principal,
+      capabilityId,
       action.input.capabilityInput,
-      admitted.contract.executionConstraints,
     );
-    if (signal.aborted) return [this.cancelledObservation(action)];
+    if (!result.ok && result.error?.code === "DENIED") {
+      return [
+        {
+          id: this.ids.next("obs"),
+          at: this.clock.now().toISOString(),
+          kind: "capability_result",
+          actionId: action.id,
+          payload: { capabilityId, denied: true, error: result.error },
+        },
+      ];
+    }
     if (!result.ok) {
       return [
         {
@@ -410,11 +368,7 @@ export class Runtime {
           at: this.clock.now().toISOString(),
           kind: "error",
           actionId: action.id,
-          payload: {
-            capabilityId,
-            code: result.error?.code,
-            message: result.error?.message,
-          },
+          payload: { capabilityId, code: result.error?.code, message: result.error?.message },
         },
       ];
     }

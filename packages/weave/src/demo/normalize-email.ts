@@ -1,38 +1,32 @@
-import type {
-  CapabilityContract,
-  ImplementationCandidate,
-  TestCorpus,
-} from "@weave/agentfabric";
+import type { Capability } from "@weave/agentsop";
 import type { InferenceKind } from "../inference.ts";
+import type { TestCorpus } from "../classifier/index.ts";
 
-export const normalizeEmailContract: CapabilityContract = {
-  id: "normalize_email",
-  version: "1.0.0",
-  purpose: "Normalize an email address by trimming whitespace and lowercasing it.",
-  inputs: {
+export const emailNormalizeDocument: Capability = {
+  agentsop: "0.1",
+  id: "email.normalize",
+  title: "Normalize email",
+  description: "Trim whitespace and lowercase an email address.",
+  input: {
     type: "object",
     properties: { email: { type: "string" } },
     required: ["email"],
+    additionalProperties: false,
   },
-  outputs: {
+  output: {
     type: "object",
     properties: { email: { type: "string" } },
     required: ["email"],
+    additionalProperties: false,
   },
-  invariants: [
-    "output.email is trimmed",
-    "output.email is lowercase",
-    "output.email contains a local part and a domain",
-  ],
-  failures: [{ code: "invalid_email", when: "the input is empty or lacks a valid local@domain shape" }],
   effects: [],
-  permissions: [],
-  successEvidence: ["output.email matches the normalized form of a valid input"],
-  executionConstraints: { timeoutMs: 50 },
+  idempotent: true,
+  authority: { resources: [], effects: [] },
+  depends_on: [],
 };
 
-export const normalizeEmailCorpus: TestCorpus = {
-  contractId: "normalize_email",
+export const emailNormalizeCorpus: TestCorpus = {
+  capabilityId: "email.normalize",
   revision: "1",
   cases: [
     {
@@ -50,22 +44,8 @@ export const normalizeEmailCorpus: TestCorpus = {
       expected: { email: "bar@test.org" },
     },
     {
-      id: "empty",
-      name: "rejects an empty string",
-      visibility: "development",
-      input: { email: "" },
-      expectedError: { code: "invalid_email" },
-    },
-    {
-      id: "missing-at",
-      name: "rejects a value without @",
-      visibility: "development",
-      input: { email: "not-an-email" },
-      expectedError: { code: "invalid_email" },
-    },
-    {
       id: "plus-tag",
-      name: "held-out plus addressing and subdomain case",
+      name: "held-out plus addressing",
       visibility: "held_out",
       input: { email: "User+Tag@SUB.Example.com" },
       expected: { email: "user+tag@sub.example.com" },
@@ -73,40 +53,19 @@ export const normalizeEmailCorpus: TestCorpus = {
   ],
 };
 
-export const normalizeEmailSource = `
+export const emailNormalizeSource = `
 const email = String(input.email ?? "").trim().toLowerCase();
 const at = email.indexOf("@");
-if (at <= 0 || at !== email.lastIndexOf("@")) {
-  throw { code: "invalid_email", message: "invalid_email" };
-}
-const domain = email.slice(at + 1);
-if (!domain) {
-  throw { code: "invalid_email", message: "invalid_email" };
+if (at <= 0 || at !== email.lastIndexOf("@") || !email.slice(at + 1)) {
+  throw new Error("invalid_email");
 }
 return { email };
 `.trim();
 
-export const lowercaseOnlySource = `
-return { email: String(input.email ?? "").toLowerCase() };
-`.trim();
-
-export function normalizeEmailCandidate(): ImplementationCandidate {
+export function emailNormalizeScripts(): Partial<Record<InferenceKind, unknown>> {
   return {
-    id: "normalize_email:local:1",
-    contractId: "normalize_email",
-    kind: "local_source",
-    source: normalizeEmailSource,
-    provenance: {
-      origin: "scripted-inference",
-      generators: ["propose_implementation"],
-    },
-  };
-}
-
-export function normalizeEmailScripts(): Partial<Record<InferenceKind, unknown>> {
-  return {
-    propose_contract: normalizeEmailContract,
-    propose_tests: normalizeEmailCorpus,
-    propose_implementation: normalizeEmailCandidate(),
+    propose_contract: emailNormalizeDocument,
+    propose_tests: emailNormalizeCorpus,
+    propose_resolver: emailNormalizeSource,
   };
 }

@@ -1,24 +1,25 @@
+import { Fabric } from "@weave/agentfabric";
 import {
   HeuristicDecisionLayer,
   Runtime,
   SequenceIds,
   corePolicy,
+  emailNormalizeDocument,
+  emailNormalizeScripts,
   type CycleRecord,
   type WeaveState,
 } from "../packages/weave/src/index.ts";
 import { ControllableClock } from "../packages/weave/src/ids.ts";
-import { CapabilityRegistry } from "../packages/weave/src/registry.ts";
 import {
   CheapestSufficientRouter,
   ScriptedInferenceProvider,
 } from "../packages/weave/src/inference.ts";
-import { normalizeEmailScripts } from "../packages/weave/src/demo/normalize-email.ts";
 
 function formatCycle(record: CycleRecord, state: WeaveState): string {
   const lines = [
     `=== Cycle ${record.index} ===`,
-    `goal: ${state.goal.status}`,
-    `crystallization: ${record.crystallizationPhase ?? "none"}`,
+    `goal: ${state.goal.status}  principal: ${state.goal.principal}`,
+    `classifier: ${record.classifierPhase ?? "none"}`,
     `facts: ${record.factKeys.join(", ") || "(none)"}`,
     "action space:",
     ...record.actionSpace.map((action) => `  - ${action.kind}  ${action.key}`),
@@ -30,9 +31,7 @@ function formatCycle(record: CycleRecord, state: WeaveState): string {
     "policy rejections:",
     ...(record.policy.length === 0
       ? ["  - (none)"]
-      : record.policy.map(
-          (item) => `  - ${item.key}  ${item.cause}: ${item.reasons.join("; ")}`,
-        )),
+      : record.policy.map((item) => `  - ${item.key}  ${item.cause}: ${item.reasons.join("; ")}`)),
     `viable: ${record.viable.join(", ") || "(none)"}`,
     `executed: ${record.executed.join(", ") || "(none)"}`,
     "observations:",
@@ -46,19 +45,21 @@ function formatCycle(record: CycleRecord, state: WeaveState): string {
   return lines.join("\n");
 }
 
-const emails = ["Foo@Example.COM", "  bar@test.org  "];
+const fabric = new Fabric();
+fabric.register(emailNormalizeDocument);
 
 const runtime = new Runtime({
   goal: {
     id: "goal_normalize",
     statement: "Normalize the provided email addresses",
     scope: "demo",
+    principal: "guest",
     authority: {
-      canCrystallize: true,
+      canCrystallise: true,
+      canClassify: true,
       canRequestInference: true,
       canCommunicate: true,
       canComplete: true,
-      canExecute: [],
       inferenceBudget: 12,
     },
     status: "active",
@@ -66,7 +67,7 @@ const runtime = new Runtime({
   },
   decision: new HeuristicDecisionLayer(),
   policy: corePolicy(),
-  registry: new CapabilityRegistry(),
+  fabric,
   router: new CheapestSufficientRouter([
     {
       id: "model-local-small",
@@ -76,7 +77,7 @@ const runtime = new Runtime({
       privacy: "local",
     },
   ]),
-  providers: new Map([["scripted", new ScriptedInferenceProvider(normalizeEmailScripts())]]),
+  providers: new Map([["scripted", new ScriptedInferenceProvider(emailNormalizeScripts())]]),
   ids: new SequenceIds(),
   clock: new ControllableClock(new Date("2026-09-17T00:00:00.000Z")),
   onCycle(record, state) {
@@ -89,10 +90,10 @@ runtime.observe({
   kind: "user_input",
   payload: {
     text: "Normalize these emails",
-    facts: { emails },
+    facts: { emails: ["Foo@Example.COM", "  bar@test.org  "] },
     gap: {
       purpose: "Normalize an email address",
-      capabilityId: "normalize_email",
+      capabilityId: "email.normalize",
       listKey: "emails",
       outputPrefix: "normalized_email:",
       inputKey: "email",
@@ -103,16 +104,17 @@ runtime.observe({
 console.log("Observation: user_input (emails + capability gap)\n");
 await runtime.runUntilIdle();
 
-console.log("Observation: approval granted for normalize_email\n");
+console.log("Observation: approval granted for email.normalize\n");
 runtime.observe({
   kind: "approval",
-  payload: { subject: "normalize_email", granted: true },
+  payload: { subject: "email.normalize", granted: true },
 });
 await runtime.runUntilIdle();
 
 const state = runtime.snapshot();
 console.log("=== Result ===");
 console.log(`status: ${state.goal.status}`);
+console.log(`fabric: ${fabric.resolutionOf("email.normalize").status}`);
 for (const [key, fact] of Object.entries(state.facts)) {
   if (key.startsWith("normalized_email:")) {
     console.log(`${key} -> ${JSON.stringify(fact.value)}`);

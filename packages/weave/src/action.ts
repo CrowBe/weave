@@ -1,12 +1,13 @@
-import type { CapabilityRegistry } from "./registry.ts";
-import type { WeaveState } from "./state.ts";
+import type { Fabric } from "@weave/agentfabric";
+import { capabilityView } from "./capabilities/index.ts";
+import type { WeaveState } from "./state/index.ts";
 
 export type ActionKind =
   | "request_inference"
-  | "execute_capability"
-  | "demonstrate_red"
-  | "prove_green"
-  | "admit_capability"
+  | "register_capability"
+  | "classify_resolver"
+  | "crystallise"
+  | "invoke_capability"
   | "request_approval"
   | "clarify"
   | "communicate"
@@ -25,114 +26,91 @@ export interface Action {
   estimatedCost?: number;
 }
 
-export function enumerateActions(state: WeaveState, registry: CapabilityRegistry): Action[] {
+export function enumerateActions(state: WeaveState, fabric: Fabric): Action[] {
   const actions: Action[] = [];
   const gap = state.gap;
-  const admitted = gap ? registry.get(gap.capabilityId) : undefined;
+  const work = state.classifier;
+  const view = gap ? capabilityView(fabric, gap.capabilityId) : undefined;
 
-  if (gap && !admitted) {
-    const phase = state.crystallization?.phase ?? "awaiting_contract";
-    switch (phase) {
-      case "awaiting_contract":
-        actions.push(
-          inferenceAction("propose_contract", {
-            purpose: gap.purpose,
-            capabilityId: gap.capabilityId,
-          }),
-        );
-        break;
-      case "awaiting_tests":
-        actions.push(
-          inferenceAction("propose_tests", {
-            contract: state.crystallization?.contract,
-          }),
-        );
-        break;
-      case "awaiting_red":
-        actions.push({
-          id: "tmp",
-          kind: "demonstrate_red",
-          key: `demonstrate_red:${gap.capabilityId}`,
-          dependsOn: [],
-          input: { capabilityId: gap.capabilityId },
-          requiredPermissions: [],
-          effects: [],
-        });
-        break;
-      case "awaiting_implementation":
-        actions.push(
-          inferenceAction("propose_implementation", {
-            contract: state.crystallization?.contract,
-            corpus: state.crystallization?.corpus,
-          }),
-        );
-        break;
-      case "awaiting_green":
-        actions.push({
-          id: "tmp",
-          kind: "prove_green",
-          key: `prove_green:${gap.capabilityId}`,
-          dependsOn: [],
-          input: { capabilityId: gap.capabilityId },
-          requiredPermissions: [],
-          effects: [],
-        });
-        break;
-      case "awaiting_admission":
-        actions.push({
-          id: "tmp",
-          kind: "admit_capability",
-          key: `admit_capability:${gap.capabilityId}`,
-          dependsOn: [],
-          input: { capabilityId: gap.capabilityId },
-          requiredPermissions: [],
-          effects: [],
-        });
-        break;
-      default:
-        break;
+  if (gap && !view) {
+    if (work?.document) {
+      actions.push({
+        id: "tmp",
+        kind: "register_capability",
+        key: `register:${gap.capabilityId}`,
+        dependsOn: [],
+        input: { document: work.document },
+        requiredPermissions: [],
+        effects: [],
+      });
+    } else {
+      actions.push(inferenceAction("propose_contract", { purpose: gap.purpose, capabilityId: gap.capabilityId }));
+    }
+  } else if (gap && view?.status !== "resolved") {
+    const phase = work?.phase ?? "awaiting_corpus";
+    if (!work?.corpus && (phase === "awaiting_document" || phase === "awaiting_corpus")) {
+      actions.push(inferenceAction("propose_tests", { capabilityId: gap.capabilityId, document: work?.document }));
+    } else if (!work?.resolverSource) {
+      actions.push(inferenceAction("propose_resolver", { capabilityId: gap.capabilityId, document: work?.document }));
+    } else if (phase === "awaiting_trust" || !work.trust?.trusted) {
+      actions.push({
+        id: "tmp",
+        kind: "classify_resolver",
+        key: `classify:${gap.capabilityId}`,
+        dependsOn: [],
+        input: { capabilityId: gap.capabilityId },
+        requiredPermissions: [],
+        effects: [],
+      });
+    } else if (phase === "awaiting_crystallise") {
+      actions.push({
+        id: "tmp",
+        kind: "crystallise",
+        key: `crystallise:${gap.capabilityId}`,
+        dependsOn: [],
+        input: { capabilityId: gap.capabilityId },
+        requiredPermissions: [],
+        effects: [],
+      });
     }
   }
 
-  if (gap && admitted) {
-    const authorized = canExecute(state, gap.capabilityId);
-    if (!authorized) {
-      const approval = state.approvals.find((item) => item.subject === gap.capabilityId);
-      if (!approval?.requested) {
-        actions.push({
-          id: "tmp",
-          kind: "request_approval",
-          key: `request_approval:${gap.capabilityId}`,
-          dependsOn: [],
-          input: {
-            capabilityId: gap.capabilityId,
-            reason: "admitted capability is not in goal authority",
-          },
-          requiredPermissions: [],
-          effects: [],
-        });
-      }
+  if (gap && view?.status === "resolved") {
+    const approval = state.approvals.find((item) => item.subject === gap.capabilityId);
+    const deniedPending = Boolean(approval && !approval.granted);
+    if (deniedPending && !approval?.requested) {
+      actions.push({
+        id: "tmp",
+        kind: "request_approval",
+        key: `request_approval:${gap.capabilityId}`,
+        dependsOn: [],
+        input: { capabilityId: gap.capabilityId, reason: "invoke returned DENIED" },
+        requiredPermissions: [],
+        effects: [],
+      });
     }
-    const items = state.facts[gap.listKey]?.value;
-    if (Array.isArray(items)) {
-      for (const item of items) {
-        const itemKey = String(item);
-        const outputKey = `${gap.outputPrefix}${itemKey}`;
-        if (outputKey in state.facts) continue;
-        actions.push({
-          id: "tmp",
-          kind: "execute_capability",
-          key: `execute:${gap.capabilityId}:${itemKey}`,
-          dependsOn: [],
-          input: {
-            capabilityId: gap.capabilityId,
-            item: itemKey,
-            outputKey,
-            capabilityInput: { [gap.inputKey]: item },
-          },
-          requiredPermissions: admitted.contract.permissions,
-          effects: admitted.contract.effects,
-        });
+    if (!deniedPending) {
+      const items = state.facts[gap.listKey]?.value;
+      if (Array.isArray(items)) {
+        for (const item of items) {
+          const itemKey = String(item);
+          const outputKey = `${gap.outputPrefix}${itemKey}`;
+          if (outputKey in state.facts) continue;
+          actions.push({
+            id: "tmp",
+            kind: "invoke_capability",
+            key: `invoke:${gap.capabilityId}:${itemKey}`,
+            dependsOn: [],
+            input: {
+              capabilityId: gap.capabilityId,
+              item: itemKey,
+              outputKey,
+              capabilityInput: { [gap.inputKey]: item },
+            },
+            requiredPermissions: [],
+            effects: view.effects,
+          });
+        }
       }
     }
   }
@@ -161,12 +139,6 @@ export function enumerateActions(state: WeaveState, registry: CapabilityRegistry
   }
 
   return actions;
-}
-
-export function canExecute(state: WeaveState, capabilityId: string): boolean {
-  if (state.goal.authority.canExecute.includes("*")) return true;
-  if (state.goal.authority.canExecute.includes(capabilityId)) return true;
-  return state.approvals.some((approval) => approval.subject === capabilityId && approval.granted);
 }
 
 function inferenceAction(kind: string, context: Record<string, unknown>): Action {

@@ -6,6 +6,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@weave/agentfabric": "0.1.0"
+    "@weave/agentfabric": "0.1.0",
+    "@weave/agentsop": "0.1.0"
   }
 }

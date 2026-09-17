@@ -1,54 +1,19 @@
-export type { JsonSchema, SchemaViolation } from "./schema.ts";
-export { deepEqual, validateSchema } from "./schema.ts";
-
-export type {
-  CapabilityContract,
-  EffectName,
-  ExecutionConstraints,
-  FailureMode,
-  Maturity,
-  PermissionName,
-  Provenance,
-} from "./contract.ts";
-export { assertContract } from "./contract.ts";
-
-export type {
-  ExecutionError,
-  ExecutionResult,
-  ImplementationCandidate,
-  ImplementationKind,
-  ImplementationRuntime,
-} from "./implementation.ts";
+export type { CapabilityView, FabricOptions } from "./fabric.ts";
+export { Fabric } from "./fabric.ts";
+export type { Grant, Principal, Privilege } from "./grants.ts";
+export { Authority, defaultPrincipals } from "./grants.ts";
+export { ResourceRegistry } from "./resources.ts";
+export type { ResolverBinding, ResolverContext, ResolverFn } from "./resolver.ts";
+export { loadResolver, placeholderResolver } from "./resolver.ts";
 export {
-  InProcessRuntime,
-  implementationForContract,
-  normalizeError,
-  placeholderImplementation,
-} from "./implementation.ts";
-
-export type {
-  TestCase,
-  TestCorpus,
-  TestResult,
-  TestVisibility,
-} from "./corpus.ts";
-export {
-  assertCorpus,
-  developmentCases,
-  heldOutCases,
-  runCases,
-} from "./corpus.ts";
-
-export type {
-  AdmissionVerdict,
-  CrystallizationRecord,
-  GreenEvidence,
-  RedEvidence,
-} from "./lifecycle.ts";
-export {
-  demonstrateRed,
-  evaluateAdmissionEligibility,
-  evaluateHeldOut,
-  proveGreen,
-  runCrystallizationPipeline,
-} from "./lifecycle.ts";
+  Denied,
+  DependencyBlocked,
+  FabricError,
+  KindMismatch,
+  ResolverError,
+  ResolverUnavailable,
+  UndeclaredDependency,
+  UnknownCapability,
+  UnknownResource,
+  Unresolved,
+} from "./errors.ts";

@@ -6,7 +6,7 @@ export type InferenceKind =
   | "generate_language"
   | "propose_contract"
   | "propose_tests"
-  | "propose_implementation";
+  | "propose_resolver";
 
 export type InferenceQuality = "min_sufficient" | "high";
 

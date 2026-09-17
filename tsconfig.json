@@ -2,6 +2,7 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "paths": {
+      "@weave/agentsop": ["./packages/agentsop/src/index.ts"],
       "@weave/agentfabric": ["./packages/agentfabric/src/index.ts"],
       "@weave/runtime": ["./packages/weave/src/index.ts"]
     }

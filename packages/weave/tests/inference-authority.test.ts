@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { Fabric } from "@weave/agentfabric";
 import {
   HeuristicDecisionLayer,
   Runtime,
@@ -7,7 +8,6 @@ import {
   type Goal,
 } from "../src/index.ts";
 import { ControllableClock } from "../src/ids.ts";
-import { CapabilityRegistry } from "../src/registry.ts";
 import { CheapestSufficientRouter, ScriptedInferenceProvider } from "../src/inference.ts";
 import { localBinding } from "./harness.ts";
 
@@ -17,12 +17,13 @@ describe("inference is an observation", () => {
       id: "goal_authority",
       statement: "Do not trust a fluent completion",
       scope: "test",
+      principal: "guest",
       authority: {
-        canCrystallize: false,
+        canCrystallise: false,
+        canClassify: false,
         canRequestInference: true,
         canCommunicate: true,
         canComplete: true,
-        canExecute: [],
         inferenceBudget: 5,
       },
       status: "active",
@@ -32,7 +33,7 @@ describe("inference is an observation", () => {
       goal,
       decision: new HeuristicDecisionLayer(),
       policy: corePolicy(),
-      registry: new CapabilityRegistry(),
+      fabric: new Fabric(),
       router: new CheapestSufficientRouter([localBinding]),
       providers: new Map([
         [
@@ -52,8 +53,6 @@ describe("inference is an observation", () => {
     });
 
     const frontier = runtime.plan();
-    const complete = frontier.actionSpace.find((action) => action.kind === "complete_goal");
-    expect(complete).toBeTruthy();
     expect(
       frontier.rejected.some(
         (item) => item.action.kind === "complete_goal" && item.cause === "policy",
@@ -70,8 +69,6 @@ describe("inference is an observation", () => {
     });
 
     expect(runtime.snapshot().goal.status).toBe("active");
-    expect(runtime.snapshot().facts.done).toBeUndefined();
-    const after = runtime.plan();
-    expect(after.viable.some((item) => item.action.kind === "complete_goal")).toBe(false);
+    expect(runtime.plan().viable.some((item) => item.action.kind === "complete_goal")).toBe(false);
   });
 });

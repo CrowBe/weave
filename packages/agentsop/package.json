@@ -1,11 +1,8 @@
 {
-  "name": "@weave/agentfabric",
+  "name": "@weave/agentsop",
   "version": "0.1.0",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
-  },
-  "dependencies": {
-    "@weave/agentsop": "0.1.0"
   }
 }

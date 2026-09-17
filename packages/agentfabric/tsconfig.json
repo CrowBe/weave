@@ -1,4 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@weave/agentsop": ["../agentsop/src/index.ts"]
+    }
+  },
   "include": ["src", "tests"]
 }
