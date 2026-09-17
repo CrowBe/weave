@@ -1,0 +1,20 @@
+{
+  "name": "weave",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/agentfabric",
+    "packages/weave"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p packages/agentfabric --noEmit && tsc -p packages/weave --noEmit",
+    "demo": "tsx examples/normalize-email.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
+  }
+}

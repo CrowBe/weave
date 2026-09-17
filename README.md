@@ -14,10 +14,29 @@ When repeated reasoning reveals a reusable capability, Weave crystallizes it thr
 
 AgentFabric provides the standard contract and lifecycle for those capabilities. It is architecturally separate but ships with Weave in the same repository and checkout. Jev is the initial fast decision layer for evaluating state, weighting actions, and classifying what is ready for capture or needs more work. Neither is the agent: the Weave runtime owns the loop, policy, state, and authority boundaries.
 
-The project is currently at the architecture and vocabulary stage. Start with:
+## Initial build
 
-- [VISION.md](./VISION.md) — what Weave is and what it refuses to become.
-- [CONTEXT.md](./CONTEXT.md) — the project's ubiquitous language.
-- [AGENTS.md](./AGENTS.md) — how coding agents should work in this repository.
+The first loop is implemented in TypeScript:
 
-Weave is early. The first objective is to prove a minimal loop that can observe state, weigh a typed action frontier, execute safe actions, and crystallize one capability from contract through red-green validation.
+- `@weave/agentfabric` — capability contracts, test corpora, demonstrated red, proven green, and admission eligibility. It does not schedule goals.
+- `@weave/runtime` — explicit state, a typed action space, heuristic weighing, deterministic policy, concurrent scheduling, and an inference router. Model output is an observation.
+
+The proof is a `normalize_email` capability: contract → tests → red against a placeholder → green against a candidate → held-out admission → approval → parallel execution → goal completion.
+
+```
+npm install
+npm test
+npm run typecheck
+npm run demo
+```
+
+`npm run demo` prints each cycle: action space, weights, policy rejections, and executed keys. After crystallization it still refuses to execute until approval is granted.
+
+### What this build is not
+
+- The heuristic decision layer is a stand-in. Jev can replace it later through the same `DecisionLayer` contract.
+- Demo inference is scripted. The runtime asks for a kind of inference and routes to a binding; it does not own a vendor.
+- `vm.runInNewContext` constrains generated local source; it is not a security sandbox.
+- Composition of existing capabilities is preferred by the architecture but not yet implemented as a matcher.
+
+A change still has to match [VISION.md](./VISION.md). Use [CONTEXT.md](./CONTEXT.md) for the ubiquitous language and [AGENTS.md](./AGENTS.md) for how to work in this repository.

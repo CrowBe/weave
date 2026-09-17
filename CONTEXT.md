@@ -28,6 +28,10 @@ One passage through observing state, weighing actions, applying policy, executin
 
 A typed operation Weave may execute to advance a goal. Retrieval, execution, inference, clarification, approval, communication, waiting, and completion are all actions.
 
+### Action space
+
+The typed set of actions that could be considered from the current state before weighing and policy. Distinct from the action frontier, which is the viable weighted subset.
+
 ### Action frontier
 
 The currently viable set of weighted actions. It may contain several independent actions that can execute concurrently. Avoid *next action* when multiple actions may be viable.
@@ -35,6 +39,10 @@ The currently viable set of weighted actions. It may contain several independent
 ### Thread
 
 A causally related sequence of actions and observations within a goal. Threads may run concurrently, join, be superseded, or be cancelled. A thread is not an operating-system thread.
+
+### Cycle record
+
+The inspectable explanation of one cycle: observations applied, considered actions, weights, policy decisions, executed and cancelled actions, and resulting observations.
 
 ## Intelligence and control
 
@@ -57,6 +65,10 @@ The deterministic component that selects a model and configuration for a request
 ### Policy
 
 Deterministic rules that bound action: permissions, approvals, spending limits, data boundaries, and destructive-operation controls. Policy always outranks a probabilistic recommendation.
+
+### Authority
+
+The explicit permissions attached to a goal: what Weave may crystallize, infer, execute, spend, communicate, and complete. Authority is granted. Evidence is not authorization, and admitting a capability does not grant permission to execute it.
 
 ### Evidence
 
@@ -142,7 +154,9 @@ The record of where a contract, test, or implementation came from, including sou
 
 - Say **runtime**, not *LLM agent*, when referring to Weave as a whole.
 - Say **observation**, not *message*, for a general state input.
+- Say **action space**, not *action frontier*, for the unfiltered set of possible actions.
 - Say **action frontier**, not *next action*, when concurrency is possible.
+- Say **authority**, not *implied permission*, for what a goal is allowed to do.
 - Say **capability**, not *tool*, for an operation governed by an AgentFabric contract.
 - Say **implementation**, not *capability*, for replaceable executable code.
 - Say **crystallization**, not *learning*, for the admission of new executable capability.
