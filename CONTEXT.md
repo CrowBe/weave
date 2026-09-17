@@ -40,7 +40,7 @@ A causally related sequence of actions and observations within a goal. Threads m
 
 ### State view
 
-The bounded, typed rendering of state handed to the decision layer for one cycle. A state view is derived from state; it is neither the observation log nor the projection, and it is budgeted so decision quality can be compared across models and across time.
+The bounded, typed rendering of state composed for one judgment site. A state view is derived from state; it is neither the observation log nor the projection, and it is budgeted so judgment quality can be compared across models and across time. Its schema is versioned, and anything consuming one pins the version it was written against. There is no general "session context": a capability's context is its typed input, and an inference's context is what its profile declares.
 
 ### Judgment site
 
@@ -73,6 +73,14 @@ Why an inference was requested, which determines its cost, frequency, and what i
 ### Inference kind
 
 What is being asked for — classify, extract, transform, draft-contract, judge. A kind is an entry in the inference map and carries prompt template versions, acceptance defaults, a default tier, and the statistics routing reads. Kinds belong to the gateway's vocabulary, not to the capability catalogue: a capability is named for its semantic operation, and its generative implementation declares the kind.
+
+### Context profile
+
+The declarative statement, carried by an inference kind, of which state slices a request needs, at what depth, under what budget, with what excluded, and at what data class. The gateway declares the profile; only the runtime composes it; the gateway cannot reach back for more.
+
+### Context manifest
+
+The record of what actually filled a composed context: slice by slice, the item ids and a content hash. It is what makes a recorded judgment reproducible.
 
 ### Inference map
 

@@ -159,16 +159,27 @@ Conversation is one source of observations, never the projection itself.
 
 ### State view
 
-A **state view** is the bounded, typed rendering of the projection handed to the
-decision layer. It is not the projection and not the log. It exists so that
-decision quality can be evaluated: the same state view must produce comparable
-weights across models and across time.
+A **state view** is the bounded, typed rendering of the projection composed for
+one judgment site. It is not the projection and not the log. It exists so that
+judgment quality can be evaluated: the same state view must produce comparable
+answers across models and across time.
+
+The decision layer's state view is the canonical one, because the loop cannot run
+without it, and it is also just the first instance of a general mechanism — every
+judgment site and every inference kind declares what it needs, and the projector
+composes exactly that (§7). There is no "full session context" object anywhere in
+this architecture. There is an observation log, which is evidence, and there are
+composed views, which are inputs.
 
 State views are budgeted. A capability digest is one compact line per capability
 (id, title, effects, resolution status, cost class, observed reliability); full
 input and output schemas travel only for shortlisted candidates. The stable
-prefix of a state view — goal, authority, capability digest — is ordered first so
-it can be cached across cycles.
+prefix — goal, authority, capability digest — is ordered first so it can be
+cached across cycles.
+
+The state view schema is versioned, and anything that consumes one pins the
+version it was written against. A view shape that drifts silently invalidates
+every corpus and every recorded judgment that used it (§8).
 
 ## 4. Ports
 
@@ -426,6 +437,62 @@ The pipeline emits one observation with the result, plus an evidence record of
 every attempt: routed units tried, evaluations, cost, latency, and why it
 stopped.
 
+### Context is composed per kind, not handed over
+
+This is what classification buys beyond routing. Because the gateway knows the
+kind, it knows what that kind needs to see — and a classification request should
+not receive what a goal decomposition receives.
+
+Each kind in the inference map carries a **context profile**: a declarative
+statement of which state slices it needs, at what depth, under what budget, and
+what must never appear.
+
+```jsonc
+{
+  "kind": "decompose_goal",
+  "requires": [
+    { "slice": "goal",               "depth": "full" },
+    { "slice": "capability_digest",  "depth": "titles+effects", "max_items": 200 },
+    { "slice": "facts",              "select": "relevant_to_goal", "max_tokens": 2000 },
+    { "slice": "open_questions",     "depth": "full" }
+  ],
+  "excludes": ["raw_observations", "other_goals", "secrets"],
+  "data_class": "internal",
+  "budget_tokens": 8000,
+  "order": ["stable", "volatile"]
+}
+```
+
+Ownership splits cleanly, and it has to, because the gateway must not be able to
+read state:
+
+- The **gateway declares the requirement**. It knows what the kind needs.
+- The **loop composes it**. Only Weave can read the projection, so Weave's
+  projector satisfies the profile and hands over a bundle.
+- The **gateway never reaches back**. If a slice is missing, the request fails
+  rather than the gateway going to look.
+
+Three consequences worth stating:
+
+- **Replay needs a manifest.** The bundle carries which items filled each slice,
+  their ids, and a content hash. Without it, a recorded judgment cannot be
+  reproduced, and the eval corpus (§11) is anecdote.
+- **Privacy is a routing input.** `data_class` on the profile, redaction applied
+  during composition, and routing filters the candidate units by what may see
+  that class. A cheaper model that would carry the data somewhere it may not go
+  is not a candidate at any price.
+- **Ordering is cache design.** Stable slices first, volatile last, so the
+  expensive prefix is reusable across cycles and across kinds that share it.
+
+The routed unit therefore includes the profile version: **(context profile ×
+prompt template × model × settings)**. A profile change moves success rates
+exactly as a prompt change does, and attributing one to the other is the same
+mistake in a different place.
+
+Small kinds get tight profiles — often the payload and nothing else. Large kinds
+get wide ones. Same machinery, one dial, and the dial is declared rather than
+improvised per call site.
+
 ### What keeps the gateway from becoming a second loop
 
 This is the real risk in putting retry and escalation behind one action. A
@@ -456,9 +523,10 @@ that meets the bar 40% of the time and escalates the rest is more expensive than
 a mid unit that meets it 90% of the time — and the arithmetic is only available
 if per-site success rates are recorded.
 
-The routed unit is **(prompt template version × model × settings)**, not a model
-alone. Prompt changes shift success rates as much as model changes do, and a
-router that cannot see them will keep attributing one to the other.
+The routed unit is **(context profile × prompt template × model × settings)**,
+not a model alone. Profile and prompt changes shift success rates as much as
+model changes do, and a router that cannot see them will keep attributing one to
+the other.
 
 Two feedback channels tune it:
 
@@ -598,6 +666,56 @@ generative implementation's call through the host, and the privileged fallback
 all reach the same module. Routing statistics, evals,
 budgets, and privacy rules are shared, and there is no second router living
 below the capability boundary with its own opinions.
+
+### Capabilities that consume state
+
+The big cognitive steps are capabilities too: `goal.decompose`,
+`request.classify`, `gap.assess`. They are larger and more expensive than
+`ticket.triage`, and they need much more of the composed state — which is
+exactly why they benefit from being contracts rather than ad-hoc prompts.
+
+Nothing special is required to give them that state. A state view is a typed
+structure, so it can be a typed capability input:
+
+```
+goal.decompose(goal, state_view, constraints)
+  -> { subgoals[], success_criteria[], desired_operations[] }
+```
+
+That keeps the rule that makes this safe: **a capability's context is its
+input.** A resolver receives its typed input and nothing else — no session, no
+transcript, no ambient projection, no way to reach back for more. A capability
+that wants more state must declare it in its contract, where it is visible,
+validated, and part of what the corpus fixes. The loop decides what goes in, so
+a capability can never widen its own view.
+
+Two consequences of typing state into a contract:
+
+- **Corpus cases carry state fixtures.** A case for `goal.decompose` is a goal
+  plus a state view plus the expected decomposition, which makes cases larger
+  and makes them real. A contract that consumes state and is tested only on
+  toy inputs has not been tested.
+- **The contract pins the state view version.** When the view schema changes,
+  every state-consuming contract is a revision candidate, its corpus needs
+  re-fixturing, and its admitted implementations need re-validation. That cost
+  is the price of letting judgment see state at all; the alternative — an
+  unversioned blob — pays it silently and continuously instead.
+
+### The loop's own cognition crystallizes too
+
+This closes a loop that was left open in §7. Framing started as
+`request_inference`, the unnamed door. When a framing shape recurs — same
+inputs, same expected output, same acceptance — it is a capability gap like any
+other, and the extension thread names it, types it, gives it a corpus, and
+admits an implementation. `goal.decompose` is what framing looks like after it
+has been through that.
+
+So the same action kind covers both ends. Novel judgment goes through
+`request_inference` and is observed. Matured judgment is `invoke_capability` on
+a named contract with recorded reliability, a corpus that catches regressions,
+and a routing choice between implementations. Weave's own thinking is subject to
+the ladder it applies to everything else, and a state-consuming contract is how
+that ladder reaches the parts of the system that need the most context.
 
 ### Generative implementations and the crystallization ladder
 
@@ -829,6 +947,11 @@ registry. M0 through M2 run against a fake host and do not force the decision.
   first-class state with their own recurrence count, or stay transient
   observations whose recurrence is recomputed, decides how gap thresholds (§10)
   are actually measured.
+- **What a state view revision costs in practice.** Pinning the version (§3)
+  makes drift visible, but a busy registry of state-consuming contracts could
+  make any view change expensive enough to discourage improving state itself.
+  Whether views need a compatibility discipline of their own — additive slices,
+  deprecation windows — is unsettled.
 - **How closed the inference map should be.** Semantic capabilities carry the
   types (§8), so the map only has to name routing and evaluation units. Whether
   that set is closed like the effect vocabulary, extended by revision, or simply
