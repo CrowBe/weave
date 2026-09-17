@@ -1,0 +1,23 @@
+# Weave
+
+**Software that builds the capabilities it needs.**
+
+Weave is an experimental goal-directed runtime. It observes evolving state, weighs the actions available to it, runs independent work in parallel, and invokes generative models only when existing software cannot adequately advance the goal.
+
+When repeated reasoning reveals a reusable capability, Weave crystallizes it through real-time TDD:
+
+1. Identify the semantic purpose.
+2. Establish a typed capability contract.
+3. Generate and validate executable tests.
+4. Generate one or more implementations.
+5. Admit only an implementation that produces deterministic evidence of correctness.
+
+AgentFabric provides the standard contract and lifecycle for those capabilities. It is architecturally separate but ships with Weave in the same repository and checkout. Jev is the initial fast decision layer for evaluating state, weighting actions, and classifying what is ready for capture or needs more work. Neither is the agent: the Weave runtime owns the loop, policy, state, and authority boundaries.
+
+The project is currently at the architecture and vocabulary stage. Start with:
+
+- [VISION.md](./VISION.md) — what Weave is and what it refuses to become.
+- [CONTEXT.md](./CONTEXT.md) — the project's ubiquitous language.
+- [AGENTS.md](./AGENTS.md) — how coding agents should work in this repository.
+
+Weave is early. The first objective is to prove a minimal loop that can observe state, weigh a typed action frontier, execute safe actions, and crystallize one capability from contract through red-green validation.
