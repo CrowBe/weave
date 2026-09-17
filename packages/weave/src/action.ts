@@ -1,11 +1,12 @@
 import type { Fabric } from "@weave/agentfabric";
-import { capabilityView } from "./capabilities/index.ts";
+import { capabilityView, identifyGap } from "./capabilities/index.ts";
 import type { WeaveState } from "./state/index.ts";
 
 export type ActionKind =
   | "request_inference"
   | "register_capability"
-  | "classify_resolver"
+  | "check_candidate"
+  | "evaluate_candidate"
   | "crystallise"
   | "invoke_capability"
   | "request_approval"
@@ -28,84 +29,118 @@ export interface Action {
 
 export function enumerateActions(state: WeaveState, fabric: Fabric): Action[] {
   const actions: Action[] = [];
-  const gap = state.gap;
-  const work = state.classifier;
-  const view = gap ? capabilityView(fabric, gap.capabilityId) : undefined;
+  const need = state.gap;
+  const work = state.expansion;
+  const gap = identifyGap(state, fabric);
+  const view = need ? capabilityView(fabric, need.capabilityId) : undefined;
 
-  if (gap && !view) {
+  if (gap?.kind === "unnamed") {
     if (work?.document) {
       actions.push({
         id: "tmp",
         kind: "register_capability",
-        key: `register:${gap.capabilityId}`,
+        key: `register:${gap.need.capabilityId}`,
         dependsOn: [],
         input: { document: work.document },
         requiredPermissions: [],
         effects: [],
       });
     } else {
-      actions.push(inferenceAction("propose_contract", { purpose: gap.purpose, capabilityId: gap.capabilityId }));
+      actions.push(
+        inferenceAction("propose_contract", {
+          purpose: gap.need.purpose,
+          capabilityId: gap.need.capabilityId,
+        }),
+      );
     }
-  } else if (gap && view?.status !== "resolved") {
+  } else if (gap?.kind === "unresolved") {
     const phase = work?.phase ?? "awaiting_corpus";
     if (!work?.corpus && (phase === "awaiting_document" || phase === "awaiting_corpus")) {
-      actions.push(inferenceAction("propose_tests", { capabilityId: gap.capabilityId, document: work?.document }));
+      actions.push(
+        inferenceAction("propose_tests", {
+          capabilityId: gap.need.capabilityId,
+          document: work?.document,
+        }),
+      );
     } else if (!work?.resolverSource) {
-      actions.push(inferenceAction("propose_resolver", { capabilityId: gap.capabilityId, document: work?.document }));
-    } else if (phase === "awaiting_trust" || !work.trust?.trusted) {
+      actions.push(
+        inferenceAction("propose_resolver", {
+          capabilityId: gap.need.capabilityId,
+          document: work?.document,
+        }),
+      );
+    } else if (!work.checks) {
       actions.push({
         id: "tmp",
-        kind: "classify_resolver",
-        key: `classify:${gap.capabilityId}`,
+        kind: "check_candidate",
+        key: `check:${gap.need.capabilityId}`,
         dependsOn: [],
-        input: { capabilityId: gap.capabilityId },
+        input: { capabilityId: gap.need.capabilityId },
         requiredPermissions: [],
         effects: [],
       });
-    } else if (phase === "awaiting_crystallise") {
+    } else if (!work.evaluation) {
+      actions.push({
+        id: "tmp",
+        kind: "evaluate_candidate",
+        key: `evaluate:${gap.need.capabilityId}`,
+        dependsOn: [],
+        input: { capabilityId: gap.need.capabilityId },
+        requiredPermissions: [],
+        effects: [],
+      });
+    } else if (work.evaluation.decision === "uncertain") {
+      actions.push(
+        inferenceAction("evaluate_expansion", {
+          capabilityId: gap.need.capabilityId,
+          checks: work.checks,
+          evaluation: work.evaluation,
+        }),
+      );
+    } else if (work.evaluation.decision === "accept") {
       actions.push({
         id: "tmp",
         kind: "crystallise",
-        key: `crystallise:${gap.capabilityId}`,
+        key: `crystallise:${gap.need.capabilityId}`,
         dependsOn: [],
-        input: { capabilityId: gap.capabilityId },
+        input: { capabilityId: gap.need.capabilityId },
         requiredPermissions: [],
         effects: [],
       });
     }
   }
 
-  if (gap && view?.status === "resolved") {
-    const approval = state.approvals.find((item) => item.subject === gap.capabilityId);
+  if (need && view?.status === "resolved") {
+    const approval = state.approvals.find((item) => item.subject === need.capabilityId);
     const deniedPending = Boolean(approval && !approval.granted);
     if (deniedPending && !approval?.requested) {
       actions.push({
         id: "tmp",
         kind: "request_approval",
-        key: `request_approval:${gap.capabilityId}`,
+        key: `request_approval:${need.capabilityId}`,
         dependsOn: [],
-        input: { capabilityId: gap.capabilityId, reason: "invoke returned DENIED" },
+        input: { capabilityId: need.capabilityId, reason: "invoke returned DENIED" },
         requiredPermissions: [],
         effects: [],
       });
     }
     if (!deniedPending) {
-      const items = state.facts[gap.listKey]?.value;
+      const items = state.facts[need.listKey]?.value;
       if (Array.isArray(items)) {
         for (const item of items) {
           const itemKey = String(item);
-          const outputKey = `${gap.outputPrefix}${itemKey}`;
+          const outputKey = `${need.outputPrefix}${itemKey}`;
           if (outputKey in state.facts) continue;
           actions.push({
             id: "tmp",
             kind: "invoke_capability",
-            key: `invoke:${gap.capabilityId}:${itemKey}`,
+            key: `invoke:${need.capabilityId}:${itemKey}`,
             dependsOn: [],
             input: {
-              capabilityId: gap.capabilityId,
+              capabilityId: need.capabilityId,
               item: itemKey,
               outputKey,
-              capabilityInput: { [gap.inputKey]: item },
+              capabilityInput: { [need.inputKey]: item },
             },
             requiredPermissions: [],
             effects: view.effects,

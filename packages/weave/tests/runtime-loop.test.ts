@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import { createRuntime, seedNormalizeGoal } from "./harness.ts";
 
 describe("minimal Weave loop", () => {
-  it("classifies a resolver, crystallises through AgentFabric, then invokes only after a grant", async () => {
+  it("checks and evaluates a resolver, crystallises through AgentFabric, then invokes only after a grant", async () => {
     const { runtime, fabric } = createRuntime();
     seedNormalizeGoal(runtime);
 
     const beforeGrant = await runtime.runUntilIdle();
     expect(beforeGrant.length).toBeGreaterThan(0);
-    expect(runtime.snapshot().classifier?.phase).toBe("ready");
+    expect(runtime.snapshot().expansion?.phase).toBe("ready");
     expect(fabric.resolutionOf("email.normalize").status).toBe("resolved");
     expect(runtime.snapshot().goal.status).toBe("active");
     expect(
@@ -31,13 +31,14 @@ describe("minimal Weave loop", () => {
     });
     const kinds = runtime.journal().map((obs) => obs.kind);
     expect(kinds).toContain("inference_result");
-    expect(kinds).toContain("classifier_event");
+    expect(kinds).toContain("check_event");
+    expect(kinds).toContain("evaluation_event");
     expect(kinds).toContain("capability_crystallised");
     expect(kinds).toContain("capability_result");
     expect(kinds).toContain("goal_completed");
   });
 
-  it("keeps generation, classification, crystallization, and invocation as separate gates", async () => {
+  it("keeps construction, checks, evaluation, crystallization, and invocation as separate gates", async () => {
     const { runtime, fabric } = createRuntime();
     seedNormalizeGoal(runtime);
     await runtime.runUntilIdle();
@@ -46,6 +47,8 @@ describe("minimal Weave loop", () => {
       .filter((obs) => obs.kind === "inference_result")
       .map((obs) => obs.payload.requestKind);
     expect(generated).toEqual(["propose_tests", "propose_resolver"]);
+    expect(runtime.snapshot().expansion?.checks?.passed).toBe(true);
+    expect(runtime.snapshot().expansion?.evaluation?.decision).toBe("accept");
     expect(fabric.resolutionOf("email.normalize").status).toBe("resolved");
     expect(runtime.snapshot().goal.status).toBe("active");
     expect(

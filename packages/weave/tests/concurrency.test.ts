@@ -66,7 +66,7 @@ describe("concurrent invocation", () => {
       principal: "guest",
       authority: {
         canCrystallise: false,
-        canClassify: false,
+        canCheck: false,
         canRequestInference: false,
         canCommunicate: false,
         canComplete: true,

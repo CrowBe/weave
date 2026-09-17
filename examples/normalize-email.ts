@@ -19,7 +19,7 @@ function formatCycle(record: CycleRecord, state: WeaveState): string {
   const lines = [
     `=== Cycle ${record.index} ===`,
     `goal: ${state.goal.status}  principal: ${state.goal.principal}`,
-    `classifier: ${record.classifierPhase ?? "none"}`,
+    `expansion: ${record.expansionPhase ?? "none"}`,
     `facts: ${record.factKeys.join(", ") || "(none)"}`,
     "action space:",
     ...record.actionSpace.map((action) => `  - ${action.kind}  ${action.key}`),
@@ -56,7 +56,7 @@ const runtime = new Runtime({
     principal: "guest",
     authority: {
       canCrystallise: true,
-      canClassify: true,
+      canCheck: true,
       canRequestInference: true,
       canCommunicate: true,
       canComplete: true,

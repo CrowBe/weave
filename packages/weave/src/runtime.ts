@@ -1,4 +1,4 @@
-import { classifyResolver } from "./classifier/index.ts";
+import { checkCandidate } from "./checks/index.ts";
 import type { Fabric } from "@weave/agentfabric";
 import { assignActionIds, enumerateActions, type Action } from "./action.ts";
 import type { DecisionLayer } from "./decision/index.ts";
@@ -27,7 +27,7 @@ export interface CycleRecord {
   at: string;
   goalId: string;
   factKeys: string[];
-  classifierPhase?: string;
+  expansionPhase?: string;
   actionSpace: Array<{ id: string; kind: string; key: string }>;
   weighted: Array<{
     key: string;
@@ -129,6 +129,7 @@ export class Runtime {
 
   async runCycle(): Promise<CycleRecord> {
     const frontier = this.plan();
+    const expansionPhase = this.state.expansion?.phase;
     const resulting: Observation[] = [];
     let executed: string[] = [];
     let cancelled: string[] = [];
@@ -152,7 +153,7 @@ export class Runtime {
       at: this.clock.now().toISOString(),
       goalId: this.state.goal.id,
       factKeys: Object.keys(this.state.facts),
-      classifierPhase: this.state.classifier?.phase,
+      expansionPhase,
       actionSpace: frontier.actionSpace.map((action) => ({
         id: action.id,
         kind: action.kind,
@@ -180,9 +181,11 @@ export class Runtime {
         detail:
           observation.kind === "inference_result"
             ? String(observation.payload.requestKind ?? "")
-            : observation.kind === "classifier_event"
-              ? "trust"
-              : undefined,
+            : observation.kind === "check_event"
+              ? "checks"
+              : observation.kind === "evaluation_event"
+                ? "evaluate"
+                : undefined,
       })),
     };
     this.cycleRecords.push(record);
@@ -229,8 +232,10 @@ export class Runtime {
           },
         ];
       }
-      case "classify_resolver":
-        return this.dispatchClassify();
+      case "check_candidate":
+        return this.dispatchCheck();
+      case "evaluate_candidate":
+        return this.dispatchEvaluate();
       case "crystallise":
         return this.dispatchCrystallise();
       case "invoke_capability":
@@ -301,16 +306,16 @@ export class Runtime {
     ];
   }
 
-  private async dispatchClassify(): Promise<Observation[]> {
-    const work = this.state.classifier;
+  private async dispatchCheck(): Promise<Observation[]> {
+    const work = this.state.expansion;
     if (!work?.corpus || !work.resolverSource) {
-      return [this.errorObs("classify_resolver requires a corpus and resolver")];
+      return [this.errorObs("check_candidate requires a corpus and resolver")];
     }
     const capability = this.fabric.has(work.capabilityId)
       ? this.fabric.capability(work.capabilityId)
       : work.document;
-    if (!capability) return [this.errorObs("classify_resolver requires an AgentSOP document")];
-    const trust = await classifyResolver({
+    if (!capability) return [this.errorObs("check_candidate requires an AgentSOP document")];
+    const checks = await checkCandidate({
       fabric: this.fabric,
       principal: this.crystallisePrincipal,
       capability,
@@ -321,16 +326,32 @@ export class Runtime {
       {
         id: this.ids.next("obs"),
         at: this.clock.now().toISOString(),
-        kind: "classifier_event",
-        payload: { trust },
+        kind: "check_event",
+        payload: { checks },
+      },
+    ];
+  }
+
+  private dispatchEvaluate(): Observation[] {
+    const work = this.state.expansion;
+    if (!work?.checks) {
+      return [this.errorObs("evaluate_candidate requires check evidence")];
+    }
+    const evaluation = this.decision.evaluate(this.state, work.checks);
+    return [
+      {
+        id: this.ids.next("obs"),
+        at: this.clock.now().toISOString(),
+        kind: "evaluation_event",
+        payload: { evaluation },
       },
     ];
   }
 
   private dispatchCrystallise(): Observation[] {
-    const work = this.state.classifier;
-    if (!work?.resolverSource || !work.trust?.trusted) {
-      return [this.errorObs("crystallise requires a trusted resolver")];
+    const work = this.state.expansion;
+    if (!work?.resolverSource || !work.checks?.passed || work.evaluation?.decision !== "accept") {
+      return [this.errorObs("crystallise requires passed checks and an accept evaluation")];
     }
     this.fabric.crystallise(this.crystallisePrincipal, work.capabilityId, work.resolverSource);
     return [

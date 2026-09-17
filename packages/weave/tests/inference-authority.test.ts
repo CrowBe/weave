@@ -20,7 +20,7 @@ describe("inference is an observation", () => {
       principal: "guest",
       authority: {
         canCrystallise: false,
-        canClassify: false,
+        canCheck: false,
         canRequestInference: true,
         canCommunicate: true,
         canComplete: true,

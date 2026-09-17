@@ -75,11 +75,21 @@ export function corePolicy(): ConjunctionPolicy {
       },
     },
     {
-      name: "classifier_requires_authority",
+      name: "check_requires_authority",
       evaluate(action, ctx) {
-        if (action.kind !== "classify_resolver") return null;
-        if (!ctx.state.goal.authority.canClassify) {
-          return deny(this.name, "goal authority does not allow classification");
+        if (action.kind !== "check_candidate") return null;
+        if (!ctx.state.goal.authority.canCheck) {
+          return deny(this.name, "goal authority does not allow checks");
+        }
+        return allow(this.name);
+      },
+    },
+    {
+      name: "evaluate_requires_check_evidence",
+      evaluate(action, ctx) {
+        if (action.kind !== "evaluate_candidate") return null;
+        if (!ctx.state.expansion?.checks) {
+          return deny(this.name, "evaluation requires check evidence");
         }
         return allow(this.name);
       },
@@ -90,6 +100,22 @@ export function corePolicy(): ConjunctionPolicy {
         if (action.kind !== "crystallise" && action.kind !== "register_capability") return null;
         if (!ctx.state.goal.authority.canCrystallise) {
           return deny(this.name, "goal authority does not allow crystallization");
+        }
+        return allow(this.name);
+      },
+    },
+    {
+      name: "crystallise_requires_passed_checks_and_accept",
+      evaluate(action, ctx) {
+        if (action.kind !== "crystallise") return null;
+        if (!ctx.state.expansion?.checks?.passed) {
+          return deny(
+            this.name,
+            "crystallization requires passed checks; evaluation cannot waive them",
+          );
+        }
+        if (ctx.state.expansion.evaluation?.decision !== "accept") {
+          return deny(this.name, "crystallization requires an accept evaluation");
         }
         return allow(this.name);
       },

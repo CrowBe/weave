@@ -15,15 +15,19 @@
 - Parallelize independent work; express dependencies instead of serializing by default.
 - Keep AgentSOP independent of Weave, AgentFabric runtime, and any harness.
 - Keep AgentFabric as a bounded subsystem that honours AgentSOP and ships with Weave.
-- Do not let AgentFabric import Weave runtime, scheduling, or classifier concerns.
+- Do not let AgentFabric import Weave runtime, scheduling, check, or evaluation concerns.
 - Do not let AgentSOP import AgentFabric or Weave.
 - Prefer composition of existing capabilities before creating a new primitive.
 - Begin crystallization with an AgentSOP document, not resolver source.
-- Use the classifier as Weave's trust layer; AgentFabric only binds resolvers.
+- Identify gaps by comparing a stated need to the catalogue; deriving the need from unstructured text is inference.
+- Construct documents, corpora, and resolvers with generative inference; do not ask the decision layer to generate them.
+- Check candidates with deterministic corpus execution; do not call that a classifier or Jev.
+- Evaluate check evidence with the decision layer; escalate to inference when uncertain.
+- The decision layer must not waive failed checks. Policy outranks evaluation.
 - Demonstrate red before generating or accepting resolver code.
 - Validate green with deterministic tests and checks.
-- Treat generated tests and generated code as untrusted until classified.
-- Keep generation, classification, crystallization, and invocation as separate gates.
+- Treat generated tests and generated code as untrusted until checks pass and evaluation accepts.
+- Keep construction, checks, evaluation, crystallization, and invocation as separate gates.
 - Keep the core small: assemble state, assemble capabilities, weigh, act. Domain-specific behavior belongs in capabilities.
 
 ## Change discipline

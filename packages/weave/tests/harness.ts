@@ -8,6 +8,7 @@ import {
   corePolicy,
   emailNormalizeDocument,
   emailNormalizeScripts,
+  type DecisionLayer,
   type Goal,
   type InferenceProvider,
   type ModelBinding,
@@ -21,7 +22,7 @@ export const demoGoal = (): Goal => ({
   principal: "guest",
   authority: {
     canCrystallise: true,
-    canClassify: true,
+    canCheck: true,
     canRequestInference: true,
     canCommunicate: true,
     canComplete: true,
@@ -44,6 +45,7 @@ export function createRuntime(options?: {
   provider?: InferenceProvider;
   fabric?: Fabric;
   registerDocument?: boolean;
+  decision?: DecisionLayer;
   onCycle?: ConstructorParameters<typeof Runtime>[0]["onCycle"];
 }): { runtime: Runtime; fabric: Fabric } {
   const fabric = options?.fabric ?? new Fabric();
@@ -53,7 +55,7 @@ export function createRuntime(options?: {
   const provider = options?.provider ?? new ScriptedInferenceProvider(emailNormalizeScripts());
   const runtime = new Runtime({
     goal: options?.goal ?? demoGoal(),
-    decision: new HeuristicDecisionLayer(),
+    decision: options?.decision ?? new HeuristicDecisionLayer(),
     policy: corePolicy(),
     fabric,
     router: new CheapestSufficientRouter([localBinding]),

@@ -1,19 +1,21 @@
 import type { Capability } from "@weave/agentsop";
-import type { TestCorpus, TrustVerdict } from "../classifier/index.ts";
+import type { CheckEvidence, TestCorpus } from "../checks/index.ts";
+import type { ExpansionEvaluation } from "../decision/index.ts";
 
 export type GoalStatus = "active" | "completed" | "blocked" | "failed" | "cancelled";
 
-export type ClassifierPhase =
+export type ExpansionPhase =
   | "awaiting_document"
   | "awaiting_corpus"
   | "awaiting_resolver"
-  | "awaiting_trust"
+  | "awaiting_checks"
+  | "awaiting_evaluate"
   | "awaiting_crystallise"
   | "ready";
 
 export interface Authority {
   canCrystallise: boolean;
-  canClassify: boolean;
+  canCheck: boolean;
   canRequestInference: boolean;
   canCommunicate: boolean;
   canComplete: boolean;
@@ -63,15 +65,16 @@ export interface Approval {
   reason?: string;
 }
 
-export interface ClassifierWork {
+export interface ExpansionWork {
   id: string;
   capabilityId: string;
   purpose: string;
-  phase: ClassifierPhase;
+  phase: ExpansionPhase;
   document?: Capability;
   corpus?: TestCorpus;
   resolverSource?: string;
-  trust?: TrustVerdict;
+  checks?: CheckEvidence;
+  evaluation?: ExpansionEvaluation;
 }
 
 export interface EvidenceRecord {
@@ -88,7 +91,7 @@ export interface WeaveState {
   openQuestions: OpenQuestion[];
   gap?: CapabilityGap;
   approvals: Approval[];
-  classifier?: ClassifierWork;
+  expansion?: ExpansionWork;
   evidence: EvidenceRecord[];
 }
 
@@ -101,7 +104,8 @@ export type ObservationKind =
   | "error"
   | "timeout"
   | "environment_change"
-  | "classifier_event"
+  | "check_event"
+  | "evaluation_event"
   | "capability_registered"
   | "capability_crystallised"
   | "communication"
@@ -161,6 +165,33 @@ function setFact(state: WeaveState, key: string, value: unknown, observation: Ob
   };
 }
 
+function applyConstructedOutput(work: ExpansionWork, kind: unknown, output: unknown): void {
+  if (kind === "propose_contract" && output && typeof output === "object") {
+    work.document = output as Capability;
+    work.phase = "awaiting_corpus";
+    return;
+  }
+  if (kind === "propose_tests" && output && typeof output === "object") {
+    work.corpus = output as TestCorpus;
+    work.phase = work.resolverSource ? "awaiting_checks" : "awaiting_resolver";
+    return;
+  }
+  if (kind === "propose_resolver" && typeof output === "string") {
+    work.resolverSource = output;
+    work.phase = work.corpus ? "awaiting_checks" : "awaiting_corpus";
+    return;
+  }
+  if (kind === "propose_resolver" && output && typeof output === "object" && "source" in output) {
+    work.resolverSource = String((output as { source: string }).source);
+    work.phase = work.corpus ? "awaiting_checks" : "awaiting_corpus";
+    return;
+  }
+  if (kind === "evaluate_expansion" && output && typeof output === "object") {
+    work.evaluation = output as ExpansionEvaluation;
+    work.phase = work.evaluation.decision === "accept" ? "awaiting_crystallise" : "awaiting_evaluate";
+  }
+}
+
 export function applyObservation(state: WeaveState, observation: Observation): WeaveState {
   const next = structuredClone(state);
   switch (observation.kind) {
@@ -173,8 +204,8 @@ export function applyObservation(state: WeaveState, observation: Observation): W
       }
       if (observation.payload.gap && typeof observation.payload.gap === "object") {
         next.gap = observation.payload.gap as CapabilityGap;
-        next.classifier = {
-          id: `clf_${observation.id}`,
+        next.expansion = {
+          id: `exp_${observation.id}`,
           capabilityId: next.gap.capabilityId,
           purpose: next.gap.purpose,
           phase: "awaiting_document",
@@ -186,48 +217,48 @@ export function applyObservation(state: WeaveState, observation: Observation): W
     case "inference_result": {
       const cost = typeof observation.payload.cost === "number" ? observation.payload.cost : 0;
       next.goal.authority.inferenceBudget = Math.max(0, next.goal.authority.inferenceBudget - cost);
-      const work = next.classifier;
-      const kind = observation.payload.requestKind;
-      const output = observation.payload.output;
-      if (work && kind === "propose_contract" && output && typeof output === "object") {
-        work.document = output as Capability;
-        work.phase = "awaiting_corpus";
-      } else if (work && kind === "propose_tests" && output && typeof output === "object") {
-        work.corpus = output as TestCorpus;
-        work.phase = work.resolverSource ? "awaiting_trust" : "awaiting_resolver";
-      } else if (work && kind === "propose_resolver" && typeof output === "string") {
-        work.resolverSource = output;
-        work.phase = work.corpus ? "awaiting_trust" : "awaiting_corpus";
-      } else if (work && kind === "propose_resolver" && output && typeof output === "object" && "source" in output) {
-        work.resolverSource = String((output as { source: string }).source);
-        work.phase = work.corpus ? "awaiting_trust" : "awaiting_corpus";
-      }
-      recordEvidence(next, observation, "inference_result", `inference ${String(kind)} recorded as observation`);
+      const work = next.expansion;
+      if (work) applyConstructedOutput(work, observation.payload.requestKind, observation.payload.output);
+      recordEvidence(
+        next,
+        observation,
+        "inference_result",
+        `inference ${String(observation.payload.requestKind)} recorded as observation`,
+      );
       break;
     }
     case "capability_registered": {
-      if (next.classifier) {
-        next.classifier.document = observation.payload.document as Capability | undefined;
-        next.classifier.phase =
-          next.classifier.corpus && next.classifier.resolverSource
-            ? "awaiting_trust"
-            : next.classifier.corpus
+      if (next.expansion) {
+        next.expansion.document = observation.payload.document as Capability | undefined;
+        next.expansion.phase =
+          next.expansion.corpus && next.expansion.resolverSource
+            ? "awaiting_checks"
+            : next.expansion.corpus
               ? "awaiting_resolver"
               : "awaiting_corpus";
       }
       recordEvidence(next, observation, "capability_registered", String(observation.payload.capabilityId));
       break;
     }
-    case "classifier_event": {
-      if (next.classifier) {
-        next.classifier.trust = observation.payload.trust as TrustVerdict;
-        next.classifier.phase = next.classifier.trust?.trusted ? "awaiting_crystallise" : "awaiting_trust";
+    case "check_event": {
+      if (next.expansion) {
+        next.expansion.checks = observation.payload.checks as CheckEvidence;
+        next.expansion.phase = "awaiting_evaluate";
       }
-      recordEvidence(next, observation, "classifier_event", "classifier verdict");
+      recordEvidence(next, observation, "check_event", "check evidence recorded");
+      break;
+    }
+    case "evaluation_event": {
+      if (next.expansion) {
+        next.expansion.evaluation = observation.payload.evaluation as ExpansionEvaluation;
+        next.expansion.phase =
+          next.expansion.evaluation?.decision === "accept" ? "awaiting_crystallise" : "awaiting_evaluate";
+      }
+      recordEvidence(next, observation, "evaluation_event", "expansion evaluation recorded");
       break;
     }
     case "capability_crystallised": {
-      if (next.classifier) next.classifier.phase = "ready";
+      if (next.expansion) next.expansion.phase = "ready";
       recordEvidence(next, observation, "capability_crystallised", String(observation.payload.capabilityId));
       break;
     }

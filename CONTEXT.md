@@ -6,7 +6,7 @@ This file defines Weave's ubiquitous language. Use these terms consistently in c
 
 ### Weave
 
-The goal-directed runtime. Weave assembles state, assembles the available capabilities, submits that structure to the decision layer, and acts on the weighted frontier. Do not use *Weave* to mean a model, agent persona, AgentFabric, or an individual capability.
+The goal-directed runtime. Weave assembles state, assembles the available capabilities, submits that structure to the decision layer, and acts on the weighted frontier. Given a goal, it identifies capability gaps, constructs and validates candidates, and crystallizes accepted work. Do not use *Weave* to mean a model, agent persona, AgentFabric, or an individual capability.
 
 ### Goal
 
@@ -26,7 +26,7 @@ One passage through observing state, weighing actions, applying policy, executin
 
 ### Action
 
-A typed operation Weave may execute to advance a goal. Retrieval, invocation, inference, classification, crystallization, clarification, approval, communication, waiting, and completion are all actions.
+A typed operation Weave may execute to advance a goal. Retrieval, invocation, inference, checks, evaluation, crystallization, clarification, approval, communication, waiting, and completion are all actions.
 
 ### Action space
 
@@ -48,7 +48,7 @@ The inspectable explanation of one cycle: observations applied, considered actio
 
 ### Decision layer
 
-The fast, typed, uncertainty-aware mechanism that evaluates assembled state and capabilities against possible actions. Jev is the initial implementation. The decision layer proposes weights; it does not override policy or AgentFabric grants.
+The fast, typed, uncertainty-aware mechanism that weighs assembled state and capabilities against possible actions, and that evaluates check evidence when a candidate is proposed for crystallization. Jev is the initial implementation. The decision layer proposes weights and expansion evaluations; it does not generate documents, corpora, or resolvers, override policy, waive failed checks, or replace AgentFabric grants.
 
 ### Weight
 
@@ -56,23 +56,19 @@ A decision-layer estimate associated with a candidate action or bounded semantic
 
 ### Inference
 
-Requested model work such as reasoning, synthesis, classification, transformation, language generation, or proposing an AgentSOP document, a test corpus, or a resolver. Inference is an action available to Weave, not the owner of the loop. Its output is an observation that must still fit AgentFabric's requested shape.
+Requested model work such as reasoning, synthesis, classification, transformation, language generation, or proposing an AgentSOP document, a test corpus, a resolver, or an escalated expansion evaluation. Inference is an action available to Weave, not the owner of the loop. Its output is an observation that must still fit AgentFabric's requested shape. Construction of new capabilities is inference; checking them is not.
 
 ### Inference router
 
 The deterministic component that selects a model and configuration for a requested kind of inference using eval results, quality requirements, cost, latency, privacy, context, and escalation risk.
 
-### Classifier
-
-Weave's automatic trust layer for generated resolvers. AgentFabric does not claim that a bound resolver is correct. The classifier evaluates a candidate against an AgentSOP document and a test corpus (demonstrated red, proven green, held-out) and only then may Weave ask AgentFabric to crystallize. Classification is deterministic evidence, not a model judgment.
-
 ### Policy
 
-Deterministic rules that bound Weave actions: inference budgets, when to classify, when to crystallize, communication, and completion. Policy always outranks a probabilistic recommendation. AgentFabric grants remain a separate authority boundary for invocation.
+Deterministic rules that bound Weave actions: inference budgets, when to check, when evaluation may proceed, when to crystallize, communication, and completion. Policy always outranks a probabilistic recommendation and always outranks a decision-layer evaluation. Failed checks cannot be waived. AgentFabric grants remain a separate authority boundary for invocation.
 
 ### Authority
 
-The explicit permissions attached to a goal: which principal Weave invokes as, whether it may classify or crystallize, spend inference, communicate, and complete. Authority is granted. Evidence is not authorization. Crystallizing a resolver does not grant permission to invoke it.
+The explicit permissions attached to a goal: which principal Weave invokes as, whether it may check or crystallize, spend inference, communicate, and complete. Authority is granted. Evidence is not authorization. Crystallizing a resolver does not grant permission to invoke it.
 
 ### Evidence
 
@@ -126,7 +122,7 @@ A Principal requesting a Capability with an input. The Result is typed success o
 
 ### AgentFabric
 
-The architecturally independent runtime that honours AgentSOP: catalogue, ResourceRefs, principals, grants, invocation, audit, and crystallization as binding a resolver. It ships with Weave behind a clean boundary so other harnesses can reuse it. AgentFabric does not schedule goals, choose actions, or classify generated resolvers as trustworthy.
+The architecturally independent runtime that honours AgentSOP: catalogue, ResourceRefs, principals, grants, invocation, audit, and crystallization as binding a resolver. It ships with Weave behind a clean boundary so other harnesses can reuse it. AgentFabric does not schedule goals, choose actions, check generated resolvers, or evaluate whether they should be bound.
 
 ### Catalogue
 
@@ -138,11 +134,41 @@ A capability whose resolver may invoke only the capabilities listed in `depends_
 
 ### Crystallization
 
-The act of binding a resolver to a named AgentSOP capability. Crystallization begins with the document, not saved code. Who may crystallize is a Fabric privilege. Whether a generated resolver should be bound is a Classifier decision.
+The act of binding a resolver to a named AgentSOP capability. Crystallization begins with the document, not saved code. Who may crystallize is a Fabric privilege. Whether a generated resolver should be bound requires passed checks and an accept evaluation. Crystallization is acceptance into the catalogue, not a grant to invoke.
+
+## Capability expansion
 
 ### Capability gap
 
-A semantic operation required to advance the goal that the current catalogue cannot adequately perform through invocation or composition.
+A semantic operation required to advance the goal that the current catalogue cannot adequately perform through invocation or composition. Identification compares a stated need to the catalogue. Deriving that need from unstructured goal text is inference, not identification.
+
+### Identify
+
+The deterministic comparison of a stated need to assembled capabilities. A need is unnamed when the catalogue has no document, unresolved when a document exists but no resolver is bound. Identification does not author a document or a resolver.
+
+### Construct
+
+Generative inference that proposes an AgentSOP document, a test corpus, or a resolver. Construction is untrusted. The decision layer does not construct.
+
+### Check
+
+Deterministic execution of a test corpus against a candidate resolver. Weave checks; AgentFabric only provides trial invocation. A check is not a model judgment and not a decision-layer evaluation.
+
+### Check evidence
+
+The recorded result of a check: demonstrated red, proven green, and held-out outcome. Check evidence may pass or fail. Passing is not acceptance.
+
+### Evaluate
+
+The decision layer's typed judgment of check evidence: accept, reject, or uncertain. Evaluation may escalate to inference when uncertain. Evaluation cannot generate a candidate and cannot waive failed checks.
+
+### Expansion evaluation
+
+The structured result of evaluate: a decision, a weight with uncertainty, and reasons. It is evidence for crystallization, not authorization.
+
+### Acceptance
+
+The expansion evaluation that a checked candidate may be crystallized. Acceptance is not a grant and cannot replace failed checks. Construction, checks, evaluation, crystallization, and invocation remain separate gates.
 
 ### Established capability
 
@@ -150,29 +176,25 @@ A named capability whose resolver is bound and whose grants match the work the g
 
 ### Frontier capability
 
-A needed capability that is unnamed, unresolved, or not yet trusted enough to crystallize.
+A needed capability that is unnamed, unresolved, or not yet accepted for crystallization.
 
-## Classifier evidence
+## Check evidence details
 
 ### Test corpus
 
-Versioned executable examples and counterexamples Weave uses to classify a resolver. It is not part of the AgentSOP document. It includes visible development cases and may include held-out cases.
+Versioned executable examples and counterexamples Weave uses to check a resolver. It is not part of the AgentSOP document. It includes visible development cases and may include held-out cases. Generated corpora remain untrusted until their execution produces check evidence.
 
 ### Demonstrated red
 
-Evidence that the test corpus rejects a placeholder, known-invalid resolver, or useful mutation before a candidate is trusted.
+Evidence that the test corpus rejects a placeholder, known-invalid resolver, or useful mutation before a candidate is accepted.
 
 ### Proven green
 
 Evidence that a candidate satisfies the development corpus inside the capability's declared schema and effects.
 
-### Trust
-
-The classifier verdict that a candidate may be crystallized. Trust is not a grant. Generation, classification, crystallization, and invocation remain separate gates.
-
 ### Provenance
 
-The record of where a document, corpus, or resolver came from, including source traces, generators, revisions, and classification evidence.
+The record of where a document, corpus, or resolver came from, including source traces, generators, revisions, check evidence, and expansion evaluations.
 
 ## Language constraints
 
@@ -185,7 +207,12 @@ The record of where a document, corpus, or resolver came from, including source 
 - Say **capability**, not *tool*, for an operation governed by AgentSOP.
 - Say **resolver**, not *capability*, for replaceable executable code bound by AgentFabric.
 - Say **crystallize**, not *learn* or *save*, for binding a resolver.
-- Say **classify** / **trust**, not *admit*, for Weave's gate before crystallization.
+- Say **identify**, not *discover*, for comparing a stated need to the catalogue.
+- Say **construct**, not *learn*, for proposing documents, tests, and resolvers.
+- Say **check** / **check evidence**, not *classify* or *trust*, for corpus execution against a candidate.
+- Say **evaluate** / **accept**, not *classify* or *trust*, for the decision layer's judgment of check evidence.
+- Say **classify** only as a kind of requested inference, never as the expansion trust layer.
 - Say **invoke**, not *execute tool*, for calling a named capability through AgentFabric.
 - Say **weight**, not *confidence*, unless the value is explicitly calibrated as confidence.
 - Never use **deterministic** to describe generated tests; their execution is deterministic, while their authorship and correctness require evidence.
+- Never describe Jev or the decision layer as generating capabilities, authoring tests, or waiving failed checks.

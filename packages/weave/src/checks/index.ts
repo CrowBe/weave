@@ -24,8 +24,8 @@ export interface CaseResult {
   detail: string;
 }
 
-export interface TrustVerdict {
-  trusted: boolean;
+export interface CheckEvidence {
+  passed: boolean;
   reasons: string[];
   red: { demonstrated: boolean; rejectedBy: string[] };
   green: { proven: boolean };
@@ -70,13 +70,13 @@ async function runCase(
   };
 }
 
-export async function classifyResolver(args: {
+export async function checkCandidate(args: {
   fabric: Fabric;
   principal: string;
   capability: Capability;
   source: string | ResolverFn;
   corpus: TestCorpus;
-}): Promise<TrustVerdict> {
+}): Promise<CheckEvidence> {
   const reasons: string[] = [];
   const redCases = development(args.corpus);
   const redResults: CaseResult[] = [];
@@ -111,7 +111,7 @@ export async function classifyResolver(args: {
   if (!heldOutVerdict.proven) reasons.push("held-out corpus did not pass");
 
   return {
-    trusted: reasons.length === 0,
+    passed: reasons.length === 0,
     reasons: reasons.length === 0 ? ["red demonstrated", "green proven", "held-out passed"] : reasons,
     red,
     green,

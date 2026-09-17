@@ -1,6 +1,6 @@
 import type { Capability } from "@weave/agentsop";
 import type { InferenceKind } from "../inference.ts";
-import type { TestCorpus } from "../classifier/index.ts";
+import type { TestCorpus } from "../checks/index.ts";
 
 export const emailNormalizeDocument: Capability = {
   agentsop: "0.1",
@@ -67,5 +67,10 @@ export function emailNormalizeScripts(): Partial<Record<InferenceKind, unknown>>
     propose_contract: emailNormalizeDocument,
     propose_tests: emailNormalizeCorpus,
     propose_resolver: emailNormalizeSource,
+    evaluate_expansion: {
+      decision: "accept",
+      weight: { value: 0.8, uncertainty: 0.15, basis: ["escalated review"] },
+      reasons: ["escalated evaluation accepts"],
+    },
   };
 }
