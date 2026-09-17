@@ -38,9 +38,21 @@ A causally related sequence of actions and observations within a goal. Threads m
 
 ## Intelligence and control
 
+### State view
+
+The bounded, typed rendering of state handed to the decision layer for one cycle. A state view is derived from state; it is neither the observation log nor the projection, and it is budgeted so decision quality can be compared across models and across time.
+
 ### Decision layer
 
 The fast, typed, uncertainty-aware mechanism that evaluates state against possible actions. Jev is the initial implementation. The decision layer proposes weights; it does not override policy.
+
+### Action candidate
+
+A typed, fully bound action the runtime has enumerated for the current cycle, including its cost class, reversibility, dependencies, and effect lock set. Candidates are enumerated deterministically by the runtime; the decision layer weighs them and does not author them.
+
+### Effect lock
+
+The set of resource references and declared effects an action candidate will touch, computed from its capability contract before execution. Effect locks determine which candidates may run concurrently.
 
 ### Weight
 
@@ -76,13 +88,21 @@ A semantic operation required to advance the goal that the current capability se
 
 The standardized statement of a capability's purpose, inputs, outputs, invariants, failures, effects, permissions, success evidence, and execution constraints.
 
+### AgentSOP
+
+The semantic definition system: the capability contract schema, the effect vocabulary, the ResourceRef shape, the result and failure vocabulary, and the resolver contract shape. AgentSOP is a contract, not a runtime. It ships as its own package and knows nothing of Weave, AgentFabric, or any protocol.
+
 ### AgentFabric
 
-The architecturally independent capability subsystem that defines capability contracts and their construction, verification, packaging, versioning, admission, observation, and revocation lifecycle. Its canonical implementation lives inside the Weave repository and ships with Weave, but remains behind a clean boundary so other harnesses can reuse or later extract it. AgentFabric does not schedule goals or choose actions.
+The capability subsystem that honours AgentSOP: catalogue, resource references, grants, resolution, invocation, admission, revocation, and audit. It ships as its own package and Weave consumes it through a capability host port. AgentFabric does not schedule goals or choose actions, and it does not import Weave.
 
 ### Implementation
 
 One executable realization of a capability contract. Local code, a remote service adapter, a composition, or a generative fallback may each be implementations of the same capability.
+
+### Capability host
+
+The port through which Weave reaches a capability subsystem: listing, describing, invoking, proposing, admitting, and revoking capabilities. AgentFabric is the first adapter. Weave depends on the port, not on AgentFabric internals.
 
 ### Capability registry
 
@@ -148,4 +168,6 @@ The record of where a contract, test, or implementation came from, including sou
 - Say **crystallization**, not *learning*, for the admission of new executable capability.
 - Say **weight**, not *confidence*, unless the value is explicitly calibrated as confidence.
 - Say **admit**, not *save*, when a capability passes into the registry.
+- Say **state view**, not *prompt* or *context*, for what the decision layer receives.
+- Say **action candidate**, not *option*, for an enumerated, bound action.
 - Never use **deterministic** to describe generated tests; their execution is deterministic, while their authorship and correctness require evidence.
