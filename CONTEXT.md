@@ -66,9 +66,17 @@ A decision-layer estimate associated with a candidate action or bounded semantic
 
 Requested model work such as reasoning, synthesis, classification, transformation, or language generation. Inference is an action available to Weave, not the owner of the loop.
 
+### Inference role
+
+Why an inference was requested, which determines its cost, frequency, and what it may author. *Framing* deepens state from a goal into subgoals, success criteria, and desired operations. *Working* performs a tightly scoped operation. *Extension* authors contracts, test corpora, and implementations inside an extension thread. Weighing is the decision layer's own work and is not an inference role.
+
 ### Inference kind
 
-The role an inference request plays, which determines its cost, frequency, and what it may author. *Framing* deepens state from a goal into subgoals, success criteria, and desired operations. *Working* performs a tightly scoped operation. *Extension* authors contracts, test corpora, and implementations inside an extension thread. Weighing is the decision layer's own work and is not an inference kind.
+What is being asked for — classify, extract, transform, draft-contract, judge. A kind is an entry in the inference map and carries prompt template versions, acceptance defaults, a default tier, and the statistics routing reads. Kinds belong to the gateway's vocabulary, not to the capability catalogue: a capability is named for its semantic operation, and its generative implementation declares the kind.
+
+### Inference map
+
+The gateway's registry of inference kinds. It stays small and mostly closed, because routing statistics are only meaningful while a kind means the same thing across runs.
 
 ### Desired operation
 
@@ -195,5 +203,7 @@ The record of where a contract, test, or implementation came from, including sou
 - Say **state view**, not *prompt* or *context*, for what the decision layer receives.
 - Say **judgment site**, not *Jev*, for a place the runtime asks for judgment. Jev is a model type.
 - Say **routed unit**, not *model*, for what routing selects.
+- Say **inference role** for why an inference was requested, and **inference kind** for what was asked of the model. They are not interchangeable.
+- Name a capability for its operation, never for the inference kind behind it: `text.classify`, not `request_text_classification`.
 - Say **action candidate**, not *option*, for an enumerated, bound action.
 - Never use **deterministic** to describe generated tests; their execution is deterministic, while their authorship and correctness require evidence.

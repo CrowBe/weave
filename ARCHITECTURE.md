@@ -328,7 +328,7 @@ describe the operations the goal wants, diff against the registry, crystallize
 the gaps, then act — is this machine with framing always running first.
 
 They are not competing architectures. **Framing is a candidate, not a stage.**
-The runtime enumerates `request_inference(kind=framing)` like anything else; the
+The runtime enumerates `request_inference(role=framing)` like anything else; the
 decision layer weighs it against doing the work directly. Its weight should rise
 when the candidate set is thin or uniformly low-weighted, and fall when a
 capability already binds the goal. "Append this line to my journal" must not buy
@@ -380,11 +380,27 @@ working, extension drafting — it declares a request and the **inference gatewa
 does the rest. The gateway is its own module behind a port, not part of the loop
 and not part of the capability host.
 
+Two words that are easy to confuse, kept apart deliberately:
+
+- An **inference role** is why the loop is asking — framing, working, extension
+  (§7). It decides who consumes the result.
+- An **inference kind** is what is being asked for — classify, extract,
+  transform, draft-contract, draft-implementation, judge. It is an entry in the
+  gateway's **inference map**, and it carries the prompt template versions, the
+  acceptance defaults, the default tier, and the accumulated statistics that
+  routing reads.
+
+The map is the gateway's vocabulary, not the catalogue's. It stays small and
+mostly closed for the same reason the effect vocabulary does: routing statistics
+are only meaningful if the same kind means the same thing across runs. Adding a
+kind is a deliberate act, not a side effect of a caller inventing a string.
+
 A request is typed and carries its own acceptance terms:
 
 ```jsonc
 {
-  "kind": "framing",
+  "role": "framing",
+  "kind": "decompose_goal",
   "output_schema": { },
   "quality_bar": "adequate",
   "acceptance": { "checks": ["schema", "cites_state_refs"], "dimensions": ["faithfulness"] },
@@ -507,16 +523,66 @@ inside its implementation. Three ways to allow that:
    with a judgment step permanently uncrystallizable.
 2. Give resolvers direct gateway access through their context. Works, and hides
    non-determinism inside implementation code where nothing declares it.
-3. **Make inference a capability.** A capability that needs judgment declares
-   `inference.request` in `depends_on`, and calls it through the host like any
+3. **Make judgment reachable through contracts.** A capability that needs
+   judgment declares its dependency, and calls it through the host like any
    other dependency.
 
-The third is the one that fits the contract model already inherited. Declared
-dependencies are audited, typed, and rejected when undeclared, so a capability
-cannot quietly acquire a model habit. Non-determinism becomes visible in the
-contract graph instead of buried in a resolver, which makes "which capabilities
-are model-backed" a query rather than an audit. And the composition rules that
+The third fits the contract model already inherited. Declared dependencies are
+audited, typed, and rejected when undeclared, so a capability cannot quietly
+acquire a model habit. Non-determinism becomes visible in the contract graph
+instead of buried in a resolver, which makes "which capabilities are
+model-backed" a query rather than an audit. And the composition rules that
 already exist do the enforcement.
+
+### The dependency is not a generic inference capability
+
+`inference.request(kind, payload)` looks like the economical way to do this, and
+it is the wrong shape for the catalogue. Three reasons, in increasing order of
+how much they cost:
+
+- **It cannot be validated.** `payload` varies by kind, so the document must
+  type it as an opaque object. `INVALID_INPUT` — the check the contract layer
+  exists to perform — stops meaning anything at exactly the boundary where
+  untrusted generated code meets the host.
+- **It cannot be granted.** A grant on a dispatch capability is a grant on
+  everything it can dispatch to. Authority stops being about operations and
+  starts being about a switch statement.
+- **It cannot have a corpus.** There is no set of cases that says what
+  `inference.request` means, so no admission evidence, no reliability history,
+  nothing to regress against. That is the decision rule in general: **if you
+  cannot write cases for it, it is not a capability yet.**
+
+So capabilities are named semantically, as they would be if no model were
+involved: `ticket.triage`, `invoice.extract_totals`, `text.classify` with a
+caller-supplied label set. Generality is not the problem — `text.classify` is
+general and perfectly typeable, because its input and output are concrete.
+Untyped dispatch is the problem.
+
+The inference kind then lives in the **implementation**, not in the contract. A
+generative implementation of `ticket.triage` declares kind `classify`, a prompt
+template version, and its acceptance terms; the registry sees a semantic
+operation and the gateway sees a routing unit. Naming capabilities after
+inference kinds would invert that — a catalogue describing how the model was
+called rather than what the operation means, which is precisely the thing a
+contract is supposed to outlive.
+
+Follow the catalogue's naming convention while doing it: `domain.verb`, dotted
+and lowercase. `text.classify`, not `request_text_classification` — "request"
+describes the call, not the operation.
+
+### Novel judgment still needs a door
+
+Contract-first must not mean judgment is unavailable until someone writes a
+contract for it. AgentFabric already solved the equivalent problem for execution:
+`fallback_exec` sits outside the semantic catalogue, is privileged, and is
+observed so that recurring use becomes a crystallization candidate.
+
+Judgment gets the same treatment. A privileged fallback into the gateway,
+outside the catalogue, available for novel work, recorded every time. When the
+same shape of judgment recurs — same inputs, same expected output, same
+acceptance — it is a capability gap with evidence attached (§10), and the
+extension thread names it, types it, and gives it a corpus. The escape hatch is
+how inference capabilities get discovered rather than guessed.
 
 This needs one contract extension. The 0.1 effect vocabulary describes
 consequences to resources — discover, read, create, write, append, delete —
@@ -527,8 +593,9 @@ rather than a resolver, so a 0.2 revision should add an `infer` effect. Grants
 then bound which principals may spend inference at all, and budget authority
 attaches to the grant rather than to implementation code.
 
-**One gateway, two doors.** The `inference.request` resolver and the Weave
-`InferenceGateway` port call the same module. Routing statistics, evals,
+**One gateway, three doors.** The loop's `request_inference` action, a
+generative implementation's call through the host, and the privileged fallback
+all reach the same module. Routing statistics, evals,
 budgets, and privacy rules are shared, and there is no second router living
 below the capability boundary with its own opinions.
 
@@ -762,11 +829,11 @@ registry. M0 through M2 run against a fake host and do not force the decision.
   first-class state with their own recurrence count, or stay transient
   observations whose recurrence is recomputed, decides how gap thresholds (§10)
   are actually measured.
-- **Whether `inference.request` is one capability or several.** One contract with
-  a `kind` field is simplest; separate contracts per kind (`text.classify`,
-  `text.extract`) give the registry sharper types, better corpora, and better
-  routing statistics, at the cost of proliferation. This is the concrete form of
-  the next question.
+- **How closed the inference map should be.** Semantic capabilities carry the
+  types (§8), so the map only has to name routing and evaluation units. Whether
+  that set is closed like the effect vocabulary, extended by revision, or simply
+  curated is unsettled — and it decides whether a new kind can appear without
+  anyone noticing that routing statistics just reset.
 - **Where inference scope is declared.** A tightly scoped inference request looks
   like a capability contract with a non-deterministic implementation. Whether
   `request_inference` should literally be an AgentSOP capability is worth
