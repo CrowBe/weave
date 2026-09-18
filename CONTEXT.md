@@ -18,7 +18,7 @@ The explicit, evolving representation of what matters to the goal: known facts, 
 
 ### Observation
 
-Anything that updates state: user input, a tool result, an inference result, an approval, an error, a timeout, or an environmental change. Model output is an observation, not a command.
+A recorded input that may support a state transition: user input, a capability result, an inference result, an approval, an error, a timeout, or an environmental change. Its provenance establishes what was observed, not that every claim in its payload is true or authorized.
 
 ### Slice
 
@@ -26,11 +26,15 @@ A named, versioned, budgeted query over state. Views — state views, context bu
 
 ### Read set
 
-What an action candidate's binding depends on, declared at enumeration. Read sets are the mirror of effect locks: locks describe what an action will write, read sets what it assumed, and together they make staleness computable when a result lands late.
+The state or resource revisions on which an action candidate’s binding depends. Read sets support validity checks before dispatch, on result arrival, and when derived conclusions are reused.
+
+### Cached conclusion
+
+A reusable conclusion with supporting evidence, dependency revisions, invalidation conditions, and an authority scope. Reuse requires those conditions and access permissions to remain valid.
 
 ### Durable knowledge
 
-What survives a goal: the capability registry, observed reliability and cost, routing statistics, the gap ledger, eval history. It holds facts about the system's own behaviour. Content learned under one goal's authority does not cross into another by being written down.
+Evidence and artifacts retained beyond a goal, including capabilities, reliability observations, gap records, and evaluation history. Retention does not grant permission for cross-goal access or disclosure.
 
 ### Cycle
 
@@ -52,23 +56,27 @@ A causally related sequence of actions and observations within a goal. Threads m
 
 ### State view
 
-The bounded, typed rendering of state composed for one judgment site. A state view is derived from state; it is neither the observation log nor the projection, and it is budgeted so judgment quality can be compared across models and across time. Its schema is versioned, and anything consuming one pins the version it was written against. There is no general "session context": a capability's context is its typed input, and an inference's context is what its profile declares.
+A bounded, typed, versioned rendering of authorized state for a particular consumer. It carries source revisions and disclosed omissions rather than serving as an independent source of truth.
 
 ### Judgment site
 
-A place where the runtime requests a bounded, typed judgment under its own contract, scored against its own eval set and routed on its own history. Frontier weighing, request classification, response evaluation, failure classification, match residue, and payoff estimation are distinct sites. Jev is a model type that may serve any of them; name the site, not the model.
+A named place where bounded judgment is requested for a specific purpose, with typed inputs and outputs and its own evaluation history. Weighing, semantic matching, and response evaluation are distinct sites; a model such as Jev may serve more than one.
 
 ### Decision layer
 
 The judgment site that evaluates state against possible actions and returns weights. Jev is the initial model type behind it. The decision layer proposes weights; it does not select models and it does not override policy.
 
+### Action proposal
+
+A suggested operation, binding, or dependency structure recorded as an observation. It can inform candidate formation but carries no authority to execute.
+
 ### Action candidate
 
-A typed, fully bound action the runtime has enumerated for the current cycle, including its cost class, reversibility, dependencies, and effect lock set. Candidates are enumerated deterministically by the runtime; the decision layer weighs them and does not author them.
+A typed, bound action produced by validating an established procedure or a recorded proposal, with supporting evidence, dependencies, read set, effects, and resource needs. Being a candidate does not grant authority to execute.
 
 ### Effect lock
 
-The set of resource references and declared effects an action candidate will touch, computed from its capability contract before execution. Effect locks determine which candidates may run concurrently.
+A reservation over canonical resources and effect scopes that constrains concurrent execution. Its safety depends on enforced access to those scopes, including nested work and collection effects.
 
 ### Weight
 
@@ -80,7 +88,7 @@ Requested model work such as reasoning, synthesis, classification, transformatio
 
 ### Inference role
 
-Why an inference was requested, which determines its cost, frequency, and what it may author. *Framing* deepens state from a goal into subgoals, success criteria, and desired operations. *Working* performs a tightly scoped operation. *Extension* authors contracts, test corpora, and implementations inside an extension thread. Weighing is the decision layer's own work and is not an inference role.
+Why an inference was requested: framing proposes subgoals, success criteria, and desired operations; working performs a scoped operation; extension authors contracts, corpora, or implementations. Proposals do not change the authorized goal or its completion bar by themselves.
 
 ### Inference kind
 
@@ -88,19 +96,19 @@ What is being asked of a model — classify, extract, transform, draft-contract,
 
 ### Context profile
 
-The declarative statement, carried by an inference kind, of which state slices a request needs, at what depth, under what budget, with what excluded, and at what data class. The gateway declares the profile; only the runtime composes it; the gateway cannot reach back for more.
+A versioned declaration of the state slices an inference kind requests, their depth and budget, and disclosure constraints. It describes context needs without granting access to the requested data.
 
 ### Desired operation
 
-A framing output describing an operation the goal appears to need: a verb, expected effects, and rough input and output shape. A desired operation is not a capability contract. It is matched against the capability registry by deterministic diff, producing a shortlist and a set of capability gaps.
+An operation a goal appears to need, described by semantic purpose, expected effects, and rough input and output shape. It is a proposal to assess against existing capabilities and compositions, not an executable contract or proof of a capability gap.
 
 ### Inference gateway
 
-The module behind a single `request_inference` action that classifies a request, routes it, executes it, evaluates the response, and then accepts, retries, escalates, or fails. It is bounded: it may re-prompt but never re-scope, it grades against acceptance terms supplied by the caller, and it returns failure rather than silently lowering the bar.
+The module that performs bounded model work under explicit scope, acceptance, authority, and resource limits. It owns routing, attempts, and evaluation, while goal scheduling and state transitions remain Weave’s responsibility.
 
 ### Routed unit
 
-What routing actually selects: a prompt template version, a model, and its settings, together. Success statistics attach to the unit, because a prompt change moves them as much as a model change does.
+A versioned context profile, prompt template, model, and settings selected together for inference. Evaluation evidence attaches to that combination.
 
 ### Routing
 
@@ -108,7 +116,7 @@ The deterministic selection step inside the gateway. It minimizes expected total
 
 ### Generative implementation
 
-An implementation of a capability contract that is a prompt and a gateway call rather than deterministic code. Legal, admitted on distributional evidence, capped at lower maturity, and superseded by a deterministic implementation of the same contract when one meets the bar.
+An implementation of a capability contract that depends on inference. Its admission requires applicable deterministic checks and versioned evaluation evidence; its maturity and execution scope are limited by that evidence and policy.
 
 ### Policy
 
@@ -134,11 +142,11 @@ The standardized statement of a capability's purpose, inputs, outputs, invariant
 
 ### AgentSOP
 
-The semantic definition system: the capability contract schema, the effect vocabulary, the ResourceRef shape, the result and failure vocabulary, and the resolver contract shape. AgentSOP is a contract, not a runtime. It is a package in this repository and knows nothing of Weave, AgentFabric, or any protocol.
+The contract layer within the AgentFabric subsystem, defining capability meaning, typed inputs and outputs, effects, authority, references, and failures. It has no dependency on either runtime.
 
 ### AgentFabric
 
-The capability subsystem that honours AgentSOP: catalogue, resource references, grants, resolution, invocation, admission, revocation, and audit. It is a package in this repository, behind a package boundary rather than a repository boundary, and Weave reaches it through a capability host port. AgentFabric does not schedule goals or choose actions, and it does not import Weave.
+The bounded capability subsystem that owns contracts through AgentSOP and governs construction evidence, invocation, admission, revocation, and audit. It ships with Weave while remaining independent of Weave’s goals, state, and scheduling.
 
 ### Implementation
 
@@ -146,11 +154,11 @@ One executable realization of a capability contract. Local code, a remote servic
 
 ### Capability host
 
-The port through which Weave reaches a capability subsystem: listing, describing, invoking, proposing, admitting, and revoking capabilities. AgentFabric is the first adapter. Weave depends on the port, not on AgentFabric internals.
+The interface through which a runtime accesses capability discovery, invocation, and lifecycle operations. AgentFabric supplies it without exposing Weave to its internal implementation.
 
 ### Capability registry
 
-The runtime catalogue of contracts, implementations, maturity, provenance, permissions, reliability, cost, and availability. Do not shorten this to *AgentFabric*; AgentFabric defines the protocol, while the registry contains runtime instances.
+The catalogue of contracts, implementations, maturity, provenance, permissions, reliability, cost, and availability. Registry presence alone implies neither admission for invocation nor authority to execute.
 
 ### Composition
 
@@ -184,11 +192,11 @@ The versioned executable evidence derived from a contract. It includes visible d
 
 ### Demonstrated red
 
-Evidence that the test corpus rejects a placeholder, known-invalid implementation, or useful mutation before implementation is accepted. Red is observed, not assumed.
+Recorded evidence that the validated test corpus rejects a placeholder, known-invalid implementation, or relevant mutation before candidate implementation generation. Red is observed, not assumed.
 
 ### Proven green
 
-Evidence that an implementation passes the applicable deterministic checks and test corpus within its declared effect and resource boundaries. Green does not waive admission policy.
+Evidence that a particular implementation passes the applicable deterministic checks and test corpus within its declared effect and resource limits. It is bound to the relevant revisions and does not waive admission policy or prove untested semantic claims.
 
 ### Admission
 
@@ -217,5 +225,5 @@ The record of where a contract, test, or implementation came from, including sou
 - Say **routed unit**, not *model*, for what routing selects.
 - Say **inference role** for why an inference was requested, and **inference kind** for what was asked of the model. They are not interchangeable.
 - Name a capability for its operation, never for the inference kind behind it: `text.classify`, not `request_text_classification`.
-- Say **action candidate**, not *option*, for an enumerated, bound action.
+- Say **action candidate**, not *option*, for a validated, bound action.
 - Never use **deterministic** to describe generated tests; their execution is deterministic, while their authorship and correctness require evidence.

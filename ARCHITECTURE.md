@@ -1,321 +1,362 @@
 # Architecture
 
-This is the high-level plan: the decisions that shape Weave, at the altitude where
-they can be argued with. It is not a specification, and it deliberately stops
-short of interfaces, schemas, and file layouts — those belong to the code that
-proves them.
+This is a proposed architecture derived from [VISION.md](./VISION.md), using the
+language in [CONTEXT.md](./CONTEXT.md). It assigns responsibilities, invariants,
+and the evidence needed to proceed. Interfaces, storage choices, and schemas
+remain to be proved by a small implementation. Nothing here claims those checks
+already exist.
 
-It uses the terms in [CONTEXT.md](./CONTEXT.md) exactly, and assumes
-[VISION.md](./VISION.md).
+## 1. Derive the architecture from the goal
 
-Nothing here is built yet. The point is that M0 is a narrowing of a decided
-architecture rather than an invention.
+Weave must advance an authorized goal even when its present software is
+incomplete. That creates two connected problems: choosing useful work under
+uncertainty, and executing work without surrendering authority to that judgment.
+Crystallization changes the software available for future choices; it must not
+change the rules that authorize execution.
 
-## 1. Three layers
+| Vision requirement | Architectural consequence |
+| --- | --- |
+| The runtime is the agent | Weave alone owns goal state, action lifecycle, and consequential state transitions. |
+| Models provide observations | Proposals and judgments carry provenance; deterministic validation and policy decide which transitions they may support. |
+| Independent work proceeds concurrently | Scheduling is driven by dependencies, resource conflicts, and arriving observations, not batches of model calls. |
+| Familiar work becomes software | Capability contracts are reusable; candidate formation and task procedures can evolve without editing the control core. |
+| Generation, admission, and execution differ | Each has its own evidence, authority check, and recorded outcome. |
+| Improvement is empirical | Every judgment and implementation is evaluated against its own versioned inputs, outcomes, and costs. |
 
+The central design is a **small control core with replaceable ways of proposing
+and performing work**. The core needs to understand authority, dependencies,
+effects, evidence, and lifecycle. It should not understand email normalization,
+travel planning, or the internal stages of a particular domain procedure.
+
+## 2. Responsibilities and package ownership
+
+These are logical modules, not a requirement for separate services or processes.
+Start with one runtime. Keep AgentSOP and AgentFabric in separate packages to
+enforce their ownership; the other modules need not become separate packages.
+
+| Module | Owns | Must not own |
+| --- | --- | --- |
+| State | Observation history, validated transitions, derived entities, versioned views, conclusion validity | Provider calls or deciding that a model's claim is true |
+| Decision layer | Weights and uncertainty for eligible action candidates | Grants, dispatch, or changes to goal success criteria |
+| Policy and scheduler | Eligibility, approvals, budget reservations, dependencies, conflicts, dispatch and cancellation | Domain-specific planning or semantic truth |
+| Inference gateway | Bounded provider execution, deterministic routing, attempt accounting and evaluation | Goal scheduling, ambient state access, or self-defined success |
+| Capability host | Contract lookup, invocation, construction evidence, admission, revocation and execution enforcement | Weave goals, threads, or frontier selection |
+
+Weave owns the first three modules and composes the inference gateway with the
+capability host. The gateway has an explicit inference request interface usable
+by both Weave and a generative implementation; it does not require importing
+Weave state or its scheduler. Provider adapters implement that interface's
+execution needs.
+
+AgentFabric is the bounded capability subsystem that ships inside this
+repository. AgentSOP is its contract layer: meaning, typed inputs and outputs,
+effects, authority, references, and failures. AgentSOP imports neither runtime;
+AgentFabric may depend on AgentSOP but never on Weave. Weave reaches AgentFabric
+through the capability host interface and may use AgentSOP contract types.
+Package checks and tests independent of Weave must enforce these directions.
+
+Preserve semantic contracts and the separation between references and authority.
+Do not inherit an existing implementation's assumptions unconditionally. Before
+reusing AgentFabric code, assess its contract, invocation, grant, and isolation
+behavior against this design. The existing external implementation has not been
+verified by this plan. A fake host supports early control-core tests; a real
+host must prove enforcement before untrusted execution is enabled.
+
+## 3. State records claims without granting them authority
+
+An observation log records **that something was observed**, not that its payload
+is true. A model saying an approval exists is evidence of that statement; it is
+not an approval. Source identity, action identity, causal links, type version,
+and validation outcome accompany the payload. Unknown or malformed observations
+can be retained for diagnosis but cannot cause privileged transitions.
+
+Derived entities include goals, threads, claims, questions, action records,
+approvals, budgets, artifacts, and capability gaps. Every consequential field has
+supporting observations and a transition rule. Approval transitions require an
+authenticated authority channel; completion requires the goal's recorded success
+evidence. A model may propose subgoals or revised success criteria, but cannot
+silently broaden the authorized goal or lower its completion bar.
+
+State transitions are serialized and deterministic for a recorded order of
+observations. Actions run concurrently and return observations. Semantic
+interpretation that needs inference is explicit work whose result is recorded,
+then integrated by deterministic rules. Contradictory claims retain provenance
+and uncertainty; recency alone does not establish truth. Domain capabilities or
+bounded judgment can propose resolutions without overriding authority records.
+
+Replay uses recorded observations and the applicable transition versions. It
+reconstructs state and decisions without repeating external effects or expecting
+fresh model calls to return identical output. Begin with a small log and explicit
+transitions; a general query engine or distributed event store is not a prerequisite.
+
+Views are typed, versioned renderings composed from authorized state slices.
+They record source revisions, deterministic selection, and omissions. A context
+profile requests slices; policy controls what may actually be disclosed. Neither
+a model-selected profile nor a capability input declaration grants access.
+
+Cached conclusions retain evidence, dependencies, versions, invalidation
+conditions, and an authority scope. State checks those conditions before reuse;
+changed or unverifiable dependencies require refresh or explicit uncertainty.
+This applies to later reuse as well as results arriving while work is in flight.
+
+Goal state and durable knowledge have different lifetimes, not different privacy
+rules. Contracts, corpora, traces, gap records, and even reliability statistics
+can contain or reveal goal content. Promotion and cross-goal access require
+explicit policy, provenance, and any necessary redaction. Writing something to
+the registry does not make it globally available.
+
+## 4. Form candidates, then authorize a frontier
+
+```text
+observe → integrate → form candidates → check eligibility → weigh
+             ↑                                          ↓
+             └──── results ← execute ← reserve and dispatch
 ```
-AgentSOP      contract: what a capability means, what a resolver must look like
-   ↑
-AgentFabric   capability runtime: catalogue, references, grants, resolution, admission
-   ↑
-Weave         goal runtime: state, cycle, action frontier, policy, evidence
+
+Candidate formation combines established procedures, dependency readiness,
+registry matches, compositions, and recorded proposals. A generative planning
+capability can propose desired operations, bindings, or dependencies. Its output
+is an observation; the runtime validates it into action candidates. This keeps
+new strategies possible without giving generated plans executive authority or
+requiring every task pattern to be hard-coded in an enumerator.
+
+An action candidate identifies its operation, bound inputs, supporting evidence,
+read set, dependencies, requested effects, applicable contract revision, and
+resource needs. Candidates can include clarification, approval, waiting,
+inference, communication, and completion. Invalid or insufficiently bound
+proposals remain recorded with reasons; they are not executable candidates.
+
+Deterministic checks establish structural validity and compatibility. Semantic
+matching and usefulness may require judgment. A failed type match can reject a
+composition; a successful type match alone cannot establish that it serves the
+goal. Composition is considered before declaring a capability gap.
+
+Eligibility distinguishes **allowed**, **approval required**, and **prohibited**.
+Only policy-designated approval requirements produce approval actions; hard
+prohibitions are not converted into requests to waive policy. The trace records
+all exclusions, even when they were never sent for weighing. Sensitive candidate
+content is filtered before any model receives it.
+
+The decision layer weighs eligible candidates against the authorized goal,
+expected progress, cost, risk, and uncertainty. Weights from different judgment
+sites are not assumed to share a calibrated scale. The result is an observation tied
+to the state and candidate revisions it evaluated. It cannot introduce executable
+actions or change policy. Existing procedures may provide deterministic weights;
+model judgment is used where it adds measured value.
+
+The scheduler chooses a compatible frontier under dependency and resource limits.
+It need not solve a globally optimal scheduling problem. A deterministic,
+explainable selection rule with stable tie-breaking is sufficient initially.
+Before dispatch, it rechecks authority and relevant revisions, reserves budget
+and resources, and records the action start. Concurrent work cannot each spend
+the same unreserved budget. Missing or expired evidence fails closed.
+
+There is no wait-for-the-whole-frontier barrier: each arrival can unlock work or
+invalidate pending choices. Control-plane transitions such as recording a result,
+releasing a reservation, or honoring cancellation do not require model approval.
+When no useful action is eligible, the runtime records whether it is waiting,
+blocked, seeking clarification, or complete. Bounded attempts and no-progress
+policy prevent repeated inference from masquerading as progress.
+
+## 5. Concurrency and external effects
+
+Actions progress through explicit states: pending, running, and a terminal
+outcome such as succeeded, failed, cancelled, or uncertain. Cancellation requests
+and supersession are recorded separately from confirmed execution outcomes.
+A thread organizes related work; dependencies determine what may proceed.
+
+Effect locks are reservations over the resources an action may affect. They
+must use canonical resource identity and cover aliases, collections, and nested
+invocations. Discovery can conflict with creation or deletion in the collection
+it reads. Read-only operations may run together, but reads do not automatically
+commute with writes. If an effect scope cannot be bounded, execution needs a
+conservative broader reservation or must remain blocked.
+
+Declarations are useful only when execution enforces them. An implementation
+cannot touch an undeclared resource and still claim the scheduler protected it.
+An action's read set separately records the state revisions its binding assumed.
+Relevant assumptions are checked before dispatch and before accepting results.
+Stale results may be retained as evidence while their proposed state update is
+rejected, recomputed, or superseded.
+
+External effects require additional care: rejecting a stale result does not
+undo a write. Where supported, execution uses resource version preconditions and
+idempotency identifiers. Otherwise the contract declares the weaker guarantee
+and policy constrains its use. An interrupted call with an unknown effect outcome
+is reconciled before retry; it is not assumed safe to repeat.
+
+Cancellation stops new dispatch and requests termination of running work. Locks
+and reservations are not released merely because cancellation was requested.
+Late results and effects remain recorded; irreversible work is not claimed to
+have been rolled back. After a crash, recovery reconciles recorded starts with
+actual outcomes before replaying or retrying effectful work.
+
+## 6. Inference is bounded work
+
+Every model call uses the inference gateway, including frontier weighing,
+framing, semantic evaluation, and generative implementations. Each judgment site
+has a named purpose, typed input and output, acceptance terms, and evaluation
+history. Jev is the initial decision-layer choice, not an architectural dependency.
+
+Goal-level inference is scheduled work. Frontier weighing is a bounded control
+request: policy authorizes and reserves its budget directly, without requiring
+another frontier judgment to authorize it. Gateway routing and initial request
+validation are deterministic. Optional classification or response judgment has
+an explicit bounded route and cannot recursively request its own classification
+or evaluator. No budget or unusable weights produces an explicit fallback or
+blocked outcome, never implicit permission to execute.
+
+The caller supplies scope, quality requirements, permitted data destinations,
+context limits, deadline, and cost ceiling. The gateway may retry or escalate
+within those terms; it cannot rescope the goal or relax acceptance. All attempts
+and evaluation costs count against the enclosing reservation. Nested capability
+calls share the same authority and budget limits rather than receiving fresh ones.
+
+Routing chooses a versioned routed unit: context profile, prompt template, model,
+and settings. Deterministic policy filters by privacy and required quality, then
+uses evaluation evidence to compare expected total cost, latency, and escalation.
+Without enough evidence, use a conservative configured route and record the
+uncertainty. A cheaper model is not presumed adequate.
+
+Deterministic checks establish properties they can actually check. A model judge
+may assess semantic quality, but its approval is another fallible observation.
+Record immediate judgments and delayed task outcomes separately. No evaluator
+can turn failed mandatory checks into success or redefine goal completion.
+
+## 7. Capability execution and trust
+
+A capability is named for its semantic operation. Its typed input supplies the
+state content it needs; its resolver context supplies only granted environmental
+operations and declared dependencies. It has no ambient session or state access.
+A generic untyped model dispatch operation is not a substitute for contracts such
+as classification, extraction, or goal decomposition.
+
+AgentFabric checks invocation authority as well as admission. The effective
+authority of nested work is bounded by the goal, caller, contract, and granted
+resources and effects. Admission does not issue an execution grant. Revocation
+prevents further invocation and is surfaced to Weave for pending and running
+work; already completed external effects remain part of the record.
+
+Generative implementations declare inference as a dependency with enforceable
+spending and disclosure limits from their first use. The exact contract syntax
+may evolve; enforcement cannot wait for a later effect-vocabulary revision.
+A generative implementation must pass applicable deterministic checks and a
+versioned evaluation policy that states its uncertainty and permitted maturity.
+Distributional evidence supplements these gates; it cannot waive failing checks.
+A deterministic replacement reuses the contract and applicable corpus, but earns
+fresh admission, reliability, cost, and maturity evidence of its own.
+
+Untrusted implementations **and generated tests** execute within enforced
+isolation. A substrate-neutral resolver context makes brokered access possible;
+process separation alone does not remove ambient authority. The execution host
+must constrain filesystem, network, credentials, process creation, resources,
+and access to held-out artifacts, and mediate declared operations. Unsupported
+isolation blocks untrusted execution. The containment mechanism remains an
+implementation choice to prove before use.
+
+## 8. Crystallization is a governed workflow
+
+Extension uses ordinary actions and dependencies on threads. AgentFabric owns
+the reusable lifecycle and admission requirements; Weave schedules the work
+without embedding a domain-specific pipeline in its core.
+
+```text
+identify gap or recurring operation → search for reuse or composition
+  → establish contract → author and validate corpus → demonstrate red
+  → generate implementations → prove green → request admission
 ```
 
-Arrows are dependency directions. AgentSOP depends on neither of the others.
-AgentFabric never imports goals, cycles, or state. Weave uses AgentSOP's types
-directly and reaches AgentFabric through a **capability host** port, so the loop
-never depends on one capability runtime's internals.
+A genuinely blocking gap may justify extension on its first occurrence if the
+authorized goal, budget, and expected benefit support it. Recurrence is evidence
+of payoff, not a mandatory gate that prevents solving novel goals. Alternatives
+include bounded frontier inference, clarification, or explicitly remaining blocked.
 
-All three are packages in this repository, not separate repositories. The
-boundary is enforced by per-package dependencies, an import-direction check in
-CI, and test suites that run without the layer above them. If a package's tests
-need the layer above, the boundary has already leaked.
+The contract states purpose, types, invariants, failures, effects, permissions,
+success evidence, and execution limits. Corpus authors work from that contract
+and approved source evidence, independently of candidate implementation code.
+The corpus is checked for agreement with the contract and known examples,
+contradictions, and rejection of placeholders or relevant invalid behavior.
+Demonstrated red is recorded **before implementation generation**; rejection of
+one placeholder is not a claim that the corpus is complete.
 
-**The model is inherited unconditionally; the code is a separate decision.**
-What Weave depends on is AgentSOP's model: a durable contract with typed input,
-output, declared effects and declared authority; a disposable resolver; a
-reference that is not a locator and does not carry authority; a capability that
-may exist unresolved; failure codes that are contract while messages are not.
-Whether `packages/agentfabric` starts as the existing AgentFabric code or as a
-fresh implementation of that model is a decision due at M3, when there is first
-something real to put behind the port. Until then the loop builds against a fake
-host, and nothing blocks on the answer.
+Visible development tests and protected held-out tests have separate access.
+Implementers cannot read the held-out split. Validation results are bound to the
+contract, corpus, implementation, execution environment, and check versions.
+Failure classification can recommend a next step; it cannot edit the corpus or
+convert red to green. Contract or corpus revisions trigger revalidation of the
+affected evidence. Admission records which policy accepted which evidence.
 
-One constraint carries over regardless of that decision: **the resolver context
-must be substrate-neutral.** The existing implementation hands resolvers
-filesystem paths, which forces every resolver to be trusted in-process code and
-keeps the resolver shape out of the contract layer. Expressed only in contract
-vocabulary — invoke a declared dependency, read, write, create, discover over
-references — the context becomes something that can be served over a pipe, and
-running untrusted code in a sandbox stops being a subsystem to build and becomes
-a deployment choice. Weave generates implementations, so this is a precondition,
-not a refinement.
+Abandoned attempts retain appropriately scoped artifacts without becoming
+invocable implementations. Newly admitted implementations begin constrained;
+observed failures can reduce maturity, revoke admission, or select a previously
+validated implementation. None of these transitions grants additional authority.
 
-## 2. The cycle
+## 9. Prove the design with a vertical slice
 
-```
-enumerate → weigh → filter → schedule → execute → integrate
-```
+Use a fixture goal: inspect two independent source artifacts, produce a checked
+report, and publish it only when explicitly authorized. One reusable transformation
+is initially missing. The fixture's domain logic belongs in capabilities.
 
-**Enumerate** is deterministic. Candidate generators read state and produce
-typed, bound action candidates: capabilities whose inputs can be filled,
-inference requests for open questions, clarifications, joins on in-flight work,
-extension actions for recorded gaps, and completion when success may have been
-reached.
+The trace must show both inspections running concurrently; a conflicting source
+write waiting; a changed source invalidating a pending report; publication
+remaining blocked without approval; and a capability gap advancing through
+contract, validated corpus, red, implementation, green, and admission. Admission
+alone must leave publication unauthorized. A cancellation or crash during
+publication must produce an honest outcome, including uncertainty when required.
 
-**Weigh** is the only probabilistic step. The decision layer receives a state
-view and the candidates and returns weights with uncertainty. It does not author
-actions, and it never sees a candidate policy would refuse — an action policy
-forbids is enumerated instead as a request for approval, so the decision layer
-can advocate escalation without being handed the boundary.
+This is an architectural acceptance scenario, not a new product requirement.
+Iterate through **thin vertical slices**, each with a demonstrable goal outcome
+and checks across the modules it touches. Build only the state, policy, host, and
+inference support needed for that slice; do not finish a horizontal layer first.
+Keep earlier scenarios running as each slice adds one consequential behavior.
 
-**Filter** is deterministic policy: permissions, budgets, data boundaries,
-destructive-action rules, approval requirements, dependency readiness,
-thresholds. It runs after weighing so refusals are recorded against weighted
-candidates, which is what makes a trace explainable.
+- **M0 — inspect and report.** Run the fixture goal with two fixed, read-only
+  capabilities and scripted weights. Observe inputs, form and authorize
+  candidates, execute independent reads concurrently, and return an in-memory
+  report with evidence. Prove rejected access stays rejected and replay does not
+  repeat execution. A small log and fake host are sufficient; no general state
+  engine is required.
+- **M1 — publish under authority.** Extend the same goal with one effectful
+  capability and an enforcing host. Prove scoped approval, forged-approval
+  rejection, conflicting access, stale input handling, and shared budget limits.
+  Add cancellation and crash scenarios around that effect: the outcome must be
+  confirmed or explicitly uncertain, and retries must not silently duplicate it.
+  The deliverable is an authorized report publication with an honest trace.
+- **M2 — handle a novel request.** Add one model through a bounded gateway to
+  propose a new binding or composition for a variant of the same goal. Validate
+  its proposal, weigh eligible candidates, and produce the report. Compare with
+  scripted judgments; verify disallowed data routes, all-attempt accounting,
+  and bounded failure without recursive judgment. No multi-provider router is
+  needed to prove this slice.
+- **M3 — fill one capability gap.** Give the report a transformation the existing
+  capabilities cannot supply. Search reuse/composition, establish a contract,
+  validate its corpus, and demonstrate red before generating its implementation.
+  Prove isolation before running generated tests or code, validate green, request
+  explicit human admission, and finish the report under a separate execution
+  grant. This is one end-to-end slice; its dependent gates stay sequential while
+  independent test or implementation proposals may run concurrently. Verify
+  held-out protection, evidence invalidation, and revocation along this path.
+- **M4 — reuse and improve.** Repeat the goal using the admitted capability,
+  validate cached conclusions and cross-goal access, and compare quality,
+  inference use, latency, and total cost. A replacement implementation earns fresh
+  evidence. Expand routing or autonomy only when measured results justify it.
 
-**Schedule** picks the frontier: the highest-weighted mutually compatible set
-within concurrency and budget limits. Compatibility is computed, not guessed —
-each candidate's declared effects and the references they land on give it a lock
-set before it runs, so reads and discoveries parallelize freely while writes,
-appends and deletes exclude on the reference they touch. The contract's effect
-vocabulary is the scheduler's lock table, which is the practical return on having
-contracts at all.
+Each slice begins with its behavioral contract and failing deterministic checks
+before implementation. The full available suite must remain green as slices
+accumulate. If a slice is too large, split it into smaller demonstrable outcomes
+through the same modules, rather than separate state, scheduler, or host projects.
 
-**Execute** runs the frontier concurrently. Every result, including every
-failure, becomes an observation.
+## 10. What remains open
 
-**Integrate** applies observations, reconciles superseded work, updates budgets,
-and re-enters the cycle. There is no conversational turn boundary.
+- Exact contract and resolver interfaces, and which existing AgentFabric code
+  can satisfy them without bringing Weave scheduling into that package.
+- Resource identity, effect scopes, and external preconditions supported by the
+  first adapters; unsupported guarantees must be explicit.
+- The isolation mechanism and its verified support on deployment hosts.
+- Domain-specific success evidence and calibrated semantic evaluation thresholds.
+- Ranking, no-progress, and extension-payoff policies beyond the first fixtures.
+- Contract/view migration, persistence retention, and redaction mechanisms.
 
-## 3. State
-
-State is an engine, not a structure, because it carries an open-ended set of
-payload types and serves consumers that need very different renderings of it.
-
-```
-observations  →  interpretation  →  views
-   (fact)          (entities)       (rendering)
-```
-
-- **Observations are fact and never change.** An append-only log with a small
-  fixed envelope and a payload validated against a registered, versioned type —
-  the same move AgentSOP makes for invocations, and the reason new kinds of
-  input extend the system without touching its core. An unrecognised type is
-  still captured, with the failure to interpret it recorded rather than silent.
-- **Entities are interpretation and can be rebuilt.** Goals, threads, facts,
-  open questions, desired operations, gaps, action records, approvals, budgets,
-  risks, artifacts — each typed, with a lifecycle, under one rule: no entity
-  field without a citing observation. Interpretation is pure and applied in
-  order by a single writer, so replay is exact.
-- **Views are rendering and are never stored as truth.** Every view — the
-  decision layer's state view, an inference's context, a capability's typed state
-  input — is composed from budgeted slices with deterministic selection, states
-  what it dropped, and carries a manifest of what filled it. There is no "full
-  session context" object anywhere in this architecture.
-
-Actions never write state; they emit observations. That is the structural reason
-a model cannot mutate state.
-
-Concurrency needs both halves: effect locks say what an action will write, and a
-candidate's declared read set says what its binding assumed. When a result lands
-against state that has moved, the two make staleness computable, and the action
-kind's policy — apply, recompute, supersede, cancel — decides explicitly rather
-than applying stale work silently.
-
-State has two tiers. **Goal state** ends with the goal. **Durable knowledge**
-crosses goals: the capability registry, observed reliability and cost, routing
-statistics, the gap ledger, eval history. The boundary is an authority boundary:
-content learned under one goal's authority does not become available to another
-by being written down, so durable knowledge holds facts about the system's own
-behaviour rather than the content that produced them.
-
-## 4. Judgment and inference
-
-**Jev is a model type, not a role.** Fast typed judgment is useful in several
-places, and each is a distinct **judgment site** with its own contract, eval set,
-and default model tier: weighing the frontier, classifying an inference request,
-evaluating a response, classifying a validation failure, resolving an ambiguous
-capability match, estimating whether a gap is worth extending. "Jev said so" is
-never an explanation; a named site with a recorded input is.
-
-All model work goes through one action and one **inference gateway** module,
-which classifies the request, routes it, executes it, evaluates the response, and
-then accepts, retries, escalates, or fails. Three callers share it: the loop's
-own inference action, a capability whose implementation is generative, and a
-privileged fallback for novel judgment.
-
-What keeps the gateway from being a second agent loop is structural, not
-stylistic: a fixed attempt ceiling and the request's own cost and deadline
-limits; it may re-prompt but never re-scope, because changing what is being asked
-is the loop's business; it grades against acceptance terms supplied by the
-caller, so success is not self-defined; it fails loudly rather than returning the
-best of a bad set; and the classifier itself is fixed-route, so the regress has a
-bottom.
-
-Routing minimizes the expected total cost of reaching the declared quality bar,
-retries and escalation included — not token price. What it selects is a routed
-unit: a context profile, a prompt template, a model, and its settings, versioned
-together, because a profile or prompt change moves success rates exactly as a
-model change does. Two signals tune it: immediate evaluation of each response,
-and delayed outcome feedback — did the consuming action succeed, did the drafted
-contract validate, did the implementation go green — joined by a correlation id
-and worth more than the immediate one.
-
-Classification also decides what the request gets to *see*. Each inference kind
-carries a context profile declaring which slices it needs, at what depth, under
-what budget, with what excluded and at what data class. The gateway declares the
-requirement; only Weave can read state, so Weave composes it; a missing slice
-fails the request rather than sending the gateway looking. Data class is a
-routing input, because a cheaper model that would carry data somewhere it may not
-go is not a candidate at any price. A classification and a goal decomposition are
-the same machinery at different settings on a declared dial.
-
-## 5. Capabilities
-
-The contract is the identity; implementations are replaceable. Weave prefers
-composing established capabilities over minting new ones, and prefers extending
-an existing contract over adding a synonym.
-
-**A capability's context is its input.** A resolver receives its typed input and
-nothing else — no session, no transcript, no ambient projection, no way to reach
-back for more. A capability that needs state declares it in its contract, where
-it is visible, validated, and fixed by its tests. This is what lets even large
-cognitive steps be contracts: `goal.decompose` takes a goal and a state view and
-returns subgoals, success criteria and desired operations, and the loop decides
-what goes in.
-
-Capabilities are named for their semantic operation, never for the model call
-behind them. A generic `inference.request(kind, payload)` is the wrong shape for
-a catalogue: an opaque payload cannot be validated at the boundary where
-untrusted code meets the host, a grant on a dispatch capability grants everything
-it dispatches to, and no set of cases says what it means. That last point
-generalizes: **if you cannot write cases for it, it is not a capability yet.**
-Generality is fine when types are concrete; untyped dispatch is not.
-
-An implementation may be deterministic code, a composition, or generative — a
-prompt and a gateway call. Generative implementations are legal and are admitted
-on distributional evidence, capped at lower maturity, and preferred against when
-a deterministic implementation of the same contract meets the bar. That is the
-real shape of the ladder: frontier work runs as raw inference; the recurring part
-earns a contract and a corpus; the first admitted implementation may well be
-generative; a deterministic one replaces it under the same contract, inheriting
-the same evidence.
-
-Model-backed capabilities declare their dependency on inference rather than
-hiding it in resolver code, which makes "which capabilities are non-deterministic"
-a query rather than an audit. Because spending inference is a consequence the
-0.1 effect vocabulary does not describe — it costs money, leaves a provider
-trace, and can carry data across a privacy boundary — this argues for an `infer`
-effect in a later contract revision, so inference spend sits under grants rather
-than under code.
-
-## 6. Extension
-
-Crystallization runs as ordinary actions on a thread in the same loop, not as a
-sub-routine with its own scheduler. It is therefore interleavable with goal work,
-parallelizable within a stage, abandonable, and subject to the same policy,
-budget and evidence machinery as everything else.
-
-The stages: name the operation, after a near-duplicate search; define the
-contract; author a test corpus from the contract alone; observe red against a
-placeholder; generate implementations in parallel; validate deterministically;
-request admission; capture. Admitting a capability changes what the next cycle
-can enumerate, which is the entire expansion mechanism — the action space grows
-because the registry grew.
-
-One rule holds throughout: **inference authors, determinism admits.** Every stage
-pairs a generator with a checker that is not itself. Three independence
-invariants make the evidence worth having: corpus authors never see an
-implementation, implementers never see the held-out split, and the failure
-classifier may redirect work but never edit the corpus. Probabilistic evaluation
-can direct the next iteration; it can never turn a red run green.
-
-Extension is expensive, so it is gated rather than reflexive. A gap is recorded
-from evidence — the decision layer finding no adequate candidate, a repeated
-inference scope signature, recurring fallback use — and becomes a thread only
-when recurrence crosses a threshold or a user asks, with an estimated payoff that
-is later checked against what the capability actually cost and saved. A loop that
-crystallizes every gap spends its life building tools it uses once.
-
-Abandonment keeps its artifacts. A validated contract with a demonstrated-red
-corpus and no implementation is a legal registry state and a far better start
-next time that gap recurs.
-
-This applies to Weave's own cognition too. Framing starts as an unnamed inference
-through the fallback door and is observed; when its shape recurs it becomes a
-named contract with a corpus and a routing choice. The loop's own thinking rides
-the same ladder it applies to everything else.
-
-## 7. Authority and trust
-
-Deterministic policy bounds probabilistic judgment, always in that order. A
-weight is evidence for routing, never authorization.
-
-Three gates stay distinct: generating a capability, admitting it, and being
-authorized to execute it. Admission grants no grant.
-
-Authority is layered. Weave enforces goal-level policy — budgets, approvals,
-destructive-action rules, data boundaries — and the capability host enforces
-contract-level authority through grants on principals, capabilities, references
-and effects. A goal runs as a principal whose grants derive from the authority
-granted for that goal, so a denial at the lower layer is the last line rather
-than the only one.
-
-Untrusted code never runs with ambient authority. Generated implementations
-execute out of process, reaching the environment only through the resolver
-context the host answers, which is what §1's neutrality constraint buys.
-
-## 8. Evidence and evaluation
-
-Every consequential cycle is replayable: the view that was composed, the
-candidates, the weights, the policy decisions, the frontier, the results, and the
-state delta. Two uses, both load-bearing:
-
-- **Judgment evaluation.** Replay recorded views against a changed decision layer
-  or a changed routed unit and score against known outcomes. Without this, a
-  weighted frontier is a guess with extra structure.
-- **Capability evaluation.** Observed reliability, cost and latency per
-  implementation drive routing between implementations of one contract, and drive
-  maturity regression when an admitted capability degrades.
-
-This record exists for evaluation and accountability. It is not a growing prompt.
-
-## 9. Milestones
-
-- **M0 — loop.** State engine first: log, interpretation, views, replay tests.
-  Then deterministic enumeration over a fixed catalogue behind a fake capability
-  host, a scripted decision layer, three action kinds, evidence written. No
-  inference, no extension.
-- **M1 — judgment.** Jev behind the decision layer port, real weights, the replay
-  eval harness, the inference action behind a single-model gateway that already
-  records attempts and evaluations, concurrent frontier with effect locks.
-  Routing arrives when there is history to route on.
-- **M2 — gaps.** Framing inference and its gate, desired operations, the
-  deterministic registry diff, gap detection and the recurrence threshold. No
-  generation yet.
-- **M3 — extension.** Name, contract, corpus, demonstrated red. Ends with a red
-  capability in the registry and no implementation. The capability host decision
-  (§1) settles here, because this is where generated artifacts first reach a
-  registry.
-- **M4 — crystallization.** Generation, sandboxed validation, explicit human
-  admission. One capability end to end, from gap to admitted.
-
-## 10. Open questions
-
-- **Composition versus extension.** Whether finding that existing capabilities
-  compose to fill a gap is a deterministic type-and-effect search, a judgment, or
-  both.
-- **Contract revision.** Changing an admitted contract invalidates corpora and
-  implementations downstream. Versioning exists; the migration path does not.
-- **View schema change.** Contracts that consume state pin the view version, which
-  makes drift visible and may make improving state itself expensive. Whether
-  views need additive-slice and deprecation discipline is unsettled.
-- **How closed the inference kind vocabulary should be.** Routing statistics are
-  only comparable while a kind means the same thing across runs, so a kind
-  appearing casually resets them silently.
-- **Goal-scoped authority over time.** Grant lifetime across threads, across
-  extension, and across promotion of anything from goal state into durable
-  knowledge.
-- **Fact contradiction.** When an observation contradicts an asserted fact,
-  whether the survivor is chosen by a recency rule or by a judgment site.
+The invariants above are the proposed architectural decisions. These open choices
+are implementation or empirical questions; they must not silently weaken the
+vision's authority, evidence, concurrency, or admission requirements.
