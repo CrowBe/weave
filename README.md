@@ -18,7 +18,7 @@ The project is currently at the architecture and vocabulary stage. Start with:
 
 - [VISION.md](./VISION.md) — what Weave is and what it refuses to become.
 - [CONTEXT.md](./CONTEXT.md) — the project's ubiquitous language.
-- [ARCHITECTURE.md](./ARCHITECTURE.md) — components, boundaries, the cycle, and the extension thread.
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — the high-level plan: layers, the cycle, state, judgment, capabilities, extension, and milestones.
 - [AGENTS.md](./AGENTS.md) — how coding agents should work in this repository.
 
 Weave is early. The first objective is to prove a minimal loop that can observe state, weigh a typed action frontier, execute safe actions, and crystallize one capability from contract through red-green validation.

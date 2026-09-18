@@ -20,25 +20,13 @@ The explicit, evolving representation of what matters to the goal: known facts, 
 
 Anything that updates state: user input, a tool result, an inference result, an approval, an error, a timeout, or an environmental change. Model output is an observation, not a command.
 
-### Observation type
-
-The registered, versioned name and payload schema of an observation. The envelope is fixed; payloads extend through new types rather than through edits to the engine. An unregistered type is still captured, and the failure to interpret it is itself recorded.
-
-### Reducer
-
-The pure, total function registered for an observation type that turns it into declared mutations on state entities. Reducers are applied in sequence order by a single writer, which is what makes replay exact.
-
-### State entity
-
-An identified, typed, provenanced element of the projection — goal, thread, fact, open question, desired operation, capability gap, action record, approval, budget, risk, artifact. Every field cites the observations that produced it.
-
 ### Slice
 
-A named, versioned, budgeted query over state entities. Views — state views, context bundles, typed capability inputs — are composed from slices, with deterministic selection, disclosed truncation, and a manifest of what filled them.
+A named, versioned, budgeted query over state. Views — state views, context bundles, typed capability inputs — are composed from slices, with deterministic selection, disclosed truncation, and a manifest recording what actually filled each one so a recorded judgment can be reproduced.
 
 ### Read set
 
-The state entities an action candidate's binding depends on, declared at enumeration. Read sets are the mirror of effect locks: locks describe what an action will write, read sets what it assumed, and together they make staleness computable when a result lands late.
+What an action candidate's binding depends on, declared at enumeration. Read sets are the mirror of effect locks: locks describe what an action will write, read sets what it assumed, and together they make staleness computable when a result lands late.
 
 ### Durable knowledge
 
@@ -96,19 +84,11 @@ Why an inference was requested, which determines its cost, frequency, and what i
 
 ### Inference kind
 
-What is being asked for — classify, extract, transform, draft-contract, judge. A kind is an entry in the inference map and carries prompt template versions, acceptance defaults, a default tier, and the statistics routing reads. Kinds belong to the gateway's vocabulary, not to the capability catalogue: a capability is named for its semantic operation, and its generative implementation declares the kind.
+What is being asked of a model — classify, extract, transform, draft-contract, judge. A kind carries a context profile, prompt template versions, acceptance defaults, a default tier, and the statistics routing reads. Kinds belong to the gateway's vocabulary, not to the capability catalogue: a capability is named for its semantic operation, and its generative implementation declares the kind.
 
 ### Context profile
 
 The declarative statement, carried by an inference kind, of which state slices a request needs, at what depth, under what budget, with what excluded, and at what data class. The gateway declares the profile; only the runtime composes it; the gateway cannot reach back for more.
-
-### Context manifest
-
-The record of what actually filled a composed context: slice by slice, the item ids and a content hash. It is what makes a recorded judgment reproducible.
-
-### Inference map
-
-The gateway's registry of inference kinds. It stays small and mostly closed, because routing statistics are only meaningful while a kind means the same thing across runs.
 
 ### Desired operation
 
