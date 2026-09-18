@@ -279,9 +279,9 @@ creates the packages (M0-C1).
 - The external repository is not fetched, vendored, or depended on by any
   build step. If a concept here is later found to have been mis-stated, correct
   this document against the external contract text rather than importing code.
-- The toolchain remains open (ARCHITECTURE §11). The package layout above is a
-  dependency structure, not a directory commitment; the toolchain may name it
-  differently.
+- The toolchain is TypeScript in an npm workspace. The package layout above is
+  realised as `packages/agentsop` (`@weave/agentsop`) and `packages/weave`
+  (`@weave/weave`); `packages/agentfabric` is created with M1.
 - M0's `ResourceId` plays the role of a reference. Issuance and the separation
   of references from locators become enforceable in M1 when the host owns the
   locator table.

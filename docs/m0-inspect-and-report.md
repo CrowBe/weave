@@ -8,8 +8,9 @@ and green before M0 is complete. Terms follow [CONTEXT.md](../CONTEXT.md).
 Everything here is in-memory and deterministic. There is no inference, no
 effectful capability, no approval, no persistence beyond the in-memory log, and
 no real AgentFabric: the capability host is a test double that satisfies the
-host interface. The checks are written in a toolchain-neutral form; the
-toolchain is open (§11) and the checks become executable tests once it is chosen.
+host interface. The checks are written in a toolchain-neutral form here and
+transcribed as executable tests in `packages/weave/test/m0.test.ts`; the
+structural checks live under `checks/`. `npm run verify` runs both.
 
 ## 1. What M0 proves
 
@@ -88,7 +89,9 @@ Two actions are provided by the runtime, not by a capability:
 - `frontier.weigh` — the bounded control request to the decision-layer judgment
   site. Policy reserves one `judgments` unit for it directly.
 - `goal.complete` — records completion when success evidence is present.
-  Reserves one `actions` unit.
+  Reserves one `actions` unit. Runtime actions complete within the dispatch
+  step: the cycle that dispatches one also appends its `action.result`, so
+  that result triggers no further cycle.
 
 ## 3. Observation envelope
 
@@ -116,6 +119,12 @@ Rules:
 - `validation` is determined by deterministic checks at append time. Only
   `accepted` observations may participate in a transition. Rejected and
   unknown-type observations are retained with their `seq`.
+- Validation checks shape and reference: a payload whose `source.kind` is not
+  one listed for its type is rejected; an `action.result` for an action that
+  is not `running` is rejected; a `weights.recorded` payload is accepted only
+  when its `state_revision` is current and its `candidate_set` is the digest
+  of exactly the candidate ids it weighs; a succeeded fixture result whose
+  output does not have the contract's output shape is rejected.
 - `source.kind = operator` observations are not authenticated in M0. Approval
   and the authority channel arrive in M1; M0 has no transition that requires
   them.
@@ -131,7 +140,7 @@ Rules:
 | `source.changed` | test | `{ resource, revision, content }` |
 | `clock.tick` | clock | `{ tick: integer }` |
 | `weights.recorded` | judgment | `{ site: "frontier.weigh", implementation: "scripted@1", state_revision, candidate_set: digest, weights: [{ candidate_id, weight }] }` |
-| `action.started` | runtime | `{ action_id, candidate_id, operation, inputs, reservation }` |
+| `action.started` | runtime | `{ action_id, candidate_id, operation, contract_rev, inputs, read_set, effects, reservation, grant }` — everything the fold needs to build the `ActionRecord` (§5) |
 | `action.result` | host or runtime | `{ action_id, outcome: succeeded { output } | failed { failure } | uncertain { reason } }` |
 | `action.cancel_requested` | operator or runtime | `{ action_id, reason }` (defined; unused in M0) |
 
@@ -145,8 +154,8 @@ State is a deterministic fold over accepted observations in `seq` order.
 ```text
 State {
   state_revision:  seq
-  goal:            Goal + { status: active | complete }
-  sources:         map ResourceId -> { revision, content }
+  goal:            Goal + { status: active | complete, evidence: seq }
+  sources:         map ResourceId -> { revision, content, evidence: seq }
   actions:         map ActionId -> ActionRecord
   inspections:     map ResourceId -> { result: InspectionResult, evidence: seq }
   report:          { report: Report, evidence: [seq] } | null
@@ -272,11 +281,12 @@ checks below count external arrivals.
 5. **Dispatch.** For each selected candidate, reserve resources, issue a `Grant`
    for capability invocations, append `action.started`, and invoke the host.
    Invocation is asynchronous; results arrive as `action.result` observations.
-6. **Record the cycle outcome:** `dispatched` if anything started; `complete`
-   if `goal.complete` succeeded; `waiting` if nothing was selected but actions
-   are running; otherwise `blocked { reason }`, where the reason is the dominant
-   non-selection reason or the prohibited candidate that leaves the goal
-   unachievable.
+6. **Record the cycle outcome,** taking the first that applies: `complete` if
+   `goal.complete` succeeded in this cycle; `dispatched` if anything started;
+   `waiting` if nothing was selected but actions are running; otherwise
+   `blocked { reason }`, where the reason is the dominant non-selection reason
+   (`actions budget exhausted`, and so on) or the prohibited candidate that
+   leaves the goal unachievable.
 
 Weights are compared only within a single `weights.recorded` observation. The
 selection rule is ordinal and site-specific; it makes no claim about calibration.
@@ -459,9 +469,11 @@ alpha, beta; authority alpha, beta; budget 6/6); hold host completions.
 
 ## 13. Assumptions recorded
 
-- The toolchain is undecided (§11). This document fixes behavior, not syntax;
-  the checks are to be transcribed into executable tests as the first commit of
-  the chosen toolchain, and must be observed red before runtime code is written.
+- The toolchain is TypeScript on Node with the built-in `node:test` runner, as
+  an npm workspace of `packages/agentsop` and `packages/weave`. The checks were
+  transcribed first and observed red against a placeholder runtime that rejects
+  every call (20 of 21 tests failing; the remaining test checks the fixture's
+  shape) before runtime code was written.
 - The fake host is sufficient for M0 because both capabilities are read-only on
   fixture memory. Nothing here is evidence that AgentFabric enforces anything.
 - `ResourceId` plays the role of a resource reference. Host issuance and the

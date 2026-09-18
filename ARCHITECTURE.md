@@ -57,7 +57,10 @@ AgentFabric may depend on AgentSOP but never on Weave. Weave reaches AgentFabric
 through the capability host interface and may use AgentSOP contract types.
 Package checks and tests independent of Weave must enforce these directions.
 
-Both packages are built in this repository. The external AgentFabric repository
+Both packages are built in this repository as an npm workspace in TypeScript
+(`packages/agentsop`, `packages/weave`; `packages/agentfabric` arrives with
+M1). Package-direction and no-ambient-clock checks live under `checks/` and run
+without Weave's tests. The external AgentFabric repository
 is a conceptual reference, not a dependency or a code source: the contract
 invariants it established (durable contracts, opaque references separated from
 locators and from authority, a closed effect vocabulary, grant matching, failure
@@ -433,9 +436,6 @@ scheduler, or host projects.
 
 ## 11. What remains open
 
-- The implementation toolchain. M0 needs only the AgentSOP contract types and a
-  fake host, but the choice fixes the language in which package-direction checks
-  and deterministic tests are written.
 - Exact contract and resolver-context interfaces for the in-repo `agentsop` and
   `agentfabric` packages, including how contracts are expressed (JSON Schema,
   native types, or both).
