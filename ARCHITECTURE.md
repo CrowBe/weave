@@ -57,12 +57,16 @@ AgentFabric may depend on AgentSOP but never on Weave. Weave reaches AgentFabric
 through the capability host interface and may use AgentSOP contract types.
 Package checks and tests independent of Weave must enforce these directions.
 
-Preserve semantic contracts and the separation between references and authority.
-Do not inherit an existing implementation's assumptions unconditionally. Before
-reusing AgentFabric code, assess its contract, invocation, grant, and isolation
-behavior against this design. The existing external implementation has not been
-verified by this plan. A fake host supports early control-core tests; a real
-host must prove enforcement before untrusted execution is enabled.
+Both packages are built in this repository. The external AgentFabric repository
+is a conceptual reference, not a dependency or a code source: the contract
+invariants it established (durable contracts, opaque references separated from
+locators and from authority, a closed effect vocabulary, grant matching, failure
+precedence, declared-dependency composition) carry over; its trusted-local
+runtime, bindings, and filesystem layout do not.
+[docs/agentfabric-concepts.md](./docs/agentfabric-concepts.md) records what is
+carried, what is not, and what Weave adds. A fake host supports early
+control-core tests; a real host must prove enforcement before untrusted
+execution is enabled.
 
 ## 3. State records claims without granting them authority
 
@@ -429,12 +433,12 @@ scheduler, or host projects.
 
 ## 11. What remains open
 
-- The implementation toolchain, and whether the existing external AgentFabric
-  code is vendored and audited or replaced by a minimal AgentSOP type set. M0
-  needs only the latter plus a fake host, but the choice fixes the language in
-  which package-direction checks and deterministic tests are written.
-- Exact contract and resolver interfaces, and which existing AgentFabric code
-  can satisfy them without bringing Weave scheduling into that package.
+- The implementation toolchain. M0 needs only the AgentSOP contract types and a
+  fake host, but the choice fixes the language in which package-direction checks
+  and deterministic tests are written.
+- Exact contract and resolver-context interfaces for the in-repo `agentsop` and
+  `agentfabric` packages, including how contracts are expressed (JSON Schema,
+  native types, or both).
 - Where the inference request and response types live. A generative
   implementation declares inference as a dependency (§7) and AgentFabric must not
   import Weave (§2), so those types belong in AgentSOP or a package neither
