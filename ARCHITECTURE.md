@@ -57,12 +57,16 @@ AgentFabric may depend on AgentSOP but never on Weave. Weave reaches AgentFabric
 through the capability host interface and may use AgentSOP contract types.
 Package checks and tests independent of Weave must enforce these directions.
 
-Preserve semantic contracts and the separation between references and authority.
-Do not inherit an existing implementation's assumptions unconditionally. Before
-reusing AgentFabric code, assess its contract, invocation, grant, and isolation
-behavior against this design. The existing external implementation has not been
-verified by this plan. A fake host supports early control-core tests; a real
-host must prove enforcement before untrusted execution is enabled.
+Both packages are built in this repository. The external AgentFabric repository
+is a conceptual reference, not a dependency or a code source: the contract
+invariants it established (durable contracts, opaque references separated from
+locators and from authority, a closed effect vocabulary, grant matching, failure
+precedence, declared-dependency composition) carry over; its trusted-local
+runtime, bindings, and filesystem layout do not.
+[docs/agentfabric-concepts.md](./docs/agentfabric-concepts.md) records what is
+carried, what is not, and what Weave adds. A fake host supports early
+control-core tests; a real host must prove enforcement before untrusted
+execution is enabled.
 
 ## 3. State records claims without granting them authority
 
@@ -360,7 +364,7 @@ Rollback changes future selection or deployment; it does not undo completed
 external effects. Changed models, contracts, workload, or evaluation rules can
 invalidate the comparison and require renewed evidence.
 
-## 10. Prove the design with a vertical slice
+## 10. Prove the design through vertical milestones
 
 Use a fixture goal: inspect two independent source artifacts, produce a checked
 report, and publish it only when explicitly authorized. One reusable transformation
@@ -374,17 +378,20 @@ alone must leave publication unauthorized. A cancellation or crash during
 publication must produce an honest outcome, including uncertainty when required.
 
 This is an architectural acceptance scenario, not a new product requirement.
-Iterate through **thin vertical slices**, each with a demonstrable goal outcome
-and checks across the modules it touches. Build only the state, policy, host, and
-inference support needed for that slice; do not finish a horizontal layer first.
-Keep earlier scenarios running as each slice adds one consequential behavior.
+Iterate through **thin vertical milestones**, each with a demonstrable goal
+outcome and checks across the modules it touches. Build only the state, policy,
+host, and inference support needed for that milestone; do not finish a
+horizontal layer first. Keep earlier scenarios running as each milestone adds one
+consequential behavior. (*Slice* is reserved for the state-query term in
+[CONTEXT.md](./CONTEXT.md).)
 
 - **M0 — inspect and report.** Run the fixture goal with two fixed, read-only
   capabilities and scripted weights. Observe inputs, form and authorize
   candidates, execute independent reads concurrently, and return an in-memory
   report with evidence. Prove rejected access stays rejected and replay does not
   repeat execution. A small log and fake host are sufficient; no general state
-  engine is required.
+  engine is required. The fixture, records, and checks are fixed in
+  [docs/m0-inspect-and-report.md](./docs/m0-inspect-and-report.md).
 - **M1 — publish under authority.** Extend the same goal with one effectful
   capability and an enforcing host. Prove scoped approval, forged-approval
   rejection, conflicting access, stale input handling, and shared budget limits.
@@ -396,13 +403,13 @@ Keep earlier scenarios running as each slice adds one consequential behavior.
   its proposal, weigh eligible candidates, and produce the report. Compare with
   scripted judgments; verify disallowed data routes, all-attempt accounting,
   and bounded failure without recursive judgment. No multi-provider router is
-  needed to prove this slice.
+  needed to prove this milestone.
 - **M3 — fill one capability gap.** Give the report a transformation the existing
   capabilities cannot supply. Search reuse/composition, establish a contract,
   validate its corpus, and demonstrate red before generating its implementation.
   Prove isolation before running generated tests or code, validate green, request
   explicit human admission, and finish the report under a separate execution
-  grant. This is one end-to-end slice; its dependent gates stay sequential while
+  grant. This is one end-to-end milestone; its dependent gates stay sequential while
   independent test or implementation proposals may run concurrently. Verify
   held-out protection, evidence invalidation, and revocation along this path.
 - **M4 — measure reuse.** Repeat the goal using the admitted capability,
@@ -418,15 +425,39 @@ Keep earlier scenarios running as each slice adds one consequential behavior.
   rollback after a detected regression. Use explicit human promotion initially;
   no general experiment platform or autonomous core release is a prerequisite.
 
-Each slice begins with its behavioral contract and failing deterministic checks
-before implementation. The full available suite must remain green as slices
-accumulate. If a slice is too large, split it into smaller demonstrable outcomes
-through the same modules, rather than separate state, scheduler, or host projects.
+Each milestone begins with its behavioral contract and failing deterministic
+checks before implementation. The full available suite must remain green as
+milestones accumulate. If a milestone is too large, split it into smaller
+demonstrable outcomes through the same modules, rather than separate state,
+scheduler, or host projects.
 
 ## 11. What remains open
 
-- Exact contract and resolver interfaces, and which existing AgentFabric code
-  can satisfy them without bringing Weave scheduling into that package.
+- The implementation toolchain. M0 needs only the AgentSOP contract types and a
+  fake host, but the choice fixes the language in which package-direction checks
+  and deterministic tests are written.
+- Exact contract and resolver-context interfaces for the in-repo `agentsop` and
+  `agentfabric` packages, including how contracts are expressed (JSON Schema,
+  native types, or both).
+- Where the inference request and response types live. A generative
+  implementation declares inference as a dependency (§7) and AgentFabric must not
+  import Weave (§2), so those types belong in AgentSOP or a package neither
+  runtime owns; the gateway implementation is then supplied through the resolver
+  context. Decide before M2 introduces the gateway.
+- How the scheduler combines weights, cost, and risk when weights from different
+  judgment sites share no calibrated scale (§4). The initial rule must be ordinal
+  or per-site; M0 fixes one such rule for scripted weights only.
+- Whether every decision-relevant clock reading is a recorded observation. Replay
+  (§3) requires it; M0 assumes it and injects time as `clock.tick` observations.
+- The authority channel: how an approval observation is authenticated as coming
+  from a principal entitled to grant it, as opposed to a payload that claims so.
+  M1's forged-approval rejection is meaningful only against a stated model.
+- What information a held-out failure may return to an implementer or corpus
+  author, and how many iteration rounds are permitted before held-out evidence is
+  considered spent (§8). Without this, iterative generation leaks the split.
+- The relationship between the gating suite and real providers: which checks run
+  only against recorded or scripted routed units, and how non-gating evaluations
+  against live models are recorded and reported.
 - Resource identity, effect scopes, and external preconditions supported by the
   first adapters; unsupported guarantees must be explicit.
 - The isolation mechanism and its verified support on deployment hosts.
@@ -434,7 +465,7 @@ through the same modules, rather than separate state, scheduler, or host project
 - Ranking, no-progress, and extension-payoff policies beyond the first fixtures.
 - Contract/view migration, persistence retention, and redaction mechanisms.
 - Experiment protocols, evidence sufficiency, and rollout thresholds for each
-  workload; the first slice needs one declared protocol, not a universal score.
+  workload; the first milestone needs one declared protocol, not a universal score.
 - The separately governed release and recovery mechanism for future control-core
   changes; M5 proves operating-strategy promotion without enabling core mutation.
 

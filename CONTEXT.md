@@ -142,11 +142,35 @@ The standardized statement of a capability's purpose, inputs, outputs, invariant
 
 ### AgentSOP
 
-The contract layer within the AgentFabric subsystem, defining capability meaning, typed inputs and outputs, effects, authority, references, and failures. It has no dependency on either runtime.
+The contract layer within the AgentFabric subsystem, defining capability meaning, typed inputs and outputs, effects, authority, references, and failures. It has no dependency on either runtime. It is built in this repository; the external AgentFabric repository is a conceptual reference only.
 
 ### AgentFabric
 
-The bounded capability subsystem that owns contracts through AgentSOP and governs construction evidence, invocation, admission, revocation, and audit. It ships with Weave while remaining independent of Weave’s goals, state, and scheduling.
+The bounded capability subsystem that owns contracts through AgentSOP and governs construction evidence, invocation, admission, revocation, and audit. It ships with Weave while remaining independent of Weave’s goals, state, and scheduling. It is built in this repository, not imported from the external repository of the same name.
+
+### Resource reference
+
+An opaque, host-issued handle to a resource, carrying a coarse kind and never a locator. Knowing a locator is not possessing a reference, and possessing a reference is not having authority to act on it.
+
+### Effect
+
+A declared consequence of invoking a capability, drawn from a closed, versioned vocabulary (`discover`, `read`, `create`, `write`, `append`, `delete`). Pure transformations declare none. Adding an effect is a contract revision.
+
+### Principal
+
+An identity to which authority can be granted. Weave, a goal, or an external caller may be a principal; a model is not.
+
+### Grant
+
+Authority for a principal to invoke a capability, scoped to resources and effects. Weave's policy issues an execution grant per action at dispatch; the host checks it at invocation. Admission does not issue one.
+
+### Resolver context
+
+The interface through which an implementation reaches its environment: nested invocation limited to declared dependencies, and reference-scoped resource operations. It contains no locators or substrate types, so it can be brokered across an isolation boundary.
+
+### Resolution status
+
+The runtime fact of whether a contract currently has an implementation that can run: `resolved`, `unresolved`, `unavailable`, or `blocked` by a dependency. It is not part of the contract document.
 
 ### Implementation
 
@@ -198,6 +222,10 @@ A bounded comparison between a versioned baseline and a candidate change for a d
 
 The governed decision to make an evaluated change active within a specified scope. It is distinct from capability admission and does not grant authority to execute or relax policy.
 
+### Milestone
+
+One vertical increment of the build plan (M0, M1, …): a demonstrable goal outcome with checks across every module it touches. A milestone is a unit of delivery; it is not a *slice*, which is a query over state.
+
 ## Real-time TDD
 
 ### Contract establishment
@@ -235,6 +263,8 @@ The record of where a contract, test, or implementation came from, including sou
 - Say **action frontier**, not *next action*, when concurrency is possible.
 - Say **capability**, not *tool*, for an operation governed by an AgentFabric contract.
 - Say **implementation**, not *capability*, for replaceable executable code.
+- Say **implementation**, not *resolver*, for code that satisfies a contract; *resolver context* remains the name of the interface it receives.
+- Say **resource reference**, not *path*, *URL*, or *locator*, for what a capability input names. Locators stay inside the host.
 - Say **crystallization**, not *learning*, for the admission of new executable capability.
 - Say **weight**, not *confidence*, unless the value is explicitly calibrated as confidence.
 - Say **admit**, not *save*, when a capability passes into the registry.
@@ -244,4 +274,5 @@ The record of where a contract, test, or implementation came from, including sou
 - Say **inference role** for why an inference was requested, and **inference kind** for what was asked of the model. They are not interchangeable.
 - Name a capability for its operation, never for the inference kind behind it: `text.classify`, not `request_text_classification`.
 - Say **action candidate**, not *option*, for a validated, bound action.
+- Say **milestone**, not *slice*, for an M-numbered increment of the plan. A slice is a query over state.
 - Never use **deterministic** to describe generated tests; their execution is deterministic, while their authorship and correctness require evidence.
