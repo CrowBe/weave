@@ -1,6 +1,6 @@
 # Weave
 
-**Software that builds the capabilities it needs.**
+**Software that builds the capabilities it needs and improves how it works.**
 
 Weave is an experimental goal-directed runtime. It observes evolving state, weighs the actions available to it, runs independent work in parallel, and invokes generative models only when existing software cannot adequately advance the goal.
 
@@ -8,16 +8,21 @@ When repeated reasoning reveals a reusable capability, Weave crystallizes it thr
 
 1. Identify the semantic purpose.
 2. Establish a typed capability contract.
-3. Generate and validate executable tests.
-4. Generate one or more implementations.
-5. Admit only an implementation that produces deterministic evidence of correctness.
+3. Generate and validate executable tests, then demonstrate red.
+4. Generate one or more implementations and prove green within declared limits.
+5. Admit against recorded evidence; authorize execution separately.
 
-AgentFabric provides the standard contract and lifecycle for those capabilities. It is architecturally separate but ships with Weave in the same repository and checkout. Jev is the initial fast decision layer for evaluating state, weighting actions, and classifying what is ready for capture or needs more work. Neither is the agent: the Weave runtime owns the loop, policy, state, and authority boundaries.
+Weave also optimises existing capabilities and operating strategies through bounded experiments: compare a versioned candidate with a baseline, authorise promotion within a declared scope, monitor outcomes, and retain or roll back the change. Improvement includes quality, reliability, human effort, latency, and total cost; the optimiser cannot lower the success bar or expand its authority.
+
+AgentSOP defines what a capability means and what an implementation's resolver context must look like. AgentFabric is the capability host that honours those contracts and owns the capability lifecycle. Both are built as packages in this repository — the external AgentFabric repository is a conceptual reference, not a dependency — and kept behind a package boundary: Weave reaches AgentFabric through a capability host port rather than depending on its internals, and neither package imports the loop. Jev is the initial model choice for the decision layer; named judgment sites keep model choice separate from responsibility. Weave owns the loop, policy, state, and authority boundaries.
 
 The project is currently at the architecture and vocabulary stage. Start with:
 
 - [VISION.md](./VISION.md) — what Weave is and what it refuses to become.
 - [CONTEXT.md](./CONTEXT.md) — the project's ubiquitous language.
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — the high-level plan: layers, the cycle, state, judgment, capabilities, extension, optimisation, and vertical milestones.
+- [docs/agentfabric-concepts.md](./docs/agentfabric-concepts.md) — which capability-system concepts carry over from the external AgentFabric, which do not, and the in-repo surface to build.
+- [docs/m0-inspect-and-report.md](./docs/m0-inspect-and-report.md) — the behavioral contract and checks for the first milestone.
 - [AGENTS.md](./AGENTS.md) — how coding agents should work in this repository.
 
-Weave is early. The first objective is to prove a minimal loop that can observe state, weigh a typed action frontier, execute safe actions, and crystallize one capability from contract through red-green validation.
+Weave is early. The first objective is a small scenario that proves authorized concurrent execution, honest handling of stale or interrupted work, and replayable evidence. It then extends to crystallizing one capability from contract through demonstrated red, proven green, admission, and separately authorized execution, followed by a measured optimisation with scoped promotion and rollback.
