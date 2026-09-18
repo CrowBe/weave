@@ -69,8 +69,9 @@ Each entry names the concept, why it supports Weave, and where it lands.
   declared effect set and the authorized effect set must be equal. → `agentsop`
 - **Grants are principal × capability × resource × effects.** Wildcards are
   explicit authority, not defaults. A grant is checked at invocation, not only
-  at registration. → grant shape and matching in `agentsop`; storage and policy
-  in `agentfabric`
+  at registration. → grant shape and matching in `agentsop`; host-side validation
+  and enforcement in `agentfabric`; goal policy, approval and per-action execution
+  grant issuance in Weave
 - **Failure precedence protects existence.** Reference well-formedness is
   checked first, then authority, then existence and kind. An unauthorized caller
   sees the same `DENIED` for an issued and an unknown handle, so references are
@@ -130,7 +131,9 @@ of it (§4). → `agentfabric`
   not capability output and are not exposed through capability grants; a
   failure to persist audit does not alter a determined result. In Weave the
   record becomes an observation with provenance, and the disclosure rule
-  survives as policy on state views. → `agentfabric`
+  survives as policy on state views. Required execution evidence must be durable
+  before new consequential dispatch; failure to record a committed outcome requires
+  reconciliation, not repetition of its effect. → `agentfabric`
 - **Machine-readable opportunity notices.** Unresolved invocations, fallback
   use, and repeated implementation-level work are recorded with a stable
   signature, deduplicated, and closed when the capability resolves. This is the
@@ -193,8 +196,9 @@ Weave loop.
 2. **Execution grants issued per action.** Weave's policy issues a grant at
    dispatch naming the action, operation, contract revision, permissions, and
    effects; the host refuses an invocation whose grant is absent or does not
-   match. Admission never issues this grant. (M0's fake host already checks
-   this shape.)
+   match. The host validates trusted issuance and binding, not just serialized
+   field equality; copied records do not convey authority. Admission never issues
+   this grant. M0 checks shape; M1 proves trusted issuance and effect enforcement.
 3. **An untrusted execution tier.** Process separation with no network, no
    filesystem, no credentials, resource and time limits, and no access to
    held-out artifacts, with context calls brokered. Unsupported isolation blocks
@@ -214,6 +218,15 @@ Weave loop.
    further invocation and is reported for pending and running work.
 8. **Uncertain outcomes.** An interrupted effectful invocation reports
    `uncertain` with what is known, rather than success or failure.
+9. **Stable invocation identity and reconciliation.** The host supports bounded,
+   authorized cancellation and outcome lookup without repeating the effect. It
+   normalizes transport and implementation failures and records late receipts.
+   Weave retains unresolved effect reservations and owns recovery scheduling;
+   AgentFabric reports execution facts without importing that scheduler.
+10. **Historical contracts remain inspectable.** Retain immutable contract and
+    implementation revision evidence needed for replay separately from current
+    invocation eligibility. Historical access remains permission-scoped; retaining
+    a revoked definition does not authorize its execution.
 
 ## 5. The in-repo surface
 
@@ -268,11 +281,16 @@ creates the packages (M0-C1).
 | Milestone | `agentsop` | `agentfabric` |
 | --- | --- | --- |
 | M0 | Capability document, reference and effect shapes, grant shape, failure codes, host interface | None. The fake host in Weave's tests satisfies the interface. |
-| M1 | Authority selectors, effect-set equality, failure precedence, catalogue graph rules | Registry, resolution status, invocation pipeline with grant checks, reference issuance, trusted tier, audit as observations, `uncertain` outcome |
+| M1 | Authority selectors, effect-set equality, failure precedence, catalogue graph rules; invocation outcome/cancellation/reconciliation contract | Registry, resolution status, trusted grant validation, reference issuance, enforcing trusted tier, durable invocation identity and receipts, bounded outcome lookup, historical contract access, `uncertain` outcome |
 | M2 | Inference declared as a dependency with limits | Resolver context supplies the gateway |
 | M3 | Test-case shape; contract revision rules | Lifecycle with evidence, untrusted tier, held-out access separation, revocation, opportunity notices |
 | M4 | — | Several implementations per contract; reliability and cost recorded per implementation |
 | M5 | — | — (promotion is Weave's; the host reports which implementation ran) |
+
+[M1's contract](m1-publish-under-authority.md) fixes the publication adapter and
+authority fixture. Its lookup/receipt support is distinct from Weave's recovery
+policy. M1 needs current invocation eligibility checks; the generated-capability
+admission and revocation workflow remains M3.
 
 ## 7. Assumptions recorded
 

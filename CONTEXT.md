@@ -40,6 +40,18 @@ Evidence and artifacts retained beyond a goal, including capabilities, reliabili
 
 One passage through observing state, weighing actions, applying policy, executing viable actions, and incorporating resulting observations. Avoid *turn* unless referring specifically to a conversational interface.
 
+### Replay
+
+Non-executing reconstruction from recorded observations and historical contract, procedure, policy and transition versions. Replay neither invokes capabilities nor reconciles effects; missing required evidence is a failure, not permission to execute.
+
+### Recovery
+
+Restoring unfinished work from durable records, preserving reservations and reconciling external outcomes under current authority before continuation or retry. Recovery is distinct from historical replay and does not renew an approval or resource budget.
+
+### Reconciliation
+
+Authorized, resource-bounded gathering of evidence about an existing invocation's external outcome without blindly repeating its effect. It may confirm a committed effect, confirm stopped execution without that effect, or leave uncertainty explicit.
+
 ### Action
 
 A typed operation Weave may execute to advance a goal. Retrieval, execution, inference, clarification, approval, communication, waiting, and completion are all actions.
@@ -163,6 +175,10 @@ An identity to which authority can be granted. Weave, a goal, or an external cal
 ### Grant
 
 Authority for a principal to invoke a capability, scoped to resources and effects. Weave's policy issues an execution grant per action at dispatch; the host checks it at invocation. Admission does not issue one.
+
+### Approval
+
+An authenticated decision by an entitled principal on a bound request, within that principal's authority and the goal's ceiling. Its scope and validity inform policy without replacing execution grants or enforcement; payload claims, retained history and silence do not establish approval.
 
 ### Resolver context
 
