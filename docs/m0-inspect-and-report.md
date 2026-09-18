@@ -206,8 +206,10 @@ ActionRecord {
 }
 ```
 
-`uncertain` and `cancelled` are defined now so that M1 adds behavior, not
-shape. M0 exercises `pending`, `running`, `succeeded`, and `failed`.
+`uncertain` and `cancelled` anticipate M1's lifecycle. M0 exercises `pending`,
+`running`, `succeeded`, and `failed`. M1 may extend records and host interfaces
+for authenticated authority, cancellation and reconciliation while preserving
+M0's exercised behavior; these fields do not claim that those contracts exist.
 
 ## 6. Action candidate
 
@@ -464,8 +466,14 @@ alpha, beta; authority alpha, beta; budget 6/6); hold host completions.
   against a real host — M1.
 - Authenticated approvals, forged-approval rejection, `source.changed`
   invalidating an in-flight report, cancellation, crash reconciliation, and
-  `uncertain` outcomes — M1. The fields exist in M0 so M1 changes behavior only.
+  `uncertain` outcomes — [M1](m1-publish-under-authority.md). Existing fields are
+  starting points; M1's contract adds trusted ingress, durable invocation identity,
+  outcome lookup and historical contract records. Strict M0 replay remains
+  non-executing and fails on missing results; recovery is a separate operation.
 - Any model-backed judgment site, the inference gateway, and context profiles — M2.
+  Synchronous scripted weighing is a fixture choice. M2 must reserve before calls,
+  account for failed/malformed attempts, remain responsive to control observations,
+  and reject stale judgments using their recorded state and candidate revisions.
 
 ## 13. Assumptions recorded
 

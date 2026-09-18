@@ -86,6 +86,12 @@ authenticated authority channel; completion requires the goal's recorded success
 evidence. A model may propose subgoals or revised success criteria, but cannot
 silently broaden the authorized goal or lower its completion bar.
 
+Ingress establishes identity independently of payload fields. Approval requests
+and decisions bind to exact operations, inputs, effects and validity conditions;
+queued work rechecks current authority at dispatch. Neither an asserted source
+label nor a copied grant record establishes trusted issuance. M1 fixes a local
+trusted-ingress model before an external transport is introduced.
+
 State transitions are serialized and deterministic for a recorded order of
 observations. Actions run concurrently and return observations. Semantic
 interpretation that needs inference is explicit work whose result is recorded,
@@ -93,15 +99,24 @@ then integrated by deterministic rules. Contradictory claims retain provenance
 and uncertainty; recency alone does not establish truth. Domain capabilities or
 bounded judgment can propose resolutions without overriding authority records.
 
-Replay uses recorded observations and the applicable transition versions. It
-reconstructs state and decisions without repeating external effects or expecting
-fresh model calls to return identical output. Begin with a small log and explicit
-transitions; a general query engine or distributed event store is not a prerequisite.
+Replay uses recorded observations, immutable contract records and the applicable
+procedure, policy and transition versions. It reconstructs state and decisions
+without repeating external effects or expecting
+fresh model calls to return identical output. It does not consult today's catalogue
+as a substitute for historical definitions; missing history fails explicitly.
+Recovery separately reconciles unfinished work under current authority. Historical
+inspectability does not restore permission to execute a revoked implementation.
+Begin with a small log and explicit transitions; a general query engine or
+distributed event store is not a prerequisite.
 
 Views are typed, versioned renderings composed from authorized state slices.
 They record source revisions, deterministic selection, and omissions. A context
 profile requests slices; policy controls what may actually be disclosed. Neither
 a model-selected profile nor a capability input declaration grants access.
+
+Load detail only where the consumer needs it. Stable prefixes can be cached, but
+freshness and disclosure checks still apply to each use. A summary or retained
+procedure is evidence for a proposal, not a replacement for authority records.
 
 Cached conclusions retain evidence, dependencies, versions, invalidation
 conditions, and an authority scope. State checks those conditions before reuse;
@@ -167,6 +182,12 @@ When no useful action is eligible, the runtime records whether it is waiting,
 blocked, seeking clarification, or complete. Bounded attempts and no-progress
 policy prevent repeated inference from masquerading as progress.
 
+Execution capacity is distinct from budget and effect locks. Saturation cannot
+prevent result integration, authority changes or cancellation. Bounded,
+authorized reconciliation must not deadlock behind the work it needs to settle.
+When nested execution is introduced, a waiting parent must not occupy all capacity
+required by its children. These guarantees do not serialize independent actions.
+
 ## 5. Concurrency and external effects
 
 Actions progress through explicit states: pending, running, and a terminal
@@ -198,7 +219,23 @@ Cancellation stops new dispatch and requests termination of running work. Locks
 and reservations are not released merely because cancellation was requested.
 Late results and effects remain recorded; irreversible work is not claimed to
 have been rolled back. After a crash, recovery reconciles recorded starts with
-actual outcomes before replaying or retrying effectful work.
+actual outcomes before resuming execution or retrying effectful work. Historical
+replay never executes or performs reconciliation lookups.
+
+Durably record required starts and reservations before dispatch. Preserve a stable
+invocation identity across recovery; a lost acknowledgement after commit must lead
+to outcome lookup or uncertainty, not blind retry. Host throws, rejected promises,
+timeouts and disconnects become observations without claiming that an effect did
+not occur. Required evidence persistence failure blocks further consequential
+dispatch; it does not change an already committed effect into a safe-to-repeat
+failure. The first adapter must state and test its actual atomicity guarantees.
+
+An uncertain attempt can be terminal while its external effects remain unresolved.
+Charge consumed resources once and retain locks and any unsettled resource liability
+until reconciled; cancellation does not refund consumed budget. Recovery attempts
+have a finite allowance. Unresolved effects block conflicting work, not unrelated
+resources. Report production, publication and eventual client delivery have separate
+outcomes; retrying a notification must not repeat publication.
 
 ## 6. Inference is bounded work
 
@@ -220,6 +257,11 @@ context limits, deadline, and cost ceiling. The gateway may retry or escalate
 within those terms; it cannot rescope the goal or relax acceptance. All attempts
 and evaluation costs count against the enclosing reservation. Nested capability
 calls share the same authority and budget limits rather than receiving fresh ones.
+
+Record and account for every attempt, including malformed responses and failures,
+independently of whether its judgment is accepted. Slow inference cannot block
+control transitions. Its eventual observation is bound to the evaluated state and
+candidate revisions; stale judgments cannot authorize dispatch.
 
 Routing chooses a versioned routed unit: context profile, prompt template, model,
 and settings. Deterministic policy filters by privacy and required quality, then
@@ -299,6 +341,10 @@ Abandoned attempts retain appropriately scoped artifacts without becoming
 invocable implementations. Newly admitted implementations begin constrained;
 observed failures can reduce maturity, revoke admission, or select a previously
 validated implementation. None of these transitions grants additional authority.
+
+Retained skill documents and procedures can inform proposed compositions, contracts
+or operating strategies. Retention alone is not capability admission. Preserve
+failed attempts as well as successes for evaluation, with the same data boundaries.
 
 ## 9. Optimisation is a governed experiment
 
@@ -401,12 +447,18 @@ consequential behavior. (*Slice* is reserved for the state-query term in
   Add cancellation and crash scenarios around that effect: the outcome must be
   confirmed or explicitly uncertain, and retries must not silently duplicate it.
   The deliverable is an authorized report publication with an honest trace.
+  [docs/m1-publish-under-authority.md](./docs/m1-publish-under-authority.md) fixes
+  the trusted ingress, adapter guarantees, persistence and recovery boundaries,
+  and checks for lost acknowledgements, revoked queued approval, forged grants,
+  capacity saturation and historical replay after catalogue change.
 - **M2 — handle a novel request.** Add one model through a bounded gateway to
   propose a new binding or composition for a variant of the same goal. Validate
   its proposal, weigh eligible candidates, and produce the report. Compare with
   scripted judgments; verify disallowed data routes, all-attempt accounting,
   and bounded failure without recursive judgment. No multi-provider router is
-  needed to prove this milestone.
+  needed to prove this milestone. Prove responsive control during slow inference,
+  stale-judgment rejection and charging of malformed or failed attempts. One
+  bounded state view records its selection manifest, revisions and omissions.
 - **M3 — fill one capability gap.** Give the report a transformation the existing
   capabilities cannot supply. Search reuse/composition, establish a contract,
   validate its corpus, and demonstrate red before generating its implementation.
@@ -415,6 +467,7 @@ consequential behavior. (*Slice* is reserved for the state-query term in
   grant. This is one end-to-end milestone; its dependent gates stay sequential while
   independent test or implementation proposals may run concurrently. Verify
   held-out protection, evidence invalidation, and revocation along this path.
+  A retained procedure may inform this work but cannot bypass admission.
 - **M4 — measure reuse.** Repeat the goal using the admitted capability,
   validate cached conclusions and cross-goal access, and compare quality,
   inference use, latency, and total cost. A replacement implementation earns fresh
@@ -449,9 +502,9 @@ scheduler, or host projects.
   or per-site; M0 fixes one such rule for scripted weights only.
 - Whether every decision-relevant clock reading is a recorded observation. Replay
   (§3) requires it; M0 assumes it and injects time as `clock.tick` observations.
-- The authority channel: how an approval observation is authenticated as coming
-  from a principal entitled to grant it, as opposed to a payload that claims so.
-  M1's forged-approval rejection is meaningful only against a stated model.
+- Authentication for future external authority channels. M1 fixes trusted local
+  ingress handles and principal scope in its contract; this does not establish
+  authentication for an eventual network or multi-user deployment.
 - What information a held-out failure may return to an implementer or corpus
   author, and how many iteration rounds are permitted before held-out evidence is
   considered spent (§8). Without this, iterative generation leaks the split.
