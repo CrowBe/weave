@@ -16,7 +16,7 @@ Weave also optimises existing capabilities and operating strategies through boun
 
 AgentSOP defines what a capability means and what an implementation's resolver context must look like. AgentFabric is the capability host that honours those contracts and owns the capability lifecycle. Both are built as packages in this repository — the external AgentFabric repository is a conceptual reference, not a dependency — and kept behind a package boundary: Weave reaches AgentFabric through a capability host port rather than depending on its internals, and neither package imports the loop. Jev is the initial model choice for the decision layer; named judgment sites keep model choice separate from responsibility. Weave owns the loop, policy, state, and authority boundaries.
 
-The project is currently at the architecture and vocabulary stage. Start with:
+Start with:
 
 - [VISION.md](./VISION.md) — what Weave is and what it refuses to become.
 - [CONTEXT.md](./CONTEXT.md) — the project's ubiquitous language.
@@ -26,3 +26,12 @@ The project is currently at the architecture and vocabulary stage. Start with:
 - [AGENTS.md](./AGENTS.md) — how coding agents should work in this repository.
 
 Weave is early. The first objective is a small scenario that proves authorized concurrent execution, honest handling of stale or interrupted work, and replayable evidence. It then extends to crystallizing one capability from contract through demonstrated red, proven green, admission, and separately authorized execution, followed by a measured optimisation with scoped promotion and rollback.
+
+## Status
+
+M0 (inspect and report) is implemented. `packages/agentsop` holds the contract layer and `packages/weave` the runtime; the fixture goal, fake host, and the M0 checks live under `packages/weave/test`. Requires Node 22 or later.
+
+```bash
+npm install
+npm run verify   # import-direction and no-ambient-clock checks, build, and the M0 test suite
+```
