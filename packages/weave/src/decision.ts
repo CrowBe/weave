@@ -6,6 +6,7 @@ import type { DecisionLayer, WeighRequest, WeightEntry } from './types.js';
 
 const SCRIPTED_WEIGHTS: Readonly<Record<string, number>> = {
   'goal.complete': 1.0,
+  'report.publish': 0.95,
   'report.assemble': 0.9,
   'source.inspect': 0.8,
 };

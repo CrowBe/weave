@@ -23,17 +23,19 @@ Start with:
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — the high-level plan: layers, the cycle, state, judgment, capabilities, extension, optimisation, and vertical milestones.
 - [docs/agentfabric-concepts.md](./docs/agentfabric-concepts.md) — which capability-system concepts carry over from the external AgentFabric, which do not, and the in-repo surface to build.
 - [docs/m0-inspect-and-report.md](./docs/m0-inspect-and-report.md) — the behavioral contract and checks for the first milestone.
-- [M1 — publish under authority](./docs/m1-publish-under-authority.md) — the next
-  milestone contract: approvals, enforced effects, cancellation and crash recovery.
+- [M1 — publish under authority](./docs/m1-publish-under-authority.md) — approvals,
+  enforced effects, cancellation and crash recovery.
 - [AGENTS.md](./AGENTS.md) — how coding agents should work in this repository.
 
 Weave is early. The first objective is a small scenario that proves authorized concurrent execution, honest handling of stale or interrupted work, and replayable evidence. It then extends to crystallizing one capability from contract through demonstrated red, proven green, admission, and separately authorized execution, followed by a measured optimisation with scoped promotion and rollback.
 
 ## Status
 
-M0 (inspect and report) is implemented. `packages/agentsop` holds the contract layer and `packages/weave` the runtime; the fixture goal, fake host, and the M0 checks live under `packages/weave/test`. Requires Node 22 or later.
+M0 (inspect and report) and M1 (publish under authority) are implemented.
+`packages/agentsop` holds the contract layer, `packages/agentfabric` the enforcing
+host, and `packages/weave` the runtime. Requires Node 22 or later.
 
 ```bash
 npm install
-npm run verify   # import-direction and no-ambient-clock checks, build, and the M0 test suite
+npm run verify   # import-direction and no-ambient-clock checks, build, M0 and M1 suites
 ```

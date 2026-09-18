@@ -5,6 +5,8 @@ export {
   ScriptedDecisionLayer,
   foldState,
   replay,
+  recover,
   traceCompletenessViolations,
   type RuntimeOptions,
 } from './runtime.js';
+export { MemoryJournal, PersistError } from './journal.js';
