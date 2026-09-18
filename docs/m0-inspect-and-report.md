@@ -226,8 +226,12 @@ it, reserves its resources, and records `action.started`.
 ## 7. The M0 cycle
 
 Each cycle is a pure function of `State` plus the log, and it appends to the
-log. It runs whenever an accepted observation has changed `state_revision`
-since the last cycle.
+log. While a goal is open, a cycle runs after each accepted observation that the
+cycle did not append itself (host results, operator, test, and clock
+observations); `goal.opened` triggers cycle 1. The
+`weights.recorded` and `action.started` observations a cycle appends advance
+`state_revision` but do not trigger another cycle, so cycle numbers in the
+checks below count external arrivals.
 
 1. **Form candidates** using the single established procedure
    `inspect_and_report@1`. No candidates form once `goal.status = complete`.
