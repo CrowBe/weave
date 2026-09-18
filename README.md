@@ -14,13 +14,14 @@ When repeated reasoning reveals a reusable capability, Weave crystallizes it thr
 
 Weave also optimises existing capabilities and operating strategies through bounded experiments: compare a versioned candidate with a baseline, authorise promotion within a declared scope, monitor outcomes, and retain or roll back the change. Improvement includes quality, reliability, human effort, latency, and total cost; the optimiser cannot lower the success bar or expand its authority.
 
-AgentSOP defines what a capability means and what a resolver must look like. AgentFabric is the runtime that honours those contracts and owns the capability lifecycle. Both are packages in this repository, kept behind a package boundary: Weave reaches AgentFabric through a capability host port rather than depending on its internals, and neither package imports the loop. Jev is the initial model choice for the decision layer; named judgment sites keep model choice separate from responsibility. Weave owns the loop, policy, state, and authority boundaries.
+AgentSOP defines what a capability means and what an implementation's resolver context must look like. AgentFabric is the capability host that honours those contracts and owns the capability lifecycle. Both are built as packages in this repository — the external AgentFabric repository is a conceptual reference, not a dependency — and kept behind a package boundary: Weave reaches AgentFabric through a capability host port rather than depending on its internals, and neither package imports the loop. Jev is the initial model choice for the decision layer; named judgment sites keep model choice separate from responsibility. Weave owns the loop, policy, state, and authority boundaries.
 
 The project is currently at the architecture and vocabulary stage. Start with:
 
 - [VISION.md](./VISION.md) — what Weave is and what it refuses to become.
 - [CONTEXT.md](./CONTEXT.md) — the project's ubiquitous language.
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — the high-level plan: layers, the cycle, state, judgment, capabilities, extension, optimisation, and vertical milestones.
+- [docs/agentfabric-concepts.md](./docs/agentfabric-concepts.md) — which capability-system concepts carry over from the external AgentFabric, which do not, and the in-repo surface to build.
 - [docs/m0-inspect-and-report.md](./docs/m0-inspect-and-report.md) — the behavioral contract and checks for the first milestone.
 - [AGENTS.md](./AGENTS.md) — how coding agents should work in this repository.
 

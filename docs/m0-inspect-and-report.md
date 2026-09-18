@@ -464,5 +464,9 @@ alpha, beta; authority alpha, beta; budget 6/6); hold host completions.
   the chosen toolchain, and must be observed red before runtime code is written.
 - The fake host is sufficient for M0 because both capabilities are read-only on
   fixture memory. Nothing here is evidence that AgentFabric enforces anything.
+- `ResourceId` plays the role of a resource reference. Host issuance and the
+  separation of references from locators are enforced from M1, when the
+  in-repo `agentfabric` owns the locator table
+  (see [agentfabric-concepts.md](./agentfabric-concepts.md)).
 - `budget.actions` and `budget.judgments` count units, not cost. Cost units are
   introduced when the gateway arrives in M2.
