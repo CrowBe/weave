@@ -180,6 +180,24 @@ A capability produced by connecting established capabilities without inventing a
 
 A needed capability that cannot yet be satisfied reliably and requires exploration or new implementation.
 
+## Experiments and improvement
+
+### Optimisation
+
+An evidence-backed change that improves how Weave achieves authorized outcomes for a declared workload while preserving protected constraints. It can change capabilities, operating strategies, or the harness implementation without expanding authority.
+
+### Operating strategy
+
+A versioned way of choosing or performing work, such as decomposition, composition, context selection, routing, scheduling, or information gathering. It operates within policy and does not define its own authority or success criteria.
+
+### Experiment
+
+A bounded comparison between a versioned baseline and a candidate change for a declared workload. It records the intended benefit, protected constraints, evaluation method, budget, promotion conditions, evidence, and rollback target.
+
+### Promotion
+
+The governed decision to make an evaluated change active within a specified scope. It is distinct from capability admission and does not grant authority to execute or relax policy.
+
 ## Real-time TDD
 
 ### Contract establishment

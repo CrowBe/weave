@@ -12,7 +12,9 @@ Weave must advance an authorized goal even when its present software is
 incomplete. That creates two connected problems: choosing useful work under
 uncertainty, and executing work without surrendering authority to that judgment.
 Crystallization changes the software available for future choices; it must not
-change the rules that authorize execution.
+change the rules that authorize execution. Optimisation improves the capabilities
+and operating strategies used within those rules, including the harness
+implementation when a separately governed release can prove its contracts.
 
 | Vision requirement | Architectural consequence |
 | --- | --- |
@@ -21,7 +23,7 @@ change the rules that authorize execution.
 | Independent work proceeds concurrently | Scheduling is driven by dependencies, resource conflicts, and arriving observations, not batches of model calls. |
 | Familiar work becomes software | Capability contracts are reusable; candidate formation and task procedures can evolve without editing the control core. |
 | Generation, admission, and execution differ | Each has its own evidence, authority check, and recorded outcome. |
-| Improvement is empirical | Every judgment and implementation is evaluated against its own versioned inputs, outcomes, and costs. |
+| Improvement is empirical | Versioned experiments compare capabilities and operating strategies against a baseline before scoped promotion. |
 
 The central design is a **small control core with replaceable ways of proposing
 and performing work**. The core needs to understand authority, dependencies,
@@ -291,7 +293,74 @@ invocable implementations. Newly admitted implementations begin constrained;
 observed failures can reduce maturity, revoke admission, or select a previously
 validated implementation. None of these transitions grants additional authority.
 
-## 9. Prove the design with a vertical slice
+## 9. Optimisation is a governed experiment
+
+Extension and optimisation use the same execution machinery. An optimisation
+thread observes outcomes, proposes a change, gathers comparative evidence, and
+requests promotion through ordinary capabilities and dependencies. It does not
+introduce a second privileged agent loop. An authorised optimisation goal or
+explicit allocation supplies its scope and budget; ordinary task authority does
+not implicitly authorise experimenting on other goals or modifying the harness.
+
+The change may target an implementation, a routed unit, a work strategy,
+scheduling choices, or information gathering. It may also target the harness
+implementation. Changes to the control core use a separately governed release
+path with contract checks, versioned deployment, and recovery, rather than
+mutating the running core. Optimisation capabilities cannot weaken the policy,
+isolation, evidence, or admission mechanisms that evaluate their changes.
+
+An experiment records:
+
+- The observed weakness, proposed benefit, versioned baseline, and candidate.
+- The workload and scope where the benefit is expected, including data authority.
+- Success measures and trade-offs: quality, completion rate, human correction,
+  latency, and total cost, with protected constraints that must remain satisfied.
+- The evaluation protocol, protected cases, budget, uncertainty treatment, and
+  promotion conditions established before comparative results are inspected.
+- Evidence tied to the evaluated versions, authorised rollout scope, monitoring
+  conditions, and an eligible rollback target.
+
+Comparison includes failures and difficult cases, not only successful traces.
+Relevant workload differences and concurrent changes are recorded so an apparent
+improvement is not silently attributed to the wrong cause. Costs include failed
+trials, inference, evaluation, human review, and rollout. Small or inconclusive
+gains can leave the baseline in place; a candidate can improve one workload and
+remain unsuitable for another.
+
+The change author does not control protected evaluation or its acceptance bar.
+Evaluation changes require separate justification and authority; candidate
+failures cannot be repaired by deleting the cases that expose them. Development
+feedback and protected evaluation access are separated, with repeated attempts
+accounted for to avoid treating benchmark fitting as general improvement.
+Code-producing experiments retain contract-first tests and demonstrated red
+before implementation generation. A configuration experiment compares variants
+under established checks; it does not fabricate a failing correctness test when
+the baseline already satisfies its contract.
+
+Replay compares recorded state interpretation or candidate decisions without
+repeating effects. It cannot prove outcomes for different actions that were never
+executed. Use isolated execution, suitable controlled comparisons, or limited
+authorised deployment for those claims. A trial is still execution: permissions,
+budgets, data boundaries, and effect controls apply in full. No publication or
+other external effect is duplicated merely to obtain an experimental comparison.
+
+Promotion checks version-bound evidence and current authority, then activates a
+candidate only for its declared scope. AgentFabric admits new capability
+implementations where necessary; Weave governs which operating strategy is active.
+The release path owns deployment of control-core revisions. These are separate
+operations, and none grants permission to execute a task. Experiments and active
+versions are recorded in state so outcomes remain attributable. Pending or running
+work keeps its recorded versions unless an explicit, compatible migration or
+cancellation transition is authorised; promotion does not silently rewrite it.
+
+Monitoring compares actual outcomes with the promotion conditions. Regression
+stops further rollout and can revert future work to a still-admitted, authorised,
+compatible baseline. If none is available, affected work pauses for reconciliation.
+Rollback changes future selection or deployment; it does not undo completed
+external effects. Changed models, contracts, workload, or evaluation rules can
+invalidate the comparison and require renewed evidence.
+
+## 10. Prove the design with a vertical slice
 
 Use a fixture goal: inspect two independent source artifacts, produce a checked
 report, and publish it only when explicitly authorized. One reusable transformation
@@ -336,17 +405,25 @@ Keep earlier scenarios running as each slice adds one consequential behavior.
   grant. This is one end-to-end slice; its dependent gates stay sequential while
   independent test or implementation proposals may run concurrently. Verify
   held-out protection, evidence invalidation, and revocation along this path.
-- **M4 — reuse and improve.** Repeat the goal using the admitted capability,
+- **M4 — measure reuse.** Repeat the goal using the admitted capability,
   validate cached conclusions and cross-goal access, and compare quality,
   inference use, latency, and total cost. A replacement implementation earns fresh
-  evidence. Expand routing or autonomy only when measured results justify it.
+  evidence. Establish the baseline for an optimisation experiment.
+- **M5 — improve one operating strategy.** From the report outcomes, identify one
+  recurring inefficiency and propose a single change, such as a narrower context
+  profile. Compare it with M4's versioned baseline on protected cases, including
+  quality and human correction as well as latency and total cost. Authorise a
+  limited promotion, complete reports with the new strategy, and monitor outcomes.
+  Demonstrate rejection of a cheaper candidate that misses the quality bar and
+  rollback after a detected regression. Use explicit human promotion initially;
+  no general experiment platform or autonomous core release is a prerequisite.
 
 Each slice begins with its behavioral contract and failing deterministic checks
 before implementation. The full available suite must remain green as slices
 accumulate. If a slice is too large, split it into smaller demonstrable outcomes
 through the same modules, rather than separate state, scheduler, or host projects.
 
-## 10. What remains open
+## 11. What remains open
 
 - Exact contract and resolver interfaces, and which existing AgentFabric code
   can satisfy them without bringing Weave scheduling into that package.
@@ -356,6 +433,10 @@ through the same modules, rather than separate state, scheduler, or host project
 - Domain-specific success evidence and calibrated semantic evaluation thresholds.
 - Ranking, no-progress, and extension-payoff policies beyond the first fixtures.
 - Contract/view migration, persistence retention, and redaction mechanisms.
+- Experiment protocols, evidence sufficiency, and rollout thresholds for each
+  workload; the first slice needs one declared protocol, not a universal score.
+- The separately governed release and recovery mechanism for future control-core
+  changes; M5 proves operating-strategy promotion without enabling core mutation.
 
 The invariants above are the proposed architectural decisions. These open choices
 are implementation or empirical questions; they must not silently weaken the

@@ -1,6 +1,6 @@
 # Vision
 
-Weave exists to build software that expands what it can reliably do in pursuit of a goal.
+Weave exists to build software that expands what it can reliably do and improves how it does it, through evidence-backed changes to its capabilities and operating strategies.
 
 Most agent systems place a generative model at the centre of a loop: the model receives a message, decides what to do, calls tools, and speaks again. Weave treats that as an implementation accident. A user message, a tool result, an inference result, an approval, an error, and a change in the environment are all observations that update state. From that state, Weave continuously weighs the actions available to it, executes the viable frontier—concurrently when it can—and evaluates the state that follows.
 
@@ -70,9 +70,25 @@ Anything the system repeatedly has to reason through is a candidate for software
 
 New capabilities earn trust. They carry provenance, permissions, version, dependencies, contract and test revisions, eval results, observed reliability, cost, and risk. They begin constrained, remain inspectable, and can be disabled or rolled back. Generated code is untrusted until the same evidence that would justify any other capability says otherwise.
 
+## The harness extends and optimises itself
+
+Extension expands what Weave can do. Optimisation improves how it achieves authorized outcomes. Crystallization can serve both: a new capability can enable a previously impossible goal or replace repeated inference with reliable software. Optimisation also improves existing implementations, prompts, context selection, routing, work strategies, scheduling, and information gathering without necessarily adding a capability.
+
+Better means better outcomes under the goal's constraints: higher success rates, better results, less human correction, faster completion, or lower total cost. The preferred trade-offs must be explicit. A cheaper result that misses the required quality bar is not an improvement, and gains on one workload do not establish gains on every workload.
+
+Weave improves through bounded experiments. Each experiment states the weakness being addressed, a versioned baseline and candidate change, its intended workload, the benefit sought, protected constraints, evaluation method, budget, promotion conditions, and rollback target. Evidence must support the comparison; uncertainty can justify further evaluation or retaining the baseline.
+
+> observe outcomes → identify a weakness → propose a change → compare with a baseline → authorise promotion → monitor → retain or roll back
+
+An optimiser cannot redefine success to make its candidate win. Evaluation criteria and protected checks remain independently governed; proposed changes to them require separate justification and authority. Replay can compare decisions on recorded inputs, but cannot establish the outcomes of actions that were never taken. Changes that alter execution require suitable isolated trials or limited authorised deployment before broader promotion.
+
+The harness implementation is also eligible for improvement. Its state queries, scheduling implementation, and other mechanics may be replaced while preserving their contracts. Changes to the control core pass through a separately governed, versioned release path; the optimiser cannot relax authority boundaries, weaken admission checks, or rewrite the running core opportunistically. Capability admission, optimisation promotion, and authority to execute remain distinct decisions.
+
+Experiments consume an explicit budget and compete with useful goal work. Failed trials, evaluation, human review, and rollout costs count toward their expected benefit. Optimisation is successful only when a scoped change earns continued use through measured outcomes; it is not a mandate for endless self-modification.
+
 ## Improvement must be measurable
 
-Weave improves through traces, evals, and changes to its executable action space—not through the claim that a growing transcript is learning.
+Weave improves through traces, evals, and validated changes to its capabilities and operating strategies—not through the claim that a growing transcript is learning.
 
 Every consequential cycle should be explainable after the fact: what state was known, which actions were considered, how they were weighted, which policies filtered them, what executed, what changed, and why the goal was considered advanced or complete. This record exists for evaluation and accountability, not as an ever-growing prompt.
 
@@ -88,7 +104,7 @@ The core should remain small enough to trust: state transitions, policy enforcem
 
 ## Scope
 
-Weave is a goal-directed runtime for selecting, parallelizing, evaluating, and expanding software capabilities over evolving state.
+Weave is a goal-directed runtime for selecting, parallelizing, evaluating, expanding, and optimising software capabilities and operating strategies over evolving state.
 
 It is not a chatbot framework with a more elaborate tool loop. Conversation is one interface and responding is one action.
 
@@ -100,6 +116,6 @@ It is not a replacement for deterministic application logic. Its purpose is to d
 
 It is not defined by Jev, any generative model, any provider, or any tool protocol. Those are replaceable participants in the architecture.
 
-A change aligns with Weave when it makes evolving state more explicit; improves action weighting or parallel execution; preserves deterministic authority boundaries; makes inference more interchangeable and empirically routed; turns semantic intent into a testable AgentFabric contract; turns repeated reasoning into a constrained, evaluated capability; strengthens provenance, observability, rollback, or evaluation; or expands the reliable action frontier without hiding how.
+A change aligns with Weave when it makes evolving state more explicit; improves action weighting or parallel execution; preserves deterministic authority boundaries; makes inference more interchangeable and empirically routed; turns semantic intent into a testable AgentFabric contract; turns repeated reasoning into a constrained, evaluated capability; strengthens provenance, observability, rollback, or evaluation; demonstrates a scoped improvement against a versioned baseline without weakening protected constraints; or expands the reliable action frontier without hiding how.
 
-A change should be resisted when it gives a model implicit control of the loop; treats conversation history as the only state; serializes independent work around artificial turns; lets probabilistic judgment override hard policy; equates generated code or generated tests with trusted evidence; crystallizes behavior without a reusable contract, demonstrated red, and deterministic validation; couples the runtime's identity to one model or vendor; optimizes cost at the expense of the required quality; mistakes activity for progress; or makes the system more capable by making it less legible.
+A change should be resisted when it gives a model implicit control of the loop; treats conversation history as the only state; serializes independent work around artificial turns; lets probabilistic judgment override hard policy; equates generated code or generated tests with trusted evidence; crystallizes behavior without a reusable contract, demonstrated red, and deterministic validation; couples the runtime's identity to one model or vendor; optimizes cost at the expense of the required quality; mistakes activity for progress; lets an optimiser redefine success or promote its own changes without the required evidence and authority; or makes the system more capable by making it less legible.
