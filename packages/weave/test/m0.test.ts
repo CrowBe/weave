@@ -53,7 +53,7 @@ function assertComplete(trace: Trace): void {
 describe('M0 base scenario', () => {
   it('M0-T01 goal opens without acting', () => {
     const s = scenario();
-    const opened = s.appended.find((o) => o.payload_type === 'goal.opened');
+    const opened = s.runtime.trace().observations.find((o) => o.payload_type === 'goal.opened');
     assert.ok(opened);
     assert.equal(opened.validation.status, 'accepted');
     const before = foldState(s.runtime.trace().observations.filter((o) => o.seq <= opened.seq));
@@ -265,7 +265,7 @@ describe('M0 base scenario', () => {
 describe('M0 authority', () => {
   it('M0-T11 a claimed completion is not completion', () => {
     const control = scenario();
-    control.observe(tick(1));
+    control.runtime.clock.submit(tick(1));
 
     const s = scenario();
     const before = s.runtime.state();
@@ -284,7 +284,7 @@ describe('M0 authority', () => {
     assert.equal(s.runtime.state().goal?.status, 'active');
     assert.equal(cycles(s).length, cyclesBefore, 'a non-accepted observation triggers no cycle');
 
-    s.observe(tick(1));
+    s.runtime.clock.submit(tick(1));
     const next = lastCycle(s);
     const controlNext = lastCycle(control);
     assert.equal(next.cycle_no, controlNext.cycle_no);
@@ -400,7 +400,7 @@ describe('M0 budget', () => {
 describe('M0 malformed input', () => {
   it('M0-T17 malformed observations cannot transition', () => {
     const control = scenario();
-    control.observe(tick(1));
+    control.runtime.clock.submit(tick(1));
 
     const s = scenario();
     const sourcesBefore = stableStringify(s.runtime.state().sources);
@@ -418,7 +418,7 @@ describe('M0 malformed input', () => {
     assert.equal(stableStringify(s.runtime.state().sources), sourcesBefore);
     assert.equal(s.runtime.state().state_revision, revisionBefore);
 
-    s.observe(tick(1));
+    s.runtime.clock.submit(tick(1));
     const next = lastCycle(s);
     const controlNext = lastCycle(control);
     assert.equal(stableStringify(next.candidates), stableStringify(controlNext.candidates));
