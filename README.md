@@ -20,7 +20,7 @@ The project is currently at the architecture and vocabulary stage. Start with:
 
 - [VISION.md](./VISION.md) — what Weave is and what it refuses to become.
 - [CONTEXT.md](./CONTEXT.md) — the project's ubiquitous language.
-- [ARCHITECTURE.md](./ARCHITECTURE.md) — the high-level plan: layers, the cycle, state, judgment, capabilities, extension, optimisation, and vertical slices.
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — the high-level plan: layers, the cycle, state, judgment, capabilities, extension, optimisation, and vertical milestones.
 - [AGENTS.md](./AGENTS.md) — how coding agents should work in this repository.
 
 Weave is early. The first objective is a small scenario that proves authorized concurrent execution, honest handling of stale or interrupted work, and replayable evidence. It then extends to crystallizing one capability from contract through demonstrated red, proven green, admission, and separately authorized execution, followed by a measured optimisation with scoped promotion and rollback.

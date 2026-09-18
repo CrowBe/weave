@@ -360,7 +360,7 @@ Rollback changes future selection or deployment; it does not undo completed
 external effects. Changed models, contracts, workload, or evaluation rules can
 invalidate the comparison and require renewed evidence.
 
-## 10. Prove the design with a vertical slice
+## 10. Prove the design through vertical milestones
 
 Use a fixture goal: inspect two independent source artifacts, produce a checked
 report, and publish it only when explicitly authorized. One reusable transformation
@@ -374,10 +374,12 @@ alone must leave publication unauthorized. A cancellation or crash during
 publication must produce an honest outcome, including uncertainty when required.
 
 This is an architectural acceptance scenario, not a new product requirement.
-Iterate through **thin vertical slices**, each with a demonstrable goal outcome
-and checks across the modules it touches. Build only the state, policy, host, and
-inference support needed for that slice; do not finish a horizontal layer first.
-Keep earlier scenarios running as each slice adds one consequential behavior.
+Iterate through **thin vertical milestones**, each with a demonstrable goal
+outcome and checks across the modules it touches. Build only the state, policy,
+host, and inference support needed for that milestone; do not finish a
+horizontal layer first. Keep earlier scenarios running as each milestone adds one
+consequential behavior. (*Slice* is reserved for the state-query term in
+[CONTEXT.md](./CONTEXT.md).)
 
 - **M0 — inspect and report.** Run the fixture goal with two fixed, read-only
   capabilities and scripted weights. Observe inputs, form and authorize
@@ -396,13 +398,13 @@ Keep earlier scenarios running as each slice adds one consequential behavior.
   its proposal, weigh eligible candidates, and produce the report. Compare with
   scripted judgments; verify disallowed data routes, all-attempt accounting,
   and bounded failure without recursive judgment. No multi-provider router is
-  needed to prove this slice.
+  needed to prove this milestone.
 - **M3 — fill one capability gap.** Give the report a transformation the existing
   capabilities cannot supply. Search reuse/composition, establish a contract,
   validate its corpus, and demonstrate red before generating its implementation.
   Prove isolation before running generated tests or code, validate green, request
   explicit human admission, and finish the report under a separate execution
-  grant. This is one end-to-end slice; its dependent gates stay sequential while
+  grant. This is one end-to-end milestone; its dependent gates stay sequential while
   independent test or implementation proposals may run concurrently. Verify
   held-out protection, evidence invalidation, and revocation along this path.
 - **M4 — measure reuse.** Repeat the goal using the admitted capability,
@@ -418,9 +420,10 @@ Keep earlier scenarios running as each slice adds one consequential behavior.
   rollback after a detected regression. Use explicit human promotion initially;
   no general experiment platform or autonomous core release is a prerequisite.
 
-Each slice begins with its behavioral contract and failing deterministic checks
-before implementation. The full available suite must remain green as slices
-accumulate. If a slice is too large, split it into smaller demonstrable outcomes
+Each milestone begins with its behavioral contract and failing deterministic
+checks before implementation. The full available suite must remain green as
+milestones accumulate. If a milestone is too large, split it into smaller
+demonstrable outcomes
 through the same modules, rather than separate state, scheduler, or host projects.
 
 ## 11. What remains open
@@ -434,7 +437,7 @@ through the same modules, rather than separate state, scheduler, or host project
 - Ranking, no-progress, and extension-payoff policies beyond the first fixtures.
 - Contract/view migration, persistence retention, and redaction mechanisms.
 - Experiment protocols, evidence sufficiency, and rollout thresholds for each
-  workload; the first slice needs one declared protocol, not a universal score.
+  workload; the first milestone needs one declared protocol, not a universal score.
 - The separately governed release and recovery mechanism for future control-core
   changes; M5 proves operating-strategy promotion without enabling core mutation.
 

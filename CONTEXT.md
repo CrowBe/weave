@@ -198,6 +198,10 @@ A bounded comparison between a versioned baseline and a candidate change for a d
 
 The governed decision to make an evaluated change active within a specified scope. It is distinct from capability admission and does not grant authority to execute or relax policy.
 
+### Milestone
+
+One vertical increment of the build plan (M0, M1, …): a demonstrable goal outcome with checks across every module it touches. A milestone is a unit of delivery; it is not a *slice*, which is a query over state.
+
 ## Real-time TDD
 
 ### Contract establishment
@@ -244,4 +248,5 @@ The record of where a contract, test, or implementation came from, including sou
 - Say **inference role** for why an inference was requested, and **inference kind** for what was asked of the model. They are not interchangeable.
 - Name a capability for its operation, never for the inference kind behind it: `text.classify`, not `request_text_classification`.
 - Say **action candidate**, not *option*, for a validated, bound action.
+- Say **milestone**, not *slice*, for an M-numbered increment of the plan. A slice is a query over state.
 - Never use **deterministic** to describe generated tests; their execution is deterministic, while their authorship and correctness require evidence.
