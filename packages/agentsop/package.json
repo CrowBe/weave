@@ -1,0 +1,13 @@
+{
+  "name": "@weave/agentsop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AgentSOP: the capability contract layer. Depends on neither Weave nor AgentFabric.",
+  "exports": {
+    ".": "./dist/src/index.js"
+  },
+  "files": [
+    "dist"
+  ]
+}

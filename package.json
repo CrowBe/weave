@@ -1,0 +1,21 @@
+{
+  "name": "weave-workspace",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "npm run build && node --test \"packages/*/dist/test/**/*.test.js\"",
+    "check": "node checks/import-direction.mjs && node checks/no-ambient-clock.mjs",
+    "verify": "npm run check && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^7.0.2"
+  }
+}

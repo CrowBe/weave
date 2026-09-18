@@ -1,0 +1,290 @@
+/**
+ * Weave record shapes for M0, transcribed from docs/m0-inspect-and-report.md.
+ * These are the contract the checks are written against; the runtime that
+ * produces them lives beside this file.
+ */
+import type { Grant, ResourceEffect } from '@weave/agentsop';
+
+export type Seq = number;
+export type ActionId = string;
+export type CandidateId = string;
+export type ResourceId = string;
+
+// ---------------------------------------------------------------------------
+// §3 Observation envelope
+// ---------------------------------------------------------------------------
+
+export type ProvenanceKind = 'runtime' | 'host' | 'judgment' | 'clock' | 'operator' | 'test';
+
+export interface Provenance {
+  readonly kind: ProvenanceKind;
+  readonly id: string;
+}
+
+export type Validation =
+  | { readonly status: 'accepted' }
+  | { readonly status: 'rejected'; readonly reason: string }
+  | { readonly status: 'unknown_type' };
+
+/** What a source supplies. The sequencer assigns `seq`; validation is determined at append. */
+export interface ObservationInput {
+  readonly observation_id: string;
+  readonly source: Provenance;
+  readonly caused_by: ActionId | Seq | null;
+  readonly payload_type: string;
+  readonly payload_version: number;
+  readonly payload: unknown;
+}
+
+export interface Observation extends ObservationInput {
+  readonly seq: Seq;
+  readonly validation: Validation;
+}
+
+// Payload types used in M0. Any other `payload_type` is `unknown_type`.
+
+export interface Goal {
+  readonly goal_id: string;
+  readonly purpose: string;
+  readonly sources: readonly ResourceId[];
+  readonly authority: { readonly read: readonly ResourceId[] };
+  readonly budget: { readonly actions: number; readonly judgments: number };
+  readonly success_evidence: string;
+}
+
+export interface SourcePayload {
+  readonly resource: ResourceId;
+  readonly revision: number;
+  readonly content: string;
+}
+
+export interface ClockTickPayload {
+  readonly tick: number;
+}
+
+export interface WeightEntry {
+  readonly candidate_id: CandidateId;
+  readonly weight: number;
+}
+
+export interface WeightsRecordedPayload {
+  readonly site: 'frontier.weigh';
+  readonly implementation: string;
+  readonly state_revision: Seq;
+  readonly candidate_set: string;
+  readonly weights: readonly WeightEntry[];
+}
+
+export interface Reservation {
+  readonly actions: number;
+  readonly judgments: number;
+}
+
+export interface ActionStartedPayload {
+  readonly action_id: ActionId;
+  readonly candidate_id: CandidateId;
+  readonly operation: string;
+  readonly contract_rev: string | null;
+  readonly inputs: unknown;
+  readonly read_set: readonly ReadSetEntry[];
+  readonly effects: readonly ResourceEffect[];
+  readonly reservation: Reservation;
+  readonly grant: Grant | null;
+}
+
+export type ActionOutcome =
+  | { readonly outcome: 'succeeded'; readonly output: unknown }
+  | { readonly outcome: 'failed'; readonly failure: string }
+  | { readonly outcome: 'uncertain'; readonly reason: string };
+
+export interface ActionResultPayload {
+  readonly action_id: ActionId;
+  readonly outcome: ActionOutcome;
+}
+
+export interface ActionCancelRequestedPayload {
+  readonly action_id: ActionId;
+  readonly reason: string;
+}
+
+export const PAYLOAD_TYPES = [
+  'goal.opened',
+  'source.registered',
+  'source.changed',
+  'clock.tick',
+  'weights.recorded',
+  'action.started',
+  'action.result',
+  'action.cancel_requested',
+] as const;
+export type PayloadType = (typeof PAYLOAD_TYPES)[number];
+
+// ---------------------------------------------------------------------------
+// Fixture capability records (§2)
+// ---------------------------------------------------------------------------
+
+export interface InspectionResult {
+  readonly source: ResourceId;
+  readonly revision: number;
+  readonly line_count: number;
+  readonly digest: string;
+}
+
+export interface Report {
+  readonly entries: readonly InspectionResult[];
+  readonly read_set: readonly ResourceReadSetEntry[];
+}
+
+// ---------------------------------------------------------------------------
+// §4 Derived state
+// ---------------------------------------------------------------------------
+
+export type GoalStatus = 'active' | 'complete';
+
+export interface BudgetLine {
+  readonly limit: number;
+  readonly reserved: number;
+  readonly spent: number;
+}
+
+export interface Budget {
+  readonly actions: BudgetLine;
+  readonly judgments: BudgetLine;
+}
+
+export interface SourceState {
+  readonly revision: number;
+  readonly content: string;
+  /** seq of the observation that established this revision */
+  readonly evidence: Seq;
+}
+
+export interface State {
+  readonly state_revision: Seq;
+  readonly goal: (Goal & { readonly status: GoalStatus; readonly evidence: Seq }) | null;
+  readonly sources: Readonly<Record<ResourceId, SourceState>>;
+  readonly actions: Readonly<Record<ActionId, ActionRecord>>;
+  readonly inspections: Readonly<Record<ResourceId, { readonly result: InspectionResult; readonly evidence: Seq }>>;
+  readonly report: { readonly report: Report; readonly evidence: readonly Seq[] } | null;
+  readonly budget: Budget;
+}
+
+// ---------------------------------------------------------------------------
+// §5 Action lifecycle
+// ---------------------------------------------------------------------------
+
+export type ActionState = 'pending' | 'running' | 'succeeded' | 'failed' | 'uncertain' | 'cancelled';
+
+export interface ResourceReadSetEntry {
+  readonly resource: ResourceId;
+  readonly revision: number;
+}
+
+export interface StateFieldReadSetEntry {
+  readonly state_field: string;
+  readonly revision: number;
+}
+
+export type ReadSetEntry = ResourceReadSetEntry | StateFieldReadSetEntry;
+
+export interface ActionRecord {
+  readonly action_id: ActionId;
+  readonly candidate_id: CandidateId;
+  readonly operation: string;
+  readonly contract_rev: string | null;
+  readonly inputs: unknown;
+  readonly read_set: readonly ReadSetEntry[];
+  readonly effects: readonly ResourceEffect[];
+  readonly reservation: Reservation;
+  readonly state: ActionState;
+  readonly cancel_requested: boolean;
+  readonly started_at: Seq | null;
+  readonly finished_at: Seq | null;
+  readonly grant: Grant | null;
+}
+
+// ---------------------------------------------------------------------------
+// §6 Action candidate
+// ---------------------------------------------------------------------------
+
+export type Eligibility =
+  | { readonly status: 'allowed' }
+  | { readonly status: 'approval_required'; readonly policy: string }
+  | { readonly status: 'prohibited'; readonly reason: string };
+
+export interface Candidate {
+  readonly candidate_id: CandidateId;
+  readonly operation: string;
+  readonly contract_rev: string | null;
+  readonly inputs: unknown;
+  readonly evidence: readonly Seq[];
+  readonly read_set: readonly ReadSetEntry[];
+  readonly dependencies: readonly ActionId[];
+  readonly effects: readonly ResourceEffect[];
+  readonly resources: Reservation;
+  readonly eligibility: Eligibility;
+  readonly weight: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// §9 Trace
+// ---------------------------------------------------------------------------
+
+export type NotSelectedReason = 'dependency' | 'conflict' | 'stale_read_set' | 'budget';
+
+export type CycleOutcome =
+  | { readonly status: 'dispatched' }
+  | { readonly status: 'waiting' }
+  | { readonly status: 'blocked'; readonly reason: string }
+  | { readonly status: 'complete' };
+
+export interface CycleRecord {
+  readonly cycle_no: number;
+  readonly state_revision: Seq;
+  readonly procedure: 'inspect_and_report@1';
+  readonly candidates: readonly Candidate[];
+  readonly weights_ref: Seq | null;
+  readonly selected: readonly {
+    readonly candidate_id: CandidateId;
+    readonly action_id: ActionId;
+    readonly reservation: Reservation;
+  }[];
+  readonly not_selected: readonly { readonly candidate_id: CandidateId; readonly reason: NotSelectedReason }[];
+  readonly outcome: CycleOutcome;
+}
+
+export interface Trace {
+  readonly observations: readonly Observation[];
+  readonly cycles: readonly CycleRecord[];
+}
+
+// ---------------------------------------------------------------------------
+// Decision layer (judgment site `frontier.weigh`)
+// ---------------------------------------------------------------------------
+
+export interface WeighRequest {
+  readonly site: 'frontier.weigh';
+  readonly state_revision: Seq;
+  readonly candidate_set: string;
+  /** The eligible candidates only. Prohibited candidates never reach a judgment site. */
+  readonly candidates: readonly Candidate[];
+}
+
+export interface DecisionLayer {
+  readonly implementation: string;
+  weigh(request: WeighRequest): readonly WeightEntry[];
+}
+
+// ---------------------------------------------------------------------------
+// §10 Replay
+// ---------------------------------------------------------------------------
+
+export interface ReplayFailure {
+  readonly at_seq: Seq | null;
+  readonly action_id: ActionId | null;
+  readonly reason: string;
+}
+
+export type ReplayResult =
+  | { readonly ok: true; readonly trace: Trace; readonly state: State }
+  | { readonly ok: false; readonly failure: ReplayFailure; readonly trace: Trace; readonly state: State };

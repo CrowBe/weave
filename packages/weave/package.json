@@ -1,0 +1,16 @@
+{
+  "name": "@weave/weave",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Weave: the goal-directed runtime. Uses AgentSOP types; reaches AgentFabric only through the capability host interface.",
+  "exports": {
+    ".": "./dist/src/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@weave/agentsop": "*"
+  }
+}
