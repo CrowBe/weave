@@ -386,7 +386,8 @@ consequential behavior. (*Slice* is reserved for the state-query term in
   candidates, execute independent reads concurrently, and return an in-memory
   report with evidence. Prove rejected access stays rejected and replay does not
   repeat execution. A small log and fake host are sufficient; no general state
-  engine is required.
+  engine is required. The fixture, records, and checks are fixed in
+  [docs/m0-inspect-and-report.md](./docs/m0-inspect-and-report.md).
 - **M1 — publish under authority.** Extend the same goal with one effectful
   capability and an enforcing host. Prove scoped approval, forged-approval
   rejection, conflicting access, stale input handling, and shared budget limits.
