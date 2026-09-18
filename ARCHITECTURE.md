@@ -423,13 +423,36 @@ consequential behavior. (*Slice* is reserved for the state-query term in
 Each milestone begins with its behavioral contract and failing deterministic
 checks before implementation. The full available suite must remain green as
 milestones accumulate. If a milestone is too large, split it into smaller
-demonstrable outcomes
-through the same modules, rather than separate state, scheduler, or host projects.
+demonstrable outcomes through the same modules, rather than separate state,
+scheduler, or host projects.
 
 ## 11. What remains open
 
+- The implementation toolchain, and whether the existing external AgentFabric
+  code is vendored and audited or replaced by a minimal AgentSOP type set. M0
+  needs only the latter plus a fake host, but the choice fixes the language in
+  which package-direction checks and deterministic tests are written.
 - Exact contract and resolver interfaces, and which existing AgentFabric code
   can satisfy them without bringing Weave scheduling into that package.
+- Where the inference request and response types live. A generative
+  implementation declares inference as a dependency (§7) and AgentFabric must not
+  import Weave (§2), so those types belong in AgentSOP or a package neither
+  runtime owns; the gateway implementation is then supplied through the resolver
+  context. Decide before M2 introduces the gateway.
+- How the scheduler combines weights, cost, and risk when weights from different
+  judgment sites share no calibrated scale (§4). The initial rule must be ordinal
+  or per-site; M0 fixes one such rule for scripted weights only.
+- Whether every decision-relevant clock reading is a recorded observation. Replay
+  (§3) requires it; M0 assumes it and injects time as `clock.tick` observations.
+- The authority channel: how an approval observation is authenticated as coming
+  from a principal entitled to grant it, as opposed to a payload that claims so.
+  M1's forged-approval rejection is meaningful only against a stated model.
+- What information a held-out failure may return to an implementer or corpus
+  author, and how many iteration rounds are permitted before held-out evidence is
+  considered spent (§8). Without this, iterative generation leaks the split.
+- The relationship between the gating suite and real providers: which checks run
+  only against recorded or scripted routed units, and how non-gating evaluations
+  against live models are recorded and reported.
 - Resource identity, effect scopes, and external preconditions supported by the
   first adapters; unsupported guarantees must be explicit.
 - The isolation mechanism and its verified support on deployment hosts.
