@@ -10,7 +10,12 @@ import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
 const root = resolve(new URL('..', import.meta.url).pathname);
-const SCANNED = ['packages/agentsop/src', 'packages/agentfabric/src', 'packages/weave/src'];
+const SCANNED = [
+  'packages/agentsop/src',
+  'packages/agentfabric/src',
+  'packages/gateway/src',
+  'packages/weave/src',
+];
 
 const FORBIDDEN = [
   [/\bDate\b/, 'Date'],

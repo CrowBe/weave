@@ -3,8 +3,10 @@
  * M0-C1 Package direction.
  *
  *   agentsop     imports neither weave nor agentfabric
- *   agentfabric  imports agentsop only
- *   weave        imports agentsop and agentfabric only
+ *   gateway      imports nothing in-repo: both runtimes may call it, and the
+ *                inference request interface must not drag either in
+ *   agentfabric  imports agentsop and gateway only
+ *   weave        imports agentsop, agentfabric and gateway only
  *   the fake host (weave test code) depends only on the host interface (agentsop)
  *
  * Runs on source text alone; it does not load Weave or its tests.
@@ -17,8 +19,9 @@ const packagesDir = join(root, 'packages');
 
 const ALLOWED = {
   agentsop: new Set(),
-  agentfabric: new Set(['agentsop']),
-  weave: new Set(['agentsop', 'agentfabric']),
+  gateway: new Set(),
+  agentfabric: new Set(['agentsop', 'gateway']),
+  weave: new Set(['agentsop', 'agentfabric', 'gateway']),
 };
 
 const FAKE_HOST_ALLOWED = new Set(['agentsop']);

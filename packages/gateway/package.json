@@ -1,0 +1,20 @@
+{
+  "name": "@weave/gateway",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Inference gateway: bounded provider execution for text generation and typed evaluation, deterministic routing, attempt accounting. Imports neither Weave nor AgentFabric.",
+  "exports": {
+    ".": "./dist/src/index.js",
+    "./vercel-ai-gateway": "./dist/src/adapters/vercel-ai-gateway.js",
+    "./typesafe-ai": "./dist/src/adapters/typesafe-ai.js",
+    "./open-router": "./dist/src/adapters/open-router.js",
+    "./nous-portal": "./dist/src/adapters/nous-portal.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "ai": "^7.0.107"
+  }
+}

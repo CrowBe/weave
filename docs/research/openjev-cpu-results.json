@@ -1,0 +1,187 @@
+{
+  "operation": "text.assess-entailment",
+  "status": "experimental",
+  "checkpoint_revision": "4b5f9a67fa2ebe77466bce0656ce350effc3148c",
+  "checkpoint_subfolder": "qwen3.5-4b-nli-v2",
+  "corpus_sha256": "77b6555cbc6a20aab40c4d1685577ea6bdc60cd8c2d52a8ecad4f55213a0c7af",
+  "torch": "2.14.0+cpu",
+  "transformers": "5.15.0",
+  "device": "cpu",
+  "dtype": "bfloat16",
+  "threads": 8,
+  "max_tokens": 256,
+  "batch_size": 1,
+  "offline": true,
+  "calibrated": false,
+  "load_seconds": 1.141777858021669,
+  "peak_rss_kib": 7597732,
+  "correct": 12,
+  "total": 12,
+  "median_seconds": 4.855401958047878,
+  "rows": [
+    {
+      "id": "reported-fact",
+      "expected": "entailment",
+      "label": "entailment",
+      "scores": {
+        "contradiction": 0.0005584745085798204,
+        "entailment": 0.9940908551216125,
+        "neutral": 0.005350656341761351
+      },
+      "correct": true,
+      "input_tokens": 26,
+      "seconds": 4.486790483002551
+    },
+    {
+      "id": "reported-negation",
+      "expected": "contradiction",
+      "label": "contradiction",
+      "scores": {
+        "contradiction": 0.9870429039001465,
+        "entailment": 0.009397245943546295,
+        "neutral": 0.0035598326940089464
+      },
+      "correct": true,
+      "input_tokens": 26,
+      "seconds": 4.6263931799912825
+    },
+    {
+      "id": "missing-evidence",
+      "expected": "neutral",
+      "label": "neutral",
+      "scores": {
+        "contradiction": 0.032614048570394516,
+        "entailment": 0.056132327765226364,
+        "neutral": 0.9112536311149597
+      },
+      "correct": true,
+      "input_tokens": 21,
+      "seconds": 4.211621403112076
+    },
+    {
+      "id": "possibility-not-certainty",
+      "expected": "neutral",
+      "label": "neutral",
+      "scores": {
+        "contradiction": 0.016210278496146202,
+        "entailment": 0.030552133917808533,
+        "neutral": 0.9532375931739807
+      },
+      "correct": true,
+      "input_tokens": 20,
+      "seconds": 3.5166884809732437
+    },
+    {
+      "id": "exclusive-approval",
+      "expected": "contradiction",
+      "label": "contradiction",
+      "scores": {
+        "contradiction": 0.9912577867507935,
+        "entailment": 0.0023814858868718147,
+        "neutral": 0.006360751576721668
+      },
+      "correct": true,
+      "input_tokens": 21,
+      "seconds": 4.6938226480269805
+    },
+    {
+      "id": "nonexclusive-approval",
+      "expected": "neutral",
+      "label": "neutral",
+      "scores": {
+        "contradiction": 0.10127632319927216,
+        "entailment": 0.0030822663102298975,
+        "neutral": 0.8956414461135864
+      },
+      "correct": true,
+      "input_tokens": 20,
+      "seconds": 5.039735320955515
+    },
+    {
+      "id": "explicit-refusal",
+      "expected": "contradiction",
+      "label": "contradiction",
+      "scores": {
+        "contradiction": 0.9942609071731567,
+        "entailment": 0.003743303008377552,
+        "neutral": 0.0019958342891186476
+      },
+      "correct": true,
+      "input_tokens": 22,
+      "seconds": 5.115802428917959
+    },
+    {
+      "id": "claim-not-authority",
+      "expected": "contradiction",
+      "label": "contradiction",
+      "scores": {
+        "contradiction": 0.9931548833847046,
+        "entailment": 0.006128781475126743,
+        "neutral": 0.0007164202397689223
+      },
+      "correct": true,
+      "input_tokens": 38,
+      "seconds": 7.297121115960181
+    },
+    {
+      "id": "quoted-instruction",
+      "expected": "contradiction",
+      "label": "contradiction",
+      "scores": {
+        "contradiction": 0.7218155860900879,
+        "entailment": 0.2218679040670395,
+        "neutral": 0.0563165508210659
+      },
+      "correct": true,
+      "input_tokens": 33,
+      "seconds": 6.515396693022922
+    },
+    {
+      "id": "numeric-bound",
+      "expected": "entailment",
+      "label": "entailment",
+      "scores": {
+        "contradiction": 0.00995358731597662,
+        "entailment": 0.9840562343597412,
+        "neutral": 0.005990174598991871
+      },
+      "correct": true,
+      "input_tokens": 32,
+      "seconds": 6.4126564878970385
+    },
+    {
+      "id": "conjunction",
+      "expected": "entailment",
+      "label": "entailment",
+      "scores": {
+        "contradiction": 0.0009322399855591357,
+        "entailment": 0.9908716082572937,
+        "neutral": 0.008196137845516205
+      },
+      "correct": true,
+      "input_tokens": 20,
+      "seconds": 4.865853393101133
+    },
+    {
+      "id": "missing-conjunct",
+      "expected": "neutral",
+      "label": "neutral",
+      "scores": {
+        "contradiction": 0.0018241567304357886,
+        "entailment": 0.023243829607963562,
+        "neutral": 0.974932074546814
+      },
+      "correct": true,
+      "input_tokens": 20,
+      "seconds": 4.844950522994623
+    }
+  ],
+  "checkpoint_weight_sha256_verified": "f625c42c6bac1fbc03935f584d0126d096b6681bdc62d11f4a7c7f3b94bc35b3",
+  "host": {
+    "cpu": "Intel Core i7-1355U",
+    "ram_gib": 31,
+    "os": "Fedora Linux 44",
+    "gpu_used": false
+  },
+  "date": "2026-09-20"
+}
