@@ -1,0 +1,16 @@
+{
+  "name": "@weave/agentfabric",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AgentFabric: the capability host. Depends on AgentSOP only.",
+  "exports": {
+    ".": "./dist/src/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@weave/agentsop": "*"
+  }
+}

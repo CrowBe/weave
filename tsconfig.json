@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "packages/agentsop" },
+    { "path": "packages/agentfabric" },
     { "path": "packages/gateway" },
     { "path": "packages/weave" }
   ]

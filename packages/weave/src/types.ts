@@ -47,8 +47,9 @@ export interface Goal {
   readonly goal_id: string;
   readonly purpose: string;
   readonly sources: readonly ResourceId[];
-  readonly authority: { readonly read: readonly ResourceId[] };
-  readonly budget: { readonly actions: number; readonly judgments: number };
+  readonly destination?: ResourceId;
+  readonly authority: { readonly read: readonly ResourceId[]; readonly write?: readonly ResourceId[] };
+  readonly budget: { readonly actions: number; readonly judgments: number; readonly recovery?: number };
   readonly success_evidence: string;
 }
 
@@ -90,6 +91,7 @@ export interface ActionStartedPayload {
   readonly effects: readonly ResourceEffect[];
   readonly reservation: Reservation;
   readonly grant: Grant | null;
+  readonly invocation_id?: string;
 }
 
 export type ActionOutcome =
@@ -107,6 +109,47 @@ export interface ActionCancelRequestedPayload {
   readonly reason: string;
 }
 
+export interface ApprovalRequestedPayload {
+  readonly request_id: string;
+  readonly goal_id: string;
+  readonly candidate_id: CandidateId;
+  readonly operation: string;
+  readonly contract_rev: string;
+  readonly binding_digest: string;
+  readonly report_digest: string;
+  readonly read_set: readonly ResourceReadSetEntry[];
+  readonly destination: ResourceId;
+  readonly expected_revision: number;
+  readonly effects: readonly ResourceEffect[];
+  readonly budget: Reservation;
+  readonly valid_from_tick: number;
+  readonly valid_until_tick: number;
+}
+
+export type ApprovalDecisionKind = 'approved' | 'denied' | 'revoked' | 'expired';
+
+export interface ApprovalDecidedPayload {
+  readonly request_id: string;
+  readonly principal: string;
+  readonly decision: ApprovalDecisionKind;
+  readonly authority_revision: number;
+  readonly scope?: {
+    readonly valid_until_tick?: number;
+  };
+}
+
+export interface CapabilityDescribedPayload {
+  readonly operation: string;
+  readonly contract: unknown;
+}
+
+export interface PublishReceipt {
+  readonly invocation_id: string;
+  readonly report_digest: string;
+  readonly destination: ResourceId;
+  readonly committed_revision: number;
+}
+
 export const PAYLOAD_TYPES = [
   'goal.opened',
   'source.registered',
@@ -114,8 +157,12 @@ export const PAYLOAD_TYPES = [
   'clock.tick',
   'weights.recorded',
   'action.started',
+  'action.queued',
   'action.result',
   'action.cancel_requested',
+  'approval.requested',
+  'approval.decided',
+  'capability.described',
 ] as const;
 export type PayloadType = (typeof PAYLOAD_TYPES)[number];
 
@@ -166,7 +213,12 @@ export interface State {
   readonly actions: Readonly<Record<ActionId, ActionRecord>>;
   readonly inspections: Readonly<Record<ResourceId, { readonly result: InspectionResult; readonly evidence: Seq }>>;
   readonly report: { readonly report: Report; readonly evidence: readonly Seq[] } | null;
+  readonly publication: { readonly receipt: PublishReceipt; readonly evidence: Seq } | null;
   readonly budget: Budget;
+  readonly clock: { readonly tick: number; readonly evidence: Seq | null };
+  readonly approvals: Readonly<Record<string, ApprovalRecord>>;
+  readonly contracts: Readonly<Record<string, unknown>>;
+  readonly recovery: { readonly limit: number; readonly spent: number };
 }
 
 // ---------------------------------------------------------------------------
@@ -201,6 +253,7 @@ export interface ActionRecord {
   readonly started_at: Seq | null;
   readonly finished_at: Seq | null;
   readonly grant: Grant | null;
+  readonly invocation_id: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -230,6 +283,17 @@ export interface Candidate {
 // §9 Trace
 // ---------------------------------------------------------------------------
 
+export type ProcedureId = 'inspect_and_report@1' | 'inspect_report_publish@1';
+
+export interface ApprovalRecord {
+  readonly request_id: string;
+  readonly request: ApprovalRequestedPayload;
+  readonly status: 'pending' | ApprovalDecisionKind;
+  readonly evidence: readonly Seq[];
+  readonly principal: string | null;
+  readonly authority_revision: number | null;
+}
+
 export type NotSelectedReason = 'dependency' | 'conflict' | 'stale_read_set' | 'budget';
 
 export type CycleOutcome =
@@ -241,7 +305,7 @@ export type CycleOutcome =
 export interface CycleRecord {
   readonly cycle_no: number;
   readonly state_revision: Seq;
-  readonly procedure: 'inspect_and_report@1';
+  readonly procedure: ProcedureId;
   readonly candidates: readonly Candidate[];
   readonly weights_ref: Seq | null;
   readonly selected: readonly {

@@ -180,6 +180,10 @@ Authority for a principal to invoke a capability, scoped to resources and effect
 
 An authenticated decision by an entitled principal on a bound request, within that principal's authority and the goal's ceiling. Its scope and validity inform policy without replacing execution grants or enforcement; payload claims, retained history and silence do not establish approval.
 
+### Trusted ingress
+
+A handle created by trusted bootstrap that may submit observations with a privileged provenance (operator, host, or clock). Untrusted observation payloads cannot choose those identities. Possession of a provenance string is not ingress.
+
 ### Resolver context
 
 The interface through which an implementation reaches its environment: nested invocation limited to declared dependencies, and reference-scoped resource operations. It contains no locators or substrate types, so it can be brokered across an isolation boundary.
@@ -291,4 +295,5 @@ The record of where a contract, test, or implementation came from, including sou
 - Name a capability for its operation, never for the inference kind behind it: `text.classify`, not `request_text_classification`.
 - Say **action candidate**, not *option*, for a validated, bound action.
 - Say **milestone**, not *slice*, for an M-numbered increment of the plan. A slice is a query over state.
+- Say **trusted ingress**, not *authenticated client*, for the in-process handle that may submit privileged observations.
 - Never use **deterministic** to describe generated tests; their execution is deterministic, while their authorship and correctness require evidence.

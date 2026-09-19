@@ -59,10 +59,9 @@ export function changed(resource: string, revision: number, content: string): Ob
   };
 }
 
-export function goalOpened(goal: Goal): ObservationInput {
+export function goalOpened(goal: Goal): Omit<ObservationInput, 'source'> {
   return {
     observation_id: `operator:goal.opened:${goal.goal_id}`,
-    source: { kind: 'operator', id: 'operator' },
     caused_by: null,
     payload_type: 'goal.opened',
     payload_version: 1,
@@ -70,10 +69,9 @@ export function goalOpened(goal: Goal): ObservationInput {
   };
 }
 
-export function tick(n: number): ObservationInput {
+export function tick(n: number): Omit<ObservationInput, 'source'> {
   return {
     observation_id: `clock:tick:${n}`,
-    source: { kind: 'clock', id: 'clock' },
     caused_by: null,
     payload_type: 'clock.tick',
     payload_version: 1,
@@ -126,7 +124,7 @@ export function scenario(options: ScenarioOptions = {}): Scenario {
   };
   if (options.open !== false) {
     registerAll(s);
-    s.observe(goalOpened(options.goal ?? baseGoal()));
+    s.runtime.operator.submit(goalOpened(options.goal ?? baseGoal()));
   }
   return s;
 }
