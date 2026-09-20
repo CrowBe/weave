@@ -12,7 +12,13 @@
     "build": "tsc -b",
     "test": "npm run build && node --test \"packages/*/dist/test/**/*.test.js\"",
     "check": "node checks/import-direction.mjs && node checks/no-ambient-clock.mjs",
-    "verify": "npm run check && npm test"
+    "typecheck:examples": "tsc -p tsconfig.examples.json",
+    "test:entailment": "python3 -m unittest discover -s tools/openjev -p 'test_*.py'",
+    "verify": "npm run check && npm test && npm run typecheck:examples && npm run test:entailment",
+    "example": "node --env-file-if-exists=.env.local index.ts",
+    "example:gateway": "npm run build && node --env-file-if-exists=.env.local examples/holiday.ts",
+    "example:free": "npm run build && node --env-file-if-exists=.env.local examples/free.ts",
+    "example:weigh": "npm run build && node --env-file-if-exists=.env.local examples/weigh.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

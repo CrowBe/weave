@@ -33,9 +33,17 @@ Weave is early. The first objective is a small scenario that proves authorized c
 
 M0 (inspect and report) and M1 (publish under authority) are implemented.
 `packages/agentsop` holds the contract layer, `packages/agentfabric` the enforcing
-host, and `packages/weave` the runtime. Requires Node 22 or later.
+host, and `packages/weave` the runtime. `packages/gateway` supplies bounded
+generation and typed evaluation through replaceable providers. Requires Node
+22 or later; offline entailment contract tests also require Python 3.
 
 ```bash
 npm install
-npm run verify   # import-direction and no-ambient-clock checks, build, M0 and M1 suites
+npm run verify   # structural checks, build, M0/M1/gateway suites, examples and entailment contract tests
 ```
+
+The [OpenJev experiment](./tools/openjev/README.md) evaluates the distinct
+`text.assess-entailment` operation locally. Its model download and CPU evaluation
+are opt-in and are not part of CI. Recorded
+[measurements and limitations](./docs/research/local-inference-evaluation.md)
+do not admit it as a general Jev fallback.

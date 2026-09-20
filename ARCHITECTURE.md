@@ -59,7 +59,12 @@ Package checks and tests independent of Weave must enforce these directions.
 
 Both packages are built in this repository as an npm workspace in TypeScript
 (`packages/agentsop`, `packages/weave`; `packages/agentfabric` arrives with
-M1). Package-direction and no-ambient-clock checks live under `checks/` and run
+M1). The inference gateway is `packages/gateway`: it is a separate package for
+the same reason AgentSOP is, since Weave and an AgentFabric generative
+implementation must both be able to call it and neither may reach the other
+through it. It imports nothing in-repo, and provider adapters sit behind their
+own entry points so the request interface carries no provider dependency.
+Package-direction and no-ambient-clock checks live under `checks/` and run
 without Weave's tests. The external AgentFabric repository
 is a conceptual reference, not a dependency or a code source: the contract
 invariants it established (durable contracts, opaque references separated from
@@ -244,6 +249,25 @@ framing, semantic evaluation, and generative implementations. Each judgment site
 has a named purpose, typed input and output, acceptance terms, and evaluation
 history. Jev is the initial decision-layer choice, not an architectural dependency.
 
+The gateway performs two operations. Generation returns text. Evaluation returns
+typed answers to typed questions asked about one shared state, which is what the
+decision layer needs: a weight is a score, a choice, or a probability, not prose
+to be parsed back into one. Those answer shapes are not interchangeable
+downstream, and a routed unit earns evidence at one shape without earning it at
+another, so each shape is its own inference kind. A request declares one shape
+and every question in it takes that shape; asking two shapes about the same
+state is two requests, separately routed and separately accounted.
+
+Matching answer shapes do not establish matching semantics. A capability is
+named for its semantic operation, and an inference implementation must earn
+evidence for that operation before it can substitute for another implementation.
+For example, assessing whether a hypothesis follows from a premise preserves
+entailment, contradiction and missing evidence; it is not a general boolean
+decision or a score of an action's usefulness. Privacy constrains destinations
+and measured performance constrains suitability. Neither an API outage nor a
+privacy requirement permits routing to a different semantic operation just
+because it can produce a compatible output type.
+
 Goal-level inference is scheduled work. Frontier weighing is a bounded control
 request: policy authorizes and reserves its budget directly, without requiring
 another frontier judgment to authorize it. Gateway routing and initial request
@@ -253,10 +277,36 @@ or evaluator. No budget or unusable weights produces an explicit fallback or
 blocked outcome, never implicit permission to execute.
 
 The caller supplies scope, quality requirements, permitted data destinations,
-context limits, deadline, and cost ceiling. The gateway may retry or escalate
-within those terms; it cannot rescope the goal or relax acceptance. All attempts
-and evaluation costs count against the enclosing reservation. Nested capability
-calls share the same authority and budget limits rather than receiving fresh ones.
+context limits, deadline, and cost ceiling. The gateway may retry, wait, or
+escalate within those terms; it cannot rescope the goal or relax acceptance. All
+attempts and evaluation costs count against the enclosing reservation. Nested
+capability calls share the same authority and budget limits rather than
+receiving fresh ones.
+
+Waiting is the third response to a failure, and a rate limit is what it is for.
+A throttle refuses again if it is asked again immediately, so retrying at once
+spends an attempt to learn nothing, while escalating pays for a route the caller
+ranked lower. The gateway waits only when the delay is known and the deadline
+still accommodates it, which keeps the deadline the single bound on how long a
+caller can be made to wait rather than introducing a second one. A delay the
+provider states is preferred to one derived from a limit declared on the routed
+unit, because a declared limit is what a vendor documents and not necessarily
+what it enforces; a declared limit therefore estimates a wait after a refusal
+and never suppresses an attempt. A wait consumes deadline but not attempts, and
+is recorded against the attempt it preceded.
+
+Inference on the operator's own hardware is a routed unit like any other, and
+deliberately so: it earns no exemption from accounting, acceptance or the
+deadline, and it fails and is retried by the same rules. What distinguishes it
+is its destination. Every hosted provider names a vendor that content is
+disclosed to; a local runtime names none, so a request that permits only the
+local destination cannot reach a hosted route whatever the route table holds
+or however the local route behaves. The privacy property is therefore a
+consequence of the filter that already governs disclosure, not a second
+mechanism layered beside it — and it is correspondingly hard to lose by
+accident, since adding a hosted fallback to the table does not weaken it. Such
+a route is priced at a real zero rather than left unpriced, so it remains
+affordable under an exhausted ceiling while still being accounted.
 
 Record and account for every attempt, including malformed responses and failures,
 independently of whether its judgment is accepted. Slow inference cannot block
