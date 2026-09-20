@@ -42,8 +42,10 @@ npm install
 npm run verify   # structural checks, build, M0/M1/gateway suites, examples and entailment contract tests
 ```
 
-The [OpenJev experiment](./tools/openjev/README.md) evaluates the distinct
-`text.assess-entailment` operation locally. Its model download and CPU evaluation
-are opt-in and are not part of CI. Recorded
-[measurements and limitations](./docs/research/local-inference-evaluation.md)
-do not admit it as a general Jev fallback.
+Local inference experiments and their recorded evidence live under
+[`benchmarks/inference`](./benchmarks/inference/README.md). OpenJev evaluates
+the distinct `text.assess-entailment` operation. Kev 4B is available as a
+bounded baseline-quality local fallback for typed evaluation, with its source,
+environment and weights kept outside the checkout. See the
+[Kev operating guide](./benchmarks/inference/kev/SERVICE.md) for external
+service registration, privacy-only routing and fallback composition.

@@ -1,0 +1,22 @@
+[Unit]
+Description=Weave local Kev 4B inference
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.local/share/weave/kev/src
+Environment=HF_HOME=%h/.local/share/weave/kev/hf
+Environment=HF_HUB_OFFLINE=1
+Environment=PYTHONPATH=%h/.local/share/weave/kev/src
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=OMP_NUM_THREADS=8
+Environment=MKL_NUM_THREADS=8
+ExecStart=%h/.local/share/weave/kev/src/.venv/bin/python -m kev.serve --run %h/.local/share/weave/kev/models/kev-4b --port 8000
+Restart=no
+MemoryMax=24G
+MemorySwapMax=0
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

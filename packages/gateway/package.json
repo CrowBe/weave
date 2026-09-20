@@ -8,6 +8,7 @@
     ".": "./dist/src/index.js",
     "./vercel-ai-gateway": "./dist/src/adapters/vercel-ai-gateway.js",
     "./typesafe-ai": "./dist/src/adapters/typesafe-ai.js",
+    "./kev-local": "./dist/src/adapters/kev-local.js",
     "./open-router": "./dist/src/adapters/open-router.js",
     "./nous-portal": "./dist/src/adapters/nous-portal.js"
   },

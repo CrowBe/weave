@@ -18,6 +18,7 @@ import {
   type GenerationAdapter,
   type GenerationProviderResult,
   type GenerationRequest,
+  type ProviderFailureCode,
   type RoutedUnit,
   type Timer,
 } from '@weave/gateway';
@@ -122,7 +123,7 @@ function scored(score: number, confidence?: Record<string, number>): EvaluationP
 }
 
 function failed(
-  code: 'rate_limited' | 'unauthorized' | 'unavailable',
+  code: ProviderFailureCode,
   retryable: boolean,
   retryAfterMs?: number,
 ): GenerationProviderResult {
@@ -135,6 +136,10 @@ function failed(
       ...(retryAfterMs === undefined ? {} : { retry_after_ms: retryAfterMs }),
     },
   };
+}
+
+function evaluationFailed(code: ProviderFailureCode, retryable: boolean): EvaluationProviderResult {
+  return { status: 'failed', failure: { code, message: code, retryable } };
 }
 
 const PERMITTED = 'test-destination';
@@ -626,6 +631,75 @@ describe('gateway evaluation', () => {
       status: 'unaccepted',
       reason: 'below_action_threshold',
     });
+  });
+
+  it('falls back to local evaluation after hosted credit is exhausted', async () => {
+    const hosted = scriptedEvaluator('hosted', [evaluationFailed('quota_exhausted', false)]);
+    const local = scriptedEvaluator('local', [scored(1.4)]);
+    const fallbackRoutes = [
+      evalUnit({ routed_unit_id: 'score@hosted', adapter: 'hosted', destination: 'hosted' }),
+      evalUnit({
+        routed_unit_id: 'score@kev-local',
+        adapter: 'local',
+        destination: 'local',
+        context_limit_tokens: 384,
+      }),
+    ];
+    const gateway = createInferenceGateway({
+      routes: fallbackRoutes,
+      evaluators: [hosted, local],
+      clock: fakeClock(),
+    });
+
+    const outcome = await gateway.evaluate(
+      scoreRequest({
+        terms: { ...TERMS, destinations: ['hosted', 'local'], max_context_tokens: 384 },
+      }),
+    );
+
+    assert.equal(outcome.status, 'accepted');
+    assert.equal(outcome.status === 'accepted' ? outcome.routed_unit_id : '', 'score@kev-local');
+    assert.equal(hosted.calls, 1);
+    assert.equal(local.calls, 1);
+    assert.deepEqual(
+      outcome.attempts.map((attempt) => attempt.disposition.status),
+      ['failed', 'accepted'],
+    );
+  });
+
+  it('makes local evaluation preferred and fails closed when privacy permits only local data', async () => {
+    const hosted = scriptedEvaluator('hosted', [scored(2)]);
+    const local = scriptedEvaluator('local', [evaluationFailed('unavailable', true)]);
+    const privateRoutes = [
+      evalUnit({ routed_unit_id: 'score@hosted', adapter: 'hosted', destination: 'hosted' }),
+      evalUnit({
+        routed_unit_id: 'score@kev-local',
+        adapter: 'local',
+        destination: 'local',
+        context_limit_tokens: 384,
+      }),
+    ];
+    const gateway = createInferenceGateway({
+      routes: privateRoutes,
+      evaluators: [hosted, local],
+      clock: fakeClock(),
+    });
+
+    const outcome = await gateway.evaluate(
+      scoreRequest({
+        terms: {
+          ...TERMS,
+          destinations: ['local'],
+          max_context_tokens: 384,
+          max_attempts_per_route: 1,
+        },
+      }),
+    );
+
+    assert.equal(outcome.status, 'unaccepted');
+    assert.equal(hosted.calls, 0, 'privacy filtering happens before provider execution');
+    assert.equal(local.calls, 1);
+    assert.ok(outcome.uncertainty.every((entry) => !entry.includes('hosted')));
   });
 });
 

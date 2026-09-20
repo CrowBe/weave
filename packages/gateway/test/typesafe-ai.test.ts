@@ -5,7 +5,10 @@
  * it reads what comes back — including the `noul` name that TypeSafe uses for a
  * boolean question and this adapter translates away.
  *
- * The response fixtures are copied from a live call, not invented.
+ * The response fixtures are copied from a live call, not invented: `LIVE_BODY`
+ * from hosted TypeSafe, `KEV_BODY` from a local `kev.serve` on the same
+ * endpoint. Kev is a separate implementation of this contract, so it is
+ * evidence the adapter is not overfitted to one vendor's serialisation.
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -201,6 +204,7 @@ describe('typesafe-ai adapter: response', () => {
 describe('typesafe-ai adapter: failures', () => {
   const cases = [
     { status: 401, code: 'unauthorized', retryable: false },
+    { status: 402, code: 'quota_exhausted', retryable: false },
     { status: 422, code: 'invalid_request', retryable: false },
     { status: 429, code: 'rate_limited', retryable: true },
     { status: 529, code: 'unavailable', retryable: true },
@@ -253,5 +257,79 @@ describe('typesafe-ai adapter: failures', () => {
   it('identifies itself so a routed unit can name it', () => {
     const { fetch } = stubFetch(LIVE_BODY);
     assert.equal(typesafeAiEvaluator(options(fetch)).id, TYPESAFE_AI_ADAPTER);
+  });
+});
+
+// Recorded from `python -m kev.serve --run $WEAVE_KEV_HOME/models/kev-4b` on
+// 2026-09-20 via `benchmarks/inference/kev/capture_fixture.py`. Kev serves the same
+// /v1/systemone contract; see benchmarks/inference/kev/README.md.
+const KEV_BODY = {
+  model: 'kev-latest',
+  answers: {
+    urgent: { type: 'noul', noul: 0.95 },
+    area: {
+      type: 'choice',
+      choice: 'payments',
+      confidence: 0.95,
+      probabilities: { auth: 0.01, payments: 0.96, ui: 0.02 },
+    },
+    severity: {
+      type: 'score',
+      score: 2.15,
+      legend: { '0': 'trivial', '1': 'minor', '2': 'serious', '3': 'critical' },
+      probabilities: { '0': 0.01, '1': 0.11, '2': 0.62, '3': 0.27 },
+      confidence: 0.87,
+    },
+  },
+  usage: { input_tokens: 102, output_tokens: 170 },
+  // Kev adds this; hosted TypeSafe does not send it and the adapter ignores it.
+  latency_ms: 4955.2,
+};
+
+describe('typesafe-ai adapter: a second implementation of the same contract', () => {
+  it('reads a local Kev response with no adapter change', async () => {
+    const { fetch } = stubFetch(KEV_BODY);
+    const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
+
+    assert.equal(result.status, 'completed');
+    assert.deepEqual(result.status === 'completed' ? result.answers : undefined, {
+      urgent: { type: 'boolean', probability: 0.95 },
+      area: { type: 'choice', choice: 'payments', probabilities: { auth: 0.01, payments: 0.96, ui: 0.02 } },
+      severity: { type: 'score', score: 2.15, probabilities: { '0': 0.01, '1': 0.11, '2': 0.62, '3': 0.27 } },
+    });
+    assert.deepEqual(result.status === 'completed' ? result.usage : undefined, {
+      input_tokens: 102,
+      output_tokens: 170,
+    });
+  });
+
+  it('collects confidence for choice and score, which Kev omits for a noul', async () => {
+    const { fetch } = stubFetch(KEV_BODY);
+    const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
+    assert.deepEqual(result.status === 'completed' ? result.confidence : undefined, {
+      area: 0.95,
+      severity: 0.87,
+    });
+  });
+
+  it('reports no provider response id, because Kev sends no request-id header', async () => {
+    // Hosted TypeSafe returns x-typesafe-request-id and the adapter surfaces it.
+    // A local Kev server sends no such header, so a call served locally has no
+    // handle for after-the-fact correlation. Recorded, not a defect to fix here.
+    const { fetch } = stubFetch(KEV_BODY);
+    const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
+    assert.equal(result.status === 'completed' ? result.provider_response_id : 'unset', undefined);
+  });
+
+  it('classifies an over-budget state as a non-retryable invalid request', async () => {
+    // Recorded live: a 9000-word state returns 422 with this body. The message
+    // blames the question branch even though the state consumed the budget.
+    const { fetch } = stubFetch(undefined, {
+      status: 422,
+      raw: JSON.stringify({ detail: 'branch too long: 12' }),
+    });
+    const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
+    assert.equal(result.status === 'failed' && result.failure.code, 'invalid_request');
+    assert.equal(result.status === 'failed' && result.failure.retryable, false);
   });
 });

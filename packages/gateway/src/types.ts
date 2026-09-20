@@ -327,6 +327,7 @@ export interface ProviderUsage {
 
 export const PROVIDER_FAILURES = [
   'unauthorized',
+  'quota_exhausted',
   'rate_limited',
   'unavailable',
   'invalid_request',
