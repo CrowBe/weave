@@ -4,6 +4,7 @@
  */
 import type {
   ActionRecord,
+  ActionReconciledPayload,
   ActionResultPayload,
   ActionStartedPayload,
   ApprovalDecidedPayload,
@@ -121,6 +122,7 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
         finished_at: null,
         grant: p.grant,
         invocation_id: p.invocation_id ?? p.action_id,
+        reconciled: false,
       };
       state.budget.actions.reserved += p.reservation.actions;
       state.budget.judgments.reserved += p.reservation.judgments;
@@ -143,6 +145,24 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
       }
       return;
     }
+    case 'action.reconciled': {
+      const p = observation.payload as ActionReconciledPayload;
+      const record = state.actions[p.action_id];
+      if (!record) {
+        throw new Error(`reconciliation for unknown action ${p.action_id} passed validation`);
+      }
+      record.reconciled = true;
+      if (p.outcome.outcome === 'succeeded') {
+        integrateSuccess(state, record, p.outcome.output, observation.seq);
+      }
+      return;
+    }
+    case 'recovery.attempted': {
+      state.recovery.spent += 1;
+      return;
+    }
+    case 'recovery.exhausted':
+      return;
     case 'action.cancel_requested': {
       const { action_id } = observation.payload as { action_id: string };
       const record = state.actions[action_id];

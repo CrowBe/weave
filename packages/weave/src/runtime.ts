@@ -9,8 +9,10 @@
  */
 import { bindSelectors, type CapabilityContract, type CapabilityHost, type Grant, type GrantAuthority, type InvocationOutcome } from '@weave/agentsop';
 import {
+  approvalStillValid,
   bindingDigest,
   formCandidates,
+  matchingApproval,
   successEvidencePresent,
   type Describe,
 } from './candidates.js';
@@ -22,6 +24,8 @@ import { applyAccepted, initialState, snapshot, type MutableState } from './stat
 import type {
   ActionId,
   ActionOutcome,
+  ActionReconciledPayload,
+  ActionRecord,
   ActionResultPayload,
   ActionStartedPayload,
   ApprovalDecidedPayload,
@@ -239,7 +243,10 @@ export class Runtime {
             validation: { status: 'rejected', reason: error.message },
           };
         }
-        if (error instanceof PersistError && observation.payload_type === 'action.result') {
+        if (
+          error instanceof PersistError &&
+          (observation.payload_type === 'action.result' || observation.payload_type === 'recovery.attempted')
+        ) {
           return {
             ...observation,
             validation: { status: 'rejected', reason: error.message },
@@ -467,6 +474,78 @@ export class Runtime {
     this.drainQueue();
   }
 
+  private recordReconciled(action: ActionRecord, outcome: ActionOutcome): void {
+    const payload: ActionReconciledPayload = {
+      action_id: action.action_id,
+      invocation_id: action.invocation_id ?? action.action_id,
+      outcome,
+    };
+    this.hostIngress.submit({
+      observation_id: `reconciled:${action.action_id}`,
+      caused_by: action.action_id,
+      payload_type: 'action.reconciled',
+      payload_version: 1,
+      payload,
+    });
+    this.drainQueue();
+  }
+
+  private recordRecoveryExhausted(reason: string): void {
+    const already = this.log.some((o) => o.payload_type === 'recovery.exhausted' && o.validation.status === 'accepted');
+    if (already) {
+      return;
+    }
+    this.append({
+      observation_id: `recovery:exhausted:${this.nextSeq()}`,
+      source: RUNTIME_SOURCE,
+      caused_by: null,
+      payload_type: 'recovery.exhausted',
+      payload_version: 1,
+      payload: { reason },
+    });
+  }
+
+  private grantForLookup(action: ActionRecord): Grant | null {
+    const authority = this.options.grantAuthority;
+    if (!authority) {
+      return action.grant;
+    }
+    if (!this.lookupAuthorized(action)) {
+      return null;
+    }
+    return authority.issue({
+      action_id: action.action_id,
+      operation: action.operation,
+      contract_rev: action.contract_rev ?? '',
+      permissions: action.grant?.permissions ?? [...action.effects],
+      effects: action.effects,
+      issued_at: this.nextSeq(),
+    });
+  }
+
+  private lookupAuthorized(action: ActionRecord): boolean {
+    if (action.operation !== 'report.publish') {
+      return this.describe(action.operation) !== null;
+    }
+    if (this.describe(action.operation) === null) {
+      return false;
+    }
+    const inputs = action.inputs;
+    const destination =
+      typeof inputs === 'object' && inputs !== null && !Array.isArray(inputs)
+        ? (inputs as { destination?: unknown }).destination
+        : undefined;
+    if (typeof destination !== 'string') {
+      return false;
+    }
+    const standingWrite = this.current.goal?.authority.write?.includes(destination) ?? false;
+    if (standingWrite) {
+      return true;
+    }
+    const approval = matchingApproval(this.state(), bindingDigest(action.inputs, action.effects), destination);
+    return !!approval && approvalStillValid(approval, this.state());
+  }
+
   /** `goal.complete` is a runtime action: it records completion only when the recorded success evidence is present. */
   private completeGoal(started: ActionStartedPayload): ActionOutcome {
     const state = this.state();
@@ -662,30 +741,43 @@ export class Runtime {
 
   reconcile(): void {
     const unfinished = Object.values(this.current.actions).filter(
-      (a) => a.state === 'running' || a.state === 'pending' || a.state === 'uncertain',
+      (a) => a.state === 'running' || a.state === 'pending' || (a.state === 'uncertain' && !a.reconciled),
     );
     for (const action of unfinished) {
       if (action.state === 'pending') {
         continue;
       }
-      if (this.current.recovery.limit > 0 && this.current.recovery.spent >= this.current.recovery.limit) {
+      if (this.current.recovery.limit === 0 || this.current.recovery.spent >= this.current.recovery.limit) {
+        this.recordRecoveryExhausted('recovery allowance exhausted');
         return;
       }
       const invocation_id = action.invocation_id ?? action.action_id;
-      if (this.current.recovery.limit > 0) {
-        this.current.recovery.spent += 1;
+      const attempted = this.append({
+        observation_id: `recovery:${action.action_id}:${this.current.recovery.spent + 1}`,
+        source: RUNTIME_SOURCE,
+        caused_by: action.action_id,
+        payload_type: 'recovery.attempted',
+        payload_version: 1,
+        payload: { action_id: action.action_id, invocation_id },
+      });
+      if (attempted.validation.status !== 'accepted') {
+        this.recordRecoveryExhausted(attempted.validation.status === 'rejected' ? attempted.validation.reason : 'recovery attempt was not recorded');
+        return;
       }
-      const looked = this.options.host.lookup(invocation_id, action.grant);
+      const grant = this.grantForLookup(action);
+      const looked = this.options.host.lookup(invocation_id, grant);
       if ('kind' in looked) {
         if (action.state !== 'uncertain') {
           this.recordResult(action.action_id, { outcome: 'uncertain', reason: `${looked.code}: ${looked.reason}` }, RUNTIME_SOURCE);
         }
         continue;
       }
-      if (looked.status === 'committed') {
-        this.recordResult(action.action_id, looked.outcome, HOST_SOURCE);
-      } else if (looked.status === 'stopped') {
-        this.recordResult(action.action_id, looked.outcome, HOST_SOURCE);
+      if (looked.status === 'committed' || looked.status === 'stopped') {
+        if (action.state === 'uncertain') {
+          this.recordReconciled(action, looked.outcome);
+        } else {
+          this.recordResult(action.action_id, looked.outcome, HOST_SOURCE);
+        }
       } else if (action.state !== 'uncertain') {
         this.recordResult(action.action_id, { outcome: 'uncertain', reason: looked.reason }, RUNTIME_SOURCE);
       }

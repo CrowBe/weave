@@ -167,6 +167,162 @@ describe('AgentFabric host authority', () => {
     assert.equal(second.kind, 'rejected');
   });
 
+  it('freezes the validated invocation binding against later input mutation', async () => {
+    const authority = createGrantAuthority();
+    const host = new AgentFabricHost({ authority });
+    const alpha = host.registerSource('mem:alpha', 'line');
+    const permitted = host.registerDestination('mem:permitted');
+    const substituted = host.registerDestination('mem:substituted');
+    const report = {
+      entries: [{ source: alpha, revision: 1, line_count: 1, digest: 'x' }],
+      read_set: [{ resource: alpha, revision: 1 }],
+    };
+    const inputs = {
+      report,
+      read_set: report.read_set,
+      sources: [alpha],
+      destination: permitted,
+      expected_revision: 1,
+    };
+    const grant = authority.issue({
+      action_id: 'a:1:1',
+      operation: REPORT_PUBLISH.id,
+      contract_rev: REPORT_PUBLISH.revision,
+      permissions: [
+        { resource: alpha, mode: 'read' },
+        { resource: permitted, mode: 'write' },
+      ],
+      effects: [
+        { resource: alpha, mode: 'read' },
+        { resource: permitted, mode: 'write' },
+      ],
+      issued_at: 1,
+    });
+    const handle = host.invoke(grant, REPORT_PUBLISH.id, inputs);
+    assert.equal(handle.kind, 'handle');
+    inputs.destination = substituted;
+    host.release('a:1:1');
+    const outcome = await (handle as { result: Promise<{ outcome: string }> }).result;
+    assert.equal(outcome.outcome, 'succeeded');
+    assert.equal(host.revision(permitted), 2);
+    assert.ok(host.publication(permitted));
+    assert.equal(host.revision(substituted), 1);
+    assert.equal(host.publication(substituted), null);
+  });
+
+  it('rejects a publication whose read_set names a resource outside the granted sources', () => {
+    const authority = createGrantAuthority();
+    const host = new AgentFabricHost({ authority });
+    const allowed = host.registerSource('mem:allowed', 'ok');
+    const secret = host.registerSource('mem:secret', 'hidden');
+    const dest = host.registerDestination('mem:outbox');
+    const inputs = {
+      report: {
+        entries: [{ source: allowed, revision: 1, line_count: 1, digest: 'x' }],
+        read_set: [{ resource: secret, revision: 1 }],
+      },
+      read_set: [{ resource: secret, revision: 1 }],
+      sources: [allowed],
+      destination: dest,
+      expected_revision: 1,
+    };
+    const grant = authority.issue({
+      action_id: 'a:2:1',
+      operation: REPORT_PUBLISH.id,
+      contract_rev: REPORT_PUBLISH.revision,
+      permissions: [
+        { resource: allowed, mode: 'read' },
+        { resource: dest, mode: 'write' },
+      ],
+      effects: [
+        { resource: allowed, mode: 'read' },
+        { resource: dest, mode: 'write' },
+      ],
+      issued_at: 1,
+    });
+    const refused = host.invoke(grant, REPORT_PUBLISH.id, inputs);
+    assert.equal(refused.kind, 'rejected');
+    assert.equal((refused as { code: string }).code, 'INVALID_INPUT');
+    assert.equal(host.resourceAccesses.length, 0);
+    assert.equal(host.publication(dest), null);
+    assert.equal(host.revision(dest), 1);
+  });
+
+  it('requires a currently issued scoped grant to look up a receipt', async () => {
+    const authority = createGrantAuthority();
+    const host = new AgentFabricHost({ authority });
+    const alpha = host.registerSource('mem:alpha', 'line');
+    const dest = host.registerDestination('mem:outbox');
+    const report = {
+      entries: [{ source: alpha, revision: 1, line_count: 1, digest: 'x' }],
+      read_set: [{ resource: alpha, revision: 1 }],
+    };
+    const inputs = { report, read_set: report.read_set, sources: [alpha], destination: dest, expected_revision: 1 };
+    const grant = authority.issue({
+      action_id: 'a:3:1',
+      operation: REPORT_PUBLISH.id,
+      contract_rev: REPORT_PUBLISH.revision,
+      permissions: [
+        { resource: alpha, mode: 'read' },
+        { resource: dest, mode: 'write' },
+      ],
+      effects: [
+        { resource: alpha, mode: 'read' },
+        { resource: dest, mode: 'write' },
+      ],
+      issued_at: 3,
+    });
+    const first = host.invoke(grant, REPORT_PUBLISH.id, inputs, { invocation_id: 'inv-lookup' });
+    assert.equal(first.kind, 'handle');
+    host.release('a:3:1');
+    await (first as { result: Promise<unknown> }).result;
+    host.authority.revoke(grant);
+
+    const forged = host.lookup('inv-lookup', {
+      action_id: 'a:3:1',
+      operation: REPORT_PUBLISH.id,
+      contract_rev: 'bogus',
+      permissions: [],
+      effects: [],
+      issued_at: 1,
+    });
+    assert.equal('kind' in forged && forged.kind, 'rejected');
+    assert.equal('code' in forged && forged.code, 'DENIED');
+
+    const empty = host.lookup(
+      'inv-lookup',
+      authority.issue({
+        action_id: 'a:3:1',
+        operation: REPORT_PUBLISH.id,
+        contract_rev: REPORT_PUBLISH.revision,
+        permissions: [],
+        effects: [],
+        issued_at: 4,
+      }),
+    );
+    assert.equal('kind' in empty && empty.kind, 'rejected');
+    assert.equal('code' in empty && empty.code, 'DENIED');
+
+    const scoped = host.lookup(
+      'inv-lookup',
+      authority.issue({
+        action_id: 'a:3:1',
+        operation: REPORT_PUBLISH.id,
+        contract_rev: REPORT_PUBLISH.revision,
+        permissions: [
+          { resource: alpha, mode: 'read' },
+          { resource: dest, mode: 'write' },
+        ],
+        effects: [
+          { resource: alpha, mode: 'read' },
+          { resource: dest, mode: 'write' },
+        ],
+        issued_at: 5,
+      }),
+    );
+    assert.equal('status' in scoped && scoped.status, 'committed');
+  });
+
   it('catalogue rejects a cycle and unequal effect selectors', () => {
     const cyclic = validateCatalogue([
       { ...SOURCE_INSPECT, depends_on: ['report.publish'] },

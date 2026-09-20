@@ -104,6 +104,21 @@ export interface ActionResultPayload {
   readonly outcome: ActionOutcome;
 }
 
+export interface ActionReconciledPayload {
+  readonly action_id: ActionId;
+  readonly invocation_id: string;
+  readonly outcome: ActionOutcome;
+}
+
+export interface RecoveryAttemptedPayload {
+  readonly action_id: ActionId;
+  readonly invocation_id: string;
+}
+
+export interface RecoveryExhaustedPayload {
+  readonly reason: string;
+}
+
 export interface ActionCancelRequestedPayload {
   readonly action_id: ActionId;
   readonly reason: string;
@@ -159,10 +174,13 @@ export const PAYLOAD_TYPES = [
   'action.started',
   'action.queued',
   'action.result',
+  'action.reconciled',
   'action.cancel_requested',
   'approval.requested',
   'approval.decided',
   'capability.described',
+  'recovery.attempted',
+  'recovery.exhausted',
 ] as const;
 export type PayloadType = (typeof PAYLOAD_TYPES)[number];
 
@@ -254,6 +272,7 @@ export interface ActionRecord {
   readonly finished_at: Seq | null;
   readonly grant: Grant | null;
   readonly invocation_id: string | null;
+  readonly reconciled: boolean;
 }
 
 // ---------------------------------------------------------------------------

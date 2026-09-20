@@ -1,3 +1,5 @@
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import type { Observation } from './types.js';
 
 export class PersistError extends Error {
@@ -34,5 +36,39 @@ export class MemoryJournal implements ObservationJournal {
 
   snapshot(): Observation[] {
     return this.items.map((o) => structuredClone(o));
+  }
+}
+
+/** JSONL observation log. Survives process termination independently of FabricStore. */
+export class FileJournal implements ObservationJournal {
+  failStarts = false;
+  failResults = false;
+
+  constructor(readonly path: string) {
+    const directory = dirname(path);
+    if (!existsSync(directory)) {
+      mkdirSync(directory, { recursive: true });
+    }
+    if (!existsSync(path)) {
+      writeFileSync(path, '');
+    }
+  }
+
+  persist(observation: Observation): void {
+    if (observation.payload_type === 'action.started' && this.failStarts) {
+      throw new PersistError('action.started');
+    }
+    if (observation.payload_type === 'action.result' && this.failResults) {
+      throw new PersistError('action.result');
+    }
+    appendFileSync(this.path, `${JSON.stringify(observation)}\n`);
+  }
+
+  snapshot(): Observation[] {
+    const text = readFileSync(this.path, 'utf8');
+    return text
+      .split('\n')
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line) as Observation);
   }
 }

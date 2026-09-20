@@ -3,8 +3,9 @@
  * served by the enforcing AgentFabric host.
  */
 import { createGrantAuthority, type GrantAuthority } from '@weave/agentsop';
-import { AgentFabricHost, type FabricSnapshot } from '@weave/agentfabric';
+import { AgentFabricHost, FabricStore, type FabricSnapshot, type HostFaults } from '@weave/agentfabric';
 import {
+  FileJournal,
   MemoryJournal,
   Runtime,
   ScriptedDecisionLayer,
@@ -22,7 +23,7 @@ export interface M1World {
   readonly authority: GrantAuthority;
   readonly host: AgentFabricHost;
   readonly runtime: Runtime;
-  readonly journal: MemoryJournal;
+  readonly journal: MemoryJournal | FileJournal;
   readonly alpha: string;
   readonly beta: string;
   readonly gamma: string;
@@ -44,10 +45,23 @@ export function m1Goal(world: M1World, overrides: Partial<Goal> = {}): Goal {
   };
 }
 
-export function m1World(options: { slots?: number; recovery?: number; includeGamma?: boolean } = {}): M1World {
+export function m1World(
+  options: {
+    slots?: number;
+    recovery?: number;
+    includeGamma?: boolean;
+    store?: FabricStore;
+    journal?: MemoryJournal | FileJournal;
+    faults?: HostFaults;
+  } = {},
+): M1World {
   const authority = createGrantAuthority();
-  const host = new AgentFabricHost({ authority });
-  const journal = new MemoryJournal();
+  const host = new AgentFabricHost({
+    authority,
+    ...(options.store ? { store: options.store } : {}),
+    ...(options.faults ? { faults: options.faults } : {}),
+  });
+  const journal = options.journal ?? new MemoryJournal();
   const alpha = host.registerSource('mem:alpha', CONTENT['source:alpha'] as string);
   const beta = host.registerSource('mem:beta', CONTENT['source:beta'] as string);
   const gamma = host.registerSource('mem:gamma', CONTENT['source:gamma'] as string);

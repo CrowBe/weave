@@ -46,7 +46,7 @@ Non-executing reconstruction from recorded observations and historical contract,
 
 ### Recovery
 
-Restoring unfinished work from durable records, preserving reservations and reconciling external outcomes under current authority before continuation or retry. Recovery is distinct from historical replay and does not renew an approval or resource budget.
+Restoring unfinished work from durable records, preserving reservations and reconciling external outcomes under current authority before continuation or retry. Recovery is distinct from historical replay and does not renew an approval or resource budget. Each lookup attempt is a recorded observation that counts against a finite allowance reconstructed after restart; a zero allowance is exhaustion, not an unbounded budget.
 
 ### Reconciliation
 

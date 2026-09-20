@@ -18,10 +18,13 @@ const EXPECTED_SOURCE: Readonly<Record<PayloadType, readonly ProvenanceKind[]>> 
   'action.started': ['runtime'],
   'action.queued': ['runtime'],
   'action.result': ['host', 'runtime'],
+  'action.reconciled': ['host', 'runtime'],
   'action.cancel_requested': ['operator', 'runtime'],
   'approval.requested': ['runtime'],
   'approval.decided': ['operator', 'runtime'],
   'capability.described': ['runtime'],
+  'recovery.attempted': ['runtime'],
+  'recovery.exhausted': ['runtime'],
 };
 
 function rejected(reason: string): Validation {
@@ -103,6 +106,12 @@ export function validate(input: ObservationInput, state: State): Validation {
       return validateStarted(payload, state, true);
     case 'action.result':
       return validateResult(payload, state);
+    case 'action.reconciled':
+      return validateReconciled(payload, state);
+    case 'recovery.attempted':
+      return validateRecoveryAttempt(payload, state);
+    case 'recovery.exhausted':
+      return isNonEmptyString(payload['reason']) ? ACCEPTED : rejected('recovery.exhausted requires a reason');
     case 'action.cancel_requested':
       if (!isNonEmptyString(payload['action_id']) || !state.actions[payload['action_id']]) {
         return rejected('cancel names an unknown action');
@@ -273,6 +282,58 @@ function validateResult(payload: Record<string, unknown>, state: State): Validat
     default:
       return rejected('outcome must be succeeded, failed, or uncertain');
   }
+}
+
+function validateReconciled(payload: Record<string, unknown>, state: State): Validation {
+  const action_id = payload['action_id'];
+  if (!isNonEmptyString(action_id)) {
+    return rejected('action.reconciled requires an action_id');
+  }
+  const record = state.actions[action_id];
+  if (!record) {
+    return rejected(`no action ${action_id}`);
+  }
+  if (record.state !== 'uncertain') {
+    return rejected(`action ${action_id} is ${record.state}, not uncertain`);
+  }
+  if (record.reconciled) {
+    return rejected(`action ${action_id} is already reconciled`);
+  }
+  if (!isNonEmptyString(payload['invocation_id'])) {
+    return rejected('action.reconciled requires an invocation_id');
+  }
+  const outcome = payload['outcome'];
+  if (!isRecord(outcome)) {
+    return rejected('action.reconciled requires an outcome');
+  }
+  switch (outcome['outcome']) {
+    case 'succeeded':
+      return validateOutput(record.operation, record.inputs, outcome['output']);
+    case 'failed':
+      return isNonEmptyString(outcome['failure']) ? ACCEPTED : rejected('failed outcome requires a failure code');
+    case 'uncertain':
+      return isNonEmptyString(outcome['reason']) ? ACCEPTED : rejected('uncertain outcome requires a reason');
+    default:
+      return rejected('outcome must be succeeded, failed, or uncertain');
+  }
+}
+
+function validateRecoveryAttempt(payload: Record<string, unknown>, state: State): Validation {
+  const action_id = payload['action_id'];
+  if (!isNonEmptyString(action_id) || !isNonEmptyString(payload['invocation_id'])) {
+    return rejected('recovery.attempted requires action_id and invocation_id');
+  }
+  const record = state.actions[action_id];
+  if (!record) {
+    return rejected(`no action ${action_id}`);
+  }
+  if (record.state !== 'running' && record.state !== 'uncertain') {
+    return rejected(`action ${action_id} is ${record.state}, not awaiting recovery`);
+  }
+  if (state.recovery.limit === 0 || state.recovery.spent >= state.recovery.limit) {
+    return rejected('recovery allowance exhausted');
+  }
+  return ACCEPTED;
 }
 
 /** Fixture contract outputs are checked for shape so a malformed result cannot become evidence. */

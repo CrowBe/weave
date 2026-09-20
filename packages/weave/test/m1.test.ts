@@ -3,11 +3,17 @@
  * docs/m1-publish-under-authority.md §7.
  */
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { createGrantAuthority } from '@weave/agentsop';
-import { AgentFabricHost } from '@weave/agentfabric';
+import { AgentFabricHost, FabricStore } from '@weave/agentfabric';
 import { FailingDecisionLayer } from './fixture.js';
 import {
+  FileJournal,
   replay,
   recover,
   ScriptedDecisionLayer,
@@ -340,31 +346,53 @@ describe('M1 publish under authority', () => {
     await release(after, afterAction.action_id);
     assert.equal(after.runtime.state().actions[afterAction.action_id]?.state, 'uncertain');
     assert.ok(after.host.publication(after.dest));
+    const spent = after.runtime.state().budget.actions.spent;
+    const finished = after.runtime.state().actions[afterAction.action_id]?.finished_at;
+    after.runtime.reconcile();
+    assert.ok(after.runtime.state().publication);
+    assert.equal(after.runtime.state().actions[afterAction.action_id]?.state, 'uncertain');
+    assert.equal(after.runtime.state().actions[afterAction.action_id]?.reconciled, true);
+    assert.equal(after.runtime.state().actions[afterAction.action_id]?.finished_at, finished);
+    assert.ok(after.runtime.state().budget.actions.spent >= spent);
   });
 
   it('M1-T13 crash at commit/result boundary does not duplicate publication', async () => {
-    const world = m1World();
-    await assembleReport(world);
-    world.runtime.decide({
-      request_id: pendingApproval(world),
-      principal: 'operator',
-      decision: 'approved',
-      authority_revision: 1,
-    });
-    const publish = Object.values(world.runtime.state().actions).find((a) => a.operation === 'report.publish')!;
-    world.host.faults.publishGate = 'after_commit';
-    world.host.faults.disconnectAfterCommit = true;
-    world.host.release(publish.action_id);
-    assert.ok(world.host.publication(world.dest));
-    const log = world.runtime.trace().observations.filter((o) => o.payload_type !== 'action.result' || (o.payload as { action_id: string }).action_id !== publish.action_id);
-    const restored = restoreWorld(world, world.host.snapshot(), log);
-    restored.runtime.reconcile();
-    assert.equal(restored.host.revision(world.dest), world.host.revision(world.dest));
-    const receipts = Object.values(restored.runtime.state().actions).filter(
-      (a) => a.operation === 'report.publish' && a.state === 'succeeded',
+    const dir = mkdtempSync(join(tmpdir(), 'm1-t13-'));
+    const worker = fileURLToPath(new URL('./m1-crash-worker.js', import.meta.url));
+    const child = spawnSync(process.execPath, [worker, dir], { encoding: 'utf8' });
+    assert.equal(child.status, 0, `${child.stderr}\n${child.stdout}`);
+    const store = FabricStore.open(join(dir, 'fabric.json'));
+    const journal = new FileJournal(join(dir, 'journal.jsonl'));
+    const observations = journal.snapshot();
+    assert.ok(observations.some((o) => o.payload_type === 'action.started'));
+    const started = observations.find((o) => o.payload_type === 'action.started' && (o.payload as { operation: string }).operation === 'report.publish');
+    assert.ok(started);
+    const publishId = (started.payload as { action_id: string }).action_id;
+    assert.equal(
+      observations.some(
+        (o) => o.payload_type === 'action.result' && (o.payload as { action_id: string }).action_id === publishId,
+      ),
+      false,
     );
-    assert.ok(receipts.length <= 1);
-    assert.ok(restored.runtime.state().publication || receipts.length === 1);
+    const authority = createGrantAuthority();
+    const host = new AgentFabricHost({ authority, store });
+    const runtime = recover(observations, {
+      host,
+      decisionLayer: new ScriptedDecisionLayer(),
+      grantAuthority: authority,
+      journal,
+    });
+    const dest = runtime.state().goal?.destination;
+    assert.ok(dest);
+    assert.equal(host.revision(dest), 2);
+    assert.ok(runtime.state().publication);
+    const again = recover(journal.snapshot(), {
+      host,
+      decisionLayer: new ScriptedDecisionLayer(),
+      grantAuthority: createGrantAuthority(),
+    });
+    assert.equal(host.revision(dest), 2);
+    assert.ok(again.state().publication);
   });
 
   it('M1-T14 lost acknowledgement with unavailable lookup stays uncertain', async () => {
@@ -467,6 +495,22 @@ describe('M1 publish under authority', () => {
   });
 
   it('M1-T19 recovery denial and exhausted allowance keep uncertainty', async () => {
+    const none = m1World({ recovery: 0 });
+    await assembleReport(none);
+    none.runtime.decide({
+      request_id: pendingApproval(none),
+      principal: 'operator',
+      decision: 'approved',
+      authority_revision: 1,
+    });
+    const nonePublish = Object.values(none.runtime.state().actions).find((a) => a.operation === 'report.publish')!;
+    none.host.faults.publishGate = 'after_commit';
+    none.host.faults.disconnectAfterCommit = true;
+    none.host.release(nonePublish.action_id);
+    const denied = restoreWorld(none, none.host.snapshot(), none.runtime.trace().observations);
+    assert.equal(denied.host.lookups.length, 0);
+    assert.notEqual(denied.runtime.state().goal?.status, 'complete');
+
     const world = m1World({ recovery: 1 });
     await assembleReport(world);
     world.runtime.decide({
@@ -487,5 +531,12 @@ describe('M1 publish under authority', () => {
     assert.notEqual(restored.runtime.state().goal?.status, 'complete');
     const action = restored.runtime.state().actions[publish.action_id];
     assert.ok(action?.state === 'uncertain' || action?.state === 'running');
+    assert.equal(restored.runtime.state().recovery.spent, 1);
+
+    const restarted = restoreWorld(restored, restored.host.snapshot(), restored.runtime.trace().observations, {
+      lookupUnavailable: true,
+    });
+    assert.equal(restarted.host.lookups.length, 0);
+    assert.equal(restarted.runtime.state().recovery.spent, 1);
   });
 });

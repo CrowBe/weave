@@ -9,4 +9,4 @@ export {
   traceCompletenessViolations,
   type RuntimeOptions,
 } from './runtime.js';
-export { MemoryJournal, PersistError } from './journal.js';
+export { FileJournal, MemoryJournal, PersistError } from './journal.js';

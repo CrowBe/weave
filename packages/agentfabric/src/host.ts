@@ -81,13 +81,13 @@ export class AgentFabricHost implements CapabilityHost {
   readonly invocations: { action_id: string; invocation_id: string; operation: string; inputs: unknown }[] = [];
   readonly rejections: InvocationRejected[] = [];
   readonly resourceAccesses: AccessRecord[] = [];
+  readonly lookups: { invocation_id: string; granted: boolean }[] = [];
   faults: HostFaults;
 
   private readonly live = new Map<string, CapabilityContract>();
   private readonly historical = new Map<string, CapabilityContract>();
   private readonly status = new Map<string, ResolutionStatus>();
   private readonly open = new Map<string, OpenInvocation>();
-  private nextCanonical = 1;
 
   constructor(options: { authority: GrantAuthority; store?: FabricStore; faults?: HostFaults; contracts?: readonly CapabilityContract[] }) {
     this.authority = options.authority;
@@ -121,7 +121,7 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   registerSource(locator: string, content: string): ResourceRef {
-    const canonical_id = this.newCanonical();
+    const canonical_id = this.store.allocateCanonical();
     this.store.putResource({
       canonical_id,
       kind: 'source',
@@ -134,7 +134,7 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   registerDestination(locator: string): ResourceRef {
-    const canonical_id = this.newCanonical();
+    const canonical_id = this.store.allocateCanonical();
     this.store.putResource({
       canonical_id,
       kind: 'destination',
@@ -246,7 +246,7 @@ export class AgentFabricHost implements CapabilityHost {
       action_id: open.action_id,
       invocation_id: open.invocation_id,
       operation,
-      inputs,
+      inputs: open.inputs,
     });
     this.open.set(open.invocation_id, open);
     const result = new Promise<InvocationOutcome>((resolve) => {
@@ -265,21 +265,46 @@ export class AgentFabricHost implements CapabilityHost {
 
   lookup(invocation_id: string, grant: Grant | null): LookupResult {
     if (this.faults.lookupUnavailable) {
+      this.lookups.push({ invocation_id, granted: false });
       return this.reject('RESOLVER_UNAVAILABLE', 'outcome lookup unavailable');
     }
-    const record = this.store.getInvocation(invocation_id);
-    if (!grant) {
-      return this.reject('DENIED', 'lookup requires a grant');
-    }
-    const issuedNow = this.authority.isIssued(grant) && this.authority.isValid(grant);
-    const recorded = record && grant.action_id === record.action_id && grant.operation === record.operation;
-    if (!issuedNow && !recorded) {
+    if (!grant || !this.authority.isIssued(grant) || !this.authority.isValid(grant)) {
+      this.lookups.push({ invocation_id, granted: false });
       return this.reject('DENIED', 'lookup requires a currently valid issued grant');
     }
+    const record = this.store.getInvocation(invocation_id);
     const open = this.open.get(invocation_id);
-    if (!record && !open) {
+    const target = record ?? (open
+      ? {
+          action_id: open.action_id,
+          operation: open.operation,
+          inputs: open.inputs,
+        }
+      : null);
+    if (!target) {
+      this.lookups.push({ invocation_id, granted: false });
       return { status: 'unresolved', reason: `no durable record for ${invocation_id}` };
     }
+    if (grant.action_id !== target.action_id || grant.operation !== target.operation) {
+      this.lookups.push({ invocation_id, granted: false });
+      return this.reject('DENIED', 'grant does not name this invocation');
+    }
+    const contract = this.live.get(target.operation) ?? this.historical.get(target.operation);
+    if (!contract || grant.contract_rev !== contract.revision) {
+      this.lookups.push({ invocation_id, granted: false });
+      return this.reject('DENIED', 'grant names a different contract revision');
+    }
+    const required = bindSelectors(contract.permissions, target.inputs);
+    if (!required.ok) {
+      this.lookups.push({ invocation_id, granted: false });
+      return this.reject(required.code, required.reason);
+    }
+    const covered = grantCovers(grant, target.operation, contract.revision, required.bound);
+    if (!covered.ok) {
+      this.lookups.push({ invocation_id, granted: false });
+      return this.reject(covered.code, covered.reason);
+    }
+    this.lookups.push({ invocation_id, granted: true });
     const status = record?.status ?? 'running';
     const outcome = record?.outcome ?? open?.outcome;
     if (status !== 'committed') {
@@ -287,6 +312,7 @@ export class AgentFabricHost implements CapabilityHost {
         (r) => r.publication?.invocation_id === invocation_id,
       );
       if (published?.publication) {
+        this.coordinator.release(invocation_id);
         return {
           status: 'committed',
           outcome: { outcome: 'succeeded', output: this.receiptFrom(published.publication) },
@@ -294,15 +320,18 @@ export class AgentFabricHost implements CapabilityHost {
       }
     }
     if (status === 'running' && !open) {
+      this.coordinator.release(invocation_id);
       return {
         status: 'stopped',
         outcome: { outcome: 'failed', failure: 'execution stopped without commit' },
       };
     }
     if (status === 'committed' && outcome) {
+      this.coordinator.release(invocation_id);
       return { status: 'committed', outcome };
     }
     if (status === 'stopped' && outcome) {
+      this.coordinator.release(invocation_id);
       return { status: 'stopped', outcome };
     }
     if (status === 'uncertain' && outcome) {
@@ -514,15 +543,19 @@ export class AgentFabricHost implements CapabilityHost {
     if (!isRecord(inputs)) {
       return this.reject('INVALID_INPUT', 'inputs must be a record');
     }
-    const shape = closedShape(contract.input, inputs);
+    const boundInputs = structuredClone(inputs);
+    if (!isRecord(boundInputs)) {
+      return this.reject('INVALID_INPUT', 'inputs must be a record');
+    }
+    const shape = closedShape(contract.input, boundInputs);
     if (!shape.ok) {
       return this.reject('INVALID_INPUT', shape.reason);
     }
-    const required = bindSelectors(contract.permissions, inputs);
+    const required = bindSelectors(contract.permissions, boundInputs);
     if (!required.ok) {
       return this.reject(required.code, required.reason);
     }
-    const declared = bindSelectors(contract.effects, inputs);
+    const declared = bindSelectors(contract.effects, boundInputs);
     if (!declared.ok) {
       return this.reject(declared.code, declared.reason);
     }
@@ -533,10 +566,16 @@ export class AgentFabricHost implements CapabilityHost {
     if (!covered.ok) {
       return this.reject(covered.code, covered.reason);
     }
+    if (operation === REPORT_PUBLISH.id) {
+      const binding = publishSetsAgree(boundInputs, (ref) => this.store.lookupRef(ref)?.canonical_id ?? ref);
+      if (!binding.ok) {
+        return this.reject('INVALID_INPUT', binding.reason);
+      }
+    }
     const action_id = (grant as Grant).action_id;
     const invocation_id = options?.invocation_id ?? action_id;
     const existing = this.store.getInvocation(invocation_id);
-    const binding_digest = digest({ operation, inputs });
+    const binding_digest = digest({ operation, inputs: boundInputs });
     if (existing && existing.binding_digest !== binding_digest) {
       return this.reject('DENIED', 'invocation identity is bound to a different input');
     }
@@ -573,7 +612,7 @@ export class AgentFabricHost implements CapabilityHost {
       invocation_id,
       action_id,
       operation,
-      inputs,
+      inputs: boundInputs,
       grant: grant as Grant,
       effects: declared.bound,
       binding_digest,
@@ -588,7 +627,7 @@ export class AgentFabricHost implements CapabilityHost {
       action_id,
       operation,
       binding_digest,
-      inputs,
+      inputs: boundInputs,
       status: 'running',
       outcome: null,
       cancel_requested: false,
@@ -637,12 +676,17 @@ export class AgentFabricHost implements CapabilityHost {
     if (!this.authority.isValid(open.grant)) {
       return { kind: 'outcome', outcome: { outcome: 'failed', failure: 'access_denied' }, status: 'stopped' };
     }
-    if (input.read_set.length !== input.sources.length) {
+    const binding = publishSetsAgree(input, (ref) => this.store.lookupRef(ref)?.canonical_id ?? ref);
+    if (!binding.ok) {
       return { kind: 'outcome', outcome: { outcome: 'failed', failure: 'INVALID_INPUT' }, status: 'stopped' };
     }
-    for (const entry of input.read_set) {
-      this.noteAccess(entry.resource, 'read');
-      const resource = this.resourceFor(entry.resource);
+    for (const source of input.sources) {
+      const entry = input.read_set.find((item) => this.sameResource(item.resource, source));
+      if (!entry) {
+        return { kind: 'outcome', outcome: { outcome: 'failed', failure: 'INVALID_INPUT' }, status: 'stopped' };
+      }
+      this.noteAccess(source, 'read');
+      const resource = this.resourceFor(source);
       if (!resource || resource.revision !== entry.revision) {
         return { kind: 'outcome', outcome: { outcome: 'failed', failure: 'stale_revision' }, status: 'stopped' };
       }
@@ -689,6 +733,7 @@ export class AgentFabricHost implements CapabilityHost {
     };
     dest.publication = record;
     dest.content = report_digest;
+    this.store.save();
     return { kind: 'committed', record };
   }
 
@@ -732,15 +777,74 @@ export class AgentFabricHost implements CapabilityHost {
     return rejection;
   }
 
-  private newCanonical(): string {
-    const id = `res_${this.nextCanonical}`;
-    this.nextCanonical += 1;
-    return id;
+  private sameResource(left: ResourceRef, right: ResourceRef): boolean {
+    return (this.store.lookupRef(left)?.canonical_id ?? left) === (this.store.lookupRef(right)?.canonical_id ?? right);
   }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function publishSetsAgree(
+  input: Record<string, unknown> | PublishInput,
+  canonical: (ref: string) => string,
+): { ok: true } | { ok: false; reason: string } {
+  const sources = (input as PublishInput).sources;
+  const read_set = (input as PublishInput).read_set;
+  const report = (input as PublishInput).report;
+  if (!Array.isArray(sources) || sources.length === 0 || !Array.isArray(read_set) || !report || !Array.isArray(report.read_set)) {
+    return { ok: false, reason: 'publication sources and read sets are required' };
+  }
+  const sourceIds = uniqueCanonical(sources, canonical);
+  if (!sourceIds.ok) {
+    return sourceIds;
+  }
+  const readIds = uniqueCanonical(
+    read_set.map((entry) => entry.resource),
+    canonical,
+  );
+  if (!readIds.ok) {
+    return readIds;
+  }
+  const reportIds = uniqueCanonical(
+    report.read_set.map((entry) => entry.resource),
+    canonical,
+  );
+  if (!reportIds.ok) {
+    return reportIds;
+  }
+  if (!sameSet(sourceIds.ids, readIds.ids) || !sameSet(sourceIds.ids, reportIds.ids)) {
+    return { ok: false, reason: 'publication sources, read_set, and report.read_set must name the same resources' };
+  }
+  for (const source of sources) {
+    const key = canonical(source);
+    const fromRead = read_set.find((entry) => canonical(entry.resource) === key);
+    const fromReport = report.read_set.find((entry) => canonical(entry.resource) === key);
+    if (!fromRead || !fromReport || fromRead.revision !== fromReport.revision) {
+      return { ok: false, reason: 'publication read-set revisions must match the report' };
+    }
+  }
+  return { ok: true };
+}
+
+function uniqueCanonical(
+  refs: readonly string[],
+  canonical: (ref: string) => string,
+): { ok: true; ids: readonly string[] } | { ok: false; reason: string } {
+  const ids = refs.map(canonical);
+  if (new Set(ids).size !== ids.length) {
+    return { ok: false, reason: 'publication resource set contains duplicates' };
+  }
+  return { ok: true, ids };
+}
+
+function sameSet(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  const wanted = new Set(left);
+  return right.every((id) => wanted.delete(id)) && wanted.size === 0;
 }
 
 function closedShape(

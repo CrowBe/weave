@@ -46,7 +46,7 @@ export function formCandidates(state: State, describe: Describe, canonical: Cano
   }
   const inFlight = new Set(
     Object.values(state.actions)
-      .filter((a) => a.state === 'pending' || a.state === 'running')
+      .filter((a) => a.state === 'pending' || a.state === 'running' || (a.state === 'uncertain' && !a.reconciled))
       .map((a) => a.candidate_id),
   );
   const candidates: Candidate[] = [];
