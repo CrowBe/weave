@@ -7,17 +7,29 @@
  * site. In replay mode both are resolved from the recorded log instead, and
  * touching either is an error.
  */
-import { bindSelectors, type CapabilityContract, type CapabilityHost, type Grant, type InvocationOutcome } from '@weave/agentsop';
-import { PROCEDURE, formCandidates, successEvidencePresent, type Describe } from './candidates.js';
-import { candidateSetDigest } from './digest.js';
+import { bindSelectors, type CapabilityContract, type CapabilityHost, type Grant, type GrantAuthority, type InvocationOutcome } from '@weave/agentsop';
+import {
+  approvalStillValid,
+  bindingDigest,
+  formCandidates,
+  matchingApproval,
+  successEvidencePresent,
+  type Describe,
+} from './candidates.js';
+import { candidateSetDigest, digest } from './digest.js';
+import { PersistError, type ObservationJournal } from './journal.js';
 import { select } from './scheduler.js';
 import { stableStringify } from './stable-json.js';
 import { applyAccepted, initialState, snapshot, type MutableState } from './state.js';
 import type {
   ActionId,
   ActionOutcome,
+  ActionReconciledPayload,
+  ActionRecord,
   ActionResultPayload,
   ActionStartedPayload,
+  ApprovalDecidedPayload,
+  ApprovalRequestedPayload,
   Candidate,
   CycleOutcome,
   CycleRecord,
@@ -25,6 +37,7 @@ import type {
   NotSelectedReason,
   Observation,
   ObservationInput,
+  Provenance,
   ProvenanceKind,
   ReplayResult,
   Seq,
@@ -38,14 +51,22 @@ import { validate } from './validation.js';
 
 export { ScriptedDecisionLayer } from './decision.js';
 export { foldState } from './state.js';
+export { MemoryJournal, PersistError } from './journal.js';
 
 export interface RuntimeOptions {
   readonly host: CapabilityHost;
   readonly decisionLayer: DecisionLayer;
+  readonly grantAuthority?: GrantAuthority;
+  readonly executionSlots?: number;
+  readonly journal?: ObservationJournal;
 }
 
 const RUNTIME_SOURCE = { kind: 'runtime', id: 'weave' } as const;
 const HOST_SOURCE = { kind: 'host', id: 'capability-host' } as const;
+const OPERATOR_SOURCE = { kind: 'operator', id: 'operator' } as const;
+const CLOCK_SOURCE = { kind: 'clock', id: 'clock' } as const;
+
+const PRIVILEGED_KINDS: readonly ProvenanceKind[] = ['operator', 'host', 'runtime', 'judgment', 'clock'];
 
 /** Observations the cycle appends itself; everything else is an external arrival that triggers a cycle. */
 const CYCLE_APPENDED: readonly ProvenanceKind[] = ['runtime', 'judgment'];
@@ -73,6 +94,17 @@ interface Environment {
   execute(started: ActionStartedPayload, contract: CapabilityContract | null): ActionOutcome | null;
 }
 
+export class IngressHandle {
+  constructor(
+    private readonly admit: (input: ObservationInput) => Observation,
+    readonly provenance: Provenance,
+  ) {}
+
+  submit(input: Omit<ObservationInput, 'source'>): Observation {
+    return this.admit({ ...input, source: this.provenance });
+  }
+}
+
 export class Runtime {
   private readonly log: Observation[] = [];
   private readonly cycles: CycleRecord[] = [];
@@ -80,32 +112,75 @@ export class Runtime {
   private readonly settled = new Map<ActionId, Promise<void>>();
   private readonly environment: Environment;
   private readonly describe: Describe;
+  private readonly replayMode: boolean;
+  private readonly slots: number;
+  private readonly recordedContracts = new Map<string, CapabilityContract>();
+  readonly operator: IngressHandle;
+  readonly clock: IngressHandle;
+  readonly hostIngress: IngressHandle;
 
   constructor(
     private readonly options: RuntimeOptions,
     recorded: readonly Observation[] | null = null,
   ) {
-    this.describe = (operation) => {
-      const described = options.host.describe(operation);
-      return described.kind === 'contract' ? described.contract : null;
-    };
-    this.environment = recorded ? this.replayEnvironment(recorded) : this.liveEnvironment();
-  }
-
-  /** Append an observation. A cycle runs when it is accepted, external, and a goal is open. */
-  observe(input: ObservationInput): Observation {
-    const observation = this.append(input);
-    if (
-      observation.validation.status === 'accepted' &&
-      !CYCLE_APPENDED.includes(observation.source.kind) &&
-      this.current.goal?.status === 'active'
-    ) {
-      this.runCycle(observation.seq);
+    this.replayMode = recorded !== null;
+    this.slots = options.executionSlots ?? Number.POSITIVE_INFINITY;
+    if (recorded) {
+      for (const observation of recorded) {
+        if (observation.payload_type === 'capability.described' && observation.validation.status === 'accepted') {
+          const payload = observation.payload as { operation: string; contract: CapabilityContract };
+          this.recordedContracts.set(payload.operation, payload.contract);
+        }
+      }
     }
-    return observation;
+    this.describe = (operation) => this.describeOperation(operation);
+    this.environment = recorded ? this.replayEnvironment(recorded) : this.liveEnvironment();
+    this.operator = new IngressHandle((input) => this.admit(input, true), OPERATOR_SOURCE);
+    this.clock = new IngressHandle((input) => this.admit(input, true), CLOCK_SOURCE);
+    this.hostIngress = new IngressHandle((input) => this.admit(input, true), HOST_SOURCE);
   }
 
-  /** Resolves once the named action's result has been integrated into the log. */
+  /** Append an untrusted observation. Privileged origins cannot be claimed here. */
+  observe(input: ObservationInput): Observation {
+    if (PRIVILEGED_KINDS.includes(input.source.kind)) {
+      return this.append({
+        ...input,
+        forced: { status: 'rejected', reason: 'untrusted ingress cannot claim this origin' },
+      });
+    }
+    return this.admit(input, true);
+  }
+
+  decide(payload: ApprovalDecidedPayload): Observation {
+    return this.operator.submit({
+      observation_id: `operator:approval:${payload.request_id}:${payload.decision}`,
+      caused_by: null,
+      payload_type: 'approval.decided',
+      payload_version: 1,
+      payload,
+    });
+  }
+
+  cancel(action_id: ActionId, reason: string): Observation {
+    const record = this.current.actions[action_id];
+    const invocation_id = record?.invocation_id ?? action_id;
+    this.options.host.requestCancel(invocation_id);
+    if (record?.grant && this.options.grantAuthority) {
+      this.options.grantAuthority.revoke(record.grant);
+    }
+    return this.operator.submit({
+      observation_id: `operator:cancel:${action_id}`,
+      caused_by: null,
+      payload_type: 'action.cancel_requested',
+      payload_version: 1,
+      payload: { action_id, reason },
+    });
+  }
+
+  /** Trusted recorded arrivals used by replay. Live callers must use observe() or an ingress handle. */
+  feed(input: ObservationInput): Observation {
+    return this.admit(input, true);
+  }
   settle(action_id: ActionId): Promise<void> {
     const pending = this.settled.get(action_id);
     if (pending) {
@@ -130,16 +205,56 @@ export class Runtime {
   // Log
   // -------------------------------------------------------------------------
 
+  private admit(input: ObservationInput, triggerCycle: boolean): Observation {
+    const observation = this.append(input);
+    if (
+      triggerCycle &&
+      observation.validation.status === 'accepted' &&
+      !CYCLE_APPENDED.includes(observation.source.kind) &&
+      this.current.goal?.status === 'active'
+    ) {
+      this.runCycle(observation.seq);
+      this.drainQueue();
+    }
+    return observation;
+  }
+
   private nextSeq(): Seq {
     return this.log.length + 1;
   }
 
-  private append(input: ObservationInput): Observation {
+  private append(
+    input: ObservationInput & { forced?: Observation['validation'] },
+  ): Observation {
+    const { forced, ...envelope } = input;
     const observation: Observation = {
-      ...input,
+      ...envelope,
       seq: this.nextSeq(),
-      validation: validate(input, this.current),
+      validation: forced ?? validate(envelope, this.current),
     };
+    const journal = this.options.journal;
+    if (journal && observation.validation.status === 'accepted') {
+      try {
+        journal.persist(observation);
+      } catch (error) {
+        if (error instanceof PersistError && observation.payload_type === 'action.started') {
+          return {
+            ...observation,
+            validation: { status: 'rejected', reason: error.message },
+          };
+        }
+        if (
+          error instanceof PersistError &&
+          (observation.payload_type === 'action.result' || observation.payload_type === 'recovery.attempted')
+        ) {
+          return {
+            ...observation,
+            validation: { status: 'rejected', reason: error.message },
+          };
+        }
+        throw error;
+      }
+    }
     this.log.push(observation);
     if (observation.validation.status === 'accepted') {
       applyAccepted(this.current, observation);
@@ -152,12 +267,16 @@ export class Runtime {
   // -------------------------------------------------------------------------
 
   private runCycle(trigger: Seq): void {
-    const cycle_no = this.cycles.length + 1;
+    this.prefetchContracts();
+    const cycle_no = this.nextCycleNo();
     const state_revision = this.current.state_revision;
     const state = this.state();
 
-    const formation = formCandidates(state, this.describe);
+    const formation = formCandidates(state, this.describe, (ref) =>
+      this.replayMode ? ref : this.options.host.canonicalResource(ref),
+    );
     const candidates: Candidate[] = [...formation.candidates];
+    this.requestApprovals(candidates);
     const eligible = candidates.filter((c) => c.eligibility.status === 'allowed');
 
     let weights_ref: Seq | null = null;
@@ -230,7 +349,7 @@ export class Runtime {
     this.cycles.push({
       cycle_no,
       state_revision,
-      procedure: PROCEDURE,
+      procedure: formation.procedure,
       candidates,
       weights_ref,
       selected,
@@ -252,9 +371,15 @@ export class Runtime {
     if (dispatched > 0) {
       return { status: 'dispatched' };
     }
-    const running = Object.values(this.current.actions).some((a) => a.state === 'running' || a.state === 'pending');
+    const running = Object.values(this.current.actions).some(
+      (a) => a.state === 'running' || a.state === 'pending',
+    );
     if (running) {
       return { status: 'waiting' };
+    }
+    const awaiting = candidates.some((c) => c.eligibility.status === 'approval_required');
+    if (awaiting) {
+      return { status: 'blocked', reason: 'awaiting approval for report.publish' };
     }
     return { status: 'blocked', reason: blockedReason(not_selected, candidates, unavailable) };
   }
@@ -264,8 +389,12 @@ export class Runtime {
   // -------------------------------------------------------------------------
 
   private dispatch(action_id: ActionId, candidate: Candidate, weights_ref: Seq | null): ActionOutcome | null {
+    if (!this.stillAuthorized(candidate)) {
+      return null;
+    }
     const contract = candidate.contract_rev === null ? null : this.describe(candidate.operation);
     const grant = contract ? this.issueGrant(action_id, candidate, contract) : null;
+    const invocation_id = action_id;
     const started: ActionStartedPayload = {
       action_id,
       candidate_id: candidate.candidate_id,
@@ -276,19 +405,39 @@ export class Runtime {
       effects: candidate.effects,
       reservation: candidate.resources,
       grant,
+      invocation_id,
     };
+    const running = Object.values(this.current.actions).filter((a) => a.state === 'running').length;
+    const queued = running >= this.slots;
     const recorded = this.append({
-      observation_id: `started:${action_id}`,
+      observation_id: `${queued ? 'queued' : 'started'}:${action_id}`,
       source: RUNTIME_SOURCE,
       caused_by: weights_ref,
-      payload_type: 'action.started',
+      payload_type: queued ? 'action.queued' : 'action.started',
       payload_version: 1,
       payload: started,
     });
     if (recorded.validation.status !== 'accepted') {
+      if (recorded.payload_type === 'action.started') {
+        return null;
+      }
       throw new Error(`dispatch of ${action_id} was rejected by validation: ${stableStringify(recorded.validation)}`);
     }
+    if (queued) {
+      return null;
+    }
     return this.environment.execute(started, contract);
+  }
+
+  private stillAuthorized(candidate: Candidate): boolean {
+    if (candidate.operation !== 'report.publish') {
+      return candidate.eligibility.status === 'allowed';
+    }
+    const fresh = formCandidates(this.state(), this.describe, (ref) =>
+      this.replayMode ? ref : this.options.host.canonicalResource(ref),
+    );
+    const match = fresh.candidates.find((c) => c.candidate_id === candidate.candidate_id);
+    return match?.eligibility.status === 'allowed';
   }
 
   private issueGrant(action_id: ActionId, candidate: Candidate, contract: CapabilityContract): Grant {
@@ -296,31 +445,105 @@ export class Runtime {
     if (!bound.ok) {
       throw new Error(`cannot issue grant for ${action_id}: ${bound.reason}`);
     }
-    return {
+    const declared = bindSelectors(contract.effects, candidate.inputs);
+    const fields: Grant = {
       action_id,
       operation: contract.id,
       contract_rev: contract.revision,
       permissions: bound.bound,
-      effects: candidate.effects,
+      effects: declared.ok ? declared.bound : candidate.effects,
       issued_at: this.nextSeq(),
     };
+    return this.options.grantAuthority ? this.options.grantAuthority.issue(fields) : fields;
   }
 
   private recordResult(action_id: ActionId, outcome: ActionOutcome, source: typeof RUNTIME_SOURCE | typeof HOST_SOURCE): void {
     const payload: ActionResultPayload = { action_id, outcome };
-    const input: ObservationInput = {
+    const rest = {
       observation_id: `result:${action_id}`,
-      source,
       caused_by: action_id,
-      payload_type: 'action.result',
+      payload_type: 'action.result' as const,
       payload_version: 1,
       payload,
     };
     if (source.kind === 'host') {
-      this.observe(input);
+      this.hostIngress.submit(rest);
     } else {
-      this.append(input);
+      this.append({ ...rest, source });
     }
+    this.drainQueue();
+  }
+
+  private recordReconciled(action: ActionRecord, outcome: ActionOutcome): void {
+    const payload: ActionReconciledPayload = {
+      action_id: action.action_id,
+      invocation_id: action.invocation_id ?? action.action_id,
+      outcome,
+    };
+    this.hostIngress.submit({
+      observation_id: `reconciled:${action.action_id}`,
+      caused_by: action.action_id,
+      payload_type: 'action.reconciled',
+      payload_version: 1,
+      payload,
+    });
+    this.drainQueue();
+  }
+
+  private recordRecoveryExhausted(reason: string): void {
+    const already = this.log.some((o) => o.payload_type === 'recovery.exhausted' && o.validation.status === 'accepted');
+    if (already) {
+      return;
+    }
+    this.append({
+      observation_id: `recovery:exhausted:${this.nextSeq()}`,
+      source: RUNTIME_SOURCE,
+      caused_by: null,
+      payload_type: 'recovery.exhausted',
+      payload_version: 1,
+      payload: { reason },
+    });
+  }
+
+  private grantForLookup(action: ActionRecord): Grant | null {
+    const authority = this.options.grantAuthority;
+    if (!authority) {
+      return action.grant;
+    }
+    if (!this.lookupAuthorized(action)) {
+      return null;
+    }
+    return authority.issue({
+      action_id: action.action_id,
+      operation: action.operation,
+      contract_rev: action.contract_rev ?? '',
+      permissions: action.grant?.permissions ?? [...action.effects],
+      effects: action.effects,
+      issued_at: this.nextSeq(),
+    });
+  }
+
+  private lookupAuthorized(action: ActionRecord): boolean {
+    if (action.operation !== 'report.publish') {
+      return this.describe(action.operation) !== null;
+    }
+    if (this.describe(action.operation) === null) {
+      return false;
+    }
+    const inputs = action.inputs;
+    const destination =
+      typeof inputs === 'object' && inputs !== null && !Array.isArray(inputs)
+        ? (inputs as { destination?: unknown }).destination
+        : undefined;
+    if (typeof destination !== 'string') {
+      return false;
+    }
+    const standingWrite = this.current.goal?.authority.write?.includes(destination) ?? false;
+    if (standingWrite) {
+      return true;
+    }
+    const approval = matchingApproval(this.state(), bindingDigest(action.inputs, action.effects), destination);
+    return !!approval && approvalStillValid(approval, this.state());
   }
 
   /** `goal.complete` is a runtime action: it records completion only when the recorded success evidence is present. */
@@ -333,6 +556,242 @@ export class Runtime {
       };
     }
     return { outcome: 'failed', failure: `success evidence missing for ${(started.inputs as { goal_id: string }).goal_id}` };
+  }
+
+  private requestApprovals(candidates: readonly Candidate[]): void {
+    for (const candidate of candidates) {
+      if (candidate.eligibility.status !== 'approval_required') {
+        continue;
+      }
+      const inputs = candidate.inputs as {
+        destination: string;
+        expected_revision: number;
+        read_set: { resource: string; revision: number }[];
+        report: unknown;
+      };
+      const request_id = `apr:${candidate.candidate_id}`;
+      if (this.current.approvals[request_id]) {
+        continue;
+      }
+      const tick = this.current.clock.tick;
+      const payload: ApprovalRequestedPayload = {
+        request_id,
+        goal_id: this.current.goal?.goal_id ?? '',
+        candidate_id: candidate.candidate_id,
+        operation: candidate.operation,
+        contract_rev: candidate.contract_rev ?? '',
+        binding_digest: bindingDigest(candidate.inputs, candidate.effects),
+        report_digest: digest(inputs.report),
+        read_set: inputs.read_set,
+        destination: inputs.destination,
+        expected_revision: inputs.expected_revision,
+        effects: candidate.effects,
+        budget: candidate.resources,
+        valid_from_tick: tick,
+        valid_until_tick: tick + 10,
+      };
+      this.append({
+        observation_id: `approval:${request_id}`,
+        source: RUNTIME_SOURCE,
+        caused_by: null,
+        payload_type: 'approval.requested',
+        payload_version: 1,
+        payload,
+      });
+    }
+  }
+
+  private nextCycleNo(): number {
+    let max = this.cycles.length;
+    for (const action of Object.values(this.current.actions)) {
+      const match = /^a:(\d+):/.exec(action.action_id);
+      if (match) {
+        max = Math.max(max, Number(match[1]));
+      }
+    }
+    return max + 1;
+  }
+
+  private prefetchContracts(): void {
+    for (const operation of ['source.inspect', 'report.assemble', 'report.publish']) {
+      this.describeOperation(operation);
+    }
+  }
+
+  private invokeHost(started: ActionStartedPayload):
+    | { kind: 'handle'; result: Promise<InvocationOutcome> }
+    | { kind: 'rejected'; code: string; reason: string }
+    | { kind: 'failed_closed'; outcome: ActionOutcome } {
+    try {
+      const handle = this.options.host.invoke(started.grant, started.operation, started.inputs, {
+        invocation_id: started.invocation_id ?? started.action_id,
+      });
+      if (handle.kind === 'rejected') {
+        return handle;
+      }
+      return { kind: 'handle', result: handle.result };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'host threw';
+      const effectful = started.effects.some((e) => e.mode !== 'read');
+      return {
+        kind: 'failed_closed',
+        outcome: effectful ? { outcome: 'uncertain', reason } : { outcome: 'failed', failure: reason },
+      };
+    }
+  }
+
+  private describeOperation(operation: string): CapabilityContract | null {
+    const recorded = this.current.contracts[operation];
+    if (recorded) {
+      return recorded as CapabilityContract;
+    }
+    if (this.replayMode) {
+      const historical = this.recordedContracts.get(operation);
+      if (!historical) {
+        return null;
+      }
+      this.append({
+        observation_id: `contract:${operation}:${historical.revision}`,
+        source: RUNTIME_SOURCE,
+        caused_by: null,
+        payload_type: 'capability.described',
+        payload_version: 1,
+        payload: { operation, contract: historical },
+      });
+      return historical;
+    }
+    const described = this.options.host.describe(operation);
+    if (described.kind !== 'contract') {
+      return null;
+    }
+    this.append({
+      observation_id: `contract:${operation}:${described.contract.revision}`,
+      source: RUNTIME_SOURCE,
+      caused_by: null,
+      payload_type: 'capability.described',
+      payload_version: 1,
+      payload: { operation, contract: described.contract },
+    });
+    return described.contract;
+  }
+
+  private drainQueue(): void {
+    if (this.replayMode) {
+      return;
+    }
+    const pending = Object.values(this.current.actions)
+      .filter((a) => a.state === 'pending' && !a.cancel_requested)
+      .sort((a, b) => a.action_id.localeCompare(b.action_id));
+    for (const record of pending) {
+      const running = Object.values(this.current.actions).filter((a) => a.state === 'running').length;
+      if (running >= this.slots) {
+        return;
+      }
+      const candidate: Candidate = {
+        candidate_id: record.candidate_id,
+        operation: record.operation,
+        contract_rev: record.contract_rev,
+        inputs: record.inputs,
+        evidence: [],
+        read_set: record.read_set,
+        dependencies: [],
+        effects: record.effects,
+        resources: record.reservation,
+        eligibility: { status: 'allowed' },
+        weight: 0,
+      };
+      if (!this.stillAuthorized(candidate)) {
+        this.append({
+          observation_id: `cancel:${record.action_id}:stale-authority`,
+          source: RUNTIME_SOURCE,
+          caused_by: null,
+          payload_type: 'action.cancel_requested',
+          payload_version: 1,
+          payload: { action_id: record.action_id, reason: 'current authority does not cover queued work' },
+        });
+        continue;
+      }
+      const started: ActionStartedPayload = {
+        action_id: record.action_id,
+        candidate_id: record.candidate_id,
+        operation: record.operation,
+        contract_rev: record.contract_rev,
+        inputs: record.inputs,
+        read_set: record.read_set,
+        effects: record.effects,
+        reservation: record.reservation,
+        grant: record.grant,
+        invocation_id: record.invocation_id ?? record.action_id,
+      };
+      const recorded = this.append({
+        observation_id: `started:${record.action_id}`,
+        source: RUNTIME_SOURCE,
+        caused_by: null,
+        payload_type: 'action.started',
+        payload_version: 1,
+        payload: started,
+      });
+      if (recorded.validation.status !== 'accepted') {
+        continue;
+      }
+      const contract = record.contract_rev === null ? null : this.describe(record.operation);
+      this.environment.execute(started, contract);
+    }
+  }
+
+  reconcile(): void {
+    const unfinished = Object.values(this.current.actions).filter(
+      (a) => a.state === 'running' || a.state === 'pending' || (a.state === 'uncertain' && !a.reconciled),
+    );
+    for (const action of unfinished) {
+      if (action.state === 'pending') {
+        continue;
+      }
+      if (this.current.recovery.limit === 0 || this.current.recovery.spent >= this.current.recovery.limit) {
+        this.recordRecoveryExhausted('recovery allowance exhausted');
+        return;
+      }
+      const invocation_id = action.invocation_id ?? action.action_id;
+      const attempted = this.append({
+        observation_id: `recovery:${action.action_id}:${this.current.recovery.spent + 1}`,
+        source: RUNTIME_SOURCE,
+        caused_by: action.action_id,
+        payload_type: 'recovery.attempted',
+        payload_version: 1,
+        payload: { action_id: action.action_id, invocation_id },
+      });
+      if (attempted.validation.status !== 'accepted') {
+        this.recordRecoveryExhausted(attempted.validation.status === 'rejected' ? attempted.validation.reason : 'recovery attempt was not recorded');
+        return;
+      }
+      const grant = this.grantForLookup(action);
+      const looked = this.options.host.lookup(invocation_id, grant);
+      if ('kind' in looked) {
+        if (action.state !== 'uncertain') {
+          this.recordResult(action.action_id, { outcome: 'uncertain', reason: `${looked.code}: ${looked.reason}` }, RUNTIME_SOURCE);
+        }
+        continue;
+      }
+      if (looked.status === 'committed' || looked.status === 'stopped') {
+        if (action.state === 'uncertain') {
+          this.recordReconciled(action, looked.outcome);
+        } else {
+          this.recordResult(action.action_id, looked.outcome, HOST_SOURCE);
+        }
+      } else if (action.state !== 'uncertain') {
+        this.recordResult(action.action_id, { outcome: 'uncertain', reason: looked.reason }, RUNTIME_SOURCE);
+      }
+    }
+    this.drainQueue();
+  }
+
+  load(observations: readonly Observation[]): void {
+    for (const observation of observations) {
+      this.log.push(structuredClone(observation));
+      if (observation.validation.status === 'accepted') {
+        applyAccepted(this.current, observation);
+      }
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -354,17 +813,32 @@ export class Runtime {
           this.recordResult(started.action_id, outcome, RUNTIME_SOURCE);
           return outcome;
         }
-        const handle = this.options.host.invoke(started.grant, started.operation, started.inputs);
+        const handle = this.invokeHost(started);
         if (handle.kind === 'rejected') {
           const outcome: ActionOutcome = { outcome: 'failed', failure: `${handle.code}: ${handle.reason}` };
           this.recordResult(started.action_id, outcome, RUNTIME_SOURCE);
           return outcome;
         }
+        if (handle.kind === 'failed_closed') {
+          this.recordResult(started.action_id, handle.outcome, RUNTIME_SOURCE);
+          return handle.outcome;
+        }
         this.settled.set(
           started.action_id,
-          handle.result.then((outcome: InvocationOutcome) => {
-            this.recordResult(started.action_id, outcome, HOST_SOURCE);
-          }),
+          handle.result.then(
+            (outcome: InvocationOutcome) => {
+              this.recordResult(started.action_id, outcome, HOST_SOURCE);
+            },
+            (error: unknown) => {
+              const reason = error instanceof Error ? error.message : 'invocation rejected';
+              const effectful = started.effects.some((e) => e.mode !== 'read');
+              this.recordResult(
+                started.action_id,
+                effectful ? { outcome: 'uncertain', reason } : { outcome: 'failed', failure: reason },
+                RUNTIME_SOURCE,
+              );
+            },
+          ),
         );
         return null;
       },
@@ -480,7 +954,7 @@ export function replay(recorded: readonly Observation[], options: RuntimeOptions
         continue;
       }
       const { seq: _seq, validation: _validation, ...input } = observation;
-      runtime.observe(input);
+      runtime.feed(input);
       checkPrefix(runtime.trace().observations, ordered);
     }
     const replayed = runtime.trace().observations;
@@ -498,6 +972,13 @@ export function replay(recorded: readonly Observation[], options: RuntimeOptions
     throw error;
   }
   return { ok: true, trace: runtime.trace(), state: runtime.state() };
+}
+
+export function recover(recorded: readonly Observation[], options: RuntimeOptions): Runtime {
+  const runtime = new Runtime(options);
+  runtime.load(recorded);
+  runtime.reconcile();
+  return runtime;
 }
 
 function checkPrefix(replayed: readonly Observation[], recorded: readonly Observation[]): void {

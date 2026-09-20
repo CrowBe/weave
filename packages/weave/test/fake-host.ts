@@ -14,6 +14,8 @@ import {
   type InvocationHandle,
   type InvocationOutcome,
   type InvocationRejected,
+  type LookupResult,
+  type ResourceRef,
 } from '@weave/agentsop';
 
 export const SOURCE_INSPECT: CapabilityContract = {
@@ -25,6 +27,7 @@ export const SOURCE_INSPECT: CapabilityContract = {
   effects: [{ input: 'source', mode: 'read' }],
   permissions: [{ input: 'source', mode: 'read' }],
   failures: ['not_found', 'access_denied'],
+  depends_on: [],
 };
 
 export const REPORT_ASSEMBLE: CapabilityContract = {
@@ -36,6 +39,7 @@ export const REPORT_ASSEMBLE: CapabilityContract = {
   effects: [],
   permissions: [],
   failures: ['empty_input'],
+  depends_on: [],
 };
 
 interface FixtureSource {
@@ -103,7 +107,7 @@ export class FakeHost implements CapabilityHost {
     if (!required.ok) {
       return this.reject(required.code, required.reason);
     }
-    const covered = grantCovers(grant, operation, contract.revision, required.bound);
+    const covered = grantCovers(grant, operation, contract.revision, required.bound, required.bound);
     if (!covered.ok) {
       return this.reject(covered.code, covered.reason);
     }
@@ -117,7 +121,31 @@ export class FakeHost implements CapabilityHost {
       resolve = r;
     });
     this.open.set(action_id, { action_id, operation, inputs, resolve });
-    return { kind: 'handle', action_id, result };
+    return {
+      kind: 'handle',
+      action_id,
+      invocation_id: action_id,
+      result,
+      requestCancel: () => {
+        /* M0 holds completions until the test releases them. */
+      },
+    };
+  }
+
+  canonicalResource(ref: ResourceRef): ResourceRef {
+    return ref;
+  }
+
+  lookup(invocation_id: string): LookupResult {
+    if (this.open.has(invocation_id)) {
+      return { status: 'unresolved', reason: 'invocation still open' };
+    }
+    return { status: 'unresolved', reason: `no durable record for ${invocation_id}` };
+  }
+
+  requestCancel(invocation_id: string): { readonly acknowledged: true } {
+    void invocation_id;
+    return { acknowledged: true };
   }
 
   /** Number of invocations accepted and not yet released. */

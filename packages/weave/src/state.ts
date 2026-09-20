@@ -4,12 +4,19 @@
  */
 import type {
   ActionRecord,
+  ActionReconciledPayload,
   ActionResultPayload,
   ActionStartedPayload,
+  ApprovalDecidedPayload,
+  ApprovalRecord,
+  ApprovalRequestedPayload,
   BudgetLine,
+  CapabilityDescribedPayload,
+  ClockTickPayload,
   Goal,
   InspectionResult,
   Observation,
+  PublishReceipt,
   Report,
   ResourceReadSetEntry,
   Seq,
@@ -26,7 +33,12 @@ interface MutableState {
   actions: Record<string, Mutable<ActionRecord>>;
   inspections: Record<string, { result: InspectionResult; evidence: Seq }>;
   report: { report: Report; evidence: Seq[] } | null;
+  publication: { receipt: PublishReceipt; evidence: Seq } | null;
   budget: { actions: Mutable<BudgetLine>; judgments: Mutable<BudgetLine> };
+  clock: { tick: number; evidence: Seq | null };
+  approvals: Record<string, Mutable<ApprovalRecord> & { evidence: Seq[] }>;
+  contracts: Record<string, unknown>;
+  recovery: { limit: number; spent: number };
 }
 
 export function initialState(): MutableState {
@@ -37,10 +49,15 @@ export function initialState(): MutableState {
     actions: {},
     inspections: {},
     report: null,
+    publication: null,
     budget: {
       actions: { limit: 0, reserved: 0, spent: 0 },
       judgments: { limit: 0, reserved: 0, spent: 0 },
     },
+    clock: { tick: 0, evidence: null },
+    approvals: {},
+    contracts: {},
+    recovery: { limit: 0, spent: 0 },
   };
 }
 
@@ -60,6 +77,7 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
         actions: { limit: goal.budget.actions, reserved: 0, spent: 0 },
         judgments: { limit: goal.budget.judgments, reserved: 0, spent: 0 },
       };
+      state.recovery = { limit: goal.budget.recovery ?? 0, spent: 0 };
       return;
     }
     case 'source.registered':
@@ -68,14 +86,27 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
       state.sources[resource] = { revision, content, evidence: observation.seq };
       return;
     }
-    case 'clock.tick':
+    case 'clock.tick': {
+      const { tick } = observation.payload as ClockTickPayload;
+      state.clock = { tick, evidence: observation.seq };
+      expireApprovals(state, tick, observation.seq);
       return;
+    }
     case 'weights.recorded':
       // The judgments unit reserved by policy for frontier.weigh is spent by the recorded result.
       state.budget.judgments.spent += 1;
       return;
-    case 'action.started': {
+    case 'action.started':
+    case 'action.queued': {
       const p = observation.payload as ActionStartedPayload;
+      const existing = state.actions[p.action_id];
+      if (existing && observation.payload_type === 'action.started') {
+        existing.state = 'running';
+        existing.started_at = observation.seq;
+        existing.grant = p.grant;
+        existing.invocation_id = p.invocation_id ?? p.action_id;
+        return;
+      }
       state.actions[p.action_id] = {
         action_id: p.action_id,
         candidate_id: p.candidate_id,
@@ -85,11 +116,13 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
         read_set: p.read_set,
         effects: p.effects,
         reservation: p.reservation,
-        state: 'running',
+        state: observation.payload_type === 'action.queued' ? 'pending' : 'running',
         cancel_requested: false,
-        started_at: observation.seq,
+        started_at: observation.payload_type === 'action.started' ? observation.seq : null,
         finished_at: null,
         grant: p.grant,
+        invocation_id: p.invocation_id ?? p.action_id,
+        reconciled: false,
       };
       state.budget.actions.reserved += p.reservation.actions;
       state.budget.judgments.reserved += p.reservation.judgments;
@@ -112,12 +145,71 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
       }
       return;
     }
+    case 'action.reconciled': {
+      const p = observation.payload as ActionReconciledPayload;
+      const record = state.actions[p.action_id];
+      if (!record) {
+        throw new Error(`reconciliation for unknown action ${p.action_id} passed validation`);
+      }
+      record.reconciled = true;
+      if (p.outcome.outcome === 'succeeded') {
+        integrateSuccess(state, record, p.outcome.output, observation.seq);
+      }
+      return;
+    }
+    case 'recovery.attempted': {
+      state.recovery.spent += 1;
+      return;
+    }
+    case 'recovery.exhausted':
+      return;
     case 'action.cancel_requested': {
       const { action_id } = observation.payload as { action_id: string };
       const record = state.actions[action_id];
       if (record) {
         record.cancel_requested = true;
+        if (record.state === 'pending') {
+          record.state = 'cancelled';
+          record.finished_at = observation.seq;
+          state.budget.actions.reserved -= record.reservation.actions;
+          state.budget.judgments.reserved -= record.reservation.judgments;
+        }
       }
+      return;
+    }
+    case 'approval.requested': {
+      const request = observation.payload as ApprovalRequestedPayload;
+      state.approvals[request.request_id] = {
+        request_id: request.request_id,
+        request,
+        status: 'pending',
+        evidence: [observation.seq],
+        principal: null,
+        authority_revision: null,
+      };
+      return;
+    }
+    case 'approval.decided': {
+      const decision = observation.payload as ApprovalDecidedPayload;
+      const record = state.approvals[decision.request_id];
+      if (!record) {
+        return;
+      }
+      if (record.status !== 'pending' && decision.decision !== 'revoked' && decision.decision !== 'expired') {
+        return;
+      }
+      record.status = decision.decision;
+      record.principal = decision.principal;
+      record.authority_revision = decision.authority_revision;
+      record.evidence.push(observation.seq);
+      if (decision.scope?.valid_until_tick !== undefined) {
+        record.request = { ...record.request, valid_until_tick: decision.scope.valid_until_tick };
+      }
+      return;
+    }
+    case 'capability.described': {
+      const p = observation.payload as CapabilityDescribedPayload;
+      state.contracts[p.operation] = p.contract;
       return;
     }
     default:
@@ -151,8 +243,24 @@ function integrateSuccess(state: MutableState, record: ActionRecord, output: unk
       }
       return;
     }
+    case 'report.publish': {
+      const receipt = output as PublishReceipt;
+      state.publication = { receipt, evidence: seq };
+      return;
+    }
     default:
       return;
+  }
+}
+
+function expireApprovals(state: MutableState, tick: number, seq: Seq): void {
+  for (const record of Object.values(state.approvals)) {
+    if (record.status === 'pending' || record.status === 'approved') {
+      if (tick > record.request.valid_until_tick) {
+        record.status = 'expired';
+        record.evidence.push(seq);
+      }
+    }
   }
 }
 

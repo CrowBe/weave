@@ -16,8 +16,15 @@ const EXPECTED_SOURCE: Readonly<Record<PayloadType, readonly ProvenanceKind[]>> 
   'clock.tick': ['clock'],
   'weights.recorded': ['judgment'],
   'action.started': ['runtime'],
+  'action.queued': ['runtime'],
   'action.result': ['host', 'runtime'],
+  'action.reconciled': ['host', 'runtime'],
   'action.cancel_requested': ['operator', 'runtime'],
+  'approval.requested': ['runtime'],
+  'approval.decided': ['operator', 'runtime'],
+  'capability.described': ['runtime'],
+  'recovery.attempted': ['runtime'],
+  'recovery.exhausted': ['runtime'],
 };
 
 function rejected(reason: string): Validation {
@@ -94,14 +101,30 @@ export function validate(input: ObservationInput, state: State): Validation {
     case 'weights.recorded':
       return validateWeights(payload, state);
     case 'action.started':
-      return validateStarted(payload, state);
+      return validateStarted(payload, state, false);
+    case 'action.queued':
+      return validateStarted(payload, state, true);
     case 'action.result':
       return validateResult(payload, state);
+    case 'action.reconciled':
+      return validateReconciled(payload, state);
+    case 'recovery.attempted':
+      return validateRecoveryAttempt(payload, state);
+    case 'recovery.exhausted':
+      return isNonEmptyString(payload['reason']) ? ACCEPTED : rejected('recovery.exhausted requires a reason');
     case 'action.cancel_requested':
       if (!isNonEmptyString(payload['action_id']) || !state.actions[payload['action_id']]) {
         return rejected('cancel names an unknown action');
       }
       return isNonEmptyString(payload['reason']) ? ACCEPTED : rejected('cancel requires a reason');
+    case 'approval.requested':
+      return validateApprovalRequest(payload, state);
+    case 'approval.decided':
+      return validateApprovalDecision(payload, state);
+    case 'capability.described':
+      return isNonEmptyString(payload['operation']) && payload['contract'] !== undefined
+        ? ACCEPTED
+        : rejected('capability.described requires operation and contract');
   }
 }
 
@@ -120,8 +143,18 @@ function validateGoal(payload: Record<string, unknown>, state: State): Validatio
   if (!isRecord(authority) || !isStringArray(authority['read'])) {
     return rejected('goal.authority.read must be a list of resource ids');
   }
+  if (authority['write'] !== undefined && !isStringArray(authority['write'])) {
+    return rejected('goal.authority.write must be a list of resource ids');
+  }
+  if (payload['destination'] !== undefined && !isNonEmptyString(payload['destination'])) {
+    return rejected('goal.destination must be a resource id');
+  }
   if (!isReservation(payload['budget'])) {
     return rejected('goal.budget must give non-negative integer actions and judgments');
+  }
+  const budget = payload['budget'] as Record<string, unknown>;
+  if (budget['recovery'] !== undefined && !isNonNegativeInteger(budget['recovery'])) {
+    return rejected('goal.budget.recovery must be a non-negative integer');
   }
   if (typeof payload['success_evidence'] !== 'string') {
     return rejected('goal requires success_evidence');
@@ -183,12 +216,13 @@ function validateWeights(payload: Record<string, unknown>, state: State): Valida
   return ACCEPTED;
 }
 
-function validateStarted(payload: Record<string, unknown>, state: State): Validation {
+function validateStarted(payload: Record<string, unknown>, state: State, queued: boolean): Validation {
   const action_id = payload['action_id'];
   if (!isNonEmptyString(action_id) || !/^a:\d+:\d+$/.test(action_id)) {
     return rejected('action_id must have the form a:<cycle_no>:<index>');
   }
-  if (state.actions[action_id]) {
+  const existing = state.actions[action_id];
+  if (existing && (queued || existing.state !== 'pending')) {
     return rejected(`action ${action_id} already exists`);
   }
   if (!isNonEmptyString(payload['candidate_id']) || !isNonEmptyString(payload['operation'])) {
@@ -204,12 +238,14 @@ function validateStarted(payload: Record<string, unknown>, state: State): Valida
   if (!isReservation(reservation)) {
     return rejected('action.started requires a reservation');
   }
-  const { actions, judgments } = state.budget;
-  if (
-    reservation.actions > actions.limit - actions.reserved - actions.spent ||
-    reservation.judgments > judgments.limit - judgments.reserved - judgments.spent
-  ) {
-    return rejected('reservation exceeds the available budget');
+  if (!existing) {
+    const { actions, judgments } = state.budget;
+    if (
+      reservation.actions > actions.limit - actions.reserved - actions.spent ||
+      reservation.judgments > judgments.limit - judgments.reserved - judgments.spent
+    ) {
+      return rejected('reservation exceeds the available budget');
+    }
   }
   const grant = payload['grant'];
   if (grant !== null) {
@@ -248,6 +284,58 @@ function validateResult(payload: Record<string, unknown>, state: State): Validat
   }
 }
 
+function validateReconciled(payload: Record<string, unknown>, state: State): Validation {
+  const action_id = payload['action_id'];
+  if (!isNonEmptyString(action_id)) {
+    return rejected('action.reconciled requires an action_id');
+  }
+  const record = state.actions[action_id];
+  if (!record) {
+    return rejected(`no action ${action_id}`);
+  }
+  if (record.state !== 'uncertain') {
+    return rejected(`action ${action_id} is ${record.state}, not uncertain`);
+  }
+  if (record.reconciled) {
+    return rejected(`action ${action_id} is already reconciled`);
+  }
+  if (!isNonEmptyString(payload['invocation_id'])) {
+    return rejected('action.reconciled requires an invocation_id');
+  }
+  const outcome = payload['outcome'];
+  if (!isRecord(outcome)) {
+    return rejected('action.reconciled requires an outcome');
+  }
+  switch (outcome['outcome']) {
+    case 'succeeded':
+      return validateOutput(record.operation, record.inputs, outcome['output']);
+    case 'failed':
+      return isNonEmptyString(outcome['failure']) ? ACCEPTED : rejected('failed outcome requires a failure code');
+    case 'uncertain':
+      return isNonEmptyString(outcome['reason']) ? ACCEPTED : rejected('uncertain outcome requires a reason');
+    default:
+      return rejected('outcome must be succeeded, failed, or uncertain');
+  }
+}
+
+function validateRecoveryAttempt(payload: Record<string, unknown>, state: State): Validation {
+  const action_id = payload['action_id'];
+  if (!isNonEmptyString(action_id) || !isNonEmptyString(payload['invocation_id'])) {
+    return rejected('recovery.attempted requires action_id and invocation_id');
+  }
+  const record = state.actions[action_id];
+  if (!record) {
+    return rejected(`no action ${action_id}`);
+  }
+  if (record.state !== 'running' && record.state !== 'uncertain') {
+    return rejected(`action ${action_id} is ${record.state}, not awaiting recovery`);
+  }
+  if (state.recovery.limit === 0 || state.recovery.spent >= state.recovery.limit) {
+    return rejected('recovery allowance exhausted');
+  }
+  return ACCEPTED;
+}
+
 /** Fixture contract outputs are checked for shape so a malformed result cannot become evidence. */
 function validateOutput(operation: string, inputs: unknown, output: unknown): Validation {
   switch (operation) {
@@ -270,7 +358,53 @@ function validateOutput(operation: string, inputs: unknown, output: unknown): Va
       }
       return ACCEPTED;
     }
+    case 'report.publish': {
+      if (
+        !isRecord(output) ||
+        !isNonEmptyString(output['invocation_id']) ||
+        !isNonEmptyString(output['report_digest']) ||
+        !isNonEmptyString(output['destination']) ||
+        !isNonNegativeInteger(output['committed_revision'])
+      ) {
+        return rejected('report.publish output is not a publication receipt');
+      }
+      return ACCEPTED;
+    }
     default:
       return ACCEPTED;
   }
+}
+
+function validateApprovalRequest(payload: Record<string, unknown>, state: State): Validation {
+  if (!isNonEmptyString(payload['request_id']) || !isNonEmptyString(payload['operation'])) {
+    return rejected('approval.requested requires request_id and operation');
+  }
+  if (state.approvals[payload['request_id'] as string]?.status === 'pending') {
+    return rejected('approval request is already pending');
+  }
+  if (!isNonEmptyString(payload['binding_digest']) || !isNonEmptyString(payload['destination'])) {
+    return rejected('approval.requested requires a binding and destination');
+  }
+  return ACCEPTED;
+}
+
+function validateApprovalDecision(payload: Record<string, unknown>, state: State): Validation {
+  const request_id = payload['request_id'];
+  if (!isNonEmptyString(request_id)) {
+    return rejected('approval.decided requires request_id');
+  }
+  const record = state.approvals[request_id];
+  if (!record) {
+    return rejected('approval.decided names an unknown request');
+  }
+  const decision = payload['decision'];
+  if (decision !== 'approved' && decision !== 'denied' && decision !== 'revoked' && decision !== 'expired') {
+    return rejected('unknown approval decision');
+  }
+  if (record.status !== 'pending' && decision !== 'revoked' && decision !== 'expired') {
+    return rejected('closed request cannot be answered as though it were still pending');
+  }
+  return isNonEmptyString(payload['principal']) && isNonNegativeInteger(payload['authority_revision'])
+    ? ACCEPTED
+    : rejected('approval.decided requires principal and authority_revision');
 }

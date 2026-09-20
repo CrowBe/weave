@@ -20,7 +20,9 @@ export function select(weighed: readonly Candidate[], state: State): Selection {
     return a.candidate_id < b.candidate_id ? -1 : a.candidate_id > b.candidate_id ? 1 : 0;
   });
 
-  const running = Object.values(state.actions).filter((a) => a.state === 'running' || a.state === 'pending');
+  const running = Object.values(state.actions).filter(
+    (a) => a.state === 'running' || a.state === 'pending' || (a.state === 'uncertain' && !a.reconciled),
+  );
   const heldEffects: ResourceEffect[] = running.flatMap((a) => [...a.effects]);
   const remaining: { -readonly [K in keyof Reservation]: number } = {
     actions: state.budget.actions.limit - state.budget.actions.reserved - state.budget.actions.spent,

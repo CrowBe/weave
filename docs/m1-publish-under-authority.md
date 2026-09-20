@@ -229,6 +229,28 @@ contract, tests and implementation revisions. Documentation alone proves neither
 Storage format, concrete host method signatures and failure-code additions remain
 implementation choices to fix before their red tests. M1's trusted ingress model,
 effect guarantees, bounded recovery and acceptance outcomes are fixed here.
+This implementation records those choices as:
+
+- Grants are unforgeable in-process objects issued by `createGrantAuthority`
+  (WeakSet identity). Field-equal copies do not invoke. Outcome lookup requires a
+  currently issued grant whose action, operation, contract revision and
+  permissions cover the invocation; historical grant fields are not authority.
+  Recovery issues a fresh grant under current policy before lookup.
+- The host snapshots invocation inputs before validation and digest, and requires
+  publication `sources`, `read_set` and `report.read_set` to name the same unique
+  resources at matching revisions.
+- The host interface adds `canonicalResource`, `lookup`, `requestCancel`, and a
+  stable `invocation_id` on handles. Trusted operator/clock/host ingress is
+  handle-based; `Runtime.observe` cannot claim those origins.
+- `FabricStore` and `FileJournal` persist atomically to disk. M1-T13 starts a
+  child process, commits publication, exits, then recovers from those files in a
+  new process.
+- `action.queued` records selected work that is waiting for an execution slot.
+  Recovery is `recover()` / `Runtime.reconcile()`, distinct from historical
+  `replay()`. `action.reconciled` records a later receipt against an uncertain
+  action without erasing that uncertainty or charging the action again.
+  `recovery.attempted` is persisted before lookup; a zero allowance is exhaustion.
+
 Real adapters that cannot provide the fixture's atomic checks must declare weaker
 guarantees and remain blocked where those guarantees cannot satisfy policy.
 
