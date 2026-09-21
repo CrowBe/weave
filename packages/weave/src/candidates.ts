@@ -14,13 +14,16 @@ import type {
   Eligibility,
   InspectionResult,
   ProcedureId,
+  Proposal,
   ResourceId,
   ResourceReadSetEntry,
   State,
 } from './types.js';
+import { proposalCoversSources } from './proposals.js';
 
 export const PROCEDURE = 'inspect_and_report@1' as const;
 export const PROCEDURE_PUBLISH = 'inspect_report_publish@1' as const;
+export const PROCEDURE_FRAME = 'frame_and_report@1' as const;
 
 export type Describe = (operation: string) => CapabilityContract | null;
 export type Canonical = (ref: string) => string;
@@ -35,6 +38,9 @@ export interface Formation {
 const ONE_ACTION = { actions: 1, judgments: 0 } as const;
 
 export function procedureFor(state: State): ProcedureId {
+  if (state.goal?.framing) {
+    return PROCEDURE_FRAME;
+  }
   return state.goal?.destination ? PROCEDURE_PUBLISH : PROCEDURE;
 }
 
@@ -58,6 +64,23 @@ export function formCandidates(state: State, describe: Describe, canonical: Cano
   };
 
   let allInspected = true;
+  if (procedure === PROCEDURE_FRAME) {
+    const proposal = state.proposal?.proposal;
+    if (!proposal || !proposalCoversSources(proposal, goal.sources)) {
+      const inFlightFrame = Object.values(state.actions).some(
+        (a) => a.operation === 'goal.frame' && (a.state === 'pending' || a.state === 'running'),
+      );
+      if (!inFlightFrame) {
+        push(frameCandidate(goal.goal_id, goal.evidence));
+      }
+      return { candidates, unavailable, procedure };
+    }
+    formProposedInspects(state, proposal, describe, canonical, push, unavailable);
+    if (unavailable.includes('source.inspect') || !goal.sources.every((s) => state.inspections[s] && state.inspections[s]!.result.revision === state.sources[s]?.revision)) {
+      return { candidates, unavailable, procedure };
+    }
+    allInspected = true;
+  } else {
   for (const source of goal.sources) {
     const current = state.sources[source];
     const inspection = state.inspections[source];
@@ -94,6 +117,7 @@ export function formCandidates(state: State, describe: Describe, canonical: Cano
   }
   if (!allInspected) {
     return { candidates, unavailable, procedure };
+  }
   }
 
   const readSet: ResourceReadSetEntry[] = goal.sources.map((source) => ({
@@ -180,6 +204,74 @@ export function formCandidates(state: State, describe: Describe, canonical: Cano
 
   push(completeCandidate(goal.goal_id, report.evidence, readSet, state));
   return { candidates, unavailable, procedure };
+}
+
+function frameCandidate(goal_id: string, evidence: number): Candidate {
+  const inputs = { goal_id };
+  return {
+    candidate_id: candidateId('goal.frame', null, inputs),
+    operation: 'goal.frame',
+    contract_rev: null,
+    inputs,
+    evidence: [evidence],
+    read_set: [],
+    dependencies: [],
+    effects: [],
+    resources: ONE_ACTION,
+    eligibility: { status: 'allowed' },
+    weight: null,
+  };
+}
+
+function formProposedInspects(
+  state: State,
+  proposal: Proposal,
+  describe: Describe,
+  canonical: Canonical,
+  push: (candidate: Candidate) => void,
+  unavailable: string[],
+): void {
+  const goal = state.goal;
+  if (!goal) {
+    return;
+  }
+  const contract = describe('source.inspect');
+  if (!contract) {
+    unavailable.push('source.inspect');
+    return;
+  }
+  for (const binding of proposal.bindings) {
+    if (binding.operation !== 'source.inspect') {
+      continue;
+    }
+    const source = (binding.inputs as { source: string }).source;
+    const current = state.sources[source];
+    const inspection = state.inspections[source];
+    if (!current) {
+      continue;
+    }
+    if (inspection && inspection.result.revision === current.revision) {
+      continue;
+    }
+    const inputs = { source };
+    const bound = bindSelectors(contract.effects, inputs);
+    const effects: ResourceEffect[] = bound.ok
+      ? bound.bound.map((e) => ({ resource: canonical(e.resource), mode: e.mode }))
+      : [];
+    push({
+      candidate_id: candidateId(contract.id, contract.revision, inputs),
+      operation: contract.id,
+      contract_rev: contract.revision,
+      inputs,
+      evidence: [goal.evidence, current.evidence, state.proposal!.evidence],
+      read_set: [{ resource: source, revision: current.revision }],
+      dependencies: [],
+      effects,
+      resources: ONE_ACTION,
+      eligibility: inspectEligibility(source, goal.authority.read),
+      weight: null,
+    });
+  }
 }
 
 function completeCandidate(

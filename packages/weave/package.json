@@ -11,7 +11,8 @@
     "dist"
   ],
   "dependencies": {
-    "@weave/agentsop": "*"
+    "@weave/agentsop": "*",
+    "@weave/gateway": "*"
   },
   "devDependencies": {
     "@weave/agentfabric": "*"

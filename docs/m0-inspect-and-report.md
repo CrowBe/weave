@@ -470,10 +470,11 @@ alpha, beta; authority alpha, beta; budget 6/6); hold host completions.
   starting points; M1's contract adds trusted ingress, durable invocation identity,
   outcome lookup and historical contract records. Strict M0 replay remains
   non-executing and fails on missing results; recovery is a separate operation.
-- Any model-backed judgment site, the inference gateway, and context profiles — M2.
-  Synchronous scripted weighing is a fixture choice. M2 must reserve before calls,
-  account for failed/malformed attempts, remain responsive to control observations,
-  and reject stale judgments using their recorded state and candidate revisions.
+- Any model-backed judgment site, the inference gateway, and context profiles —
+  [M2](m2-handle-a-novel-request.md). Synchronous scripted weighing is a fixture
+  choice. M2 reserves before calls, accounts for failed/malformed attempts,
+  remains responsive to control observations, and rejects stale judgments using
+  their recorded state and candidate revisions.
 
 ## 13. Assumptions recorded
 
@@ -489,4 +490,5 @@ alpha, beta; authority alpha, beta; budget 6/6); hold host completions.
   in-repo `agentfabric` owns the locator table
   (see [agentfabric-concepts.md](./agentfabric-concepts.md)).
 - `budget.actions` and `budget.judgments` count units, not cost. Cost units are
-  introduced when the gateway arrives in M2.
+  micros on `budget.cost`, introduced by [M2](m2-handle-a-novel-request.md). M0
+  goals omit `cost` and have a cost limit of zero.

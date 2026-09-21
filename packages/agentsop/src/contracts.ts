@@ -1,6 +1,22 @@
 import { isWellFormedRef, type EffectSelector, type ResourceEffect } from './refs.js';
 import type { FailureCode } from './failures.js';
 
+export const INFERENCE_ROLES = ['framing', 'working', 'extension'] as const;
+export type InferenceRole = (typeof INFERENCE_ROLES)[number];
+
+/**
+ * Declared inference dependency and its enforceable limits. Types for the
+ * actual request live in `@weave/gateway`; this object is the contract's
+ * ceiling, not a generate-anything capability.
+ */
+export interface InferenceLimits {
+  readonly kind: string;
+  readonly role: InferenceRole;
+  readonly max_cost: number;
+  readonly destinations: readonly string[];
+  readonly max_attempts: number;
+}
+
 /**
  * The capability document. The contract is durable; implementations are
  * disposable. It is named for the operation, never for an implementation.
@@ -18,6 +34,8 @@ export interface CapabilityContract {
   readonly failures: readonly string[];
   /** Allow-list of capability ids this implementation may invoke. Empty is none. */
   readonly depends_on: readonly string[];
+  /** When present, the resolver context must supply a bounded `infer` port. */
+  readonly inference?: InferenceLimits;
 }
 
 export type BindResult =

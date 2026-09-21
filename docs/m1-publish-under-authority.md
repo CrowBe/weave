@@ -219,7 +219,8 @@ contract, tests and implementation revisions. Documentation alone proves neither
 ## 8. Later milestones and remaining choices
 
 - M2: asynchronous bounded inference, every-attempt accounting, stale judgments,
-  and a versioned state view with a selection manifest and disclosed omissions.
+  and a versioned state view with a selection manifest and disclosed omissions —
+  [m2-handle-a-novel-request.md](m2-handle-a-novel-request.md).
 - M3: isolated generated tests/code and admission evidence. Retained skill text
   can propose a contract or composition; it is not an admitted implementation.
 - M4/M5: freshness-aware reuse and experiments including failed attempts.

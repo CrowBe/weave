@@ -63,6 +63,7 @@ describe('M0 base scenario', () => {
     assert.deepEqual(before.budget, {
       actions: { limit: 6, reserved: 0, spent: 0 },
       judgments: { limit: 6, reserved: 0, spent: 0 },
+      cost: { limit: 0, reserved: 0, spent: 0 },
     });
   });
 
@@ -240,6 +241,7 @@ describe('M0 base scenario', () => {
     assert.deepEqual(s.runtime.state().budget, {
       actions: { limit: 6, reserved: 0, spent: 4 },
       judgments: { limit: 6, reserved: 0, spent: 3 },
+      cost: { limit: 0, reserved: 0, spent: 0 },
     });
     assert.equal(s.host.invocations.length, 3);
     assertComplete(trace);

@@ -282,7 +282,7 @@ creates the packages (M0-C1).
 | --- | --- | --- |
 | M0 | Capability document, reference and effect shapes, grant shape, failure codes, host interface | None. The fake host in Weave's tests satisfies the interface. |
 | M1 | Authority selectors, effect-set equality, failure precedence, catalogue graph rules; invocation outcome/cancellation/reconciliation contract | Registry, resolution status, trusted grant validation, reference issuance, enforcing trusted tier, durable invocation identity and receipts, bounded outcome lookup, historical contract access, `uncertain` outcome |
-| M2 | Inference declared as a dependency with limits | Resolver context supplies the gateway |
+| M2 | Inference declared as a dependency with limits | Resolver context supplies the gateway ([contract](m2-handle-a-novel-request.md)) |
 | M3 | Test-case shape; contract revision rules | Lifecycle with evidence, untrusted tier, held-out access separation, revocation, opportunity notices |
 | M4 | — | Several implementations per contract; reliability and cost recorded per implementation |
 | M5 | — | — (promotion is Weave's; the host reports which implementation ran) |
