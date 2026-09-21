@@ -237,6 +237,7 @@ function numberMap(value: unknown): Record<string, number> | undefined {
 function classifyStatus(status: number, detail: string, requestId: string | undefined): ProviderFailure {
   const message = withRequestId(`typesafe-ai responded ${status}: ${detail}`, requestId);
   if (status === 401 || status === 403) return { code: 'unauthorized', message, retryable: false };
+  if (status === 402) return { code: 'quota_exhausted', message, retryable: false };
   if (status === 429) return { code: 'rate_limited', message, retryable: true };
   // 529 is TypeSafe's "overloaded"; it lands here with the other 5xx.
   if (status >= 500) return { code: 'unavailable', message, retryable: true };

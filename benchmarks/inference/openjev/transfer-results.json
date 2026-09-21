@@ -1,0 +1,883 @@
+{
+ "operation": "text.assess-entailment",
+ "status": "experimental",
+ "calibrated": {
+  "value": false,
+  "basis": "measured, not assumed: ECE 0.146 and Brier 0.212 over 307 held-out tasks; see the calibration block"
+ },
+ "measured": "2026-09-20",
+ "host": "Metabox Edge i7-1355U, Fedora 44, 31 GiB",
+ "checkpoint_revision": "4b5f9a67fa2ebe77466bce0656ce350effc3148c",
+ "checkpoint_subfolder": "qwen3.5-4b-nli-v2",
+ "torch": "2.14.0+cpu",
+ "device": "cpu",
+ "batch_size": 1,
+ "measurement_protocol": {
+  "note": "A cold process on this part runs far above its sustained clock, so every timing below is preceded by a fixed-duration warmup and gated on a reference forward that must not have drifted more than 5%.",
+  "cold_vs_sustained_ratio": {
+   "fp32_128_token_reference": 1.6935641947076119,
+   "observed_slowdown_pct": 69.35641947076118
+  },
+  "warmup_seconds": 200.0
+ },
+ "dtype": {
+  "note": "fp32 is faster AND the two dtypes prefer opposite thread counts: bf16 is compute-bound under scalar emulation and wants 8 threads, fp32 is bandwidth-bound and is hurt by E-core imbalance.",
+  "float32": {
+   "threads_best": 2,
+   "reference_128tok_seconds": 8.833632429945283,
+   "corpus_median_seconds": 2.227045449486468,
+   "corpus_correct": 12,
+   "peak_rss_kib": 23174956,
+   "drift_pct": -4.862180640277147,
+   "steady_state": true
+  },
+  "bfloat16": {
+   "threads_best": 8,
+   "reference_128tok_seconds": 33.02133723802399,
+   "corpus_median_seconds": 7.263212308520451,
+   "corpus_correct": 12,
+   "peak_rss_kib": 7640068,
+   "drift_pct": -6.54707173119955,
+   "steady_state": false,
+   "caveat": "drift -6.5% fell just outside the 5% gate; effect size dwarfs it"
+  },
+  "fp32_speedup_best_config": 3.738138019653658
+ },
+ "thread_scaling_fp32": {
+  "note": "More threads is slower. 2 threads wins; the dip at 4 reproduced across two independent runs, so it is not noise. Consistent with OpenMP splitting work evenly across 2 P-cores and 8 slower E-cores.",
+  "reference_128tok_seconds": {
+   "1": 12.689085977035575,
+   "2": 8.833632429945283,
+   "4": 12.219659343943931,
+   "8": 10.317986923037097,
+   "12": 11.63789013097994
+  },
+  "corpus_median_seconds": {
+   "1": 2.986610552005004,
+   "2": 2.227045449486468,
+   "4": 3.122332378930878,
+   "8": 2.331115339999087,
+   "12": 3.4277918155421503
+  },
+  "independent_replication": {
+   "2": 8.912755974452011,
+   "4": 12.159530273987912,
+   "8": 10.554595861467533,
+   "12": 13.395187536487356
+  }
+ },
+ "length_scaling_fp32_8_threads": {
+  "note": "Measured at 8 threads. Its 137-token point (10.44 s) matches the independent sustained 8-thread reference (10.32 s), which is why these rows are treated as sustained despite the warmup gate misfiring. Not re-measured at the faster 2-thread setting.",
+  "rows": [
+   {
+    "target": 64,
+    "input_tokens": 75,
+    "median_seconds": 7.254256539978087,
+    "tokens_per_second": 10.33875760895362,
+    "samples": [
+     7.897398191969842,
+     7.254256539978087,
+     7.168720522080548
+    ]
+   },
+   {
+    "target": 128,
+    "input_tokens": 137,
+    "median_seconds": 10.436576267005876,
+    "tokens_per_second": 13.126910252465736,
+    "samples": [
+     10.353811899083667,
+     10.44139107200317,
+     10.436576267005876
+    ]
+   },
+   {
+    "target": 256,
+    "input_tokens": 261,
+    "median_seconds": 18.883764213998802,
+    "tokens_per_second": 13.821396891119674,
+    "samples": [
+     18.883764213998802,
+     18.91420342004858,
+     18.742351448978297
+    ]
+   },
+   {
+    "target": 512,
+    "input_tokens": 540,
+    "median_seconds": 37.9044895619154,
+    "tokens_per_second": 14.246333514607356,
+    "samples": [
+     37.662067539058626,
+     37.9044895619154,
+     38.204946247977205
+    ]
+   },
+   {
+    "target": 1024,
+    "input_tokens": 1036,
+    "median_seconds": 74.51010108203627,
+    "tokens_per_second": 13.904155073677257,
+    "samples": [
+     73.84714807500131,
+     74.62930818204768,
+     74.51010108203627
+    ]
+   }
+  ],
+  "trained_max_len": 1024,
+  "config_max_position_embeddings": 262144
+ },
+ "determinism": {
+  "repeats": 3,
+  "bit_identical": true,
+  "corroborated_on_real_records": "10 transfer-v4 records appear in two contrast arms with byte-identical state; all 10 returned bit-identical score dictionaries"
+ },
+ "argument_order": {
+  "note": "Anecdote, not a finding: only 3 entailment pairs. Contradiction is symmetric so 5/5 unchanged is correct behaviour. Needs a real asymmetry corpus before any claim about directionality.",
+  "by_expected": {
+   "entailment": {
+    "n": 3,
+    "unchanged_on_swap": 2
+   },
+   "contradiction": {
+    "n": 5,
+    "unchanged_on_swap": 5
+   },
+   "neutral": {
+    "n": 4,
+    "unchanged_on_swap": 2
+   }
+  },
+  "rows": [
+   {
+    "id": "reported-fact",
+    "expected": "entailment",
+    "forward": "entailment",
+    "reversed": "entailment",
+    "same": true
+   },
+   {
+    "id": "reported-negation",
+    "expected": "contradiction",
+    "forward": "contradiction",
+    "reversed": "contradiction",
+    "same": true
+   },
+   {
+    "id": "missing-evidence",
+    "expected": "neutral",
+    "forward": "neutral",
+    "reversed": "neutral",
+    "same": true
+   },
+   {
+    "id": "possibility-not-certainty",
+    "expected": "neutral",
+    "forward": "neutral",
+    "reversed": "entailment",
+    "same": false
+   },
+   {
+    "id": "exclusive-approval",
+    "expected": "contradiction",
+    "forward": "contradiction",
+    "reversed": "contradiction",
+    "same": true
+   },
+   {
+    "id": "nonexclusive-approval",
+    "expected": "neutral",
+    "forward": "neutral",
+    "reversed": "neutral",
+    "same": true
+   },
+   {
+    "id": "explicit-refusal",
+    "expected": "contradiction",
+    "forward": "contradiction",
+    "reversed": "contradiction",
+    "same": true
+   },
+   {
+    "id": "claim-not-authority",
+    "expected": "contradiction",
+    "forward": "contradiction",
+    "reversed": "contradiction",
+    "same": true
+   },
+   {
+    "id": "quoted-instruction",
+    "expected": "contradiction",
+    "forward": "contradiction",
+    "reversed": "contradiction",
+    "same": true
+   },
+   {
+    "id": "numeric-bound",
+    "expected": "entailment",
+    "forward": "entailment",
+    "reversed": "entailment",
+    "same": true
+   },
+   {
+    "id": "conjunction",
+    "expected": "entailment",
+    "forward": "entailment",
+    "reversed": "neutral",
+    "same": false
+   },
+   {
+    "id": "missing-conjunct",
+    "expected": "neutral",
+    "forward": "neutral",
+    "reversed": "entailment",
+    "same": false
+   }
+  ]
+ },
+ "transfer_v4": {
+  "note": "Kev's held-out suite, so the same records both local candidates were measured on. OpenJev has no score primitive; those questions are skipped. The emotion source was excluded from the 2026-09-20 run because its criteria values are null and the harness passed an empty hypothesis; the harness was fixed and emotion re-run on 2026-09-21, and is included here. Every noul hypothesis here is the interrogative instructions text; see hypothesis_form for the declarative variant.",
+  "suite": "transfer-v4",
+  "split": "development",
+  "suite_sha256": "31677c2256b406222e7d94ffdc0a02a70ce05746b9efe307876024c4e77291d1",
+  "split_sha256": "ff374c49c6c9f15f8a56fb274b4a4857d20497eb8dd1ac07ce01560e682a5f2e",
+  "in_distribution": false,
+  "seed": 20260920,
+  "per_source": 40,
+  "threads": 2,
+  "dtype": "float32",
+  "tasks_scored": 307,
+  "correct": 201,
+  "accuracy": 0.6547231270358306,
+  "wilson_95": [
+   0.5999197888777589,
+   0.705702109864237
+  ],
+  "standard_error": 0.027135848013790508,
+  "majority_class_floor": 0.501628664495114,
+  "uniform_chance_floor": 0.3854893749030557,
+  "tasks_skipped": 18,
+  "skipped_types": {
+   "score": 18
+  },
+  "by_kind": {
+   "choice": {
+    "correct": 101,
+    "n": 165,
+    "accuracy": 0.6121212121212121
+   },
+   "noul": {
+    "correct": 100,
+    "n": 142,
+    "accuracy": 0.704225352112676
+   }
+  },
+  "by_source": {
+   "composition_held_and_or": {
+    "accuracy": 0.875,
+    "n": 16,
+    "kind": "choice",
+    "constant": 0.75,
+    "uniform": 0.5,
+    "median_seconds": 14.109622587508056
+   },
+   "composition_held_conditional": {
+    "accuracy": 0.16666666666666666,
+    "n": 12,
+    "kind": "choice",
+    "constant": 0.5833333333333334,
+    "uniform": 0.5,
+    "median_seconds": 14.335101466509514
+   },
+   "composition_held_or_not": {
+    "accuracy": 0.75,
+    "n": 12,
+    "kind": "choice",
+    "constant": 0.5833333333333334,
+    "uniform": 0.5,
+    "median_seconds": 14.190083760477137
+   },
+   "contrastive_authorization": {
+    "accuracy": 0.5,
+    "n": 22,
+    "kind": "noul",
+    "constant": 0.5,
+    "uniform": 0.5,
+    "median_seconds": 4.797096560942009
+   },
+   "mmlu": {
+    "accuracy": 0.32558139534883723,
+    "n": 43,
+    "kind": "choice",
+    "constant": 0.32558139534883723,
+    "uniform": 0.24302325581395348,
+    "median_seconds": 13.065224974998273
+   },
+   "paws": {
+    "accuracy": 0.65,
+    "n": 40,
+    "kind": "noul",
+    "constant": 0.625,
+    "uniform": 0.5,
+    "median_seconds": 4.94348027050728
+   },
+   "qnli": {
+    "accuracy": 0.95,
+    "n": 40,
+    "kind": "noul",
+    "constant": 0.55,
+    "uniform": 0.5,
+    "median_seconds": 4.607193020056002
+   },
+   "sciq": {
+    "accuracy": 0.9523809523809523,
+    "n": 42,
+    "kind": "choice",
+    "constant": 0.3333333333333333,
+    "uniform": 0.24523809523809523,
+    "median_seconds": 28.62332302244613
+   },
+   "tweet_offensive": {
+    "accuracy": 0.625,
+    "n": 40,
+    "kind": "noul",
+    "constant": 0.625,
+    "uniform": 0.5,
+    "median_seconds": 3.4406695244833827
+   },
+   "emotion": {
+    "accuracy": 0.55,
+    "n": 40,
+    "kind": "choice",
+    "constant": 0.425,
+    "uniform": 0.16488095238095238,
+    "median_seconds": 10.875561817083508
+   }
+  },
+  "wall_seconds": 4053.5518456669524,
+  "forwards": 815,
+  "input_tokens": 62709,
+  "throughput_tokens_per_second": 15.470136410622905,
+  "comparison_to_kev": {
+   "method": "Per-source accuracies reweighted to Kev's task counts, because the two runs used different seeds and source mixes. Raw overalls are not comparable.",
+   "shared_sources": [
+    "composition_held_and_or",
+    "composition_held_or_not",
+    "contrastive_authorization",
+    "mmlu",
+    "paws",
+    "qnli",
+    "sciq",
+    "tweet_offensive"
+   ],
+   "kev_weight_tasks": 85,
+   "openjev_reweighted": 0.7269659957006058,
+   "kev_reweighted": 0.8352941176470589,
+   "per_source": {
+    "composition_held_and_or": {
+     "openjev_acc": 0.875,
+     "openjev_n": 16,
+     "kev_acc": 0.875,
+     "kev_n": 8,
+     "uniform": 0.5,
+     "majority": 0.75
+    },
+    "composition_held_or_not": {
+     "openjev_acc": 0.75,
+     "openjev_n": 12,
+     "kev_acc": 1.0,
+     "kev_n": 8,
+     "uniform": 0.5,
+     "majority": 0.5833333333333334
+    },
+    "contrastive_authorization": {
+     "openjev_acc": 0.5,
+     "openjev_n": 22,
+     "kev_acc": 1.0,
+     "kev_n": 4,
+     "uniform": 0.5,
+     "majority": 0.5
+    },
+    "mmlu": {
+     "openjev_acc": 0.32558139534883723,
+     "openjev_n": 43,
+     "kev_acc": 0.6363636363636364,
+     "kev_n": 11,
+     "uniform": 0.24302325581395348,
+     "majority": 0.32558139534883723
+    },
+    "paws": {
+     "openjev_acc": 0.65,
+     "openjev_n": 40,
+     "kev_acc": 0.7692307692307693,
+     "kev_n": 13,
+     "uniform": 0.5,
+     "majority": 0.625
+    },
+    "qnli": {
+     "openjev_acc": 0.95,
+     "openjev_n": 40,
+     "kev_acc": 0.8461538461538461,
+     "kev_n": 13,
+     "uniform": 0.5,
+     "majority": 0.55
+    },
+    "sciq": {
+     "openjev_acc": 0.9523809523809523,
+     "openjev_n": 42,
+     "kev_acc": 1.0,
+     "kev_n": 15,
+     "uniform": 0.24523809523809523,
+     "majority": 0.3333333333333333
+    },
+    "tweet_offensive": {
+     "openjev_acc": 0.625,
+     "openjev_n": 40,
+     "kev_acc": 0.6923076923076923,
+     "kev_n": 13,
+     "uniform": 0.5,
+     "majority": 0.625
+    }
+   }
+  },
+  "emotion_rerun": {
+   "date": "2026-09-21",
+   "accuracy": 0.55,
+   "n": 40,
+   "majority_floor": 0.425,
+   "uniform_floor": 0.16488095238095238,
+   "wilson_95": [
+    0.39828829888440775,
+    0.6929492471905531
+   ],
+   "note": "the 2026-09-20 figure for this source was a harness artifact and is not reported anywhere"
+  }
+ },
+ "mmlu_premise_rendering_check": {
+  "note": "The model card claims MMLU rerank 0.53. Tested whether the premise rendering was responsible for the low score by re-running with the bare question text instead of the rendered subject/question dict.",
+  "rendered_dict": {
+   "accuracy": 0.32558139534883723,
+   "n": 43
+  },
+  "bare_question": {
+   "accuracy": 0.37209302325581395,
+   "n": 43,
+   "wilson_95": [
+    0.2437613889377433,
+    0.5214046173472684
+   ]
+  },
+  "uniform_chance": 0.24302325581395348,
+  "card_claim": 0.53,
+  "conclusion": "Rendering is not the cause; the two differ by less than one standard error. 0.53 was not reproduced on this held-out sample."
+ },
+ "calibration": {
+  "note": "Post-processed from the recorded per-record scores by benchmarks/inference/openjev/analyse.py. No new inference. Confidence for a choice task renormalises entailment across the options; for a boolean task it is the mass on the predicted side of the {entailment} vs {contradiction, neutral} split. Includes the re-run emotion source.",
+  "summary": {
+   "all": {
+    "n": 307,
+    "accuracy": 0.6547,
+    "mean_confidence": 0.7603,
+    "ece_10_bin": 0.1457,
+    "brier": 0.2118
+   },
+   "choice": {
+    "n": 165,
+    "accuracy": 0.6121,
+    "mean_confidence": 0.648,
+    "ece_10_bin": 0.0889,
+    "brier": 0.1935
+   },
+   "noul": {
+    "n": 142,
+    "accuracy": 0.7042,
+    "mean_confidence": 0.8907,
+    "ece_10_bin": 0.213,
+    "brier": 0.2331
+   }
+  },
+  "reliability_bins": {
+   "all": [
+    {
+     "bin": "0.2-0.3",
+     "n": 7,
+     "mean_confidence": 0.273,
+     "accuracy": 0.143,
+     "gap": 0.13
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 29,
+     "mean_confidence": 0.36,
+     "accuracy": 0.276,
+     "gap": 0.084
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 19,
+     "mean_confidence": 0.45,
+     "accuracy": 0.421,
+     "gap": 0.029
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 21,
+     "mean_confidence": 0.563,
+     "accuracy": 0.857,
+     "gap": -0.294
+    },
+    {
+     "bin": "0.6-0.7",
+     "n": 29,
+     "mean_confidence": 0.657,
+     "accuracy": 0.621,
+     "gap": 0.036
+    },
+    {
+     "bin": "0.7-0.8",
+     "n": 29,
+     "mean_confidence": 0.753,
+     "accuracy": 0.655,
+     "gap": 0.098
+    },
+    {
+     "bin": "0.8-0.9",
+     "n": 61,
+     "mean_confidence": 0.864,
+     "accuracy": 0.574,
+     "gap": 0.29
+    },
+    {
+     "bin": "0.9-1.0",
+     "n": 112,
+     "mean_confidence": 0.956,
+     "accuracy": 0.839,
+     "gap": 0.117
+    }
+   ],
+   "choice": [
+    {
+     "bin": "0.2-0.3",
+     "n": 7,
+     "mean_confidence": 0.273,
+     "accuracy": 0.143,
+     "gap": 0.13
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 29,
+     "mean_confidence": 0.36,
+     "accuracy": 0.276,
+     "gap": 0.084
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 17,
+     "mean_confidence": 0.45,
+     "accuracy": 0.412,
+     "gap": 0.038
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 17,
+     "mean_confidence": 0.566,
+     "accuracy": 0.824,
+     "gap": -0.257
+    },
+    {
+     "bin": "0.6-0.7",
+     "n": 25,
+     "mean_confidence": 0.659,
+     "accuracy": 0.64,
+     "gap": 0.019
+    },
+    {
+     "bin": "0.7-0.8",
+     "n": 20,
+     "mean_confidence": 0.755,
+     "accuracy": 0.7,
+     "gap": 0.055
+    },
+    {
+     "bin": "0.8-0.9",
+     "n": 20,
+     "mean_confidence": 0.861,
+     "accuracy": 0.75,
+     "gap": 0.111
+    },
+    {
+     "bin": "0.9-1.0",
+     "n": 30,
+     "mean_confidence": 0.95,
+     "accuracy": 0.867,
+     "gap": 0.084
+    }
+   ],
+   "noul": [
+    {
+     "bin": "0.4-0.5",
+     "n": 2,
+     "mean_confidence": 0.457,
+     "accuracy": 0.5,
+     "gap": -0.043
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 4,
+     "mean_confidence": 0.55,
+     "accuracy": 1.0,
+     "gap": -0.45
+    },
+    {
+     "bin": "0.6-0.7",
+     "n": 4,
+     "mean_confidence": 0.644,
+     "accuracy": 0.5,
+     "gap": 0.144
+    },
+    {
+     "bin": "0.7-0.8",
+     "n": 9,
+     "mean_confidence": 0.75,
+     "accuracy": 0.556,
+     "gap": 0.195
+    },
+    {
+     "bin": "0.8-0.9",
+     "n": 41,
+     "mean_confidence": 0.866,
+     "accuracy": 0.488,
+     "gap": 0.378
+    },
+    {
+     "bin": "0.9-1.0",
+     "n": 82,
+     "mean_confidence": 0.958,
+     "accuracy": 0.829,
+     "gap": 0.129
+    }
+   ]
+  },
+  "reading": "Overconfident overall: mean confidence 0.760 against accuracy 0.655, ECE 0.146. Boolean questions are much the worse half (ECE 0.213 against 0.089 for choice), and the 0.8-0.9 confidence band holds 41 boolean tasks at 0.488 accuracy, so a confidence threshold placed just below 'very confident' admits a bucket that is at chance."
+ },
+ "contrast_behaviour": {
+  "note": "Composition records come in <scenario>/<arm>/<a|b> groups. The relevant arm perturbs a field the policy depends on; the irrelevant arm perturbs one it explicitly does not.",
+  "relevant_change_answer_must_move": {
+   "n": 10,
+   "ok": 5
+  },
+  "irrelevant_change_answer_must_hold": {
+   "n": 10,
+   "ok": 10
+  },
+  "by_source": {
+   "composition_held_and_or/irrelevant_change_answer_must_hold": {
+    "n": 4,
+    "ok": 4
+   },
+   "composition_held_and_or/relevant_change_answer_must_move": {
+    "n": 4,
+    "ok": 2
+   },
+   "composition_held_conditional/irrelevant_change_answer_must_hold": {
+    "n": 3,
+    "ok": 3
+   },
+   "composition_held_conditional/relevant_change_answer_must_move": {
+    "n": 3,
+    "ok": 1
+   },
+   "composition_held_or_not/irrelevant_change_answer_must_hold": {
+    "n": 3,
+    "ok": 3
+   },
+   "composition_held_or_not/relevant_change_answer_must_move": {
+    "n": 3,
+    "ok": 2
+   }
+  },
+  "missed_flips": [
+   {
+    "group": "composition/v3-composition-transfer/held_and_or/4/relevant",
+    "labels": [
+     "reject",
+     "accept"
+    ],
+    "predicted": [
+     "reject",
+     "reject"
+    ]
+   },
+   {
+    "group": "composition/v3-composition-transfer/held_and_or/7/relevant",
+    "labels": [
+     "reject",
+     "accept"
+    ],
+    "predicted": [
+     "reject",
+     "reject"
+    ]
+   },
+   {
+    "group": "composition/v3-composition-transfer/held_conditional/1/relevant",
+    "labels": [
+     "accept",
+     "reject"
+    ],
+    "predicted": [
+     "reject",
+     "reject"
+    ]
+   },
+   {
+    "group": "composition/v3-composition-transfer/held_conditional/3/relevant",
+    "labels": [
+     "reject",
+     "accept"
+    ],
+    "predicted": [
+     "accept",
+     "accept"
+    ]
+   },
+   {
+    "group": "composition/v3-composition-transfer/held_or_not/0/relevant",
+    "labels": [
+     "accept",
+     "reject"
+    ],
+    "predicted": [
+     "reject",
+     "reject"
+    ]
+   }
+  ],
+  "reading": "Stable but not discriminating. It ignores every irrelevant perturbation (10/10) and misses half the relevant ones (5/10). The 0.167 on composition_held_conditional is this, not a logical inversion."
+ },
+ "ranking_vs_argmax": {
+  "note": "transfer.py predicts true only when entailment is the strict argmax of three labels. That boundary comes from the checkpoint's head, not from the task. AUC asks whether p_entailment orders true above false at all, independent of any threshold. best_threshold_accuracy is fitted on the same records and is an optimistic upper bound on recalibration, not an accuracy.",
+  "by_source": {
+   "all_noul": {
+    "n": 142,
+    "argmax_accuracy": 0.7042,
+    "majority_floor": 0.5563,
+    "auc": 0.8168,
+    "bootstrap_95": [
+     0.7411,
+     0.8846
+    ],
+    "permutation_p": 5e-05,
+    "best_threshold_accuracy_optimistic": 0.8099,
+    "best_threshold": 0.9424
+   },
+   "contrastive_authorization": {
+    "n": 22,
+    "argmax_accuracy": 0.5,
+    "majority_floor": 0.5,
+    "auc": 1.0,
+    "bootstrap_95": [
+     1.0,
+     1.0
+    ],
+    "permutation_p": 5e-05,
+    "best_threshold_accuracy_optimistic": 1.0,
+    "best_threshold": 0.9478,
+    "within_pair_ranking": {
+     "pairs": 11,
+     "correct": 11,
+     "exact_one_sided_p": 1.4176e-06
+    }
+   },
+   "paws": {
+    "n": 40,
+    "argmax_accuracy": 0.65,
+    "majority_floor": 0.625,
+    "auc": 0.8027,
+    "bootstrap_95": [
+     0.6484,
+     0.9268
+    ],
+    "permutation_p": 0.0005,
+    "best_threshold_accuracy_optimistic": 0.775,
+    "best_threshold": 0.9428
+   },
+   "qnli": {
+    "n": 40,
+    "argmax_accuracy": 0.95,
+    "majority_floor": 0.55,
+    "auc": 0.9899,
+    "bootstrap_95": [
+     0.96,
+     1.0
+    ],
+    "permutation_p": 5e-05,
+    "best_threshold_accuracy_optimistic": 0.975,
+    "best_threshold": 0.8858
+   },
+   "tweet_offensive": {
+    "n": 40,
+    "argmax_accuracy": 0.625,
+    "majority_floor": 0.625,
+    "auc": 0.6187,
+    "bootstrap_95": [
+     0.4375,
+     0.7857
+    ],
+    "permutation_p": 0.114394,
+    "best_threshold_accuracy_optimistic": 0.625,
+    "best_threshold": 0.1045
+   }
+  },
+  "reading": "On contrastive_authorization the argmax rule scores 0.500, exactly its floor, because the model answers true to all 22 records. Yet p_entailment separates the classes perfectly: AUC 1.000, all 11 pairs ranked correctly, exact one-sided p 1.4e-6. The signal is present and the decision rule discards it. CORRECTION 2026-09-21: the original reading of this block used tweet_offensive (AUC 0.619, p 0.114) as the contrasting case where the signal is genuinely absent. That was wrong. Its hypothesis was the contentless question 'Is this post offensive?'; with the declarative criteria.true the same records give AUC 0.827 at p 0.0003. See hypothesis_form."
+ },
+ "hypothesis_form": {
+  "question": "A noul question can be rendered as the interrogative `instructions` or the declarative `criteria.true`. Measured 2026-09-21 on the two sources that have a criteria.true; qnli and contrastive_authorization have none and are unaffected.",
+  "results": {
+   "tweet_offensive": {
+    "n": 40,
+    "instructions": {
+     "argmax": 0.625,
+     "floor": 0.625,
+     "auc": 0.619,
+     "permutation_p": 0.114394
+    },
+    "criteria_true": {
+     "argmax": 0.675,
+     "floor": 0.625,
+     "auc": 0.827,
+     "permutation_p": 0.0003
+    }
+   },
+   "paws": {
+    "n": 40,
+    "instructions": {
+     "argmax": 0.65,
+     "floor": 0.625,
+     "auc": 0.803,
+     "permutation_p": 0.0005
+    },
+    "criteria_true": {
+     "argmax": 0.625,
+     "floor": 0.625,
+     "auc": 0.661,
+     "permutation_p": 0.044698
+    }
+   }
+  },
+  "aggregate_argmax": {
+   "instructions": 0.6375,
+   "criteria_true": 0.65,
+   "note": "one task in eighty; the aggregate is a null result and hides two opposing shifts"
+  },
+  "mechanism": "Both directions follow one rule: an NLI hypothesis must be declarative and must carry the content being asserted. For tweet_offensive the post is entirely in the premise and the instructions are a contentless question, so criteria.true is a pure upgrade. For paws the second sentence -- the thing being compared -- is embedded in the instructions, and criteria.true is generic boilerplate ('Same meaning, possibly reworded'), so switching deletes the content the question is about. Verified by reading the records, not inferred from the scores.",
+  "consequence": "tweet_offensive was the only source whose hypothesis was both interrogative and contentless, and it was the only source with no ranking signal. Neither rendering is correct for every source, so a harness must choose per source by where the content sits.",
+  "caveat": "Both renderings were scored on the same 40 records per source, so picking the better one per source is in-sample selection. n=40 gives SE about 0.077 on accuracy; the AUC shift on tweet_offensive is the durable part, the argmax shift is not."
+ },
+ "not_measured": [
+  "a held-out threshold: every best_threshold figure here is fitted in-sample",
+  "a held-out choice of hypothesis rendering, per the hypothesis_form caveat",
+  "length scaling at the faster 2-thread setting"
+ ]
+}

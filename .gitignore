@@ -5,4 +5,5 @@ dist/
 .env.local
 .env.*.local
 .local/openjev/
-tools/openjev/__pycache__/
+benchmarks/inference/openjev/__pycache__/
+benchmarks/inference/kev/__pycache__/
