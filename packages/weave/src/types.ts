@@ -439,6 +439,8 @@ export interface WeighRequest {
   /** The eligible candidates only. Prohibited candidates never reach a judgment site. */
   readonly candidates: readonly Candidate[];
   readonly view?: StateView;
+  /** Cost envelope reserved for this gateway weigh, in micros. */
+  readonly cost_ceiling?: number;
 }
 
 export interface WeighResult {

@@ -40,7 +40,7 @@ export class GatewayDecisionLayer {
         destinations: [...this.destinations],
         max_context_tokens: 8_000,
         deadline: Number.MAX_SAFE_INTEGER,
-        cost_ceiling: 1_000_000,
+        cost_ceiling: request.cost_ceiling ?? 10_000,
         max_attempts: 3,
       },
     });

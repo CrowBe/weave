@@ -80,6 +80,9 @@ const OPERATOR_SOURCE = { kind: 'operator', id: 'operator' } as const;
 const CLOCK_SOURCE = { kind: 'clock', id: 'clock' } as const;
 const GATEWAY_SOURCE = { kind: 'gateway', id: 'inference-gateway' } as const;
 
+/** Cost envelope reserved for one gateway weigh; framing must still have remaining budget. */
+const GATEWAY_WEIGH_COST = 10_000;
+
 const PRIVILEGED_KINDS: readonly ProvenanceKind[] = ['operator', 'host', 'runtime', 'judgment', 'clock', 'gateway'];
 
 /** Observations the cycle appends itself; everything else is an external arrival that triggers a cycle. */
@@ -414,7 +417,8 @@ export class Runtime {
       }
       const costRemaining =
         this.current.budget.cost.limit - this.current.budget.cost.reserved - this.current.budget.cost.spent;
-      if (costRemaining < 1) {
+      const cost_ceiling = Math.min(GATEWAY_WEIGH_COST, costRemaining);
+      if (cost_ceiling < 1) {
         return {
           weights_ref: null,
           outcome: { status: 'blocked', reason: 'cost budget exhausted' },
@@ -423,7 +427,6 @@ export class Runtime {
       }
       const view = renderWeighView(state, eligible);
       const request_id = `inf:c${cycle_no}:weigh`;
-      const cost_ceiling = Math.min(1_000_000, costRemaining);
       const requested = this.appendInferenceRequested({
         request_id,
         site: 'frontier.weigh',
@@ -457,6 +460,7 @@ export class Runtime {
           candidate_set,
           candidates: eligible,
           view,
+          cost_ceiling,
         });
       }
       return { weights_ref: null, outcome: { status: 'waiting' }, selection: { selected: [], not_selected: [] } };

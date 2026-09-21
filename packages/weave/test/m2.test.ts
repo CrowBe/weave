@@ -49,13 +49,14 @@ async function flush(times = 15): Promise<void> {
   }
 }
 
-async function waitUntil(predicate: () => boolean, steps = 50): Promise<void> {
+async function waitUntil(predicate: () => boolean, steps = 80): Promise<void> {
   for (let i = 0; i < steps; i += 1) {
     if (predicate()) {
       return;
     }
     await Promise.resolve();
   }
+  assert.ok(predicate(), 'timed out waiting for condition');
 }
 
 function cycleThatSelected(s: ReturnType<typeof novelScenario>, operation: string) {
