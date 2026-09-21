@@ -186,7 +186,15 @@ A handle created by trusted bootstrap that may submit observations with a privil
 
 ### Resolver context
 
-The interface through which an implementation reaches its environment: nested invocation limited to declared dependencies, and reference-scoped resource operations. It contains no locators or substrate types, so it can be brokered across an isolation boundary.
+The interface through which an implementation reaches its environment: nested invocation limited to declared dependencies, and reference-scoped resource operations. It contains no locators or substrate types, so it can be brokered across an isolation boundary. An unbound context grants no resource access.
+
+### Execution tier
+
+Where an implementation or generated test runs. The `trusted` tier is host-owned code. The `untrusted` tier is generated code and generated tests, which run only under enforced isolation. Missing isolation blocks execution; it does not fall back to the trusted tier.
+
+### Held-out report
+
+The only result returned from protected admission tests to an implementer or corpus author: how many cases passed, how many failed, and the failure codes. It does not include inputs, expected outputs, artifact bodies, or which case failed. One report is available per implementation revision; requesting another spends that held-out split.
 
 ### Resolution status
 
@@ -296,4 +304,6 @@ The record of where a contract, test, or implementation came from, including sou
 - Say **action candidate**, not *option*, for a validated, bound action.
 - Say **milestone**, not *slice*, for an M-numbered increment of the plan. A slice is a query over state.
 - Say **trusted ingress**, not *authenticated client*, for the in-process handle that may submit privileged observations.
+- Say **execution tier**, not *sandbox*, for where an implementation runs. A label is not containment.
+- Say **held-out report**, not *test output*, for what protected evaluation returns to an implementer.
 - Never use **deterministic** to describe generated tests; their execution is deterministic, while their authorship and correctness require evidence.

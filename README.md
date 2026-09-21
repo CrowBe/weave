@@ -27,6 +27,14 @@ Start with:
   enforced effects, cancellation and crash recovery.
 - [M2 — handle a novel request](./docs/m2-handle-a-novel-request.md) — bounded
   inference, validated proposals, state views, and stale-judgment rejection.
+- [M3 — fill one capability gap](./docs/m3-fill-a-capability-gap.md) — contract,
+  red, isolated green, admission, and a separate execution grant.
+- [M4 — measure reuse](./docs/m4-measure-reuse.md) — cached conclusions,
+  cross-goal access, and the optimisation baseline.
+- [M5 — improve one operating strategy](./docs/m5-improve-an-operating-strategy.md)
+  — one profile change, a protocol fixed before results, promotion, and rollback.
+- [H1 — bound the log](./docs/h1-bound-the-log.md) — a follow-up hardening step:
+  reject oversize and duplicate observations before they are durable.
 - [AGENTS.md](./AGENTS.md) — how coding agents should work in this repository.
 
 Weave is early. The first objective is a small scenario that proves authorized concurrent execution, honest handling of stale or interrupted work, and replayable evidence. It then extends to crystallizing one capability from contract through demonstrated red, proven green, admission, and separately authorized execution, followed by a measured optimisation with scoped promotion and rollback.
@@ -34,7 +42,9 @@ Weave is early. The first objective is a small scenario that proves authorized c
 ## Status
 
 M0 (inspect and report), M1 (publish under authority), and M2 (handle a novel
-request) are implemented.
+request) are implemented. M3–M5 and the H1 log bound have behavioral contracts
+and are not implemented. The host refuses to execute a supplied implementation, framing
+profiles are versioned records, and the framing view lists the host catalogue.
 `packages/agentsop` holds the contract layer, `packages/agentfabric` the enforcing
 host, and `packages/weave` the runtime. `packages/gateway` supplies bounded
 generation and typed evaluation through replaceable providers. Requires Node

@@ -32,6 +32,7 @@ import {
   BETA,
   bindingJson,
   completedText,
+  createInferenceGateway,
   deferredEvaluate,
   evaluateAdapter,
   failedEval,
@@ -187,12 +188,14 @@ describe('M2 novel request', () => {
   });
 
   it('M2-T04 framing view discloses omissions and truncation', async () => {
-    const s = novelScenario();
-    await frameThenInspect(s);
-    const requested = observationsOfType(s.runtime.trace(), 'inference.requested')[0];
+    const tight = novelScenario({
+      frameProfile: { id: 'profile.frame.tight@1', version: 1, catalogue_budget: 1 },
+    });
+    await frameThenInspect(tight);
+    const requested = observationsOfType(tight.runtime.trace(), 'inference.requested')[0];
     assert.ok(requested);
     const payload = requested.payload as InferenceRequestedPayload;
-    assert.equal(payload.view.profile, 'profile.frame@1');
+    assert.equal(payload.view.profile, 'profile.frame.tight@1');
     const view = payload.view as StateView;
     const encoded = JSON.stringify(view.content);
     assert.equal(encoded.includes('gamma one'), false);
@@ -202,6 +205,16 @@ describe('M2 novel request', () => {
     assert.equal(catalogue?.truncated, true);
     assert.ok(catalogue?.omitted.some((item) => item.reason === 'budget'));
     assert.ok(view.manifest.slices.some((slice) => slice.revisions.length > 0));
+
+    const disclosed = novelScenario();
+    await frameThenInspect(disclosed);
+    const disclosedView = observationsOfType(disclosed.runtime.trace(), 'inference.requested')[0]?.payload as
+      | InferenceRequestedPayload
+      | undefined;
+    assert.equal(disclosedView?.view.profile, 'profile.frame@1');
+    const disclosedCatalogue = (disclosedView?.view as StateView).manifest.slices.find((slice) => slice.name === 'catalogue');
+    assert.equal(disclosedCatalogue?.truncated, false);
+    assert.match(JSON.stringify(disclosedView?.view.content), /"source.inspect"/);
   });
 
   it('M2-T05 hosted routes are excluded unless permitted', async () => {
@@ -409,7 +422,7 @@ describe('M2 resolver inference port', () => {
       kind: 'transform',
       role: 'working',
       input: { prompt: 'hello' },
-      terms: { cost_ceiling: 50, destinations: [LOCAL_DESTINATION], max_attempts: 1 },
+      terms: { cost_ceiling: 50, destinations: [LOCAL_DESTINATION], max_attempts: 1, deadline: 100 },
     });
     assert.equal(ok.status, 'accepted');
     assert.equal(generate.calls, 1);
@@ -418,7 +431,7 @@ describe('M2 resolver inference port', () => {
       kind: 'transform',
       role: 'working',
       input: { prompt: 'hello' },
-      terms: { cost_ceiling: 5_000, destinations: [LOCAL_DESTINATION], max_attempts: 1 },
+      terms: { cost_ceiling: 5_000, destinations: [LOCAL_DESTINATION], max_attempts: 1, deadline: 100 },
     });
     assert.equal(overCost.status, 'refused');
 
@@ -426,7 +439,7 @@ describe('M2 resolver inference port', () => {
       kind: 'transform',
       role: 'working',
       input: { prompt: 'hello' },
-      terms: { cost_ceiling: 50, destinations: [HOSTED_DESTINATION], max_attempts: 1 },
+      terms: { cost_ceiling: 50, destinations: [HOSTED_DESTINATION], max_attempts: 1, deadline: 100 },
     });
     assert.equal(badDest.status, 'refused');
 
@@ -434,7 +447,7 @@ describe('M2 resolver inference port', () => {
       kind: 'judge',
       role: 'working',
       input: { prompt: 'hello' },
-      terms: { cost_ceiling: 50, destinations: [LOCAL_DESTINATION], max_attempts: 1 },
+      terms: { cost_ceiling: 50, destinations: [LOCAL_DESTINATION], max_attempts: 1, deadline: 100 },
     });
     assert.equal(badKind.status, 'refused');
 
@@ -442,7 +455,7 @@ describe('M2 resolver inference port', () => {
       kind: 'transform',
       role: 'framing',
       input: { prompt: 'hello' },
-      terms: { cost_ceiling: 50, destinations: [LOCAL_DESTINATION], max_attempts: 1 },
+      terms: { cost_ceiling: 50, destinations: [LOCAL_DESTINATION], max_attempts: 1, deadline: 100 },
     });
     assert.equal(badRole.status, 'refused');
 
@@ -450,20 +463,124 @@ describe('M2 resolver inference port', () => {
       kind: 'transform',
       role: 'working',
       input: { prompt: 'hello' },
-      terms: { cost_ceiling: 50, destinations: [LOCAL_DESTINATION], max_attempts: 9 },
+      terms: { cost_ceiling: 50, destinations: [LOCAL_DESTINATION], max_attempts: 9, deadline: 100 },
     });
     assert.equal(overAttempts.status, 'refused');
+
+    const openDeadline = await ctx.infer!({
+      kind: 'transform',
+      role: 'working',
+      input: { prompt: 'hello' },
+      terms: { cost_ceiling: 1, destinations: [LOCAL_DESTINATION], max_attempts: 1, deadline: Number.POSITIVE_INFINITY },
+    });
+    assert.equal(openDeadline.status, 'refused');
+
+    const expired = await ctx.infer!({
+      kind: 'transform',
+      role: 'working',
+      input: { prompt: 'hello' },
+      terms: { cost_ceiling: 40, destinations: [LOCAL_DESTINATION], max_attempts: 1, deadline: 0 },
+    });
+    assert.equal(expired.status, 'blocked');
+    if (expired.status === 'blocked') {
+      assert.equal(expired.reason, 'deadline_passed');
+    }
+    assert.equal(generate.calls, 1);
+
+    const overRemaining = await ctx.infer!({
+      kind: 'transform',
+      role: 'working',
+      input: { prompt: 'hello' },
+      terms: { cost_ceiling: 20, destinations: [LOCAL_DESTINATION], max_attempts: 1, deadline: 100 },
+    });
+    assert.equal(overRemaining.status, 'refused');
+    assert.equal(generate.calls, 1);
 
     const noGateway = new AgentFabricHost({ authority, contracts: [contract] });
     const unavailable = await noGateway.resolverContext(contract).infer!({
       kind: 'transform',
       role: 'working',
       input: { prompt: 'hello' },
-      terms: { cost_ceiling: 50, destinations: [LOCAL_DESTINATION], max_attempts: 1 },
+      terms: { cost_ceiling: 50, destinations: [LOCAL_DESTINATION], max_attempts: 1, deadline: 100 },
     });
     assert.equal(unavailable.status, 'refused');
     if (unavailable.status === 'refused') {
       assert.equal(unavailable.code, 'RESOLVER_UNAVAILABLE');
     }
+  });
+
+  it('M2-T11 routes the declared generation kind', async () => {
+    const authority = createGrantAuthority();
+    const transform = generateAdapter('fixture.transform', [completedText('transformed')]);
+    const extract = generateAdapter('fixture.extract', [completedText('extracted')]);
+    const gateway = createInferenceGateway({
+      clock: { now: () => 0 },
+      routes: [
+        {
+          routed_unit_id: 'probe.transform',
+          operation: 'generate',
+          kind: 'transform',
+          context_profile: 'profile.frame@1',
+          context_profile_version: 1,
+          prompt_template: 't',
+          prompt_template_version: 1,
+          adapter: transform.id,
+          model: 'fixture/transform',
+          settings: { max_output_tokens: 32 },
+          destination: LOCAL_DESTINATION,
+          quality: 'baseline',
+          context_limit_tokens: 8_000,
+          price: { input_per_mtok: 1, output_per_mtok: 1 },
+        },
+        {
+          routed_unit_id: 'probe.extract',
+          operation: 'generate',
+          kind: 'extract',
+          context_profile: 'profile.frame@1',
+          context_profile_version: 1,
+          prompt_template: 't',
+          prompt_template_version: 1,
+          adapter: extract.id,
+          model: 'fixture/extract',
+          settings: { max_output_tokens: 32 },
+          destination: LOCAL_DESTINATION,
+          quality: 'baseline',
+          context_limit_tokens: 8_000,
+          price: { input_per_mtok: 1, output_per_mtok: 1 },
+        },
+      ],
+      adapters: [transform, extract],
+    });
+    const contract: CapabilityContract = {
+      id: 'probe.extract',
+      revision: 'r1',
+      purpose: 'Probe kind routing',
+      input: { prompt: 'string' },
+      output: { text: 'string' },
+      effects: [],
+      permissions: [],
+      failures: [],
+      depends_on: [],
+      inference: {
+        kind: 'extract',
+        role: 'working',
+        max_cost: 100,
+        destinations: [LOCAL_DESTINATION],
+        max_attempts: 1,
+      },
+    };
+    const host = new AgentFabricHost({ authority, contracts: [contract], gateway });
+    const outcome = await host.resolverContext(contract).infer!({
+      kind: 'extract',
+      role: 'working',
+      input: { prompt: 'hello' },
+      terms: { cost_ceiling: 50, destinations: [LOCAL_DESTINATION], max_attempts: 1, deadline: 100 },
+    });
+    assert.equal(outcome.status, 'accepted');
+    if (outcome.status === 'accepted') {
+      assert.equal(outcome.output, 'extracted');
+    }
+    assert.equal(transform.calls, 0);
+    assert.equal(extract.calls, 1);
   });
 });

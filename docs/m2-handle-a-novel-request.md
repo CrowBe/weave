@@ -145,10 +145,20 @@ Two profiles:
 | `profile.frame@1` | `goal.frame` | goal purpose, sources, authority ids, catalogue operation ids and input shapes, registered source ids and revisions the goal may read | gamma content and id-as-content, locators, prohibited candidate payloads, source bodies |
 | `profile.frontier-weigh@1` | `frontier.weigh` | goal purpose, eligible candidates (id, operation, input summary) | prohibited candidates, unauthorized source content |
 
-A slice that exceeds its budget is truncated with `truncated: true` and an
-omission reason `budget`. Policy, not the model, chooses the profile and
-filters disclosure. The view's `content` is what the gateway may send; a test
-may inspect `content` and the manifest to prove omissions.
+A profile is a versioned record the runtime selects: `id`, `version`, and
+`catalogue_budget`. The renderer does not own a private budget.
+`profile.frame@1` has `catalogue_budget: 32` and discloses every operation the
+host lists. That list is the host catalogue, not a fixed set of operation ids
+in the runtime. A profile whose budget is smaller than the catalogue truncates
+with `truncated: true` and omission reason `budget`. Policy, not the model,
+chooses the profile and filters disclosure. The view's `content` is what the
+gateway may send; a test may inspect `content` and the manifest to prove
+omissions.
+
+Replay reconstructs the framing catalogue from recorded `capability.described`
+observations that precede the framing request. It does not consult the host
+catalogue supplied to replay, and it must be given the same profile record
+that produced the view.
 
 ## 4. Inference records
 
@@ -256,9 +266,15 @@ capability.
 The resolver context may include an `infer` port. The host supplies it only
 when the contract declared `inference` and a gateway is configured. The port
 enforces the contract's cost, destination, attempt, kind, and role limits; a
-call that would exceed them is refused without reaching the provider. Absence
-of a gateway while `inference` is declared yields `RESOLVER_UNAVAILABLE` at
-the port, not silent ambient model access.
+call that would exceed them is refused without reaching the provider.
+`max_cost` is cumulative: each admitted call reserves its `cost_ceiling`
+against the remaining contract budget. The caller supplies a finite tick
+deadline, which the port forwards; an open deadline is refused rather than
+replaced. The kind routed is the declared generation kind and is not rewritten
+to another kind. A kind that is not a generation kind is refused. Absence of
+a gateway while `inference` is declared yields `RESOLVER_UNAVAILABLE` at the
+port, not silent ambient model access. Resource operations on a context that
+is not bound to an invocation grant are denied and do not read or write.
 
 Weave's `goal.frame` and `frontier.weigh` call the gateway directly. They are
 not AgentFabric capabilities. The host-level port exists so a later generative
@@ -274,14 +290,14 @@ the wall clock. Retain every M0 and M1 check.
 | M2-T01 | Novel goal with a valid framing proposal | Procedure is `frame_and_report@1`; cycle 1 forms `goal.frame` and not inspects; after an accepted proposal covering alpha and beta, inspects dispatch, the report completes, success evidence matches M0. |
 | M2-T02 | Proposal names gamma, an unknown operation, and the two authorized inspects | Gamma and the unknown operation are in `rejected`; neither is a candidate nor an `action.started`; alpha and beta inspects still form from the accepted bindings. |
 | M2-T03 | Same inspect candidate set weighed by scripted@1 and by the gateway | Ordinal selection (weight desc, candidate_id asc) matches; gateway `weights.recorded.implementation` is not `scripted@1`; both traces dispatch the same operations in the same order. |
-| M2-T04 | Framing state view | `inference.requested.view` names `profile.frame@1`, records revisions, and discloses omissions; `content` and the manifest contain no gamma body and no prohibited payload; a budget-truncated slice sets `truncated` and reason `budget`. |
+| M2-T04 | Framing state view | A tight profile (`profile.frame.tight@1`, catalogue budget 1) names that profile, records revisions, and discloses omissions; `content` and the manifest contain no gamma body and no prohibited payload; the catalogue slice sets `truncated` and reason `budget`. The default `profile.frame@1` discloses `source.inspect` and is not truncated. |
 | M2-T05 | Weigh terms permit only `local` while the table also has `hosted.vendor` | The hosted route is not attempted; any accepted attempt names `local`. A request that permits no remaining route records `blocked / no_route` with zero provider attempts. |
 | M2-T06 | Malformed then failed provider attempts for weighing | `inference.requested` precedes the call; `inference.recorded.attempts` includes both; `spent` is positive; the reserved judgment unit is spent; no `weights.recorded` is accepted. |
 | M2-T07 | Weigh adapter is held open | A `clock.tick` and a cancellation still append and run a cycle; the cycle outcome is `waiting`; the adapter has not yet resolved. |
 | M2-T08 | Tick advances while weighing is held, then the adapter resolves | `weights.recorded` is rejected as stale; no dispatch is authorized from it; `inference.recorded` is accepted and the reservation is spent. |
 | M2-T09 | Unaccepted gateway weigh | No second `frontier.weigh` starts for the same state_revision and candidate_set; the cycle is `blocked` with an explicit reason; the goal stays `active`. |
 | M2-T10 | Replay the completed novel run | Replayed cycles and observations match; the gateway and decision layer are not invoked; the host invocation count is zero during replay. |
-| M2-T11 | Contract declares inference limits | Resolver context exposes `infer` for that contract; a call within limits reaches the gateway; a call that exceeds cost, destinations, attempts, kind, or role is refused; a declared-inference contract with no gateway configured is `RESOLVER_UNAVAILABLE`. |
+| M2-T11 | Contract declares inference limits | Resolver context exposes `infer` for that contract; a call within limits reaches the gateway; a call that exceeds remaining cost, destinations, attempts, kind, or role is refused; a passed deadline is `blocked / deadline_passed` without a provider call; an open deadline is refused; an `extract` contract is routed to an `extract` unit and does not call a `transform` adapter; a declared-inference contract with no gateway configured is `RESOLVER_UNAVAILABLE`. |
 
 Package-direction checks keep AgentSOP independent of the gateway, AgentFabric
 able to import the gateway, and Weave able to import both. Record demonstrated
@@ -301,3 +317,9 @@ red and green against the exact contract, tests and implementation revisions.
   crystallization remains M3.
 - Cost units are micros. M0 goals without `budget.cost` have a cost limit of
   zero and never reserve cost.
+- `profile.frame@1` is data with catalogue budget 32. Truncation is proved
+  with a separate tight profile, so the default view can show the operation a
+  proposal must name.
+- A contract's `max_cost` bounds the sum of admitted `cost_ceiling` values.
+  The port charges that ceiling when the call is admitted, including when the
+  gateway then blocks on a passed deadline.
