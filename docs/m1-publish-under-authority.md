@@ -221,9 +221,14 @@ contract, tests and implementation revisions. Documentation alone proves neither
 - M2: asynchronous bounded inference, every-attempt accounting, stale judgments,
   and a versioned state view with a selection manifest and disclosed omissions —
   [m2-handle-a-novel-request.md](m2-handle-a-novel-request.md).
-- M3: isolated generated tests/code and admission evidence. Retained skill text
-  can propose a contract or composition; it is not an admitted implementation.
-- M4/M5: freshness-aware reuse and experiments including failed attempts.
+- M3: isolated generated tests and code, held-out reports, and admission
+  evidence. A retained procedure can propose a contract or composition; it is
+  not an admitted implementation.
+  [docs/m3-fill-a-capability-gap.md](m3-fill-a-capability-gap.md).
+- M4/M5: freshness-aware reuse, a baseline that includes failures, and one
+  profile experiment.
+  [docs/m4-measure-reuse.md](m4-measure-reuse.md),
+  [docs/m5-improve-an-operating-strategy.md](m5-improve-an-operating-strategy.md).
 - Client delivery, nested-work capacity and external transport authentication
   gain their own checks when those surfaces are introduced.
 

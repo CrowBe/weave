@@ -339,4 +339,72 @@ describe('AgentFabric host authority', () => {
     ]);
     assert.equal(unequal.ok, false);
   });
+
+  it('a supplied implementation is not executed', async () => {
+    const authority = createGrantAuthority();
+    const host = new AgentFabricHost({ authority });
+    const alpha = host.registerSource('mem:alpha', 'alpha body');
+    let replaced = false;
+    const refusal = host.registerImplementation(SOURCE_INSPECT.id, () => {
+      replaced = true;
+      return { outcome: 'succeeded', output: {} };
+    });
+    assert.equal(refusal.admitted, false);
+    const handle = host.invoke(inspectGrant(authority, alpha, 'a:9:1'), SOURCE_INSPECT.id, { source: alpha });
+    assert.equal(handle.kind, 'handle');
+    if (handle.kind !== 'handle') {
+      return;
+    }
+    host.release(handle.action_id);
+    const outcome = await handle.result;
+    assert.equal(outcome.outcome, 'succeeded');
+    assert.equal(replaced, false);
+
+    host.replaceLiveContract({
+      id: 'text.normalize',
+      revision: 'r1',
+      purpose: 'Normalize whitespace',
+      input: {},
+      output: { text: 'string' },
+      effects: [],
+      permissions: [],
+      failures: [],
+      depends_on: [],
+    });
+    let proposed = false;
+    host.registerImplementation('text.normalize', () => {
+      proposed = true;
+      return { outcome: 'succeeded', output: { text: 'x' } };
+    });
+    const invoked = host.invoke(
+      authority.issue({
+        action_id: 'a:9:2',
+        operation: 'text.normalize',
+        contract_rev: 'r1',
+        permissions: [],
+        effects: [],
+        issued_at: 1,
+      }),
+      'text.normalize',
+      {},
+    );
+    assert.equal(invoked.kind, 'rejected');
+    if (invoked.kind === 'rejected') {
+      assert.equal(invoked.code, 'UNRESOLVED');
+    }
+    assert.equal(proposed, false);
+    assert.equal(host.resolution('text.normalize'), 'unresolved');
+    assert.ok(host.operations().includes('text.normalize'));
+  });
+
+  it('an unbound resolver context cannot read or write resources', () => {
+    const authority = createGrantAuthority();
+    const host = new AgentFabricHost({ authority });
+    const gamma = host.registerSource('mem:gamma', 'gamma one');
+    const ctx = host.resolverContext(SOURCE_INSPECT);
+    assert.throws(() => ctx.read(gamma), /DENIED/);
+    assert.throws(() => ctx.write(gamma, 1, 'rewritten'), /DENIED/);
+    assert.equal(host.content(gamma), 'gamma one');
+    assert.equal(host.revision(gamma), 1);
+  });
 });

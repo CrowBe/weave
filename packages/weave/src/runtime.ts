@@ -23,7 +23,7 @@ import { parseProposalText, validateProposal } from './proposals.js';
 import { select } from './scheduler.js';
 import { stableStringify } from './stable-json.js';
 import { applyAccepted, initialState, snapshot, type MutableState } from './state.js';
-import { renderFrameView, renderWeighView } from './views.js';
+import { DEFAULT_FRAME_PROFILE, renderFrameView, renderWeighView, type FrameProfile } from './views.js';
 import { toAttempts, toMicros } from './gateway-decision.js';
 import type {
   ActionId,
@@ -60,7 +60,14 @@ import { validate } from './validation.js';
 
 export { ScriptedDecisionLayer } from './decision.js';
 export { GatewayDecisionLayer, fixtureGateway, HOSTED_DESTINATION, LOCAL_DESTINATION } from './gateway-decision.js';
-export { renderFrameView, renderWeighView, FRAME_PROFILE, WEIGH_PROFILE } from './views.js';
+export {
+  renderFrameView,
+  renderWeighView,
+  FRAME_PROFILE,
+  DEFAULT_FRAME_PROFILE,
+  WEIGH_PROFILE,
+  type FrameProfile,
+} from './views.js';
 export { parseProposalText, validateProposal, proposalCoversSources } from './proposals.js';
 export { foldState } from './state.js';
 export { MemoryJournal, PersistError } from './journal.js';
@@ -72,6 +79,11 @@ export interface RuntimeOptions {
   readonly executionSlots?: number;
   readonly journal?: ObservationJournal;
   readonly gateway?: InferenceGateway;
+  /**
+   * Frame profile for this run. Replay must receive the profile that produced
+   * the recorded view; the active profile is not read from today's default.
+   */
+  readonly frameProfile?: FrameProfile;
 }
 
 const RUNTIME_SOURCE = { kind: 'runtime', id: 'weave' } as const;
@@ -137,6 +149,8 @@ export class Runtime {
   readonly hostIngress: IngressHandle;
   readonly gatewayIngress: IngressHandle;
   private readonly inferAbort = new Map<string, AbortController>();
+  private readonly frameProfile: FrameProfile;
+  private readonly replayLog: readonly Observation[] | null;
 
   constructor(
     private readonly options: RuntimeOptions,
@@ -144,6 +158,8 @@ export class Runtime {
   ) {
     this.replayMode = recorded !== null;
     this.slots = options.executionSlots ?? Number.POSITIVE_INFINITY;
+    this.frameProfile = options.frameProfile ?? DEFAULT_FRAME_PROFILE;
+    this.replayLog = recorded;
     if (recorded) {
       for (const observation of recorded) {
         if (observation.payload_type === 'capability.described' && observation.validation.status === 'accepted') {
@@ -642,8 +658,9 @@ export class Runtime {
   }
 
   private catalogueOps(): { id: string; input: Readonly<Record<string, string>> }[] {
+    const ids = this.replayMode ? this.replayCatalogueIds() : [...this.options.host.operations()].sort();
     const ops: { id: string; input: Readonly<Record<string, string>> }[] = [];
-    for (const operation of ['source.inspect', 'report.assemble', 'report.publish']) {
+    for (const operation of ids) {
       const contract = this.describe(operation);
       if (contract) {
         ops.push({ id: contract.id, input: contract.input });
@@ -652,8 +669,37 @@ export class Runtime {
     return ops;
   }
 
+  /**
+   * Catalogue ids whose contracts were recorded before the framing request
+   * about to be regenerated. Replay does not consult the host's current catalogue.
+   */
+  private replayCatalogueIds(): readonly string[] {
+    if (!this.replayLog) {
+      return [];
+    }
+    const emitted = new Set(this.log.map((observation) => observation.observation_id));
+    const nextRequest = this.replayLog.find(
+      (observation) => observation.payload_type === 'inference.requested' && !emitted.has(observation.observation_id),
+    );
+    const horizon = nextRequest?.seq ?? Number.POSITIVE_INFINITY;
+    const ids: string[] = [];
+    for (const observation of this.replayLog) {
+      if (observation.payload_type !== 'capability.described' || observation.validation.status !== 'accepted') {
+        continue;
+      }
+      if (observation.seq >= horizon) {
+        continue;
+      }
+      const operation = (observation.payload as { operation: string }).operation;
+      if (!ids.includes(operation)) {
+        ids.push(operation);
+      }
+    }
+    return ids;
+  }
+
   private frameGoal(started: ActionStartedPayload): ActionOutcome | null {
-    const view = renderFrameView(this.state(), this.catalogueOps());
+    const view = renderFrameView(this.state(), this.catalogueOps(), this.frameProfile);
     const request_id = `inf:${started.action_id}`;
     const costRemaining =
       this.current.budget.cost.limit - this.current.budget.cost.reserved - this.current.budget.cost.spent;

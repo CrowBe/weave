@@ -54,6 +54,8 @@ export type LookupResult = OutcomeLookup | InvocationRejected;
  * handles.
  */
 export interface CapabilityHost {
+  /** Live catalogue ids. Listing does not grant invocation. */
+  operations(): readonly string[];
   describe(operation: string): DescribeResult;
   invoke(
     grant: Grant | null,
@@ -78,6 +80,8 @@ export interface InferCall {
     readonly cost_ceiling: number;
     readonly destinations: readonly string[];
     readonly max_attempts: number;
+    /** Tick deadline forwarded to the gateway. An open deadline is not substituted. */
+    readonly deadline: number;
   };
 }
 

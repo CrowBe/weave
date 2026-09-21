@@ -518,18 +518,26 @@ consequential behavior. (*Slice* is reserved for the state-query term in
   independent test or implementation proposals may run concurrently. Verify
   held-out protection, evidence invalidation, and revocation along this path.
   A retained procedure may inform this work but cannot bypass admission.
+  The composition is recorded data; it is not a new procedure arm in the control
+  core. The contract is
+  [docs/m3-fill-a-capability-gap.md](docs/m3-fill-a-capability-gap.md).
 - **M4 — measure reuse.** Repeat the goal using the admitted capability,
   validate cached conclusions and cross-goal access, and compare quality,
   inference use, latency, and total cost. A replacement implementation earns fresh
   evidence. Establish the baseline for an optimisation experiment.
+  [docs/m4-measure-reuse.md](docs/m4-measure-reuse.md) fixes the conclusion
+  record, the authority scope, and the baseline.
 - **M5 — improve one operating strategy.** From the report outcomes, identify one
-  recurring inefficiency and propose a single change, such as a narrower context
-  profile. Compare it with M4's versioned baseline on protected cases, including
+  recurring inefficiency and propose a single change: a narrower context
+  profile record. Compare it with M4's versioned baseline on protected cases, including
   quality and human correction as well as latency and total cost. Authorise a
   limited promotion, complete reports with the new strategy, and monitor outcomes.
   Demonstrate rejection of a cheaper candidate that misses the quality bar and
   rollback after a detected regression. Use explicit human promotion initially;
   no general experiment platform or autonomous core release is a prerequisite.
+  A patch to the scheduler, policy, or admission checks is refused.
+  [docs/m5-improve-an-operating-strategy.md](docs/m5-improve-an-operating-strategy.md)
+  fixes the protocol, promotion, and rollback.
 
 Each milestone begins with its behavioral contract and failing deterministic
 checks before implementation. The full available suite must remain green as
@@ -554,22 +562,26 @@ scheduler, or host projects.
 - Authentication for future external authority channels. M1 fixes trusted local
   ingress handles and principal scope in its contract; this does not establish
   authentication for an eventual network or multi-user deployment.
-- What information a held-out failure may return to an implementer or corpus
-  author, and how many iteration rounds are permitted before held-out evidence is
-  considered spent (§8). Without this, iterative generation leaks the split.
 - The relationship between the gating suite and real providers: which checks run
   only against recorded or scripted routed units, and how non-gating evaluations
   against live models are recorded and reported.
 - Resource identity, effect scopes, and external preconditions supported by the
   first adapters; unsupported guarantees must be explicit.
-- The isolation mechanism and its verified support on deployment hosts.
+- Which deployment hosts can produce the M3 isolation report. The report's
+  required fields, the refusal when it cannot be produced, and the held-out
+  report (counts and failure codes, one per implementation revision) are fixed
+  in [docs/m3-fill-a-capability-gap.md](docs/m3-fill-a-capability-gap.md). A
+  supplied function is not executed.
 - Domain-specific success evidence and calibrated semantic evaluation thresholds.
 - Ranking, no-progress, and extension-payoff policies beyond the first fixtures.
 - Contract/view migration, persistence retention, and redaction mechanisms.
-- Experiment protocols, evidence sufficiency, and rollout thresholds for each
-  workload; the first milestone needs one declared protocol, not a universal score.
+- Experiment protocols, evidence sufficiency, and rollout thresholds for later
+  workloads. The first profile experiment's protocol, quality bar, and rollback
+  are fixed in [docs/m5-improve-an-operating-strategy.md](docs/m5-improve-an-operating-strategy.md).
+  That protocol is not a universal score.
 - The separately governed release and recovery mechanism for future control-core
-  changes; M5 proves operating-strategy promotion without enabling core mutation.
+  changes. M5 promotes one context-profile record and refuses a core patch;
+  it does not add that release path.
 
 The invariants above are the proposed architectural decisions. These open choices
 are implementation or empirical questions; they must not silently weaken the
