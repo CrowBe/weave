@@ -107,6 +107,78 @@ export async function loadKevOutcomes(): Promise<Map<string, KevOutcome>> {
   return out;
 }
 
+export interface PairedComparison {
+  /** Rows that had both a Jev outcome and a Kev outcome. */
+  readonly presentations: number;
+  /** Distinct ids whose presentations agreed. Repeated orderings count once. */
+  readonly cases: number;
+  /** Ids omitted because Jev's correctness moved across presentations. */
+  readonly unstable: number;
+  readonly both: number;
+  readonly jevOnly: number;
+  readonly kevOnly: number;
+  readonly neither: number;
+  /**
+   * McNemar's normal approximation without a continuity correction:
+   * `(jevOnly - kevOnly) / sqrt(jevOnly + kevOnly)`. Undefined when the two
+   * models never disagree, because that denominator is zero.
+   */
+  readonly z: number | undefined;
+}
+
+/**
+ * Pair Jev against Kev once per id.
+ *
+ * A permutation file repeats an id under several presentation orders. Those
+ * rows are one case. Counting each row as its own trial treats a stable
+ * disagreement as several independent ones and inflates z.
+ */
+export function comparePaired(
+  records: readonly { readonly id: string; readonly correct?: boolean }[],
+  kevCorrect: (id: string) => boolean | undefined,
+): PairedComparison {
+  const byId = new Map<string, boolean[]>();
+  let presentations = 0;
+  for (const record of records) {
+    if (record.correct === undefined) continue;
+    if (kevCorrect(record.id) === undefined) continue;
+    presentations += 1;
+    const list = byId.get(record.id);
+    if (list === undefined) byId.set(record.id, [record.correct]);
+    else list.push(record.correct);
+  }
+
+  let unstable = 0;
+  let both = 0;
+  let jevOnly = 0;
+  let kevOnly = 0;
+  let neither = 0;
+  for (const [id, flags] of byId) {
+    const first = flags[0];
+    if (first === undefined || flags.some((flag) => flag !== first)) {
+      unstable += 1;
+      continue;
+    }
+    const kev = kevCorrect(id) === true;
+    if (first && kev) both += 1;
+    else if (first) jevOnly += 1;
+    else if (kev) kevOnly += 1;
+    else neither += 1;
+  }
+
+  const disagree = jevOnly + kevOnly;
+  return {
+    presentations,
+    cases: both + jevOnly + kevOnly + neither,
+    unstable,
+    both,
+    jevOnly,
+    kevOnly,
+    neither,
+    z: disagree === 0 ? undefined : (jevOnly - kevOnly) / Math.sqrt(disagree),
+  };
+}
+
 /** The suite's question, minus the answer, in the gateway's vocabulary. */
 export function toGatewayQuestion(question: SuiteQuestion): { kind: EvaluationKind; question: EvaluationQuestion } {
   switch (question.type) {

@@ -69,9 +69,9 @@ test('a stable but wrong case is accepted; stability is not correctness', () => 
   assert.equal(report.accuracy_covered, 0);
 });
 
-test('a fitted threshold is reported against its held-out half', () => {
+test('a fitted threshold is reported against its test half', () => {
   // Confidence is informative on the train half and uninformative on the test
-  // half, so an in-sample reading must exceed the held-out one.
+  // half, so an in-sample reading must exceed the test half.
   const answers: OrderedAnswer[] = [];
   for (let i = 0; i < 40; i += 1) {
     const even = i % 2 === 0;
@@ -87,7 +87,7 @@ test('a fitted threshold is reported against its held-out half', () => {
   }
   const report = fitThreshold(answers, 0.25);
   assert.ok(report.train.accuracy_covered > report.test.accuracy_covered,
-    'the fitted half must flatter the threshold relative to the held-out half');
+    'the fitted half must flatter the threshold relative to the test half');
   assert.ok(report.in_sample.accuracy_covered >= report.test.accuracy_covered,
     'the in-sample figure is an upper bound on the honest one');
   assert.equal(report.train.n + report.test.n, answers.length, 'every record lands in exactly one half');

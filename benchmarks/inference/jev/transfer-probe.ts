@@ -11,6 +11,7 @@ import { dirname } from 'node:path';
 import type { Clock } from '@weave/gateway';
 import { createJevGateway, readCredentials } from './run.ts';
 import {
+  comparePaired,
   loadKevOutcomes,
   loadSuite,
   runSuiteRecord,
@@ -208,53 +209,63 @@ async function main(): Promise<void> {
   }
 
   const kev = await loadKevOutcomes();
-  console.log('\n  by source' + (kev.size > 0 ? '   (Kev = local 4B fp32 on the same records)' : ''));
+  console.log('\n  by source' + (kev.size > 0 ? '   (Kev = local 4B fp32, one row per case)' : ''));
   for (const source of [...new Set(scored.map((r) => r.source))].sort()) {
     const subset = scored.filter((r) => r.source === source);
-    const h = subset.filter((r) => r.correct === true).length;
-    const paired = subset.filter((r) => kev.has(r.id));
-    const kevHits = paired.filter((r) => kev.get(r.id)!.correct).length;
-    const kevCell =
-      paired.length === 0 ? '     —' : pct(kevHits / paired.length);
+    const firstPerCase: TransferRecord[] = [];
+    const seen = new Set<string>();
+    for (const record of subset) {
+      if (seen.has(record.id)) continue;
+      seen.add(record.id);
+      firstPerCase.push(record);
+    }
+    const h = firstPerCase.filter((r) => r.correct === true).length;
+    const withKev = firstPerCase.filter((r) => kev.has(r.id));
+    const kevHits = withKev.filter((r) => kev.get(r.id)!.correct).length;
+    const kevCell = withKev.length === 0 ? '     —' : pct(kevHits / withKev.length);
     console.log(
-      `    ${source.padEnd(28)} n=${String(subset.length).padStart(3)}  jev ${pct(
-        h / subset.length,
-      )}  kev ${kevCell}  uniform ${pct(uniformFloor(subset))}  majority ${pct(majorityFloor(subset))}`,
+      `    ${source.padEnd(28)} n=${String(firstPerCase.length).padStart(3)}  jev ${pct(
+        firstPerCase.length === 0 ? 0 : h / firstPerCase.length,
+      )}  kev ${kevCell}  uniform ${pct(uniformFloor(firstPerCase))}  majority ${pct(majorityFloor(firstPerCase))}`,
     );
   }
 
-  const paired = scored.filter((r) => kev.has(r.id));
-  if (paired.length > 0) {
-    let both = 0;
-    let jevOnly = 0;
-    let kevOnly = 0;
-    let neither = 0;
-    for (const r of paired) {
-      const k = kev.get(r.id)!.correct;
-      if (r.correct === true && k) both += 1;
-      else if (r.correct === true) jevOnly += 1;
-      else if (k) kevOnly += 1;
-      else neither += 1;
+  const paired = comparePaired(scored, (id) => kev.get(id)?.correct);
+  if (paired.cases > 0) {
+    const kevAcc = (paired.both + paired.kevOnly) / paired.cases;
+    const jevAcc = (paired.both + paired.jevOnly) / paired.cases;
+    console.log(`\n  paired against Kev on ${paired.cases} cases`);
+    if (paired.presentations !== paired.cases || paired.unstable > 0) {
+      console.log(
+        `    presentations   ${paired.presentations} rows; repeated ids count once` +
+          (paired.unstable > 0 ? `; ${paired.unstable} unstable case(s) omitted` : ''),
+      );
     }
-    const kevAcc = paired.filter((r) => kev.get(r.id)!.correct).length / paired.length;
-    const jevAcc = paired.filter((r) => r.correct === true).length / paired.length;
-    const disagree = jevOnly + kevOnly;
-    console.log(`\n  paired against Kev on ${paired.length} identical records`);
     console.log(`    hosted Jev ${pct(jevAcc)}   local Kev ${pct(kevAcc)}`);
     console.log(
-      `    both right ${both}   jev only ${jevOnly}   kev only ${kevOnly}   neither ${neither}`,
+      `    both right ${paired.both}   jev only ${paired.jevOnly}   kev only ${paired.kevOnly}   neither ${paired.neither}`,
     );
-    if (disagree > 0) {
-      // McNemar, normal approximation. Small counts make this indicative only.
-      const z = (jevOnly - kevOnly) / Math.sqrt(disagree);
+    if (paired.z !== undefined) {
+      const disagree = paired.jevOnly + paired.kevOnly;
       console.log(
-        `    they disagree on ${disagree}; McNemar z = ${z.toFixed(2)} ${
-          Math.abs(z) < 1.96 ? '(not significant at 0.05)' : '(significant at 0.05)'
+        `    they disagree on ${disagree}; McNemar z = ${paired.z.toFixed(2)} ${
+          Math.abs(paired.z) < 1.96 ? '(not significant at 0.05)' : '(significant at 0.05)'
         }`,
       );
     }
-    const kevLat = paired.map((r) => kev.get(r.id)!.latency_ms).sort((a, b) => a - b);
-    const jevLat = paired.map((r) => r.latency_ms).sort((a, b) => a - b);
+    const seen = new Set<string>();
+    const kevLat: number[] = [];
+    const jevLat: number[] = [];
+    for (const record of scored) {
+      if (record.correct === undefined || seen.has(record.id)) continue;
+      const outcome = kev.get(record.id);
+      if (outcome === undefined) continue;
+      seen.add(record.id);
+      kevLat.push(outcome.latency_ms);
+      jevLat.push(record.latency_ms);
+    }
+    kevLat.sort((a, b) => a - b);
+    jevLat.sort((a, b) => a - b);
     const med = (xs: readonly number[]): number => xs[Math.floor(xs.length / 2)] ?? 0;
     console.log(
       `    median latency: hosted ${med(jevLat).toFixed(0)} ms vs local ${med(kevLat).toFixed(0)} ms ` +
