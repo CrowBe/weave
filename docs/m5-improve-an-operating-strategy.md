@@ -140,7 +140,9 @@ Record demonstrated red and green against the exact contract revisions.
 ## 6. Assumptions recorded
 
 - One profile record is the whole operating-strategy change. Routing,
-  scheduling, and information-gathering experiments are later milestones.
+  catalogue disclosure, read-set destinations, and shared slice assembly are
+  [M6](m6-route-a-reconstructed-view.md). M5's cache-miss delta stays a fixture
+  constant.
 - The gating suite compares fixture measurements. It does not call a live
   model to decide promotion.
 - Human promotion is the only promotion authority in this milestone.

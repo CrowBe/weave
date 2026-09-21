@@ -230,6 +230,10 @@ contract, tests and implementation revisions. Documentation alone proves neither
   misses the quality bar.
   [docs/m4-measure-reuse.md](m4-measure-reuse.md),
   [docs/m5-improve-an-operating-strategy.md](m5-improve-an-operating-strategy.md).
+- M6: prefix-cache routing, a catalogue index separate from schemas, destinations
+  narrowed from the read set, and one slice assembly shared by a read-only
+  review. The review cannot promote or grant.
+  [docs/m6-route-a-reconstructed-view.md](m6-route-a-reconstructed-view.md).
 - H1: the log rejects an oversize, cut, or duplicate observation before it is
   durable, and a second runtime cannot attach to the same host store.
   [docs/h1-bound-the-log.md](h1-bound-the-log.md).

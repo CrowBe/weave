@@ -24,6 +24,10 @@ A recorded input that may support a state transition: user input, a capability r
 
 A named, versioned, budgeted query over state. Views — state views, context bundles, typed capability inputs — are composed from slices, with deterministic selection, disclosed truncation, and a manifest recording what actually filled each one so a recorded judgment can be reproduced.
 
+### Slice assembly
+
+The recorded fill of one or more slices at one state revision. Every view that uses those slices cites the same assembly. Its cost is counted once. An assembly does not grant disclosure; each consumer still receives its own view.
+
 ### Read set
 
 The state or resource revisions on which an action candidate’s binding depends. Read sets support validity checks before dispatch, on result arrival, and when derived conclusions are reused.
@@ -124,7 +128,11 @@ A versioned context profile, prompt template, model, and settings selected toget
 
 ### Routing
 
-The deterministic selection step inside the gateway. It minimizes expected total cost of reaching the declared quality bar — retries and escalation included — using recorded per-site success rates, cost, latency, privacy, and context limits.
+The deterministic selection step inside the gateway. It minimizes expected total cost of reaching the declared quality bar — retries and escalation included — using recorded per-site success rates, cost, latency, privacy, and context limits. When a prefix cache is supplied, that cost includes a hit discount or one reload.
+
+### Prefix cache
+
+A recorded match between one routed unit and the digest of a view's stable prefix, together with a cached token count. A matching digest discounts that unit's input cost. A different unit or digest is one reload at the selected unit's input price. With no record, input cost stays the cold window. A prefix cache is not a cached conclusion, a provider bill, or authority.
 
 ### Generative implementation
 
@@ -299,6 +307,8 @@ The record of where a contract, test, or implementation came from, including sou
 - Say **state view**, not *prompt* or *context*, for what the decision layer receives.
 - Say **judgment site**, not *Jev*, for a place the runtime asks for judgment. Jev is a model type.
 - Say **routed unit**, not *model*, for what routing selects.
+- Say **prefix cache**, not *KV cache* or *cached conclusion*, for recorded reuse of a view prefix by one routed unit.
+- Say **slice assembly**, not *shared context*, for one recorded fill of slices at a revision.
 - Say **inference role** for why an inference was requested, and **inference kind** for what was asked of the model. They are not interchangeable.
 - Name a capability for its operation, never for the inference kind behind it: `text.classify`, not `request_text_classification`.
 - Say **action candidate**, not *option*, for a validated, bound action.
