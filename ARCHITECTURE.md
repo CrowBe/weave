@@ -537,7 +537,18 @@ consequential behavior. (*Slice* is reserved for the state-query term in
   no general experiment platform or autonomous core release is a prerequisite.
   A patch to the scheduler, policy, or admission checks is refused.
   [docs/m5-improve-an-operating-strategy.md](docs/m5-improve-an-operating-strategy.md)
-  fixes the protocol, promotion, and rollback.
+  fixes the protocol, promotion, and rollback. An empty view and a view that
+  drops a required operation miss the quality bar. Cost counts each reserved
+  amount once, and a stable-prefix change is a recorded cache miss.
+
+After M5, one hardening step bounds the log itself. M3 bounds a single
+capability output, gives the untrusted tier no path to the host process, and
+keeps admission as a single host-store record. It does not bound every
+observation. [docs/h1-bound-the-log.md](docs/h1-bound-the-log.md) rejects an
+oversize or mid-value payload before it is durable, rejects a duplicate
+observation id, refuses a second runtime on the same host store, and keeps
+trace retention off the state-transition lock. H1 is not a milestone and adds
+no goal outcome.
 
 Each milestone begins with its behavioral contract and failing deterministic
 checks before implementation. The full available suite must remain green as
@@ -575,6 +586,9 @@ scheduler, or host projects.
 - Domain-specific success evidence and calibrated semantic evaluation thresholds.
 - Ranking, no-progress, and extension-payoff policies beyond the first fixtures.
 - Contract/view migration, persistence retention, and redaction mechanisms.
+  [H1](docs/h1-bound-the-log.md) fixes the byte bound, duplicate observation
+  identity, and the rule that trace eviction stays off the state-transition
+  lock. It does not choose the retention period.
 - Experiment protocols, evidence sufficiency, and rollout thresholds for later
   workloads. The first profile experiment's protocol, quality bar, and rollback
   are fixed in [docs/m5-improve-an-operating-strategy.md](docs/m5-improve-an-operating-strategy.md).

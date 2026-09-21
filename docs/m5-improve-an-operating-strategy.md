@@ -30,6 +30,10 @@ M5 proves:
   changes future selection and does not undo a completed effect.
 - The author of the candidate does not edit the protected cases or the
   quality bar to make the candidate pass.
+- A view that renders and is empty, or that drops an operation the
+  composition needs, misses the quality bar.
+- Cost counts each reserved micros once. A candidate that changes the stable
+  prefix of an otherwise identical view pays for that cache miss.
 
 No general experiment platform and no control-core release path are required.
 Refusing a core patch is part of the proof.
@@ -47,10 +51,15 @@ FrameProfile {
 }
 ```
 
-It must still disclose every operation the recorded composition needs. A
-profile that omits `text.normalize` or `source.inspect` fails the quality
-bar even if it is cheaper. The renderer already takes the profile as data;
-selecting the narrow record is not an edit to the control core.
+It must still disclose every operation the recorded composition needs, as
+ids and input shapes. Purpose prose is not added to make the profile look
+complete. A profile that omits `text.normalize` or `source.inspect` fails
+the quality bar even if it is cheaper. An empty `content` payload fails the
+bar even when the renderer returned. The renderer already takes the profile
+as data; selecting the narrow record is not an edit to the control core.
+
+The comparison deadline stays the recorded tick. Provider liveness, including
+a keepalive, does not move it.
 
 An experiment whose candidate is a change to the scheduler, the policy
 checks, the admission checks, or the procedure union is refused before
@@ -68,9 +77,10 @@ Experiment {
   workload:            M4's repeated goals, including the failing case
   protected_cases:     [case ids]
   quality_bar:         M4 success evidence, unchanged
-  measures:            [quality, human_corrections, latency_ticks, cost_micros]
+  measures:            [quality, human_corrections, latency_ticks, cost_micros, prefix_stable]
   promotion:           quality holds AND human_corrections do not increase
                        AND (latency_ticks or cost_micros improves)
+                       AND an empty view is a quality miss
   budget:              { judgments, cost }
   rollback:            "profile.frame@1"
 }
@@ -80,6 +90,13 @@ Results recorded before this observation cannot support promotion. Changing
 the quality bar, the protected cases, or the success evidence after results
 exist invalidates the comparison. Deleting a protected case that the
 candidate fails is rejected.
+
+`cost_micros` counts each reserved micros once. `prefix_stable` is true when
+the bytes of the view that would form a cache prefix match the baseline for
+the same goal inputs. A candidate that changes those bytes records one cache
+miss and includes it in `cost_micros`. The same tokens are not added again
+because a cache read them. The fixture represents that miss as a recorded
+cost delta, not as a live provider bill.
 
 ## 4. Promotion and rollback
 
@@ -111,11 +128,12 @@ ticks.
 | --- | --- | --- |
 | M5-T01 | Protocol recorded, then the narrow profile compared with the M4 baseline | The protocol observation's sequence is earlier than every comparative result. The candidate profile id is `profile.frame.narrow@1`. No scheduler, policy, admission, or procedure-union source change is part of the candidate. |
 | M5-T02 | Narrow profile still discloses the composition's operations and meets the promotion rule | Operator promotion activates it for the declared workload. Later goals frame with that profile. Success evidence is unchanged. No execution grant is issued by the promotion. |
-| M5-T03 | Candidate is cheaper and misses the quality bar, or increases human corrections | Promotion is refused. The active profile remains `profile.frame@1`. |
+| M5-T03 | Candidate is cheaper and misses the quality bar, or increases human corrections | Promotion is refused. The active profile remains `profile.frame@1`. An empty view, and a view that drops `source.inspect` or `text.normalize`, are quality misses even though rendering returned. |
 | M5-T04 | Protected case removed or quality bar lowered after results exist | The comparison is invalid and cannot promote. |
 | M5-T05 | Promotion, then a protected case regresses | Future goals use the baseline profile. The in-flight goal keeps the profile on its recorded framing view. Completed publication is not reversed. |
 | M5-T06 | Candidate is presented as a patch to admission or the procedure union | Evaluation does not start. The patch is not applied. |
 | M5-T07 | Replay of the promoted run | Observations match. Replay uses the profile recorded on the view, not today's active profile. The host and gateway are not invoked. |
+| M5-T08 | Candidate changes only the stable prefix bytes and is otherwise identical | `prefix_stable` is false. `cost_micros` includes one cache-miss delta and does not count those tokens a second time. A keepalive during the comparison does not move the recorded deadline. |
 
 Record demonstrated red and green against the exact contract revisions.
 
@@ -126,3 +144,5 @@ Record demonstrated red and green against the exact contract revisions.
 - The gating suite compares fixture measurements. It does not call a live
   model to decide promotion.
 - Human promotion is the only promotion authority in this milestone.
+- The cache-miss delta is a fixture constant recorded on the attempt. M5
+  does not integrate a provider's prompt-cache bill.

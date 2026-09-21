@@ -36,6 +36,14 @@ M3 proves:
   same operation while its contract still exists.
 - A retained procedure may be cited by a proposal. It is not admission
   evidence and cannot skip red or green.
+- The untrusted tier cannot reach the host process. Its broker has no sleep,
+  poll, or restart. A dependency that ends without a result is `failed` or
+  `uncertain`, and the parent is not left parked.
+- The host store is the single writer of admission. The log records the
+  observation. Restart uses the stored admission and does not crystallize again.
+- A null, empty, or mid-value output is `failed`. An output over the declared
+  byte bound is truncated on a value boundary or refused, and the raw bytes
+  are not the observation.
 
 No general experiment platform, multi-implementation router, or control-core
 release is required. Fixture generators are enough for the gating suite.
@@ -126,6 +134,7 @@ IsolationReport {
   filesystem:        none
   credentials:       none
   held_out_mounted:  false
+  host_process:      unreachable
   broker:            resolver-context
   limits:            { memory_bytes, cpu_ms }
 }
@@ -133,8 +142,18 @@ IsolationReport {
 
 The child receives a broker, not the host's in-process resolver context.
 Resource operations are checked against the invocation grant. An unbound
-context does not read or write. If the host cannot produce the report, it
-does not start the child and the attempt is `RESOLVER_UNAVAILABLE`.
+context does not read or write. The broker offers `read`, `write`, and
+declared `invoke` only. Sleep, poll, and restart are absent, so waiting is
+an observation the runtime records rather than a loop inside the child. If
+the host cannot produce the report, it does not start the child and the
+attempt is `RESOLVER_UNAVAILABLE`.
+
+A dependency that ends without a result — including a child that dies
+without an outcome — is `failed` or `uncertain`. The parent records that
+outcome and continues. Child completion and parent cancellation take effect
+locks in one order: the child's terminal outcome is recorded before the
+parent's lock is released. One runtime owns the host. A second scheduler
+does not attach to it.
 
 ## 6. Evidence and revocation
 
@@ -147,8 +166,31 @@ historical inspection, and rejects invocation. Candidate formation treats it
 as unavailable. It does not describe the operation as unknown and does not
 open a second gap for the same id.
 
+The host store is the only writer of admission, resolution, and
+implementation identity. Weave's log records the admitting observation and
+is authoritative for replay. On restart the host store decides whether the
+implementation may be invoked. A second in-memory copy that disagrees is
+ignored, and crystallization does not run again because the goal is active.
+
+```text
+OutputBound {
+  max_bytes:     integer
+  disposition:   truncated | refused
+  boundary:      value
+  omitted:       { reason: "budget" }
+}
+```
+
+`text.normalize` declares `max_bytes`. A null output, an empty output for a
+non-empty input, or a value cut mid-encoding is `failed`, not `succeeded`
+with an empty body. An output over `max_bytes` is truncated on a whole value
+or refused. The omission is recorded. The raw oversize bytes are not appended
+to the log. The log-wide bound for every observation, and rejection of a
+duplicate or repeated failure on recovery, are the follow-up hardening step
+[H1](h1-bound-the-log.md).
+
 Replay reconstructs the milestone from the log. It does not run generated
-code, the gateway, or admission.
+code, the gateway, or admission. An oversize body is not required for replay.
 
 ## 7. Required deterministic checks
 
@@ -166,7 +208,11 @@ injected ticks. Do not sleep on the wall clock. Retain every M0–M2 check.
 | M3-T07 | Human admission, then the goal's use of `text.normalize` | Admission does not include an execution grant. The goal's invocation carries a separate grant. A revoked implementation is refused, remains historically describable, and does not open a new gap. |
 | M3-T08 | Retained procedure text names `text.normalize` before admission | The proposal may cite it. It is not `resolved`, not invocable, and does not skip red or green. |
 | M3-T09 | Two corpus cases authored concurrently, and two implementation candidates after red | Their observations may interleave. Implementation generation requested before red is rejected. Admission requested before green is rejected. |
-| M3-T10 | Replay the crystallized run | Replayed observations match. Generated code, the gateway, and the host invocation count stay at zero during replay. |
+| M3-T10 | Replay the crystallized run | Replayed observations match. Generated code, the gateway, and the host invocation count stay at zero during replay. Replay does not need an oversize raw body. |
+| M3-T11 | Output is null, empty for a non-empty input, or cut mid-value | The invocation outcome is `failed`. It is not `succeeded` with an empty body. |
+| M3-T12 | Output exceeds `max_bytes` | The result is truncated on a value boundary or refused. The omission reason is `budget`. The raw bytes are absent from the log, and replay still completes. |
+| M3-T13 | The child requests sleep, poll, or a signal to the host; a dependency ends with no result | The broker refuses the request. The isolation report records `host_process: unreachable`. The parent records `failed` or `uncertain` and is not left running. |
+| M3-T14 | Restart after admission, with a second in-memory copy that disagrees | Invocation follows the host store. Crystallization does not start again. The disagreeing copy is not consulted. |
 
 Package-direction checks stay as in M2. Record demonstrated red and green
 against the exact contract, tests, and implementation revisions.
@@ -182,3 +228,7 @@ against the exact contract, tests, and implementation revisions.
   budget. There is no second, richer disclosure.
 - The isolation double in the gating suite must be able to fail closed. A
   passing label without the report fields does not count.
+- `max_bytes` for the fixture is small enough that an oversize case is an
+  ordinary test, not a multi-megabyte allocation.
+- Lock order is child terminal outcome, then release of the parent's effect
+  lock. M3 does not introduce a second lock protocol.

@@ -226,9 +226,13 @@ contract, tests and implementation revisions. Documentation alone proves neither
   not an admitted implementation.
   [docs/m3-fill-a-capability-gap.md](m3-fill-a-capability-gap.md).
 - M4/M5: freshness-aware reuse, a baseline that includes failures, and one
-  profile experiment.
+  profile experiment. Short conclusions are not exempt, and an empty view
+  misses the quality bar.
   [docs/m4-measure-reuse.md](m4-measure-reuse.md),
   [docs/m5-improve-an-operating-strategy.md](m5-improve-an-operating-strategy.md).
+- H1: the log rejects an oversize, cut, or duplicate observation before it is
+  durable, and a second runtime cannot attach to the same host store.
+  [docs/h1-bound-the-log.md](h1-bound-the-log.md).
 - Client delivery, nested-work capacity and external transport authentication
   gain their own checks when those surfaces are introduced.
 
