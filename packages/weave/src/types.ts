@@ -14,7 +14,7 @@ export type ResourceId = string;
 // §3 Observation envelope
 // ---------------------------------------------------------------------------
 
-export type ProvenanceKind = 'runtime' | 'host' | 'judgment' | 'clock' | 'operator' | 'test';
+export type ProvenanceKind = 'runtime' | 'host' | 'judgment' | 'clock' | 'operator' | 'test' | 'gateway';
 
 export interface Provenance {
   readonly kind: ProvenanceKind;
@@ -49,7 +49,8 @@ export interface Goal {
   readonly sources: readonly ResourceId[];
   readonly destination?: ResourceId;
   readonly authority: { readonly read: readonly ResourceId[]; readonly write?: readonly ResourceId[] };
-  readonly budget: { readonly actions: number; readonly judgments: number; readonly recovery?: number };
+  readonly framing?: boolean;
+  readonly budget: { readonly actions: number; readonly judgments: number; readonly recovery?: number; readonly cost?: number };
   readonly success_evidence: string;
 }
 
@@ -74,6 +75,7 @@ export interface WeightsRecordedPayload {
   readonly state_revision: Seq;
   readonly candidate_set: string;
   readonly weights: readonly WeightEntry[];
+  readonly request_id?: string;
 }
 
 export interface Reservation {
@@ -158,6 +160,79 @@ export interface CapabilityDescribedPayload {
   readonly contract: unknown;
 }
 
+export interface ViewOmission {
+  readonly name: string;
+  readonly reason: string;
+}
+
+export interface ViewSliceManifest {
+  readonly name: string;
+  readonly revisions: readonly Seq[];
+  readonly truncated: boolean;
+  readonly omitted: readonly ViewOmission[];
+}
+
+export interface StateView {
+  readonly profile: string;
+  readonly profile_version: number;
+  readonly state_revision: Seq;
+  readonly content: unknown;
+  readonly manifest: { readonly slices: readonly ViewSliceManifest[] };
+}
+
+export interface InferenceTermsRecord {
+  readonly quality: string;
+  readonly destinations: readonly string[];
+  readonly max_context_tokens: number;
+  readonly deadline: number;
+  readonly cost_ceiling: number;
+  readonly max_attempts: number;
+}
+
+export interface InferenceRequestedPayload {
+  readonly request_id: string;
+  readonly site: 'frontier.weigh' | 'goal.frame';
+  readonly role: 'framing' | 'working';
+  readonly kind: string;
+  readonly view: StateView;
+  readonly state_revision: Seq;
+  readonly candidate_set: string | null;
+  readonly terms: InferenceTermsRecord;
+  readonly reservation: { readonly judgments: number; readonly cost: number };
+}
+
+export interface InferenceAttemptRecord {
+  readonly attempt: number;
+  readonly routed_unit_id: string;
+  readonly cost: number;
+  readonly cost_is_upper_bound: boolean;
+  readonly disposition: unknown;
+}
+
+export interface InferenceRecordedPayload {
+  readonly request_id: string;
+  readonly attempts: readonly InferenceAttemptRecord[];
+  readonly spent: number;
+  readonly status: 'accepted' | 'unaccepted' | 'blocked';
+  readonly reason: string | null;
+}
+
+export interface ProposedBinding {
+  readonly operation: string;
+  readonly inputs: unknown;
+}
+
+export interface RejectedBinding {
+  readonly operation: string;
+  readonly inputs: unknown;
+  readonly reason: string;
+}
+
+export interface Proposal {
+  readonly bindings: readonly ProposedBinding[];
+  readonly rejected: readonly RejectedBinding[];
+}
+
 export interface PublishReceipt {
   readonly invocation_id: string;
   readonly report_digest: string;
@@ -181,6 +256,8 @@ export const PAYLOAD_TYPES = [
   'capability.described',
   'recovery.attempted',
   'recovery.exhausted',
+  'inference.requested',
+  'inference.recorded',
 ] as const;
 export type PayloadType = (typeof PAYLOAD_TYPES)[number];
 
@@ -215,6 +292,7 @@ export interface BudgetLine {
 export interface Budget {
   readonly actions: BudgetLine;
   readonly judgments: BudgetLine;
+  readonly cost: BudgetLine;
 }
 
 export interface SourceState {
@@ -237,6 +315,8 @@ export interface State {
   readonly approvals: Readonly<Record<string, ApprovalRecord>>;
   readonly contracts: Readonly<Record<string, unknown>>;
   readonly recovery: { readonly limit: number; readonly spent: number };
+  readonly proposal: { readonly proposal: Proposal; readonly evidence: Seq } | null;
+  readonly inferences: Readonly<Record<string, InferenceRecord>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -302,7 +382,14 @@ export interface Candidate {
 // §9 Trace
 // ---------------------------------------------------------------------------
 
-export type ProcedureId = 'inspect_and_report@1' | 'inspect_report_publish@1';
+export type ProcedureId = 'inspect_and_report@1' | 'inspect_report_publish@1' | 'frame_and_report@1';
+
+export interface InferenceRecord {
+  readonly request_id: string;
+  readonly request: InferenceRequestedPayload;
+  readonly recorded: InferenceRecordedPayload | null;
+  readonly evidence: readonly Seq[];
+}
 
 export interface ApprovalRecord {
   readonly request_id: string;
@@ -351,11 +438,23 @@ export interface WeighRequest {
   readonly candidate_set: string;
   /** The eligible candidates only. Prohibited candidates never reach a judgment site. */
   readonly candidates: readonly Candidate[];
+  readonly view?: StateView;
+}
+
+export interface WeighResult {
+  readonly weights: readonly WeightEntry[];
+  readonly attempts?: readonly InferenceAttemptRecord[];
+  readonly spent?: number;
+  readonly status?: 'accepted' | 'unaccepted' | 'blocked';
+  readonly reason?: string;
+  readonly implementation?: string;
 }
 
 export interface DecisionLayer {
   readonly implementation: string;
-  weigh(request: WeighRequest): readonly WeightEntry[];
+  /** Gateway weighing is asynchronous; scripted weighing is not. */
+  readonly async?: boolean;
+  weigh(request: WeighRequest): readonly WeightEntry[] | Promise<WeighResult>;
 }
 
 // ---------------------------------------------------------------------------

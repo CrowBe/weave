@@ -1,5 +1,5 @@
 import { selectorsEqual } from './refs.js';
-import type { CapabilityContract } from './contracts.js';
+import { INFERENCE_ROLES, type CapabilityContract } from './contracts.js';
 import type { FailureCode } from './failures.js';
 
 export type CatalogueResult =
@@ -25,6 +25,13 @@ export function validateCatalogue(contracts: readonly CapabilityContract[]): Cat
     for (const dep of contract.depends_on) {
       if (!byId.has(dep)) {
         return fail(`${contract.id} depends on missing ${dep}`);
+      }
+    }
+    const inference = contract.inference;
+    if (inference) {
+      const inferenceError = invalidInference(contract.id, inference);
+      if (inferenceError) {
+        return fail(inferenceError);
       }
     }
   }
@@ -56,6 +63,28 @@ export function validateCatalogue(contracts: readonly CapabilityContract[]): Cat
     }
   }
   return { ok: true };
+}
+
+function invalidInference(id: string, inference: NonNullable<CapabilityContract['inference']>): string | null {
+  if (!inference.kind || typeof inference.kind !== 'string') {
+    return `${id}: inference.kind must be a non-empty string`;
+  }
+  if (!(INFERENCE_ROLES as readonly string[]).includes(inference.role)) {
+    return `${id}: inference.role must be framing, working, or extension`;
+  }
+  if (!Number.isInteger(inference.max_cost) || inference.max_cost < 0) {
+    return `${id}: inference.max_cost must be a non-negative integer`;
+  }
+  if (!Array.isArray(inference.destinations) || inference.destinations.length === 0) {
+    return `${id}: inference.destinations must be a non-empty list`;
+  }
+  if (inference.destinations.some((d) => typeof d !== 'string' || d.length === 0)) {
+    return `${id}: inference.destinations must be non-empty strings`;
+  }
+  if (!Number.isInteger(inference.max_attempts) || inference.max_attempts < 1) {
+    return `${id}: inference.max_attempts must be a positive integer`;
+  }
+  return null;
 }
 
 function fail(reason: string): { ok: false; code: 'INVALID_CATALOGUE'; reason: string } {

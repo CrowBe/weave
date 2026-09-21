@@ -14,10 +14,10 @@ const EXPECTED_SOURCE: Readonly<Record<PayloadType, readonly ProvenanceKind[]>> 
   'source.registered': ['test'],
   'source.changed': ['test'],
   'clock.tick': ['clock'],
-  'weights.recorded': ['judgment'],
+  'weights.recorded': ['judgment', 'gateway'],
   'action.started': ['runtime'],
   'action.queued': ['runtime'],
-  'action.result': ['host', 'runtime'],
+  'action.result': ['host', 'runtime', 'gateway'],
   'action.reconciled': ['host', 'runtime'],
   'action.cancel_requested': ['operator', 'runtime'],
   'approval.requested': ['runtime'],
@@ -25,6 +25,8 @@ const EXPECTED_SOURCE: Readonly<Record<PayloadType, readonly ProvenanceKind[]>> 
   'capability.described': ['runtime'],
   'recovery.attempted': ['runtime'],
   'recovery.exhausted': ['runtime'],
+  'inference.requested': ['runtime'],
+  'inference.recorded': ['gateway'],
 };
 
 function rejected(reason: string): Validation {
@@ -125,6 +127,10 @@ export function validate(input: ObservationInput, state: State): Validation {
       return isNonEmptyString(payload['operation']) && payload['contract'] !== undefined
         ? ACCEPTED
         : rejected('capability.described requires operation and contract');
+    case 'inference.requested':
+      return validateInferenceRequested(payload, state);
+    case 'inference.recorded':
+      return validateInferenceRecorded(payload, state);
   }
 }
 
@@ -149,12 +155,18 @@ function validateGoal(payload: Record<string, unknown>, state: State): Validatio
   if (payload['destination'] !== undefined && !isNonEmptyString(payload['destination'])) {
     return rejected('goal.destination must be a resource id');
   }
+  if (payload['framing'] !== undefined && payload['framing'] !== true && payload['framing'] !== false) {
+    return rejected('goal.framing must be a boolean');
+  }
   if (!isReservation(payload['budget'])) {
     return rejected('goal.budget must give non-negative integer actions and judgments');
   }
   const budget = payload['budget'] as Record<string, unknown>;
   if (budget['recovery'] !== undefined && !isNonNegativeInteger(budget['recovery'])) {
     return rejected('goal.budget.recovery must be a non-negative integer');
+  }
+  if (budget['cost'] !== undefined && !isNonNegativeInteger(budget['cost'])) {
+    return rejected('goal.budget.cost must be a non-negative integer');
   }
   if (typeof payload['success_evidence'] !== 'string') {
     return rejected('goal requires success_evidence');
@@ -370,9 +382,76 @@ function validateOutput(operation: string, inputs: unknown, output: unknown): Va
       }
       return ACCEPTED;
     }
+    case 'goal.frame': {
+      if (!isRecord(output) || !Array.isArray(output['bindings']) || !Array.isArray(output['rejected'])) {
+        return rejected('goal.frame output is not a Proposal');
+      }
+      return ACCEPTED;
+    }
     default:
       return ACCEPTED;
   }
+}
+
+function validateInferenceRequested(payload: Record<string, unknown>, state: State): Validation {
+  if (!isNonEmptyString(payload['request_id'])) {
+    return rejected('inference.requested requires request_id');
+  }
+  if (state.inferences[payload['request_id'] as string]?.recorded === null && state.inferences[payload['request_id'] as string]) {
+    return rejected('inference request is already pending');
+  }
+  const site = payload['site'];
+  if (site !== 'frontier.weigh' && site !== 'goal.frame') {
+    return rejected('unknown inference site');
+  }
+  if (payload['role'] !== 'framing' && payload['role'] !== 'working') {
+    return rejected('inference.requested requires a role');
+  }
+  if (!isNonEmptyString(payload['kind'])) {
+    return rejected('inference.requested requires a kind');
+  }
+  if (!isRecord(payload['view']) || !isNonEmptyString(payload['view']['profile'])) {
+    return rejected('inference.requested requires a state view');
+  }
+  if (!isNonNegativeInteger(payload['state_revision'])) {
+    return rejected('inference.requested requires state_revision');
+  }
+  const reservation = payload['reservation'];
+  if (!isRecord(reservation) || !isNonNegativeInteger(reservation['judgments']) || !isNonNegativeInteger(reservation['cost'])) {
+    return rejected('inference.requested requires a reservation');
+  }
+  const { judgments, cost } = state.budget;
+  if (
+    (reservation['judgments'] as number) > judgments.limit - judgments.reserved - judgments.spent ||
+    (reservation['cost'] as number) > cost.limit - cost.reserved - cost.spent
+  ) {
+    return rejected('inference reservation exceeds the available budget');
+  }
+  return ACCEPTED;
+}
+
+function validateInferenceRecorded(payload: Record<string, unknown>, state: State): Validation {
+  if (!isNonEmptyString(payload['request_id'])) {
+    return rejected('inference.recorded requires request_id');
+  }
+  const existing = state.inferences[payload['request_id'] as string];
+  if (!existing) {
+    return rejected('inference.recorded names an unknown request');
+  }
+  if (existing.recorded) {
+    return rejected('inference request is already recorded');
+  }
+  if (!Array.isArray(payload['attempts'])) {
+    return rejected('inference.recorded requires attempts');
+  }
+  if (!isNonNegativeInteger(payload['spent'])) {
+    return rejected('inference.recorded requires spent');
+  }
+  const status = payload['status'];
+  if (status !== 'accepted' && status !== 'unaccepted' && status !== 'blocked') {
+    return rejected('unknown inference status');
+  }
+  return ACCEPTED;
 }
 
 function validateApprovalRequest(payload: Record<string, unknown>, state: State): Validation {

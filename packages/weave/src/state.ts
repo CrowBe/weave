@@ -14,8 +14,12 @@ import type {
   CapabilityDescribedPayload,
   ClockTickPayload,
   Goal,
+  InferenceRecord,
+  InferenceRecordedPayload,
+  InferenceRequestedPayload,
   InspectionResult,
   Observation,
+  Proposal,
   PublishReceipt,
   Report,
   ResourceReadSetEntry,
@@ -34,11 +38,13 @@ interface MutableState {
   inspections: Record<string, { result: InspectionResult; evidence: Seq }>;
   report: { report: Report; evidence: Seq[] } | null;
   publication: { receipt: PublishReceipt; evidence: Seq } | null;
-  budget: { actions: Mutable<BudgetLine>; judgments: Mutable<BudgetLine> };
+  budget: { actions: Mutable<BudgetLine>; judgments: Mutable<BudgetLine>; cost: Mutable<BudgetLine> };
   clock: { tick: number; evidence: Seq | null };
   approvals: Record<string, Mutable<ApprovalRecord> & { evidence: Seq[] }>;
   contracts: Record<string, unknown>;
   recovery: { limit: number; spent: number };
+  proposal: { proposal: Proposal; evidence: Seq } | null;
+  inferences: Record<string, Mutable<InferenceRecord> & { evidence: Seq[] }>;
 }
 
 export function initialState(): MutableState {
@@ -53,11 +59,14 @@ export function initialState(): MutableState {
     budget: {
       actions: { limit: 0, reserved: 0, spent: 0 },
       judgments: { limit: 0, reserved: 0, spent: 0 },
+      cost: { limit: 0, reserved: 0, spent: 0 },
     },
     clock: { tick: 0, evidence: null },
     approvals: {},
     contracts: {},
     recovery: { limit: 0, spent: 0 },
+    proposal: null,
+    inferences: {},
   };
 }
 
@@ -76,6 +85,7 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
       state.budget = {
         actions: { limit: goal.budget.actions, reserved: 0, spent: 0 },
         judgments: { limit: goal.budget.judgments, reserved: 0, spent: 0 },
+        cost: { limit: goal.budget.cost ?? 0, reserved: 0, spent: 0 },
       };
       state.recovery = { limit: goal.budget.recovery ?? 0, spent: 0 };
       return;
@@ -92,10 +102,41 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
       expireApprovals(state, tick, observation.seq);
       return;
     }
-    case 'weights.recorded':
-      // The judgments unit reserved by policy for frontier.weigh is spent by the recorded result.
-      state.budget.judgments.spent += 1;
+    case 'weights.recorded': {
+      const payload = observation.payload as { request_id?: string };
+      if (!payload.request_id) {
+        // Scripted weighing: the judgments unit is spent by the recorded result.
+        state.budget.judgments.spent += 1;
+      }
       return;
+    }
+    case 'inference.requested': {
+      const p = observation.payload as InferenceRequestedPayload;
+      state.inferences[p.request_id] = {
+        request_id: p.request_id,
+        request: p,
+        recorded: null,
+        evidence: [observation.seq],
+      };
+      state.budget.judgments.reserved += p.reservation.judgments;
+      state.budget.cost.reserved += p.reservation.cost;
+      return;
+    }
+    case 'inference.recorded': {
+      const p = observation.payload as InferenceRecordedPayload;
+      const record = state.inferences[p.request_id];
+      if (!record) {
+        throw new Error(`inference.recorded for unknown request ${p.request_id} passed validation`);
+      }
+      record.recorded = p;
+      record.evidence.push(observation.seq);
+      const reserved = record.request.reservation;
+      state.budget.judgments.reserved -= reserved.judgments;
+      state.budget.judgments.spent += reserved.judgments;
+      state.budget.cost.reserved -= reserved.cost;
+      state.budget.cost.spent += p.spent;
+      return;
+    }
     case 'action.started':
     case 'action.queued': {
       const p = observation.payload as ActionStartedPayload;
@@ -246,6 +287,11 @@ function integrateSuccess(state: MutableState, record: ActionRecord, output: unk
     case 'report.publish': {
       const receipt = output as PublishReceipt;
       state.publication = { receipt, evidence: seq };
+      return;
+    }
+    case 'goal.frame': {
+      const proposal = output as Proposal;
+      state.proposal = { proposal, evidence: seq };
       return;
     }
     default:

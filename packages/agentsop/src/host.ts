@@ -1,4 +1,4 @@
-import type { CapabilityContract } from './contracts.js';
+import type { CapabilityContract, InferenceRole } from './contracts.js';
 import type { FailureCode } from './failures.js';
 import type { Grant } from './grants.js';
 import type { ResourceRef } from './refs.js';
@@ -67,8 +67,45 @@ export interface CapabilityHost {
 }
 
 /**
+ * A bounded inference request from an implementation. The host enforces the
+ * contract's declared limits before any provider is reached.
+ */
+export interface InferCall {
+  readonly kind: string;
+  readonly role: InferenceRole;
+  readonly input: unknown;
+  readonly terms: {
+    readonly cost_ceiling: number;
+    readonly destinations: readonly string[];
+    readonly max_attempts: number;
+  };
+}
+
+export type InferResult =
+  | {
+      readonly status: 'accepted';
+      readonly output: unknown;
+      readonly attempts: readonly unknown[];
+      readonly spent: number;
+    }
+  | {
+      readonly status: 'unaccepted';
+      readonly reason: string;
+      readonly attempts: readonly unknown[];
+      readonly spent: number;
+    }
+  | {
+      readonly status: 'blocked';
+      readonly reason: string;
+      readonly attempts: readonly unknown[];
+      readonly spent: number;
+    }
+  | { readonly status: 'refused'; readonly code: FailureCode; readonly reason: string };
+
+/**
  * Resolver context: operations in contract vocabulary only. No locators or
  * substrate types. Nested invoke is limited to the contract's depends_on.
+ * `infer` is present only when the contract declared inference limits.
  */
 export interface ResolverContext {
   read(ref: ResourceRef): { readonly revision: number; readonly content: string };
@@ -78,4 +115,5 @@ export interface ResolverContext {
     content: string,
   ): { readonly revision: number };
   invoke(capability: string, input: unknown): InvocationOutcome;
+  infer?(call: InferCall): Promise<InferResult>;
 }

@@ -8,15 +8,19 @@ import {
   type FailureCode,
   type Grant,
   type GrantAuthority,
+  type InferCall,
+  type InferResult,
   type InvocationHandle,
   type InvocationOutcome,
   type InvocationRejected,
   type InvokeOptions,
   type LookupResult,
+  type ResolverContext,
   type ResourceEffect,
   type ResourceRef,
   type ResolutionStatus,
 } from '@weave/agentsop';
+import type { InferenceGateway } from '@weave/gateway';
 import { ResourceCoordinator } from './coordinator.js';
 import { FIXTURE_CONTRACTS, REPORT_ASSEMBLE, REPORT_PUBLISH, SOURCE_INSPECT } from './contracts.js';
 import { contentDigest, digest } from './digest.js';
@@ -74,6 +78,11 @@ interface OpenInvocation {
   outcome: InvocationOutcome | null;
 }
 
+export type CapabilityImplementation = (
+  inputs: unknown,
+  context: ResolverContext,
+) => Promise<InvocationOutcome> | InvocationOutcome;
+
 export class AgentFabricHost implements CapabilityHost {
   readonly store: FabricStore;
   readonly authority: GrantAuthority;
@@ -83,16 +92,25 @@ export class AgentFabricHost implements CapabilityHost {
   readonly resourceAccesses: AccessRecord[] = [];
   readonly lookups: { invocation_id: string; granted: boolean }[] = [];
   faults: HostFaults;
+  private readonly gateway: InferenceGateway | undefined;
+  private readonly implementations = new Map<string, CapabilityImplementation>();
 
   private readonly live = new Map<string, CapabilityContract>();
   private readonly historical = new Map<string, CapabilityContract>();
   private readonly status = new Map<string, ResolutionStatus>();
   private readonly open = new Map<string, OpenInvocation>();
 
-  constructor(options: { authority: GrantAuthority; store?: FabricStore; faults?: HostFaults; contracts?: readonly CapabilityContract[] }) {
+  constructor(options: {
+    authority: GrantAuthority;
+    store?: FabricStore;
+    faults?: HostFaults;
+    contracts?: readonly CapabilityContract[];
+    gateway?: InferenceGateway;
+  }) {
     this.authority = options.authority;
     this.store = options.store ?? new FabricStore();
     this.faults = { ...options.faults };
+    this.gateway = options.gateway;
     const contracts = options.contracts ?? FIXTURE_CONTRACTS;
     const catalogue = validateCatalogue(contracts);
     if (!catalogue.ok) {
@@ -183,6 +201,97 @@ export class AgentFabricHost implements CapabilityHost {
     resource.content = content;
     resource.revision += 1;
     return { ok: true, revision: resource.revision };
+  }
+
+  registerImplementation(operation: string, implementation: CapabilityImplementation): void {
+    this.implementations.set(operation, implementation);
+  }
+
+  resolverContext(contract: CapabilityContract): ResolverContext {
+    const infer = contract.inference ? (call: InferCall) => this.infer(contract, call) : undefined;
+    return {
+      read: (ref) => {
+        const resource = this.resourceFor(ref);
+        if (!resource) {
+          throw new Error('UNKNOWN_RESOURCE');
+        }
+        return { revision: resource.revision, content: resource.content };
+      },
+      write: (ref, expected_revision, content) => {
+        const issued = this.store.lookupRef(ref);
+        if (!issued) {
+          throw new Error('UNKNOWN_RESOURCE');
+        }
+        const resource = this.store.getResource(issued.canonical_id);
+        if (!resource || resource.revision !== expected_revision) {
+          throw new Error('stale_revision');
+        }
+        resource.content = content;
+        resource.revision += 1;
+        return { revision: resource.revision };
+      },
+      invoke: (capability) => {
+        if (!contract.depends_on.includes(capability)) {
+          return { outcome: 'failed', failure: 'UNDECLARED_DEPENDENCY' };
+        }
+        return { outcome: 'failed', failure: 'UNRESOLVED' };
+      },
+      ...(infer ? { infer } : {}),
+    };
+  }
+
+  async infer(contract: CapabilityContract, call: InferCall): Promise<InferResult> {
+    const limits = contract.inference;
+    if (!limits) {
+      return { status: 'refused', code: 'UNDECLARED_DEPENDENCY', reason: 'contract did not declare inference' };
+    }
+    if (!this.gateway) {
+      return { status: 'refused', code: 'RESOLVER_UNAVAILABLE', reason: 'inference gateway is not configured' };
+    }
+    if (call.kind !== limits.kind) {
+      return { status: 'refused', code: 'DENIED', reason: `kind ${call.kind} is outside contract limits` };
+    }
+    if (call.role !== limits.role) {
+      return { status: 'refused', code: 'DENIED', reason: `role ${call.role} is outside contract limits` };
+    }
+    if (call.terms.max_attempts > limits.max_attempts) {
+      return { status: 'refused', code: 'DENIED', reason: 'max_attempts exceeds contract limits' };
+    }
+    if (call.terms.cost_ceiling > limits.max_cost) {
+      return { status: 'refused', code: 'DENIED', reason: 'cost_ceiling exceeds contract limits' };
+    }
+    if (call.terms.destinations.some((d) => !limits.destinations.includes(d))) {
+      return { status: 'refused', code: 'DENIED', reason: 'destination is outside contract limits' };
+    }
+    const input = call.input;
+    const prompt =
+      typeof input === 'object' && input !== null && !Array.isArray(input) && typeof (input as { prompt?: unknown }).prompt === 'string'
+        ? (input as { prompt: string }).prompt
+        : JSON.stringify(input);
+    const outcome = await this.gateway.generate({
+      request_id: `fabric:${contract.id}`,
+      site: contract.id,
+      role: call.role,
+      kind: 'transform',
+      input: { instructions: `capability ${contract.id}`, prompt },
+      terms: {
+        quality: 'baseline',
+        destinations: call.terms.destinations,
+        max_context_tokens: 8_000,
+        deadline: Number.MAX_SAFE_INTEGER,
+        cost_ceiling: call.terms.cost_ceiling,
+        max_attempts: call.terms.max_attempts,
+      },
+    });
+    if (outcome.status === 'accepted') {
+      return { status: 'accepted', output: outcome.text, attempts: [...outcome.attempts], spent: outcome.spent };
+    }
+    return {
+      status: outcome.status,
+      reason: outcome.reason,
+      attempts: [...outcome.attempts],
+      spent: outcome.spent,
+    };
   }
 
   revoke(operation: string, reason = 'revoked'): void {
@@ -403,6 +512,20 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   private advance(open: OpenInvocation): void {
+    const implementation = this.implementations.get(open.operation);
+    if (implementation) {
+      const contract = this.live.get(open.operation);
+      if (!contract) {
+        this.finish(open, { outcome: 'failed', failure: 'UNKNOWN_CAPABILITY' });
+        return;
+      }
+      void Promise.resolve(implementation(open.inputs, this.resolverContext(contract))).then(
+        (outcome) => this.finish(open, outcome),
+        (error: unknown) =>
+          this.finish(open, { outcome: 'failed', failure: error instanceof Error ? error.message : 'implementation threw' }),
+      );
+      return;
+    }
     if (open.operation === SOURCE_INSPECT.id) {
       this.finish(open, this.performInspect(open));
       return;

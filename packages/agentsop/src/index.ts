@@ -38,13 +38,22 @@ export {
   type GrantMatch,
 } from './grants.js';
 
-export { bindSelectors, type BindResult, type CapabilityContract } from './contracts.js';
+export {
+  bindSelectors,
+  INFERENCE_ROLES,
+  type BindResult,
+  type CapabilityContract,
+  type InferenceLimits,
+  type InferenceRole,
+} from './contracts.js';
 
 export { validateCatalogue, type CatalogueResult } from './catalogue.js';
 
 export type {
   CapabilityHost,
   DescribeResult,
+  InferCall,
+  InferResult,
   InvocationHandle,
   InvocationOutcome,
   InvocationRejected,

@@ -542,11 +542,10 @@ scheduler, or host projects.
 - Exact contract and resolver-context interfaces for the in-repo `agentsop` and
   `agentfabric` packages, including how contracts are expressed (JSON Schema,
   native types, or both).
-- Where the inference request and response types live. A generative
-  implementation declares inference as a dependency (§7) and AgentFabric must not
-  import Weave (§2), so those types belong in AgentSOP or a package neither
-  runtime owns; the gateway implementation is then supplied through the resolver
-  context. Decide before M2 introduces the gateway.
+- Inference request and response types live in `packages/gateway`. AgentSOP
+  declares inference limits and a structural `infer` port without importing the
+  gateway; AgentFabric supplies the gateway through the resolver context. Closed
+  by [M2](docs/m2-handle-a-novel-request.md).
 - How the scheduler combines weights, cost, and risk when weights from different
   judgment sites share no calibrated scale (§4). The initial rule must be ordinal
   or per-site; M0 fixes one such rule for scripted weights only.

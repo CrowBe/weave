@@ -6,6 +6,7 @@
   },
   "include": ["src/**/*.ts", "test/**/*.ts"],
   "references": [
-    { "path": "../agentsop" }
+    { "path": "../agentsop" },
+    { "path": "../gateway" }
   ]
 }
