@@ -27,14 +27,17 @@ Start with:
   enforced effects, cancellation and crash recovery.
 - [M2 — handle a novel request](./docs/m2-handle-a-novel-request.md) — bounded
   inference, validated proposals, state views, and stale-judgment rejection.
+- [M3 — fill one capability gap](./docs/m3-fill-one-capability-gap.md) — contract,
+  corpus, demonstrated red, isolated green, admission, and a separate execution grant.
 - [AGENTS.md](./AGENTS.md) — how coding agents should work in this repository.
 
 Weave is early. The first objective is a small scenario that proves authorized concurrent execution, honest handling of stale or interrupted work, and replayable evidence. It then extends to crystallizing one capability from contract through demonstrated red, proven green, admission, and separately authorized execution, followed by a measured optimisation with scoped promotion and rollback.
 
 ## Status
 
-M0 (inspect and report), M1 (publish under authority), and M2 (handle a novel
-request) are implemented.
+M0 (inspect and report), M1 (publish under authority), M2 (handle a novel
+request), and M3 (fill one capability gap) are implemented. The offline
+crystallization harness is `npm run example:crystallize`.
 `packages/agentsop` holds the contract layer, `packages/agentfabric` the enforcing
 host, and `packages/weave` the runtime. `packages/gateway` supplies bounded
 generation and typed evaluation through replaceable providers. Requires Node
@@ -42,7 +45,7 @@ generation and typed evaluation through replaceable providers. Requires Node
 
 ```bash
 npm install
-npm run verify   # structural checks, build, M0/M1/M2/gateway suites, examples and entailment contract tests
+npm run verify   # structural checks, build, M0/M1/M2/M3/gateway suites, examples and entailment contract tests
 ```
 
 Local inference experiments and their recorded evidence live under

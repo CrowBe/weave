@@ -19,11 +19,13 @@ import type {
   ResourceReadSetEntry,
   State,
 } from './types.js';
+import { formCrystallizeCandidates } from './crystallize.js';
 import { proposalCoversSources } from './proposals.js';
 
 export const PROCEDURE = 'inspect_and_report@1' as const;
 export const PROCEDURE_PUBLISH = 'inspect_report_publish@1' as const;
 export const PROCEDURE_FRAME = 'frame_and_report@1' as const;
+export const PROCEDURE_CRYSTALLIZE = 'crystallize_and_report@1' as const;
 
 export type Describe = (operation: string) => CapabilityContract | null;
 export type Canonical = (ref: string) => string;
@@ -38,6 +40,9 @@ export interface Formation {
 const ONE_ACTION = { actions: 1, judgments: 0 } as const;
 
 export function procedureFor(state: State): ProcedureId {
+  if (state.goal?.gap) {
+    return PROCEDURE_CRYSTALLIZE;
+  }
   if (state.goal?.framing) {
     return PROCEDURE_FRAME;
   }
@@ -49,6 +54,9 @@ export function formCandidates(state: State, describe: Describe, canonical: Cano
   const procedure = procedureFor(state);
   if (!goal || goal.status !== 'active') {
     return { candidates: [], unavailable: [], procedure };
+  }
+  if (procedure === PROCEDURE_CRYSTALLIZE) {
+    return formCrystallizeCandidates(state, describe, canonical);
   }
   const inFlight = new Set(
     Object.values(state.actions)
@@ -378,6 +386,25 @@ export function successEvidencePresent(state: State): boolean {
   }
   if (!coversSources(report.report, goal.sources) || !readSetMatches(report.report.read_set, state)) {
     return false;
+  }
+  if (goal.gap) {
+    const fold = state.crystallization.fold;
+    if (!fold) {
+      return false;
+    }
+    const bound = goal.sources.every((source) => {
+      const inspection = state.inspections[source];
+      return (
+        inspection &&
+        fold.bound.some(
+          (entry) =>
+            entry.source === source && entry.revision === inspection.result.revision && entry.digest === inspection.result.digest,
+        )
+      );
+    });
+    if (!bound) {
+      return false;
+    }
   }
   if (!goal.destination) {
     return true;

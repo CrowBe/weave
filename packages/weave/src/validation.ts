@@ -27,6 +27,9 @@ const EXPECTED_SOURCE: Readonly<Record<PayloadType, readonly ProvenanceKind[]>> 
   'recovery.exhausted': ['runtime'],
   'inference.requested': ['runtime'],
   'inference.recorded': ['gateway'],
+  'admission.decided': ['operator'],
+  'implementation.revoked': ['operator'],
+  'evidence.invalidated': ['operator'],
 };
 
 function rejected(reason: string): Validation {
@@ -131,6 +134,16 @@ export function validate(input: ObservationInput, state: State): Validation {
       return validateInferenceRequested(payload, state);
     case 'inference.recorded':
       return validateInferenceRecorded(payload, state);
+    case 'admission.decided':
+      return validateAdmission(payload, state);
+    case 'implementation.revoked':
+      return isNonEmptyString(payload['operation']) && isNonEmptyString(payload['implementation_id']) && isNonEmptyString(payload['reason'])
+        ? ACCEPTED
+        : rejected('implementation.revoked requires operation, implementation_id, and reason');
+    case 'evidence.invalidated':
+      return isNonEmptyString(payload['reason']) && isNonEmptyString(payload['contract_revision'])
+        ? ACCEPTED
+        : rejected('evidence.invalidated requires reason and contract_revision');
   }
 }
 
@@ -157,6 +170,21 @@ function validateGoal(payload: Record<string, unknown>, state: State): Validatio
   }
   if (payload['framing'] !== undefined && payload['framing'] !== true && payload['framing'] !== false) {
     return rejected('goal.framing must be a boolean');
+  }
+  if (payload['gap'] !== undefined) {
+    const gap = payload['gap'];
+    if (!isRecord(gap) || !isNonEmptyString(gap['operation']) || typeof gap['purpose'] !== 'string') {
+      return rejected('goal.gap requires operation and purpose');
+    }
+    if (!isTypeMap(gap['input']) || !isTypeMap(gap['output'])) {
+      return rejected('goal.gap requires input and output type maps');
+    }
+    if (gap['variants'] !== undefined && !isStringArray(gap['variants'])) {
+      return rejected('goal.gap.variants must be a list of ids');
+    }
+  }
+  if (payload['retained_procedure'] !== undefined && typeof payload['retained_procedure'] !== 'string') {
+    return rejected('goal.retained_procedure must be a string');
   }
   if (!isReservation(payload['budget'])) {
     return rejected('goal.budget must give non-negative integer actions and judgments');
@@ -388,9 +416,90 @@ function validateOutput(operation: string, inputs: unknown, output: unknown): Va
       }
       return ACCEPTED;
     }
+    case 'report.fold': {
+      return isRecord(output) && isNonEmptyString(output['fold']) ? ACCEPTED : rejected('report.fold output requires a fold string');
+    }
+    case 'gap.search': {
+      return outputStatus(output, ['reusable', 'composed', 'gap']) ? ACCEPTED : rejected('gap.search output is not a search result');
+    }
+    case 'contract.establish': {
+      return isRecord(output) && isNonEmptyString(output['contract_id']) && isNonEmptyString(output['contract_revision'])
+        ? ACCEPTED
+        : rejected('contract.establish output requires a contract id and revision');
+    }
+    case 'corpus.propose': {
+      return isRecord(output) && (output['split'] === 'visible' || output['split'] === 'held_out') && isStringArray(output['case_ids'])
+        ? ACCEPTED
+        : rejected('corpus.propose output requires a split and case ids');
+    }
+    case 'corpus.validate': {
+      return isRecord(output) && output['validated'] === true && isNonEmptyString(output['corpus_revision'])
+        ? ACCEPTED
+        : rejected('corpus.validate output requires a validated corpus revision');
+    }
+    case 'red.demonstrate': {
+      return isRecord(output) && output['demonstrated'] === true && isRecord(output['isolation'])
+        ? ACCEPTED
+        : rejected('red.demonstrate output requires demonstrated red and an isolation report');
+    }
+    case 'implementation.generate': {
+      return isRecord(output) && isNonEmptyString(output['implementation_id']) && isNonEmptyString(output['source_digest']) && isRecord(output['view'])
+        ? ACCEPTED
+        : rejected('implementation.generate output requires an id, digest, and implementer view');
+    }
+    case 'green.prove': {
+      if (!isRecord(output) || !isNonEmptyString(output['implementation_id']) || typeof output['proven'] !== 'boolean') {
+        return rejected('green.prove output requires an implementation id and proven flag');
+      }
+      if (!isCount(output['held_out']) || !isCount(output['visible'])) {
+        return rejected('green.prove output requires visible and held-out counts');
+      }
+      return ACCEPTED;
+    }
+    case 'admission.request': {
+      return isRecord(output) && isNonEmptyString(output['request_id']) && isNonEmptyString(output['evidence_digest'])
+        ? ACCEPTED
+        : rejected('admission.request output requires a request id and evidence digest');
+    }
     default:
       return ACCEPTED;
   }
+}
+
+function outputStatus(output: unknown, allowed: readonly string[]): boolean {
+  return isRecord(output) && typeof output['status'] === 'string' && allowed.includes(output['status']);
+}
+
+function isCount(value: unknown): boolean {
+  return isRecord(value) && isNonNegativeInteger(value['passed']) && isNonNegativeInteger(value['failed']) && !('cases' in value);
+}
+
+function isTypeMap(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const keys = Object.keys(value);
+  return keys.length > 0 && keys.every((key) => isNonEmptyString(key) && isNonEmptyString(value[key]));
+}
+
+function validateAdmission(payload: Record<string, unknown>, state: State): Validation {
+  const request_id = payload['request_id'];
+  if (!isNonEmptyString(request_id)) {
+    return rejected('admission.decided requires request_id');
+  }
+  const admission = state.crystallization.admission;
+  if (!admission || admission.request_id !== request_id || admission.status !== 'requested') {
+    return rejected('admission.decided names a request that is not pending');
+  }
+  if (payload['implementation_id'] !== admission.implementation_id || payload['evidence_digest'] !== admission.evidence_digest) {
+    return rejected('admission.decided does not match the recorded evidence');
+  }
+  if (payload['decision'] !== 'admitted' && payload['decision'] !== 'denied') {
+    return rejected('unknown admission decision');
+  }
+  return isNonEmptyString(payload['approver']) && isNonNegativeInteger(payload['authority_revision'])
+    ? ACCEPTED
+    : rejected('admission.decided requires approver and authority_revision');
 }
 
 function validateInferenceRequested(payload: Record<string, unknown>, state: State): Validation {

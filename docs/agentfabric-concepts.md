@@ -289,8 +289,9 @@ creates the packages (M0-C1).
 
 [M1's contract](m1-publish-under-authority.md) fixes the publication adapter and
 authority fixture. Its lookup/receipt support is distinct from Weave's recovery
-policy. M1 needs current invocation eligibility checks; the generated-capability
-admission and revocation workflow remains M3.
+policy. M1 needs current invocation eligibility checks. Generated-capability
+admission, held-out separation, isolation, and revocation are specified in
+[M3](m3-fill-one-capability-gap.md).
 
 ## 7. Assumptions recorded
 

@@ -556,13 +556,19 @@ scheduler, or host projects.
   authentication for an eventual network or multi-user deployment.
 - What information a held-out failure may return to an implementer or corpus
   author, and how many iteration rounds are permitted before held-out evidence is
-  considered spent (§8). Without this, iterative generation leaks the split.
+  considered spent (§8). Closed by [M3](docs/m3-fill-one-capability-gap.md):
+  pass and fail counts only, zero feedback rounds, and the split is spent when
+  the first prove-green starts.
 - The relationship between the gating suite and real providers: which checks run
   only against recorded or scripted routed units, and how non-gating evaluations
   against live models are recorded and reported.
 - Resource identity, effect scopes, and external preconditions supported by the
   first adapters; unsupported guarantees must be explicit.
-- The isolation mechanism and its verified support on deployment hosts.
+- The isolation mechanism and its verified support on deployment hosts. Closed
+  for the M3 fixture by [M3](docs/m3-fill-one-capability-gap.md): a
+  permission-constrained child process and a `vm` context with no `process`,
+  `require`, or `fetch`. Unsupported isolation blocks execution. Network denial
+  is the absence of a network API in that context, not a Node permission flag.
 - Domain-specific success evidence and calibrated semantic evaluation thresholds.
 - Ranking, no-progress, and extension-payoff policies beyond the first fixtures.
 - Contract/view migration, persistence retention, and redaction mechanisms.

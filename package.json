@@ -19,7 +19,8 @@
     "example": "node --env-file-if-exists=.env.local index.ts",
     "example:gateway": "npm run build && node --env-file-if-exists=.env.local examples/holiday.ts",
     "example:free": "npm run build && node --env-file-if-exists=.env.local examples/free.ts",
-    "example:weigh": "npm run build && node --env-file-if-exists=.env.local examples/weigh.ts"
+    "example:weigh": "npm run build && node --env-file-if-exists=.env.local examples/weigh.ts",
+    "example:crystallize": "npm run build && node --experimental-strip-types examples/crystallize.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

@@ -7,7 +7,16 @@
  * site. In replay mode both are resolved from the recorded log instead, and
  * touching either is an error.
  */
-import { bindSelectors, type CapabilityContract, type CapabilityHost, type Grant, type GrantAuthority, type InvocationOutcome } from '@weave/agentsop';
+import {
+  bindSelectors,
+  type AdmissionDecision,
+  type CapabilityContract,
+  type CapabilityHost,
+  type CapabilityLifecycle,
+  type Grant,
+  type GrantAuthority,
+  type InvocationOutcome,
+} from '@weave/agentsop';
 import type { InferenceGateway } from '@weave/gateway';
 import {
   approvalStillValid,
@@ -17,6 +26,7 @@ import {
   successEvidencePresent,
   type Describe,
 } from './candidates.js';
+import { isCrystallizeOperation, runCrystallizeAction, type ExtensionAuthor } from './crystallize-actions.js';
 import { candidateSetDigest, digest } from './digest.js';
 import { PersistError, type ObservationJournal } from './journal.js';
 import { parseProposalText, validateProposal } from './proposals.js';
@@ -32,6 +42,7 @@ import type {
   ActionRecord,
   ActionResultPayload,
   ActionStartedPayload,
+  AdmissionDecidedPayload,
   ApprovalDecidedPayload,
   ApprovalRequestedPayload,
   Candidate,
@@ -72,6 +83,8 @@ export interface RuntimeOptions {
   readonly executionSlots?: number;
   readonly journal?: ObservationJournal;
   readonly gateway?: InferenceGateway;
+  readonly lifecycle?: CapabilityLifecycle;
+  readonly author?: ExtensionAuthor;
 }
 
 const RUNTIME_SOURCE = { kind: 'runtime', id: 'weave' } as const;
@@ -137,6 +150,8 @@ export class Runtime {
   readonly hostIngress: IngressHandle;
   readonly gatewayIngress: IngressHandle;
   private readonly inferAbort = new Map<string, AbortController>();
+  private readonly lifecycleQueue: { action_id: ActionId; outcome: ActionOutcome }[] = [];
+  private lifecyclePump = false;
 
   constructor(
     private readonly options: RuntimeOptions,
@@ -169,6 +184,109 @@ export class Runtime {
       });
     }
     return this.admit(input, true);
+  }
+
+  admitCapability(decision: AdmissionDecision): Observation {
+    const payload: AdmissionDecidedPayload = {
+      request_id: decision.request_id,
+      implementation_id: decision.implementation_id,
+      decision: 'admitted',
+      approver: decision.approver,
+      evidence_digest: decision.evidence_digest,
+      authority_revision: decision.authority_revision,
+    };
+    const lifecycle = this.options.lifecycle;
+    if (!lifecycle) {
+      return this.append({
+        observation_id: `operator:admission:${decision.request_id}:rejected`,
+        source: OPERATOR_SOURCE,
+        caused_by: null,
+        payload_type: 'admission.decided',
+        payload_version: 1,
+        payload,
+        forced: { status: 'rejected', reason: 'no capability lifecycle is configured' },
+      });
+    }
+    const step = lifecycle.admit(decision);
+    if (!step.ok) {
+      return this.append({
+        observation_id: `operator:admission:${decision.request_id}:rejected`,
+        source: OPERATOR_SOURCE,
+        caused_by: null,
+        payload_type: 'admission.decided',
+        payload_version: 1,
+        payload,
+        forced: { status: 'rejected', reason: step.reason },
+      });
+    }
+    return this.operator.submit({
+      observation_id: `operator:admission:${decision.request_id}:admitted`,
+      caused_by: null,
+      payload_type: 'admission.decided',
+      payload_version: 1,
+      payload,
+    });
+  }
+
+  revokeCapability(operation: string, implementationId: string, reason: string): Observation {
+    const payload = { operation, implementation_id: implementationId, reason };
+    const lifecycle = this.options.lifecycle;
+    if (lifecycle) {
+      const step = lifecycle.revoke(operation, implementationId, reason);
+      if (!step.ok) {
+        return this.append({
+          observation_id: `operator:revoked:${implementationId}:rejected`,
+          source: OPERATOR_SOURCE,
+          caused_by: null,
+          payload_type: 'implementation.revoked',
+          payload_version: 1,
+          payload,
+          forced: { status: 'rejected', reason: step.reason },
+        });
+      }
+    }
+    return this.operator.submit({
+      observation_id: `operator:revoked:${implementationId}`,
+      caused_by: null,
+      payload_type: 'implementation.revoked',
+      payload_version: 1,
+      payload,
+    });
+  }
+
+  invalidateEvidence(next: CapabilityContract): Observation {
+    const payload = { reason: 'contract revision', contract_revision: next.revision };
+    const lifecycle = this.options.lifecycle;
+    if (!lifecycle) {
+      return this.append({
+        observation_id: `operator:invalidated:${next.revision}:rejected`,
+        source: OPERATOR_SOURCE,
+        caused_by: null,
+        payload_type: 'evidence.invalidated',
+        payload_version: 1,
+        payload,
+        forced: { status: 'rejected', reason: 'no capability lifecycle is configured' },
+      });
+    }
+    const step = lifecycle.reviseContract(next);
+    if (!step.ok) {
+      return this.append({
+        observation_id: `operator:invalidated:${next.revision}:rejected`,
+        source: OPERATOR_SOURCE,
+        caused_by: null,
+        payload_type: 'evidence.invalidated',
+        payload_version: 1,
+        payload,
+        forced: { status: 'rejected', reason: step.reason },
+      });
+    }
+    return this.operator.submit({
+      observation_id: `operator:invalidated:${next.revision}`,
+      caused_by: null,
+      payload_type: 'evidence.invalidated',
+      payload_version: 1,
+      payload,
+    });
   }
 
   decide(payload: ApprovalDecidedPayload): Observation {
@@ -357,6 +475,9 @@ export class Runtime {
     );
     if (running) {
       return { status: 'waiting' };
+    }
+    if (this.current.crystallization.admission?.status === 'requested') {
+      return { status: 'blocked', reason: 'awaiting admission' };
     }
     const awaiting = candidates.some((c) => c.eligibility.status === 'approval_required');
     if (awaiting) {
@@ -980,7 +1101,12 @@ export class Runtime {
   }
 
   private prefetchContracts(): void {
-    for (const operation of ['source.inspect', 'report.assemble', 'report.publish']) {
+    const operations = ['source.inspect', 'report.assemble', 'report.publish'];
+    const crystal = this.current.crystallization;
+    if (crystal.admission?.status === 'admitted' || crystal.search?.status === 'reusable') {
+      operations.push('report.fold');
+    }
+    for (const operation of operations) {
       this.describeOperation(operation);
     }
   }
@@ -1161,6 +1287,65 @@ export class Runtime {
     }
   }
 
+  private executeCrystallize(started: ActionStartedPayload): ActionOutcome | null {
+    const goal = this.current.goal;
+    const lifecycle = this.options.lifecycle;
+    const author = this.options.author;
+    if (!goal?.gap || !lifecycle || !author) {
+      this.enqueueLifecycleResult(started.action_id, {
+        outcome: 'failed',
+        failure: 'crystallization requires a gap, a lifecycle, and an extension author',
+      });
+      return null;
+    }
+    const outcome = runCrystallizeAction(started, lifecycle, author, {
+      operation: goal.gap.operation,
+      purpose: goal.gap.purpose,
+      input: goal.gap.input,
+      output: goal.gap.output,
+    }, goal.retained_procedure ?? null);
+    if (typeof (outcome as { then?: unknown }).then === 'function') {
+      this.settled.set(
+        started.action_id,
+        Promise.resolve(outcome).then(
+          (result) => {
+            this.recordResult(started.action_id, result, HOST_SOURCE);
+          },
+          (error: unknown) => {
+            this.recordResult(started.action_id, {
+              outcome: 'failed',
+              failure: error instanceof Error ? error.message : 'crystallize failed',
+            }, HOST_SOURCE);
+          },
+        ),
+      );
+      return null;
+    }
+    this.enqueueLifecycleResult(started.action_id, outcome as ActionOutcome);
+    return null;
+  }
+
+  private enqueueLifecycleResult(action_id: ActionId, outcome: ActionOutcome): void {
+    this.lifecycleQueue.push({ action_id, outcome });
+    if (!this.lifecyclePump) {
+      this.lifecyclePump = true;
+      queueMicrotask(() => this.pumpLifecycle());
+    }
+  }
+
+  private pumpLifecycle(): void {
+    this.lifecyclePump = false;
+    const item = this.lifecycleQueue.shift();
+    if (!item) {
+      return;
+    }
+    this.recordResult(item.action_id, item.outcome, HOST_SOURCE);
+    if (this.lifecycleQueue.length > 0 && !this.lifecyclePump) {
+      this.lifecyclePump = true;
+      queueMicrotask(() => this.pumpLifecycle());
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Environments
   // -------------------------------------------------------------------------
@@ -1188,6 +1373,9 @@ export class Runtime {
               return outcome;
             }
             return null;
+          }
+          if (isCrystallizeOperation(started.operation)) {
+            return this.executeCrystallize(started);
           }
           throw new Error(`unknown runtime action ${started.operation}`);
         }

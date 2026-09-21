@@ -297,7 +297,25 @@ export class AgentFabricHost implements CapabilityHost {
   revoke(operation: string, reason = 'revoked'): void {
     void reason;
     this.live.delete(operation);
+    this.implementations.delete(operation);
     this.status.set(operation, 'unavailable');
+  }
+
+  liveContracts(): CapabilityContract[] {
+    return [...this.live.values()];
+  }
+
+  /** Registry installation after admission, or for a capability that is already established. */
+  installAdmitted(contract: CapabilityContract, implementation: CapabilityImplementation): void {
+    const others = [...this.live.values()].filter((item) => item.id !== contract.id);
+    const catalogue = validateCatalogue([...others, contract]);
+    if (!catalogue.ok) {
+      throw new Error(`INVALID_CATALOGUE: ${catalogue.reason}`);
+    }
+    this.live.set(contract.id, contract);
+    this.historical.set(contract.id, contract);
+    this.status.set(contract.id, 'resolved');
+    this.implementations.set(contract.id, implementation);
   }
 
   replaceLiveContract(contract: CapabilityContract): void {
@@ -512,6 +530,10 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   private advance(open: OpenInvocation): void {
+    if (this.status.get(open.operation) === 'unavailable') {
+      this.finish(open, { outcome: 'failed', failure: 'UNRESOLVED' });
+      return;
+    }
     const implementation = this.implementations.get(open.operation);
     if (implementation) {
       const contract = this.live.get(open.operation);
