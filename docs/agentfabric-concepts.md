@@ -286,6 +286,7 @@ creates the packages (M0-C1).
 | M3 | Test-case shape; contract revision rules; held-out report | Lifecycle with evidence, untrusted tier, held-out access separation, revocation, opportunity notices. The host store is the single writer of admission. [Contract](m3-fill-a-capability-gap.md). |
 | M4 | — | Several implementations per contract; reliability and cost recorded per implementation. [Contract](m4-measure-reuse.md). |
 | M5 | — | — (promotion is Weave's; the host reports which implementation ran). [Contract](m5-improve-an-operating-strategy.md). |
+| M6 | — | — (routing, views, and destination narrowing are Weave's; the gateway does not see the read set). [Contract](m6-route-a-reconstructed-view.md). |
 | H1 | — | Refuse a second runtime attaching to the same store. The log bound itself is Weave's. [Contract](h1-bound-the-log.md). |
 
 [M1's contract](m1-publish-under-authority.md) fixes the publication adapter and

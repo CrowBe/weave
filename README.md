@@ -33,6 +33,9 @@ Start with:
   cross-goal access, and the optimisation baseline.
 - [M5 — improve one operating strategy](./docs/m5-improve-an-operating-strategy.md)
   — one profile change, a protocol fixed before results, promotion, and rollback.
+- [M6 — route a reconstructed view](./docs/m6-route-a-reconstructed-view.md)
+  — prefix-cache routing, catalogue index and schema slices, read-set
+  destinations, and one shared slice assembly.
 - [H1 — bound the log](./docs/h1-bound-the-log.md) — a follow-up hardening step:
   reject oversize and duplicate observations before they are durable.
 - [AGENTS.md](./AGENTS.md) — how coding agents should work in this repository.
@@ -42,7 +45,7 @@ Weave is early. The first objective is a small scenario that proves authorized c
 ## Status
 
 M0 (inspect and report), M1 (publish under authority), and M2 (handle a novel
-request) are implemented. M3–M5 and the H1 log bound have behavioral contracts
+request) are implemented. M3–M6 and the H1 log bound have behavioral contracts
 and are not implemented. The host refuses to execute a supplied implementation, framing
 profiles are versioned records, and the framing view lists the host catalogue.
 `packages/agentsop` holds the contract layer, `packages/agentfabric` the enforcing

@@ -2,8 +2,9 @@
 
 Research date: 2026-09-21. Read against `VISION.md`, `CONTEXT.md`, `ARCHITECTURE.md`,
 and the M0–M5 and H1 contracts on `main` at `6e4a662`. This note is research-time
-evidence and recommendations. It is not a specification, and it does not change
-a milestone contract.
+evidence. The acceptance cases it proposed are now the
+[M6 contract](../m6-route-a-reconstructed-view.md). This note is not that
+specification.
 
 ## Decision
 
@@ -14,7 +15,8 @@ routing, compaction, restarts, and subagents behave badly. That is evidence for
 the design Weave already has: observations are state, a state view is a bounded
 rendering, and a model does not own the loop.
 
-Four consequences are not yet acceptance cases:
+Four consequences are the M6 contract. They were not acceptance cases when this
+note was written:
 
 1. A later routing experiment must price a model switch as a context reload, and
    must price staying on a cached prefix as a discount. Today's gateway prices
@@ -29,9 +31,9 @@ Four consequences are not yet acceptance cases:
 
 M5 already compares two framing profiles and records a fixture cache-miss delta
 when the stable prefix bytes change. H1 already refuses session compaction.
-None of the four items above belongs in those contracts. Routing and
-information-gathering experiments are explicitly later work in
-[M5 §6](../m5-improve-an-operating-strategy.md).
+None of the four items belongs in those contracts. They are
+[M6](../m6-route-a-reconstructed-view.md). M5 §6 points there, and M5's
+cache-miss delta stays a fixture constant.
 
 No change to `VISION.md`. The acceptance boundary is unchanged.
 
@@ -305,8 +307,8 @@ runtime decides whether it changes the frontier.
 
 ## Later acceptance cases
 
-When a routing or information-gathering milestone is written, the failing
-checks to demonstrate first are:
+The checks below are the ones M6 requires. The contract fixes fixture prices
+and token counts; this list is the research sketch they came from.
 
 1. Two fixture routes, same view bytes, one with a recorded warm prefix: the
    warm route's expected cost is below its cold `worstCaseCost`, and the cold
@@ -324,6 +326,3 @@ checks to demonstrate first are:
 5. Two read-only judgments over one revision share the slice assembly cost
    once. A write still conflicts. Neither judgment promotes an operating
    strategy or issues a grant.
-
-These are proposals for a future contract. They are not M5 work, and they are
-not authorization to start that contract in this change.
