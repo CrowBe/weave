@@ -49,7 +49,7 @@ export class GatewayDecisionLayer {
       return {
         weights: [],
         attempts,
-        spent: outcome.spent,
+        spent: toMicros(outcome.spent),
         status: outcome.status,
         reason: outcome.reason,
         implementation: this.implementation,
@@ -63,11 +63,19 @@ export class GatewayDecisionLayer {
     return {
       weights,
       attempts,
-      spent: outcome.spent,
+      spent: toMicros(outcome.spent),
       status: 'accepted',
       implementation: outcome.routed_unit_id,
     };
   }
+}
+
+/** Weave records cost as integer micros; gateway metering may yield a fraction. */
+export function toMicros(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  return Math.ceil(value);
 }
 
 export function toAttempts(
@@ -82,7 +90,7 @@ export function toAttempts(
   return attempts.map((a) => ({
     attempt: a.attempt,
     routed_unit_id: a.routed_unit_id,
-    cost: a.cost,
+    cost: toMicros(a.cost),
     cost_is_upper_bound: a.cost_is_upper_bound,
     disposition: a.disposition,
   }));

@@ -24,7 +24,7 @@ import { select } from './scheduler.js';
 import { stableStringify } from './stable-json.js';
 import { applyAccepted, initialState, snapshot, type MutableState } from './state.js';
 import { renderFrameView, renderWeighView } from './views.js';
-import { toAttempts } from './gateway-decision.js';
+import { toAttempts, toMicros } from './gateway-decision.js';
 import type {
   ActionId,
   ActionOutcome,
@@ -607,7 +607,7 @@ export class Runtime {
     const recordedPayload: InferenceRecordedPayload = {
       request_id,
       attempts: result.attempts ?? [],
-      spent: result.spent ?? 0,
+      spent: toMicros(result.spent ?? 0),
       status: result.status ?? (result.weights.length > 0 ? 'accepted' : 'unaccepted'),
       reason: result.reason ?? null,
     };
@@ -720,7 +720,7 @@ export class Runtime {
             payload: {
               request_id,
               attempts: toAttempts(outcome.attempts),
-              spent: outcome.spent,
+              spent: toMicros(outcome.spent),
               status: outcome.status === 'accepted' ? 'accepted' : outcome.status,
               reason: outcome.status === 'accepted' ? null : outcome.reason,
             } satisfies InferenceRecordedPayload,

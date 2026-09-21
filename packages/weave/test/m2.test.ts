@@ -49,6 +49,24 @@ async function flush(times = 15): Promise<void> {
   }
 }
 
+async function waitUntil(predicate: () => boolean, steps = 50): Promise<void> {
+  for (let i = 0; i < steps; i += 1) {
+    if (predicate()) {
+      return;
+    }
+    await Promise.resolve();
+  }
+}
+
+function cycleThatSelected(s: ReturnType<typeof novelScenario>, operation: string) {
+  return s.runtime.trace().cycles.find((cycle) =>
+    cycle.selected.some((sel) => {
+      const candidate = cycle.candidates.find((c) => c.candidate_id === sel.candidate_id);
+      return candidate?.operation === operation;
+    }),
+  );
+}
+
 function startedAction(s: ReturnType<typeof novelScenario>, operation: string): string | undefined {
   const observation = observationsOfType(s.runtime.trace(), 'action.started').find(
     (o) => (o.payload as { operation: string }).operation === operation,
@@ -57,7 +75,7 @@ function startedAction(s: ReturnType<typeof novelScenario>, operation: string): 
 }
 
 async function waitForStarted(s: ReturnType<typeof novelScenario>, operation: string): Promise<string> {
-  await flush();
+  await waitUntil(() => startedAction(s, operation) !== undefined);
   const action_id = startedAction(s, operation);
   assert.ok(action_id, `expected ${operation} to start`);
   return action_id;
@@ -135,13 +153,22 @@ describe('M2 novel request', () => {
     });
     const gatewayRun = novelScenario({ evaluate });
     await frameThenInspect(gatewayRun);
-    await flush();
+    await waitUntil(() => cycleThatSelected(gatewayRun, 'source.inspect') !== undefined);
     const weigh = observationsOfType(gatewayRun.runtime.trace(), 'weights.recorded').find(
-      (o) => (o.payload as WeightsRecordedPayload).implementation !== 'scripted@1',
+      (o) =>
+        (o.payload as WeightsRecordedPayload).implementation !== 'scripted@1' &&
+        (o.payload as WeightsRecordedPayload).weights.some((w) =>
+          gatewayRun.runtime
+            .trace()
+            .cycles.some((cycle) =>
+              cycle.candidates.some((c) => c.candidate_id === w.candidate_id && c.operation === 'source.inspect'),
+            ),
+        ),
     );
     assert.ok(weigh);
     assert.notEqual((weigh.payload as WeightsRecordedPayload).implementation, 'scripted@1');
-    const gatewayInspect = lastCycle(gatewayRun);
+    const gatewayInspect = cycleThatSelected(gatewayRun, 'source.inspect');
+    assert.ok(gatewayInspect);
     assert.deepEqual(
       gatewayInspect.selected.map((s) => s.candidate_id),
       scriptedOrder,
@@ -223,18 +250,25 @@ describe('M2 novel request', () => {
       failedEval(),
     ]);
     const s = novelScenario({ evaluate });
-    await flush();
+    await waitUntil(() =>
+      observationsOfType(s.runtime.trace(), 'inference.recorded').some(
+        (o) => o.validation.status === 'accepted' && (o.payload as InferenceRecordedPayload).attempts.length >= 2,
+      ),
+    );
     const requested = observationsOfType(s.runtime.trace(), 'inference.requested').filter(
       (o) => (o.payload as InferenceRequestedPayload).site === 'frontier.weigh',
     );
-    const recorded = observationsOfType(s.runtime.trace(), 'inference.recorded')
-      .map((o) => o.payload as InferenceRecordedPayload)
-      .find((p) => p.attempts.length >= 2);
+    const recordedObs = observationsOfType(s.runtime.trace(), 'inference.recorded').find(
+      (o) => (o.payload as InferenceRecordedPayload).attempts.length >= 2,
+    );
+    const recorded = recordedObs?.payload as InferenceRecordedPayload | undefined;
     assert.ok(requested[0]);
     assert.ok(recorded);
-    assert.ok(requested[0]!.seq < observationsOfType(s.runtime.trace(), 'inference.recorded').find((o) => (o.payload as InferenceRecordedPayload).request_id === recorded.request_id)!.seq);
+    assert.ok(requested[0]!.seq < recordedObs!.seq);
     assert.ok(recorded.spent > 0);
+    assert.equal(Number.isInteger(recorded.spent), true);
     assert.equal(recorded.attempts.length >= 2, true);
+    assert.equal(recordedObs!.validation.status, 'accepted');
     assert.equal(s.runtime.state().budget.judgments.spent >= 1, true);
     const acceptedWeights = observationsOfType(s.runtime.trace(), 'weights.recorded').filter((o) => o.validation.status === 'accepted' && (o.payload as WeightsRecordedPayload).request_id);
     assert.equal(acceptedWeights.length, 0);
@@ -271,7 +305,9 @@ describe('M2 novel request', () => {
       payload: { tick: 2 },
     });
     held.release();
-    await flush();
+    await waitUntil(() =>
+      observationsOfType(s.runtime.trace(), 'weights.recorded').some((o) => o.validation.status === 'rejected'),
+    );
     const weights = observationsOfType(s.runtime.trace(), 'weights.recorded');
     assert.ok(weights.some((o) => o.validation.status === 'rejected'));
     const recorded = observationsOfType(s.runtime.trace(), 'inference.recorded')
@@ -289,7 +325,7 @@ describe('M2 novel request', () => {
   it('M2-T09 unaccepted weighing does not recurse', async () => {
     const evaluate = evaluateAdapter('fixture.evaluate', [malformedEval()]);
     const s = novelScenario({ evaluate });
-    await flush();
+    await waitUntil(() => lastCycle(s).outcome.status === 'blocked');
     const weighRequests = observationsOfType(s.runtime.trace(), 'inference.requested').filter(
       (o) => (o.payload as InferenceRequestedPayload).site === 'frontier.weigh',
     );
