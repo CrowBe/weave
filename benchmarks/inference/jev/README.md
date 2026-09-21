@@ -175,12 +175,13 @@ These bind every number this directory produces.
   actually given. Closing that gap means rendering corpus state through the
   view renderer, which the import-direction check explicitly permits.
 - **Do not author corpus cases from `transfer-v4`.** Its manifest declares
-  `in_distribution: false` with every source in `holdout_sources`. CONTEXT.md
-  defines a *held-out report* as counts and failure codes only, and states
-  that once a split is drawn, corpus authors do not receive its cases either.
-  Borrowing transfer-v4 records to de-saturate the Weave corpus — considered
-  here while E1 was saturating — is therefore ruled out. De-saturation has to
-  come from newly authored adversarial cases.
+  `in_distribution: false` with every source in `holdout_sources`. That suite
+  is Kev's eval split. Weave's **held-out report** (`CONTEXT.md`) is counts
+  and failure codes from the protected admission split. The M3 contract states
+  that after that split is drawn, corpus authors do not receive its cases.
+  Those rules cover Weave's admission corpus. New Weave cases have to be
+  authored fresh: copying `transfer-v4` records into the corpus would spend
+  the comparison set this directory is scoring.
 
 ---
 
@@ -256,9 +257,9 @@ minute budget. Its higher retry count is ordering, not shape.
 
 ## E1 (retry) — transfer-v4, paired against local Kev
 
-125 held-out records, the same records Kev 4B fp32 was scored on, read from
-Kev's own `predictions.jsonl` so the comparison is paired rather than across
-two subsamples.
+125 records from Kev's `transfer-v4` development split, the same records Kev
+4B fp32 was scored on, read from Kev's own `predictions.jsonl` so the
+comparison is paired rather than across two subsamples.
 
 | | hosted Jev | local Kev (same 125) |
 | --- | ---: | ---: |
@@ -271,7 +272,9 @@ the stronger floor is 0.472, or 14.1 standard errors, so the model is
 unambiguously reading the state.
 
 **Against Kev the difference is not significant.** They disagree on 21 of 125
-records, 14 to Jev and 7 to Kev; McNemar z = 1.53, p ≈ 0.13. On this sample
+cases, 14 to Jev and 7 to Kev. McNemar's normal approximation, without a
+continuity correction, is z = (14 − 7) / sqrt(21) = 1.53, p ≈ 0.13. The same
+formula is used for every z in this file. On this sample
 hosted Jev and the local 4B checkpoint are statistically indistinguishable in
 accuracy. What separates them is latency — 4x with throttle waits included,
 15x without — and where the content goes.
@@ -334,7 +337,7 @@ not as a clearance.
 
 ## Calibration: a usable gate at 0.9, fitted in sample
 
-> Superseded in part: the held-out fit below ("The two gates, applied")
+> Superseded in part: the test-half fit below ("The two gates, applied")
 > confirms 0.9 and measures the optimism at 0.3 points. The cautions about
 > band sizes and the confident-error rate still stand.
 
@@ -424,7 +427,8 @@ orderings, same state, same seed.
 | position bias | 0.000 | 0.107 |
 
 Paired on the 168 identical records: both right 140, **Jev only 28, Kev only
-0**, neither 0. McNemar z = 5.10, significant at 0.05. Kev did not answer a
+0**, neither 0. McNemar z = (28 − 0) / sqrt(28) = 5.29, significant at 0.05.
+Kev did not answer a
 single record correctly that Jev got wrong — this is strict domination, not an
 average advantage, so the usual caution about a mean hiding a trade-off does
 not apply here.
@@ -449,11 +453,13 @@ single record, and one record is not a measured failure rate. It is still the
 exact shape the runtime must not depend on a model to catch, which is why
 approval is a deterministic gate and not a weight.
 
-On transfer-v4, the un-saturated corpus, the gap narrows and reverses by
-source: Jev 83.2% against Kev 77.0% overall (McNemar z = 2.71, significant),
-but Kev leads on `emotion` (77.8% against 61.1%) while Jev leads hugely on
-`mmlu` (80.0% against 50.0%). "Better model" is the wrong summary; the two
-fail on different things.
+On transfer-v4, the un-saturated corpus, the paired 125-case run above is Jev
+0.832 against Kev 0.776, McNemar z = 1.53, not significant at 0.05. Kev leads
+on `emotion` (0.778 against 0.556) and Jev leads on `mmlu` (0.800 against
+0.500). The permutation file is a later pass: `emotion` is 11/18 there. Each
+id counts once, so that file measures presentation order, and the significance
+test stays the 125-case run. "Better model" is the wrong summary; the two fail
+on different things.
 
 ## The two gates, applied
 
@@ -485,21 +491,21 @@ reporting on the other half closes that:
 | --- | --: | --: | --: | --: |
 | ungated | 309 | 100% | 83.2% | — |
 | threshold fitted on train half | 155 | 78.1% | 91.7% | 50.0% |
-| **same threshold, held-out half** | **154** | **80.5%** | **91.1%** | **53.3%** |
+| **same threshold, test half** | **154** | **80.5%** | **91.1%** | **53.3%** |
 | fitted and scored in sample | 309 | 79.3% | 91.4% | 51.6% |
 
 The threshold chosen on the training half is 0.9, the same value the in-sample
 reading suggested. **Optimism is 0.3 points** — in-sample 91.4% against
-held-out 91.1%. The earlier caution was right to state but the penalty turned
+91.1% on the test half. The earlier caution was right to state but the penalty turned
 out to be negligible, and the gate is now a measured result rather than a
 bound.
 
-What it costs is visible: on the held-out half the gate catches 14 wrong
+What it costs is visible: on the test half the gate catches 14 wrong
 answers and throws away 16 right ones. It is not free accuracy, it is a trade
 of coverage for reliability, and the deferred set at 53.3% is close to a coin
 flip on this corpus — which is the correct place to escalate.
 
-The same fit on Kev is much weaker: coverage 47.6%, held-out accuracy 87.5%,
+The same fit on Kev is much weaker: coverage 47.6%, test-half accuracy 87.5%,
 and optimism 4.6 points. Kev's confidence is less informative and its threshold
 does overfit, so the in-sample caution that turned out not to bite on Jev does
 bite here. Calibration is model-specific and does not transfer.
@@ -545,6 +551,12 @@ or the evidence look stronger than it was:
    own `loadKevOutcomes()`.
 5. Order-stability counted cases that were never permuted (see above).
 6. Per-ordering accuracy compared different populations (see above).
+7. McNemar on the Weave head-to-head used a continuity correction (z = 5.10)
+   while the transfer comparison did not (z = 1.53). A later sentence then
+   quoted z = 2.71 for the same 125-case transfer result. Repeating each case
+   once per presentation order produces that larger z; those rows are one
+   case. Every z above is `(jevOnly − kevOnly) / sqrt(disagree)` on one row
+   per id.
 
 Errors 5 and 6 were found by tests written before the metric, not by review:
 the load-bearing case is a stub locked to a fixed position, which must fail
@@ -558,6 +570,7 @@ Two claims in this file are verifiable directly:
 
 ```
 node benchmarks/inference/jev/probe.ts --from benchmarks/inference/jev/permutation-results.json
+node benchmarks/inference/jev/transfer-probe.ts --from benchmarks/inference/jev/transfer-results.json
 node benchmarks/inference/jev/transfer-probe.ts --from benchmarks/inference/jev/transfer-permutation-results.json
 ```
 
