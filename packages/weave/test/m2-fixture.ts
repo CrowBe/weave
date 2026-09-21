@@ -97,7 +97,10 @@ export function evaluateAdapter(
   };
 }
 
-export function deferredEvaluate(id: string, result: EvaluationProviderResult): EvaluationAdapter & { release: () => void; calls: number } {
+export function deferredEvaluate(
+  id: string,
+  result?: EvaluationProviderResult | ((call: { questions: Record<string, unknown> }) => EvaluationProviderResult),
+): EvaluationAdapter & { release: () => void; calls: number } {
   let calls = 0;
   let release!: () => void;
   const held = new Promise<void>((resolve) => {
@@ -111,10 +114,20 @@ export function deferredEvaluate(id: string, result: EvaluationProviderResult): 
     release() {
       release();
     },
-    async evaluate() {
+    async evaluate(call) {
       calls += 1;
       await held;
-      return result;
+      if (typeof result === 'function') {
+        return result(call);
+      }
+      if (result) {
+        return result;
+      }
+      const scores: Record<string, number> = {};
+      for (const questionId of Object.keys(call.questions)) {
+        scores[questionId] = 1.6;
+      }
+      return scoreAnswers(scores);
     },
   };
 }

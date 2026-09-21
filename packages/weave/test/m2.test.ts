@@ -49,11 +49,24 @@ async function flush(times = 15): Promise<void> {
   }
 }
 
+function startedAction(s: ReturnType<typeof novelScenario>, operation: string): string | undefined {
+  const observation = observationsOfType(s.runtime.trace(), 'action.started').find(
+    (o) => (o.payload as { operation: string }).operation === operation,
+  );
+  return observation ? (observation.payload as { action_id: string }).action_id : undefined;
+}
+
+async function waitForStarted(s: ReturnType<typeof novelScenario>, operation: string): Promise<string> {
+  await flush();
+  const action_id = startedAction(s, operation);
+  assert.ok(action_id, `expected ${operation} to start`);
+  return action_id;
+}
+
 async function frameThenInspect(s: ReturnType<typeof novelScenario>): Promise<void> {
-  const c1 = lastCycle(s);
-  const frame = candidatesFor(c1, 'goal.frame')[0];
-  assert.ok(frame);
-  await s.runtime.settle(actionIdFor(c1, frame.candidate_id));
+  const action_id = await waitForStarted(s, 'goal.frame');
+  await s.runtime.settle(action_id);
+  await flush();
 }
 
 describe('M2 novel request', () => {
@@ -195,7 +208,6 @@ describe('M2 novel request', () => {
       hosted,
       destinations: ['nowhere'],
     });
-    await frameThenInspect(none);
     await flush();
     const blocked = observationsOfType(none.runtime.trace(), 'inference.recorded')
       .map((o) => o.payload as InferenceRecordedPayload)
@@ -211,7 +223,6 @@ describe('M2 novel request', () => {
       failedEval(),
     ]);
     const s = novelScenario({ evaluate });
-    await frameThenInspect(s);
     await flush();
     const requested = observationsOfType(s.runtime.trace(), 'inference.requested').filter(
       (o) => (o.payload as InferenceRequestedPayload).site === 'frontier.weigh',
@@ -230,9 +241,8 @@ describe('M2 novel request', () => {
   });
 
   it('M2-T07 slow weighing does not block control', async () => {
-    const held = deferredEvaluate('fixture.evaluate', scoreAnswers({}));
+    const held = deferredEvaluate('fixture.evaluate');
     const s = novelScenario({ evaluate: held });
-    await frameThenInspect(s);
     await flush();
     const before = s.runtime.trace().observations.length;
     const waiting = lastCycle(s);
@@ -250,9 +260,8 @@ describe('M2 novel request', () => {
   });
 
   it('M2-T08 a late judgment cannot authorize dispatch', async () => {
-    const held = deferredEvaluate('fixture.evaluate', scoreAnswers({}));
+    const held = deferredEvaluate('fixture.evaluate');
     const s = novelScenario({ evaluate: held });
-    await frameThenInspect(s);
     await flush();
     s.runtime.clock.submit({
       observation_id: 'clock:tick:2',
@@ -262,8 +271,7 @@ describe('M2 novel request', () => {
       payload: { tick: 2 },
     });
     held.release();
-    await Promise.resolve();
-    await Promise.resolve();
+    await flush();
     const weights = observationsOfType(s.runtime.trace(), 'weights.recorded');
     assert.ok(weights.some((o) => o.validation.status === 'rejected'));
     const recorded = observationsOfType(s.runtime.trace(), 'inference.recorded')
@@ -281,7 +289,6 @@ describe('M2 novel request', () => {
   it('M2-T09 unaccepted weighing does not recurse', async () => {
     const evaluate = evaluateAdapter('fixture.evaluate', [malformedEval()]);
     const s = novelScenario({ evaluate });
-    await frameThenInspect(s);
     await flush();
     const weighRequests = observationsOfType(s.runtime.trace(), 'inference.requested').filter(
       (o) => (o.payload as InferenceRequestedPayload).site === 'frontier.weigh',
