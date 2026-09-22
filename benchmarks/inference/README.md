@@ -617,6 +617,52 @@ survive that. And neither rendering is correct in general — a harness has to
 decide per source by where the suite puts the content, which means this is a
 property of the suite as much as of the model.
 
+### The corpus cannot tell the trained checkpoint from the base — 2026-09-22
+
+Kev-4B is Qwen3-4B-Base plus a trained LoRA plus a trained pointer head read off
+hidden states. Scoring the *untrained* base on the same 56 records — no adapter,
+no head, the option markers read straight off the next-token distribution —
+gives this. `benchmarks/inference/kev/base_readout.py`, evidence in
+`base-readout-results.json`:
+
+| system | acc | ECE | Brier | pos. bias | stable | McNemar p |
+| --- | --: | --: | --: | --: | --: | --: |
+| Kev-4B, LoRA + pointer head | **47/56** | 0.104 | 0.236 | 0.107 | 15/18 | — |
+| base, "…best advances the goal is:" | 46/56 | 0.144 | 0.223 | 0.125 | 13/18 | 1.000 |
+| base, "Dispatch:" | 44/56 | 0.162 | 0.298 | 0.179 | 13/18 | 0.549 |
+| base, "Answer:" | 43/56 | 0.150 | 0.291 | 0.107 | 14/18 | 0.424 |
+| base, "Answer: " with digits | 43/56 | 0.128 | 0.276 | 0.143 | 14/18 | 0.344 |
+
+Floors are always-first 0.389 and best-constant 0.500; every rendering clears
+them comfortably. The records are paired — both systems answer the same 56 — so
+the comparison is McNemar's exact test on the discordant pairs, not two
+independent accuracies.
+
+**Nothing here is significant.** Not even the worst rendering separates from the
+trained checkpoint. Read that as low power rather than equivalence: at 56 records
+a seven-point gap needs several hundred to resolve and a two-point gap needs
+thousands. The consequence is about the corpus rather than the model. **The
+47/56 never validated Kev's training, and no model comparison run at this size
+can**, which includes any evaluation of a larger candidate — the measurement
+would not have been able to see the difference it was looking for.
+
+What the training does take is every secondary axis: calibration on 4 of 4
+renderings, order stability on 4 of 4, position bias on 3 of 4 with one tie, and
+Brier on 3 of 4. That is the same shape as the Winnow-12B artifact, where a
+merged LoRA beats its own stock base by 2-3 accuracy points but roughly halves
+ECE. On this evidence the training bought calibration and order-robustness, not
+accuracy.
+
+Three limits. The best rendering was chosen from four scored on these same 56
+records, so it is in-sample selection exactly as the hypothesis-rendering result
+above was — the honest expectation for an unseen rendering is nearer the median
+43-44 than 46. Five of the 56 records have a top-two margin below 0.02, the
+closest at 0.0012, so serving the corpus concurrently across llama-server's slots
+changes the score by a whole record as batch composition shifts the reduction
+order; the script runs sequentially and repeats exactly. And the two systems fail
+differently — only 4 records defeat both, so an oracle over the pair would score
+52/56 — which means this measures neither as a bound on the other.
+
 ### Disposition
 
 The model evidence remains **experimental, with no admitted judgment site**.
@@ -653,3 +699,14 @@ one split and tested on another, not a claim that authorization works. The
 same applies to picking a hypothesis rendering per source. And an AUC of 1.000
 on 22 records from one generator is a property of that generator's contrast
 pairs, not a general capability.
+
+A third constraint arrived on 2026-09-22, and it applies to the harness rather
+than to any checkpoint. An untrained base model, read through option logits,
+scores within noise of the trained Kev checkpoint on the decision corpus. The
+corpus is too small to resolve differences of the size that separate real
+candidates, so accuracy figures quoted from it — including the 0.835 above —
+carry no evidence about training, adapters or model choice. They remain useful
+as a floor check and as a regression guard on the wire contract, which is what
+they were built for. Anything comparative needs a larger corpus first, and
+building one is the prerequisite for the next model evaluation rather than a
+follow-up to it.
