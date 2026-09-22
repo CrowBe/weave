@@ -67,6 +67,7 @@ interface OpenInvocation {
   readonly invocation_id: string;
   readonly action_id: string;
   readonly operation: string;
+  readonly implementation_id: string;
   readonly inputs: unknown;
   readonly grant: Grant;
   readonly effects: readonly ResourceEffect[];
@@ -83,11 +84,40 @@ export type CapabilityImplementation = (
   context: ResolverContext,
 ) => Promise<InvocationOutcome> | InvocationOutcome;
 
+export interface ImplementationProfile {
+  readonly id: string;
+  readonly reliability: { readonly successes: number; readonly failures: number } | null;
+  readonly cost_micros: number | null;
+}
+
+interface AdmittedImplementation {
+  readonly id: string;
+  readonly run: CapabilityImplementation;
+  reliability: { successes: number; failures: number } | null;
+  cost_micros: number | null;
+}
+
+/**
+ * Admission order only. Reliability and cost are not inputs, so a second
+ * implementation is not selected because an earlier one measured well.
+ */
+export function selectAdmittedImplementation(records: readonly { readonly id: string }[]): string | null {
+  return records[0]?.id ?? null;
+}
+
 export class AgentFabricHost implements CapabilityHost {
   readonly store: FabricStore;
   readonly authority: GrantAuthority;
   readonly coordinator = new ResourceCoordinator();
-  readonly invocations: { action_id: string; invocation_id: string; operation: string; inputs: unknown }[] = [];
+  readonly invocations: {
+    action_id: string;
+    invocation_id: string;
+    operation: string;
+    implementation_id: string;
+    inputs: unknown;
+  }[] = [];
+  /** Registry copies of conclusions. Presence here is not cross-goal authority. */
+  readonly retainedConclusions: unknown[] = [];
   readonly rejections: InvocationRejected[] = [];
   readonly resourceAccesses: AccessRecord[] = [];
   readonly lookups: { invocation_id: string; granted: boolean }[] = [];
@@ -97,7 +127,7 @@ export class AgentFabricHost implements CapabilityHost {
   private readonly inferenceCharged = new Map<string, number>();
   private inferenceSeq = 0;
   /** Written only by admission. A function passed to registerImplementation is not stored here. */
-  private readonly implementations = new Map<string, CapabilityImplementation>();
+  private readonly admitted = new Map<string, AdmittedImplementation[]>();
 
   private readonly live = new Map<string, CapabilityContract>();
   private readonly historical = new Map<string, CapabilityContract>();
@@ -317,7 +347,7 @@ export class AgentFabricHost implements CapabilityHost {
   revoke(operation: string, reason = 'revoked'): void {
     void reason;
     this.live.delete(operation);
-    this.implementations.delete(operation);
+    this.admitted.delete(operation);
     this.status.set(operation, 'unavailable');
   }
 
@@ -326,7 +356,11 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   /** Registry installation after admission, or for a capability that is already established. */
-  installAdmitted(contract: CapabilityContract, implementation: CapabilityImplementation): void {
+  installAdmitted(
+    contract: CapabilityContract,
+    implementation: CapabilityImplementation,
+    implementationId = 'admitted',
+  ): void {
     const others = [...this.live.values()].filter((item) => item.id !== contract.id);
     const catalogue = validateCatalogue([...others, contract]);
     if (!catalogue.ok) {
@@ -335,7 +369,60 @@ export class AgentFabricHost implements CapabilityHost {
     this.live.set(contract.id, contract);
     this.historical.set(contract.id, contract);
     this.status.set(contract.id, 'resolved');
-    this.implementations.set(contract.id, implementation);
+    const records = this.admitted.get(contract.id) ?? [];
+    const fresh: AdmittedImplementation = {
+      id: implementationId,
+      run: implementation,
+      reliability: null,
+      cost_micros: null,
+    };
+    const existing = records.findIndex((record) => record.id === implementationId);
+    if (existing >= 0) {
+      records[existing] = fresh;
+    } else {
+      records.push(fresh);
+    }
+    this.admitted.set(contract.id, records);
+  }
+
+  implementationRecords(operation: string): ImplementationProfile[] {
+    return (this.admitted.get(operation) ?? []).map((record) => ({
+      id: record.id,
+      reliability: record.reliability === null ? null : { ...record.reliability },
+      cost_micros: record.cost_micros,
+    }));
+  }
+
+  /** The implementation invoke will run. Measurements are not consulted. */
+  selectedImplementation(operation: string): string | null {
+    return selectAdmittedImplementation(this.implementationRecords(operation));
+  }
+
+  implementationAdmitted(operation: string, implementationId: string): boolean {
+    return (this.admitted.get(operation) ?? []).some((record) => record.id === implementationId);
+  }
+
+  /**
+   * Record reliability and cost for one implementation. A later admission does
+   * not read this when choosing which implementation runs.
+   */
+  recordMeasurement(
+    operation: string,
+    implementationId: string,
+    reliability: { successes: number; failures: number } | null,
+    cost_micros: number | null,
+  ): void {
+    const record = (this.admitted.get(operation) ?? []).find((item) => item.id === implementationId);
+    if (!record) {
+      throw new Error(`no admitted implementation ${implementationId} for ${operation}`);
+    }
+    record.reliability = reliability === null ? null : { ...reliability };
+    record.cost_micros = cost_micros;
+  }
+
+  /** Store a conclusion in the registry. This does not widen its authority scope. */
+  retainConclusion(conclusion: unknown): void {
+    this.retainedConclusions.push(structuredClone(conclusion));
   }
 
   replaceLiveContract(contract: CapabilityContract): void {
@@ -397,6 +484,7 @@ export class AgentFabricHost implements CapabilityHost {
       action_id: open.action_id,
       invocation_id: open.invocation_id,
       operation,
+      implementation_id: open.implementation_id,
       inputs: open.inputs,
     });
     this.open.set(open.invocation_id, open);
@@ -407,6 +495,7 @@ export class AgentFabricHost implements CapabilityHost {
       kind: 'handle',
       action_id: open.action_id,
       invocation_id: open.invocation_id,
+      implementation_id: open.implementation_id,
       result,
       requestCancel: () => {
         this.requestCancel(open.invocation_id);
@@ -558,14 +647,15 @@ export class AgentFabricHost implements CapabilityHost {
       this.finish(open, { outcome: 'failed', failure: 'UNRESOLVED' });
       return;
     }
-    const implementation = this.implementations.get(open.operation);
+    const selectedId = selectAdmittedImplementation(this.implementationRecords(open.operation));
+    const implementation = (this.admitted.get(open.operation) ?? []).find((record) => record.id === selectedId);
     if (implementation) {
       const contract = this.live.get(open.operation);
       if (!contract) {
         this.finish(open, { outcome: 'failed', failure: 'UNKNOWN_CAPABILITY' });
         return;
       }
-      void Promise.resolve(implementation(open.inputs, this.resolverContext(contract))).then(
+      void Promise.resolve(implementation.run(open.inputs, this.resolverContext(contract))).then(
         (outcome) => this.finish(open, outcome),
         (error: unknown) =>
           this.finish(open, { outcome: 'failed', failure: error instanceof Error ? error.message : 'implementation threw' }),
@@ -639,6 +729,7 @@ export class AgentFabricHost implements CapabilityHost {
         invocation_id: open.invocation_id,
         action_id: open.action_id,
         operation: open.operation,
+        implementation_id: open.implementation_id,
         binding_digest: open.binding_digest,
         inputs: open.inputs,
         status: 'committed',
@@ -661,6 +752,7 @@ export class AgentFabricHost implements CapabilityHost {
         invocation_id: open.invocation_id,
         action_id: open.action_id,
         operation: open.operation,
+        implementation_id: open.implementation_id,
         binding_digest: open.binding_digest,
         inputs: open.inputs,
         status: terminal,
@@ -777,10 +869,14 @@ export class AgentFabricHost implements CapabilityHost {
     if (conflict) {
       return this.reject('RESOLVER_ERROR', `effect conflict on ${conflict.canonical_id}`);
     }
+    const implementation_id =
+      selectAdmittedImplementation(this.implementationRecords(operation)) ??
+      (trustedBuiltin(operation) ? 'builtin' : 'unresolved');
     const open: OpenInvocation = {
       invocation_id,
       action_id,
       operation,
+      implementation_id,
       inputs: boundInputs,
       grant: grant as Grant,
       effects: declared.bound,
@@ -795,6 +891,7 @@ export class AgentFabricHost implements CapabilityHost {
       invocation_id,
       action_id,
       operation,
+      implementation_id,
       binding_digest,
       inputs: boundInputs,
       status: 'running',
@@ -921,6 +1018,7 @@ export class AgentFabricHost implements CapabilityHost {
       kind: 'handle',
       action_id: existing.action_id,
       invocation_id: existing.invocation_id,
+      implementation_id: existing.implementation_id ?? 'builtin',
       result: Promise.resolve(outcome),
       requestCancel: () => {
         this.requestCancel(existing.invocation_id);

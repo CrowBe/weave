@@ -53,4 +53,21 @@ export const REPORT_PUBLISH: CapabilityContract = {
   depends_on: [],
 };
 
+export const TEXT_NORMALIZE: CapabilityContract = {
+  id: 'text.normalize',
+  revision: 'r1',
+  purpose: 'Collapse whitespace in one text value',
+  input: { text: 'string' },
+  output: { text: 'string' },
+  effects: [],
+  permissions: [],
+  failures: [],
+  depends_on: [],
+};
+
+/** Collapse internal whitespace and trim. Length is not a reuse exemption. */
+export function collapseWhitespace(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
 export const FIXTURE_CONTRACTS: readonly CapabilityContract[] = [SOURCE_INSPECT, REPORT_ASSEMBLE, REPORT_PUBLISH];

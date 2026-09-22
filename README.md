@@ -44,10 +44,15 @@ Weave is early. The first objective is a small scenario that proves authorized c
 
 ## Status
 
-M0 (inspect and report), M1 (publish under authority), and M2 (handle a novel
-request) are implemented. M3–M6 and the H1 log bound have behavioral contracts
-and are not implemented. The host refuses to execute a supplied implementation, framing
-profiles are versioned records, and the framing view lists the host catalogue.
+M0 (inspect and report), M1 (publish under authority), M2 (handle a novel
+request), and M4 (measure reuse) are implemented. M4 repeats a normalized
+report from a recorded composition and an admitted `text.normalize`, reuses
+cached conclusions under their read set and authority scope, and records the
+`profile.frame@1` baseline. M3's `text.normalize` crystallization gates are
+not the path M4 runs: the earlier `report.fold` fixture remains, and a
+supplied implementation is still refused. M5, M6, and the H1 log bound have
+behavioral contracts and are not implemented. Framing profiles are versioned
+records, and the framing view lists the host catalogue.
 `npm run example:crystallize` runs an earlier `report.fold` fixture. It adds a
 procedure arm, so it does not satisfy the M3 contract.
 

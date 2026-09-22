@@ -19,6 +19,8 @@ export interface InvocationHandle {
   readonly action_id: string;
   /** Stable identity across disconnects and recovery. Defaults to action_id when omitted at invoke. */
   readonly invocation_id: string;
+  /** The admitted implementation that ran, or `builtin` for host-owned fixture operations. */
+  readonly implementation_id: string;
   /** Resolves when the invocation completes. It never rejects; failures are outcomes. */
   readonly result: Promise<InvocationOutcome>;
   requestCancel(): void;
@@ -66,6 +68,8 @@ export interface CapabilityHost {
   canonicalResource(ref: ResourceRef): ResourceRef;
   lookup(invocation_id: string, grant: Grant | null): LookupResult;
   requestCancel(invocation_id: string): { readonly acknowledged: true };
+  /** Whether an admitted implementation may still be reused. Absent hosts do not record admission. */
+  implementationAdmitted?(operation: string, implementationId: string): boolean;
 }
 
 /**

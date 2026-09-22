@@ -27,6 +27,7 @@ export interface InvocationRecord {
   invocation_id: string;
   action_id: string;
   operation: string;
+  implementation_id?: string;
   binding_digest: string;
   inputs: unknown;
   status: InvocationStatus;

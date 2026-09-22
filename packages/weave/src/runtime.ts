@@ -28,6 +28,7 @@ import {
 } from './candidates.js';
 import { isCrystallizeOperation, runCrystallizeAction, type ExtensionAuthor } from './crystallize-actions.js';
 import { candidateSetDigest, digest } from './digest.js';
+import { HOST_INVOCATION_MICROS, reuseVerdict } from './reuse.js';
 import { PersistError, type ObservationJournal } from './journal.js';
 import { parseProposalText, validateProposal } from './proposals.js';
 import { select } from './scheduler.js';
@@ -43,6 +44,8 @@ import type {
   ActionResultPayload,
   ActionStartedPayload,
   AdmissionDecidedPayload,
+  BaselineRecord,
+  ClockTickPayload,
   ApprovalDecidedPayload,
   ApprovalRequestedPayload,
   Candidate,
@@ -166,6 +169,8 @@ export class Runtime {
   private lifecyclePump = false;
   private readonly frameProfile: FrameProfile;
   private readonly replayLog: readonly Observation[] | null;
+  /** A reused conclusion finished inside the cycle; form the next candidates before returning. */
+  private reuseFollowUp = false;
 
   constructor(
     private readonly options: RuntimeOptions,
@@ -357,12 +362,50 @@ export class Runtime {
     return structuredClone({ observations: this.log, cycles: this.cycles });
   }
 
+  /**
+   * Record the M4 baseline from the log. Inference reservations and host
+   * invocation costs are summed once each. A reused conclusion adds neither.
+   */
+  recordBaseline(): Observation {
+    const payload = this.baselinePayload();
+    if (!payload) {
+      return this.append({
+        observation_id: 'runtime:baseline:profile.frame@1:rejected',
+        source: RUNTIME_SOURCE,
+        caused_by: null,
+        payload_type: 'baseline.recorded',
+        payload_version: 1,
+        payload: {
+          strategy: 'profile.frame@1',
+          workload: 'repeated normalized-report goals, including a failing case',
+          quality: { held: 0, missed: 0 },
+          inference_requests: 0,
+          latency_ticks: 0,
+          cost_micros: 0,
+          human_corrections: 0,
+        },
+        forced: { status: 'rejected', reason: 'baseline requires a failing case and a success' },
+      });
+    }
+    return this.append({
+      observation_id: 'runtime:baseline:profile.frame@1',
+      source: RUNTIME_SOURCE,
+      caused_by: null,
+      payload_type: 'baseline.recorded',
+      payload_version: 1,
+      payload,
+    });
+  }
+
   // -------------------------------------------------------------------------
   // Log
   // -------------------------------------------------------------------------
 
   private admit(input: ObservationInput, triggerCycle: boolean): Observation {
     const observation = this.append(input);
+    if (observation.validation.status === 'accepted') {
+      this.maybeCacheConclusion(observation);
+    }
     if (
       triggerCycle &&
       observation.validation.status === 'accepted' &&
@@ -423,6 +466,14 @@ export class Runtime {
   // -------------------------------------------------------------------------
 
   private runCycle(trigger: Seq): void {
+    this.runCycleOnce(trigger);
+    while (this.reuseFollowUp) {
+      this.reuseFollowUp = false;
+      this.runCycleOnce(trigger);
+    }
+  }
+
+  private runCycleOnce(trigger: Seq): void {
     this.prefetchContracts();
     const cycle_no = this.nextCycleNo();
     const state_revision = this.current.state_revision;
@@ -989,8 +1040,33 @@ export class Runtime {
     action_id: ActionId,
     outcome: ActionOutcome,
     source: typeof RUNTIME_SOURCE | typeof HOST_SOURCE | typeof GATEWAY_SOURCE,
+    extra?: {
+      implementation_id?: string;
+      cost_micros?: number;
+      conclusion_id?: string;
+      cited_evidence?: readonly Seq[];
+    },
   ): void {
-    const payload: ActionResultPayload = { action_id, outcome };
+    const payload: {
+      action_id: ActionId;
+      outcome: ActionOutcome;
+      implementation_id?: string;
+      cost_micros?: number;
+      conclusion_id?: string;
+      cited_evidence?: readonly Seq[];
+    } = { action_id, outcome };
+    if (extra?.implementation_id) {
+      payload.implementation_id = extra.implementation_id;
+    }
+    if (extra?.cost_micros !== undefined) {
+      payload.cost_micros = extra.cost_micros;
+    }
+    if (extra?.conclusion_id) {
+      payload.conclusion_id = extra.conclusion_id;
+    }
+    if (extra?.cited_evidence) {
+      payload.cited_evidence = extra.cited_evidence;
+    }
     const rest = {
       observation_id: `result:${action_id}`,
       caused_by: action_id,
@@ -1148,6 +1224,12 @@ export class Runtime {
 
   private prefetchContracts(): void {
     const operations = ['source.inspect', 'report.assemble', 'report.publish'];
+    if (
+      this.current.goal?.composition_id ||
+      this.current.composition?.steps.some((step) => step.operation === 'text.normalize')
+    ) {
+      operations.push('text.normalize');
+    }
     const crystal = this.current.crystallization;
     if (crystal.admission?.status === 'admitted' || crystal.search?.status === 'reusable') {
       operations.push('report.fold');
@@ -1158,7 +1240,7 @@ export class Runtime {
   }
 
   private invokeHost(started: ActionStartedPayload):
-    | { kind: 'handle'; result: Promise<InvocationOutcome> }
+    | { kind: 'handle'; result: Promise<InvocationOutcome>; implementation_id: string }
     | { kind: 'rejected'; code: string; reason: string }
     | { kind: 'failed_closed'; outcome: ActionOutcome } {
     try {
@@ -1168,7 +1250,7 @@ export class Runtime {
       if (handle.kind === 'rejected') {
         return handle;
       }
-      return { kind: 'handle', result: handle.result };
+      return { kind: 'handle', result: handle.result, implementation_id: handle.implementation_id };
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'host threw';
       const effectful = started.effects.some((e) => e.mode !== 'read');
@@ -1392,6 +1474,133 @@ export class Runtime {
     }
   }
 
+  private baselinePayload(): BaselineRecord | null {
+    const held = this.current.workload.filter((item) => item.quality === 'held').length;
+    const missed = this.current.workload.filter((item) => item.quality === 'missed').length;
+    if (held < 1 || missed < 1) {
+      return null;
+    }
+    let inference_requests = 0;
+    let inference_cost = 0;
+    let host_cost = 0;
+    const ticks: number[] = [];
+    for (const observation of this.log) {
+      if (observation.validation.status !== 'accepted') {
+        continue;
+      }
+      if (observation.payload_type === 'inference.requested') {
+        const request = observation.payload as InferenceRequestedPayload;
+        inference_requests += 1;
+        inference_cost += request.reservation.cost;
+      }
+      if (observation.payload_type === 'action.result' && observation.source.kind === 'host') {
+        const cost = (observation.payload as ActionResultPayload).cost_micros;
+        if (cost !== undefined) {
+          host_cost += cost;
+        }
+      }
+      if (observation.payload_type === 'clock.tick') {
+        ticks.push((observation.payload as ClockTickPayload).tick);
+      }
+    }
+    const first = ticks[0];
+    const last = ticks[ticks.length - 1];
+    const latency_ticks = first === undefined || last === undefined ? 0 : last - first;
+    return {
+      strategy: 'profile.frame@1',
+      workload: 'repeated normalized-report goals, including a failing case',
+      quality: { held, missed },
+      inference_requests,
+      latency_ticks,
+      cost_micros: inference_cost + host_cost,
+      human_corrections: this.current.corrections.length,
+    };
+  }
+
+  private maybeCacheConclusion(result: Observation): void {
+    if (result.payload_type !== 'action.result') {
+      return;
+    }
+    const payload = result.payload as ActionResultPayload;
+    if (payload.conclusion_id || payload.outcome.outcome !== 'succeeded' || !payload.implementation_id) {
+      return;
+    }
+    const action = this.current.actions[payload.action_id];
+    const goal_id = this.current.goal?.goal_id;
+    if (!action || action.operation !== 'text.normalize' || !action.contract_rev || !goal_id) {
+      return;
+    }
+    const evidence: number[] = [result.seq];
+    for (const entry of action.read_set) {
+      if (!('resource' in entry)) {
+        continue;
+      }
+      const source = this.current.sources[entry.resource];
+      if (source && !evidence.includes(source.evidence)) {
+        evidence.push(source.evidence);
+      }
+    }
+    this.append({
+      observation_id: `conclusion:${payload.action_id}`,
+      source: RUNTIME_SOURCE,
+      caused_by: payload.action_id,
+      payload_type: 'conclusion.cached',
+      payload_version: 1,
+      payload: {
+        conclusion_id: `conc:${payload.action_id}`,
+        operation: action.operation,
+        contract_rev: action.contract_rev,
+        implementation_id: payload.implementation_id,
+        input_digest: digest(action.inputs),
+        output: payload.outcome.output,
+        evidence,
+        read_set: action.read_set.filter((entry) => 'resource' in entry),
+        authority_scope: { goal_id },
+        invalidation: ['read_set', 'contract_rev', 'admission'],
+      },
+    });
+  }
+
+  private reuseConclusion(started: ActionStartedPayload): ActionOutcome | null {
+    if (started.operation !== 'text.normalize') {
+      return null;
+    }
+    const verdict = reuseVerdict(
+      this.current.conclusions,
+      {
+        operation: started.operation,
+        contract_rev: started.contract_rev,
+        inputs: started.inputs,
+        read_set: started.read_set,
+      },
+      { sources: this.current.sources, goal_id: this.current.goal?.goal_id ?? null },
+      this.current.policies,
+      (operation, implementationId) => this.implementationAdmitted(operation, implementationId),
+    );
+    if (verdict.kind === 'rerun') {
+      return null;
+    }
+    if (verdict.kind === 'uncertain') {
+      const outcome: ActionOutcome = { outcome: 'uncertain', reason: verdict.reason };
+      this.recordResult(started.action_id, outcome, RUNTIME_SOURCE);
+      return outcome;
+    }
+    this.reuseFollowUp = true;
+    const outcome: ActionOutcome = { outcome: 'succeeded', output: verdict.conclusion.output };
+    this.recordResult(started.action_id, outcome, RUNTIME_SOURCE, {
+      conclusion_id: verdict.conclusion.conclusion_id,
+      cited_evidence: verdict.conclusion.evidence,
+    });
+    return outcome;
+  }
+
+  private implementationAdmitted(operation: string, implementationId: string): boolean {
+    if (this.options.host.implementationAdmitted) {
+      return this.options.host.implementationAdmitted(operation, implementationId);
+    }
+    return this.describe(operation) !== null;
+  }
+
   // -------------------------------------------------------------------------
   // Environments
   // -------------------------------------------------------------------------
@@ -1425,6 +1634,10 @@ export class Runtime {
           }
           throw new Error(`unknown runtime action ${started.operation}`);
         }
+        const reused = this.reuseConclusion(started);
+        if (reused) {
+          return reused;
+        }
         const handle = this.invokeHost(started);
         if (handle.kind === 'rejected') {
           const outcome: ActionOutcome = { outcome: 'failed', failure: `${handle.code}: ${handle.reason}` };
@@ -1439,7 +1652,10 @@ export class Runtime {
           started.action_id,
           handle.result.then(
             (outcome: InvocationOutcome) => {
-              this.recordResult(started.action_id, outcome, HOST_SOURCE);
+              this.recordResult(started.action_id, outcome, HOST_SOURCE, {
+                implementation_id: handle.implementation_id,
+                cost_micros: HOST_INVOCATION_MICROS,
+              });
             },
             (error: unknown) => {
               const reason = error instanceof Error ? error.message : 'invocation rejected';
@@ -1491,7 +1707,10 @@ export class Runtime {
         const payload = match.payload as ActionResultPayload;
         if (match.source.kind === 'runtime') {
           // A synchronous runtime outcome is part of the cycle; reproduce it now.
-          this.recordResult(started.action_id, payload.outcome, RUNTIME_SOURCE);
+          if (payload.conclusion_id) {
+            this.reuseFollowUp = true;
+          }
+          this.recordResult(started.action_id, payload.outcome, RUNTIME_SOURCE, resultExtra(payload));
           return payload.outcome;
         }
         // A host result arrives later in the log and is fed by replay in order.
@@ -1536,6 +1755,33 @@ function blockedReason(
   return 'no candidates';
 }
 
+function resultExtra(payload: ActionResultPayload): {
+  implementation_id?: string;
+  cost_micros?: number;
+  conclusion_id?: string;
+  cited_evidence?: readonly Seq[];
+} {
+  const extra: {
+    implementation_id?: string;
+    cost_micros?: number;
+    conclusion_id?: string;
+    cited_evidence?: readonly Seq[];
+  } = {};
+  if (payload.implementation_id) {
+    extra.implementation_id = payload.implementation_id;
+  }
+  if (payload.cost_micros !== undefined) {
+    extra.cost_micros = payload.cost_micros;
+  }
+  if (payload.conclusion_id) {
+    extra.conclusion_id = payload.conclusion_id;
+  }
+  if (payload.cited_evidence) {
+    extra.cited_evidence = payload.cited_evidence;
+  }
+  return extra;
+}
+
 const REASON_TEXT: Readonly<Record<NotSelectedReason, string>> = {
   budget: 'actions budget exhausted',
   dependency: 'dependencies unsatisfied',
@@ -1565,6 +1811,11 @@ export function replay(recorded: readonly Observation[], options: RuntimeOptions
 
   try {
     for (const observation of ordered) {
+      if (observation.payload_type === 'baseline.recorded') {
+        runtime.recordBaseline();
+        checkPrefix(runtime.trace().observations, ordered);
+        continue;
+      }
       if (CYCLE_APPENDED.includes(observation.source.kind)) {
         continue;
       }

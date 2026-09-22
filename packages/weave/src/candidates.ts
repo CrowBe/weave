@@ -15,6 +15,7 @@ import type {
   InspectionResult,
   ProcedureId,
   Proposal,
+  RecordedComposition,
   ResourceId,
   ResourceReadSetEntry,
   State,
@@ -26,6 +27,17 @@ export const PROCEDURE = 'inspect_and_report@1' as const;
 export const PROCEDURE_PUBLISH = 'inspect_report_publish@1' as const;
 export const PROCEDURE_FRAME = 'frame_and_report@1' as const;
 export const PROCEDURE_CRYSTALLIZE = 'crystallize_and_report@1' as const;
+
+/** The control-core procedure union. A recorded composition is not a member. */
+export const PROCEDURE_IDS = [PROCEDURE, PROCEDURE_PUBLISH, PROCEDURE_FRAME, PROCEDURE_CRYSTALLIZE] as const satisfies readonly ProcedureId[];
+
+const PROCEDURE_UNION: Record<ProcedureId, true> = {
+  'inspect_and_report@1': true,
+  'inspect_report_publish@1': true,
+  'frame_and_report@1': true,
+  'crystallize_and_report@1': true,
+};
+void PROCEDURE_UNION;
 
 export type Describe = (operation: string) => CapabilityContract | null;
 export type Canonical = (ref: string) => string;
@@ -128,6 +140,14 @@ export function formCandidates(state: State, describe: Describe, canonical: Cano
   }
   }
 
+  const composition = activeComposition(state);
+  if (goal.composition_id && !composition) {
+    return { candidates, unavailable: [...unavailable, goal.composition_id], procedure };
+  }
+  if (composition && !formNormalizations(state, composition, describe, push, unavailable)) {
+    return { candidates, unavailable, procedure };
+  }
+
   const readSet: ResourceReadSetEntry[] = goal.sources.map((source) => ({
     resource: source,
     revision: (state.sources[source] as { revision: number }).revision,
@@ -212,6 +232,65 @@ export function formCandidates(state: State, describe: Describe, canonical: Cano
 
   push(completeCandidate(goal.goal_id, report.evidence, readSet, state));
   return { candidates, unavailable, procedure };
+}
+
+function activeComposition(state: State): RecordedComposition | null {
+  const id = state.goal?.composition_id;
+  if (!id || state.composition?.composition_id !== id) {
+    return null;
+  }
+  return state.composition;
+}
+
+/** Form text.normalize candidates named by the composition. Returns false when any are still pending. */
+function formNormalizations(
+  state: State,
+  composition: RecordedComposition,
+  describe: Describe,
+  push: (candidate: Candidate) => void,
+  unavailable: string[],
+): boolean {
+  if (!composition.steps.some((step) => step.operation === 'text.normalize')) {
+    return true;
+  }
+  const goal = state.goal;
+  if (!goal) {
+    return true;
+  }
+  const contract = describe('text.normalize');
+  if (!contract) {
+    unavailable.push('text.normalize');
+    return false;
+  }
+  let pending = false;
+  for (const source of goal.sources) {
+    const current = state.sources[source];
+    const inspection = state.inspections[source];
+    if (!current || !inspection) {
+      continue;
+    }
+    const normalization = state.normalizations[source];
+    if (normalization && normalization.revision === current.revision) {
+      continue;
+    }
+    pending = true;
+    const inputs = { text: current.content };
+    const producer = actionFinishedAt(state, inspection.evidence);
+    push({
+      candidate_id: candidateId(contract.id, contract.revision, inputs),
+      operation: contract.id,
+      contract_rev: contract.revision,
+      inputs,
+      evidence: [goal.evidence, current.evidence, composition.evidence, inspection.evidence],
+      read_set: [{ resource: source, revision: current.revision }],
+      dependencies: producer ? [producer] : [],
+      effects: [],
+      resources: ONE_ACTION,
+      eligibility: inspectEligibility(source, goal.authority.read),
+      weight: null,
+    });
+  }
+  return !pending;
 }
 
 function frameCandidate(goal_id: string, evidence: number): Candidate {
@@ -386,6 +465,21 @@ export function successEvidencePresent(state: State): boolean {
   }
   if (!coversSources(report.report, goal.sources) || !readSetMatches(report.report.read_set, state)) {
     return false;
+  }
+  if (goal.composition_id) {
+    const composition = state.composition;
+    if (!composition || composition.composition_id !== goal.composition_id) {
+      return false;
+    }
+    if (composition.steps.some((step) => step.operation === 'text.normalize')) {
+      const normalized = goal.sources.every((source) => {
+        const normalization = state.normalizations[source];
+        return normalization !== undefined && normalization.revision === state.sources[source]?.revision;
+      });
+      if (!normalized) {
+        return false;
+      }
+    }
   }
   if (goal.gap) {
     const fold = state.crystallization.fold;
