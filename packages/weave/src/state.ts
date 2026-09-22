@@ -23,12 +23,10 @@ import type {
   InferenceRecordedPayload,
   InferenceRequestedPayload,
   InspectionResult,
-  NormalizationRecord,
   Observation,
   PolicyRecord,
   Proposal,
   PublishReceipt,
-  RecordedComposition,
   Report,
   ResourceReadSetEntry,
   Seq,
@@ -55,10 +53,9 @@ interface MutableState {
   proposal: { proposal: Proposal; evidence: Seq } | null;
   inferences: Record<string, Mutable<InferenceRecord> & { evidence: Seq[] }>;
   crystallization: Mutable<CrystallizationState>;
-  composition: RecordedComposition | null;
   conclusions: CachedConclusion[];
   policies: PolicyRecord[];
-  normalizations: Record<string, NormalizationRecord>;
+  normalized: Record<string, { text: string; revision: number; evidence: Seq }>;
   workload: WorkloadCase[];
   corrections: HumanCorrection[];
   baseline: BaselineRecord | null;
@@ -85,10 +82,9 @@ export function initialState(): MutableState {
     proposal: null,
     inferences: {},
     crystallization: emptyCrystallization(),
-    composition: null,
     conclusions: [],
     policies: [],
-    normalizations: {},
+    normalized: {},
     workload: [],
     corrections: [],
     baseline: null,
@@ -127,7 +123,7 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
       state.goal = { ...goal, status: 'active', evidence: observation.seq };
       state.actions = {};
       state.inspections = {};
-      state.normalizations = {};
+      state.normalized = {};
       state.report = null;
       state.publication = null;
       state.proposal = null;
@@ -140,19 +136,13 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
       state.recovery = { limit: goal.budget.recovery ?? 0, spent: 0 };
       return;
     }
-    case 'composition.recorded': {
-      const payload = observation.payload as { composition_id: string; steps: { operation: string }[] };
-      state.composition = {
-        composition_id: payload.composition_id,
-        steps: payload.steps.map((step) => ({ operation: step.operation })),
-        evidence: observation.seq,
-      };
+    case 'composition.recorded':
       return;
-    }
     case 'conclusion.cached': {
       state.conclusions.push(observation.payload as CachedConclusion);
       return;
     }
+    case 'conclusion.policy':
     case 'policy.recorded': {
       const payload = observation.payload as { policy_id: string; goals: string[] };
       state.policies.push({ policy_id: payload.policy_id, goals: [...payload.goals], evidence: observation.seq });
@@ -168,9 +158,9 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
     }
     case 'binding.corrected':
     case 'output.rejected': {
-      const payload = observation.payload as { goal_id: string; action_id: string; reason: string };
+      const payload = observation.payload as { goal_id?: string; action_id: string; reason: string };
       state.corrections.push({
-        goal_id: payload.goal_id,
+        goal_id: payload.goal_id ?? state.goal?.goal_id ?? '',
         kind: observation.payload_type === 'binding.corrected' ? 'binding' : 'output',
         action_id: payload.action_id,
         reason: payload.reason,
@@ -404,14 +394,6 @@ function integrateSuccess(state: MutableState, record: ActionRecord, output: unk
       }
       return;
     }
-    case 'text.normalize': {
-      const entry = record.read_set.find((item) => 'resource' in item);
-      const text = isTextOutput(output);
-      if (entry && 'resource' in entry && text !== null) {
-        state.normalizations[entry.resource] = { text, revision: entry.revision, evidence: seq };
-      }
-      return;
-    }
     case 'report.publish': {
       const receipt = output as PublishReceipt;
       state.publication = { receipt, evidence: seq };
@@ -501,17 +483,18 @@ function integrateSuccess(state: MutableState, record: ActionRecord, output: unk
       state.crystallization.fold = { fold, bound: inspections };
       return;
     }
+    case 'text.normalize': {
+      const text = (output as { text?: unknown }).text;
+      const entry = record.read_set.find((item) => 'resource' in item);
+      if (typeof text !== 'string' || !entry || !('resource' in entry)) {
+        return;
+      }
+      state.normalized[entry.resource] = { text, revision: entry.revision, evidence: seq };
+      return;
+    }
     default:
       return;
   }
-}
-
-function isTextOutput(output: unknown): string | null {
-  if (typeof output !== 'object' || output === null || Array.isArray(output)) {
-    return null;
-  }
-  const text = (output as { text?: unknown }).text;
-  return typeof text === 'string' ? text : null;
 }
 
 function expireApprovals(state: MutableState, tick: number, seq: Seq): void {

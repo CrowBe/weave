@@ -20,7 +20,11 @@ interface BatchMessage {
   readonly cases: readonly { readonly id: string; readonly input: unknown }[];
 }
 
-type Inbound = ProbeMessage | BatchMessage;
+interface SilentExitMessage {
+  readonly type: 'silent-exit';
+}
+
+type Inbound = ProbeMessage | BatchMessage | SilentExitMessage;
 
 const GLOBALS = ['Object', 'Array', 'String', 'Number', 'Boolean', 'Math', 'JSON', 'Error'] as const;
 
@@ -39,6 +43,11 @@ function sandbox(): vm.Context {
   for (const name of GLOBALS) {
     target[name] = globalThis[name];
   }
+  target['broker'] = {
+    read: () => ({ ok: false, code: 'DENIED' }),
+    write: () => ({ ok: false, code: 'DENIED' }),
+    invoke: () => ({ ok: false, code: 'DENIED' }),
+  };
   return context;
 }
 
@@ -57,12 +66,15 @@ function probe(): Record<string, unknown> {
   } catch (error) {
     childProcess = codeOf(error) === 'ERR_ACCESS_DENIED' ? 'blocked' : 'error';
   }
+  const permission = process.permission;
+  const network: 'none' | 'open' | 'error' = permission ? (permission.has('net') ? 'open' : 'none') : 'error';
   const evaluated = new vm.Script('({ process: typeof process, require: typeof require, fetch: typeof fetch })').runInContext(
     sandbox(),
     { timeout: 100 },
   ) as { process: string; require: string; fetch: string };
   return {
     filesystem,
+    network,
     child_process: childProcess,
     canary: process.env['WEAVE_ISOLATION_CANARY'] ?? null,
     vm: evaluated,
@@ -89,6 +101,9 @@ function codeOf(error: unknown): string | undefined {
 }
 
 process.on('message', (message: Inbound) => {
+  if (message.type === 'silent-exit') {
+    process.exit(0);
+  }
   try {
     const result = message.type === 'probe' ? probe() : runBatch(message.source, message.cases);
     send({ ok: true, result }, () => process.exit(0));

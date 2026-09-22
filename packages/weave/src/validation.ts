@@ -32,8 +32,9 @@ const EXPECTED_SOURCE: Readonly<Record<PayloadType, readonly ProvenanceKind[]>> 
   'evidence.invalidated': ['operator'],
   'composition.recorded': ['operator'],
   'conclusion.cached': ['runtime'],
+  'conclusion.policy': ['operator'],
   'policy.recorded': ['operator'],
-  'goal.missed': ['operator'],
+  'goal.missed': ['operator', 'runtime'],
   'binding.corrected': ['operator'],
   'output.rejected': ['operator'],
   'baseline.recorded': ['runtime'],
@@ -155,6 +156,7 @@ export function validate(input: ObservationInput, state: State): Validation {
       return validateComposition(payload);
     case 'conclusion.cached':
       return validateConclusion(payload);
+    case 'conclusion.policy':
     case 'policy.recorded':
       return validatePolicy(payload);
     case 'goal.missed':
@@ -209,6 +211,9 @@ function validateGoal(payload: Record<string, unknown>, state: State): Validatio
   }
   if (payload['retained_procedure'] !== undefined && typeof payload['retained_procedure'] !== 'string') {
     return rejected('goal.retained_procedure must be a string');
+  }
+  if (payload['composition'] !== undefined && !isNormalizeComposition(payload['composition'])) {
+    return rejected('goal.composition must be composition.normalize-report@1');
   }
   if (!isReservation(payload['budget'])) {
     return rejected('goal.budget must give non-negative integer actions and judgments');
@@ -506,6 +511,23 @@ function isTypeMap(value: unknown): boolean {
   return keys.length > 0 && keys.every((key) => isNonEmptyString(key) && isNonEmptyString(value[key]));
 }
 
+function isNormalizeComposition(value: unknown): boolean {
+  if (!isRecord(value) || value['id'] !== 'composition.normalize-report@1' || value['operation'] !== 'text.normalize') {
+    return false;
+  }
+  if (!isTypeMap(value['input']) || !isTypeMap(value['output'])) {
+    return false;
+  }
+  const steps = value['steps'];
+  if (!Array.isArray(steps) || steps.length !== 3) {
+    return false;
+  }
+  if (steps[0] !== 'source.inspect' || steps[1] !== 'text.normalize' || steps[2] !== 'report.assemble') {
+    return false;
+  }
+  return value['variants'] === undefined || isStringArray(value['variants']);
+}
+
 function validateAdmission(payload: Record<string, unknown>, state: State): Validation {
   const request_id = payload['request_id'];
   if (!isNonEmptyString(request_id)) {
@@ -682,8 +704,11 @@ function validateMissed(payload: Record<string, unknown>, state: State): Validat
 }
 
 function validateCorrection(payload: Record<string, unknown>): Validation {
-  if (!isNonEmptyString(payload['goal_id']) || !isNonEmptyString(payload['action_id']) || !isNonEmptyString(payload['reason'])) {
-    return rejected('a human correction requires goal_id, action_id, and reason');
+  if (payload['goal_id'] !== undefined && !isNonEmptyString(payload['goal_id'])) {
+    return rejected('a human correction goal_id must be a non-empty string');
+  }
+  if (!isNonEmptyString(payload['action_id']) || !isNonEmptyString(payload['reason'])) {
+    return rejected('a human correction requires action_id and reason');
   }
   return ACCEPTED;
 }

@@ -60,8 +60,11 @@ export interface Goal {
   };
   /** Retained procedure text. It may inform a contract; it is not an implementation. */
   readonly retained_procedure?: string;
-  /** Selects a recorded composition. It does not add a procedure. */
-  readonly composition_id?: string;
+  /**
+   * Recorded composition. Candidate formation reads it as data. It is not a
+   * new `ProcedureId`.
+   */
+  readonly composition?: RecordedComposition;
   readonly budget: { readonly actions: number; readonly judgments: number; readonly recovery?: number; readonly cost?: number };
   readonly success_evidence: string;
 }
@@ -339,6 +342,7 @@ export const PAYLOAD_TYPES = [
   'evidence.invalidated',
   'composition.recorded',
   'conclusion.cached',
+  'conclusion.policy',
   'policy.recorded',
   'goal.missed',
   'binding.corrected',
@@ -351,11 +355,23 @@ export type PayloadType = (typeof PAYLOAD_TYPES)[number];
 // Fixture capability records (§2)
 // ---------------------------------------------------------------------------
 
+export interface RecordedComposition {
+  readonly id: 'composition.normalize-report@1';
+  readonly operation: 'text.normalize';
+  readonly purpose: string;
+  readonly input: Readonly<Record<string, string>>;
+  readonly output: Readonly<Record<string, string>>;
+  readonly steps: readonly ['source.inspect', 'text.normalize', 'report.assemble'];
+  readonly variants?: readonly string[];
+}
+
 export interface InspectionResult {
   readonly source: ResourceId;
   readonly revision: number;
   readonly line_count: number;
   readonly digest: string;
+  /** Present when the recorded composition normalized this inspection's text. */
+  readonly text?: string;
 }
 
 export interface Report {
@@ -368,16 +384,6 @@ export interface Report {
 // ---------------------------------------------------------------------------
 
 export type GoalStatus = 'active' | 'complete' | 'missed';
-
-export interface CompositionStep {
-  readonly operation: string;
-}
-
-export interface RecordedComposition {
-  readonly composition_id: string;
-  readonly steps: readonly CompositionStep[];
-  readonly evidence: Seq;
-}
 
 export type InvalidationCondition = 'read_set' | 'contract_rev' | 'admission';
 
@@ -402,12 +408,6 @@ export interface PolicyRecord {
   readonly evidence: Seq;
 }
 
-export interface NormalizationRecord {
-  readonly text: string;
-  readonly revision: number;
-  readonly evidence: Seq;
-}
-
 export interface WorkloadCase {
   readonly goal_id: string;
   readonly quality: 'held' | 'missed';
@@ -424,7 +424,11 @@ export interface HumanCorrection {
 export interface BaselineRecord {
   readonly strategy: 'profile.frame@1';
   readonly workload: string;
-  readonly quality: { readonly held: number; readonly missed: number };
+  readonly quality: {
+    readonly held: number;
+    readonly missed: number;
+    readonly cases: readonly WorkloadCase[];
+  };
   readonly inference_requests: number;
   readonly latency_ticks: number;
   readonly cost_micros: number;
@@ -466,10 +470,9 @@ export interface State {
   readonly proposal: { readonly proposal: Proposal; readonly evidence: Seq } | null;
   readonly inferences: Readonly<Record<string, InferenceRecord>>;
   readonly crystallization: CrystallizationState;
-  readonly composition: RecordedComposition | null;
   readonly conclusions: readonly CachedConclusion[];
   readonly policies: readonly PolicyRecord[];
-  readonly normalizations: Readonly<Record<ResourceId, NormalizationRecord>>;
+  readonly normalized: Readonly<Record<ResourceId, { readonly text: string; readonly revision: number; readonly evidence: Seq }>>;
   readonly workload: readonly WorkloadCase[];
   readonly corrections: readonly HumanCorrection[];
   readonly baseline: BaselineRecord | null;

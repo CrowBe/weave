@@ -114,6 +114,33 @@ export function readCredentials(env: NodeJS.ProcessEnv): Credentials | { readonl
   return { vercel, typesafe: typesafe !== undefined && typesafe.trim().length > 0 ? typesafe : undefined };
 }
 
+/**
+ * Which local Kev service to call. Read from the environment by the composition
+ * root only, like the credentials above.
+ *
+ * Unset means the default PyTorch service. Both services report their backbone
+ * and weights at `/api/info`, so a run can state what answered it rather than
+ * inferring it from a port number.
+ */
+export function readKevBaseURL(env: NodeJS.ProcessEnv): string {
+  const url = env['WEAVE_KEV_BASE_URL'];
+  return url === undefined || url.trim().length === 0 ? KEV_LOCAL_BASE_URL : url.trim().replace(/\/+$/, '');
+}
+
+/** What a local Kev service says it is, for the run log. Never fails a run. */
+export async function describeKevService(baseURL: string): Promise<string> {
+  try {
+    const response = await fetch(`${baseURL}/api/info`);
+    if (!response.ok) return `${baseURL} (no identity: HTTP ${response.status})`;
+    const info = (await response.json()) as Record<string, unknown>;
+    const backend = typeof info['backend'] === 'string' ? info['backend'] : 'pytorch';
+    const weights = typeof info['weights'] === 'string' ? ` ${info['weights']}` : '';
+    return `${baseURL} — ${backend}${weights}, lora ${String(info['lora'])}`;
+  } catch {
+    return `${baseURL} (unreachable)`;
+  }
+}
+
 export const realTimer: Timer = {
   sleep(ms, signal) {
     return new Promise((resolve, reject) => {
@@ -279,8 +306,13 @@ export async function runCase(
  * Service lifecycle stays an operator concern (`benchmarks/inference/kev/SERVICE.md`).
  * The runtime seam here reports ready because the unit is started outside this
  * process; it does not install, supervise, or stop anything.
+ *
+ * `baseURL` selects which service answers, not which model. Two of them speak
+ * this contract at the same checkpoint — `kev.serve` in PyTorch, and the
+ * llama.cpp-backed shim — and the adapter is indifferent to the difference, so
+ * this stays a URL rather than a backend enum.
  */
-export function createKevGateway(clock: Clock): InferenceGateway {
+export function createKevGateway(clock: Clock, baseURL: string = KEV_LOCAL_BASE_URL): InferenceGateway {
   const routes: RoutedUnit[] = EVALUATION_KINDS.map((kind) => ({
     operation: 'evaluate',
     kind,
@@ -305,7 +337,7 @@ export function createKevGateway(clock: Clock): InferenceGateway {
     evaluators: [
       kevLocalEvaluator({
         runtime: { ensureReady: async () => ({ status: 'ready' as const }) },
-        baseURL: KEV_LOCAL_BASE_URL,
+        baseURL,
       }),
     ],
     clock,

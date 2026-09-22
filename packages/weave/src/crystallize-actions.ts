@@ -27,10 +27,11 @@ export function runCrystallizeAction(
   author: ExtensionAuthor,
   desired: DesiredOperation,
   retained: string | null,
+  exact = false,
 ): ActionOutcome | Promise<ActionOutcome> {
   switch (started.operation) {
     case 'gap.search':
-      return fromStep(lifecycle.search(desired, retained));
+      return fromStep(exact ? lifecycle.searchExact(desired, retained) : lifecycle.search(desired, retained));
     case 'contract.establish':
       return fromStep(lifecycle.proposeContract(author.proposeContract(desired)));
     case 'corpus.propose': {

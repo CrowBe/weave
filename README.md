@@ -45,16 +45,17 @@ Weave is early. The first objective is a small scenario that proves authorized c
 ## Status
 
 M0 (inspect and report), M1 (publish under authority), M2 (handle a novel
-request), and M4 (measure reuse) are implemented. M4 repeats a normalized
-report from a recorded composition and an admitted `text.normalize`, reuses
-cached conclusions under their read set and authority scope, and records the
-`profile.frame@1` baseline. M3's `text.normalize` crystallization gates are
-not the path M4 runs: the earlier `report.fold` fixture remains, and a
-supplied implementation is still refused. M5, M6, and the H1 log bound have
-behavioral contracts and are not implemented. Framing profiles are versioned
-records, and the framing view lists the host catalogue.
-`npm run example:crystallize` runs an earlier `report.fold` fixture. It adds a
-procedure arm, so it does not satisfy the M3 contract.
+request), M3 (recorded `text.normalize`), and M4 (measure reuse) are
+implemented. The composition is `composition.normalize-report@1`. A cached
+conclusion is reused only while its input digest, read set, contract
+revision, admitted implementation, and authority scope still hold.
+`conclusion.policy` is the cross-goal record. The `profile.frame@1` baseline
+is recorded from the repeated workload, including the failing goal. The
+earlier `report.fold` fixture in `npm run example:crystallize` remains a
+separate procedure arm. M5, M6, and the H1 log bound have behavioral
+contracts and are not implemented. The host refuses to execute a supplied
+implementation, framing profiles are versioned records, and the framing view
+lists the host catalogue.
 
 `packages/agentsop` holds the contract layer, `packages/agentfabric` the enforcing
 host, and `packages/weave` the runtime. `packages/gateway` supplies bounded

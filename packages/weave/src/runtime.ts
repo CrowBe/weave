@@ -378,7 +378,7 @@ export class Runtime {
         payload: {
           strategy: 'profile.frame@1',
           workload: 'repeated normalized-report goals, including a failing case',
-          quality: { held: 0, missed: 0 },
+          quality: { held: 0, missed: 0, cases: [] },
           inference_requests: 0,
           latency_ticks: 0,
           cost_micros: 0,
@@ -403,9 +403,6 @@ export class Runtime {
 
   private admit(input: ObservationInput, triggerCycle: boolean): Observation {
     const observation = this.append(input);
-    if (observation.validation.status === 'accepted') {
-      this.maybeCacheConclusion(observation);
-    }
     if (
       triggerCycle &&
       observation.validation.status === 'accepted' &&
@@ -457,6 +454,7 @@ export class Runtime {
     this.log.push(observation);
     if (observation.validation.status === 'accepted') {
       applyAccepted(this.current, observation);
+      this.followAccepted(observation);
     }
     return observation;
   }
@@ -474,6 +472,7 @@ export class Runtime {
   }
 
   private runCycleOnce(trigger: Seq): void {
+    this.importRetainedConclusions();
     this.prefetchContracts();
     const cycle_no = this.nextCycleNo();
     const state_revision = this.current.state_revision;
@@ -1224,15 +1223,12 @@ export class Runtime {
 
   private prefetchContracts(): void {
     const operations = ['source.inspect', 'report.assemble', 'report.publish'];
-    if (
-      this.current.goal?.composition_id ||
-      this.current.composition?.steps.some((step) => step.operation === 'text.normalize')
-    ) {
-      operations.push('text.normalize');
-    }
     const crystal = this.current.crystallization;
     if (crystal.admission?.status === 'admitted' || crystal.search?.status === 'reusable') {
       operations.push('report.fold');
+    }
+    if (this.current.goal?.composition) {
+      operations.push('text.normalize');
     }
     for (const operation of operations) {
       this.describeOperation(operation);
@@ -1271,8 +1267,16 @@ export class Runtime {
       if (!historical) {
         return null;
       }
+      const observation_id = `contract:${operation}:${historical.revision}`;
+      if (this.log.some((observation) => observation.observation_id === observation_id)) {
+        return historical;
+      }
+      const upcoming = this.replayLog?.find((observation) => observation.seq === this.nextSeq());
+      if (upcoming?.observation_id !== observation_id) {
+        return null;
+      }
       this.append({
-        observation_id: `contract:${operation}:${historical.revision}`,
+        observation_id,
         source: RUNTIME_SOURCE,
         caused_by: null,
         payload_type: 'capability.described',
@@ -1419,19 +1423,36 @@ export class Runtime {
     const goal = this.current.goal;
     const lifecycle = this.options.lifecycle;
     const author = this.options.author;
-    if (!goal?.gap || !lifecycle || !author) {
+    const desired = goal?.gap
+      ? {
+          operation: goal.gap.operation,
+          purpose: goal.gap.purpose,
+          input: goal.gap.input,
+          output: goal.gap.output,
+        }
+      : goal?.composition
+        ? {
+            operation: goal.composition.operation,
+            purpose: goal.composition.purpose,
+            input: goal.composition.input,
+            output: goal.composition.output,
+          }
+        : null;
+    if (!desired || !lifecycle || !author) {
       this.enqueueLifecycleResult(started.action_id, {
         outcome: 'failed',
-        failure: 'crystallization requires a gap, a lifecycle, and an extension author',
+        failure: 'crystallization requires a gap or a recorded composition, a lifecycle, and an extension author',
       });
       return null;
     }
-    const outcome = runCrystallizeAction(started, lifecycle, author, {
-      operation: goal.gap.operation,
-      purpose: goal.gap.purpose,
-      input: goal.gap.input,
-      output: goal.gap.output,
-    }, goal.retained_procedure ?? null);
+    const outcome = runCrystallizeAction(
+      started,
+      lifecycle,
+      author,
+      desired,
+      goal?.retained_procedure ?? null,
+      Boolean(goal?.composition && !goal.gap),
+    );
     if (typeof (outcome as { then?: unknown }).then === 'function') {
       this.settled.set(
         started.action_id,
@@ -1475,29 +1496,24 @@ export class Runtime {
   }
 
   private baselinePayload(): BaselineRecord | null {
-    const held = this.current.workload.filter((item) => item.quality === 'held').length;
-    const missed = this.current.workload.filter((item) => item.quality === 'missed').length;
+    const cases = this.workloadCases();
+    const held = cases.filter((item) => item.quality === 'held').length;
+    const missed = cases.filter((item) => item.quality === 'missed').length;
     if (held < 1 || missed < 1) {
       return null;
     }
     let inference_requests = 0;
     let inference_cost = 0;
-    let host_cost = 0;
     const ticks: number[] = [];
     for (const observation of this.log) {
       if (observation.validation.status !== 'accepted') {
         continue;
       }
       if (observation.payload_type === 'inference.requested') {
-        const request = observation.payload as InferenceRequestedPayload;
         inference_requests += 1;
-        inference_cost += request.reservation.cost;
       }
-      if (observation.payload_type === 'action.result' && observation.source.kind === 'host') {
-        const cost = (observation.payload as ActionResultPayload).cost_micros;
-        if (cost !== undefined) {
-          host_cost += cost;
-        }
+      if (observation.payload_type === 'inference.recorded') {
+        inference_cost += (observation.payload as { spent?: number }).spent ?? 0;
       }
       if (observation.payload_type === 'clock.tick') {
         ticks.push((observation.payload as ClockTickPayload).tick);
@@ -1506,15 +1522,134 @@ export class Runtime {
     const first = ticks[0];
     const last = ticks[ticks.length - 1];
     const latency_ticks = first === undefined || last === undefined ? 0 : last - first;
+    const measured = this.measuredCost();
     return {
       strategy: 'profile.frame@1',
       workload: 'repeated normalized-report goals, including a failing case',
-      quality: { held, missed },
+      quality: { held, missed, cases },
       inference_requests,
       latency_ticks,
-      cost_micros: inference_cost + host_cost,
+      cost_micros: inference_cost + measured,
       human_corrections: this.current.corrections.length,
     };
+  }
+
+  private workloadCases(): { goal_id: string; quality: 'held' | 'missed' }[] {
+    const host = this.options.host as {
+      workload?: () => readonly { goal_id: string; quality: 'held' | 'missed' }[];
+    };
+    const merged = new Map<string, { goal_id: string; quality: 'held' | 'missed' }>();
+    for (const item of host.workload?.() ?? []) {
+      merged.set(item.goal_id, { goal_id: item.goal_id, quality: item.quality });
+    }
+    for (const item of this.current.workload) {
+      merged.set(item.goal_id, { goal_id: item.goal_id, quality: item.quality });
+    }
+    return [...merged.values()];
+  }
+
+  private measuredCost(): number {
+    const host = this.options.host as { measuredCostMicros?: () => number };
+    if (host.measuredCostMicros) {
+      return host.measuredCostMicros();
+    }
+    let host_cost = 0;
+    for (const observation of this.log) {
+      if (observation.validation.status !== 'accepted' || observation.payload_type !== 'action.result') {
+        continue;
+      }
+      if (observation.source.kind !== 'host') {
+        continue;
+      }
+      const cost = (observation.payload as ActionResultPayload).cost_micros;
+      if (cost !== undefined) {
+        host_cost += cost;
+      }
+    }
+    return host_cost;
+  }
+
+  private followAccepted(observation: Observation): void {
+    if (observation.payload_type === 'action.result') {
+      const payload = observation.payload as ActionResultPayload;
+      this.maybeCacheConclusion(observation);
+      const action = this.current.actions[payload.action_id];
+      if (
+        payload.outcome.outcome === 'failed' &&
+        payload.outcome.failure === 'empty_output' &&
+        action?.operation === 'text.normalize' &&
+        this.current.goal?.status === 'active'
+      ) {
+        this.append({
+          observation_id: `runtime:goal.missed:${this.current.goal.goal_id}`,
+          source: RUNTIME_SOURCE,
+          caused_by: payload.action_id,
+          payload_type: 'goal.missed',
+          payload_version: 1,
+          payload: { goal_id: this.current.goal.goal_id, reason: 'empty_output' },
+        });
+      }
+      if (payload.outcome.outcome === 'succeeded' && action?.operation === 'goal.complete' && this.current.goal) {
+        this.noteWorkload(this.current.goal.goal_id, 'held');
+      }
+      return;
+    }
+    if (observation.payload_type === 'goal.missed') {
+      const payload = observation.payload as { goal_id: string };
+      this.noteWorkload(payload.goal_id, 'missed');
+      return;
+    }
+    if (observation.payload_type === 'output.rejected') {
+      this.maybeRecordBaseline();
+    }
+  }
+
+  private noteWorkload(goal_id: string, quality: 'held' | 'missed'): void {
+    const host = this.options.host as {
+      noteWorkload?: (goal_id: string, quality: 'held' | 'missed') => void;
+    };
+    host.noteWorkload?.(goal_id, quality);
+  }
+
+  private maybeRecordBaseline(): void {
+    if (this.log.some((item) => item.payload_type === 'baseline.recorded' && item.validation.status === 'accepted')) {
+      return;
+    }
+    const payload = this.baselinePayload();
+    if (!payload) {
+      return;
+    }
+    this.append({
+      observation_id: 'runtime:baseline:profile.frame@1',
+      source: RUNTIME_SOURCE,
+      caused_by: null,
+      payload_type: 'baseline.recorded',
+      payload_version: 1,
+      payload,
+    });
+  }
+
+  private importRetainedConclusions(): void {
+    if (this.replayMode) {
+      return;
+    }
+    const host = this.options.host as { conclusions?: () => readonly unknown[] };
+    for (const item of host.conclusions?.() ?? []) {
+      if (!isCachedConclusion(item)) {
+        continue;
+      }
+      if (this.current.conclusions.some((conclusion) => conclusion.conclusion_id === item.conclusion_id)) {
+        continue;
+      }
+      this.append({
+        observation_id: `conclusion:imported:${item.conclusion_id}`,
+        source: RUNTIME_SOURCE,
+        caused_by: null,
+        payload_type: 'conclusion.cached',
+        payload_version: 1,
+        payload: item,
+      });
+    }
   }
 
   private maybeCacheConclusion(result: Observation): void {
@@ -1559,6 +1694,11 @@ export class Runtime {
         invalidation: ['read_set', 'contract_rev', 'admission'],
       },
     });
+    const cached = this.current.conclusions[this.current.conclusions.length - 1];
+    if (cached) {
+      const host = this.options.host as { retainConclusion?: (conclusion: unknown) => void };
+      host.retainConclusion?.(cached);
+    }
   }
 
   private reuseConclusion(started: ActionStartedPayload): ActionOutcome | null {
@@ -1720,6 +1860,25 @@ export class Runtime {
   }
 }
 
+function isCachedConclusion(value: unknown): value is {
+  conclusion_id: string;
+  operation: string;
+  contract_rev: string;
+  implementation_id: string;
+  input_digest: string;
+  output: unknown;
+  evidence: readonly number[];
+  read_set: readonly { resource: string; revision: number }[];
+  authority_scope: { goal_id: string } | { policy_id: string };
+  invalidation: readonly ('read_set' | 'contract_rev' | 'admission')[];
+} {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as { conclusion_id?: unknown };
+  return typeof record.conclusion_id === 'string';
+}
+
 function blockedReason(
   not_selected: readonly { reason: NotSelectedReason }[],
   candidates: readonly Candidate[],
@@ -1811,11 +1970,6 @@ export function replay(recorded: readonly Observation[], options: RuntimeOptions
 
   try {
     for (const observation of ordered) {
-      if (observation.payload_type === 'baseline.recorded') {
-        runtime.recordBaseline();
-        checkPrefix(runtime.trace().observations, ordered);
-        continue;
-      }
       if (CYCLE_APPENDED.includes(observation.source.kind)) {
         continue;
       }

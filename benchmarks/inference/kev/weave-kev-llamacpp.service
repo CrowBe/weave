@@ -1,0 +1,33 @@
+[Unit]
+Description=Weave Kev System One service (llama.cpp backbone)
+Documentation=file://%h/.local/share/weave/kev/llamacpp/
+After=network.target weave-kev-backbone.service
+Requires=weave-kev-backbone.service
+# Same checkpoint and the same wire contract as weave-kev.service, on a
+# different port. Run one or the other; running both is supported and is how
+# the two are compared.
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.local/share/weave/kev/llamacpp
+Environment=HF_HOME=%h/.local/share/weave/kev/hf
+Environment=HF_HUB_OFFLINE=1
+Environment=PYTHONPATH=%h/.local/share/weave/kev/src
+Environment=PYTHONDONTWRITEBYTECODE=1
+# The backbone is elsewhere; torch here holds only the four small pointer-head
+# matrices, so the thread pool is deliberately not widened.
+Environment=OMP_NUM_THREADS=2
+ExecStart=%h/.local/share/weave/kev/src/.venv/bin/python \
+  %h/.local/share/weave/kev/llamacpp/llamacpp_serve.py \
+  --run %h/.local/share/weave/kev/models/kev-4b \
+  --backbone http://127.0.0.1:8099 \
+  --weights Qwen3-4B-Base.Q8_0.gguf \
+  --host 127.0.0.1 --port 8001
+Restart=no
+MemoryMax=8G
+MemorySwapMax=0
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

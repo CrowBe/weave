@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { InvocationOutcome } from '@weave/agentsop';
+import type { CapabilityContract, InvocationOutcome } from '@weave/agentsop';
 
 export type ResourceKind = 'source' | 'destination';
 
@@ -41,12 +41,37 @@ export interface IssuedRef {
   kind: ResourceKind;
 }
 
+/** Admitted implementation source. The host store is the single writer. */
+export interface StoredAdmission {
+  readonly operation: string;
+  readonly implementation_id: string;
+  readonly contract: CapabilityContract;
+  readonly source: string;
+}
+
+export interface StoredWorkload {
+  readonly goal_id: string;
+  readonly quality: 'held' | 'missed';
+}
+
+export interface StoredBuiltinResult {
+  readonly key: string;
+  readonly operation: string;
+  readonly implementation_id: string;
+  readonly outcome: InvocationOutcome;
+}
+
 export interface FabricSnapshot {
   readonly next_handle: number;
   readonly next_canonical: number;
   readonly resources: readonly StoredResource[];
   readonly refs: readonly IssuedRef[];
   readonly invocations: readonly InvocationRecord[];
+  readonly admissions?: readonly StoredAdmission[];
+  readonly conclusions?: readonly unknown[];
+  readonly workload?: readonly StoredWorkload[];
+  readonly measured_cost_micros?: number;
+  readonly builtin_results?: readonly StoredBuiltinResult[];
 }
 
 interface MutableResource extends StoredResource {}
@@ -61,6 +86,11 @@ export class FabricStore {
   private readonly resources: Map<string, MutableResource>;
   private readonly refs: Map<string, IssuedRef>;
   private readonly invocations: Map<string, InvocationRecord>;
+  private admissions: StoredAdmission[];
+  private conclusionRecords: unknown[];
+  private workloadRecords: StoredWorkload[];
+  private measured_cost_micros: number;
+  private builtinResults: StoredBuiltinResult[];
   private readonly path: string | null;
   persistStart = true;
   persistResult = true;
@@ -71,6 +101,14 @@ export class FabricStore {
     this.resources = new Map((snapshot?.resources ?? []).map((r) => [r.canonical_id, { ...r }]));
     this.refs = new Map((snapshot?.refs ?? []).map((r) => [r.handle, { ...r }]));
     this.invocations = new Map((snapshot?.invocations ?? []).map((r) => [r.invocation_id, { ...r }]));
+    this.admissions = (snapshot?.admissions ?? []).map((admission) => ({ ...admission, contract: { ...admission.contract } }));
+    this.conclusionRecords = (snapshot?.conclusions ?? []).map((conclusion) => structuredClone(conclusion));
+    this.workloadRecords = (snapshot?.workload ?? []).map((item) => ({ ...item }));
+    this.measured_cost_micros = snapshot?.measured_cost_micros ?? 0;
+    this.builtinResults = (snapshot?.builtin_results ?? []).map((item) => ({
+      ...item,
+      outcome: structuredClone(item.outcome),
+    }));
     this.path = path;
   }
 
@@ -94,6 +132,11 @@ export class FabricStore {
         ...r,
         inputs: structuredClone(r.inputs),
       })),
+      admissions: this.admissions.map((admission) => ({ ...admission, contract: { ...admission.contract } })),
+      conclusions: this.conclusionRecords.map((conclusion) => structuredClone(conclusion)),
+      workload: this.workloadRecords.map((item) => ({ ...item })),
+      measured_cost_micros: this.measured_cost_micros,
+      builtin_results: this.builtinResults.map((item) => ({ ...item, outcome: structuredClone(item.outcome) })),
     };
   }
 
@@ -147,6 +190,71 @@ export class FabricStore {
     }
     this.invocations.set(record.invocation_id, { ...record, inputs: structuredClone(record.inputs) });
     this.save();
+  }
+
+  recordAdmission(admission: StoredAdmission): void {
+    const copy = { ...admission, contract: { ...admission.contract } };
+    const index = this.admissions.findIndex(
+      (item) => item.operation === admission.operation && item.implementation_id === admission.implementation_id,
+    );
+    if (index >= 0) {
+      this.admissions[index] = copy;
+    } else {
+      this.admissions.push(copy);
+    }
+    this.save();
+  }
+
+  admitted(): readonly StoredAdmission[] {
+    return this.admissions.map((admission) => ({ ...admission, contract: { ...admission.contract } }));
+  }
+
+  retainConclusion(conclusion: unknown): void {
+    this.conclusionRecords.push(structuredClone(conclusion));
+    this.save();
+  }
+
+  conclusions(): readonly unknown[] {
+    return this.conclusionRecords.map((conclusion) => structuredClone(conclusion));
+  }
+
+  noteWorkload(record: StoredWorkload): void {
+    const index = this.workloadRecords.findIndex((item) => item.goal_id === record.goal_id);
+    if (index >= 0) {
+      this.workloadRecords[index] = { ...record };
+    } else {
+      this.workloadRecords.push({ ...record });
+    }
+    this.save();
+  }
+
+  workload(): readonly StoredWorkload[] {
+    return this.workloadRecords.map((item) => ({ ...item }));
+  }
+
+  addMeasuredCost(micros: number): void {
+    this.measured_cost_micros += micros;
+    this.save();
+  }
+
+  measuredCostMicros(): number {
+    return this.measured_cost_micros;
+  }
+
+  rememberResult(result: StoredBuiltinResult): void {
+    const index = this.builtinResults.findIndex((item) => item.key === result.key);
+    const copy = { ...result, outcome: structuredClone(result.outcome) };
+    if (index >= 0) {
+      this.builtinResults[index] = copy;
+    } else {
+      this.builtinResults.push(copy);
+    }
+    this.save();
+  }
+
+  cachedResult(key: string): StoredBuiltinResult | undefined {
+    const found = this.builtinResults.find((item) => item.key === key);
+    return found ? { ...found, outcome: structuredClone(found.outcome) } : undefined;
   }
 
   writeInvocation(record: InvocationRecord): void {

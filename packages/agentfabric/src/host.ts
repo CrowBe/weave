@@ -21,9 +21,11 @@ import {
   type ResolutionStatus,
 } from '@weave/agentsop';
 import { GENERATION_KINDS, type GenerationKind, type InferenceGateway } from '@weave/gateway';
+import { acceptCapabilityOutput } from './bounds.js';
 import { ResourceCoordinator } from './coordinator.js';
 import { FIXTURE_CONTRACTS, REPORT_ASSEMBLE, REPORT_PUBLISH, SOURCE_INSPECT } from './contracts.js';
 import { contentDigest, digest } from './digest.js';
+import { IsolateRunner, isolatedCall } from './isolate.js';
 import {
   FabricStore,
   PersistFailure,
@@ -128,6 +130,7 @@ export class AgentFabricHost implements CapabilityHost {
   private inferenceSeq = 0;
   /** Written only by admission. A function passed to registerImplementation is not stored here. */
   private readonly admitted = new Map<string, AdmittedImplementation[]>();
+  private readonly restored = new IsolateRunner('enforcing');
 
   private readonly live = new Map<string, CapabilityContract>();
   private readonly historical = new Map<string, CapabilityContract>();
@@ -155,6 +158,7 @@ export class AgentFabricHost implements CapabilityHost {
       this.historical.set(contract.id, contract);
       this.status.set(contract.id, trustedBuiltin(contract.id) ? 'resolved' : 'unresolved');
     }
+    this.restoreAdmissions();
   }
 
   snapshot(): FabricSnapshot {
@@ -355,6 +359,20 @@ export class AgentFabricHost implements CapabilityHost {
     return [...this.live.values()];
   }
 
+  /**
+   * The host store records the admitted source. A later process restores the
+   * implementation from that record and does not consult a second in-memory copy.
+   */
+  noteAdmission(contract: CapabilityContract, implementationId: string, source: string): void {
+    this.store.recordAdmission({
+      operation: contract.id,
+      implementation_id: implementationId,
+      contract,
+      source,
+    });
+    this.installAdmitted(contract, this.storedImplementation(contract, source), implementationId);
+  }
+
   /** Registry installation after admission, or for a capability that is already established. */
   installAdmitted(
     contract: CapabilityContract,
@@ -422,7 +440,48 @@ export class AgentFabricHost implements CapabilityHost {
 
   /** Store a conclusion in the registry. This does not widen its authority scope. */
   retainConclusion(conclusion: unknown): void {
-    this.retainedConclusions.push(structuredClone(conclusion));
+    const copy = structuredClone(conclusion);
+    this.retainedConclusions.push(copy);
+    this.store.retainConclusion(copy);
+  }
+
+  conclusions(): readonly unknown[] {
+    return this.retainedConclusions.map((conclusion) => structuredClone(conclusion));
+  }
+
+  noteWorkload(goal_id: string, quality: 'held' | 'missed'): void {
+    this.store.noteWorkload({ goal_id, quality });
+  }
+
+  workload(): readonly { goal_id: string; quality: 'held' | 'missed' }[] {
+    return this.store.workload();
+  }
+
+  measuredCostMicros(): number {
+    return this.store.measuredCostMicros();
+  }
+
+  private restoreAdmissions(): void {
+    for (const admission of this.store.admitted()) {
+      this.installAdmitted(
+        admission.contract,
+        this.storedImplementation(admission.contract, admission.source),
+        admission.implementation_id,
+      );
+    }
+    for (const conclusion of this.store.conclusions()) {
+      this.retainedConclusions.push(structuredClone(conclusion));
+    }
+  }
+
+  private storedImplementation(contract: CapabilityContract, source: string): CapabilityImplementation {
+    return async (inputs) => {
+      const ran = await isolatedCall(this.restored, source, inputs);
+      if (!ran.ok) {
+        return { outcome: 'failed', failure: ran.failure };
+      }
+      return acceptCapabilityOutput(contract, inputs, ran.output);
+    };
   }
 
   replaceLiveContract(contract: CapabilityContract): void {
@@ -487,6 +546,7 @@ export class AgentFabricHost implements CapabilityHost {
       implementation_id: open.implementation_id,
       inputs: open.inputs,
     });
+    this.store.addMeasuredCost(HOST_INVOCATION_MICROS);
     this.open.set(open.invocation_id, open);
     const result = new Promise<InvocationOutcome>((resolve) => {
       open.resolve = resolve;
@@ -778,11 +838,54 @@ export class AgentFabricHost implements CapabilityHost {
     open.outcome = outcome;
     open.phase = 'done';
     this.open.delete(open.invocation_id);
+    if (outcome.outcome === 'succeeded') {
+      const key = this.builtinCacheKey(open.operation, open.inputs);
+      if (key) {
+        this.store.rememberResult({
+          key,
+          operation: open.operation,
+          implementation_id: open.implementation_id,
+          outcome,
+        });
+      }
+    }
     open.resolve(outcome);
   }
 
   private finishUncertain(open: OpenInvocation, reason: string): void {
     this.finish(open, { outcome: 'uncertain', reason }, 'uncertain');
+  }
+
+  private cachedBuiltin(operation: string, inputs: unknown): CachedBuiltin | null {
+    const key = this.builtinCacheKey(operation, inputs);
+    if (!key) {
+      return null;
+    }
+    return this.store.cachedResult(key) ?? null;
+  }
+
+  /** Inspect and assemble only. `text.normalize` is reused through a conclusion, not this cache. */
+  private builtinCacheKey(operation: string, inputs: unknown): string | null {
+    if (operation === SOURCE_INSPECT.id) {
+      const source = (inputs as { source?: string }).source;
+      if (!source) {
+        return null;
+      }
+      const resource = this.resourceFor(source);
+      if (!resource) {
+        return null;
+      }
+      return digest({
+        operation,
+        canonical_id: resource.canonical_id,
+        revision: resource.revision,
+        content: resource.content,
+      });
+    }
+    if (operation === REPORT_ASSEMBLE.id) {
+      return digest({ operation, inputs });
+    }
+    return null;
   }
 
   private prepare(
@@ -842,6 +945,22 @@ export class AgentFabricHost implements CapabilityHost {
     }
     if (existing?.status === 'committed' && existing.outcome) {
       return { kind: 'replay', handle: this.replayCompleted(existing) };
+    }
+    const cached = this.cachedBuiltin(operation, boundInputs);
+    if (cached && grant) {
+      return {
+        kind: 'replay',
+        handle: {
+          kind: 'handle',
+          action_id: grant.action_id,
+          invocation_id,
+          implementation_id: cached.implementation_id,
+          result: Promise.resolve(cached.outcome),
+          requestCancel: () => {
+            this.requestCancel(invocation_id);
+          },
+        },
+      };
     }
     if (!this.authority.markInvoked(grant as Grant)) {
       return this.reject('DENIED', 'grant has already been used for an invocation');
@@ -1114,6 +1233,8 @@ function sameSet(left: readonly string[], right: readonly string[]): boolean {
   return right.every((id) => wanted.delete(id)) && wanted.size === 0;
 }
 
+const HOST_INVOCATION_MICROS = 1_000;
+
 const TRUSTED_BUILTINS: ReadonlySet<string> = new Set([
   SOURCE_INSPECT.id,
   REPORT_ASSEMBLE.id,
@@ -1122,6 +1243,11 @@ const TRUSTED_BUILTINS: ReadonlySet<string> = new Set([
 
 function trustedBuiltin(id: string): boolean {
   return TRUSTED_BUILTINS.has(id);
+}
+
+interface CachedBuiltin {
+  readonly implementation_id: string;
+  readonly outcome: InvocationOutcome;
 }
 
 function isGenerationKind(kind: string): kind is GenerationKind {

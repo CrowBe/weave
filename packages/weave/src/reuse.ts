@@ -9,7 +9,7 @@ import { digest } from './digest.js';
 import type { AuthorityScope, CachedConclusion, PolicyRecord, ReadSetEntry, ResourceReadSetEntry } from './types.js';
 
 /** Fixture cost of one host invocation, counted once. A reuse does not add another. */
-export const HOST_INVOCATION_MICROS = 100;
+export const HOST_INVOCATION_MICROS = 1_000;
 
 export interface ReuseCandidate {
   readonly operation: string;

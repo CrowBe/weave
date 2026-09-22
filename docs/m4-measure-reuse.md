@@ -127,3 +127,48 @@ demonstrated red and green against the exact contract revisions.
   binding or reject an output. Silence is not a correction.
 - Cross-goal policy is one explicit record in the fixture. M4 does not add a
   general disclosure language.
+
+## 7. Fixture facts
+
+These are the fixture choices the checks name. An implementation uses them
+as written.
+
+The repeated report dispatches admitted `text.normalize` from
+`composition.normalize-report@1`. The procedure union does not gain an arm
+for that binding. `crystallize_and_report@1` and `report.fold` are an earlier
+fixture. They are not this composition.
+
+The workload is three goals. `g-normalize-1` and `g-normalize-2` use the M0
+source texts and hold the success evidence. `g-normalize-blank` is the
+failing goal: one source body is three spaces, which is non-empty, and the
+admitted implementation's empty output is `failed`. That goal does not
+complete. Its quality is `missed`. The other two are `held`.
+
+```text
+ConclusionPolicy {
+  policy_id: "policy.conclusion.share@1"
+  goals:     ["g-normalize-1", "g-normalize-2"]
+}
+```
+
+Operator ingress writes it as `conclusion.policy`. Two goal ids in the
+registry are not this record.
+
+One host invocation adds `1_000` to `cost_micros`. An inference reservation
+adds the micros the gateway recorded for that request, once. Reuse adds
+neither.
+
+The action binding names `implementation_id`. The host runs that
+implementation and records the id on the invocation. When the binding omits
+the id, the host runs the earliest admitted implementation. Empty reliability
+and cost do not change either choice. The host retains every admitted
+implementation of the contract.
+
+A reused conclusion is included in a view only when the profile selects the
+slice `conclusion`. `profile.frame@1` does not. The manifest records that
+slice once.
+
+`output.rejected` is the human-correction observation. Operator ingress
+sends `{ action_id, reason }` when it changes an action binding or rejects
+an output. Each accepted observation counts once. `admission.decided` and
+`implementation.revoked` do not. Silence does not.

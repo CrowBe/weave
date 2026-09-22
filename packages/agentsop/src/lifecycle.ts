@@ -22,13 +22,18 @@ export interface SearchResult {
 
 export interface IsolationReport {
   readonly supported: boolean;
+  readonly tier: 'untrusted';
   readonly filesystem: 'blocked' | 'open' | 'unprobed';
+  readonly network: 'none' | 'open' | 'unprobed';
   readonly child_process: 'blocked' | 'open' | 'unprobed';
   readonly credentials: 'absent' | 'visible' | 'unprobed';
   readonly evaluated_process: 'undefined' | 'defined' | 'unprobed';
   readonly evaluated_require: 'undefined' | 'defined' | 'unprobed';
   readonly evaluated_fetch: 'undefined' | 'defined' | 'unprobed';
   readonly held_out_mounted: false;
+  readonly host_process: 'unreachable' | 'unprobed';
+  readonly broker: 'resolver-context';
+  readonly limits: { readonly memory_bytes: number; readonly cpu_ms: number };
   readonly report_id: string;
 }
 
@@ -70,6 +75,8 @@ export interface AdmissionDecision {
  */
 export interface CapabilityLifecycle {
   search(desired: DesiredOperation, retained: string | null): LifecycleStep;
+  /** Purpose, closed shapes, and an empty effect set. A shared output type is not a composition. */
+  searchExact(desired: DesiredOperation, retained: string | null): LifecycleStep;
   proposeContract(contract: CapabilityContract): LifecycleStep;
   submitCases(split: TestSplit, cases: readonly TestCase[]): LifecycleStep;
   reviseCases(split: TestSplit, cases: readonly TestCase[]): LifecycleStep;
@@ -78,6 +85,8 @@ export interface CapabilityLifecycle {
   implementerView(): ImplementerView | null;
   attachImplementation(id: string, source: string): LifecycleStep;
   proveGreen(id: string): Promise<LifecycleStep>;
+  /** Counts and failure codes only. A second request for the same pair spends the split. */
+  heldOutReport(id: string): LifecycleStep;
   requestAdmission(id: string): LifecycleStep;
   admit(decision: AdmissionDecision): LifecycleStep;
   revoke(operation: string, implementationId: string, reason: string): LifecycleStep;
