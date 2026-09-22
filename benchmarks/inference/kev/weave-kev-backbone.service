@@ -1,0 +1,33 @@
+[Unit]
+Description=Weave Kev backbone (llama.cpp, Vulkan)
+Documentation=file://%h/.local/share/weave/kev/llamacpp/
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.local/share/weave/kev/llamacpp/bin
+Environment=LD_LIBRARY_PATH=%h/.local/share/weave/kev/llamacpp/bin
+# --pooling none makes /embedding return per-token last_hidden_state rather than a
+# pooled sentence vector, and --embd-normalize -1 leaves it unnormalised. The Kev
+# pointer head reads those states directly, so both are load-bearing, not tuning.
+#
+# Q8_0 rather than Q4_K_M: it reproduces the PyTorch service's decision on 56/56
+# judgment-site records, against 52/56 for Q4_K_M, and costs 5% more latency and
+# 1.7 GB. Both score 47/56 correct, so Q4_K_M is not worse — it is merely not
+# identical, and identity is what makes this service a drop-in replacement.
+#
+# -ngl 99 is not an optimisation. A runtime LoRA disables llama.cpp's CPU_REPACK
+# GEMM kernels on every adapted projection ("cannot use buft 'CPU_REPACK',
+# fallback to CPU"), which costs the whole advantage: 28 tok/s on CPU against
+# 82 tok/s offloaded. On this iGPU there is no repack buft to lose.
+ExecStart=%h/.local/share/weave/kev/llamacpp/bin/llama-server \
+  --model %h/.local/share/weave/kev/models/gguf/Qwen3-4B-Base.Q8_0.gguf \
+  --lora %h/.local/share/weave/kev/models/gguf/kev-lora-f16.gguf \
+  -ngl 99 --embeddings --pooling none --embd-normalize -1 \
+  -c 4096 -t 8 --host 127.0.0.1 --port 8099
+Restart=no
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

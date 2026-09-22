@@ -19,7 +19,9 @@ import {
   EVALUATION_KINDS,
   createJevGateway,
   createKevGateway,
+  describeKevService,
   readCredentials,
+  readKevBaseURL,
   runCase,
   type ProbeRecord,
 } from './run.ts';
@@ -167,8 +169,13 @@ async function main(): Promise<void> {
     const permute = Math.max(1, Number(flag('permute') ?? 1));
     const local = (flag('model') ?? 'jev') === 'kev';
     const options = { preferFree: present('prefer-free'), local };
-    const gateway = local ? createKevGateway(clock) : createJevGateway(credentials, clock, options);
-    console.log(local ? 'model: local Kev 4B (single route, no fallback)' : 'model: hosted Jev');
+    const kevBaseURL = readKevBaseURL(process.env);
+    const gateway = local ? createKevGateway(clock, kevBaseURL) : createJevGateway(credentials, clock, options);
+    console.log(
+      local
+        ? `model: local Kev 4B (single route, no fallback)\nservice: ${await describeKevService(kevBaseURL)}`
+        : 'model: hosted Jev',
+    );
     records = [];
 
     // Precompute each case's orderings so the plan — and the cost — is known
