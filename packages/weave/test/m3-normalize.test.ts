@@ -430,14 +430,14 @@ describe('M3 text.normalize composition', () => {
   });
 
   it('M3-T11 null, empty, and mid-value outputs are failed', async () => {
-    const authority = createGrantAuthority();
-    const host = new AgentFabricHost({ authority });
     const cases: { source: string; text: string; failure: string }[] = [
       { source: 'return null;', text: 'hello', failure: 'empty_output' },
       { source: 'return { text: "" };', text: 'hello', failure: 'empty_output' },
       { source: 'return { text: "a\\uD800" };', text: 'hello', failure: 'mid_value' },
     ];
     for (const [index, item] of cases.entries()) {
+      const authority = createGrantAuthority();
+      const host = new AgentFabricHost({ authority });
       host.noteAdmission(NORMALIZE_CONTRACT, `bad-${index}`, item.source);
       const grant = authority.issue({
         action_id: `a-bad-${index}`,

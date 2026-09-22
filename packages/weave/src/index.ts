@@ -35,3 +35,5 @@ export {
   heldOutNormalizeCases,
 } from './normalize-author.js';
 export type { ExtensionAuthor } from './crystallize-actions.js';
+export { PROCEDURE_IDS } from './candidates.js';
+export { HOST_INVOCATION_MICROS, reuseVerdict } from './reuse.js';

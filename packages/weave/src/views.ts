@@ -19,6 +19,11 @@ export interface FrameProfile {
   readonly version: number;
   /** Maximum catalogue operations disclosed. Excess is omitted with reason `budget`. */
   readonly catalogue_budget: number;
+  /**
+   * Slice names this profile selects. A cached conclusion is included only
+   * when `conclusion` is listed, and then once. Reuse does not add a slice.
+   */
+  readonly slices?: readonly string[];
 }
 
 /** Discloses the fixture catalogue. A tighter profile is a different record. */
@@ -68,7 +73,14 @@ export function renderFrameView(
     .filter((id) => state.sources[id])
     .map((id) => ({ id, revision: state.sources[id]!.revision }));
 
-  const content = {
+  const content: {
+    purpose: string;
+    sources: string[];
+    authority: { read: string[] };
+    catalogue: { id: string; input: Readonly<Record<string, string>> }[];
+    registered: { id: string; revision: number }[];
+    conclusions?: { conclusion_id: string; evidence: readonly number[] }[];
+  } = {
     purpose: goal?.purpose ?? '',
     sources: [...(goal?.sources ?? [])],
     authority: { read: [...(goal?.authority.read ?? [])] },
@@ -79,23 +91,40 @@ export function renderFrameView(
     registered: authorizedSources,
   };
 
+  const slices = [
+    slice('goal', goal ? [goal.evidence] : [], []),
+    slice('authority', goal ? [goal.evidence] : [], authorityOmitted),
+    slice('catalogue', [], catalogueOmitted, omittedOps.length > 0),
+    slice(
+      'registered',
+      authorizedSources.map((s) => state.sources[s.id]!.evidence),
+      [],
+    ),
+  ];
+  if (profile.slices?.includes('conclusion')) {
+    const seen = new Set<number>();
+    const revisions: number[] = [];
+    for (const conclusion of state.conclusions) {
+      for (const seq of conclusion.evidence) {
+        if (!seen.has(seq)) {
+          seen.add(seq);
+          revisions.push(seq);
+        }
+      }
+    }
+    content.conclusions = state.conclusions.map((conclusion) => ({
+      conclusion_id: conclusion.conclusion_id,
+      evidence: conclusion.evidence,
+    }));
+    slices.push(slice('conclusion', revisions, []));
+  }
+
   return {
     profile: profile.id,
     profile_version: profile.version,
     state_revision: state.state_revision,
     content,
-    manifest: {
-      slices: [
-        slice('goal', goal ? [goal.evidence] : [], []),
-        slice('authority', goal ? [goal.evidence] : [], authorityOmitted),
-        slice('catalogue', [], catalogueOmitted, omittedOps.length > 0),
-        slice(
-          'registered',
-          authorizedSources.map((s) => state.sources[s.id]!.evidence),
-          [],
-        ),
-      ],
-    },
+    manifest: { slices },
   };
 }
 

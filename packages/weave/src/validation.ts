@@ -30,6 +30,14 @@ const EXPECTED_SOURCE: Readonly<Record<PayloadType, readonly ProvenanceKind[]>> 
   'admission.decided': ['operator'],
   'implementation.revoked': ['operator'],
   'evidence.invalidated': ['operator'],
+  'composition.recorded': ['operator'],
+  'conclusion.cached': ['runtime'],
+  'conclusion.policy': ['operator'],
+  'policy.recorded': ['operator'],
+  'goal.missed': ['operator', 'runtime'],
+  'binding.corrected': ['operator'],
+  'output.rejected': ['operator'],
+  'baseline.recorded': ['runtime'],
 };
 
 function rejected(reason: string): Validation {
@@ -144,11 +152,26 @@ export function validate(input: ObservationInput, state: State): Validation {
       return isNonEmptyString(payload['reason']) && isNonEmptyString(payload['contract_revision'])
         ? ACCEPTED
         : rejected('evidence.invalidated requires reason and contract_revision');
+    case 'composition.recorded':
+      return validateComposition(payload);
+    case 'conclusion.cached':
+      return validateConclusion(payload);
+    case 'conclusion.policy':
+    case 'policy.recorded':
+      return validatePolicy(payload);
+    case 'goal.missed':
+      return validateMissed(payload, state);
+    case 'binding.corrected':
+      return validateCorrection(payload);
+    case 'output.rejected':
+      return validateCorrection(payload);
+    case 'baseline.recorded':
+      return validateBaseline(payload);
   }
 }
 
 function validateGoal(payload: Record<string, unknown>, state: State): Validation {
-  if (state.goal) {
+  if (state.goal && state.goal.status === 'active') {
     return rejected('a goal is already open');
   }
   if (!isNonEmptyString(payload['goal_id']) || typeof payload['purpose'] !== 'string') {
@@ -170,6 +193,9 @@ function validateGoal(payload: Record<string, unknown>, state: State): Validatio
   }
   if (payload['framing'] !== undefined && payload['framing'] !== true && payload['framing'] !== false) {
     return rejected('goal.framing must be a boolean');
+  }
+  if (payload['composition_id'] !== undefined && !isNonEmptyString(payload['composition_id'])) {
+    return rejected('goal.composition_id must be a non-empty string');
   }
   if (payload['gap'] !== undefined) {
     const gap = payload['gap'];
@@ -615,4 +641,99 @@ function validateApprovalDecision(payload: Record<string, unknown>, state: State
   return isNonEmptyString(payload['principal']) && isNonNegativeInteger(payload['authority_revision'])
     ? ACCEPTED
     : rejected('approval.decided requires principal and authority_revision');
+}
+
+function validateComposition(payload: Record<string, unknown>): Validation {
+  if (!isNonEmptyString(payload['composition_id']) || !Array.isArray(payload['steps']) || payload['steps'].length === 0) {
+    return rejected('composition.recorded requires composition_id and steps');
+  }
+  const steps = payload['steps'];
+  if (!steps.every((step) => isRecord(step) && isNonEmptyString(step['operation']))) {
+    return rejected('composition steps require an operation');
+  }
+  return ACCEPTED;
+}
+
+function validateConclusion(payload: Record<string, unknown>): Validation {
+  if (
+    !isNonEmptyString(payload['conclusion_id']) ||
+    !isNonEmptyString(payload['operation']) ||
+    !isNonEmptyString(payload['contract_rev']) ||
+    !isNonEmptyString(payload['implementation_id']) ||
+    !isNonEmptyString(payload['input_digest']) ||
+    !('output' in payload)
+  ) {
+    return rejected('conclusion.cached requires identity, digest, and output');
+  }
+  if (!Array.isArray(payload['evidence']) || payload['evidence'].length === 0 || !payload['evidence'].every(isNonNegativeInteger)) {
+    return rejected('conclusion.cached requires evidence seqs');
+  }
+  if (!isReadSet(payload['read_set'])) {
+    return rejected('conclusion.cached requires a read set');
+  }
+  const scope = payload['authority_scope'];
+  if (!isRecord(scope) || isNonEmptyString(scope['goal_id']) === isNonEmptyString(scope['policy_id'])) {
+    return rejected('conclusion.cached requires an authority scope');
+  }
+  const invalidation = payload['invalidation'];
+  const allowed = new Set(['read_set', 'contract_rev', 'admission']);
+  if (!Array.isArray(invalidation) || invalidation.length === 0 || !invalidation.every((item) => typeof item === 'string' && allowed.has(item))) {
+    return rejected('conclusion.cached requires invalidation conditions');
+  }
+  return ACCEPTED;
+}
+
+function validatePolicy(payload: Record<string, unknown>): Validation {
+  if (!isNonEmptyString(payload['policy_id']) || !isStringArray(payload['goals']) || new Set(payload['goals']).size !== payload['goals'].length) {
+    return rejected('policy.recorded requires a policy_id and distinct goals');
+  }
+  if (payload['goals'].length < 2) {
+    return rejected('policy.recorded must name both goals');
+  }
+  return ACCEPTED;
+}
+
+function validateMissed(payload: Record<string, unknown>, state: State): Validation {
+  if (!isNonEmptyString(payload['goal_id']) || !isNonEmptyString(payload['reason'])) {
+    return rejected('goal.missed requires goal_id and reason');
+  }
+  if (!state.goal || state.goal.goal_id !== payload['goal_id'] || state.goal.status !== 'active') {
+    return rejected('goal.missed names a goal that is not active');
+  }
+  return ACCEPTED;
+}
+
+function validateCorrection(payload: Record<string, unknown>): Validation {
+  if (payload['goal_id'] !== undefined && !isNonEmptyString(payload['goal_id'])) {
+    return rejected('a human correction goal_id must be a non-empty string');
+  }
+  if (!isNonEmptyString(payload['action_id']) || !isNonEmptyString(payload['reason'])) {
+    return rejected('a human correction requires action_id and reason');
+  }
+  return ACCEPTED;
+}
+
+function validateBaseline(payload: Record<string, unknown>): Validation {
+  if (payload['strategy'] !== 'profile.frame@1') {
+    return rejected('baseline strategy must be profile.frame@1');
+  }
+  if (typeof payload['workload'] !== 'string' || payload['workload'].length === 0) {
+    return rejected('baseline requires a workload');
+  }
+  const quality = payload['quality'];
+  if (!isRecord(quality) || !isNonNegativeInteger(quality['held']) || !isNonNegativeInteger(quality['missed'])) {
+    return rejected('baseline quality requires held and missed counts');
+  }
+  if ((quality['missed'] as number) < 1 || (quality['held'] as number) < 1) {
+    return rejected('baseline requires a failing case and a success');
+  }
+  if (
+    !isNonNegativeInteger(payload['inference_requests']) ||
+    !isNonNegativeInteger(payload['latency_ticks']) ||
+    !isNonNegativeInteger(payload['cost_micros']) ||
+    !isNonNegativeInteger(payload['human_corrections'])
+  ) {
+    return rejected('baseline requires inference count, tick latency, cost, and human corrections');
+  }
+  return ACCEPTED;
 }

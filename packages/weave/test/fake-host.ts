@@ -129,6 +129,7 @@ export class FakeHost implements CapabilityHost {
       kind: 'handle',
       action_id,
       invocation_id: action_id,
+      implementation_id: 'builtin',
       result,
       requestCancel: () => {
         /* M0 holds completions until the test releases them. */

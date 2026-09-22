@@ -1,9 +1,9 @@
 /**
  * M4 contract checks (docs/m4-measure-reuse.md).
  *
- * M4-T01 is the repeated composition and is green on the admitted fixture.
- * M4-T02 through M4-T06 still fail their assertions. `expectRed` records that
- * gap so verify stays green, and fails the suite once a check starts passing.
+ * The repeated report dispatches admitted `text.normalize` from
+ * `composition.normalize-report@1`. Reuse, cross-goal policy, replacement
+ * admission, and the baseline are required evidence.
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -253,19 +253,6 @@ function throwingLifecycle(): CapabilityLifecycle {
   };
 }
 
-/** The check is still the unimplemented gap. A passing check must leave this wrapper. */
-async function expectRed(check: () => void | Promise<void>): Promise<void> {
-  try {
-    await check();
-  } catch (error) {
-    if (error instanceof assert.AssertionError) {
-      return;
-    }
-    throw error;
-  }
-  throw new Error('this M4 check passed; remove expectRed');
-}
-
 function throwingAuthor(): ExtensionAuthor {
   const fail = (): never => {
     throw new Error('author must not be invoked');
@@ -314,10 +301,8 @@ describe('M4 measure reuse', () => {
     await drive({ runtime: repeat, host: next.host });
 
     const added = normalizeInvocations(next.host);
-    await expectRed(() => {
-      assert.equal(added, 0, 'a current read set reuses the cached conclusion and does not invoke the host again');
-      assert.equal(citesConclusion(repeat), true, 'the trace cites the conclusion evidence');
-    });
+    assert.equal(added, 0, 'a current read set reuses the cached conclusion and does not invoke the host again');
+    assert.equal(citesConclusion(repeat), true, 'the trace cites the conclusion evidence');
   });
 
   it('M4-T03 a source revision keeps the short conclusion and does not return it as current', async () => {
@@ -350,13 +335,11 @@ describe('M4 measure reuse', () => {
 
     assert.equal(repeat.state().normalized[fixture.alpha]?.text, collapseWhitespace(SHORT_REVISION));
     assert.notEqual(repeat.state().normalized[fixture.alpha]?.text, firstText);
-    await expectRed(() => {
-      const retained = fixture.runtime.trace().observations.filter((observation) => {
-        return observation.validation.status === 'accepted' && observation.payload_type.startsWith('conclusion.');
-      });
-      assert.ok(retained.length > 0, 'the old conclusion remains in the log after the source revision changes');
-      assert.equal(JSON.stringify(retained).includes(firstText), true, 'the retained conclusion still holds the short output');
+    const retained = fixture.runtime.trace().observations.filter((observation) => {
+      return observation.validation.status === 'accepted' && observation.payload_type.startsWith('conclusion.');
     });
+    assert.ok(retained.length > 0, 'the old conclusion remains in the log after the source revision changes');
+    assert.equal(JSON.stringify(retained).includes(firstText), true, 'the retained conclusion still holds the short output');
   });
 
   it('M4-T04 cross-goal reuse requires conclusion.policy', async () => {
@@ -385,18 +368,16 @@ describe('M4 measure reuse', () => {
       payload_version: 1,
       payload: { policy_id: 'policy.conclusion.share@1', goals: ['g-normalize-1', 'g-normalize-2'] },
     });
-    await expectRed(async () => {
-      assert.equal(policy.validation.status, 'accepted', JSON.stringify(policy.validation));
-      register(shared, fixture.alpha, CONTENT['source:alpha'] as string, 'shared-alpha');
-      register(shared, fixture.beta, CONTENT['source:beta'] as string, 'shared-beta');
-      open(shared, goalFor(fixture, 'g-normalize-2', [fixture.alpha, fixture.beta]));
-      await drive({ runtime: shared, host: allowed.host });
-      assert.equal(
-        normalizeInvocations(allowed.host),
-        0,
-        'policy.conclusion.share@1 permits reuse without a second host invocation',
-      );
-    });
+    assert.equal(policy.validation.status, 'accepted', JSON.stringify(policy.validation));
+    register(shared, fixture.alpha, CONTENT['source:alpha'] as string, 'shared-alpha');
+    register(shared, fixture.beta, CONTENT['source:beta'] as string, 'shared-beta');
+    open(shared, goalFor(fixture, 'g-normalize-2', [fixture.alpha, fixture.beta]));
+    await drive({ runtime: shared, host: allowed.host });
+    assert.equal(
+      normalizeInvocations(allowed.host),
+      0,
+      'policy.conclusion.share@1 permits reuse without a second host invocation',
+    );
   });
 
   it('M4-T05 a second admission keeps empty reliability and the host names who ran', async () => {
@@ -419,16 +400,14 @@ describe('M4 measure reuse', () => {
     }
     host.release(handle.action_id);
     await handle.result;
-    await expectRed(() => {
-      const kept = host.store.admitted().filter((admission) => admission.operation === 'text.normalize');
-      assert.deepEqual(
-        kept.map((admission) => admission.implementation_id),
-        ['direct', 'aliased'],
-        'the host retains every admitted implementation; empty reliability and cost do not replace the earlier one',
-      );
-      const record = host.store.getInvocation(handle.invocation_id) as { implementation_id?: string } | undefined;
-      assert.equal(record?.implementation_id, 'direct', 'an omitted binding runs the earliest admitted implementation and records that id');
-    });
+    const kept = host.store.admitted().filter((admission) => admission.operation === 'text.normalize');
+    assert.deepEqual(
+      kept.map((admission) => admission.implementation_id),
+      ['direct', 'aliased'],
+      'the host retains every admitted implementation; empty reliability and cost do not replace the earlier one',
+    );
+    const record = host.store.getInvocation(handle.invocation_id) as { implementation_id?: string } | undefined;
+    assert.equal(record?.implementation_id, 'direct', 'an omitted binding runs the earliest admitted implementation and records that id');
   });
 
   it('M4-T06 the baseline counts the failing goal before any M5 candidate', async () => {
@@ -445,6 +424,14 @@ describe('M4 measure reuse', () => {
     tick(second, 2);
     register(second, fixture.alpha, CONTENT['source:alpha'] as string, 'base-alpha');
     register(second, fixture.beta, CONTENT['source:beta'] as string, 'base-beta');
+    const shared = second.operator.submit({
+      observation_id: 'operator:conclusion.policy:baseline',
+      caused_by: null,
+      payload_type: 'conclusion.policy',
+      payload_version: 1,
+      payload: { policy_id: 'policy.conclusion.share@1', goals: ['g-normalize-1', 'g-normalize-2'] },
+    });
+    assert.equal(shared.validation.status, 'accepted', JSON.stringify(shared.validation));
     open(second, goalFor(fixture, 'g-normalize-2', [fixture.alpha, fixture.beta]));
     await drive({ runtime: second, host: repeated.host });
     const repeatedNormalize = normalizeInvocations(repeated.host);
@@ -475,7 +462,6 @@ describe('M4 measure reuse', () => {
     const observations = [fixture.runtime, second, failing].flatMap((runtime) => runtime.trace().observations);
     const laterCandidate = observations.find((observation) => observation.payload_type.startsWith('experiment.') || JSON.stringify(observation.payload).includes('profile.frame.narrow@1'));
     const baseline = baselinePayload(observations);
-    await expectRed(() => {
     assert.ok(baseline, 'the baseline is recorded before any M5 candidate');
     assert.equal(laterCandidate, undefined);
     const body = JSON.stringify(baseline.quality);
@@ -495,6 +481,5 @@ describe('M4 measure reuse', () => {
     );
     assert.equal(typeof baseline.latency_ticks, 'number');
     assert.ok((baseline.latency_ticks as number) >= 0);
-    });
   });
 });

@@ -28,6 +28,17 @@ export const PROCEDURE_PUBLISH = 'inspect_report_publish@1' as const;
 export const PROCEDURE_FRAME = 'frame_and_report@1' as const;
 export const PROCEDURE_CRYSTALLIZE = 'crystallize_and_report@1' as const;
 
+/** The control-core procedure union. A recorded composition is not a member. */
+export const PROCEDURE_IDS = [PROCEDURE, PROCEDURE_PUBLISH, PROCEDURE_FRAME, PROCEDURE_CRYSTALLIZE] as const satisfies readonly ProcedureId[];
+
+const PROCEDURE_UNION: Record<ProcedureId, true> = {
+  'inspect_and_report@1': true,
+  'inspect_report_publish@1': true,
+  'frame_and_report@1': true,
+  'crystallize_and_report@1': true,
+};
+void PROCEDURE_UNION;
+
 export type Describe = (operation: string) => CapabilityContract | null;
 export type Canonical = (ref: string) => string;
 

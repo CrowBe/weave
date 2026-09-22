@@ -14,13 +14,17 @@ import type {
   AdmissionDecidedPayload,
   CapabilityDescribedPayload,
   ClockTickPayload,
+  BaselineRecord,
+  CachedConclusion,
   CrystallizationState,
   Goal,
+  HumanCorrection,
   InferenceRecord,
   InferenceRecordedPayload,
   InferenceRequestedPayload,
   InspectionResult,
   Observation,
+  PolicyRecord,
   Proposal,
   PublishReceipt,
   Report,
@@ -28,13 +32,14 @@ import type {
   Seq,
   SourcePayload,
   State,
+  WorkloadCase,
 } from './types.js';
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
 interface MutableState {
   state_revision: Seq;
-  goal: (Goal & { status: 'active' | 'complete'; evidence: Seq }) | null;
+  goal: (Goal & { status: 'active' | 'complete' | 'missed'; evidence: Seq }) | null;
   sources: Record<string, { revision: number; content: string; evidence: Seq }>;
   actions: Record<string, Mutable<ActionRecord>>;
   inspections: Record<string, { result: InspectionResult; evidence: Seq }>;
@@ -48,7 +53,12 @@ interface MutableState {
   proposal: { proposal: Proposal; evidence: Seq } | null;
   inferences: Record<string, Mutable<InferenceRecord> & { evidence: Seq[] }>;
   crystallization: Mutable<CrystallizationState>;
+  conclusions: CachedConclusion[];
+  policies: PolicyRecord[];
   normalized: Record<string, { text: string; revision: number; evidence: Seq }>;
+  workload: WorkloadCase[];
+  corrections: HumanCorrection[];
+  baseline: BaselineRecord | null;
 }
 
 export function initialState(): MutableState {
@@ -72,7 +82,12 @@ export function initialState(): MutableState {
     proposal: null,
     inferences: {},
     crystallization: emptyCrystallization(),
+    conclusions: [],
+    policies: [],
     normalized: {},
+    workload: [],
+    corrections: [],
+    baseline: null,
   };
 }
 
@@ -106,12 +121,55 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
     case 'goal.opened': {
       const goal = observation.payload as Goal;
       state.goal = { ...goal, status: 'active', evidence: observation.seq };
+      state.actions = {};
+      state.inspections = {};
+      state.normalized = {};
+      state.report = null;
+      state.publication = null;
+      state.proposal = null;
+      state.crystallization = emptyCrystallization();
       state.budget = {
         actions: { limit: goal.budget.actions, reserved: 0, spent: 0 },
         judgments: { limit: goal.budget.judgments, reserved: 0, spent: 0 },
         cost: { limit: goal.budget.cost ?? 0, reserved: 0, spent: 0 },
       };
       state.recovery = { limit: goal.budget.recovery ?? 0, spent: 0 };
+      return;
+    }
+    case 'composition.recorded':
+      return;
+    case 'conclusion.cached': {
+      state.conclusions.push(observation.payload as CachedConclusion);
+      return;
+    }
+    case 'conclusion.policy':
+    case 'policy.recorded': {
+      const payload = observation.payload as { policy_id: string; goals: string[] };
+      state.policies.push({ policy_id: payload.policy_id, goals: [...payload.goals], evidence: observation.seq });
+      return;
+    }
+    case 'goal.missed': {
+      const payload = observation.payload as { goal_id: string };
+      if (state.goal && state.goal.goal_id === payload.goal_id) {
+        state.goal.status = 'missed';
+        state.workload.push({ goal_id: payload.goal_id, quality: 'missed' });
+      }
+      return;
+    }
+    case 'binding.corrected':
+    case 'output.rejected': {
+      const payload = observation.payload as { goal_id?: string; action_id: string; reason: string };
+      state.corrections.push({
+        goal_id: payload.goal_id ?? state.goal?.goal_id ?? '',
+        kind: observation.payload_type === 'binding.corrected' ? 'binding' : 'output',
+        action_id: payload.action_id,
+        reason: payload.reason,
+        evidence: observation.seq,
+      });
+      return;
+    }
+    case 'baseline.recorded': {
+      state.baseline = observation.payload as BaselineRecord;
       return;
     }
     case 'source.registered':
@@ -330,8 +388,9 @@ function integrateSuccess(state: MutableState, record: ActionRecord, output: unk
       return;
     }
     case 'goal.complete': {
-      if (state.goal) {
+      if (state.goal && state.goal.status === 'active') {
         state.goal.status = 'complete';
+        state.workload.push({ goal_id: state.goal.goal_id, quality: 'held' });
       }
       return;
     }

@@ -119,6 +119,14 @@ export type ActionOutcome =
 export interface ActionResultPayload {
   readonly action_id: ActionId;
   readonly outcome: ActionOutcome;
+  /** Host invocation that produced a fresh output. Absent when a conclusion is reused. */
+  readonly implementation_id?: string;
+  /** Fixture cost of one host invocation. A reused conclusion does not carry one. */
+  readonly cost_micros?: number;
+  /** Set when the output was reused from a cached conclusion. */
+  readonly conclusion_id?: string;
+  /** Seqs of the conclusion's evidence. Present only on reuse. */
+  readonly cited_evidence?: readonly Seq[];
 }
 
 export interface ActionReconciledPayload {
@@ -332,6 +340,14 @@ export const PAYLOAD_TYPES = [
   'admission.decided',
   'implementation.revoked',
   'evidence.invalidated',
+  'composition.recorded',
+  'conclusion.cached',
+  'conclusion.policy',
+  'policy.recorded',
+  'goal.missed',
+  'binding.corrected',
+  'output.rejected',
+  'baseline.recorded',
 ] as const;
 export type PayloadType = (typeof PAYLOAD_TYPES)[number];
 
@@ -367,7 +383,57 @@ export interface Report {
 // §4 Derived state
 // ---------------------------------------------------------------------------
 
-export type GoalStatus = 'active' | 'complete';
+export type GoalStatus = 'active' | 'complete' | 'missed';
+
+export type InvalidationCondition = 'read_set' | 'contract_rev' | 'admission';
+
+export type AuthorityScope = { readonly goal_id: string } | { readonly policy_id: string };
+
+export interface CachedConclusion {
+  readonly conclusion_id: string;
+  readonly operation: string;
+  readonly contract_rev: string;
+  readonly implementation_id: string;
+  readonly input_digest: string;
+  readonly output: unknown;
+  readonly evidence: readonly Seq[];
+  readonly read_set: readonly ResourceReadSetEntry[];
+  readonly authority_scope: AuthorityScope;
+  readonly invalidation: readonly InvalidationCondition[];
+}
+
+export interface PolicyRecord {
+  readonly policy_id: string;
+  readonly goals: readonly string[];
+  readonly evidence: Seq;
+}
+
+export interface WorkloadCase {
+  readonly goal_id: string;
+  readonly quality: 'held' | 'missed';
+}
+
+export interface HumanCorrection {
+  readonly goal_id: string;
+  readonly kind: 'binding' | 'output';
+  readonly action_id: string;
+  readonly reason: string;
+  readonly evidence: Seq;
+}
+
+export interface BaselineRecord {
+  readonly strategy: 'profile.frame@1';
+  readonly workload: string;
+  readonly quality: {
+    readonly held: number;
+    readonly missed: number;
+    readonly cases: readonly WorkloadCase[];
+  };
+  readonly inference_requests: number;
+  readonly latency_ticks: number;
+  readonly cost_micros: number;
+  readonly human_corrections: number;
+}
 
 export interface BudgetLine {
   readonly limit: number;
@@ -404,7 +470,12 @@ export interface State {
   readonly proposal: { readonly proposal: Proposal; readonly evidence: Seq } | null;
   readonly inferences: Readonly<Record<string, InferenceRecord>>;
   readonly crystallization: CrystallizationState;
+  readonly conclusions: readonly CachedConclusion[];
+  readonly policies: readonly PolicyRecord[];
   readonly normalized: Readonly<Record<ResourceId, { readonly text: string; readonly revision: number; readonly evidence: Seq }>>;
+  readonly workload: readonly WorkloadCase[];
+  readonly corrections: readonly HumanCorrection[];
+  readonly baseline: BaselineRecord | null;
 }
 
 // ---------------------------------------------------------------------------
