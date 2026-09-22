@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { InvocationOutcome } from '@weave/agentsop';
+import type { CapabilityContract, InvocationOutcome } from '@weave/agentsop';
 
 export type ResourceKind = 'source' | 'destination';
 
@@ -40,12 +40,21 @@ export interface IssuedRef {
   kind: ResourceKind;
 }
 
+/** Admitted implementation source. The host store is the single writer. */
+export interface StoredAdmission {
+  readonly operation: string;
+  readonly implementation_id: string;
+  readonly contract: CapabilityContract;
+  readonly source: string;
+}
+
 export interface FabricSnapshot {
   readonly next_handle: number;
   readonly next_canonical: number;
   readonly resources: readonly StoredResource[];
   readonly refs: readonly IssuedRef[];
   readonly invocations: readonly InvocationRecord[];
+  readonly admissions?: readonly StoredAdmission[];
 }
 
 interface MutableResource extends StoredResource {}
@@ -60,6 +69,7 @@ export class FabricStore {
   private readonly resources: Map<string, MutableResource>;
   private readonly refs: Map<string, IssuedRef>;
   private readonly invocations: Map<string, InvocationRecord>;
+  private admissions: StoredAdmission[];
   private readonly path: string | null;
   persistStart = true;
   persistResult = true;
@@ -70,6 +80,7 @@ export class FabricStore {
     this.resources = new Map((snapshot?.resources ?? []).map((r) => [r.canonical_id, { ...r }]));
     this.refs = new Map((snapshot?.refs ?? []).map((r) => [r.handle, { ...r }]));
     this.invocations = new Map((snapshot?.invocations ?? []).map((r) => [r.invocation_id, { ...r }]));
+    this.admissions = (snapshot?.admissions ?? []).map((admission) => ({ ...admission, contract: { ...admission.contract } }));
     this.path = path;
   }
 
@@ -93,6 +104,7 @@ export class FabricStore {
         ...r,
         inputs: structuredClone(r.inputs),
       })),
+      admissions: this.admissions.map((admission) => ({ ...admission, contract: { ...admission.contract } })),
     };
   }
 
@@ -146,6 +158,18 @@ export class FabricStore {
     }
     this.invocations.set(record.invocation_id, { ...record, inputs: structuredClone(record.inputs) });
     this.save();
+  }
+
+  recordAdmission(admission: StoredAdmission): void {
+    this.admissions = [
+      ...this.admissions.filter((item) => item.operation !== admission.operation),
+      { ...admission, contract: { ...admission.contract } },
+    ];
+    this.save();
+  }
+
+  admitted(): readonly StoredAdmission[] {
+    return this.admissions.map((admission) => ({ ...admission, contract: { ...admission.contract } }));
   }
 
   writeInvocation(record: InvocationRecord): void {

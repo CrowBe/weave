@@ -54,11 +54,13 @@ export class IsolateRunner {
     const response = await this.spawnWorker({ type: 'probe' });
     const result = response as {
       filesystem?: string;
+      network?: string;
       child_process?: string;
       canary?: unknown;
       vm?: { process?: string; require?: string; fetch?: string };
     };
     const filesystem = result.filesystem === 'blocked' ? 'blocked' : 'open';
+    const network = result.network === 'none' ? 'none' : 'open';
     const child_process = result.child_process === 'blocked' ? 'blocked' : 'open';
     const credentials = result.canary == null ? 'absent' : 'visible';
     const evaluated_process = result.vm?.process === 'undefined' ? 'undefined' : 'defined';
@@ -66,6 +68,7 @@ export class IsolateRunner {
     const evaluated_fetch = result.vm?.fetch === 'undefined' ? 'undefined' : 'defined';
     const supported =
       filesystem === 'blocked' &&
+      network === 'none' &&
       child_process === 'blocked' &&
       credentials === 'absent' &&
       evaluated_process === 'undefined' &&
@@ -73,13 +76,18 @@ export class IsolateRunner {
       evaluated_fetch === 'undefined';
     const body: Omit<IsolationReport, 'report_id'> = {
       supported,
+      tier: 'untrusted',
       filesystem,
+      network,
       child_process,
       credentials,
       evaluated_process,
       evaluated_require,
       evaluated_fetch,
       held_out_mounted: false,
+      host_process: evaluated_process === 'undefined' ? 'unreachable' : 'unprobed',
+      broker: 'resolver-context',
+      limits: { memory_bytes: 32 * 1024 * 1024, cpu_ms: 100 },
     };
     const report: IsolationReport = { ...body, report_id: digest(body) };
     this.report = report;
@@ -106,9 +114,19 @@ export class IsolateRunner {
     return response.results ?? [];
   }
 
+  /** A dependency that exits before it sends an outcome. The promise settles as failure. */
+  async endedWithoutResult(): Promise<{ readonly ok: false; readonly failure: string }> {
+    try {
+      await this.spawnWorker({ type: 'silent-exit' });
+      return { ok: false, failure: 'no result' };
+    } catch (error) {
+      return { ok: false, failure: error instanceof Error ? error.message : 'no result' };
+    }
+  }
+
   private spawnWorker(message: Serializable): Promise<unknown> {
     return new Promise((resolve, reject) => {
-      const child = spawn(process.execPath, ['--permission', `--allow-fs-read=${WORKER}`, WORKER], {
+      const child = spawn(process.execPath, ['--permission', `--allow-fs-read=${WORKER}`, '--max-old-space-size=32', WORKER], {
         stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
         env: {},
       });
@@ -149,13 +167,18 @@ export class IsolateRunner {
 function unsupported(): IsolationReport {
   const body = {
     supported: false,
+    tier: 'untrusted' as const,
     filesystem: 'unprobed' as const,
+    network: 'unprobed' as const,
     child_process: 'unprobed' as const,
     credentials: 'unprobed' as const,
     evaluated_process: 'unprobed' as const,
     evaluated_require: 'unprobed' as const,
     evaluated_fetch: 'unprobed' as const,
     held_out_mounted: false as const,
+    host_process: 'unprobed' as const,
+    broker: 'resolver-context' as const,
+    limits: { memory_bytes: 32 * 1024 * 1024, cpu_ms: 100 },
   };
   return { ...body, report_id: digest(body) };
 }

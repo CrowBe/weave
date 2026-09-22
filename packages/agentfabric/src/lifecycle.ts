@@ -18,6 +18,7 @@ import {
   type TestCase,
   type TestSplit,
 } from '@weave/agentsop';
+import { acceptCapabilityOutput } from './bounds.js';
 import { digest } from './digest.js';
 import { stableStringify } from './stable-json.js';
 import type { AgentFabricHost, CapabilityImplementation } from './host.js';
@@ -36,6 +37,7 @@ interface GreenRecord {
   readonly visible_passed: number;
   readonly held_out_passed: number;
   readonly held_out_failed: number;
+  readonly held_out_codes: readonly string[];
   valid: boolean;
 }
 
@@ -52,6 +54,8 @@ export class FabricLifecycle implements CapabilityLifecycle {
   private readonly sources = new Map<string, string>();
   private readonly attached = new Set<string>();
   private heldOutSpent = false;
+  private generationRefused = false;
+  private readonly heldOutIssued = new Set<string>();
   private heldOutExecuted = 0;
   private readonly green = new Map<string, GreenRecord>();
   private admission: {
@@ -71,7 +75,37 @@ export class FabricLifecycle implements CapabilityLifecycle {
 
   /** Already-established capability, used when search should find reuse. */
   installEstablished(contract: CapabilityContract, source: string): void {
-    this.host.installAdmitted(contract, this.implementation(source));
+    this.host.installAdmitted(contract, this.implementation(source, contract));
+  }
+
+  /**
+   * Same purpose, closed input and output, and an empty effect set.
+   * A shared output type is not a composition.
+   */
+  searchExact(desired: DesiredOperation, retained: string | null): LifecycleStep {
+    this.desired = desired;
+    this.retained = retained;
+    const catalogue = this.host.liveContracts();
+    const matches = catalogue
+      .filter((contract) => contract.id === desired.operation && this.host.resolution(contract.id) === 'resolved')
+      .map((contract) => contract.id);
+    if (matches.length > 0) {
+      return ok(searchBody('reusable', matches, [], retained, 'an admitted capability already performs this operation'));
+    }
+    const compositions = catalogue
+      .filter(
+        (contract) =>
+          contract.id !== desired.operation &&
+          contract.purpose === desired.purpose &&
+          typeMapsEqual(contract.input, desired.input) &&
+          typeMapsEqual(contract.output, desired.output) &&
+          contract.effects.length === 0,
+      )
+      .map((contract) => contract.id);
+    if (compositions.length > 0) {
+      return ok(searchBody('composed', [], compositions, retained, 'an admitted capability matches the purpose and closed shapes'));
+    }
+    return ok(searchBody('gap', [], [], retained, 'no admitted capability matches the purpose and closed shapes'));
   }
 
   search(desired: DesiredOperation, retained: string | null): LifecycleStep {
@@ -225,7 +259,7 @@ export class FabricLifecycle implements CapabilityLifecycle {
     if (!this.red?.demonstrated) {
       return fail('red has not been demonstrated');
     }
-    if (this.heldOutSpent && !this.attached.has(id)) {
+    if ((this.heldOutSpent || this.generationRefused) && !this.attached.has(id)) {
       return fail('held-out evidence spent');
     }
     if (!source.trim()) {
@@ -260,6 +294,7 @@ export class FabricLifecycle implements CapabilityLifecycle {
     this.heldOutExecuted += heldOut.length;
     const visibleFailed = visible.filter((result) => !result.passed).length;
     const heldOutFailed = heldOut.filter((result) => !result.passed).length;
+    const heldOutCodes = [...new Set(heldOut.flatMap((result) => (result.code ? [result.code] : [])))];
     const proven = visibleFailed === 0 && heldOutFailed === 0;
     const source_digest = digest(source);
     const evidence_digest = digest({
@@ -284,6 +319,7 @@ export class FabricLifecycle implements CapabilityLifecycle {
       visible_passed: visible.length - visibleFailed,
       held_out_passed: heldOut.length - heldOutFailed,
       held_out_failed: heldOutFailed,
+      held_out_codes: heldOutCodes,
       valid: true,
     };
     this.green.set(id, record);
@@ -296,8 +332,27 @@ export class FabricLifecycle implements CapabilityLifecycle {
       isolation_report_id: isolation.report_id,
       evidence_digest,
       visible: { passed: record.visible_passed, failed: visibleFailed },
-      held_out: { passed: record.held_out_passed, failed: heldOutFailed },
+      held_out: { passed: record.held_out_passed, failed: heldOutFailed, codes: heldOutCodes },
       role: 'extension',
+    });
+  }
+
+  heldOutReport(id: string): LifecycleStep {
+    const record = this.green.get(id);
+    if (!record) {
+      return fail('no green evidence for a held-out report');
+    }
+    const key = `${record.corpus_revision}:${id}`;
+    if (this.heldOutIssued.has(key)) {
+      this.heldOutSpent = true;
+      this.generationRefused = true;
+      return ok({ spent: true, refused: true, admission: false });
+    }
+    this.heldOutIssued.add(key);
+    return ok({
+      passed: record.held_out_passed,
+      failed: record.held_out_failed,
+      codes: [...record.held_out_codes],
     });
   }
 
@@ -344,7 +399,7 @@ export class FabricLifecycle implements CapabilityLifecycle {
     if (!source) {
       return fail('implementation source is missing');
     }
-    this.host.installAdmitted(this.contract, this.implementation(source));
+    this.host.noteAdmission(this.contract, decision.implementation_id, source);
     this.admission = { ...pending, status: 'admitted' };
     return ok({
       implementation_id: decision.implementation_id,
@@ -398,34 +453,28 @@ export class FabricLifecycle implements CapabilityLifecycle {
     return this.heldOut.map((testCase) => ({ ...testCase }));
   }
 
-  private implementation(source: string): CapabilityImplementation {
+  private implementation(source: string, contract: CapabilityContract | null = this.contract): CapabilityImplementation {
     return async (inputs) => {
       const ran = await isolatedCall(this.runner, source, inputs);
       if (!ran.ok) {
         return { outcome: 'failed', failure: ran.failure };
       }
-      const output = ran.output;
-      if (isRecord(output) && typeof output['failure'] === 'string') {
-        return { outcome: 'failed', failure: output['failure'] };
-      }
-      if (isRecord(output) && typeof output['fold'] === 'string') {
-        return { outcome: 'succeeded', output: { fold: output['fold'] } };
-      }
-      return { outcome: 'failed', failure: 'invalid_inspection' };
+      return acceptCapabilityOutput(contract, inputs, ran.output);
     };
   }
 
   private async score(
     source: string,
     cases: readonly TestCase[],
-  ): Promise<readonly { readonly id: string; readonly passed: boolean }[]> {
+  ): Promise<readonly { readonly id: string; readonly passed: boolean; readonly code: string | null }[]> {
     const results = await this.runner.runCases(
       source,
       cases.map((testCase) => ({ id: testCase.id, input: testCase.input })),
     );
     return cases.map((testCase) => {
       const result = results.find((item) => item.id === testCase.id);
-      return { id: testCase.id, passed: result ? matches(result, testCase) : false };
+      const passed = result ? matches(result, testCase) : false;
+      return { id: testCase.id, passed, code: passed || !result ? null : failureCode(result) };
     });
   }
 
@@ -438,10 +487,20 @@ export class FabricLifecycle implements CapabilityLifecycle {
     this.sources.clear();
     this.attached.clear();
     this.heldOutSpent = false;
+    this.generationRefused = false;
+    this.heldOutIssued.clear();
     this.green.clear();
     this.admission = null;
     this.revoked = false;
   }
+}
+
+function failureCode(result: { output?: unknown }): string | null {
+  const output = result.output;
+  if (isRecord(output) && typeof output['failure'] === 'string') {
+    return output['failure'];
+  }
+  return null;
 }
 
 function matches(result: { output?: unknown; error?: string }, testCase: TestCase): boolean {

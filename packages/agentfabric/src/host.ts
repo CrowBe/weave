@@ -21,9 +21,11 @@ import {
   type ResolutionStatus,
 } from '@weave/agentsop';
 import { GENERATION_KINDS, type GenerationKind, type InferenceGateway } from '@weave/gateway';
+import { acceptCapabilityOutput } from './bounds.js';
 import { ResourceCoordinator } from './coordinator.js';
 import { FIXTURE_CONTRACTS, REPORT_ASSEMBLE, REPORT_PUBLISH, SOURCE_INSPECT } from './contracts.js';
 import { contentDigest, digest } from './digest.js';
+import { IsolateRunner, isolatedCall } from './isolate.js';
 import {
   FabricStore,
   PersistFailure,
@@ -98,6 +100,7 @@ export class AgentFabricHost implements CapabilityHost {
   private inferenceSeq = 0;
   /** Written only by admission. A function passed to registerImplementation is not stored here. */
   private readonly implementations = new Map<string, CapabilityImplementation>();
+  private readonly restored = new IsolateRunner('enforcing');
 
   private readonly live = new Map<string, CapabilityContract>();
   private readonly historical = new Map<string, CapabilityContract>();
@@ -125,6 +128,7 @@ export class AgentFabricHost implements CapabilityHost {
       this.historical.set(contract.id, contract);
       this.status.set(contract.id, trustedBuiltin(contract.id) ? 'resolved' : 'unresolved');
     }
+    this.restoreAdmissions();
   }
 
   snapshot(): FabricSnapshot {
@@ -325,6 +329,20 @@ export class AgentFabricHost implements CapabilityHost {
     return [...this.live.values()];
   }
 
+  /**
+   * The host store records the admitted source. A later process restores the
+   * implementation from that record and does not consult a second in-memory copy.
+   */
+  noteAdmission(contract: CapabilityContract, implementationId: string, source: string): void {
+    this.store.recordAdmission({
+      operation: contract.id,
+      implementation_id: implementationId,
+      contract,
+      source,
+    });
+    this.installAdmitted(contract, this.storedImplementation(contract, source));
+  }
+
   /** Registry installation after admission, or for a capability that is already established. */
   installAdmitted(contract: CapabilityContract, implementation: CapabilityImplementation): void {
     const others = [...this.live.values()].filter((item) => item.id !== contract.id);
@@ -336,6 +354,22 @@ export class AgentFabricHost implements CapabilityHost {
     this.historical.set(contract.id, contract);
     this.status.set(contract.id, 'resolved');
     this.implementations.set(contract.id, implementation);
+  }
+
+  private restoreAdmissions(): void {
+    for (const admission of this.store.admitted()) {
+      this.installAdmitted(admission.contract, this.storedImplementation(admission.contract, admission.source));
+    }
+  }
+
+  private storedImplementation(contract: CapabilityContract, source: string): CapabilityImplementation {
+    return async (inputs) => {
+      const ran = await isolatedCall(this.restored, source, inputs);
+      if (!ran.ok) {
+        return { outcome: 'failed', failure: ran.failure };
+      }
+      return acceptCapabilityOutput(contract, inputs, ran.output);
+    };
   }
 
   replaceLiveContract(contract: CapabilityContract): void {

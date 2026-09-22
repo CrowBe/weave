@@ -20,6 +20,7 @@ import type {
   State,
 } from './types.js';
 import { formCrystallizeCandidates } from './crystallize.js';
+import { formNormalizeCandidates, normalizedReportReady } from './normalize.js';
 import { proposalCoversSources } from './proposals.js';
 
 export const PROCEDURE = 'inspect_and_report@1' as const;
@@ -132,6 +133,15 @@ export function formCandidates(state: State, describe: Describe, canonical: Cano
     resource: source,
     revision: (state.sources[source] as { revision: number }).revision,
   }));
+  if (goal.composition && !goal.gap) {
+    const composed = formNormalizeCandidates(state, describe, canonical);
+    if (composed.kind === 'pending') {
+      for (const candidate of composed.candidates) {
+        push(candidate);
+      }
+      return { candidates, unavailable: [...unavailable, ...composed.unavailable], procedure };
+    }
+  }
   const report = state.report;
   if (!report || !readSetMatches(report.report.read_set, state) || !coversSources(report.report, goal.sources)) {
     const contract = describe('report.assemble');
@@ -143,9 +153,13 @@ export function formCandidates(state: State, describe: Describe, canonical: Cano
     const dependencies: ActionId[] = [];
     for (const source of goal.sources) {
       const inspection = state.inspections[source] as { result: InspectionResult; evidence: number };
-      inspections.push(inspection.result);
+      const normalized = state.normalized[source];
+      inspections.push(goal.composition && normalized ? { ...inspection.result, text: normalized.text } : inspection.result);
       evidence.push(inspection.evidence);
-      const producer = actionFinishedAt(state, inspection.evidence);
+      if (normalized) {
+        evidence.push(normalized.evidence);
+      }
+      const producer = actionFinishedAt(state, normalized?.evidence ?? inspection.evidence);
       if (producer) {
         dependencies.push(producer);
       }
@@ -385,6 +399,9 @@ export function successEvidencePresent(state: State): boolean {
     return false;
   }
   if (!coversSources(report.report, goal.sources) || !readSetMatches(report.report.read_set, state)) {
+    return false;
+  }
+  if (goal.composition && !normalizedReportReady(state)) {
     return false;
   }
   if (goal.gap) {

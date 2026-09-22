@@ -186,6 +186,9 @@ function validateGoal(payload: Record<string, unknown>, state: State): Validatio
   if (payload['retained_procedure'] !== undefined && typeof payload['retained_procedure'] !== 'string') {
     return rejected('goal.retained_procedure must be a string');
   }
+  if (payload['composition'] !== undefined && !isNormalizeComposition(payload['composition'])) {
+    return rejected('goal.composition must be composition.normalize-report@1');
+  }
   if (!isReservation(payload['budget'])) {
     return rejected('goal.budget must give non-negative integer actions and judgments');
   }
@@ -480,6 +483,23 @@ function isTypeMap(value: unknown): boolean {
   }
   const keys = Object.keys(value);
   return keys.length > 0 && keys.every((key) => isNonEmptyString(key) && isNonEmptyString(value[key]));
+}
+
+function isNormalizeComposition(value: unknown): boolean {
+  if (!isRecord(value) || value['id'] !== 'composition.normalize-report@1' || value['operation'] !== 'text.normalize') {
+    return false;
+  }
+  if (!isTypeMap(value['input']) || !isTypeMap(value['output'])) {
+    return false;
+  }
+  const steps = value['steps'];
+  if (!Array.isArray(steps) || steps.length !== 3) {
+    return false;
+  }
+  if (steps[0] !== 'source.inspect' || steps[1] !== 'text.normalize' || steps[2] !== 'report.assemble') {
+    return false;
+  }
+  return value['variants'] === undefined || isStringArray(value['variants']);
 }
 
 function validateAdmission(payload: Record<string, unknown>, state: State): Validation {

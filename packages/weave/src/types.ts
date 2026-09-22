@@ -60,6 +60,11 @@ export interface Goal {
   };
   /** Retained procedure text. It may inform a contract; it is not an implementation. */
   readonly retained_procedure?: string;
+  /**
+   * Recorded composition. Candidate formation reads it as data. It is not a
+   * new `ProcedureId`.
+   */
+  readonly composition?: RecordedComposition;
   readonly budget: { readonly actions: number; readonly judgments: number; readonly recovery?: number; readonly cost?: number };
   readonly success_evidence: string;
 }
@@ -334,11 +339,23 @@ export type PayloadType = (typeof PAYLOAD_TYPES)[number];
 // Fixture capability records (§2)
 // ---------------------------------------------------------------------------
 
+export interface RecordedComposition {
+  readonly id: 'composition.normalize-report@1';
+  readonly operation: 'text.normalize';
+  readonly purpose: string;
+  readonly input: Readonly<Record<string, string>>;
+  readonly output: Readonly<Record<string, string>>;
+  readonly steps: readonly ['source.inspect', 'text.normalize', 'report.assemble'];
+  readonly variants?: readonly string[];
+}
+
 export interface InspectionResult {
   readonly source: ResourceId;
   readonly revision: number;
   readonly line_count: number;
   readonly digest: string;
+  /** Present when the recorded composition normalized this inspection's text. */
+  readonly text?: string;
 }
 
 export interface Report {
@@ -387,6 +404,7 @@ export interface State {
   readonly proposal: { readonly proposal: Proposal; readonly evidence: Seq } | null;
   readonly inferences: Readonly<Record<string, InferenceRecord>>;
   readonly crystallization: CrystallizationState;
+  readonly normalized: Readonly<Record<ResourceId, { readonly text: string; readonly revision: number; readonly evidence: Seq }>>;
 }
 
 // ---------------------------------------------------------------------------

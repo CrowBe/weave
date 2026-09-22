@@ -391,6 +391,8 @@ function throwingLifecycle(): CapabilityLifecycle {
     admit: fail,
     revoke: fail,
     reviseContract: fail,
+    heldOutReport: fail,
+    searchExact: fail,
     audit: fail,
   };
 }
