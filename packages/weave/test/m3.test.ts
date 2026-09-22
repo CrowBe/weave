@@ -1,7 +1,8 @@
 /**
- * M3 — fill one capability gap. The report needs a fold the catalogue cannot
- * supply. Crystallization runs contract, corpus, red, isolation, green, and
- * human admission before a separate execution grant finishes the report.
+ * Earlier report.fold fixture. The M3 contract is text.normalize as recorded
+ * data (docs/m3-fill-a-capability-gap.md). This procedure arm does not satisfy
+ * that contract. It still checks search, red, isolation, admission, and a
+ * separate execution grant for the fold.
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

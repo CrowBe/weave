@@ -1,7 +1,10 @@
 /**
- * Offline crystallization harness for one missing report fold.
+ * Offline harness for an earlier report.fold fixture.
  *
- * Spins the M3 fixture without a model: search, contract, corpus, demonstrated
+ * This predates the M3 contract in docs/m3-fill-a-capability-gap.md. It adds
+ * a procedure arm, so a green run here does not satisfy that milestone.
+ *
+ * Spins the fixture without a model: search, contract, corpus, demonstrated
  * red under isolation, two implementations, proven green, a human admission,
  * then a separate execution grant that finishes the report. Replay reconstructs
  * the trace without the author, the lifecycle, or the host.

@@ -24,6 +24,10 @@ A recorded input that may support a state transition: user input, a capability r
 
 A named, versioned, budgeted query over state. Views — state views, context bundles, typed capability inputs — are composed from slices, with deterministic selection, disclosed truncation, and a manifest recording what actually filled each one so a recorded judgment can be reproduced.
 
+### Slice assembly
+
+The recorded fill of one or more slices at one state revision. Every view that uses those slices cites the same assembly. Its cost is counted once. An assembly does not grant disclosure; each consumer still receives its own view.
+
 ### Read set
 
 The state or resource revisions on which an action candidate’s binding depends. Read sets support validity checks before dispatch, on result arrival, and when derived conclusions are reused.
@@ -124,7 +128,11 @@ A versioned context profile, prompt template, model, and settings selected toget
 
 ### Routing
 
-The deterministic selection step inside the gateway. It minimizes expected total cost of reaching the declared quality bar — retries and escalation included — using recorded per-site success rates, cost, latency, privacy, and context limits.
+The deterministic selection step inside the gateway. It minimizes expected total cost of reaching the declared quality bar — retries and escalation included — using recorded per-site success rates, cost, latency, privacy, and context limits. When a prefix cache is supplied, that cost includes a hit discount or one reload.
+
+### Prefix cache
+
+A recorded match between one routed unit and the digest of a view's stable prefix, together with a cached token count. A matching digest discounts that unit's input cost. A different unit or digest is one reload at the selected unit's input price. With no record, input cost stays the cold window. A prefix cache is not a cached conclusion, a provider bill, or authority.
 
 ### Generative implementation
 
@@ -186,7 +194,15 @@ A handle created by trusted bootstrap that may submit observations with a privil
 
 ### Resolver context
 
-The interface through which an implementation reaches its environment: nested invocation limited to declared dependencies, and reference-scoped resource operations. It contains no locators or substrate types, so it can be brokered across an isolation boundary.
+The interface through which an implementation reaches its environment: nested invocation limited to declared dependencies, and reference-scoped resource operations. It contains no locators or substrate types, so it can be brokered across an isolation boundary. An unbound context grants no resource access.
+
+### Execution tier
+
+Where an implementation or generated test runs. The `trusted` tier is host-owned code. The `untrusted` tier is generated code and generated tests, which run only under enforced isolation. Missing isolation blocks execution; it does not fall back to the trusted tier.
+
+### Held-out report
+
+The only result returned from protected admission tests to an implementer or corpus author: how many cases passed, how many failed, and the failure codes. It does not include inputs, expected outputs, artifact bodies, or which case failed. One report is available per implementation revision; requesting another spends that held-out split.
 
 ### Resolution status
 
@@ -296,9 +312,13 @@ The record of where a contract, test, or implementation came from, including sou
 - Say **state view**, not *prompt* or *context*, for what the decision layer receives.
 - Say **judgment site**, not *Jev*, for a place the runtime asks for judgment. Jev is a model type.
 - Say **routed unit**, not *model*, for what routing selects.
+- Say **prefix cache**, not *KV cache* or *cached conclusion*, for recorded reuse of a view prefix by one routed unit.
+- Say **slice assembly**, not *shared context*, for one recorded fill of slices at a revision.
 - Say **inference role** for why an inference was requested, and **inference kind** for what was asked of the model. They are not interchangeable.
 - Name a capability for its operation, never for the inference kind behind it: `text.classify`, not `request_text_classification`.
 - Say **action candidate**, not *option*, for a validated, bound action.
 - Say **milestone**, not *slice*, for an M-numbered increment of the plan. A slice is a query over state.
 - Say **trusted ingress**, not *authenticated client*, for the in-process handle that may submit privileged observations.
+- Say **execution tier**, not *sandbox*, for where an implementation runs. A label is not containment.
+- Say **held-out report**, not *test output*, for what protected evaluation returns to an implementer.
 - Never use **deterministic** to describe generated tests; their execution is deterministic, while their authorship and correctness require evidence.

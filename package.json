@@ -15,12 +15,16 @@
     "typecheck:examples": "tsc -p tsconfig.examples.json",
     "test:entailment": "python3 -m unittest discover -s benchmarks/inference/openjev -p 'test_*.py'",
     "test:decision": "python3 -m unittest discover -s benchmarks/inference/kev -p 'test_*.py'",
-    "verify": "npm run check && npm test && npm run typecheck:examples && npm run test:entailment && npm run test:decision",
+    "verify": "npm run check && npm test && npm run typecheck:examples && npm run typecheck:benchmarks && npm run test:jev && npm run test:entailment && npm run test:decision",
     "example": "node --env-file-if-exists=.env.local index.ts",
     "example:gateway": "npm run build && node --env-file-if-exists=.env.local examples/holiday.ts",
     "example:free": "npm run build && node --env-file-if-exists=.env.local examples/free.ts",
     "example:weigh": "npm run build && node --env-file-if-exists=.env.local examples/weigh.ts",
-    "example:crystallize": "npm run build && node --experimental-strip-types examples/crystallize.ts"
+    "example:crystallize": "npm run build && node --experimental-strip-types examples/crystallize.ts",
+    "typecheck:benchmarks": "tsc -p tsconfig.benchmarks.json",
+    "test:jev": "node --experimental-strip-types --test \"benchmarks/inference/jev/test/*.test.ts\"",
+    "jev:probe": "npm run build && node --env-file-if-exists=.env.local benchmarks/inference/jev/probe.ts",
+    "jev:transfer": "npm run build && node --env-file-if-exists=.env.local benchmarks/inference/jev/transfer-probe.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

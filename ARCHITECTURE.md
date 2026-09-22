@@ -120,8 +120,12 @@ profile requests slices; policy controls what may actually be disclosed. Neither
 a model-selected profile nor a capability input declaration grants access.
 
 Load detail only where the consumer needs it. Stable prefixes can be cached, but
-freshness and disclosure checks still apply to each use. A summary or retained
-procedure is evidence for a proposal, not a replacement for authority records.
+freshness and disclosure checks still apply to each use. A prefix cache records
+that reuse for one routed unit and one prefix digest: a hit discounts that
+unit's input cost, and a different unit or digest is one reload. Views that
+share slices at one revision cite one slice assembly; each consumer still
+receives its own view. A summary or retained procedure is evidence for a
+proposal, not a replacement for authority records.
 
 Cached conclusions retain evidence, dependencies, versions, invalidation
 conditions, and an authority scope. State checks those conditions before reuse;
@@ -164,7 +168,10 @@ Eligibility distinguishes **allowed**, **approval required**, and **prohibited**
 Only policy-designated approval requirements produce approval actions; hard
 prohibitions are not converted into requests to waive policy. The trace records
 all exclusions, even when they were never sent for weighing. Sensitive candidate
-content is filtered before any model receives it.
+content is filtered before any model receives it. Policy narrows the request's
+destinations from the action's declared read set and effects before the request
+is formed. The gateway never receives the read set. A weight cannot add a
+destination, and it cannot remove one policy still permits.
 
 The decision layer weighs eligible candidates against the authorized goal,
 expected progress, cost, risk, and uncertainty. Weights from different judgment
@@ -318,6 +325,16 @@ and settings. Deterministic policy filters by privacy and required quality, then
 uses evaluation evidence to compare expected total cost, latency, and escalation.
 Without enough evidence, use a conservative configured route and record the
 uncertainty. A cheaper model is not presumed adequate.
+
+When the caller supplies a prefix cache, expected cost uses the hit discount or
+one reload at the selected unit's input price. With no record, expected cost
+stays the cold window. The reservation before the call stays that cold ceiling,
+so a miss or a missing usage report cannot spend more than was reserved, and a
+hit does not charge the cached tokens again. A cheaper unit is selected only
+when it clears the quality bar and its reload-inclusive cost is lower. The
+decision layer does not choose the unit. [M6](docs/m6-route-a-reconstructed-view.md)
+fixes the fixture prices and the two-slice catalogue view. A live provider
+prompt-cache bill stays out of scope.
 
 Deterministic checks establish properties they can actually check. A model judge
 may assess semantic quality, but its approval is another fallible observation.
@@ -518,18 +535,48 @@ consequential behavior. (*Slice* is reserved for the state-query term in
   independent test or implementation proposals may run concurrently. Verify
   held-out protection, evidence invalidation, and revocation along this path.
   A retained procedure may inform this work but cannot bypass admission.
+  The composition is recorded data; it is not a new procedure arm in the control
+  core. The contract is
+  [docs/m3-fill-a-capability-gap.md](docs/m3-fill-a-capability-gap.md).
 - **M4 — measure reuse.** Repeat the goal using the admitted capability,
   validate cached conclusions and cross-goal access, and compare quality,
   inference use, latency, and total cost. A replacement implementation earns fresh
   evidence. Establish the baseline for an optimisation experiment.
+  [docs/m4-measure-reuse.md](docs/m4-measure-reuse.md) fixes the conclusion
+  record, the authority scope, and the baseline.
 - **M5 — improve one operating strategy.** From the report outcomes, identify one
-  recurring inefficiency and propose a single change, such as a narrower context
-  profile. Compare it with M4's versioned baseline on protected cases, including
+  recurring inefficiency and propose a single change: a narrower context
+  profile record. Compare it with M4's versioned baseline on protected cases, including
   quality and human correction as well as latency and total cost. Authorise a
   limited promotion, complete reports with the new strategy, and monitor outcomes.
   Demonstrate rejection of a cheaper candidate that misses the quality bar and
   rollback after a detected regression. Use explicit human promotion initially;
   no general experiment platform or autonomous core release is a prerequisite.
+  A patch to the scheduler, policy, or admission checks is refused.
+  [docs/m5-improve-an-operating-strategy.md](docs/m5-improve-an-operating-strategy.md)
+  fixes the protocol, promotion, and rollback. An empty view and a view that
+  drops a required operation miss the quality bar. Cost counts each reserved
+  amount once, and a stable-prefix change is a recorded cache miss.
+- **M6 — route a reconstructed view.** On the repeated report, price a prefix
+  cache at routing time, disclose the catalogue as an index plus the schemas
+  the profile names, narrow destinations from the action's read set, and share
+  one slice assembly across a read-only review of the same revision. A warm
+  long view stays on the expensive unit; a short view with no matching prefix
+  may select the cheaper unit when quality holds. The review cannot promote or
+  grant. The log is not compacted, and the review is not a child goal.
+  [docs/m6-route-a-reconstructed-view.md](docs/m6-route-a-reconstructed-view.md)
+  fixes the fixture prices, the two catalogue slices, the destination
+  intersection, and the shared assembly. M5's promotion protocol and cache-miss
+  delta stay as they are. H1 is not a prerequisite.
+
+After M5, one hardening step bounds the log itself. It may land before or after
+M6. M3 bounds a single capability output, gives the untrusted tier no path to
+the host process, and keeps admission as a single host-store record. It does
+not bound every observation. [docs/h1-bound-the-log.md](docs/h1-bound-the-log.md) rejects an
+oversize or mid-value payload before it is durable, rejects a duplicate
+observation id, refuses a second runtime on the same host store, and keeps
+trace retention off the state-transition lock. H1 is not a milestone and adds
+no goal outcome.
 
 Each milestone begins with its behavioral contract and failing deterministic
 checks before implementation. The full available suite must remain green as
@@ -554,28 +601,34 @@ scheduler, or host projects.
 - Authentication for future external authority channels. M1 fixes trusted local
   ingress handles and principal scope in its contract; this does not establish
   authentication for an eventual network or multi-user deployment.
-- What information a held-out failure may return to an implementer or corpus
-  author, and how many iteration rounds are permitted before held-out evidence is
-  considered spent (§8). Closed by [M3](docs/m3-fill-one-capability-gap.md):
-  pass and fail counts only, zero feedback rounds, and the split is spent when
-  the first prove-green starts.
 - The relationship between the gating suite and real providers: which checks run
   only against recorded or scripted routed units, and how non-gating evaluations
   against live models are recorded and reported.
 - Resource identity, effect scopes, and external preconditions supported by the
   first adapters; unsupported guarantees must be explicit.
-- The isolation mechanism and its verified support on deployment hosts. Closed
-  for the M3 fixture by [M3](docs/m3-fill-one-capability-gap.md): a
-  permission-constrained child process and a `vm` context with no `process`,
-  `require`, or `fetch`. Unsupported isolation blocks execution. Network denial
-  is the absence of a network API in that context, not a Node permission flag.
+- Which deployment hosts can produce the M3 isolation report. The report's
+  required fields, the refusal when it cannot be produced, and the held-out
+  report (counts and failure codes, one per implementation revision) are fixed
+  in [docs/m3-fill-a-capability-gap.md](docs/m3-fill-a-capability-gap.md). A
+  supplied function is not executed.
 - Domain-specific success evidence and calibrated semantic evaluation thresholds.
 - Ranking, no-progress, and extension-payoff policies beyond the first fixtures.
 - Contract/view migration, persistence retention, and redaction mechanisms.
-- Experiment protocols, evidence sufficiency, and rollout thresholds for each
-  workload; the first milestone needs one declared protocol, not a universal score.
+  [H1](docs/h1-bound-the-log.md) fixes the byte bound, duplicate observation
+  identity, and the rule that trace eviction stays off the state-transition
+  lock. It does not choose the retention period.
+- Experiment protocols, evidence sufficiency, and rollout thresholds for later
+  workloads. The first profile experiment's protocol, quality bar, and rollback
+  are fixed in [docs/m5-improve-an-operating-strategy.md](docs/m5-improve-an-operating-strategy.md).
+  That protocol is not a universal score.
 - The separately governed release and recovery mechanism for future control-core
-  changes; M5 proves operating-strategy promotion without enabling core mutation.
+  changes. M5 promotes one context-profile record and refuses a core patch;
+  it does not add that release path.
+- How expected inference cost accounts for a prefix cache, how a framing
+  profile splits the catalogue index from schemas, how destinations narrow
+  from a read set, and how read-only views share a slice assembly. Fixed as
+  requirements in [M6](docs/m6-route-a-reconstructed-view.md). A live
+  provider prompt-cache bill remains out of scope.
 
 The invariants above are the proposed architectural decisions. These open choices
 are implementation or empirical questions; they must not silently weaken the

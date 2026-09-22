@@ -1,12 +1,14 @@
-# M3 — Fill one capability gap
+# Earlier fold fixture
 
-This is the behavioral contract for the fourth milestone in
-[ARCHITECTURE.md §10](../ARCHITECTURE.md). It extends
-[M0](m0-inspect-and-report.md) with one transformation the catalogue cannot
-supply. Terms follow [CONTEXT.md](../CONTEXT.md). The checks below are
-transcribed as `packages/weave/test/m3.test.ts` and
-`packages/agentfabric/test/lifecycle.test.ts`. An offline run of the same
-fixture is `npm run example:crystallize`.
+This is not the M3 contract. The milestone contract is
+[docs/m3-fill-a-capability-gap.md](m3-fill-a-capability-gap.md). That contract
+crystallizes `text.normalize` as recorded data and says a new procedure arm
+does not satisfy the milestone.
+
+The notes below record an earlier `report.fold` fixture that adds
+`crystallize_and_report@1`. Its checks are `packages/weave/test/m3.test.ts`
+and `packages/agentfabric/test/lifecycle.test.ts`. An offline run is
+`npm run example:crystallize`. Terms follow [CONTEXT.md](../CONTEXT.md).
 
 ## 1. Outcome and scope
 

@@ -17,6 +17,7 @@ import {
   Runtime,
   ScriptedDecisionLayer,
   type DecisionLayer,
+  type FrameProfile,
   type Goal,
 } from '@weave/weave';
 import { FakeHost, FixtureEnvironment } from './fake-host.js';
@@ -186,6 +187,7 @@ export function novelScenario(options: {
   includeHosted?: boolean;
   destinations?: readonly string[];
   hosted?: EvaluationAdapter;
+  frameProfile?: FrameProfile;
 } = {}): NovelScenario {
   const environment = new FixtureEnvironment();
   const host = new FakeHost(environment);
@@ -209,7 +211,12 @@ export function novelScenario(options: {
     (evaluate
       ? new GatewayDecisionLayer(gateway, options.destinations ? [...options.destinations] : [LOCAL_DESTINATION])
       : new ScriptedDecisionLayer());
-  runtime = new Runtime({ host, decisionLayer, gateway });
+  runtime = new Runtime({
+    host,
+    decisionLayer,
+    gateway,
+    ...(options.frameProfile ? { frameProfile: options.frameProfile } : {}),
+  });
   const appended: import('@weave/weave').Observation[] = [];
   const s: NovelScenario = {
     environment,

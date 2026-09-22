@@ -20,7 +20,7 @@ import {
   type ResourceRef,
   type ResolutionStatus,
 } from '@weave/agentsop';
-import type { InferenceGateway } from '@weave/gateway';
+import { GENERATION_KINDS, type GenerationKind, type InferenceGateway } from '@weave/gateway';
 import { ResourceCoordinator } from './coordinator.js';
 import { FIXTURE_CONTRACTS, REPORT_ASSEMBLE, REPORT_PUBLISH, SOURCE_INSPECT } from './contracts.js';
 import { contentDigest, digest } from './digest.js';
@@ -93,6 +93,10 @@ export class AgentFabricHost implements CapabilityHost {
   readonly lookups: { invocation_id: string; granted: boolean }[] = [];
   faults: HostFaults;
   private readonly gateway: InferenceGateway | undefined;
+  /** Cost ceilings already admitted against each contract's max_cost. */
+  private readonly inferenceCharged = new Map<string, number>();
+  private inferenceSeq = 0;
+  /** Written only by admission. A function passed to registerImplementation is not stored here. */
   private readonly implementations = new Map<string, CapabilityImplementation>();
 
   private readonly live = new Map<string, CapabilityContract>();
@@ -119,7 +123,7 @@ export class AgentFabricHost implements CapabilityHost {
     for (const contract of contracts) {
       this.live.set(contract.id, contract);
       this.historical.set(contract.id, contract);
-      this.status.set(contract.id, 'resolved');
+      this.status.set(contract.id, trustedBuiltin(contract.id) ? 'resolved' : 'unresolved');
     }
   }
 
@@ -203,35 +207,38 @@ export class AgentFabricHost implements CapabilityHost {
     return { ok: true, revision: resource.revision };
   }
 
-  registerImplementation(operation: string, implementation: CapabilityImplementation): void {
-    this.implementations.set(operation, implementation);
+  /**
+   * Record that an implementation was offered. The function is not retained
+   * and cannot run: untrusted code stays unresolved until isolation exists
+   * and admission evidence is recorded. Trusted fixture operations are not
+   * replaceable by this call.
+   */
+  registerImplementation(
+    operation: string,
+    implementation: CapabilityImplementation,
+  ): { readonly admitted: false; readonly reason: string } {
+    void operation;
+    void implementation;
+    return {
+      admitted: false,
+      reason: 'untrusted execution is blocked: isolation is not supported',
+    };
   }
 
   resolverContext(contract: CapabilityContract): ResolverContext {
-    const infer = contract.inference ? (call: InferCall) => this.infer(contract, call) : undefined;
+    const registered = this.live.get(contract.id);
+    const infer =
+      registered?.inference ? (call: InferCall) => this.infer(registered, call) : undefined;
     return {
-      read: (ref) => {
-        const resource = this.resourceFor(ref);
-        if (!resource) {
-          throw new Error('UNKNOWN_RESOURCE');
-        }
-        return { revision: resource.revision, content: resource.content };
+      read: () => {
+        throw new Error('DENIED');
       },
-      write: (ref, expected_revision, content) => {
-        const issued = this.store.lookupRef(ref);
-        if (!issued) {
-          throw new Error('UNKNOWN_RESOURCE');
-        }
-        const resource = this.store.getResource(issued.canonical_id);
-        if (!resource || resource.revision !== expected_revision) {
-          throw new Error('stale_revision');
-        }
-        resource.content = content;
-        resource.revision += 1;
-        return { revision: resource.revision };
+      write: () => {
+        throw new Error('DENIED');
       },
       invoke: (capability) => {
-        if (!contract.depends_on.includes(capability)) {
+        const depends = registered?.depends_on ?? contract.depends_on;
+        if (!depends.includes(capability)) {
           return { outcome: 'failed', failure: 'UNDECLARED_DEPENDENCY' };
         }
         return { outcome: 'failed', failure: 'UNRESOLVED' };
@@ -241,7 +248,11 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   async infer(contract: CapabilityContract, call: InferCall): Promise<InferResult> {
-    const limits = contract.inference;
+    const registered = this.live.get(contract.id);
+    if (!registered) {
+      return { status: 'refused', code: 'UNKNOWN_CAPABILITY', reason: `${contract.id} is not in the catalogue` };
+    }
+    const limits = registered.inference;
     if (!limits) {
       return { status: 'refused', code: 'UNDECLARED_DEPENDENCY', reason: 'contract did not declare inference' };
     }
@@ -251,34 +262,43 @@ export class AgentFabricHost implements CapabilityHost {
     if (call.kind !== limits.kind) {
       return { status: 'refused', code: 'DENIED', reason: `kind ${call.kind} is outside contract limits` };
     }
+    if (!isGenerationKind(call.kind)) {
+      return { status: 'refused', code: 'DENIED', reason: `kind ${call.kind} is not a generation kind` };
+    }
     if (call.role !== limits.role) {
       return { status: 'refused', code: 'DENIED', reason: `role ${call.role} is outside contract limits` };
     }
     if (call.terms.max_attempts > limits.max_attempts) {
       return { status: 'refused', code: 'DENIED', reason: 'max_attempts exceeds contract limits' };
     }
-    if (call.terms.cost_ceiling > limits.max_cost) {
-      return { status: 'refused', code: 'DENIED', reason: 'cost_ceiling exceeds contract limits' };
+    if (!Number.isFinite(call.terms.deadline)) {
+      return { status: 'refused', code: 'DENIED', reason: 'deadline must be a finite tick' };
+    }
+    const charged = this.inferenceCharged.get(registered.id) ?? 0;
+    if (charged + call.terms.cost_ceiling > limits.max_cost) {
+      return { status: 'refused', code: 'DENIED', reason: 'cost_ceiling exceeds the contract cost remaining' };
     }
     if (call.terms.destinations.some((d) => !limits.destinations.includes(d))) {
       return { status: 'refused', code: 'DENIED', reason: 'destination is outside contract limits' };
     }
+    this.inferenceCharged.set(registered.id, charged + call.terms.cost_ceiling);
     const input = call.input;
     const prompt =
       typeof input === 'object' && input !== null && !Array.isArray(input) && typeof (input as { prompt?: unknown }).prompt === 'string'
         ? (input as { prompt: string }).prompt
         : JSON.stringify(input);
+    const request_id = `fabric:${registered.id}:${this.inferenceSeq++}`;
     const outcome = await this.gateway.generate({
-      request_id: `fabric:${contract.id}`,
-      site: contract.id,
+      request_id,
+      site: registered.id,
       role: call.role,
-      kind: 'transform',
-      input: { instructions: `capability ${contract.id}`, prompt },
+      kind: call.kind,
+      input: { instructions: `capability ${registered.id}`, prompt },
       terms: {
         quality: 'baseline',
         destinations: call.terms.destinations,
         max_context_tokens: 8_000,
-        deadline: Number.MAX_SAFE_INTEGER,
+        deadline: call.terms.deadline,
         cost_ceiling: call.terms.cost_ceiling,
         max_attempts: call.terms.max_attempts,
       },
@@ -321,11 +341,15 @@ export class AgentFabricHost implements CapabilityHost {
   replaceLiveContract(contract: CapabilityContract): void {
     this.live.set(contract.id, contract);
     this.historical.set(contract.id, contract);
-    this.status.set(contract.id, 'resolved');
+    this.status.set(contract.id, trustedBuiltin(contract.id) ? 'resolved' : 'unresolved');
   }
 
   resolution(operation: string): ResolutionStatus {
     return this.status.get(operation) ?? 'unresolved';
+  }
+
+  operations(): readonly string[] {
+    return [...this.live.keys()].sort();
   }
 
   describe(operation: string): DescribeResult {
@@ -990,6 +1014,20 @@ function sameSet(left: readonly string[], right: readonly string[]): boolean {
   }
   const wanted = new Set(left);
   return right.every((id) => wanted.delete(id)) && wanted.size === 0;
+}
+
+const TRUSTED_BUILTINS: ReadonlySet<string> = new Set([
+  SOURCE_INSPECT.id,
+  REPORT_ASSEMBLE.id,
+  REPORT_PUBLISH.id,
+]);
+
+function trustedBuiltin(id: string): boolean {
+  return TRUSTED_BUILTINS.has(id);
+}
+
+function isGenerationKind(kind: string): kind is GenerationKind {
+  return (GENERATION_KINDS as readonly string[]).includes(kind);
 }
 
 function closedShape(

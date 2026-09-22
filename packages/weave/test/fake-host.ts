@@ -93,6 +93,10 @@ export class FakeHost implements CapabilityHost {
 
   constructor(private readonly environment: FixtureEnvironment) {}
 
+  operations(): readonly string[] {
+    return [...this.contracts.keys()].sort();
+  }
+
   describe(operation: string): DescribeResult {
     const contract = this.contracts.get(operation);
     return contract ? { kind: 'contract', contract } : { kind: 'unknown_operation' };

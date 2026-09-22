@@ -9,7 +9,24 @@ import type { Candidate, Seq, State, StateView, ViewOmission, ViewSliceManifest 
 export const FRAME_PROFILE = 'profile.frame@1' as const;
 export const WEIGH_PROFILE = 'profile.frontier-weigh@1' as const;
 
-const CATALOGUE_SLICE_BUDGET = 1;
+/**
+ * A context profile is a versioned record the runtime selects. The renderer
+ * does not own a private budget: promotion of another profile is a different
+ * record, not an edit to this function.
+ */
+export interface FrameProfile {
+  readonly id: string;
+  readonly version: number;
+  /** Maximum catalogue operations disclosed. Excess is omitted with reason `budget`. */
+  readonly catalogue_budget: number;
+}
+
+/** Discloses the fixture catalogue. A tighter profile is a different record. */
+export const DEFAULT_FRAME_PROFILE: FrameProfile = {
+  id: FRAME_PROFILE,
+  version: 1,
+  catalogue_budget: 32,
+};
 
 export interface CatalogueOp {
   readonly id: string;
@@ -26,9 +43,15 @@ function slice(
 }
 
 /** Framing view: purpose, authorized ids, catalogue shapes. No source bodies. */
-export function renderFrameView(state: State, catalogue: readonly CatalogueOp[]): StateView {
+export function renderFrameView(
+  state: State,
+  catalogue: readonly CatalogueOp[],
+  profile: FrameProfile = DEFAULT_FRAME_PROFILE,
+): StateView {
   const goal = state.goal;
   const allowed = new Set(goal?.authority.read ?? []);
+  const catalogueBudget =
+    Number.isInteger(profile.catalogue_budget) && profile.catalogue_budget > 0 ? profile.catalogue_budget : 0;
   const authorityOmitted: ViewOmission[] = [];
   for (const resource of Object.keys(state.sources).sort()) {
     if (!allowed.has(resource)) {
@@ -37,8 +60,8 @@ export function renderFrameView(state: State, catalogue: readonly CatalogueOp[])
   }
 
   const catalogueIds = [...catalogue].map((op) => op.id).sort();
-  const selectedOps = catalogueIds.slice(0, CATALOGUE_SLICE_BUDGET);
-  const omittedOps = catalogueIds.slice(CATALOGUE_SLICE_BUDGET);
+  const selectedOps = catalogueIds.slice(0, catalogueBudget);
+  const omittedOps = catalogueIds.slice(catalogueBudget);
   const catalogueOmitted = omittedOps.map((name) => ({ name, reason: 'budget' }));
 
   const authorizedSources = (goal?.authority.read ?? [])
@@ -57,8 +80,8 @@ export function renderFrameView(state: State, catalogue: readonly CatalogueOp[])
   };
 
   return {
-    profile: FRAME_PROFILE,
-    profile_version: 1,
+    profile: profile.id,
+    profile_version: profile.version,
     state_revision: state.state_revision,
     content,
     manifest: {
