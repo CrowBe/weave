@@ -314,7 +314,7 @@ red and green against the exact contract, tests and implementation revisions.
   unchanged. Gateway weighing is the asynchronous path this milestone adds.
 - `goal.frame` is a runtime action, not a capability. A generative
   implementation of a capability is proven only at the host port (M2-T11);
-  crystallization remains M3.
+  crystallization is [M3](m3-fill-a-capability-gap.md).
 - Cost units are micros. M0 goals without `budget.cost` have a cost limit of
   zero and never reserve cost.
 - `profile.frame@1` is data with catalogue budget 32. Truncation is proved

@@ -284,6 +284,10 @@ Evidence that a particular implementation passes the applicable deterministic ch
 
 The governed transition by which a tested implementation becomes available through the capability registry. Generation, admission, and authorization to execute are separate events.
 
+### Opportunity notice
+
+An operator observation that a lifecycle fact is ready for a decision: admission decided, an implementation revoked, or evidence invalidated. The notice records the fact. It does not issue an execution grant and does not itself dispatch work.
+
 ### Maturity
 
 The trust stage of an implementation, such as proposed, provisional, established, deprecated, or revoked. Maturity is evidence-based and may regress.
@@ -304,6 +308,7 @@ The record of where a contract, test, or implementation came from, including sou
 - Say **crystallization**, not *learning*, for the admission of new executable capability.
 - Say **weight**, not *confidence*, unless the value is explicitly calibrated as confidence.
 - Say **admit**, not *save*, when a capability passes into the registry.
+- Say **opportunity notice**, not *alert* or *notification*, for an operator observation that a lifecycle fact is ready for a decision.
 - Say **state view**, not *prompt* or *context*, for what the decision layer receives.
 - Say **judgment site**, not *Jev*, for a place the runtime asks for judgment. Jev is a model type.
 - Say **routed unit**, not *model*, for what routing selects.

@@ -49,6 +49,28 @@ export {
 
 export { validateCatalogue, type CatalogueResult } from './catalogue.js';
 
+export {
+  checkHeldOutRetained,
+  checkRevision,
+  validateContractDocument,
+  validateTestCases,
+  type CorpusCheck,
+  type TestCase,
+  type TestExpectation,
+  type TestSplit,
+} from './corpus.js';
+
+export type {
+  AdmissionDecision,
+  CapabilityLifecycle,
+  DesiredOperation,
+  ImplementerView,
+  IsolationReport,
+  LifecycleAudit,
+  LifecycleStep,
+  SearchResult,
+} from './lifecycle.js';
+
 export type {
   CapabilityHost,
   DescribeResult,

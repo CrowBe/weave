@@ -96,6 +96,8 @@ export class AgentFabricHost implements CapabilityHost {
   /** Cost ceilings already admitted against each contract's max_cost. */
   private readonly inferenceCharged = new Map<string, number>();
   private inferenceSeq = 0;
+  /** Written only by admission. A function passed to registerImplementation is not stored here. */
+  private readonly implementations = new Map<string, CapabilityImplementation>();
 
   private readonly live = new Map<string, CapabilityContract>();
   private readonly historical = new Map<string, CapabilityContract>();
@@ -315,7 +317,25 @@ export class AgentFabricHost implements CapabilityHost {
   revoke(operation: string, reason = 'revoked'): void {
     void reason;
     this.live.delete(operation);
+    this.implementations.delete(operation);
     this.status.set(operation, 'unavailable');
+  }
+
+  liveContracts(): CapabilityContract[] {
+    return [...this.live.values()];
+  }
+
+  /** Registry installation after admission, or for a capability that is already established. */
+  installAdmitted(contract: CapabilityContract, implementation: CapabilityImplementation): void {
+    const others = [...this.live.values()].filter((item) => item.id !== contract.id);
+    const catalogue = validateCatalogue([...others, contract]);
+    if (!catalogue.ok) {
+      throw new Error(`INVALID_CATALOGUE: ${catalogue.reason}`);
+    }
+    this.live.set(contract.id, contract);
+    this.historical.set(contract.id, contract);
+    this.status.set(contract.id, 'resolved');
+    this.implementations.set(contract.id, implementation);
   }
 
   replaceLiveContract(contract: CapabilityContract): void {
@@ -534,6 +554,24 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   private advance(open: OpenInvocation): void {
+    if (this.status.get(open.operation) === 'unavailable') {
+      this.finish(open, { outcome: 'failed', failure: 'UNRESOLVED' });
+      return;
+    }
+    const implementation = this.implementations.get(open.operation);
+    if (implementation) {
+      const contract = this.live.get(open.operation);
+      if (!contract) {
+        this.finish(open, { outcome: 'failed', failure: 'UNKNOWN_CAPABILITY' });
+        return;
+      }
+      void Promise.resolve(implementation(open.inputs, this.resolverContext(contract))).then(
+        (outcome) => this.finish(open, outcome),
+        (error: unknown) =>
+          this.finish(open, { outcome: 'failed', failure: error instanceof Error ? error.message : 'implementation threw' }),
+      );
+      return;
+    }
     if (open.operation === SOURCE_INSPECT.id) {
       this.finish(open, this.performInspect(open));
       return;

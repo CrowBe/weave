@@ -50,6 +50,16 @@ export interface Goal {
   readonly destination?: ResourceId;
   readonly authority: { readonly read: readonly ResourceId[]; readonly write?: readonly ResourceId[] };
   readonly framing?: boolean;
+  /** A transformation the catalogue cannot yet perform. Selects `crystallize_and_report@1`. */
+  readonly gap?: {
+    readonly operation: string;
+    readonly purpose: string;
+    readonly input: Readonly<Record<string, string>>;
+    readonly output: Readonly<Record<string, string>>;
+    readonly variants?: readonly string[];
+  };
+  /** Retained procedure text. It may inform a contract; it is not an implementation. */
+  readonly retained_procedure?: string;
   readonly budget: { readonly actions: number; readonly judgments: number; readonly recovery?: number; readonly cost?: number };
   readonly success_evidence: string;
 }
@@ -240,6 +250,62 @@ export interface PublishReceipt {
   readonly committed_revision: number;
 }
 
+export interface AdmissionDecidedPayload {
+  readonly request_id: string;
+  readonly implementation_id: string;
+  readonly decision: 'admitted' | 'denied';
+  readonly approver: string;
+  readonly evidence_digest: string;
+  readonly authority_revision: number;
+}
+
+export interface ImplementationRevokedPayload {
+  readonly operation: string;
+  readonly implementation_id: string;
+  readonly reason: string;
+}
+
+export interface EvidenceInvalidatedPayload {
+  readonly reason: string;
+  readonly contract_revision: string;
+}
+
+export interface CrystallizationSearch {
+  readonly status: 'reusable' | 'composed' | 'gap';
+  readonly matches: readonly string[];
+  readonly compositions: readonly string[];
+  readonly informed_by: string | null;
+  readonly reason: string;
+}
+
+export interface CrystallizationState {
+  readonly search: CrystallizationSearch | null;
+  readonly contract: { readonly id: string; readonly revision: string } | null;
+  readonly visible_ids: readonly string[];
+  readonly held_out_ids: readonly string[];
+  readonly corpus_revision: string | null;
+  readonly corpus_validated: boolean;
+  readonly red: { readonly demonstrated: boolean; readonly corpus_revision: string; readonly contract_revision: string } | null;
+  readonly implementations: readonly { readonly id: string; readonly source_digest: string }[];
+  readonly held_out_spent: boolean;
+  readonly green: readonly {
+    readonly id: string;
+    readonly proven: boolean;
+    readonly evidence_digest: string;
+    readonly corpus_revision: string;
+    readonly contract_revision: string;
+  }[];
+  readonly admission: {
+    readonly request_id: string;
+    readonly implementation_id: string;
+    readonly evidence_digest: string;
+    readonly status: 'requested' | 'admitted' | 'denied';
+    readonly approver: string | null;
+  } | null;
+  readonly revoked: boolean;
+  readonly fold: { readonly fold: string; readonly bound: readonly InspectionResult[] } | null;
+}
+
 export const PAYLOAD_TYPES = [
   'goal.opened',
   'source.registered',
@@ -258,6 +324,9 @@ export const PAYLOAD_TYPES = [
   'recovery.exhausted',
   'inference.requested',
   'inference.recorded',
+  'admission.decided',
+  'implementation.revoked',
+  'evidence.invalidated',
 ] as const;
 export type PayloadType = (typeof PAYLOAD_TYPES)[number];
 
@@ -317,6 +386,7 @@ export interface State {
   readonly recovery: { readonly limit: number; readonly spent: number };
   readonly proposal: { readonly proposal: Proposal; readonly evidence: Seq } | null;
   readonly inferences: Readonly<Record<string, InferenceRecord>>;
+  readonly crystallization: CrystallizationState;
 }
 
 // ---------------------------------------------------------------------------
@@ -382,7 +452,11 @@ export interface Candidate {
 // §9 Trace
 // ---------------------------------------------------------------------------
 
-export type ProcedureId = 'inspect_and_report@1' | 'inspect_report_publish@1' | 'frame_and_report@1';
+export type ProcedureId =
+  | 'inspect_and_report@1'
+  | 'inspect_report_publish@1'
+  | 'frame_and_report@1'
+  | 'crystallize_and_report@1';
 
 export interface InferenceRecord {
   readonly request_id: string;

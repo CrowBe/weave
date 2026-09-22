@@ -1,4 +1,6 @@
 export { AgentFabricHost, type CapabilityImplementation, type HostFaults, type PublishGate, type PublishInput, type PublishReceipt } from './host.js';
+export { FabricLifecycle } from './lifecycle.js';
+export { IsolateRunner, isolatedCall, type IsolationMode } from './isolate.js';
 export { FIXTURE_CONTRACTS, REPORT_ASSEMBLE, REPORT_PUBLISH, SOURCE_INSPECT } from './contracts.js';
 export { FabricStore, PersistFailure, type FabricSnapshot, type InvocationRecord, type PublicationRecord } from './store.js';
 export { ResourceCoordinator } from './coordinator.js';

@@ -48,6 +48,9 @@ M0 (inspect and report), M1 (publish under authority), and M2 (handle a novel
 request) are implemented. M3–M6 and the H1 log bound have behavioral contracts
 and are not implemented. The host refuses to execute a supplied implementation, framing
 profiles are versioned records, and the framing view lists the host catalogue.
+`npm run example:crystallize` runs an earlier `report.fold` fixture. It adds a
+procedure arm, so it does not satisfy the M3 contract.
+
 `packages/agentsop` holds the contract layer, `packages/agentfabric` the enforcing
 host, and `packages/weave` the runtime. `packages/gateway` supplies bounded
 generation and typed evaluation through replaceable providers. Requires Node
@@ -55,7 +58,7 @@ generation and typed evaluation through replaceable providers. Requires Node
 
 ```bash
 npm install
-npm run verify   # structural checks, build, M0/M1/M2/gateway suites, examples and entailment contract tests
+npm run verify   # structural checks, build, runtime and gateway suites, examples, Jev benchmarks, and entailment and decision contract tests
 ```
 
 Local inference experiments and their recorded evidence live under

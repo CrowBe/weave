@@ -11,8 +11,10 @@ import type {
   ApprovalRecord,
   ApprovalRequestedPayload,
   BudgetLine,
+  AdmissionDecidedPayload,
   CapabilityDescribedPayload,
   ClockTickPayload,
+  CrystallizationState,
   Goal,
   InferenceRecord,
   InferenceRecordedPayload,
@@ -45,6 +47,7 @@ interface MutableState {
   recovery: { limit: number; spent: number };
   proposal: { proposal: Proposal; evidence: Seq } | null;
   inferences: Record<string, Mutable<InferenceRecord> & { evidence: Seq[] }>;
+  crystallization: Mutable<CrystallizationState>;
 }
 
 export function initialState(): MutableState {
@@ -67,6 +70,25 @@ export function initialState(): MutableState {
     recovery: { limit: 0, spent: 0 },
     proposal: null,
     inferences: {},
+    crystallization: emptyCrystallization(),
+  };
+}
+
+export function emptyCrystallization(): Mutable<CrystallizationState> {
+  return {
+    search: null,
+    contract: null,
+    visible_ids: [],
+    held_out_ids: [],
+    corpus_revision: null,
+    corpus_validated: false,
+    red: null,
+    implementations: [],
+    held_out_spent: false,
+    green: [],
+    admission: null,
+    revoked: false,
+    fold: null,
   };
 }
 
@@ -253,6 +275,33 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
       state.contracts[p.operation] = p.contract;
       return;
     }
+    case 'admission.decided': {
+      const p = observation.payload as AdmissionDecidedPayload;
+      const admission = state.crystallization.admission;
+      if (!admission) {
+        return;
+      }
+      state.crystallization.admission = {
+        ...admission,
+        status: p.decision === 'admitted' ? 'admitted' : 'denied',
+        approver: p.approver,
+      };
+      return;
+    }
+    case 'implementation.revoked': {
+      state.crystallization.revoked = true;
+      const admission = state.crystallization.admission;
+      if (admission && admission.status !== 'denied') {
+        state.crystallization.admission = { ...admission, status: 'denied' };
+      }
+      return;
+    }
+    case 'evidence.invalidated': {
+      const search = state.crystallization.search;
+      state.crystallization = emptyCrystallization();
+      state.crystallization.search = search;
+      return;
+    }
     default:
       throw new Error(`unknown payload type ${observation.payload_type} passed validation`);
   }
@@ -292,6 +341,85 @@ function integrateSuccess(state: MutableState, record: ActionRecord, output: unk
     case 'goal.frame': {
       const proposal = output as Proposal;
       state.proposal = { proposal, evidence: seq };
+      return;
+    }
+    case 'gap.search': {
+      state.crystallization.search = output as CrystallizationState['search'];
+      return;
+    }
+    case 'contract.establish': {
+      const body = output as { contract_id: string; contract_revision: string };
+      state.crystallization.contract = { id: body.contract_id, revision: body.contract_revision };
+      return;
+    }
+    case 'corpus.propose': {
+      const body = output as { split: string; case_ids: string[] };
+      if (body.split === 'visible') {
+        state.crystallization.visible_ids = body.case_ids;
+      } else {
+        state.crystallization.held_out_ids = body.case_ids;
+      }
+      return;
+    }
+    case 'corpus.validate': {
+      const body = output as { corpus_revision: string; validated: boolean };
+      state.crystallization.corpus_revision = body.corpus_revision;
+      state.crystallization.corpus_validated = body.validated;
+      return;
+    }
+    case 'red.demonstrate': {
+      const body = output as { demonstrated: boolean; corpus_revision: string; contract_revision: string };
+      state.crystallization.red = {
+        demonstrated: body.demonstrated,
+        corpus_revision: body.corpus_revision,
+        contract_revision: body.contract_revision,
+      };
+      return;
+    }
+    case 'implementation.generate': {
+      const body = output as { implementation_id: string; source_digest: string };
+      state.crystallization.implementations = [
+        ...state.crystallization.implementations,
+        { id: body.implementation_id, source_digest: body.source_digest },
+      ];
+      return;
+    }
+    case 'green.prove': {
+      const body = output as {
+        implementation_id: string;
+        proven: boolean;
+        evidence_digest: string;
+        corpus_revision: string;
+        contract_revision: string;
+      };
+      state.crystallization.held_out_spent = true;
+      state.crystallization.green = [
+        ...state.crystallization.green,
+        {
+          id: body.implementation_id,
+          proven: body.proven,
+          evidence_digest: body.evidence_digest,
+          corpus_revision: body.corpus_revision,
+          contract_revision: body.contract_revision,
+        },
+      ];
+      return;
+    }
+    case 'admission.request': {
+      const body = output as { request_id: string; implementation_id: string; evidence_digest: string };
+      state.crystallization.admission = {
+        request_id: body.request_id,
+        implementation_id: body.implementation_id,
+        evidence_digest: body.evidence_digest,
+        status: 'requested',
+        approver: null,
+      };
+      return;
+    }
+    case 'report.fold': {
+      const fold = (output as { fold: string }).fold;
+      const inspections = (record.inputs as { inspections?: InspectionResult[] }).inspections ?? [];
+      state.crystallization.fold = { fold, bound: inspections };
       return;
     }
     default:
