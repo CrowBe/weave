@@ -127,3 +127,35 @@ demonstrated red and green against the exact contract revisions.
   binding or reject an output. Silence is not a correction.
 - Cross-goal policy is one explicit record in the fixture. M4 does not add a
   general disclosure language.
+
+## 7. Evidence required before red
+
+The schemas and checks above are the milestone. They are not yet enough to
+demonstrate red. An implementation that fills the gaps below is choosing the
+milestone, not proving it.
+
+The repeated report needs the [M3](m3-fill-a-capability-gap.md) contract
+green first. `text.normalize` is admitted and then dispatched from a recorded
+composition. The runtime procedure union does not gain an arm for that
+binding. `crystallize_and_report@1` and `report.fold` are an earlier fixture.
+They do not supply that composition, and a green fold run is not M3.
+
+These fixture facts are named by the checks and are not fixed in this
+contract:
+
+- Which goal fails, and which observation makes that failure. The baseline
+  includes that goal.
+- The policy record's fields, and that operator ingress writes it. Two goal
+  ids present in the registry are not that record.
+- The micros one host invocation adds to `cost_micros`, separate from an
+  inference reservation. Reuse adds neither a second reservation nor a
+  second invocation charge.
+- Which admitted implementation runs when two are admitted and the second
+  has empty reliability and cost. Empty is not a loss to the first
+  implementation's measurements, and it is not a win over them. The host
+  retains both. The invocation record names the one that ran.
+- The slice a profile selects before a reused conclusion is included in a
+  view. `profile.frame@1` does not select it. The manifest records that
+  inclusion once.
+- The observation type counted as a human correction. Admission and
+  revocation are not that type.

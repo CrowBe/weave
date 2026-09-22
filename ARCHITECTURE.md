@@ -617,6 +617,13 @@ scheduler, or host projects.
   [H1](docs/h1-bound-the-log.md) fixes the byte bound, duplicate observation
   identity, and the rule that trace eviction stays off the state-transition
   lock. It does not choose the retention period.
+- The fixture facts M4 names and does not yet fix: the failing goal, the
+  cross-goal policy record, the host-invocation micros, which admitted
+  implementation runs when reliability is empty, the slice that includes a
+  reused conclusion, and the observation counted as a human correction.
+  [docs/m4-measure-reuse.md](docs/m4-measure-reuse.md) §7 records them.
+  M4 red also waits on a green M3 `text.normalize` composition. The fold
+  procedure arm is not that composition.
 - Experiment protocols, evidence sufficiency, and rollout thresholds for later
   workloads. The first profile experiment's protocol, quality bar, and rollback
   are fixed in [docs/m5-improve-an-operating-strategy.md](docs/m5-improve-an-operating-strategy.md).
