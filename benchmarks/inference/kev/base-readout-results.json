@@ -1,0 +1,97 @@
+{
+ "measured": "2026-09-22",
+ "question": "Does the trained LoRA and pointer head beat the same base model with nothing trained?",
+ "corpus": {
+  "source": "benchmarks/inference/jev/corpus.ts",
+  "kind": "choice",
+  "cases": 18,
+  "records": 56,
+  "note": "every case at every presentation ordering; orderingsFor(n, 4, 20260921)"
+ },
+ "floors": {
+  "always_first": 0.389,
+  "uniform": 0.389,
+  "best_constant": 0.5
+ },
+ "machine": "Metabox Edge, i7-1355U, 32 GB LPDDR5, Intel Iris Xe 96 EU (UMA), Vulkan offload -ngl 99",
+ "reference": {
+  "system": "Kev-4B, LoRA + pointer head, llama.cpp Q8_0",
+  "file": "llamacpp-results.json",
+  "correct": 47,
+  "n": 56,
+  "ece": 0.1043,
+  "brier": 0.236,
+  "position_bias": 0.1071,
+  "stable": 15,
+  "permuted": 18
+ },
+ "base": {
+  "weights": "Qwen3-4B-Base.Q8_0.gguf",
+  "lora": null,
+  "head": null,
+  "readout": "next-token logits restricted to the option markers"
+ },
+ "renderings": {
+  "letter_answer": {
+   "correct": 43,
+   "n": 56,
+   "accuracy": 0.7679,
+   "ece": 0.1502,
+   "brier": 0.2914,
+   "position_bias": 0.1071,
+   "stable": 14,
+   "permuted": 18,
+   "markers_missing": 0,
+   "cue": "Answer:",
+   "reference_only_correct": 9,
+   "rendering_only_correct": 5,
+   "mcnemar_p": 0.424
+  },
+  "digit_answer": {
+   "correct": 43,
+   "n": 56,
+   "accuracy": 0.7679,
+   "ece": 0.1281,
+   "brier": 0.2759,
+   "position_bias": 0.1429,
+   "stable": 14,
+   "permuted": 18,
+   "markers_missing": 0,
+   "cue": "Answer: ",
+   "reference_only_correct": 7,
+   "rendering_only_correct": 3,
+   "mcnemar_p": 0.3438
+  },
+  "letter_dispatch": {
+   "correct": 44,
+   "n": 56,
+   "accuracy": 0.7857,
+   "ece": 0.1617,
+   "brier": 0.2977,
+   "position_bias": 0.1786,
+   "stable": 13,
+   "permuted": 18,
+   "markers_missing": 0,
+   "cue": "Dispatch:",
+   "reference_only_correct": 7,
+   "rendering_only_correct": 4,
+   "mcnemar_p": 0.5488
+  },
+  "letter_best": {
+   "correct": 46,
+   "n": 56,
+   "accuracy": 0.8214,
+   "ece": 0.1437,
+   "brier": 0.2234,
+   "position_bias": 0.125,
+   "stable": 13,
+   "permuted": 18,
+   "markers_missing": 0,
+   "cue": "The candidate that best advances the goal is:",
+   "reference_only_correct": 6,
+   "rendering_only_correct": 5,
+   "mcnemar_p": 1.0
+  }
+ },
+ "finding": "The untrained base scores 43-46 of 56 against the trained checkpoint's 47, and no rendering is distinguishable from it: exact McNemar on the paired records gives p 0.344 to 1.000. That is low power, not equivalence \u2014 at 56 records a seven-point gap needs several hundred to resolve and a two-point gap thousands, so the corpus does not license any accuracy claim about the training. The trained checkpoint does take the secondary axes: calibration on 4 of 4 renderings, order stability on 4 of 4, position bias on 3 of 4 (1 tied), and Brier on 3 of 4. Training bought calibration and order-robustness here, not accuracy."
+}
