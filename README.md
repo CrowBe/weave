@@ -45,11 +45,18 @@ Weave is early. The first objective is a small scenario that proves authorized c
 ## Status
 
 M0 (inspect and report), M1 (publish under authority), and M2 (handle a novel
-request) are implemented. M3–M6 and the H1 log bound have behavioral contracts
-and are not implemented. The host refuses to execute a supplied implementation, framing
-profiles are versioned records, and the framing view lists the host catalogue.
-`npm run example:crystallize` runs an earlier `report.fold` fixture. It adds a
-procedure arm, so it does not satisfy the M3 contract.
+request) are implemented. M3's recorded `text.normalize` composition
+(`composition.normalize-report@1`) is implemented and its checks are green.
+The earlier `report.fold` fixture in `npm run example:crystallize` remains a
+separate procedure arm. M4's fixture facts are fixed in
+[M4 §7](./docs/m4-measure-reuse.md). M4-T01 passes. M4-T02 through M4-T06 still
+fail their assertions: cached conclusions, `conclusion.policy`, retained
+replacement implementations, and the baseline are not implemented. Those
+failures are the expected gap, so they do not fail `npm test`. A check that
+starts passing fails the suite until that expectation is removed. M5, M6, and
+the H1 log bound have behavioral contracts and are not implemented. The host refuses to
+execute a supplied implementation, framing profiles are versioned records, and
+the framing view lists the host catalogue.
 
 `packages/agentsop` holds the contract layer, `packages/agentfabric` the enforcing
 host, and `packages/weave` the runtime. `packages/gateway` supplies bounded

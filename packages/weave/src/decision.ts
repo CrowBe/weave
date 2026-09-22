@@ -8,6 +8,7 @@ const SCRIPTED_WEIGHTS: Readonly<Record<string, number>> = {
   'goal.complete': 1.0,
   'report.publish': 0.95,
   'report.fold': 0.92,
+  'text.normalize': 0.88,
   'report.assemble': 0.9,
   'goal.frame': 0.85,
   'source.inspect': 0.8,

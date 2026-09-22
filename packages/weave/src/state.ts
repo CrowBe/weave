@@ -48,6 +48,7 @@ interface MutableState {
   proposal: { proposal: Proposal; evidence: Seq } | null;
   inferences: Record<string, Mutable<InferenceRecord> & { evidence: Seq[] }>;
   crystallization: Mutable<CrystallizationState>;
+  normalized: Record<string, { text: string; revision: number; evidence: Seq }>;
 }
 
 export function initialState(): MutableState {
@@ -71,6 +72,7 @@ export function initialState(): MutableState {
     proposal: null,
     inferences: {},
     crystallization: emptyCrystallization(),
+    normalized: {},
   };
 }
 
@@ -420,6 +422,15 @@ function integrateSuccess(state: MutableState, record: ActionRecord, output: unk
       const fold = (output as { fold: string }).fold;
       const inspections = (record.inputs as { inspections?: InspectionResult[] }).inspections ?? [];
       state.crystallization.fold = { fold, bound: inspections };
+      return;
+    }
+    case 'text.normalize': {
+      const text = (output as { text?: unknown }).text;
+      const entry = record.read_set.find((item) => 'resource' in item);
+      if (typeof text !== 'string' || !entry || !('resource' in entry)) {
+        return;
+      }
+      state.normalized[entry.resource] = { text, revision: entry.revision, evidence: seq };
       return;
     }
     default:

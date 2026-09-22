@@ -1152,6 +1152,9 @@ export class Runtime {
     if (crystal.admission?.status === 'admitted' || crystal.search?.status === 'reusable') {
       operations.push('report.fold');
     }
+    if (this.current.goal?.composition) {
+      operations.push('text.normalize');
+    }
     for (const operation of operations) {
       this.describeOperation(operation);
     }
@@ -1189,8 +1192,16 @@ export class Runtime {
       if (!historical) {
         return null;
       }
+      const observation_id = `contract:${operation}:${historical.revision}`;
+      if (this.log.some((observation) => observation.observation_id === observation_id)) {
+        return historical;
+      }
+      const upcoming = this.replayLog?.find((observation) => observation.seq === this.nextSeq());
+      if (upcoming?.observation_id !== observation_id) {
+        return null;
+      }
       this.append({
-        observation_id: `contract:${operation}:${historical.revision}`,
+        observation_id,
         source: RUNTIME_SOURCE,
         caused_by: null,
         payload_type: 'capability.described',
@@ -1337,19 +1348,36 @@ export class Runtime {
     const goal = this.current.goal;
     const lifecycle = this.options.lifecycle;
     const author = this.options.author;
-    if (!goal?.gap || !lifecycle || !author) {
+    const desired = goal?.gap
+      ? {
+          operation: goal.gap.operation,
+          purpose: goal.gap.purpose,
+          input: goal.gap.input,
+          output: goal.gap.output,
+        }
+      : goal?.composition
+        ? {
+            operation: goal.composition.operation,
+            purpose: goal.composition.purpose,
+            input: goal.composition.input,
+            output: goal.composition.output,
+          }
+        : null;
+    if (!desired || !lifecycle || !author) {
       this.enqueueLifecycleResult(started.action_id, {
         outcome: 'failed',
-        failure: 'crystallization requires a gap, a lifecycle, and an extension author',
+        failure: 'crystallization requires a gap or a recorded composition, a lifecycle, and an extension author',
       });
       return null;
     }
-    const outcome = runCrystallizeAction(started, lifecycle, author, {
-      operation: goal.gap.operation,
-      purpose: goal.gap.purpose,
-      input: goal.gap.input,
-      output: goal.gap.output,
-    }, goal.retained_procedure ?? null);
+    const outcome = runCrystallizeAction(
+      started,
+      lifecycle,
+      author,
+      desired,
+      goal?.retained_procedure ?? null,
+      Boolean(goal?.composition && !goal.gap),
+    );
     if (typeof (outcome as { then?: unknown }).then === 'function') {
       this.settled.set(
         started.action_id,
