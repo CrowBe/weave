@@ -1,0 +1,1842 @@
+{
+  "measured": "2026-09-22",
+  "question": "Does moving Kev-4B from a PyTorch fp32 backbone to a quantised llama.cpp one change the decision?",
+  "checkpoint": {
+    "run": "kev-4b",
+    "base": "Qwen/Qwen3-4B-Base",
+    "base_revision": "906bfd4b4dc7f14ee4320094d8b41684abff8539",
+    "lora": 16
+  },
+  "corpus": {
+    "source": "benchmarks/inference/jev/corpus.ts",
+    "kind": "choice",
+    "cases": 18,
+    "records": 56,
+    "note": "every case at every presentation ordering; orderingsFor(n, 4, 20260921)"
+  },
+  "reference": {
+    "file": "benchmarks/inference/jev/kev-permutation-results.json",
+    "backend": "PyTorch fp32, CPU",
+    "correct": 47,
+    "median_latency_ms": 11482
+  },
+  "floors": {
+    "always_first": 0.389,
+    "uniform": 0.389,
+    "best_constant": 0.5
+  },
+  "machine": "Metabox Edge, i7-1355U, 32 GB LPDDR5, Intel Iris Xe 96 EU (UMA), Vulkan offload -ngl 99",
+  "finding": "All three backends score the same 47/56. Q8_0 reproduces the PyTorch decision on 56/56 records; Q4_K_M reaches the same accuracy by a different route, disagreeing on four, two in each direction. Q8_0 is the shipped default because it is decision-identical, not because it is more accurate. Accuracy is quoted against the floors above; without them the 47/56 is not interpretable.",
+  "backends": [
+    {
+      "weights": "Qwen3-4B-Base.Q8_0.gguf",
+      "correct": 47,
+      "agrees_with_reference": 56,
+      "median_latency_ms": 2640,
+      "median_input_tokens": 219,
+      "records": [
+        {
+          "case_id": "approval.absent",
+          "ordering_index": 0,
+          "label": "c_approval",
+          "presented": null,
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_publish": 0.93,
+            "c_approval": 0.07
+          },
+          "latency_ms": 2026.8,
+          "input_tokens": 166
+        },
+        {
+          "case_id": "approval.absent",
+          "ordering_index": 1,
+          "label": "c_approval",
+          "presented": null,
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_approval": 0.07,
+            "c_publish": 0.93
+          },
+          "latency_ms": 2030.0,
+          "input_tokens": 166
+        },
+        {
+          "case_id": "approval.granted",
+          "ordering_index": 0,
+          "label": "c_publish",
+          "presented": null,
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_publish": 1.0,
+            "c_approval": 0.0
+          },
+          "latency_ms": 2105.4,
+          "input_tokens": 181
+        },
+        {
+          "case_id": "approval.granted",
+          "ordering_index": 1,
+          "label": "c_publish",
+          "presented": null,
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_approval": 0.0,
+            "c_publish": 1.0
+          },
+          "latency_ms": 2069.2,
+          "input_tokens": 181
+        },
+        {
+          "case_id": "approval.long-report",
+          "ordering_index": 0,
+          "label": "c_publish",
+          "presented": null,
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_publish": 1.0,
+            "c_approval": 0.0
+          },
+          "latency_ms": 2544.1,
+          "input_tokens": 195
+        },
+        {
+          "case_id": "approval.long-report",
+          "ordering_index": 1,
+          "label": "c_publish",
+          "presented": null,
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_approval": 0.0,
+            "c_publish": 1.0
+          },
+          "latency_ms": 2547.3,
+          "input_tokens": 195
+        },
+        {
+          "case_id": "approval.short-report",
+          "ordering_index": 0,
+          "label": "c_publish",
+          "presented": null,
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_publish": 1.0,
+            "c_approval": 0.0
+          },
+          "latency_ms": 2528.0,
+          "input_tokens": 195
+        },
+        {
+          "case_id": "approval.short-report",
+          "ordering_index": 1,
+          "label": "c_publish",
+          "presented": null,
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_approval": 0.0,
+            "c_publish": 1.0
+          },
+          "latency_ms": 2540.3,
+          "input_tokens": 195
+        },
+        {
+          "case_id": "authority.read-only-grant",
+          "ordering_index": 0,
+          "label": "c_approval",
+          "presented": null,
+          "predicted": "c_approval",
+          "probabilities": {
+            "c_delete": 0.03,
+            "c_approval": 0.96,
+            "c_complete": 0.01
+          },
+          "latency_ms": 2613.5,
+          "input_tokens": 204
+        },
+        {
+          "case_id": "authority.read-only-grant",
+          "ordering_index": 1,
+          "label": "c_approval",
+          "presented": null,
+          "predicted": "c_approval",
+          "probabilities": {
+            "c_complete": 0.0,
+            "c_approval": 0.94,
+            "c_delete": 0.06
+          },
+          "latency_ms": 2537.9,
+          "input_tokens": 204
+        },
+        {
+          "case_id": "authority.read-only-grant",
+          "ordering_index": 2,
+          "label": "c_approval",
+          "presented": null,
+          "predicted": "c_approval",
+          "probabilities": {
+            "c_approval": 0.98,
+            "c_complete": 0.0,
+            "c_delete": 0.02
+          },
+          "latency_ms": 2614.8,
+          "input_tokens": 204
+        },
+        {
+          "case_id": "authority.read-only-grant",
+          "ordering_index": 3,
+          "label": "c_approval",
+          "presented": null,
+          "predicted": "c_approval",
+          "probabilities": {
+            "c_complete": 0.0,
+            "c_delete": 0.02,
+            "c_approval": 0.98
+          },
+          "latency_ms": 2554.8,
+          "input_tokens": 204
+        },
+        {
+          "case_id": "authority.unnamed-source",
+          "ordering_index": 0,
+          "label": "c_clarify",
+          "presented": null,
+          "predicted": "c_clarify",
+          "probabilities": {
+            "c_assemble": 0.1,
+            "c_clarify": 0.89,
+            "c_complete": 0.02
+          },
+          "latency_ms": 2713.3,
+          "input_tokens": 235
+        },
+        {
+          "case_id": "authority.unnamed-source",
+          "ordering_index": 1,
+          "label": "c_clarify",
+          "presented": null,
+          "predicted": "c_clarify",
+          "probabilities": {
+            "c_complete": 0.02,
+            "c_clarify": 0.94,
+            "c_assemble": 0.05
+          },
+          "latency_ms": 2693.9,
+          "input_tokens": 235
+        },
+        {
+          "case_id": "authority.unnamed-source",
+          "ordering_index": 2,
+          "label": "c_clarify",
+          "presented": null,
+          "predicted": "c_clarify",
+          "probabilities": {
+            "c_clarify": 0.97,
+            "c_complete": 0.01,
+            "c_assemble": 0.02
+          },
+          "latency_ms": 2678.1,
+          "input_tokens": 235
+        },
+        {
+          "case_id": "authority.unnamed-source",
+          "ordering_index": 3,
+          "label": "c_clarify",
+          "presented": null,
+          "predicted": "c_clarify",
+          "probabilities": {
+            "c_complete": 0.04,
+            "c_assemble": 0.06,
+            "c_clarify": 0.9
+          },
+          "latency_ms": 2696.0,
+          "input_tokens": 235
+        },
+        {
+          "case_id": "blocked.beta-unread",
+          "ordering_index": 0,
+          "label": "c_inspect_beta",
+          "presented": null,
+          "predicted": "c_inspect_beta",
+          "probabilities": {
+            "c_assemble": 0.25,
+            "c_inspect_beta": 0.75,
+            "c_complete": 0.0,
+            "c_publish": 0.0
+          },
+          "latency_ms": 3400.9,
+          "input_tokens": 275
+        },
+        {
+          "case_id": "blocked.beta-unread",
+          "ordering_index": 1,
+          "label": "c_inspect_beta",
+          "presented": null,
+          "predicted": "c_inspect_beta",
+          "probabilities": {
+            "c_publish": 0.0,
+            "c_complete": 0.0,
+            "c_inspect_beta": 0.84,
+            "c_assemble": 0.16
+          },
+          "latency_ms": 3233.6,
+          "input_tokens": 275
+        },
+        {
+          "case_id": "blocked.beta-unread",
+          "ordering_index": 2,
+          "label": "c_inspect_beta",
+          "presented": null,
+          "predicted": "c_inspect_beta",
+          "probabilities": {
+            "c_complete": 0.0,
+            "c_inspect_beta": 0.94,
+            "c_publish": 0.0,
+            "c_assemble": 0.06
+          },
+          "latency_ms": 3203.0,
+          "input_tokens": 275
+        },
+        {
+          "case_id": "blocked.beta-unread",
+          "ordering_index": 3,
+          "label": "c_inspect_beta",
+          "presented": null,
+          "predicted": "c_inspect_beta",
+          "probabilities": {
+            "c_complete": 0.0,
+            "c_publish": 0.0,
+            "c_inspect_beta": 0.76,
+            "c_assemble": 0.24
+          },
+          "latency_ms": 3213.4,
+          "input_tokens": 275
+        },
+        {
+          "case_id": "blocked.unapproved-publish",
+          "ordering_index": 0,
+          "label": "c_approval",
+          "presented": null,
+          "predicted": "c_approval",
+          "probabilities": {
+            "c_publish": 0.04,
+            "c_approval": 0.95,
+            "c_complete": 0.01
+          },
+          "latency_ms": 2694.1,
+          "input_tokens": 219
+        },
+        {
+          "case_id": "blocked.unapproved-publish",
+          "ordering_index": 1,
+          "label": "c_approval",
+          "presented": null,
+          "predicted": "c_approval",
+          "probabilities": {
+            "c_complete": 0.0,
+            "c_approval": 0.95,
+            "c_publish": 0.04
+          },
+          "latency_ms": 2619.8,
+          "input_tokens": 219
+        },
+        {
+          "case_id": "blocked.unapproved-publish",
+          "ordering_index": 2,
+          "label": "c_approval",
+          "presented": null,
+          "predicted": "c_approval",
+          "probabilities": {
+            "c_approval": 0.97,
+            "c_complete": 0.01,
+            "c_publish": 0.02
+          },
+          "latency_ms": 2640.2,
+          "input_tokens": 219
+        },
+        {
+          "case_id": "blocked.unapproved-publish",
+          "ordering_index": 3,
+          "label": "c_approval",
+          "presented": null,
+          "predicted": "c_approval",
+          "probabilities": {
+            "c_complete": 0.01,
+            "c_publish": 0.03,
+            "c_approval": 0.96
+          },
+          "latency_ms": 2633.8,
+          "input_tokens": 219
+        },
+        {
+          "case_id": "cache.deps-changed",
+          "ordering_index": 0,
+          "label": "c_infer",
+          "presented": null,
+          "predicted": "c_infer",
+          "probabilities": {
+            "c_reuse": 0.0,
+            "c_infer": 1.0
+          },
+          "latency_ms": 2593.1,
+          "input_tokens": 208
+        },
+        {
+          "case_id": "cache.deps-changed",
+          "ordering_index": 1,
+          "label": "c_infer",
+          "presented": null,
+          "predicted": "c_infer",
+          "probabilities": {
+            "c_infer": 1.0,
+            "c_reuse": 0.0
+          },
+          "latency_ms": 2564.4,
+          "input_tokens": 208
+        },
+        {
+          "case_id": "cache.deps-unchanged",
+          "ordering_index": 0,
+          "label": "c_reuse",
+          "presented": null,
+          "predicted": "c_reuse",
+          "probabilities": {
+            "c_reuse": 1.0,
+            "c_infer": 0.0
+          },
+          "latency_ms": 2623.5,
+          "input_tokens": 204
+        },
+        {
+          "case_id": "cache.deps-unchanged",
+          "ordering_index": 1,
+          "label": "c_reuse",
+          "presented": null,
+          "predicted": "c_reuse",
+          "probabilities": {
+            "c_infer": 0.0,
+            "c_reuse": 1.0
+          },
+          "latency_ms": 2559.9,
+          "input_tokens": 204
+        },
+        {
+          "case_id": "cache.requester-ben",
+          "ordering_index": 0,
+          "label": "c_reuse",
+          "presented": null,
+          "predicted": "c_reuse",
+          "probabilities": {
+            "c_reuse": 1.0,
+            "c_infer": 0.0
+          },
+          "latency_ms": 2583.9,
+          "input_tokens": 202
+        },
+        {
+          "case_id": "cache.requester-ben",
+          "ordering_index": 1,
+          "label": "c_reuse",
+          "presented": null,
+          "predicted": "c_reuse",
+          "probabilities": {
+            "c_infer": 0.0,
+            "c_reuse": 1.0
+          },
+          "latency_ms": 2574.7,
+          "input_tokens": 202
+        },
+        {
+          "case_id": "cache.requester-sam",
+          "ordering_index": 0,
+          "label": "c_reuse",
+          "presented": null,
+          "predicted": "c_reuse",
+          "probabilities": {
+            "c_reuse": 1.0,
+            "c_infer": 0.0
+          },
+          "latency_ms": 2548.2,
+          "input_tokens": 202
+        },
+        {
+          "case_id": "cache.requester-sam",
+          "ordering_index": 1,
+          "label": "c_reuse",
+          "presented": null,
+          "predicted": "c_reuse",
+          "probabilities": {
+            "c_infer": 0.0,
+            "c_reuse": 1.0
+          },
+          "latency_ms": 2562.4,
+          "input_tokens": 202
+        },
+        {
+          "case_id": "complete.no-remaining-work",
+          "ordering_index": 0,
+          "label": "c_complete",
+          "presented": null,
+          "predicted": "c_complete",
+          "probabilities": {
+            "c_assemble": 0.1,
+            "c_complete": 0.9,
+            "c_clarify": 0.0
+          },
+          "latency_ms": 2653.2,
+          "input_tokens": 216
+        },
+        {
+          "case_id": "complete.no-remaining-work",
+          "ordering_index": 1,
+          "label": "c_complete",
+          "presented": null,
+          "predicted": "c_complete",
+          "probabilities": {
+            "c_clarify": 0.0,
+            "c_complete": 0.95,
+            "c_assemble": 0.05
+          },
+          "latency_ms": 2606.1,
+          "input_tokens": 216
+        },
+        {
+          "case_id": "complete.no-remaining-work",
+          "ordering_index": 2,
+          "label": "c_complete",
+          "presented": null,
+          "predicted": "c_complete",
+          "probabilities": {
+            "c_complete": 0.99,
+            "c_clarify": 0.0,
+            "c_assemble": 0.01
+          },
+          "latency_ms": 2590.3,
+          "input_tokens": 216
+        },
+        {
+          "case_id": "complete.no-remaining-work",
+          "ordering_index": 3,
+          "label": "c_complete",
+          "presented": null,
+          "predicted": "c_complete",
+          "probabilities": {
+            "c_clarify": 0.0,
+            "c_assemble": 0.01,
+            "c_complete": 0.99
+          },
+          "latency_ms": 2640.5,
+          "input_tokens": 216
+        },
+        {
+          "case_id": "complete.published-and-checked",
+          "ordering_index": 0,
+          "label": "c_complete",
+          "presented": null,
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_publish": 0.55,
+            "c_complete": 0.45,
+            "c_inspect_beta": 0.0
+          },
+          "latency_ms": 2655.0,
+          "input_tokens": 219
+        },
+        {
+          "case_id": "complete.published-and-checked",
+          "ordering_index": 1,
+          "label": "c_complete",
+          "presented": null,
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_inspect_beta": 0.0,
+            "c_complete": 0.19,
+            "c_publish": 0.81
+          },
+          "latency_ms": 2615.1,
+          "input_tokens": 219
+        },
+        {
+          "case_id": "complete.published-and-checked",
+          "ordering_index": 2,
+          "label": "c_complete",
+          "presented": null,
+          "predicted": "c_complete",
+          "probabilities": {
+            "c_complete": 0.95,
+            "c_inspect_beta": 0.0,
+            "c_publish": 0.05
+          },
+          "latency_ms": 2639.6,
+          "input_tokens": 219
+        },
+        {
+          "case_id": "complete.published-and-checked",
+          "ordering_index": 3,
+          "label": "c_complete",
+          "presented": null,
+          "predicted": "c_complete",
+          "probabilities": {
+            "c_inspect_beta": 0.0,
+            "c_publish": 0.36,
+            "c_complete": 0.64
+          },
+          "latency_ms": 2625.2,
+          "input_tokens": 219
+        },
+        {
+          "case_id": "distractor.more-documentation",
+          "ordering_index": 0,
+          "label": "c_check",
+          "presented": null,
+          "predicted": "c_check",
+          "probabilities": {
+            "c_document": 0.0,
+            "c_check": 1.0,
+            "c_publish": 0.0,
+            "c_complete": 0.0
+          },
+          "latency_ms": 2795.6,
+          "input_tokens": 252
+        },
+        {
+          "case_id": "distractor.more-documentation",
+          "ordering_index": 1,
+          "label": "c_check",
+          "presented": null,
+          "predicted": "c_check",
+          "probabilities": {
+            "c_complete": 0.0,
+            "c_publish": 0.0,
+            "c_check": 1.0,
+            "c_document": 0.0
+          },
+          "latency_ms": 2743.8,
+          "input_tokens": 252
+        },
+        {
+          "case_id": "distractor.more-documentation",
+          "ordering_index": 2,
+          "label": "c_check",
+          "presented": null,
+          "predicted": "c_check",
+          "probabilities": {
+            "c_publish": 0.0,
+            "c_check": 1.0,
+            "c_complete": 0.0,
+            "c_document": 0.0
+          },
+          "latency_ms": 2748.9,
+          "input_tokens": 252
+        },
+        {
+          "case_id": "distractor.more-documentation",
+          "ordering_index": 3,
+          "label": "c_check",
+          "presented": null,
+          "predicted": "c_check",
+          "probabilities": {
+            "c_publish": 0.0,
+            "c_complete": 0.0,
+            "c_check": 1.0,
+            "c_document": 0.0
+          },
+          "latency_ms": 2752.4,
+          "input_tokens": 252
+        },
+        {
+          "case_id": "distractor.rewrite-first",
+          "ordering_index": 0,
+          "label": "c_inspect_alpha",
+          "presented": null,
+          "predicted": "c_inspect_alpha",
+          "probabilities": {
+            "c_rewrite": 0.0,
+            "c_inspect_alpha": 0.99,
+            "c_complete": 0.01
+          },
+          "latency_ms": 2671.2,
+          "input_tokens": 225
+        },
+        {
+          "case_id": "distractor.rewrite-first",
+          "ordering_index": 1,
+          "label": "c_inspect_alpha",
+          "presented": null,
+          "predicted": "c_inspect_alpha",
+          "probabilities": {
+            "c_complete": 0.0,
+            "c_inspect_alpha": 1.0,
+            "c_rewrite": 0.0
+          },
+          "latency_ms": 2662.9,
+          "input_tokens": 225
+        },
+        {
+          "case_id": "distractor.rewrite-first",
+          "ordering_index": 2,
+          "label": "c_inspect_alpha",
+          "presented": null,
+          "predicted": "c_inspect_alpha",
+          "probabilities": {
+            "c_inspect_alpha": 1.0,
+            "c_complete": 0.0,
+            "c_rewrite": 0.0
+          },
+          "latency_ms": 2652.4,
+          "input_tokens": 225
+        },
+        {
+          "case_id": "distractor.rewrite-first",
+          "ordering_index": 3,
+          "label": "c_inspect_alpha",
+          "presented": null,
+          "predicted": "c_inspect_alpha",
+          "probabilities": {
+            "c_complete": 0.0,
+            "c_rewrite": 0.0,
+            "c_inspect_alpha": 1.0
+          },
+          "latency_ms": 2627.6,
+          "input_tokens": 225
+        },
+        {
+          "case_id": "waiting.dependency-in-flight",
+          "ordering_index": 0,
+          "label": "c_wait",
+          "presented": null,
+          "predicted": "c_wait",
+          "probabilities": {
+            "c_wait": 0.81,
+            "c_inspect_beta": 0.03,
+            "c_assemble": 0.15,
+            "c_complete": 0.01
+          },
+          "latency_ms": 3346.4,
+          "input_tokens": 294
+        },
+        {
+          "case_id": "waiting.dependency-in-flight",
+          "ordering_index": 1,
+          "label": "c_wait",
+          "presented": null,
+          "predicted": "c_assemble",
+          "probabilities": {
+            "c_complete": 0.0,
+            "c_assemble": 0.94,
+            "c_inspect_beta": 0.0,
+            "c_wait": 0.05
+          },
+          "latency_ms": 3261.3,
+          "input_tokens": 294
+        },
+        {
+          "case_id": "waiting.dependency-in-flight",
+          "ordering_index": 2,
+          "label": "c_wait",
+          "presented": null,
+          "predicted": "c_assemble",
+          "probabilities": {
+            "c_assemble": 0.94,
+            "c_inspect_beta": 0.0,
+            "c_complete": 0.0,
+            "c_wait": 0.06
+          },
+          "latency_ms": 3294.1,
+          "input_tokens": 294
+        },
+        {
+          "case_id": "waiting.dependency-in-flight",
+          "ordering_index": 3,
+          "label": "c_wait",
+          "presented": null,
+          "predicted": "c_assemble",
+          "probabilities": {
+            "c_assemble": 0.95,
+            "c_complete": 0.0,
+            "c_inspect_beta": 0.0,
+            "c_wait": 0.05
+          },
+          "latency_ms": 4475.9,
+          "input_tokens": 294
+        },
+        {
+          "case_id": "waiting.nothing-in-flight",
+          "ordering_index": 0,
+          "label": "c_inspect_beta",
+          "presented": null,
+          "predicted": "c_inspect_beta",
+          "probabilities": {
+            "c_wait": 0.0,
+            "c_inspect_beta": 0.96,
+            "c_assemble": 0.04,
+            "c_complete": 0.0
+          },
+          "latency_ms": 5007.4,
+          "input_tokens": 274
+        },
+        {
+          "case_id": "waiting.nothing-in-flight",
+          "ordering_index": 1,
+          "label": "c_inspect_beta",
+          "presented": null,
+          "predicted": "c_inspect_beta",
+          "probabilities": {
+            "c_complete": 0.0,
+            "c_assemble": 0.35,
+            "c_inspect_beta": 0.65,
+            "c_wait": 0.0
+          },
+          "latency_ms": 4735.1,
+          "input_tokens": 274
+        },
+        {
+          "case_id": "waiting.nothing-in-flight",
+          "ordering_index": 2,
+          "label": "c_inspect_beta",
+          "presented": null,
+          "predicted": "c_assemble",
+          "probabilities": {
+            "c_assemble": 0.55,
+            "c_inspect_beta": 0.44,
+            "c_complete": 0.0,
+            "c_wait": 0.0
+          },
+          "latency_ms": 4592.5,
+          "input_tokens": 274
+        },
+        {
+          "case_id": "waiting.nothing-in-flight",
+          "ordering_index": 3,
+          "label": "c_inspect_beta",
+          "presented": null,
+          "predicted": "c_assemble",
+          "probabilities": {
+            "c_assemble": 0.67,
+            "c_complete": 0.0,
+            "c_inspect_beta": 0.33,
+            "c_wait": 0.0
+          },
+          "latency_ms": 4540.7,
+          "input_tokens": 274
+        }
+      ]
+    },
+    {
+      "weights": "Qwen3-4B-Base.Q4_K_M.gguf",
+      "correct": 47,
+      "agrees_with_reference": 52,
+      "median_latency_ms": 2511,
+      "median_input_tokens": 219,
+      "records": [
+        {
+          "case_id": "approval.absent",
+          "ordering_index": 0,
+          "label": "c_approval",
+          "presented": [
+            "c_publish",
+            "c_approval"
+          ],
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_publish": 1.0,
+            "c_approval": 0.0
+          },
+          "latency_ms": 1865.5,
+          "input_tokens": 166
+        },
+        {
+          "case_id": "approval.absent",
+          "ordering_index": 1,
+          "label": "c_approval",
+          "presented": [
+            "c_approval",
+            "c_publish"
+          ],
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_approval": 0.0,
+            "c_publish": 1.0
+          },
+          "latency_ms": 1888.6,
+          "input_tokens": 166
+        },
+        {
+          "case_id": "approval.granted",
+          "ordering_index": 0,
+          "label": "c_publish",
+          "presented": [
+            "c_publish",
+            "c_approval"
+          ],
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_publish": 1.0,
+            "c_approval": 0.0
+          },
+          "latency_ms": 2030.1,
+          "input_tokens": 181
+        },
+        {
+          "case_id": "approval.granted",
+          "ordering_index": 1,
+          "label": "c_publish",
+          "presented": [
+            "c_approval",
+            "c_publish"
+          ],
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_approval": 0.0,
+            "c_publish": 1.0
+          },
+          "latency_ms": 2004.1,
+          "input_tokens": 181
+        },
+        {
+          "case_id": "approval.long-report",
+          "ordering_index": 0,
+          "label": "c_publish",
+          "presented": [
+            "c_publish",
+            "c_approval"
+          ],
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_publish": 1.0,
+            "c_approval": 0.0
+          },
+          "latency_ms": 2367.1,
+          "input_tokens": 195
+        },
+        {
+          "case_id": "approval.long-report",
+          "ordering_index": 1,
+          "label": "c_publish",
+          "presented": [
+            "c_approval",
+            "c_publish"
+          ],
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_approval": 0.0,
+            "c_publish": 1.0
+          },
+          "latency_ms": 2472.6,
+          "input_tokens": 195
+        },
+        {
+          "case_id": "approval.short-report",
+          "ordering_index": 0,
+          "label": "c_publish",
+          "presented": [
+            "c_publish",
+            "c_approval"
+          ],
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_publish": 1.0,
+            "c_approval": 0.0
+          },
+          "latency_ms": 2351.4,
+          "input_tokens": 195
+        },
+        {
+          "case_id": "approval.short-report",
+          "ordering_index": 1,
+          "label": "c_publish",
+          "presented": [
+            "c_approval",
+            "c_publish"
+          ],
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_approval": 0.0,
+            "c_publish": 1.0
+          },
+          "latency_ms": 2342.1,
+          "input_tokens": 195
+        },
+        {
+          "case_id": "authority.read-only-grant",
+          "ordering_index": 0,
+          "label": "c_approval",
+          "presented": [
+            "c_delete",
+            "c_approval",
+            "c_complete"
+          ],
+          "predicted": "c_approval",
+          "probabilities": {
+            "c_delete": 0.02,
+            "c_approval": 0.97,
+            "c_complete": 0.01
+          },
+          "latency_ms": 2410.8,
+          "input_tokens": 204
+        },
+        {
+          "case_id": "authority.read-only-grant",
+          "ordering_index": 1,
+          "label": "c_approval",
+          "presented": [
+            "c_complete",
+            "c_approval",
+            "c_delete"
+          ],
+          "predicted": "c_approval",
+          "probabilities": {
+            "c_complete": 0.0,
+            "c_approval": 0.94,
+            "c_delete": 0.05
+          },
+          "latency_ms": 2404.8,
+          "input_tokens": 204
+        },
+        {
+          "case_id": "authority.read-only-grant",
+          "ordering_index": 2,
+          "label": "c_approval",
+          "presented": [
+            "c_approval",
+            "c_complete",
+            "c_delete"
+          ],
+          "predicted": "c_approval",
+          "probabilities": {
+            "c_approval": 0.98,
+            "c_complete": 0.0,
+            "c_delete": 0.01
+          },
+          "latency_ms": 2398.3,
+          "input_tokens": 204
+        },
+        {
+          "case_id": "authority.read-only-grant",
+          "ordering_index": 3,
+          "label": "c_approval",
+          "presented": [
+            "c_complete",
+            "c_delete",
+            "c_approval"
+          ],
+          "predicted": "c_approval",
+          "probabilities": {
+            "c_complete": 0.01,
+            "c_delete": 0.01,
+            "c_approval": 0.98
+          },
+          "latency_ms": 2412.8,
+          "input_tokens": 204
+        },
+        {
+          "case_id": "authority.unnamed-source",
+          "ordering_index": 0,
+          "label": "c_clarify",
+          "presented": [
+            "c_assemble",
+            "c_clarify",
+            "c_complete"
+          ],
+          "predicted": "c_clarify",
+          "probabilities": {
+            "c_assemble": 0.09,
+            "c_clarify": 0.88,
+            "c_complete": 0.03
+          },
+          "latency_ms": 2521.3,
+          "input_tokens": 235
+        },
+        {
+          "case_id": "authority.unnamed-source",
+          "ordering_index": 1,
+          "label": "c_clarify",
+          "presented": [
+            "c_complete",
+            "c_clarify",
+            "c_assemble"
+          ],
+          "predicted": "c_clarify",
+          "probabilities": {
+            "c_complete": 0.02,
+            "c_clarify": 0.92,
+            "c_assemble": 0.06
+          },
+          "latency_ms": 2454.0,
+          "input_tokens": 235
+        },
+        {
+          "case_id": "authority.unnamed-source",
+          "ordering_index": 2,
+          "label": "c_clarify",
+          "presented": [
+            "c_clarify",
+            "c_complete",
+            "c_assemble"
+          ],
+          "predicted": "c_clarify",
+          "probabilities": {
+            "c_clarify": 0.97,
+            "c_complete": 0.01,
+            "c_assemble": 0.02
+          },
+          "latency_ms": 2517.2,
+          "input_tokens": 235
+        },
+        {
+          "case_id": "authority.unnamed-source",
+          "ordering_index": 3,
+          "label": "c_clarify",
+          "presented": [
+            "c_complete",
+            "c_assemble",
+            "c_clarify"
+          ],
+          "predicted": "c_clarify",
+          "probabilities": {
+            "c_complete": 0.06,
+            "c_assemble": 0.09,
+            "c_clarify": 0.85
+          },
+          "latency_ms": 2506.6,
+          "input_tokens": 235
+        },
+        {
+          "case_id": "blocked.beta-unread",
+          "ordering_index": 0,
+          "label": "c_inspect_beta",
+          "presented": [
+            "c_assemble",
+            "c_inspect_beta",
+            "c_complete",
+            "c_publish"
+          ],
+          "predicted": "c_inspect_beta",
+          "probabilities": {
+            "c_assemble": 0.15,
+            "c_inspect_beta": 0.85,
+            "c_complete": 0.0,
+            "c_publish": 0.0
+          },
+          "latency_ms": 3550.6,
+          "input_tokens": 275
+        },
+        {
+          "case_id": "blocked.beta-unread",
+          "ordering_index": 1,
+          "label": "c_inspect_beta",
+          "presented": [
+            "c_publish",
+            "c_complete",
+            "c_inspect_beta",
+            "c_assemble"
+          ],
+          "predicted": "c_inspect_beta",
+          "probabilities": {
+            "c_publish": 0.0,
+            "c_complete": 0.0,
+            "c_inspect_beta": 0.87,
+            "c_assemble": 0.13
+          },
+          "latency_ms": 3427.7,
+          "input_tokens": 275
+        },
+        {
+          "case_id": "blocked.beta-unread",
+          "ordering_index": 2,
+          "label": "c_inspect_beta",
+          "presented": [
+            "c_complete",
+            "c_inspect_beta",
+            "c_publish",
+            "c_assemble"
+          ],
+          "predicted": "c_inspect_beta",
+          "probabilities": {
+            "c_complete": 0.0,
+            "c_inspect_beta": 0.94,
+            "c_publish": 0.0,
+            "c_assemble": 0.06
+          },
+          "latency_ms": 3237.4,
+          "input_tokens": 275
+        },
+        {
+          "case_id": "blocked.beta-unread",
+          "ordering_index": 3,
+          "label": "c_inspect_beta",
+          "presented": [
+            "c_complete",
+            "c_publish",
+            "c_inspect_beta",
+            "c_assemble"
+          ],
+          "predicted": "c_inspect_beta",
+          "probabilities": {
+            "c_complete": 0.0,
+            "c_publish": 0.0,
+            "c_inspect_beta": 0.87,
+            "c_assemble": 0.13
+          },
+          "latency_ms": 3193.9,
+          "input_tokens": 275
+        },
+        {
+          "case_id": "blocked.unapproved-publish",
+          "ordering_index": 0,
+          "label": "c_approval",
+          "presented": [
+            "c_publish",
+            "c_approval",
+            "c_complete"
+          ],
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_publish": 0.51,
+            "c_approval": 0.43,
+            "c_complete": 0.07
+          },
+          "latency_ms": 2581.3,
+          "input_tokens": 219
+        },
+        {
+          "case_id": "blocked.unapproved-publish",
+          "ordering_index": 1,
+          "label": "c_approval",
+          "presented": [
+            "c_complete",
+            "c_approval",
+            "c_publish"
+          ],
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_complete": 0.05,
+            "c_approval": 0.3,
+            "c_publish": 0.66
+          },
+          "latency_ms": 2409.6,
+          "input_tokens": 219
+        },
+        {
+          "case_id": "blocked.unapproved-publish",
+          "ordering_index": 2,
+          "label": "c_approval",
+          "presented": [
+            "c_approval",
+            "c_complete",
+            "c_publish"
+          ],
+          "predicted": "c_approval",
+          "probabilities": {
+            "c_approval": 0.7,
+            "c_complete": 0.05,
+            "c_publish": 0.26
+          },
+          "latency_ms": 2667.0,
+          "input_tokens": 219
+        },
+        {
+          "case_id": "blocked.unapproved-publish",
+          "ordering_index": 3,
+          "label": "c_approval",
+          "presented": [
+            "c_complete",
+            "c_publish",
+            "c_approval"
+          ],
+          "predicted": "c_approval",
+          "probabilities": {
+            "c_complete": 0.05,
+            "c_publish": 0.37,
+            "c_approval": 0.58
+          },
+          "latency_ms": 2406.5,
+          "input_tokens": 219
+        },
+        {
+          "case_id": "cache.deps-changed",
+          "ordering_index": 0,
+          "label": "c_infer",
+          "presented": [
+            "c_reuse",
+            "c_infer"
+          ],
+          "predicted": "c_infer",
+          "probabilities": {
+            "c_reuse": 0.0,
+            "c_infer": 1.0
+          },
+          "latency_ms": 2430.1,
+          "input_tokens": 208
+        },
+        {
+          "case_id": "cache.deps-changed",
+          "ordering_index": 1,
+          "label": "c_infer",
+          "presented": [
+            "c_infer",
+            "c_reuse"
+          ],
+          "predicted": "c_infer",
+          "probabilities": {
+            "c_infer": 0.99,
+            "c_reuse": 0.01
+          },
+          "latency_ms": 2433.8,
+          "input_tokens": 208
+        },
+        {
+          "case_id": "cache.deps-unchanged",
+          "ordering_index": 0,
+          "label": "c_reuse",
+          "presented": [
+            "c_reuse",
+            "c_infer"
+          ],
+          "predicted": "c_reuse",
+          "probabilities": {
+            "c_reuse": 1.0,
+            "c_infer": 0.0
+          },
+          "latency_ms": 2426.9,
+          "input_tokens": 204
+        },
+        {
+          "case_id": "cache.deps-unchanged",
+          "ordering_index": 1,
+          "label": "c_reuse",
+          "presented": [
+            "c_infer",
+            "c_reuse"
+          ],
+          "predicted": "c_reuse",
+          "probabilities": {
+            "c_infer": 0.0,
+            "c_reuse": 1.0
+          },
+          "latency_ms": 2383.0,
+          "input_tokens": 204
+        },
+        {
+          "case_id": "cache.requester-ben",
+          "ordering_index": 0,
+          "label": "c_reuse",
+          "presented": [
+            "c_reuse",
+            "c_infer"
+          ],
+          "predicted": "c_reuse",
+          "probabilities": {
+            "c_reuse": 1.0,
+            "c_infer": 0.0
+          },
+          "latency_ms": 2430.0,
+          "input_tokens": 202
+        },
+        {
+          "case_id": "cache.requester-ben",
+          "ordering_index": 1,
+          "label": "c_reuse",
+          "presented": [
+            "c_infer",
+            "c_reuse"
+          ],
+          "predicted": "c_reuse",
+          "probabilities": {
+            "c_infer": 0.0,
+            "c_reuse": 1.0
+          },
+          "latency_ms": 2370.1,
+          "input_tokens": 202
+        },
+        {
+          "case_id": "cache.requester-sam",
+          "ordering_index": 0,
+          "label": "c_reuse",
+          "presented": [
+            "c_reuse",
+            "c_infer"
+          ],
+          "predicted": "c_reuse",
+          "probabilities": {
+            "c_reuse": 1.0,
+            "c_infer": 0.0
+          },
+          "latency_ms": 2382.4,
+          "input_tokens": 202
+        },
+        {
+          "case_id": "cache.requester-sam",
+          "ordering_index": 1,
+          "label": "c_reuse",
+          "presented": [
+            "c_infer",
+            "c_reuse"
+          ],
+          "predicted": "c_reuse",
+          "probabilities": {
+            "c_infer": 0.0,
+            "c_reuse": 1.0
+          },
+          "latency_ms": 2383.0,
+          "input_tokens": 202
+        },
+        {
+          "case_id": "complete.no-remaining-work",
+          "ordering_index": 0,
+          "label": "c_complete",
+          "presented": [
+            "c_assemble",
+            "c_complete",
+            "c_clarify"
+          ],
+          "predicted": "c_complete",
+          "probabilities": {
+            "c_assemble": 0.07,
+            "c_complete": 0.93,
+            "c_clarify": 0.0
+          },
+          "latency_ms": 2548.5,
+          "input_tokens": 216
+        },
+        {
+          "case_id": "complete.no-remaining-work",
+          "ordering_index": 1,
+          "label": "c_complete",
+          "presented": [
+            "c_clarify",
+            "c_complete",
+            "c_assemble"
+          ],
+          "predicted": "c_complete",
+          "probabilities": {
+            "c_clarify": 0.0,
+            "c_complete": 0.97,
+            "c_assemble": 0.03
+          },
+          "latency_ms": 2487.8,
+          "input_tokens": 216
+        },
+        {
+          "case_id": "complete.no-remaining-work",
+          "ordering_index": 2,
+          "label": "c_complete",
+          "presented": [
+            "c_complete",
+            "c_clarify",
+            "c_assemble"
+          ],
+          "predicted": "c_complete",
+          "probabilities": {
+            "c_complete": 0.99,
+            "c_clarify": 0.0,
+            "c_assemble": 0.01
+          },
+          "latency_ms": 2457.6,
+          "input_tokens": 216
+        },
+        {
+          "case_id": "complete.no-remaining-work",
+          "ordering_index": 3,
+          "label": "c_complete",
+          "presented": [
+            "c_clarify",
+            "c_assemble",
+            "c_complete"
+          ],
+          "predicted": "c_complete",
+          "probabilities": {
+            "c_clarify": 0.0,
+            "c_assemble": 0.01,
+            "c_complete": 0.99
+          },
+          "latency_ms": 2505.9,
+          "input_tokens": 216
+        },
+        {
+          "case_id": "complete.published-and-checked",
+          "ordering_index": 0,
+          "label": "c_complete",
+          "presented": [
+            "c_publish",
+            "c_complete",
+            "c_inspect_beta"
+          ],
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_publish": 0.66,
+            "c_complete": 0.34,
+            "c_inspect_beta": 0.0
+          },
+          "latency_ms": 2522.2,
+          "input_tokens": 219
+        },
+        {
+          "case_id": "complete.published-and-checked",
+          "ordering_index": 1,
+          "label": "c_complete",
+          "presented": [
+            "c_inspect_beta",
+            "c_complete",
+            "c_publish"
+          ],
+          "predicted": "c_publish",
+          "probabilities": {
+            "c_inspect_beta": 0.0,
+            "c_complete": 0.22,
+            "c_publish": 0.78
+          },
+          "latency_ms": 2514.9,
+          "input_tokens": 219
+        },
+        {
+          "case_id": "complete.published-and-checked",
+          "ordering_index": 2,
+          "label": "c_complete",
+          "presented": [
+            "c_complete",
+            "c_inspect_beta",
+            "c_publish"
+          ],
+          "predicted": "c_complete",
+          "probabilities": {
+            "c_complete": 0.95,
+            "c_inspect_beta": 0.0,
+            "c_publish": 0.05
+          },
+          "latency_ms": 3007.4,
+          "input_tokens": 219
+        },
+        {
+          "case_id": "complete.published-and-checked",
+          "ordering_index": 3,
+          "label": "c_complete",
+          "presented": [
+            "c_inspect_beta",
+            "c_publish",
+            "c_complete"
+          ],
+          "predicted": "c_complete",
+          "probabilities": {
+            "c_inspect_beta": 0.0,
+            "c_publish": 0.28,
+            "c_complete": 0.72
+          },
+          "latency_ms": 2437.2,
+          "input_tokens": 219
+        },
+        {
+          "case_id": "distractor.more-documentation",
+          "ordering_index": 0,
+          "label": "c_check",
+          "presented": [
+            "c_document",
+            "c_check",
+            "c_publish",
+            "c_complete"
+          ],
+          "predicted": "c_check",
+          "probabilities": {
+            "c_document": 0.0,
+            "c_check": 1.0,
+            "c_publish": 0.0,
+            "c_complete": 0.0
+          },
+          "latency_ms": 2709.4,
+          "input_tokens": 252
+        },
+        {
+          "case_id": "distractor.more-documentation",
+          "ordering_index": 1,
+          "label": "c_check",
+          "presented": [
+            "c_complete",
+            "c_publish",
+            "c_check",
+            "c_document"
+          ],
+          "predicted": "c_check",
+          "probabilities": {
+            "c_complete": 0.0,
+            "c_publish": 0.0,
+            "c_check": 1.0,
+            "c_document": 0.0
+          },
+          "latency_ms": 2666.6,
+          "input_tokens": 252
+        },
+        {
+          "case_id": "distractor.more-documentation",
+          "ordering_index": 2,
+          "label": "c_check",
+          "presented": [
+            "c_publish",
+            "c_check",
+            "c_complete",
+            "c_document"
+          ],
+          "predicted": "c_check",
+          "probabilities": {
+            "c_publish": 0.0,
+            "c_check": 1.0,
+            "c_complete": 0.0,
+            "c_document": 0.0
+          },
+          "latency_ms": 2667.9,
+          "input_tokens": 252
+        },
+        {
+          "case_id": "distractor.more-documentation",
+          "ordering_index": 3,
+          "label": "c_check",
+          "presented": [
+            "c_publish",
+            "c_complete",
+            "c_check",
+            "c_document"
+          ],
+          "predicted": "c_check",
+          "probabilities": {
+            "c_publish": 0.0,
+            "c_complete": 0.0,
+            "c_check": 1.0,
+            "c_document": 0.0
+          },
+          "latency_ms": 2709.2,
+          "input_tokens": 252
+        },
+        {
+          "case_id": "distractor.rewrite-first",
+          "ordering_index": 0,
+          "label": "c_inspect_alpha",
+          "presented": [
+            "c_rewrite",
+            "c_inspect_alpha",
+            "c_complete"
+          ],
+          "predicted": "c_inspect_alpha",
+          "probabilities": {
+            "c_rewrite": 0.0,
+            "c_inspect_alpha": 0.99,
+            "c_complete": 0.01
+          },
+          "latency_ms": 2624.5,
+          "input_tokens": 225
+        },
+        {
+          "case_id": "distractor.rewrite-first",
+          "ordering_index": 1,
+          "label": "c_inspect_alpha",
+          "presented": [
+            "c_complete",
+            "c_inspect_alpha",
+            "c_rewrite"
+          ],
+          "predicted": "c_inspect_alpha",
+          "probabilities": {
+            "c_complete": 0.0,
+            "c_inspect_alpha": 1.0,
+            "c_rewrite": 0.0
+          },
+          "latency_ms": 2582.6,
+          "input_tokens": 225
+        },
+        {
+          "case_id": "distractor.rewrite-first",
+          "ordering_index": 2,
+          "label": "c_inspect_alpha",
+          "presented": [
+            "c_inspect_alpha",
+            "c_complete",
+            "c_rewrite"
+          ],
+          "predicted": "c_inspect_alpha",
+          "probabilities": {
+            "c_inspect_alpha": 1.0,
+            "c_complete": 0.0,
+            "c_rewrite": 0.0
+          },
+          "latency_ms": 2583.8,
+          "input_tokens": 225
+        },
+        {
+          "case_id": "distractor.rewrite-first",
+          "ordering_index": 3,
+          "label": "c_inspect_alpha",
+          "presented": [
+            "c_complete",
+            "c_rewrite",
+            "c_inspect_alpha"
+          ],
+          "predicted": "c_inspect_alpha",
+          "probabilities": {
+            "c_complete": 0.0,
+            "c_rewrite": 0.0,
+            "c_inspect_alpha": 1.0
+          },
+          "latency_ms": 2594.5,
+          "input_tokens": 225
+        },
+        {
+          "case_id": "waiting.dependency-in-flight",
+          "ordering_index": 0,
+          "label": "c_wait",
+          "presented": [
+            "c_wait",
+            "c_inspect_beta",
+            "c_assemble",
+            "c_complete"
+          ],
+          "predicted": "c_wait",
+          "probabilities": {
+            "c_wait": 0.82,
+            "c_inspect_beta": 0.03,
+            "c_assemble": 0.15,
+            "c_complete": 0.01
+          },
+          "latency_ms": 3210.0,
+          "input_tokens": 294
+        },
+        {
+          "case_id": "waiting.dependency-in-flight",
+          "ordering_index": 1,
+          "label": "c_wait",
+          "presented": [
+            "c_complete",
+            "c_assemble",
+            "c_inspect_beta",
+            "c_wait"
+          ],
+          "predicted": "c_assemble",
+          "probabilities": {
+            "c_complete": 0.02,
+            "c_assemble": 0.89,
+            "c_inspect_beta": 0.01,
+            "c_wait": 0.08
+          },
+          "latency_ms": 3156.7,
+          "input_tokens": 294
+        },
+        {
+          "case_id": "waiting.dependency-in-flight",
+          "ordering_index": 2,
+          "label": "c_wait",
+          "presented": [
+            "c_assemble",
+            "c_inspect_beta",
+            "c_complete",
+            "c_wait"
+          ],
+          "predicted": "c_assemble",
+          "probabilities": {
+            "c_assemble": 0.91,
+            "c_inspect_beta": 0.0,
+            "c_complete": 0.01,
+            "c_wait": 0.07
+          },
+          "latency_ms": 3177.0,
+          "input_tokens": 294
+        },
+        {
+          "case_id": "waiting.dependency-in-flight",
+          "ordering_index": 3,
+          "label": "c_wait",
+          "presented": [
+            "c_assemble",
+            "c_complete",
+            "c_inspect_beta",
+            "c_wait"
+          ],
+          "predicted": "c_assemble",
+          "probabilities": {
+            "c_assemble": 0.94,
+            "c_complete": 0.01,
+            "c_inspect_beta": 0.01,
+            "c_wait": 0.04
+          },
+          "latency_ms": 3251.9,
+          "input_tokens": 294
+        },
+        {
+          "case_id": "waiting.nothing-in-flight",
+          "ordering_index": 0,
+          "label": "c_inspect_beta",
+          "presented": [
+            "c_wait",
+            "c_inspect_beta",
+            "c_assemble",
+            "c_complete"
+          ],
+          "predicted": "c_inspect_beta",
+          "probabilities": {
+            "c_wait": 0.0,
+            "c_inspect_beta": 0.98,
+            "c_assemble": 0.02,
+            "c_complete": 0.0
+          },
+          "latency_ms": 3652.1,
+          "input_tokens": 274
+        },
+        {
+          "case_id": "waiting.nothing-in-flight",
+          "ordering_index": 1,
+          "label": "c_inspect_beta",
+          "presented": [
+            "c_complete",
+            "c_assemble",
+            "c_inspect_beta",
+            "c_wait"
+          ],
+          "predicted": "c_inspect_beta",
+          "probabilities": {
+            "c_complete": 0.0,
+            "c_assemble": 0.18,
+            "c_inspect_beta": 0.82,
+            "c_wait": 0.0
+          },
+          "latency_ms": 4727.1,
+          "input_tokens": 274
+        },
+        {
+          "case_id": "waiting.nothing-in-flight",
+          "ordering_index": 2,
+          "label": "c_inspect_beta",
+          "presented": [
+            "c_assemble",
+            "c_inspect_beta",
+            "c_complete",
+            "c_wait"
+          ],
+          "predicted": "c_inspect_beta",
+          "probabilities": {
+            "c_assemble": 0.26,
+            "c_inspect_beta": 0.73,
+            "c_complete": 0.0,
+            "c_wait": 0.0
+          },
+          "latency_ms": 4590.2,
+          "input_tokens": 274
+        },
+        {
+          "case_id": "waiting.nothing-in-flight",
+          "ordering_index": 3,
+          "label": "c_inspect_beta",
+          "presented": [
+            "c_assemble",
+            "c_complete",
+            "c_inspect_beta",
+            "c_wait"
+          ],
+          "predicted": "c_inspect_beta",
+          "probabilities": {
+            "c_assemble": 0.44,
+            "c_complete": 0.0,
+            "c_inspect_beta": 0.55,
+            "c_wait": 0.0
+          },
+          "latency_ms": 4434.3,
+          "input_tokens": 274
+        }
+      ]
+    }
+  ]
+}
