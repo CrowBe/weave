@@ -15,6 +15,7 @@ export {
   renderWeighView,
   FRAME_PROFILE,
   DEFAULT_FRAME_PROFILE,
+  NARROW_FRAME_PROFILE,
   WEIGH_PROFILE,
   type FrameProfile,
   parseProposalText,
@@ -37,3 +38,10 @@ export {
 export type { ExtensionAuthor } from './crystallize-actions.js';
 export { PROCEDURE_IDS } from './candidates.js';
 export { HOST_INVOCATION_MICROS, reuseVerdict } from './reuse.js';
+export {
+  CACHE_MISS_DELTA_MICROS,
+  CATALOGUE_SLOT_MICROS,
+  FRAME_QUALITY_OPERATIONS,
+  stablePrefixBytes,
+  viewBodyBytes,
+} from './strategy.js';

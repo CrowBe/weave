@@ -348,6 +348,19 @@ export const PAYLOAD_TYPES = [
   'binding.corrected',
   'output.rejected',
   'baseline.recorded',
+  'workload.recorded',
+  'baseline.requested',
+  'profile.recorded',
+  'profile.retired',
+  'experiment.recorded',
+  'experiment.requested',
+  'experiment.compared',
+  'experiment.amended',
+  'experiment.invalidated',
+  'experiment.regressed',
+  'strategy.promoted',
+  'strategy.rolled_back',
+  'provider.keepalive',
 ] as const;
 export type PayloadType = (typeof PAYLOAD_TYPES)[number];
 
@@ -435,6 +448,60 @@ export interface BaselineRecord {
   readonly human_corrections: number;
 }
 
+export interface ContextProfileRecord {
+  readonly id: string;
+  readonly version: number;
+  readonly catalogue_budget: number;
+  readonly slices?: readonly string[];
+  readonly prefix?: string;
+}
+
+export interface ExperimentRecord {
+  readonly experiment_id: string;
+  readonly weakness: string;
+  readonly baseline: 'profile.frame@1';
+  readonly candidate: string;
+  readonly workload: string;
+  readonly protected_cases: readonly string[];
+  readonly quality_bar: string;
+  readonly measures: readonly string[];
+  readonly promotion: string;
+  readonly budget: { readonly judgments: number; readonly cost: number };
+  readonly rollback: 'profile.frame@1';
+  readonly deadline_tick: number;
+  readonly evidence: Seq;
+  readonly invalidated: boolean;
+}
+
+export interface ExperimentComparedPayload {
+  readonly experiment_id: string;
+  readonly candidate: string;
+  readonly baseline: 'profile.frame@1';
+  readonly quality: 'held' | 'missed';
+  readonly misses: readonly string[];
+  readonly human_corrections: number;
+  readonly latency_ticks: number;
+  readonly cost_micros: number;
+  readonly baseline_cost_micros: number;
+  readonly prefix_stable: boolean;
+  readonly cache_miss_delta: number;
+  readonly token_micros: number;
+  readonly deadline_tick: number;
+}
+
+export interface ComparisonRecord extends ExperimentComparedPayload {
+  readonly evidence: Seq;
+}
+
+export interface StrategySelection {
+  readonly profile_id: string;
+  readonly workload: string | null;
+  readonly experiment_id: string | null;
+  readonly promoted: boolean;
+  readonly rolled_back: boolean;
+  readonly paused: boolean;
+}
+
 export interface BudgetLine {
   readonly limit: number;
   readonly reserved: number;
@@ -476,6 +543,10 @@ export interface State {
   readonly workload: readonly WorkloadCase[];
   readonly corrections: readonly HumanCorrection[];
   readonly baseline: BaselineRecord | null;
+  readonly profiles: Readonly<Record<string, ContextProfileRecord>>;
+  readonly experiment: ExperimentRecord | null;
+  readonly comparisons: readonly ComparisonRecord[];
+  readonly strategy: StrategySelection;
 }
 
 // ---------------------------------------------------------------------------

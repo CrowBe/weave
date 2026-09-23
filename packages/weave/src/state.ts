@@ -16,7 +16,10 @@ import type {
   ClockTickPayload,
   BaselineRecord,
   CachedConclusion,
+  ComparisonRecord,
+  ContextProfileRecord,
   CrystallizationState,
+  ExperimentRecord,
   Goal,
   HumanCorrection,
   InferenceRecord,
@@ -32,8 +35,10 @@ import type {
   Seq,
   SourcePayload,
   State,
+  StrategySelection,
   WorkloadCase,
 } from './types.js';
+import { DEFAULT_FRAME_PROFILE, NARROW_FRAME_PROFILE } from './views.js';
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
@@ -59,6 +64,10 @@ interface MutableState {
   workload: WorkloadCase[];
   corrections: HumanCorrection[];
   baseline: BaselineRecord | null;
+  profiles: Record<string, ContextProfileRecord>;
+  experiment: ExperimentRecord | null;
+  comparisons: ComparisonRecord[];
+  strategy: StrategySelection;
 }
 
 export function initialState(): MutableState {
@@ -88,6 +97,20 @@ export function initialState(): MutableState {
     workload: [],
     corrections: [],
     baseline: null,
+    profiles: {
+      [DEFAULT_FRAME_PROFILE.id]: { ...DEFAULT_FRAME_PROFILE },
+      [NARROW_FRAME_PROFILE.id]: { ...NARROW_FRAME_PROFILE },
+    },
+    experiment: null,
+    comparisons: [],
+    strategy: {
+      profile_id: DEFAULT_FRAME_PROFILE.id,
+      workload: null,
+      experiment_id: null,
+      promoted: false,
+      rolled_back: false,
+      paused: false,
+    },
   };
 }
 
@@ -170,6 +193,106 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
     }
     case 'baseline.recorded': {
       state.baseline = observation.payload as BaselineRecord;
+      return;
+    }
+    case 'workload.recorded': {
+      const payload = observation.payload as { goal_id: string; quality: 'held' | 'missed' };
+      const existing = state.workload.findIndex((item) => item.goal_id === payload.goal_id);
+      const next = { goal_id: payload.goal_id, quality: payload.quality };
+      if (existing >= 0) {
+        state.workload[existing] = next;
+      } else {
+        state.workload.push(next);
+      }
+      return;
+    }
+    case 'baseline.requested':
+    case 'experiment.requested':
+    case 'provider.keepalive':
+      return;
+    case 'profile.recorded': {
+      const payload = observation.payload as ContextProfileRecord;
+      const record: ContextProfileRecord = {
+        id: payload.id,
+        version: payload.version,
+        catalogue_budget: payload.catalogue_budget,
+        ...(payload.prefix !== undefined ? { prefix: payload.prefix } : {}),
+        ...(payload.slices !== undefined ? { slices: [...payload.slices] } : {}),
+      };
+      state.profiles[payload.id] = record;
+      return;
+    }
+    case 'profile.retired': {
+      const payload = observation.payload as { profile_id: string };
+      delete state.profiles[payload.profile_id];
+      if (state.strategy.profile_id === payload.profile_id) {
+        state.strategy = { ...state.strategy, paused: true };
+      }
+      return;
+    }
+    case 'experiment.recorded': {
+      const payload = observation.payload as Omit<ExperimentRecord, 'evidence' | 'invalidated'>;
+      state.experiment = { ...payload, evidence: observation.seq, invalidated: false };
+      return;
+    }
+    case 'experiment.compared': {
+      const payload = observation.payload as ComparisonRecord;
+      state.comparisons.push({ ...payload, evidence: observation.seq });
+      return;
+    }
+    case 'experiment.amended': {
+      const payload = observation.payload as {
+        experiment_id: string;
+        protected_cases?: string[];
+        quality_bar?: string;
+      };
+      const experiment = state.experiment;
+      if (!experiment || experiment.experiment_id !== payload.experiment_id) {
+        return;
+      }
+      state.experiment = {
+        ...experiment,
+        ...(payload.protected_cases ? { protected_cases: [...payload.protected_cases] } : {}),
+        ...(payload.quality_bar ? { quality_bar: payload.quality_bar } : {}),
+      };
+      return;
+    }
+    case 'experiment.invalidated': {
+      const payload = observation.payload as { experiment_id: string };
+      if (state.experiment && state.experiment.experiment_id === payload.experiment_id) {
+        state.experiment = { ...state.experiment, invalidated: true };
+      }
+      return;
+    }
+    case 'experiment.regressed':
+      return;
+    case 'strategy.promoted': {
+      const experiment = state.experiment;
+      if (!experiment) {
+        return;
+      }
+      const record = state.profiles[experiment.candidate];
+      state.strategy = {
+        profile_id: experiment.candidate,
+        workload: experiment.workload,
+        experiment_id: experiment.experiment_id,
+        promoted: true,
+        rolled_back: false,
+        paused: record === undefined,
+      };
+      return;
+    }
+    case 'strategy.rolled_back': {
+      const payload = observation.payload as { profile_id: string; experiment_id: string };
+      const record = state.profiles[payload.profile_id];
+      state.strategy = {
+        profile_id: payload.profile_id,
+        workload: state.strategy.workload,
+        experiment_id: payload.experiment_id,
+        promoted: false,
+        rolled_back: true,
+        paused: record === undefined,
+      };
       return;
     }
     case 'source.registered':
