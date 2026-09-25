@@ -5,6 +5,7 @@
  */
 import { isEffect } from '@weave/agentsop';
 import { candidateSetDigest } from './digest.js';
+import { amendmentMovesProtocol, isCorePatch, promotionRefusal } from './strategy.js';
 import { PAYLOAD_TYPES, type ObservationInput, type PayloadType, type ProvenanceKind, type State, type Validation } from './types.js';
 
 const ACCEPTED: Validation = { status: 'accepted' };
@@ -38,6 +39,19 @@ const EXPECTED_SOURCE: Readonly<Record<PayloadType, readonly ProvenanceKind[]>> 
   'binding.corrected': ['operator'],
   'output.rejected': ['operator'],
   'baseline.recorded': ['runtime'],
+  'workload.recorded': ['operator'],
+  'baseline.requested': ['operator'],
+  'profile.recorded': ['operator'],
+  'profile.retired': ['operator'],
+  'experiment.recorded': ['operator'],
+  'experiment.requested': ['operator'],
+  'experiment.compared': ['runtime'],
+  'experiment.amended': ['operator'],
+  'experiment.invalidated': ['runtime'],
+  'experiment.regressed': ['operator'],
+  'strategy.promoted': ['operator'],
+  'strategy.rolled_back': ['runtime'],
+  'provider.keepalive': ['gateway', 'host'],
 };
 
 function rejected(reason: string): Validation {
@@ -167,6 +181,34 @@ export function validate(input: ObservationInput, state: State): Validation {
       return validateCorrection(payload);
     case 'baseline.recorded':
       return validateBaseline(payload);
+    case 'workload.recorded':
+      return validateWorkload(payload);
+    case 'baseline.requested':
+      return ACCEPTED;
+    case 'profile.recorded':
+      return validateProfileRecord(payload, state);
+    case 'profile.retired':
+      return validateProfileRetired(payload, state);
+    case 'experiment.recorded':
+      return validateExperiment(payload, state);
+    case 'experiment.requested':
+      return validateExperimentRequested(payload, state);
+    case 'experiment.compared':
+      return validateComparison(payload);
+    case 'experiment.amended':
+      return validateAmendment(payload, state);
+    case 'experiment.invalidated':
+      return isNonEmptyString(payload['experiment_id']) && isNonEmptyString(payload['reason'])
+        ? ACCEPTED
+        : rejected('experiment.invalidated requires experiment_id and reason');
+    case 'experiment.regressed':
+      return validateRegression(payload, state);
+    case 'strategy.promoted':
+      return validatePromotion(payload, state);
+    case 'strategy.rolled_back':
+      return validateRollback(payload, state);
+    case 'provider.keepalive':
+      return ACCEPTED;
   }
 }
 
@@ -711,6 +753,216 @@ function validateCorrection(payload: Record<string, unknown>): Validation {
     return rejected('a human correction requires action_id and reason');
   }
   return ACCEPTED;
+}
+
+const MEASURES = ['quality', 'human_corrections', 'latency_ticks', 'cost_micros', 'prefix_stable'] as const;
+
+function validateWorkload(payload: Record<string, unknown>): Validation {
+  if (!isNonEmptyString(payload['goal_id'])) {
+    return rejected('workload.recorded requires a goal_id');
+  }
+  if (payload['quality'] !== 'held' && payload['quality'] !== 'missed') {
+    return rejected('workload.recorded quality must be held or missed');
+  }
+  return ACCEPTED;
+}
+
+function validateProfileRecord(payload: Record<string, unknown>, state: State): Validation {
+  if (isCorePatch(payload) || payload['patch'] !== undefined || payload['target'] !== undefined) {
+    return rejected('evaluation does not start');
+  }
+  if (!isNonEmptyString(payload['id']) || !isNonNegativeInteger(payload['version']) || payload['version'] < 1) {
+    return rejected('profile.recorded requires id and a positive version');
+  }
+  if (!isNonNegativeInteger(payload['catalogue_budget'])) {
+    return rejected('profile.recorded requires a catalogue_budget');
+  }
+  if (payload['prefix'] !== undefined && typeof payload['prefix'] !== 'string') {
+    return rejected('profile.recorded prefix must be a string');
+  }
+  if (payload['slices'] !== undefined && !isStringArray(payload['slices'])) {
+    return rejected('profile.recorded slices must be ids');
+  }
+  if (state.profiles[payload['id']]) {
+    return rejected(`profile ${payload['id']} is already recorded`);
+  }
+  return ACCEPTED;
+}
+
+function validateProfileRetired(payload: Record<string, unknown>, state: State): Validation {
+  if (!isNonEmptyString(payload['profile_id'])) {
+    return rejected('profile.retired requires a profile_id');
+  }
+  if (!state.profiles[payload['profile_id']]) {
+    return rejected(`profile ${payload['profile_id']} is not recorded`);
+  }
+  return ACCEPTED;
+}
+
+function validateExperiment(payload: Record<string, unknown>, state: State): Validation {
+  if (isCorePatch(payload['candidate']) || payload['patch'] !== undefined || payload['target'] !== undefined) {
+    return rejected('evaluation does not start');
+  }
+  if (state.experiment) {
+    return rejected('an experiment is already recorded');
+  }
+  if (!isNonEmptyString(payload['experiment_id']) || !isNonEmptyString(payload['weakness'])) {
+    return rejected('experiment.recorded requires experiment_id and weakness');
+  }
+  if (payload['baseline'] !== 'profile.frame@1' || payload['rollback'] !== 'profile.frame@1') {
+    return rejected('experiment baseline and rollback must be profile.frame@1');
+  }
+  if (!isNonEmptyString(payload['candidate']) || !state.profiles[payload['candidate']]) {
+    return rejected('experiment candidate must be a recorded profile');
+  }
+  if (!isNonEmptyString(payload['workload']) || !isNonEmptyString(payload['quality_bar']) || !isNonEmptyString(payload['promotion'])) {
+    return rejected('experiment.recorded requires workload, quality_bar, and promotion');
+  }
+  if (!isStringArray(payload['protected_cases']) || new Set(payload['protected_cases']).size !== payload['protected_cases'].length) {
+    return rejected('experiment.protected_cases must be distinct case ids');
+  }
+  if (!sameMeasures(payload['measures'])) {
+    return rejected('experiment.measures must name quality, human corrections, latency, cost, and prefix_stable');
+  }
+  const budget = payload['budget'];
+  if (!isRecord(budget) || !isNonNegativeInteger(budget['judgments']) || !isNonNegativeInteger(budget['cost'])) {
+    return rejected('experiment.budget must give judgments and cost');
+  }
+  if (!isNonNegativeInteger(payload['deadline_tick']) || payload['deadline_tick'] !== state.clock.tick) {
+    return rejected('experiment deadline must be the recorded tick');
+  }
+  return ACCEPTED;
+}
+
+function validateExperimentRequested(payload: Record<string, unknown>, state: State): Validation {
+  if (!state.experiment || state.experiment.invalidated) {
+    return rejected('evaluation does not start');
+  }
+  if (payload['experiment_id'] !== state.experiment.experiment_id) {
+    return rejected('evaluation does not start');
+  }
+  if (!state.profiles[state.experiment.candidate]) {
+    return rejected('evaluation does not start');
+  }
+  return ACCEPTED;
+}
+
+function validateComparison(payload: Record<string, unknown>): Validation {
+  if (!isNonEmptyString(payload['experiment_id']) || !isNonEmptyString(payload['candidate'])) {
+    return rejected('experiment.compared requires experiment_id and candidate');
+  }
+  if (payload['baseline'] !== 'profile.frame@1') {
+    return rejected('experiment.compared baseline must be profile.frame@1');
+  }
+  if (payload['quality'] !== 'held' && payload['quality'] !== 'missed') {
+    return rejected('experiment.compared quality must be held or missed');
+  }
+  if (!isStringArray(payload['misses']) && !(Array.isArray(payload['misses']) && payload['misses'].every((item) => typeof item === 'string'))) {
+    return rejected('experiment.compared misses must be strings');
+  }
+  if (
+    !isNonNegativeInteger(payload['human_corrections']) ||
+    !isNonNegativeInteger(payload['latency_ticks']) ||
+    !isNonNegativeInteger(payload['cost_micros']) ||
+    !isNonNegativeInteger(payload['baseline_cost_micros']) ||
+    !isNonNegativeInteger(payload['cache_miss_delta']) ||
+    !isNonNegativeInteger(payload['token_micros']) ||
+    !isNonNegativeInteger(payload['deadline_tick'])
+  ) {
+    return rejected('experiment.compared requires cost, latency, and the deadline tick');
+  }
+  if (typeof payload['prefix_stable'] !== 'boolean') {
+    return rejected('experiment.compared requires prefix_stable');
+  }
+  return ACCEPTED;
+}
+
+function validateAmendment(payload: Record<string, unknown>, state: State): Validation {
+  const experiment = state.experiment;
+  if (!experiment || payload['experiment_id'] !== experiment.experiment_id) {
+    return rejected('experiment.amended names an unknown experiment');
+  }
+  const results = state.comparisons.some((comparison) => comparison.experiment_id === experiment.experiment_id && comparison.evidence > experiment.evidence);
+  if (results && amendmentMovesProtocol(experiment, payload)) {
+    return rejected('comparison invalidated');
+  }
+  if (results) {
+    return rejected('comparison invalidated');
+  }
+  if (payload['protected_cases'] !== undefined && (!isStringArray(payload['protected_cases']) || new Set(payload['protected_cases']).size !== payload['protected_cases'].length)) {
+    return rejected('experiment.protected_cases must be distinct case ids');
+  }
+  if (payload['quality_bar'] !== undefined && !isNonEmptyString(payload['quality_bar'])) {
+    return rejected('quality_bar must be a non-empty string');
+  }
+  if (payload['success_evidence'] !== undefined && typeof payload['success_evidence'] !== 'string') {
+    return rejected('success_evidence must be a string');
+  }
+  return ACCEPTED;
+}
+
+function validateRegression(payload: Record<string, unknown>, state: State): Validation {
+  const experiment = state.experiment;
+  if (!experiment || payload['experiment_id'] !== experiment.experiment_id) {
+    return rejected('experiment.regressed names an unknown experiment');
+  }
+  if (!state.strategy.promoted || state.strategy.experiment_id !== experiment.experiment_id) {
+    return rejected('regression requires an active promotion');
+  }
+  if (!isNonEmptyString(payload['case_id']) || !experiment.protected_cases.includes(payload['case_id'])) {
+    return rejected('regression must name a protected case');
+  }
+  return ACCEPTED;
+}
+
+function validatePromotion(payload: Record<string, unknown>, state: State): Validation {
+  if ('grant' in payload || 'execution_grant' in payload) {
+    return rejected('promotion does not issue an execution grant');
+  }
+  if ('admission' in payload || 'implementation_id' in payload) {
+    return rejected('promotion is not admission');
+  }
+  if ('success_evidence' in payload || 'quality_bar' in payload) {
+    return rejected('promotion does not change success evidence');
+  }
+  const experiment = state.experiment;
+  if (!experiment || payload['experiment_id'] !== experiment.experiment_id) {
+    return rejected('strategy.promoted names an unknown experiment');
+  }
+  if (payload['workload'] !== experiment.workload) {
+    return rejected('promotion is limited to the declared workload');
+  }
+  const comparison = [...state.comparisons].reverse().find((item) => item.experiment_id === experiment.experiment_id);
+  const reason = promotionRefusal(experiment, comparison, state.baseline);
+  if (reason) {
+    return rejected(reason);
+  }
+  return ACCEPTED;
+}
+
+function validateRollback(payload: Record<string, unknown>, state: State): Validation {
+  const experiment = state.experiment;
+  if (!experiment || payload['experiment_id'] !== experiment.experiment_id) {
+    return rejected('strategy.rolled_back names an unknown experiment');
+  }
+  if (payload['profile_id'] !== experiment.rollback) {
+    return rejected('rollback target must be the recorded baseline profile');
+  }
+  if (!isNonEmptyString(payload['case_id']) || !experiment.protected_cases.includes(payload['case_id'])) {
+    return rejected('rollback must name a protected case');
+  }
+  if (!isNonEmptyString(payload['reason'])) {
+    return rejected('rollback requires a reason');
+  }
+  return ACCEPTED;
+}
+
+function sameMeasures(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length !== MEASURES.length) {
+    return false;
+  }
+  const seen = new Set(value);
+  return MEASURES.every((measure) => seen.has(measure));
 }
 
 function validateBaseline(payload: Record<string, unknown>): Validation {

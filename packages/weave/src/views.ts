@@ -24,6 +24,12 @@ export interface FrameProfile {
    * when `conclusion` is listed, and then once. Reuse does not add a slice.
    */
   readonly slices?: readonly string[];
+  /**
+   * Extra bytes that belong to the stable prefix and not to the view body.
+   * A different value changes `prefix_stable` without changing disclosed
+   * operations. Absent means the profile id alone distinguishes the prefix.
+   */
+  readonly prefix?: string;
 }
 
 /** Discloses the fixture catalogue. A tighter profile is a different record. */
@@ -31,6 +37,13 @@ export const DEFAULT_FRAME_PROFILE: FrameProfile = {
   id: FRAME_PROFILE,
   version: 1,
   catalogue_budget: 32,
+};
+
+/** M5 candidate. A smaller catalogue budget, still a profile record. */
+export const NARROW_FRAME_PROFILE: FrameProfile = {
+  id: 'profile.frame.narrow@1',
+  version: 1,
+  catalogue_budget: 8,
 };
 
 export interface CatalogueOp {
@@ -54,6 +67,20 @@ export function renderFrameView(
   profile: FrameProfile = DEFAULT_FRAME_PROFILE,
 ): StateView {
   const goal = state.goal;
+  if (profile.catalogue_budget === 0) {
+    return {
+      profile: profile.id,
+      profile_version: profile.version,
+      state_revision: state.state_revision,
+      content: {},
+      manifest: {
+        slices: [
+          slice('goal', goal ? [goal.evidence] : [], []),
+          slice('catalogue', [], [{ name: 'catalogue', reason: 'budget' }], true),
+        ],
+      },
+    };
+  }
   const allowed = new Set(goal?.authority.read ?? []);
   const catalogueBudget =
     Number.isInteger(profile.catalogue_budget) && profile.catalogue_budget > 0 ? profile.catalogue_budget : 0;

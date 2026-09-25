@@ -34,6 +34,7 @@ import { parseProposalText, validateProposal } from './proposals.js';
 import { select } from './scheduler.js';
 import { stableStringify } from './stable-json.js';
 import { applyAccepted, initialState, snapshot, type MutableState } from './state.js';
+import { measureCandidate } from './strategy.js';
 import { DEFAULT_FRAME_PROFILE, renderFrameView, renderWeighView, type FrameProfile } from './views.js';
 import { toAttempts, toMicros } from './gateway-decision.js';
 import type {
@@ -79,6 +80,7 @@ export {
   renderWeighView,
   FRAME_PROFILE,
   DEFAULT_FRAME_PROFILE,
+  NARROW_FRAME_PROFILE,
   WEIGH_PROFILE,
   type FrameProfile,
 } from './views.js';
@@ -455,6 +457,8 @@ export class Runtime {
     if (observation.validation.status === 'accepted') {
       applyAccepted(this.current, observation);
       this.followAccepted(observation);
+    } else {
+      this.noteRejectedAmendment(observation);
     }
     return observation;
   }
@@ -481,7 +485,10 @@ export class Runtime {
     const formation = formCandidates(state, this.describe, (ref) =>
       this.replayMode ? ref : this.options.host.canonicalResource(ref),
     );
-    const candidates: Candidate[] = [...formation.candidates];
+    const pausedFraming = this.framingPaused();
+    const candidates: Candidate[] = pausedFraming
+      ? formation.candidates.filter((candidate) => candidate.operation !== 'goal.frame')
+      : [...formation.candidates];
     this.requestApprovals(candidates);
     const eligible = candidates.filter((c) => c.eligibility.status === 'allowed');
 
@@ -509,6 +516,9 @@ export class Runtime {
 
     if (outcome === null) {
       outcome = this.cycleOutcome(completed, selected.length, selection.not_selected, candidates, formation.unavailable);
+    }
+    if (pausedFraming && selected.length === 0) {
+      outcome = { status: 'blocked', reason: 'profile record missing' };
     }
 
     this.cycles.push({
@@ -870,7 +880,11 @@ export class Runtime {
   }
 
   private frameGoal(started: ActionStartedPayload): ActionOutcome | null {
-    const view = renderFrameView(this.state(), this.catalogueOps(), this.frameProfile);
+    const profile = this.profileForFrame();
+    if (!profile) {
+      return { outcome: 'failed', failure: 'profile record missing' };
+    }
+    const view = renderFrameView(this.state(), this.catalogueOps(), profile);
     const request_id = `inf:${started.action_id}`;
     const costRemaining =
       this.current.budget.cost.limit - this.current.budget.cost.reserved - this.current.budget.cost.spent;
@@ -1569,6 +1583,185 @@ export class Runtime {
     return host_cost;
   }
 
+  private framingPaused(): boolean {
+    const strategy = this.current.strategy;
+    if (!strategy.promoted && !strategy.rolled_back) {
+      return false;
+    }
+    if (strategy.paused) {
+      return true;
+    }
+    return this.current.profiles[strategy.profile_id] === undefined;
+  }
+
+  private profileForNewWork(): FrameProfile | null {
+    const strategy = this.current.strategy;
+    if (strategy.promoted || strategy.rolled_back) {
+      return this.current.profiles[strategy.profile_id] ?? null;
+    }
+    return this.frameProfile;
+  }
+
+  private profileForFrame(): FrameProfile | null {
+    if (this.replayMode) {
+      return this.recordedFrameProfile() ?? this.profileForNewWork();
+    }
+    return this.profileBoundToCurrentGoal() ?? this.profileForNewWork();
+  }
+
+  /** The profile id on the next recorded framing view, not today's active profile. */
+  private recordedFrameProfile(): FrameProfile | null {
+    if (!this.replayLog) {
+      return null;
+    }
+    const emitted = new Set(this.log.map((observation) => observation.observation_id));
+    const next = this.replayLog.find((observation) => {
+      if (observation.payload_type !== 'inference.requested' || emitted.has(observation.observation_id)) {
+        return false;
+      }
+      return (observation.payload as InferenceRequestedPayload).site === 'goal.frame';
+    });
+    if (!next) {
+      return null;
+    }
+    const view = (next.payload as InferenceRequestedPayload).view;
+    const option = this.options.frameProfile;
+    if (option && option.id === view.profile && option.version === view.profile_version) {
+      return option;
+    }
+    const known = this.current.profiles[view.profile];
+    if (known && known.version === view.profile_version) {
+      return known;
+    }
+    return null;
+  }
+
+  /** An in-flight goal keeps the profile already written on its framing view. */
+  private profileBoundToCurrentGoal(): FrameProfile | null {
+    const opened = this.current.goal?.evidence;
+    if (!opened) {
+      return null;
+    }
+    let profileId: string | null = null;
+    let profileVersion = 0;
+    for (const observation of this.log) {
+      if (observation.validation.status !== 'accepted' || observation.seq <= opened) {
+        continue;
+      }
+      if (observation.payload_type !== 'inference.requested') {
+        continue;
+      }
+      const payload = observation.payload as InferenceRequestedPayload;
+      if (payload.site !== 'goal.frame') {
+        continue;
+      }
+      profileId = payload.view.profile;
+      profileVersion = payload.view.profile_version;
+    }
+    if (!profileId) {
+      return null;
+    }
+    const known = this.current.profiles[profileId];
+    if (known && known.version === profileVersion) {
+      return known;
+    }
+    if (this.frameProfile.id === profileId && this.frameProfile.version === profileVersion) {
+      return this.frameProfile;
+    }
+    return null;
+  }
+
+  private recordComparison(experimentId: string): void {
+    const experiment = this.current.experiment;
+    if (!experiment || experiment.experiment_id !== experimentId || experiment.invalidated) {
+      return;
+    }
+    const baselineProfile = this.current.profiles[experiment.baseline];
+    const candidateProfile = this.current.profiles[experiment.candidate];
+    if (!baselineProfile || !candidateProfile) {
+      return;
+    }
+    const catalogue = this.catalogueOps();
+    const rendered = this.state();
+    const baselineView = renderFrameView(rendered, catalogue, baselineProfile);
+    const candidateView = renderFrameView(rendered, catalogue, candidateProfile);
+    const humanCorrections = this.current.corrections.filter((item) => item.evidence > experiment.evidence).length;
+    const latencyTicks = Math.max(0, this.current.clock.tick - experiment.deadline_tick);
+    this.append({
+      observation_id: `runtime:experiment.compared:${experimentId}`,
+      source: RUNTIME_SOURCE,
+      caused_by: experiment.evidence,
+      payload_type: 'experiment.compared',
+      payload_version: 1,
+      payload: measureCandidate({
+        experimentId,
+        deadlineTick: experiment.deadline_tick,
+        baseline: baselineProfile,
+        candidate: candidateProfile,
+        baselineView,
+        candidateView,
+        humanCorrections,
+        latencyTicks,
+      }),
+    });
+  }
+
+  private recordRollback(regression: Observation): void {
+    const experiment = this.current.experiment;
+    const payload = regression.payload as { experiment_id?: string; case_id?: string };
+    if (!experiment || experiment.experiment_id !== payload.experiment_id || !payload.case_id) {
+      return;
+    }
+    this.append({
+      observation_id: `runtime:strategy.rolled_back:${payload.experiment_id}:${payload.case_id}`,
+      source: RUNTIME_SOURCE,
+      caused_by: regression.seq,
+      payload_type: 'strategy.rolled_back',
+      payload_version: 1,
+      payload: {
+        experiment_id: experiment.experiment_id,
+        case_id: payload.case_id,
+        profile_id: experiment.rollback,
+        reason: 'protected case regressed',
+      },
+    });
+  }
+
+  private noteRejectedAmendment(observation: Observation): void {
+    if (observation.payload_type !== 'experiment.amended' || observation.validation.status !== 'rejected') {
+      return;
+    }
+    const experiment = this.current.experiment;
+    if (!experiment || experiment.invalidated) {
+      return;
+    }
+    const payload = observation.payload;
+    if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+      return;
+    }
+    const body = payload as Record<string, unknown>;
+    if (body['experiment_id'] !== experiment.experiment_id) {
+      return;
+    }
+    const results = this.current.comparisons.some(
+      (comparison) => comparison.experiment_id === experiment.experiment_id && comparison.evidence > experiment.evidence,
+    );
+    if (!results) {
+      return;
+    }
+    this.append({
+      observation_id: `runtime:experiment.invalidated:${experiment.experiment_id}`,
+      source: RUNTIME_SOURCE,
+      caused_by: observation.seq,
+      payload_type: 'experiment.invalidated',
+      payload_version: 1,
+      payload: {
+        experiment_id: experiment.experiment_id,
+        reason: 'protected cases or quality bar changed after results',
+      },
+    });
+  }
+
   private followAccepted(observation: Observation): void {
     if (observation.payload_type === 'action.result') {
       const payload = observation.payload as ActionResultPayload;
@@ -1601,6 +1794,19 @@ export class Runtime {
     }
     if (observation.payload_type === 'output.rejected') {
       this.maybeRecordBaseline();
+      return;
+    }
+    if (observation.payload_type === 'baseline.requested') {
+      this.maybeRecordBaseline();
+      return;
+    }
+    if (observation.payload_type === 'experiment.requested') {
+      const payload = observation.payload as { experiment_id: string };
+      this.recordComparison(payload.experiment_id);
+      return;
+    }
+    if (observation.payload_type === 'experiment.regressed') {
+      this.recordRollback(observation);
     }
   }
 
