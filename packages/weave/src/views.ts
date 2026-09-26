@@ -30,6 +30,12 @@ export interface FrameProfile {
    * operations. Absent means the profile id alone distinguishes the prefix.
    */
   readonly prefix?: string;
+  /**
+   * When set, the catalogue is disclosed as an index plus input shapes for
+   * these operations only. An empty list omits every shape. Absent keeps the
+   * single catalogue slice.
+   */
+  readonly schema_for?: readonly string[];
 }
 
 /** Discloses the fixture catalogue. A tighter profile is a different record. */
@@ -49,6 +55,8 @@ export const NARROW_FRAME_PROFILE: FrameProfile = {
 export interface CatalogueOp {
   readonly id: string;
   readonly input: Readonly<Record<string, string>>;
+  /** Fixture purpose line. Disclosed on the catalogue index, not as a contract revision. */
+  readonly purpose?: string;
 }
 
 function slice(
@@ -60,11 +68,35 @@ function slice(
   return { name, revisions, truncated, omitted };
 }
 
+/** Identity of one fill of the named slices at a state revision. */
+export function sliceAssemblyId(state_revision: number, slices: readonly string[]): string {
+  return `asm:${state_revision}:${[...slices].sort().join('+')}`;
+}
+
+export const SHARED_ASSEMBLY_MICROS = 1_000;
+
+function stampAssemblies(slices: readonly ViewSliceManifest[], state_revision: number, enabled: boolean): ViewSliceManifest[] {
+  if (!enabled) {
+    return [...slices];
+  }
+  const shared = sliceAssemblyId(state_revision, ['goal', 'registered']);
+  return slices.map((item) => {
+    if (item.name === 'goal' || item.name === 'registered') {
+      return { ...item, assembly_id: shared };
+    }
+    if (item.name === 'catalogue_schema') {
+      return { ...item, assembly_id: sliceAssemblyId(state_revision, ['catalogue_schema']) };
+    }
+    return item;
+  });
+}
+
 /** Framing view: purpose, authorized ids, catalogue shapes. No source bodies. */
 export function renderFrameView(
   state: State,
   catalogue: readonly CatalogueOp[],
   profile: FrameProfile = DEFAULT_FRAME_PROFILE,
+  options?: { readonly assemblies?: boolean },
 ): StateView {
   const goal = state.goal;
   if (profile.catalogue_budget === 0) {
@@ -74,10 +106,14 @@ export function renderFrameView(
       state_revision: state.state_revision,
       content: {},
       manifest: {
-        slices: [
-          slice('goal', goal ? [goal.evidence] : [], []),
-          slice('catalogue', [], [{ name: 'catalogue', reason: 'budget' }], true),
-        ],
+        slices: stampAssemblies(
+          [
+            slice('goal', goal ? [goal.evidence] : [], []),
+            slice('catalogue', [], [{ name: 'catalogue', reason: 'budget' }], true),
+          ],
+          state.state_revision,
+          options?.assemblies === true,
+        ),
       },
     };
   }
@@ -146,11 +182,77 @@ export function renderFrameView(
     slices.push(slice('conclusion', revisions, []));
   }
 
+  if (profile.schema_for !== undefined) {
+    const schemaFor = new Set(profile.schema_for);
+    const catalogue_index = selectedOps.map((id) => {
+      const op = catalogue.find((item) => item.id === id);
+      return { id, purpose: op?.purpose ?? '' };
+    });
+    const catalogue_schema = selectedOps
+      .filter((id) => schemaFor.has(id))
+      .map((id) => {
+        const op = catalogue.find((item) => item.id === id);
+        return { id, input: op?.input ?? {} };
+      });
+    const schemaOmitted = selectedOps.filter((id) => !schemaFor.has(id)).map((name) => ({ name, reason: 'profile' }));
+    const { catalogue: _catalogue, ...rest } = content;
+    void _catalogue;
+    return {
+      profile: profile.id,
+      profile_version: profile.version,
+      state_revision: state.state_revision,
+      content: { ...rest, catalogue_index, catalogue_schema },
+      manifest: {
+        slices: stampAssemblies(
+          [
+            slices[0]!,
+            slices[1]!,
+            slice('catalogue_index', [], catalogueOmitted, omittedOps.length > 0),
+            slice('catalogue_schema', [], schemaOmitted, schemaOmitted.length > 0),
+            ...slices.slice(3),
+          ],
+          state.state_revision,
+          options?.assemblies === true,
+        ),
+      },
+    };
+  }
+
   return {
     profile: profile.id,
     profile_version: profile.version,
     state_revision: state.state_revision,
     content,
+    manifest: { slices: stampAssemblies(slices, state.state_revision, options?.assemblies === true) },
+  };
+}
+
+/** Read-only review of goal and registered slices. It does not select schemas. */
+export function renderReviewView(state: State): StateView {
+  const goal = state.goal;
+  const authorizedSources = (goal?.authority.read ?? [])
+    .filter((id) => state.sources[id])
+    .map((id) => ({ id, revision: state.sources[id]!.revision }));
+  const slices = stampAssemblies(
+    [
+      slice('goal', goal ? [goal.evidence] : [], []),
+      slice(
+        'registered',
+        authorizedSources.map((source) => state.sources[source.id]!.evidence),
+        [],
+      ),
+    ],
+    state.state_revision,
+    true,
+  );
+  return {
+    profile: 'profile.review@1',
+    profile_version: 1,
+    state_revision: state.state_revision,
+    content: {
+      purpose: goal?.purpose ?? '',
+      registered: authorizedSources,
+    },
     manifest: { slices },
   };
 }

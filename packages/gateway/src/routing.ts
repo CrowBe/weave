@@ -16,6 +16,14 @@ import {
   type RouteTarget,
 } from './types.js';
 
+export interface AttemptPrice {
+  readonly cost: Micros;
+  /** Cached input tokens were omitted from this cost. */
+  readonly cache_applied: boolean;
+  /** The cache matched but its token count exceeded the input, so the attempt is cold. */
+  readonly cache_ignored: boolean;
+}
+
 export type ExclusionReason =
   | 'operation_mismatch'
   | 'kind_mismatch'
@@ -42,16 +50,47 @@ export interface RoutingDecision {
  * reservation honest when a provider reports no usage.
  */
 export function worstCaseCost(route: RoutedUnit, terms: InferenceTerms): Micros {
-  const input = (terms.max_context_tokens / 1_000_000) * route.price.input_per_mtok;
-  const output = (route.settings.max_output_tokens / 1_000_000) * route.price.output_per_mtok;
-  return input + output;
+  return tokenCost(terms.max_context_tokens, route.price.input_per_mtok) + tokenCost(route.settings.max_output_tokens, route.price.output_per_mtok);
+}
+
+/**
+ * Cost of one attempt. Input and output default to the cold window: the full
+ * context the terms allow, and the route's output cap. A matching prefix cache
+ * drops cached input tokens. A cache larger than the input is ignored.
+ */
+export function priceAttempt(
+  route: RoutedUnit,
+  terms: InferenceTerms,
+  tokens?: { readonly input_tokens: number; readonly output_tokens: number },
+): AttemptPrice {
+  const input = tokens?.input_tokens ?? terms.max_context_tokens;
+  const output = tokens?.output_tokens ?? route.settings.max_output_tokens;
+  const cache = terms.prefix_cache;
+  const matches =
+    cache !== undefined &&
+    terms.prefix_digest !== undefined &&
+    cache.routed_unit_id === route.routed_unit_id &&
+    cache.prefix_digest === terms.prefix_digest;
+  if (matches && cache.cached_tokens > input) {
+    return { cost: tokenCost(input, route.price.input_per_mtok) + tokenCost(output, route.price.output_per_mtok), cache_applied: false, cache_ignored: true };
+  }
+  const uncached = matches ? input - cache.cached_tokens : input;
+  return {
+    cost: tokenCost(uncached, route.price.input_per_mtok) + tokenCost(output, route.price.output_per_mtok),
+    cache_applied: matches && cache.cached_tokens > 0,
+    cache_ignored: false,
+  };
+}
+
+function tokenCost(tokens: number, perMtok: Micros): Micros {
+  return (tokens * perMtok) / 1_000_000;
 }
 
 /** Expected cost of reaching acceptance, given observed accept rate. */
 function expectedCost(route: RoutedUnit, terms: InferenceTerms, minAttempts: number): number | null {
   const evidence = route.evidence;
   if (evidence === undefined || evidence.attempts < minAttempts || evidence.accepted === 0) return null;
-  return worstCaseCost(route, terms) * (evidence.attempts / evidence.accepted);
+  return priceAttempt(route, terms).cost * (evidence.attempts / evidence.accepted);
 }
 
 /**
@@ -77,6 +116,11 @@ export function route(
   }
 
   const uncertainty: string[] = [];
+  for (const unit of eligible) {
+    if (priceAttempt(unit, terms).cache_ignored) {
+      uncertainty.push(`prefix cache ignored for ${unit.routed_unit_id}: cached tokens exceed the input`);
+    }
+  }
   const thin = eligible.filter((u) => expectedCost(u, terms, minEvidenceAttempts) === null);
   if (thin.length > 0) {
     uncertainty.push(

@@ -14,7 +14,7 @@
  * `runBounded` loop below, so neither operation can drift from the other's
  * accounting.
  */
-import { route, worstCaseCost, type RouteExclusion } from './routing.js';
+import { priceAttempt, route, worstCaseCost, type RouteExclusion } from './routing.js';
 import {
   answersMatchQuestions,
   nonEmptyText,
@@ -319,11 +319,15 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
       const result = await params.attempt(unit);
       const ended_at = clock.now();
 
-      const metered = meteredCost(unit, result.usage);
+      const metered = meteredCost(unit, terms, result.usage);
       const cost = metered ?? worstCase;
       if (metered === null) {
         uncertainty.push(
           `attempt ${attempts.length + 1} on ${unit.routed_unit_id}: usage unreported, charged worst case`,
+        );
+      } else if (priceAttempt(unit, terms, { input_tokens: result.usage.input_tokens ?? 0, output_tokens: result.usage.output_tokens ?? 0 }).cache_ignored) {
+        uncertainty.push(
+          `attempt ${attempts.length + 1} on ${unit.routed_unit_id}: prefix cache ignored, cached tokens exceed the input`,
         );
       }
       spent += cost;
@@ -542,13 +546,13 @@ function retryDelayMs(failure: ProviderFailure, unit: RoutedUnit): number {
   return Math.min(...limits.map((limit) => limit.window_ms / limit.requests));
 }
 
-/** Actual cost when the provider reported usage; null when it did not. */
-function meteredCost(unit: RoutedUnit, usage: ProviderUsage): Micros | null {
+/**
+ * Actual cost when the provider reported usage; null when it did not.
+ * A missing report stays the cold ceiling. The hit discount is not invented.
+ */
+function meteredCost(unit: RoutedUnit, terms: InferenceTerms, usage: ProviderUsage): Micros | null {
   if (usage.input_tokens === undefined || usage.output_tokens === undefined) return null;
-  return (
-    (usage.input_tokens / 1_000_000) * unit.price.input_per_mtok +
-    (usage.output_tokens / 1_000_000) * unit.price.output_per_mtok
-  );
+  return priceAttempt(unit, terms, { input_tokens: usage.input_tokens, output_tokens: usage.output_tokens }).cost;
 }
 
 function cheapestWorstCase(order: readonly RoutedUnit[], terms: InferenceTerms): Micros {

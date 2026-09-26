@@ -56,10 +56,14 @@ workload only after a protocol recorded before the comparison, and only when
 quality holds and human corrections do not increase. A cheaper profile that
 misses the quality bar is refused. A protected-case regression selects the
 baseline profile again. The earlier `report.fold` fixture in
-`npm run example:crystallize` remains a separate procedure arm. M6 and the
-H1 log bound have behavioral contracts and are not implemented. The host
-refuses to execute a supplied implementation, framing profiles are versioned
-records, and the framing view lists the host catalogue.
+`npm run example:crystallize` remains a separate procedure arm. M6 prices a
+prefix cache at routing time, discloses the catalogue as an index and named
+schemas, narrows destinations from the read set, and shares one slice
+assembly across a read-only review. H1 rejects an oversize, mid-value, or
+duplicate observation before it is durable, refuses a second open of the host
+store, and evicts retained trace records outside the state-transition lock.
+The host refuses to execute a supplied implementation, framing profiles are
+versioned records, and the framing view lists the host catalogue.
 
 `packages/agentsop` holds the contract layer, `packages/agentfabric` the enforcing
 host, and `packages/weave` the runtime. `packages/gateway` supplies bounded

@@ -60,6 +60,7 @@ interface MutableState {
   crystallization: Mutable<CrystallizationState>;
   conclusions: CachedConclusion[];
   policies: PolicyRecord[];
+  destination_policies: { resource: string; destinations: string[] }[];
   normalized: Record<string, { text: string; revision: number; evidence: Seq }>;
   workload: WorkloadCase[];
   corrections: HumanCorrection[];
@@ -93,6 +94,7 @@ export function initialState(): MutableState {
     crystallization: emptyCrystallization(),
     conclusions: [],
     policies: [],
+    destination_policies: [],
     normalized: {},
     workload: [],
     corrections: [],
@@ -165,6 +167,11 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
       state.conclusions.push(observation.payload as CachedConclusion);
       return;
     }
+    case 'destination.policy': {
+      const payload = observation.payload as { resource: string; destinations: string[] };
+      state.destination_policies.push({ resource: payload.resource, destinations: [...payload.destinations] });
+      return;
+    }
     case 'conclusion.policy':
     case 'policy.recorded': {
       const payload = observation.payload as { policy_id: string; goals: string[] };
@@ -218,6 +225,7 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
         catalogue_budget: payload.catalogue_budget,
         ...(payload.prefix !== undefined ? { prefix: payload.prefix } : {}),
         ...(payload.slices !== undefined ? { slices: [...payload.slices] } : {}),
+        ...(payload.schema_for !== undefined ? { schema_for: [...payload.schema_for] } : {}),
       };
       state.profiles[payload.id] = record;
       return;
@@ -382,6 +390,9 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
       }
       record.state = p.outcome.outcome;
       record.finished_at = observation.seq;
+      if (p.outcome.outcome === 'failed') {
+        record.failure = p.outcome.failure;
+      }
       state.budget.actions.reserved -= record.reservation.actions;
       state.budget.actions.spent += record.reservation.actions;
       state.budget.judgments.reserved -= record.reservation.judgments;

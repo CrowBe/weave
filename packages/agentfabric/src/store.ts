@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import type { CapabilityContract, InvocationOutcome } from '@weave/agentsop';
+
+const openStores = new Set<string>();
 
 export type ResourceKind = 'source' | 'destination';
 
@@ -113,13 +115,26 @@ export class FabricStore {
   }
 
   static open(path: string): FabricStore {
-    if (existsSync(path)) {
-      const snapshot = JSON.parse(readFileSync(path, 'utf8')) as FabricSnapshot;
-      return new FabricStore(snapshot, path);
+    const key = resolve(path);
+    if (openStores.has(key)) {
+      throw new Error(`host store is already open: ${key}`);
     }
-    const store = new FabricStore(undefined, path);
-    store.save();
+    const store = existsSync(path)
+      ? new FabricStore(JSON.parse(readFileSync(path, 'utf8')) as FabricSnapshot, path)
+      : new FabricStore(undefined, path);
+    if (!existsSync(path)) {
+      store.save();
+    }
+    openStores.add(key);
     return store;
+  }
+
+  /** Release this process's ownership so a later restart can open the store. */
+  close(): void {
+    if (!this.path) {
+      return;
+    }
+    openStores.delete(resolve(this.path));
   }
 
   snapshot(): FabricSnapshot {

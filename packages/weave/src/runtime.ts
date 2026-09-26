@@ -34,8 +34,9 @@ import { parseProposalText, validateProposal } from './proposals.js';
 import { select } from './scheduler.js';
 import { stableStringify } from './stable-json.js';
 import { applyAccepted, initialState, snapshot, type MutableState } from './state.js';
-import { measureCandidate } from './strategy.js';
-import { DEFAULT_FRAME_PROFILE, renderFrameView, renderWeighView, type FrameProfile } from './views.js';
+import { narrowDestinations } from './destinations.js';
+import { measureCandidate, stablePrefixBytes } from './strategy.js';
+import { DEFAULT_FRAME_PROFILE, renderFrameView, renderReviewView, SHARED_ASSEMBLY_MICROS, renderWeighView, type FrameProfile } from './views.js';
 import { toAttempts, toMicros } from './gateway-decision.js';
 import type {
   ActionId,
@@ -71,6 +72,7 @@ import type {
   WeightEntry,
   WeightsRecordedPayload,
 } from './types.js';
+import { hasMidValue, payloadBytes, type TraceRetention } from './log-bound.js';
 import { validate } from './validation.js';
 
 export { ScriptedDecisionLayer } from './decision.js';
@@ -102,6 +104,26 @@ export interface RuntimeOptions {
    * the recorded view; the active profile is not read from today's default.
    */
   readonly frameProfile?: FrameProfile;
+  /**
+   * Terms for a framing request. Absent keeps the local destination, a
+   * baseline quality bar, and the historical context window.
+   */
+  readonly framingTerms?: {
+    readonly quality: 'baseline' | 'high';
+    readonly max_context_tokens: number;
+    readonly cost_ceiling: number;
+  };
+  /** Caller-supplied prefix cache. The runtime passes it through; it does not discover one. */
+  readonly prefixCache?: {
+    readonly routed_unit_id: string;
+    readonly prefix_digest: string;
+    readonly cached_tokens: number;
+  };
+  /** Cite one slice assembly for read-only views of the same revision. */
+  readonly shareAssemblies?: boolean;
+  /** Canonical payload bound. An observation over it is rejected before it is durable. */
+  readonly logBound?: { readonly max_observation_bytes: number };
+  readonly traceRetention?: TraceRetention;
 }
 
 const RUNTIME_SOURCE = { kind: 'runtime', id: 'weave' } as const;
@@ -173,6 +195,14 @@ export class Runtime {
   private readonly replayLog: readonly Observation[] | null;
   /** A reused conclusion finished inside the cycle; form the next candidates before returning. */
   private reuseFollowUp = false;
+  private readonly chargedAssemblies = new Set<string>();
+  private cycleAssemblyCost = 0;
+  private readonly reviews = new Map<ActionId, StateView>();
+  private readonly preparedViews = new Map<string, StateView>();
+  /** Views rendered at cycle start, kept for an action that starts after the cycle. */
+  private readonly preparedForAction = new Map<string, StateView>();
+  private readonly diagnostics: Observation[] = [];
+  private transitionLock = false;
 
   constructor(
     private readonly options: RuntimeOptions,
@@ -364,6 +394,11 @@ export class Runtime {
     return structuredClone({ observations: this.log, cycles: this.cycles });
   }
 
+  /** Rejections kept for diagnosis. Oversize payloads are not copied into the log. */
+  diagnosticRejections(): readonly Observation[] {
+    return structuredClone(this.diagnostics);
+  }
+
   /**
    * Record the M4 baseline from the log. Inference reservations and host
    * invocation costs are summed once each. A reused conclusion adds neither.
@@ -424,43 +459,90 @@ export class Runtime {
   private append(
     input: ObservationInput & { forced?: Observation['validation'] },
   ): Observation {
-    const { forced, ...envelope } = input;
-    const observation: Observation = {
-      ...envelope,
-      seq: this.nextSeq(),
-      validation: forced ?? validate(envelope, this.current),
-    };
-    const journal = this.options.journal;
-    if (journal && observation.validation.status === 'accepted') {
-      try {
-        journal.persist(observation);
-      } catch (error) {
-        if (error instanceof PersistError && observation.payload_type === 'action.started') {
-          return {
-            ...observation,
-            validation: { status: 'rejected', reason: error.message },
-          };
-        }
-        if (
-          error instanceof PersistError &&
-          (observation.payload_type === 'action.result' || observation.payload_type === 'recovery.attempted')
-        ) {
-          return {
-            ...observation,
-            validation: { status: 'rejected', reason: error.message },
-          };
-        }
-        throw error;
+    this.transitionLock = true;
+    let observation: Observation;
+    try {
+      const { forced, ...envelope } = input;
+      const bytes = payloadBytes(envelope.payload);
+      const oversize = this.options.logBound !== undefined && bytes > this.options.logBound.max_observation_bytes;
+      if (oversize) {
+        const diagnostic: Observation = {
+          ...envelope,
+          seq: this.nextSeq(),
+          validation: { status: 'rejected', reason: 'budget' },
+          payload: { reason: 'budget', bytes },
+        };
+        this.diagnostics.push(diagnostic);
+        return diagnostic;
       }
+      const duplicate =
+        this.log.some((item) => item.observation_id === envelope.observation_id) ||
+        this.diagnostics.some((item) => item.observation_id === envelope.observation_id);
+      const midValue = hasMidValue(envelope.payload);
+      let validation = forced ?? validate(envelope, this.current);
+      if (duplicate) {
+        validation = { status: 'rejected', reason: 'duplicate' };
+      } else if (midValue) {
+        validation = { status: 'rejected', reason: 'mid_value' };
+      }
+      observation = {
+        ...envelope,
+        seq: this.nextSeq(),
+        validation,
+      };
+      const journal = this.options.journal;
+      if (journal && observation.validation.status === 'accepted') {
+        try {
+          journal.persist(observation);
+        } catch (error) {
+          if (error instanceof PersistError && observation.payload_type === 'action.started') {
+            return {
+              ...observation,
+              validation: { status: 'rejected', reason: error.message },
+            };
+          }
+          if (
+            error instanceof PersistError &&
+            (observation.payload_type === 'action.result' || observation.payload_type === 'recovery.attempted')
+          ) {
+            return {
+              ...observation,
+              validation: { status: 'rejected', reason: error.message },
+            };
+          }
+          throw error;
+        }
+      }
+      this.log.push(observation);
+      if (observation.validation.status === 'accepted') {
+        applyAccepted(this.current, observation);
+        this.followAccepted(observation);
+      } else {
+        this.noteRejectedAmendment(observation);
+      }
+    } finally {
+      this.transitionLock = false;
     }
-    this.log.push(observation);
-    if (observation.validation.status === 'accepted') {
-      applyAccepted(this.current, observation);
-      this.followAccepted(observation);
-    } else {
-      this.noteRejectedAmendment(observation);
-    }
+    this.retainTrace(observation);
     return observation;
+  }
+
+  private retainTrace(observation: Observation): void {
+    const retention = this.options.traceRetention;
+    if (!retention || observation.validation.status !== 'accepted') {
+      return;
+    }
+    if (observation.payload_type === 'inference.recorded') {
+      const attempts = (observation.payload as InferenceRecordedPayload).attempts;
+      for (const attempt of attempts) {
+        retention.retain(`${observation.observation_id}:${attempt.attempt}`, stableStringify(attempt), this.transitionLock);
+      }
+      return;
+    }
+    if (observation.payload_type === 'action.result') {
+      const action_id = (observation.payload as { action_id: string }).action_id;
+      retention.retain(`result:${action_id}`, stableStringify(observation.payload), this.transitionLock);
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -503,6 +585,10 @@ export class Runtime {
       selection = judged.selection;
     }
 
+    if (this.options.shareAssemblies) {
+      this.prepareSharedViews(state, candidates);
+    }
+
     const selected: { candidate_id: string; action_id: ActionId; reservation: Candidate['resources'] }[] = [];
     let completed = false;
     selection.selected.forEach((candidate, index) => {
@@ -530,7 +616,33 @@ export class Runtime {
       selected,
       not_selected: selection.not_selected,
       outcome,
+      cost_micros: this.cycleAssemblyCost,
     });
+    this.cycleAssemblyCost = 0;
+    this.preparedViews.clear();
+  }
+
+  private takePrepared(action_id: string, operation: string): StateView | undefined {
+    const stashed = this.preparedForAction.get(action_id);
+    if (stashed) {
+      this.preparedForAction.delete(action_id);
+      return stashed;
+    }
+    return this.preparedViews.get(operation);
+  }
+
+  private prepareSharedViews(state: State, candidates: readonly Candidate[]): void {
+    const profile = this.profileForFrame();
+    if (profile && candidates.some((candidate) => candidate.operation === 'goal.frame')) {
+      const view = renderFrameView(state, this.catalogueOps(), profile, { assemblies: true });
+      this.preparedViews.set('goal.frame', view);
+      this.noteViewAssemblies(view);
+    }
+    if (candidates.some((candidate) => candidate.operation === 'report.review')) {
+      const view = renderReviewView(state);
+      this.preparedViews.set('report.review', view);
+      this.noteViewAssemblies(view);
+    }
   }
 
   private cycleOutcome(
@@ -879,32 +991,91 @@ export class Runtime {
     return ids;
   }
 
+  finishReview(action_id: ActionId): void {
+    const host = this.options.host as { releaseReads?: (invocation_id: string) => void };
+    host.releaseReads?.(action_id);
+    const view = this.reviews.get(action_id);
+    this.recordResult(
+      action_id,
+      {
+        outcome: 'succeeded',
+        output: {
+          view,
+          profile: 'profile.frame.narrow@1',
+          grant: { grant_id: 'forged' },
+        },
+      },
+      RUNTIME_SOURCE,
+    );
+  }
+
+  private reviewGoal(started: ActionStartedPayload): ActionOutcome | null {
+    const prepared = this.takePrepared(started.action_id, 'report.review');
+    const view = prepared ?? renderReviewView(this.state());
+    if (!prepared) {
+      this.noteViewAssemblies(view);
+    }
+    this.reviews.set(started.action_id, view);
+    const resources = started.read_set.flatMap((entry) => ('resource' in entry ? [entry.resource] : []));
+    const host = this.options.host as { holdReads?: (invocation_id: string, resources: readonly string[]) => void };
+    host.holdReads?.(started.invocation_id ?? started.action_id, resources);
+    return null;
+  }
+
+  private noteViewAssemblies(view: StateView): void {
+    for (const item of view.manifest.slices) {
+      if (!item.assembly_id || this.chargedAssemblies.has(item.assembly_id)) {
+        continue;
+      }
+      this.chargedAssemblies.add(item.assembly_id);
+      if (item.assembly_id.endsWith(':goal+registered')) {
+        this.cycleAssemblyCost += SHARED_ASSEMBLY_MICROS;
+      }
+    }
+  }
+
   private frameGoal(started: ActionStartedPayload): ActionOutcome | null {
     const profile = this.profileForFrame();
     if (!profile) {
       return { outcome: 'failed', failure: 'profile record missing' };
     }
-    const view = renderFrameView(this.state(), this.catalogueOps(), profile);
+    const prepared = this.takePrepared(started.action_id, 'goal.frame');
+    const view =
+      prepared ??
+      renderFrameView(this.state(), this.catalogueOps(), profile, this.options.shareAssemblies ? { assemblies: true } : undefined);
+    if (!prepared) {
+      this.noteViewAssemblies(view);
+    }
     const request_id = `inf:${started.action_id}`;
     const costRemaining =
       this.current.budget.cost.limit - this.current.budget.cost.reserved - this.current.budget.cost.spent;
-    const cost_ceiling = Math.min(1_000_000, Math.max(0, costRemaining));
+    const framing = this.options.framingTerms;
+    const readResources = started.read_set.flatMap((entry) => ('resource' in entry ? [entry.resource] : []));
+    const destinations = this.current.goal?.destinations
+      ? narrowDestinations(this.current.goal.destinations, this.current.destination_policies, readResources)
+      : ['local'];
+    const cost_ceiling = Math.min(framing?.cost_ceiling ?? 1_000_000, Math.max(0, costRemaining));
+    const prefix_digest = this.options.prefixCache ? digest(stablePrefixBytes(profile, view)) : undefined;
+    const terms = {
+      quality: framing?.quality ?? 'baseline',
+      destinations,
+      max_context_tokens: framing?.max_context_tokens ?? 8_000,
+      deadline: this.current.clock.tick + 100,
+      cost_ceiling,
+      max_attempts: 3,
+      ...(prefix_digest !== undefined && this.options.prefixCache
+        ? { prefix_digest, prefix_cache: this.options.prefixCache }
+        : {}),
+    };
     const requested = this.appendInferenceRequested({
       request_id,
       site: 'goal.frame',
       role: 'framing',
       kind: 'transform',
       view,
-      state_revision: this.current.state_revision,
+      state_revision: view.state_revision,
       candidate_set: null,
-      terms: {
-        quality: 'baseline',
-        destinations: ['local'],
-        max_context_tokens: 8_000,
-        deadline: this.current.clock.tick + 100,
-        cost_ceiling,
-        max_attempts: 3,
-      },
+      terms,
       reservation: { judgments: 0, cost: cost_ceiling },
     });
     if (requested.validation.status !== 'accepted') {
@@ -934,14 +1105,7 @@ export class Runtime {
                 'Propose inspect bindings as JSON {"bindings":[{"operation":"source.inspect","inputs":{"source":"..."}}]}',
               prompt: stableStringify(view.content),
             },
-            terms: {
-              quality: 'baseline',
-              destinations: ['local'],
-              max_context_tokens: 8_000,
-              deadline: this.current.clock.tick + 100,
-              cost_ceiling,
-              max_attempts: 3,
-            },
+            terms,
           },
           controller.signal,
         )
@@ -999,6 +1163,10 @@ export class Runtime {
       grant,
       invocation_id,
     };
+    const prepared = this.preparedViews.get(candidate.operation);
+    if (prepared) {
+      this.preparedForAction.set(action_id, prepared);
+    }
     const running = Object.values(this.current.actions).filter((a) => a.state === 'running').length;
     const queued = running >= this.slots;
     const recorded = this.append({
@@ -1967,6 +2135,9 @@ export class Runtime {
             this.recordResult(started.action_id, outcome, RUNTIME_SOURCE);
             return outcome;
           }
+          if (started.operation === 'report.review') {
+            return this.reviewGoal(started);
+          }
           if (started.operation === 'goal.frame') {
             const outcome = this.frameGoal(started);
             if (outcome) {
@@ -2041,6 +2212,9 @@ export class Runtime {
         return { implementation: p.implementation, weights: p.weights };
       },
       execute: (started) => {
+        if (started.operation === 'report.review') {
+          return null;
+        }
         if (started.operation === 'goal.frame') {
           this.frameGoal(started);
         }
@@ -2175,8 +2349,19 @@ export function replay(recorded: readonly Observation[], options: RuntimeOptions
   });
 
   try {
+    const reviewActions = new Set(
+      ordered
+        .filter(
+          (observation) =>
+            observation.payload_type === 'action.started' &&
+            (observation.payload as { operation?: string }).operation === 'report.review',
+        )
+        .map((observation) => (observation.payload as { action_id: string }).action_id),
+    );
     for (const observation of ordered) {
-      if (CYCLE_APPENDED.includes(observation.source.kind)) {
+      const resultAction = observation.payload_type === 'action.result' ? (observation.payload as { action_id?: string }).action_id : undefined;
+      const feedReviewResult = observation.source.kind === 'runtime' && resultAction !== undefined && reviewActions.has(resultAction);
+      if (CYCLE_APPENDED.includes(observation.source.kind) && !feedReviewResult) {
         continue;
       }
       const { seq: _seq, validation: _validation, ...input } = observation;
