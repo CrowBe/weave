@@ -783,6 +783,9 @@ function validateProfileRecord(payload: Record<string, unknown>, state: State): 
   if (payload['slices'] !== undefined && !isStringArray(payload['slices'])) {
     return rejected('profile.recorded slices must be ids');
   }
+  if (payload['schema_for'] !== undefined && !isStringArray(payload['schema_for'])) {
+    return rejected('profile.recorded schema_for must be operation ids');
+  }
   if (state.profiles[payload['id']]) {
     return rejected(`profile ${payload['id']} is already recorded`);
   }

@@ -42,6 +42,7 @@ export {
   CACHE_MISS_DELTA_MICROS,
   CATALOGUE_SLOT_MICROS,
   FRAME_QUALITY_OPERATIONS,
+  frameQuality,
   stablePrefixBytes,
   viewBodyBytes,
 } from './strategy.js';

@@ -454,6 +454,7 @@ export interface ContextProfileRecord {
   readonly catalogue_budget: number;
   readonly slices?: readonly string[];
   readonly prefix?: string;
+  readonly schema_for?: readonly string[];
 }
 
 export interface ExperimentRecord {

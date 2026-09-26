@@ -218,6 +218,7 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
         catalogue_budget: payload.catalogue_budget,
         ...(payload.prefix !== undefined ? { prefix: payload.prefix } : {}),
         ...(payload.slices !== undefined ? { slices: [...payload.slices] } : {}),
+        ...(payload.schema_for !== undefined ? { schema_for: [...payload.schema_for] } : {}),
       };
       state.profiles[payload.id] = record;
       return;

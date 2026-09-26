@@ -30,6 +30,12 @@ export interface FrameProfile {
    * operations. Absent means the profile id alone distinguishes the prefix.
    */
   readonly prefix?: string;
+  /**
+   * When set, the catalogue is disclosed as an index plus input shapes for
+   * these operations only. An empty list omits every shape. Absent keeps the
+   * single catalogue slice.
+   */
+  readonly schema_for?: readonly string[];
 }
 
 /** Discloses the fixture catalogue. A tighter profile is a different record. */
@@ -49,6 +55,8 @@ export const NARROW_FRAME_PROFILE: FrameProfile = {
 export interface CatalogueOp {
   readonly id: string;
   readonly input: Readonly<Record<string, string>>;
+  /** Fixture purpose line. Disclosed on the catalogue index, not as a contract revision. */
+  readonly purpose?: string;
 }
 
 function slice(
@@ -144,6 +152,38 @@ export function renderFrameView(
       evidence: conclusion.evidence,
     }));
     slices.push(slice('conclusion', revisions, []));
+  }
+
+  if (profile.schema_for !== undefined) {
+    const schemaFor = new Set(profile.schema_for);
+    const catalogue_index = selectedOps.map((id) => {
+      const op = catalogue.find((item) => item.id === id);
+      return { id, purpose: op?.purpose ?? '' };
+    });
+    const catalogue_schema = selectedOps
+      .filter((id) => schemaFor.has(id))
+      .map((id) => {
+        const op = catalogue.find((item) => item.id === id);
+        return { id, input: op?.input ?? {} };
+      });
+    const schemaOmitted = selectedOps.filter((id) => !schemaFor.has(id)).map((name) => ({ name, reason: 'profile' }));
+    const { catalogue: _catalogue, ...rest } = content;
+    void _catalogue;
+    return {
+      profile: profile.id,
+      profile_version: profile.version,
+      state_revision: state.state_revision,
+      content: { ...rest, catalogue_index, catalogue_schema },
+      manifest: {
+        slices: [
+          slices[0]!,
+          slices[1]!,
+          slice('catalogue_index', [], catalogueOmitted, omittedOps.length > 0),
+          slice('catalogue_schema', [], schemaOmitted, schemaOmitted.length > 0),
+          ...slices.slice(3),
+        ],
+      },
+    };
   }
 
   return {

@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   createInferenceGateway,
+  priceAttempt,
   route,
   worstCaseCost,
   type Clock,
@@ -177,6 +178,25 @@ describe('M6 prefix cache', () => {
       short,
       20,
     );
+    assert.equal(priceAttempt(shortCheap, short).cost, 4_800);
+    assert.equal(priceAttempt(shortStrong, short).cost, 8_000);
+    assert.equal(priceAttempt(shortStrong, short).cache_applied, false);
+    const digestMiss = terms({
+      max_context_tokens: 1_100,
+      prefix_digest: SHORT_DIGEST,
+      prefix_cache: { routed_unit_id: 'route.strong', prefix_digest: LONG_DIGEST, cached_tokens: 1_000 },
+    });
+    const isolated = route(
+      [shortStrong, shortCheap],
+      { operation: 'generate', kind: 'transform' },
+      digestMiss,
+      20,
+    );
+    assert.deepEqual(
+      isolated.order.map((item) => item.routed_unit_id),
+      ['route.cheap', 'route.strong'],
+    );
+    assert.equal(priceAttempt(shortStrong, digestMiss).cost, 8_000);
     assert.deepEqual(
       decision.order.map((item) => item.routed_unit_id),
       ['route.cheap', 'route.strong'],
