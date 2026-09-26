@@ -60,6 +60,7 @@ interface MutableState {
   crystallization: Mutable<CrystallizationState>;
   conclusions: CachedConclusion[];
   policies: PolicyRecord[];
+  destination_policies: { resource: string; destinations: string[] }[];
   normalized: Record<string, { text: string; revision: number; evidence: Seq }>;
   workload: WorkloadCase[];
   corrections: HumanCorrection[];
@@ -93,6 +94,7 @@ export function initialState(): MutableState {
     crystallization: emptyCrystallization(),
     conclusions: [],
     policies: [],
+    destination_policies: [],
     normalized: {},
     workload: [],
     corrections: [],
@@ -163,6 +165,11 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
       return;
     case 'conclusion.cached': {
       state.conclusions.push(observation.payload as CachedConclusion);
+      return;
+    }
+    case 'destination.policy': {
+      const payload = observation.payload as { resource: string; destinations: string[] };
+      state.destination_policies.push({ resource: payload.resource, destinations: [...payload.destinations] });
       return;
     }
     case 'conclusion.policy':

@@ -52,6 +52,7 @@ const EXPECTED_SOURCE: Readonly<Record<PayloadType, readonly ProvenanceKind[]>> 
   'strategy.promoted': ['operator'],
   'strategy.rolled_back': ['runtime'],
   'provider.keepalive': ['gateway', 'host'],
+  'destination.policy': ['operator'],
 };
 
 function rejected(reason: string): Validation {
@@ -209,7 +210,19 @@ export function validate(input: ObservationInput, state: State): Validation {
       return validateRollback(payload, state);
     case 'provider.keepalive':
       return ACCEPTED;
+    case 'destination.policy':
+      return validateDestinationPolicy(payload);
   }
+}
+
+function validateDestinationPolicy(payload: Record<string, unknown>): Validation {
+  if (!isNonEmptyString(payload['resource'])) {
+    return rejected('destination.policy requires a resource');
+  }
+  if (!isStringArray(payload['destinations']) || payload['destinations'].length === 0) {
+    return rejected('destination.policy requires destinations');
+  }
+  return ACCEPTED;
 }
 
 function validateGoal(payload: Record<string, unknown>, state: State): Validation {

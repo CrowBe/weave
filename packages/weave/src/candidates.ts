@@ -91,7 +91,17 @@ export function formCandidates(state: State, describe: Describe, canonical: Cano
         (a) => a.operation === 'goal.frame' && (a.state === 'pending' || a.state === 'running'),
       );
       if (!inFlightFrame) {
-        push(frameCandidate(goal.goal_id, goal.evidence));
+        push(frameCandidate(state));
+      }
+      if (goal.review) {
+        const reviewOpen = Object.values(state.actions).some(
+          (action) =>
+            action.operation === 'report.review' &&
+            (action.state === 'pending' || action.state === 'running' || action.state === 'succeeded'),
+        );
+        if (!reviewOpen) {
+          push(reviewCandidate(state, canonical));
+        }
       }
       return { candidates, unavailable, procedure };
     }
@@ -239,15 +249,45 @@ export function formCandidates(state: State, describe: Describe, canonical: Cano
   return { candidates, unavailable, procedure };
 }
 
-function frameCandidate(goal_id: string, evidence: number): Candidate {
+function reviewCandidate(state: State, canonical: Canonical): Candidate {
+  const goal = state.goal;
+  const goal_id = goal?.goal_id ?? '';
   const inputs = { goal_id };
+  const read_set = (goal?.sources ?? [])
+    .filter((source) => state.sources[source])
+    .map((source) => ({ resource: source, revision: state.sources[source]!.revision }));
+  return {
+    candidate_id: candidateId('report.review', null, inputs),
+    operation: 'report.review',
+    contract_rev: null,
+    inputs,
+    evidence: goal ? [goal.evidence] : [],
+    read_set,
+    dependencies: [],
+    effects: read_set.map((entry) => ({ resource: canonical(entry.resource), mode: 'read' as const })),
+    resources: ONE_ACTION,
+    eligibility: { status: 'allowed' },
+    weight: null,
+  };
+}
+
+function frameCandidate(state: State): Candidate {
+  const goal = state.goal;
+  const goal_id = goal?.goal_id ?? '';
+  const inputs = { goal_id };
+  const read_set =
+    goal?.destinations && goal.destinations.length > 0
+      ? goal.sources
+          .filter((source) => state.sources[source])
+          .map((source) => ({ resource: source, revision: state.sources[source]!.revision }))
+      : [];
   return {
     candidate_id: candidateId('goal.frame', null, inputs),
     operation: 'goal.frame',
     contract_rev: null,
     inputs,
-    evidence: [evidence],
-    read_set: [],
+    evidence: goal ? [goal.evidence] : [],
+    read_set,
     dependencies: [],
     effects: [],
     resources: ONE_ACTION,

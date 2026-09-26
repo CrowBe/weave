@@ -68,11 +68,35 @@ function slice(
   return { name, revisions, truncated, omitted };
 }
 
+/** Identity of one fill of the named slices at a state revision. */
+export function sliceAssemblyId(state_revision: number, slices: readonly string[]): string {
+  return `asm:${state_revision}:${[...slices].sort().join('+')}`;
+}
+
+export const SHARED_ASSEMBLY_MICROS = 1_000;
+
+function stampAssemblies(slices: readonly ViewSliceManifest[], state_revision: number, enabled: boolean): ViewSliceManifest[] {
+  if (!enabled) {
+    return [...slices];
+  }
+  const shared = sliceAssemblyId(state_revision, ['goal', 'registered']);
+  return slices.map((item) => {
+    if (item.name === 'goal' || item.name === 'registered') {
+      return { ...item, assembly_id: shared };
+    }
+    if (item.name === 'catalogue_schema') {
+      return { ...item, assembly_id: sliceAssemblyId(state_revision, ['catalogue_schema']) };
+    }
+    return item;
+  });
+}
+
 /** Framing view: purpose, authorized ids, catalogue shapes. No source bodies. */
 export function renderFrameView(
   state: State,
   catalogue: readonly CatalogueOp[],
   profile: FrameProfile = DEFAULT_FRAME_PROFILE,
+  options?: { readonly assemblies?: boolean },
 ): StateView {
   const goal = state.goal;
   if (profile.catalogue_budget === 0) {
@@ -82,10 +106,14 @@ export function renderFrameView(
       state_revision: state.state_revision,
       content: {},
       manifest: {
-        slices: [
-          slice('goal', goal ? [goal.evidence] : [], []),
-          slice('catalogue', [], [{ name: 'catalogue', reason: 'budget' }], true),
-        ],
+        slices: stampAssemblies(
+          [
+            slice('goal', goal ? [goal.evidence] : [], []),
+            slice('catalogue', [], [{ name: 'catalogue', reason: 'budget' }], true),
+          ],
+          state.state_revision,
+          options?.assemblies === true,
+        ),
       },
     };
   }
@@ -175,13 +203,17 @@ export function renderFrameView(
       state_revision: state.state_revision,
       content: { ...rest, catalogue_index, catalogue_schema },
       manifest: {
-        slices: [
-          slices[0]!,
-          slices[1]!,
-          slice('catalogue_index', [], catalogueOmitted, omittedOps.length > 0),
-          slice('catalogue_schema', [], schemaOmitted, schemaOmitted.length > 0),
-          ...slices.slice(3),
-        ],
+        slices: stampAssemblies(
+          [
+            slices[0]!,
+            slices[1]!,
+            slice('catalogue_index', [], catalogueOmitted, omittedOps.length > 0),
+            slice('catalogue_schema', [], schemaOmitted, schemaOmitted.length > 0),
+            ...slices.slice(3),
+          ],
+          state.state_revision,
+          options?.assemblies === true,
+        ),
       },
     };
   }
@@ -191,6 +223,36 @@ export function renderFrameView(
     profile_version: profile.version,
     state_revision: state.state_revision,
     content,
+    manifest: { slices: stampAssemblies(slices, state.state_revision, options?.assemblies === true) },
+  };
+}
+
+/** Read-only review of goal and registered slices. It does not select schemas. */
+export function renderReviewView(state: State): StateView {
+  const goal = state.goal;
+  const authorizedSources = (goal?.authority.read ?? [])
+    .filter((id) => state.sources[id])
+    .map((id) => ({ id, revision: state.sources[id]!.revision }));
+  const slices = stampAssemblies(
+    [
+      slice('goal', goal ? [goal.evidence] : [], []),
+      slice(
+        'registered',
+        authorizedSources.map((source) => state.sources[source.id]!.evidence),
+        [],
+      ),
+    ],
+    state.state_revision,
+    true,
+  );
+  return {
+    profile: 'profile.review@1',
+    profile_version: 1,
+    state_revision: state.state_revision,
+    content: {
+      purpose: goal?.purpose ?? '',
+      registered: authorizedSources,
+    },
     manifest: { slices },
   };
 }

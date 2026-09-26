@@ -34,8 +34,9 @@ import { parseProposalText, validateProposal } from './proposals.js';
 import { select } from './scheduler.js';
 import { stableStringify } from './stable-json.js';
 import { applyAccepted, initialState, snapshot, type MutableState } from './state.js';
-import { measureCandidate } from './strategy.js';
-import { DEFAULT_FRAME_PROFILE, renderFrameView, renderWeighView, type FrameProfile } from './views.js';
+import { narrowDestinations } from './destinations.js';
+import { measureCandidate, stablePrefixBytes } from './strategy.js';
+import { DEFAULT_FRAME_PROFILE, renderFrameView, renderReviewView, SHARED_ASSEMBLY_MICROS, renderWeighView, type FrameProfile } from './views.js';
 import { toAttempts, toMicros } from './gateway-decision.js';
 import type {
   ActionId,
@@ -102,6 +103,23 @@ export interface RuntimeOptions {
    * the recorded view; the active profile is not read from today's default.
    */
   readonly frameProfile?: FrameProfile;
+  /**
+   * Terms for a framing request. Absent keeps the local destination, a
+   * baseline quality bar, and the historical context window.
+   */
+  readonly framingTerms?: {
+    readonly quality: 'baseline' | 'high';
+    readonly max_context_tokens: number;
+    readonly cost_ceiling: number;
+  };
+  /** Caller-supplied prefix cache. The runtime passes it through; it does not discover one. */
+  readonly prefixCache?: {
+    readonly routed_unit_id: string;
+    readonly prefix_digest: string;
+    readonly cached_tokens: number;
+  };
+  /** Cite one slice assembly for read-only views of the same revision. */
+  readonly shareAssemblies?: boolean;
 }
 
 const RUNTIME_SOURCE = { kind: 'runtime', id: 'weave' } as const;
@@ -173,6 +191,10 @@ export class Runtime {
   private readonly replayLog: readonly Observation[] | null;
   /** A reused conclusion finished inside the cycle; form the next candidates before returning. */
   private reuseFollowUp = false;
+  private readonly chargedAssemblies = new Set<string>();
+  private cycleAssemblyCost = 0;
+  private readonly reviews = new Map<ActionId, StateView>();
+  private readonly preparedViews = new Map<string, StateView>();
 
   constructor(
     private readonly options: RuntimeOptions,
@@ -503,6 +525,10 @@ export class Runtime {
       selection = judged.selection;
     }
 
+    if (this.options.shareAssemblies) {
+      this.prepareSharedViews(state, candidates);
+    }
+
     const selected: { candidate_id: string; action_id: ActionId; reservation: Candidate['resources'] }[] = [];
     let completed = false;
     selection.selected.forEach((candidate, index) => {
@@ -530,7 +556,24 @@ export class Runtime {
       selected,
       not_selected: selection.not_selected,
       outcome,
+      cost_micros: this.cycleAssemblyCost,
     });
+    this.cycleAssemblyCost = 0;
+    this.preparedViews.clear();
+  }
+
+  private prepareSharedViews(state: State, candidates: readonly Candidate[]): void {
+    const profile = this.profileForFrame();
+    if (profile && candidates.some((candidate) => candidate.operation === 'goal.frame')) {
+      const view = renderFrameView(state, this.catalogueOps(), profile, { assemblies: true });
+      this.preparedViews.set('goal.frame', view);
+      this.noteViewAssemblies(view);
+    }
+    if (candidates.some((candidate) => candidate.operation === 'report.review')) {
+      const view = renderReviewView(state);
+      this.preparedViews.set('report.review', view);
+      this.noteViewAssemblies(view);
+    }
   }
 
   private cycleOutcome(
@@ -879,32 +922,92 @@ export class Runtime {
     return ids;
   }
 
+  finishReview(action_id: ActionId): void {
+    const host = this.options.host as { releaseReads?: (invocation_id: string) => void };
+    host.releaseReads?.(action_id);
+    const view = this.reviews.get(action_id);
+    this.recordResult(
+      action_id,
+      {
+        outcome: 'succeeded',
+        output: {
+          view,
+          profile: 'profile.frame.narrow@1',
+          grant: { grant_id: 'forged' },
+        },
+      },
+      RUNTIME_SOURCE,
+    );
+  }
+
+  private reviewGoal(started: ActionStartedPayload): ActionOutcome | null {
+    const view = this.preparedViews.get('report.review') ?? renderReviewView(this.state());
+    if (!this.preparedViews.has('report.review')) {
+      this.noteViewAssemblies(view);
+    }
+    this.reviews.set(started.action_id, view);
+    const resources = started.read_set.flatMap((entry) => ('resource' in entry ? [entry.resource] : []));
+    const host = this.options.host as { holdReads?: (invocation_id: string, resources: readonly string[]) => void };
+    host.holdReads?.(started.invocation_id ?? started.action_id, resources);
+    return null;
+  }
+
+  private noteViewAssemblies(view: StateView): void {
+    for (const item of view.manifest.slices) {
+      if (!item.assembly_id || this.chargedAssemblies.has(item.assembly_id)) {
+        continue;
+      }
+      this.chargedAssemblies.add(item.assembly_id);
+      if (item.assembly_id.endsWith(':goal+registered')) {
+        this.cycleAssemblyCost += SHARED_ASSEMBLY_MICROS;
+      }
+    }
+  }
+
   private frameGoal(started: ActionStartedPayload): ActionOutcome | null {
     const profile = this.profileForFrame();
     if (!profile) {
       return { outcome: 'failed', failure: 'profile record missing' };
     }
-    const view = renderFrameView(this.state(), this.catalogueOps(), profile);
+    const prepared = this.preparedViews.get('goal.frame');
+    const view =
+      prepared ??
+      renderFrameView(this.state(), this.catalogueOps(), profile, this.options.shareAssemblies ? { assemblies: true } : undefined);
+    if (!prepared) {
+      this.noteViewAssemblies(view);
+    }
     const request_id = `inf:${started.action_id}`;
     const costRemaining =
       this.current.budget.cost.limit - this.current.budget.cost.reserved - this.current.budget.cost.spent;
-    const cost_ceiling = Math.min(1_000_000, Math.max(0, costRemaining));
+    const framing = this.options.framingTerms;
+    const readResources = started.read_set.flatMap((entry) => ('resource' in entry ? [entry.resource] : []));
+    const permitted = this.current.goal?.destinations ?? ['local'];
+    const destinations =
+      this.current.goal?.destinations && readResources.length > 0
+        ? narrowDestinations(permitted, this.current.destination_policies, readResources)
+        : ['local'];
+    const cost_ceiling = Math.min(framing?.cost_ceiling ?? 1_000_000, Math.max(0, costRemaining));
+    const prefix_digest = this.options.prefixCache ? digest(stablePrefixBytes(profile, view)) : undefined;
+    const terms = {
+      quality: framing?.quality ?? 'baseline',
+      destinations,
+      max_context_tokens: framing?.max_context_tokens ?? 8_000,
+      deadline: this.current.clock.tick + 100,
+      cost_ceiling,
+      max_attempts: 3,
+      ...(prefix_digest !== undefined && this.options.prefixCache
+        ? { prefix_digest, prefix_cache: this.options.prefixCache }
+        : {}),
+    };
     const requested = this.appendInferenceRequested({
       request_id,
       site: 'goal.frame',
       role: 'framing',
       kind: 'transform',
       view,
-      state_revision: this.current.state_revision,
+      state_revision: view.state_revision,
       candidate_set: null,
-      terms: {
-        quality: 'baseline',
-        destinations: ['local'],
-        max_context_tokens: 8_000,
-        deadline: this.current.clock.tick + 100,
-        cost_ceiling,
-        max_attempts: 3,
-      },
+      terms,
       reservation: { judgments: 0, cost: cost_ceiling },
     });
     if (requested.validation.status !== 'accepted') {
@@ -934,14 +1037,7 @@ export class Runtime {
                 'Propose inspect bindings as JSON {"bindings":[{"operation":"source.inspect","inputs":{"source":"..."}}]}',
               prompt: stableStringify(view.content),
             },
-            terms: {
-              quality: 'baseline',
-              destinations: ['local'],
-              max_context_tokens: 8_000,
-              deadline: this.current.clock.tick + 100,
-              cost_ceiling,
-              max_attempts: 3,
-            },
+            terms,
           },
           controller.signal,
         )
@@ -1967,6 +2063,9 @@ export class Runtime {
             this.recordResult(started.action_id, outcome, RUNTIME_SOURCE);
             return outcome;
           }
+          if (started.operation === 'report.review') {
+            return this.reviewGoal(started);
+          }
           if (started.operation === 'goal.frame') {
             const outcome = this.frameGoal(started);
             if (outcome) {
@@ -2041,6 +2140,9 @@ export class Runtime {
         return { implementation: p.implementation, weights: p.weights };
       },
       execute: (started) => {
+        if (started.operation === 'report.review') {
+          return null;
+        }
         if (started.operation === 'goal.frame') {
           this.frameGoal(started);
         }
@@ -2175,8 +2277,19 @@ export function replay(recorded: readonly Observation[], options: RuntimeOptions
   });
 
   try {
+    const reviewActions = new Set(
+      ordered
+        .filter(
+          (observation) =>
+            observation.payload_type === 'action.started' &&
+            (observation.payload as { operation?: string }).operation === 'report.review',
+        )
+        .map((observation) => (observation.payload as { action_id: string }).action_id),
+    );
     for (const observation of ordered) {
-      if (CYCLE_APPENDED.includes(observation.source.kind)) {
+      const resultAction = observation.payload_type === 'action.result' ? (observation.payload as { action_id?: string }).action_id : undefined;
+      const feedReviewResult = observation.source.kind === 'runtime' && resultAction !== undefined && reviewActions.has(resultAction);
+      if (CYCLE_APPENDED.includes(observation.source.kind) && !feedReviewResult) {
         continue;
       }
       const { seq: _seq, validation: _validation, ...input } = observation;
