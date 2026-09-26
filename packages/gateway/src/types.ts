@@ -93,6 +93,16 @@ export function qualityClears(offered: QualityBar, required: QualityBar): boolea
  * permitted destinations, context limits, deadline and cost ceiling
  * (ARCHITECTURE.md §6). The gateway may retry or escalate inside these terms.
  */
+/**
+ * A recorded match between one routed unit and a view prefix digest.
+ * The caller supplies it. The gateway does not discover it from Weave state.
+ */
+export interface PrefixCacheRecord {
+  readonly routed_unit_id: RoutedUnitId;
+  readonly prefix_digest: string;
+  readonly cached_tokens: number;
+}
+
 export interface InferenceTerms {
   readonly quality: QualityBar;
   readonly destinations: readonly DataDestination[];
@@ -100,6 +110,10 @@ export interface InferenceTerms {
   readonly deadline: Timestamp;
   readonly cost_ceiling: Micros;
   readonly max_attempts: number;
+  /** Digest of the view prefix this request is pricing. Absent means no cache lookup. */
+  readonly prefix_digest?: string;
+  /** Absent means expected cost stays the cold window. */
+  readonly prefix_cache?: PrefixCacheRecord;
   /**
    * How many attempts one routed unit may consume before the gateway escalates
    * to the next. Defaults to 2, so a retryable fault gets one retry.
