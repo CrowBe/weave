@@ -463,36 +463,33 @@ export class Runtime {
     let observation: Observation;
     try {
       const { forced, ...envelope } = input;
+      const bytes = payloadBytes(envelope.payload);
+      const oversize = this.options.logBound !== undefined && bytes > this.options.logBound.max_observation_bytes;
+      if (oversize) {
+        const diagnostic: Observation = {
+          ...envelope,
+          seq: this.nextSeq(),
+          validation: { status: 'rejected', reason: 'budget' },
+          payload: { reason: 'budget', bytes },
+        };
+        this.diagnostics.push(diagnostic);
+        return diagnostic;
+      }
       const duplicate =
         this.log.some((item) => item.observation_id === envelope.observation_id) ||
         this.diagnostics.some((item) => item.observation_id === envelope.observation_id);
       const midValue = hasMidValue(envelope.payload);
-      const bytes = payloadBytes(envelope.payload);
-      const oversize = this.options.logBound !== undefined && bytes > this.options.logBound.max_observation_bytes;
       let validation = forced ?? validate(envelope, this.current);
       if (duplicate) {
         validation = { status: 'rejected', reason: 'duplicate' };
       } else if (midValue) {
         validation = { status: 'rejected', reason: 'mid_value' };
-      } else if (oversize) {
-        validation = { status: 'rejected', reason: 'budget' };
       }
       observation = {
         ...envelope,
         seq: this.nextSeq(),
         validation,
       };
-      if (oversize) {
-        const diagnostic: Observation = {
-          ...observation,
-          payload: {
-            reason: validation.status === 'rejected' ? validation.reason : 'budget',
-            bytes,
-          },
-        };
-        this.diagnostics.push(diagnostic);
-        return diagnostic;
-      }
       const journal = this.options.journal;
       if (journal && observation.validation.status === 'accepted') {
         try {

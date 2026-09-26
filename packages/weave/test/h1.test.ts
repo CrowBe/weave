@@ -68,12 +68,12 @@ describe('H1 bound the log', () => {
     assert.equal(restored.state().sources[ALPHA], undefined);
   });
 
-  it('H1-T01 keeps an oversize mid-value or duplicate out of the log', () => {
+  it('H1-T01 rejects an oversize mid-value or duplicate as budget', () => {
     const { runtime } = runtimeWith({ logBound: { max_observation_bytes: 64 } });
     const cut = runtime.observe(registered(ALPHA, `${MARKER.repeat(8)}\uD800`));
     assert.equal(cut.validation.status, 'rejected');
     if (cut.validation.status === 'rejected') {
-      assert.equal(cut.validation.reason, 'mid_value');
+      assert.equal(cut.validation.reason, 'budget');
     }
     assert.equal(JSON.stringify(runtime.trace()).includes(MARKER), false);
     assert.equal(JSON.stringify(cut.payload).includes(MARKER), false);
@@ -87,7 +87,7 @@ describe('H1 bound the log', () => {
     });
     assert.equal(reused.validation.status, 'rejected');
     if (reused.validation.status === 'rejected') {
-      assert.equal(reused.validation.reason, 'duplicate');
+      assert.equal(reused.validation.reason, 'budget');
     }
     assert.equal(JSON.stringify(again.trace()).includes(MARKER), false);
     assert.equal(JSON.stringify(reused.payload).includes(MARKER), false);
