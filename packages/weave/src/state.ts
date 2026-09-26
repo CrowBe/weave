@@ -390,6 +390,9 @@ export function applyAccepted(state: MutableState, observation: Observation): vo
       }
       record.state = p.outcome.outcome;
       record.finished_at = observation.seq;
+      if (p.outcome.outcome === 'failed') {
+        record.failure = p.outcome.failure;
+      }
       state.budget.actions.reserved -= record.reservation.actions;
       state.budget.actions.spent += record.reservation.actions;
       state.budget.judgments.reserved -= record.reservation.judgments;

@@ -75,6 +75,81 @@ function assemblyId(view: StateView, sliceName: string): string | undefined {
 }
 
 describe('M6 slice assembly', () => {
+  it('cites the cycle-start assembly when the review waits for a slot', async () => {
+    const authority = createGrantAuthority();
+    const host = new AgentFabricHost({ authority });
+    const alpha = host.registerSource('mem:alpha', 'alpha one');
+    const beta = host.registerSource('mem:beta', 'beta one');
+    const strong = adapter('route.strong');
+    let now = 1;
+    const gateway = createInferenceGateway({
+      routes: [unit('route.strong', 'local')],
+      adapters: [strong],
+      clock: { now: () => now++ },
+    });
+    const runtime = new Runtime({
+      host,
+      decisionLayer: new ScriptedDecisionLayer(),
+      grantAuthority: authority,
+      gateway,
+      frameProfile: INDEX_PROFILE,
+      shareAssemblies: true,
+      executionSlots: 1,
+      framingTerms: { quality: 'high', max_context_tokens: 1_100, cost_ceiling: 20_000 },
+      prefixCache: { routed_unit_id: 'route.strong', prefix_digest: 'digest-long', cached_tokens: 650_000 },
+    });
+    for (const resource of [alpha, beta]) {
+      runtime.observe({
+        observation_id: `test:source.registered:${resource}`,
+        source: { kind: 'test', id: 'm6' },
+        caused_by: null,
+        payload_type: 'source.registered',
+        payload_version: 1,
+        payload: { resource, revision: 1, content: 'alpha one' },
+      });
+    }
+    runtime.operator.submit({
+      observation_id: 'operator:goal.opened:g-slot',
+      caused_by: null,
+      payload_type: 'goal.opened',
+      payload_version: 1,
+      payload: {
+        goal_id: 'g-slot',
+        purpose: 'Review the normalized report',
+        sources: [alpha, beta],
+        authority: { read: [alpha, beta] },
+        framing: true,
+        review: true,
+        destinations: ['local'],
+        budget: { actions: 2, judgments: 4, cost: 100_000 },
+        success_evidence: 'a checked report',
+      } satisfies Goal,
+    });
+    const review = Object.values(runtime.state().actions).find((action) => action.operation === 'report.review');
+    const frame = Object.values(runtime.state().actions).find((action) => action.operation === 'goal.frame');
+    assert.ok(review);
+    assert.ok(frame);
+    assert.equal(review.state, 'pending');
+    assert.equal(frame.state, 'running');
+    await runtime.settle(frame.action_id);
+    assert.equal(runtime.state().actions[review.action_id]?.state, 'running');
+    runtime.finishReview(review.action_id);
+    const requested = runtime
+      .trace()
+      .observations.find((observation) => observation.payload_type === 'inference.requested');
+    const reviewResult = runtime.trace().observations.find(
+      (observation) =>
+        observation.payload_type === 'action.result' &&
+        (observation.payload as { action_id: string }).action_id === review.action_id,
+    );
+    assert.ok(requested);
+    assert.ok(reviewResult);
+    const frameView = (requested.payload as InferenceRequestedPayload).view;
+    const reviewOutput = (reviewResult.payload as { outcome: { output: { view: StateView } } }).outcome.output;
+    assert.equal(assemblyId(frameView, 'goal'), assemblyId(reviewOutput.view, 'goal'));
+    assert.equal(assemblyId(frameView, 'registered'), assemblyId(reviewOutput.view, 'registered'));
+  });
+
   it('M6-T07 shares one assembly and M6-T08 replays the routed run', async () => {
     const authority = createGrantAuthority();
     const host = new AgentFabricHost({ authority });

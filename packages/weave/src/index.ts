@@ -24,6 +24,7 @@ export {
   type RuntimeOptions,
 } from './runtime.js';
 export { FileJournal, MemoryJournal, PersistError } from './journal.js';
+export { TraceRetention, payloadBytes } from './log-bound.js';
 export { ScriptedFoldAuthor, FOLD_CONTRACT, HELD_OUT_MARKER, RETAINED_FOLD_PROCEDURE, canonicalFold, foldSource, visibleFoldCases, heldOutFoldCases } from './fold-author.js';
 export {
   ScriptedNormalizeAuthor,

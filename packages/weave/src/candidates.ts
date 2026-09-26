@@ -61,6 +61,15 @@ export function procedureFor(state: State): ProcedureId {
   return state.goal?.destination ? PROCEDURE_PUBLISH : PROCEDURE;
 }
 
+/** A failed candidate with a recorded failure string is not formed again. Uncertain actions are not in this set. */
+function failedCandidateIds(state: State): Set<string> {
+  return new Set(
+    Object.values(state.actions)
+      .filter((action) => action.state === 'failed' && action.failure)
+      .map((action) => action.candidate_id),
+  );
+}
+
 export function formCandidates(state: State, describe: Describe, canonical: Canonical = (ref) => ref): Formation {
   const goal = state.goal;
   const procedure = procedureFor(state);
@@ -68,7 +77,12 @@ export function formCandidates(state: State, describe: Describe, canonical: Cano
     return { candidates: [], unavailable: [], procedure };
   }
   if (procedure === PROCEDURE_CRYSTALLIZE) {
-    return formCrystallizeCandidates(state, describe, canonical);
+    const formed = formCrystallizeCandidates(state, describe, canonical);
+    const failed = failedCandidateIds(state);
+    return {
+      ...formed,
+      candidates: formed.candidates.filter((candidate) => !failed.has(candidate.candidate_id)),
+    };
   }
   const inFlight = new Set(
     Object.values(state.actions)
@@ -77,10 +91,12 @@ export function formCandidates(state: State, describe: Describe, canonical: Cano
   );
   const candidates: Candidate[] = [];
   const unavailable: string[] = [];
+  const failed = failedCandidateIds(state);
   const push = (candidate: Candidate): void => {
-    if (!inFlight.has(candidate.candidate_id)) {
-      candidates.push(candidate);
+    if (failed.has(candidate.candidate_id) || inFlight.has(candidate.candidate_id)) {
+      return;
     }
+    candidates.push(candidate);
   };
 
   let allInspected = true;

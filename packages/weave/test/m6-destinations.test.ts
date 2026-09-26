@@ -148,4 +148,42 @@ describe('M6 destinations', () => {
     assert.deepEqual(alpha.requested.terms.destinations, ['local', 'hosted.cheap']);
     assert.equal(alpha.recorded.attempts[0]?.routed_unit_id, 'route.cheap');
   });
+
+  it('keeps the goal destinations when the read set is empty', async () => {
+    const strong = adapter('route.strong');
+    const cheap = adapter('route.cheap');
+    let now = 1;
+    const gateway = createInferenceGateway({
+      routes: [route('route.cheap', 'hosted.cheap'), route('route.strong', 'local')],
+      adapters: [strong, cheap],
+      clock: { now: () => now++ },
+    });
+    const world = scenario({ open: false, decisionLayer: lowWeight });
+    const runtime = new Runtime({
+      host: world.host,
+      decisionLayer: lowWeight,
+      gateway,
+      framingTerms: { quality: 'high', max_context_tokens: 1_100, cost_ceiling: 20_000 },
+    });
+    runtime.operator.submit(
+      goalOpened(
+        baseGoal({
+          framing: true,
+          sources: [ALPHA],
+          authority: { read: [ALPHA] },
+          destinations: ['hosted.cheap'],
+          budget: { actions: 4, judgments: 4, cost: 100_000 },
+        }),
+      ),
+    );
+    const frameAction = Object.values(runtime.state().actions).find((action) => action.operation === 'goal.frame');
+    assert.ok(frameAction);
+    assert.deepEqual(frameAction.read_set, []);
+    await runtime.settle(frameAction.action_id);
+    const requested = runtime
+      .trace()
+      .observations.find((observation) => observation.payload_type === 'inference.requested');
+    assert.ok(requested);
+    assert.deepEqual((requested.payload as InferenceRequestedPayload).terms.destinations, ['hosted.cheap']);
+  });
 });

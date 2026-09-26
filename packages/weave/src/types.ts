@@ -601,6 +601,8 @@ export interface ActionRecord {
   readonly grant: Grant | null;
   readonly invocation_id: string | null;
   readonly reconciled: boolean;
+  /** Set when the action failed. The same candidate and failure are not dispatched again. */
+  readonly failure?: string;
 }
 
 // ---------------------------------------------------------------------------

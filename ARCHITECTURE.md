@@ -614,9 +614,9 @@ scheduler, or host projects.
 - Domain-specific success evidence and calibrated semantic evaluation thresholds.
 - Ranking, no-progress, and extension-payoff policies beyond the first fixtures.
 - Contract/view migration, persistence retention, and redaction mechanisms.
-  [H1](docs/h1-bound-the-log.md) fixes the byte bound, duplicate observation
-  identity, and the rule that trace eviction stays off the state-transition
-  lock. It does not choose the retention period.
+  [H1](docs/h1-bound-the-log.md) bounds each observation, rejects a duplicate
+  observation id, refuses a second open of the host store, and keeps trace
+  eviction off the state-transition lock. It does not choose the retention period.
 - M4's fixture facts are fixed in
   [docs/m4-measure-reuse.md](docs/m4-measure-reuse.md) §7: the failing goal
   `g-normalize-blank`, `conclusion.policy`, 1_000 micros per host invocation,
@@ -633,9 +633,10 @@ scheduler, or host projects.
   it does not add that release path.
 - How expected inference cost accounts for a prefix cache, how a framing
   profile splits the catalogue index from schemas, how destinations narrow
-  from a read set, and how read-only views share a slice assembly. Fixed as
-  requirements in [M6](docs/m6-route-a-reconstructed-view.md). A live
-  provider prompt-cache bill remains out of scope.
+  from a read set, and how read-only views share a slice assembly. Implemented
+  in [M6](docs/m6-route-a-reconstructed-view.md). A live provider prompt-cache
+  bill remains out of scope. The review's acceptance record is the action
+  result that cites the shared assembly.
 
 The invariants above are the proposed architectural decisions. These open choices
 are implementation or empirical questions; they must not silently weaken the
