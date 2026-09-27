@@ -647,17 +647,29 @@ The operator design system is planned in
 [docs/design-system.md](docs/design-system.md). It is not a milestone and it
 does not change the acceptance boundary.
 
-Setup is a deterministic terminal surface. A dashboard attaches only after
-local configuration validates and a goal is open on a running runtime. Chrome
-and a closed component vocabulary paint from a dashboard state view. The
-judgment site `dashboard.arrange` may choose among offered components for a
-contested variable region, through one `choice` evaluation of role `working`.
-Protected regions, including pending approvals, are filled by deterministic
-rules and are not questions.
+A project is the durable container. It can make repositories, documents,
+artifacts, capabilities, and history available by name. Availability grants
+nothing, fills no slice, and does not put the resource on screen. A workspace
+is one session attached to that project. Setup remains a deterministic
+terminal surface. The workspace itself starts as navigation plus a
+conversational surface, and it has no mode.
 
-Arrangements are recorded on a session record, not in the observation log, so
-a presentation observation cannot reject an in-flight `weights.recorded`.
-Components are trusted presentation code, not capabilities. Jev may serve
-`dashboard.arrange`; it does not define the vocabulary or the theme. No model
-emits component source. External transport and more than one operator remain
-the open authority question in §11.
+The shell is deterministic: navigation, main surface, an optional drawer, and
+a cut-through. Pending authority requests occupy the cut-through until placed
+or decided. Arrangement cannot suppress them. Operator pins and placements are
+session-scoped hard constraints and outrank arrangement. A new session starts
+without the previous session's pins.
+
+`workspace.arrange` may choose among offered components for a contested
+adaptive region the operator has not claimed, through one `choice` evaluation
+of role `working`. The closed vocabulary, the default tree, and the theme
+tokens stay. The vocabulary names semantic components and interaction states.
+It names no toolkit. Web is the first renderer of that specification. A later
+native renderer is out of scope here.
+
+Arrangements, placements, and pins live on a session record, not in the
+observation log, so presentation cannot reject an in-flight
+`weights.recorded`. Components are trusted presentation code, not
+capabilities. Jev may serve `workspace.arrange`. It does not define the
+vocabulary, the theme, or the shell. External transport and more than one
+operator remain the open authority question in §11.
