@@ -15,6 +15,13 @@ Three pieces stay separate:
   to another runtime, through a binding. Its core imports neither Weave nor
   AgentFabric.
 
+The split is an import boundary. Weave already keeps its loop free of
+catalogue internals. Tapestry keeps paint free of that loop. A viewer stays
+out of the catalogue, and a goal's check stays out of the shell. The binding
+is a read port and an ingress handle. This plan does not add a presentation
+protocol, a second state model, or a second runtime binding. Another runtime
+is allowed by the imports. It is not a thing to design yet.
+
 Terms live in [CONTEXT.md](../CONTEXT.md). This document uses them.
 
 Two sentences hold the plan:

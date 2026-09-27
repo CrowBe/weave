@@ -647,8 +647,9 @@ Tapestry is the visual presentation layer, planned in
 [docs/design-system.md](docs/design-system.md). It is not a milestone, it is
 not a Weave module, and it does not change the acceptance boundary. Its core
 imports neither Weave nor AgentFabric. Weave is one runtime it can attach to,
-through a binding that supplies a read port and ingress. Another runtime
-attaches through its own binding.
+through a binding that supplies a read port and ingress. The import rule
+allows another runtime later. This plan does not design that binding or a
+presentation protocol.
 
 AgentFabric stays the capability subsystem. AgentSOP is its contract layer.
 Weave calls the capability host. AgentFabric does not sit inside the runtime.
