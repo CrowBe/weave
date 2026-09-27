@@ -640,3 +640,24 @@ scheduler, or host projects.
 The invariants above are the proposed architectural decisions. These open choices
 are implementation or empirical questions; they must not silently weaken the
 vision's authority, evidence, concurrency, or admission requirements.
+
+## 12. Operator surfaces
+
+The operator design system is planned in
+[docs/design-system.md](docs/design-system.md). It is not a milestone and it
+does not change the acceptance boundary.
+
+Setup is a deterministic terminal surface. A dashboard attaches only after
+local configuration validates and a goal is open on a running runtime. Chrome
+and a closed component vocabulary paint from a dashboard state view. The
+judgment site `dashboard.arrange` may choose among offered components for a
+contested variable region, through one `choice` evaluation of role `working`.
+Protected regions, including pending approvals, are filled by deterministic
+rules and are not questions.
+
+Arrangements are recorded on a session record, not in the observation log, so
+a presentation observation cannot reject an in-flight `weights.recorded`.
+Components are trusted presentation code, not capabilities. Jev may serve
+`dashboard.arrange`; it does not define the vocabulary or the theme. No model
+emits component source. External transport and more than one operator remain
+the open authority question in §11.

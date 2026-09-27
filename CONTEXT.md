@@ -10,7 +10,7 @@ The goal-directed runtime. Weave owns state transitions, scheduling, policy enfo
 
 ### Goal
 
-The outcome Weave is currently authorized to pursue. A goal includes its scope and authority; it is not merely the latest user message.
+The outcome Weave is currently authorized to pursue. A goal includes its scope and authority; it is not merely the latest operator observation.
 
 ### State
 
@@ -18,7 +18,7 @@ The explicit, evolving representation of what matters to the goal: known facts, 
 
 ### Observation
 
-A recorded input that may support a state transition: user input, a capability result, an inference result, an approval, an error, a timeout, or an environmental change. Its provenance establishes what was observed, not that every claim in its payload is true or authorized.
+A recorded input that may support a state transition: operator input, a capability result, an inference result, an approval, an error, a timeout, or an environmental change. Its provenance establishes what was observed, not that every claim in its payload is true or authorized.
 
 ### Slice
 
@@ -296,6 +296,76 @@ The trust stage of an implementation, such as proposed, provisional, established
 
 The record of where a contract, test, or implementation came from, including source traces, generators, revisions, evals, and validation evidence.
 
+## Operator surfaces
+
+### Operator
+
+The principal that configures Weave locally, opens goals, and decides requests the runtime records as pending. Authority comes from configured entitlement within the goal's ceiling. Attending an operator surface grants nothing. Operator observations enter only through trusted ingress.
+
+### Operator surface
+
+Trusted, in-process presentation of runtime state for the operator. It reads state views and submits existing operator observation types through a trusted ingress handle supplied at bootstrap. It holds no goal state, schedules no action, and issues no grant. The setup surface and a dashboard are operator surfaces.
+
+### Setup surface
+
+The deterministic terminal operator surface that writes local configuration before any dashboard exists. It requests no inference and begins no session.
+
+### Local configuration
+
+The versioned local record the setup surface writes: the operator principal, the selected theme record, the arrangement allowance, the per-key request cap, and the destinations permitted to `dashboard.arrange`. A session cites its digest. It is not goal state. The principal must be one the runtime is configured to accept. The record itself grants nothing.
+
+### Session
+
+The attachment of one dashboard to one running runtime while a goal is open. It fixes the theme record, the component vocabulary version, and the arrangement allowance. It ends when the operator detaches, the goal closes, or the runtime stops. Ending a session detaches the operator surface. It does not complete, pause, or cancel the goal, release a reservation, or write to the observation log. Recovery does not restore a session.
+
+### Session record
+
+The append-only record one dashboard keeps for one session: attachment, arrangement requests and reservations, attempts, outcomes, admitted and rejected and invalidated arrangements, and detachment. It cites goal state revisions and does not advance them. It is not the observation log.
+
+### Dashboard
+
+The operator surface for one session. It paints chrome and a component tree from the dashboard view at the current state revision, starting with the default tree. It boots only when local configuration validates and a goal is open on a running runtime.
+
+### Dashboard view
+
+The state view rendered for the operator principal at one revision. Components bind slices of this view. An omitted slice stays omitted.
+
+### Chrome
+
+The fixed, theme-resolved structure of a dashboard: a header, an ordered set of regions, and indicators for view lag and arrangement status. The component vocabulary version fixes the chrome. A judgment does not add, remove, reorder, or resize a region.
+
+### Region
+
+A named place in the chrome. A protected region is filled by deterministic rules from the dashboard view. A variable region holds one component from its offer.
+
+### Theme
+
+A versioned record of token values chosen at setup, covering every role in a versioned token role set. Components name token roles. One theme record resolves every paint in a session. A judgment does not see or set it.
+
+### Component
+
+Trusted presentation code in the component vocabulary, identified by a versioned id. It declares the slices it binds, the operator observation types it may submit, and the regions that may hold it. It is not a capability: it has no contract, no admission, and no grant.
+
+### Component vocabulary
+
+The closed, versioned set of components, regions, offers, applicability conditions, and the criterion texts a judgment may be shown. Adding a component, a region, or an offer is a vocabulary revision shipped as trusted code. No judgment extends it.
+
+### Component tree
+
+The chrome's regions with one component bound in each, resolved against one dashboard view revision and one theme record. It records ids and slice names. It carries no content, markup, or token values.
+
+### Default tree
+
+The component tree a pure function computes from the dashboard view and the component vocabulary. The dashboard paints it for every variable region that has no admitted arrangement for the current arrangement key.
+
+### Arrangement
+
+An assignment of offered components to variable regions, admitted from a `dashboard.arrange` answer after deterministic validation. It binds to the state revision its request evaluated and holds while its arrangement key is unchanged. The chosen component still reads current content from the dashboard view.
+
+### `dashboard.arrange`
+
+The judgment site that proposes an arrangement. It is one evaluation request of kind `choice` and role `working`, with one question per contested variable region. Protected regions are filled before the request and are not questions. Attempts draw on the session's arrangement allowance, which is separate from the goal budget.
+
 ## Language constraints
 
 - Say **runtime**, not *LLM agent*, when referring to Weave as a whole.
@@ -322,3 +392,14 @@ The record of where a contract, test, or implementation came from, including sou
 - Say **execution tier**, not *sandbox*, for where an implementation runs. A label is not containment.
 - Say **held-out report**, not *test output*, for what protected evaluation returns to an implementer.
 - Never use **deterministic** to describe generated tests; their execution is deterministic, while their authorship and correctness require evidence.
+- Say **operator**, not *user*, for the principal that configures Weave and decides pending requests through an operator surface.
+- Say **operator surface**, not *client* or *UI*, for in-process presentation over runtime state.
+- Say **chrome**, not *frame*, for the fixed structure of a dashboard. *Frame* remains the name of framing: `profile.frame@1`, the `goal.frame` site, and the `framing` role.
+- Say **region**, not *slot*, for a place in the chrome. An execution slot is scheduler capacity.
+- Say **arrangement**, not *composition* or *layout*, for an admitted assignment of components to variable regions. A composition is a capability assembled from capabilities.
+- Say **component**, not *widget* or *capability*, for trusted presentation code in the component vocabulary.
+- Say **session** for a dashboard's attachment to a running runtime. A session is not a transcript, a compaction unit, a scheduler lane, or a restart boundary.
+- Say **session record**, not *journal* or *log*, for the dashboard's own record. The journal is the observation log.
+- Say **dashboard view**, not *screen* or *prompt*, for the state view a dashboard renders.
+- Say **indicator**, not *notice* or *alert*, for a chrome status mark. An opportunity notice is an operator observation.
+- Say **`dashboard.arrange`**, not *Jev*, for the judgment site that proposes an arrangement. Jev is a model type that may answer `choice`.
