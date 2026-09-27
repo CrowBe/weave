@@ -6,6 +6,7 @@ import argparse
 from collections import Counter, defaultdict
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import resource
@@ -129,8 +130,14 @@ def load_split(split):
 
 
 def probe_row(meta, result, latency_ms):
+    if not isinstance(result, dict) or type(result.get("label")) is not str or result["label"] not in LABELS:
+        raise ValueError(f"invalid tool-suitability result: {result!r}")
+    top_score = result.get("confidence")
+    if (top_score is not None and (type(top_score) not in (int, float)
+            or not math.isfinite(top_score) or not 0 <= top_score <= 1)):
+        raise ValueError(f"invalid tool-suitability score: {top_score!r}")
     return {"id": meta["id"], "group": meta["group"], "label": meta["label"],
-            "prediction": result["label"], "top_score": result.get("confidence"),
+            "prediction": result["label"], "top_score": top_score,
             "latency_ms": latency_ms}
 
 

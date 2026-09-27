@@ -77,10 +77,18 @@ class BevToolSplitTest(unittest.TestCase):
 
     def test_probe_row_names_provider_confidence_as_top_score(self):
         row = bev_tool.probe_row(
-            {"id": "case", "group": "group", "label": "use_tool"},
-            {"label": "use_tool", "confidence": 0.75}, 3.5)
+            {"id": "case", "group": "group", "label": "call"},
+            {"label": "call", "confidence": 0.75}, 3.5)
         self.assertEqual(row["top_score"], 0.75)
         self.assertNotIn("confidence", row)
+
+    def test_probe_row_rejects_malformed_model_output(self):
+        meta = {"id": "case", "group": "group", "label": "call"}
+        for result in (None, {}, {"label": "unexpected"}, {"label": "call", "confidence": float("nan")},
+                       {"label": "call", "confidence": 1.1}):
+            with self.subTest(result=result):
+                with self.assertRaisesRegex(ValueError, "invalid tool-suitability"):
+                    bev_tool.probe_row(meta, result, 3.5)
 
 
 if __name__ == "__main__":

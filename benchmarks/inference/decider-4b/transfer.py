@@ -64,19 +64,45 @@ def model_question(record):
 
 
 def score_answer(question, label, answer):
+    if not isinstance(answer, dict):
+        raise ValueError(f"invalid answer: {answer!r}")
+
+    probabilities = answer.get("probabilities", {})
+    if not isinstance(probabilities, dict):
+        raise ValueError("invalid probability map")
+    for key, value in probabilities.items():
+        if type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 1:
+            raise ValueError(f"invalid probability for {key}: {value!r}")
+
     kind = question["type"]
     if kind == "choice":
-        predicted = answer["choice"]
-        probability = answer.get("probabilities", {}).get(predicted)
+        predicted = answer.get("choice")
+        criteria = question.get("criteria")
+        if not isinstance(criteria, dict) or type(predicted) is not str or predicted not in criteria:
+            raise ValueError(f"invalid choice: {predicted!r}")
+        if any(type(key) is not str or key not in criteria for key in probabilities):
+            raise ValueError("probability map contains an unknown choice")
+        probability = probabilities.get(predicted)
         return predicted, predicted == label, probability, None
     if kind == "noul":
-        probability = float(answer["noul"])
+        probability = answer.get("noul")
+        if (type(probability) not in (int, float) or not math.isfinite(probability)
+                or not 0 <= probability <= 1):
+            raise ValueError(f"invalid NOUL probability: {probability!r}")
         predicted = probability >= 0.5
         return predicted, predicted == label, probability if predicted else 1 - probability, None
     if kind == "score":
-        expected_value = float(answer["score"])
+        expected_value = answer.get("score")
+        criteria = question.get("criteria")
+        if (not isinstance(criteria, list) or not criteria
+                or type(expected_value) not in (int, float) or not math.isfinite(expected_value)
+                or not 0 <= expected_value <= len(criteria) - 1):
+            raise ValueError(f"invalid score: {expected_value!r}")
+        allowed = {str(index) for index in range(len(criteria))}
+        if any(type(key) is not str or key not in allowed for key in probabilities):
+            raise ValueError("probability map contains an unknown score")
         predicted = math.floor(expected_value + 0.5)
-        probability = answer.get("probabilities", {}).get(str(predicted))
+        probability = probabilities.get(str(predicted))
         return predicted, predicted == int(label), probability, abs(expected_value - int(label))
     raise ValueError(f"unknown question type {kind}")
 
