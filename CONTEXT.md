@@ -376,11 +376,11 @@ A versioned product the workspace can open: source, prose, a report, a publicati
 
 ### Editor
 
-The workspace component that opens any artifact. It invokes `artifact.present` and paints the presentation with the session theme. It is agent-first: it shows what work produced, and operator correction goes through an existing observation or grant. It is not a mode, not a second runtime, and not a capability.
+The workspace component that opens any artifact. It paints a disclosed body with the session theme, using the viewer for that artifact's kind. It is agent-first: it shows what work produced, and operator correction goes through an existing observation or grant. It is not a mode, not a second runtime, and not a capability.
 
 ### Viewer
 
-An implementation of the `artifact.present` capability. The operation is the same for source, prose, a report, and any other kind. Kind selects the implementation. The output is a semantic presentation and its diagnostics. A viewer declares no effect when the disclosed body is its input, and it does not execute the artifact. The plain-text implementation presents every kind. A further implementation may add structure or checks for the kinds it accepts.
+Surface presentation for one artifact kind, used only by the editor. Source, prose, a report, and any other kind are the same editor. Kind selects the viewer. A viewer paints a body the workspace view already disclosed. It is not a capability, it is not on the action frontier, and it does not execute the artifact, read storage, or receive a locator. The plain-text viewer presents every kind. A richer viewer may add structure for the kinds it accepts. A check the goal can reuse is a separate capability. The editor may show that capability's recorded result. It does not invoke the catalogue to paint.
 
 ### Component tree
 
@@ -437,7 +437,7 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 - Say **conversational surface**, not *chat*, for the component that presents and accepts operator input.
 - Say **artifact**, not *file*, for what the editor opens. A locator stays in the host.
 - Say **editor**, not *IDE* or *mode*, for the workspace component that opens an artifact. The editor is not a capability.
-- Say **viewer**, not *reader*, *interpreter*, or *plugin*, for an implementation of `artifact.present`. Source and prose are kinds of that one operation.
+- Say **viewer**, not *capability*, *reader*, or *plugin*, for how the editor paints one artifact kind. There is one capability catalogue. A viewer is not in it.
 - Say **session** for a workspace's attachment to a project on a running runtime. A session is not a transcript, a compaction unit, a scheduler lane, or a restart boundary.
 - Say **session record**, not *journal* or *log*, for the workspace's ephemeral record. The journal is the observation log.
 - Say **workspace view**, not *screen* or *prompt*, for the state view a workspace renders.

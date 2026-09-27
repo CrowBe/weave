@@ -368,9 +368,10 @@ The payload is not in the runtime. Until it exists, the component renders
 disclosed observations and the submit control stays disabled. Text in that
 component does not authorize, complete, or dispatch anything.
 
-`editor@1` is the one opener for every artifact. It invokes the
-`artifact.present` capability specified in §6.1. Arrangement chooses the
-editor. It does not choose a viewer.
+`editor@1` is the one opener for every artifact. Viewers are specified in
+§6.1. They are surface presentation, not catalogue entries. Arrangement
+chooses the editor. It does not choose a viewer, and it does not invoke a
+capability to paint.
 
 What each component shows:
 
@@ -403,8 +404,9 @@ What each component shows:
   uncertain. A requested cancellation stays requested until the action record
   says otherwise.
 - `editor` shows the artifact's identity, kind, and revision, and paints the
-  presentation returned by `artifact.present`. A withheld body is an omission,
-  not an empty artifact, and the capability is not invoked.
+  disclosed body with the viewer for that kind. A withheld body is an
+  omission, not an empty artifact. A recorded check result already in state
+  may be shown with the body. Painting does not invoke the catalogue.
 - `notice.list` shows the fact, sequence, provenance, and validation status.
   A rejected notice is labeled rejected. A notice is not a grant and not
   dispatched work.
@@ -436,39 +438,31 @@ not keep it.
 Any artifact an action emits, and any document the project makes available,
 opens in `editor@1`. The project index is the navigator the operator sees:
 names, kinds, and resource references. Locators stay in the host. Source and
-an agent-written document are the same operation.
+an agent-written document open in that same editor.
 
-The editor calls the capability host with `artifact.present`. The contract is
-one operation for every kind:
+Weave has one capability catalogue. AgentFabric owns it. A capability is an
+operation that can advance a goal, invoked by the runtime under a grant.
+There is no second catalogue for the shell.
 
-```text
-artifact.present
-  input:   kind, revision, body
-  output:  presentation { blocks, diagnostics }
-  effects: none
-```
+A viewer is not in that catalogue. Kind selects a viewer inside the editor.
+The plain-text viewer accepts every kind. A richer viewer may mark structure
+for the kinds it accepts. Both paint a body the workspace view already
+disclosed. A withheld body is an omission. The viewer does not read storage,
+receive a locator, or run on the action frontier.
 
-The body is already disclosed by the workspace view, so the viewer does not
-read storage and does not receive a locator. A withheld body is shown as an
-omission. The capability is not called.
-
-Kind selects an admitted implementation. The plain-text implementation
-accepts every kind and is the baseline. A richer implementation accepts the
-kinds it declares and returns the same output shape, with whatever structure
-or diagnostics that kind warrants: typo spans, lint, a language diagnostic.
-Those checks are fields of the presentation, or capabilities named in
-`depends_on`, invoked under the same authority rules as any other
-composition. They are not a second editor and not a branch in the shell.
-
-The output names blocks, spans, and diagnostics. It carries no token values
-and no toolkit types. The editor paints it with the session theme.
+A typo check, a lint, or a language diagnostic is a different thing. If the
+goal can reuse the result, that operation is an ordinary capability, with a
+contract, admission, and a grant, the same as any other operation. The editor
+may paint a result that is already in state. Opening the editor does not
+dispatch the capability, and the surface does not keep a private copy of the
+catalogue.
 
 An operator correction is an existing observation type or a write under a
 grant the runtime already issued. Keystrokes do not write by themselves.
 
-Which implementations ship, and which checker capabilities they depend on,
-can wait. The contract does not. A new kind is a new implementation of
-`artifact.present`, admitted like any other capability.
+Which viewers ship beyond plain text can wait. So can the contract for any
+check a goal will reuse. Neither choice splits reading code from reading a
+document, and neither adds a system-capability type.
 
 ### Default tree
 
@@ -629,15 +623,15 @@ does not put `workspace.arrange` on the action frontier.
 string. Routing evidence accrues per site. Jev, or any other routed unit that
 answers `choice`, may serve it.
 
-AgentSOP and AgentFabric import nothing from the surface package. Shell
-components are not capabilities. Viewers are implementations of
-`artifact.present`, owned by AgentFabric and invoked through the capability
-host supplied at bootstrap. The surface package may depend on AgentSOP
-contract types. It does not import the host's internals.
+AgentSOP and AgentFabric import nothing from the surface package. The
+surface package does not import them. Shell components and viewers are not
+capabilities. A check the goal can reuse is a capability in the one
+catalogue, scheduled by the runtime. The editor only paints a result that
+state already holds.
 
 When the package exists, `checks/import-direction.mjs` allows `surface` to
-depend on `weave`, `gateway`, and `agentsop`, and forbids `weave`, `gateway`,
-`agentsop`, and `agentfabric` from depending on `surface`.
+depend on `weave` and `gateway`, and forbids `weave`, `gateway`, `agentsop`,
+and `agentfabric` from depending on `surface`.
 
 This plan does not choose a component toolkit, add a dependency, open a
 network protocol, generate component source, implement an Omarchy renderer,
@@ -660,12 +654,11 @@ or edit `VISION.md`.
 4. **Project persistence.** Where the project record and its attachments live,
    and whether an attachment of a repository is a resource reference the host
    already knows how to mint.
-5. **Artifact slice and viewer implementations.** `report` and `publication`
-   exist on `State`. The `artifacts` slice's exact fields, and when a body is
-   disclosable, are not fixed. Which implementations of `artifact.present`
-   ship beyond plain text, and which checker capabilities they depend on, are
-   not fixed either. The plain-text implementation still presents a disclosed
-   body.
+5. **Artifact slice.** `report` and `publication` exist on `State`. The
+   `artifacts` slice's exact fields, and when a body is disclosable, are not
+   fixed. Which viewers ship beyond plain text is not fixed either. A check
+   worth reusing across goals gets its own capability contract later. The
+   editor does not dispatch it.
 6. **Renderer bindings.** Web is first. Which token bindings that renderer
    must supply, and how a missing binding fails, are open. Omarchy is a later
    renderer of this specification, not part of this plan.
