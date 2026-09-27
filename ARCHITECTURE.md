@@ -641,11 +641,17 @@ The invariants above are the proposed architectural decisions. These open choice
 are implementation or empirical questions; they must not silently weaken the
 vision's authority, evidence, concurrency, or admission requirements.
 
-## 12. Operator surfaces
+## 12. Tapestry
 
-The operator design system is planned in
-[docs/design-system.md](docs/design-system.md). It is not a milestone and it
-does not change the acceptance boundary.
+Tapestry is the visual presentation layer, planned in
+[docs/design-system.md](docs/design-system.md). It is not a milestone, it is
+not a Weave module, and it does not change the acceptance boundary. Its core
+imports neither Weave nor AgentFabric. Weave is one runtime it can attach to,
+through a binding that supplies a read port and ingress. Another runtime
+attaches through its own binding.
+
+AgentFabric stays the capability subsystem. AgentSOP is its contract layer.
+Weave calls the capability host. AgentFabric does not sit inside the runtime.
 
 A project is the durable container. It can make repositories, documents,
 artifacts, capabilities, and history available by name. Availability grants
@@ -665,15 +671,15 @@ adaptive region the operator has not claimed, through one `choice` evaluation
 of role `working`. The closed vocabulary, the default tree, and the theme
 tokens stay. The vocabulary names semantic components and interaction states.
 It names no toolkit. One editor opens any artifact. Source and prose are
-kinds of that editor, painted by surface viewers, not by a second capability
-catalogue. A check the goal can reuse is an ordinary AgentFabric capability.
-The editor may show a result already in state. It does not dispatch one.
-Web is the first renderer of the shell. A later native renderer is out of
-scope here.
+kinds of that editor, painted by Tapestry viewers, not by a second capability
+catalogue. A check the runtime can reuse is an ordinary AgentFabric
+capability. The editor may show a result the binding already disclosed. It
+does not dispatch one. Web is the first renderer of the shell. A later
+native renderer is out of scope here.
 
 Arrangements, placements, and pins live on a session record, not in the
 observation log, so presentation cannot reject an in-flight
-`weights.recorded`. Shell components and viewers are trusted presentation code, not
+`weights.recorded`. Shell components and viewers are Tapestry presentation code, not
 capabilities. Jev may serve `workspace.arrange`. It does not define the
 vocabulary, the theme, or the shell. External transport and more than one
 operator remain the open authority question in §11.

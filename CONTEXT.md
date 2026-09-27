@@ -296,7 +296,11 @@ The trust stage of an implementation, such as proposed, provisional, established
 
 The record of where a contract, test, or implementation came from, including source traces, generators, revisions, evals, and validation evidence.
 
-## Operator surfaces
+## Tapestry
+
+### Tapestry
+
+The visual presentation layer. It paints a workspace for an operator and submits that operator's observations through the attached runtime's ingress. It holds no goal state, schedules no action, and issues no grant. Its core imports no runtime and no capability host. Weave is one runtime it can attach to. Another runtime attaches through its own binding. The shell, theme, viewers, and session record belong to Tapestry.
 
 ### Operator
 
@@ -308,7 +312,7 @@ The durable container an operator works in. A project makes repositories, docume
 
 ### Operator surface
 
-Trusted, in-process presentation of runtime state for the operator. It reads state views and submits operator observations through a trusted ingress handle supplied at bootstrap. It holds no goal state, schedules no action, and issues no grant. The setup surface and a workspace are operator surfaces.
+A Tapestry presentation of runtime state for the operator: the setup surface or a workspace. It reads a workspace view and submits operator observations through the attached runtime's ingress. It holds no goal state, schedules no action, and issues no grant.
 
 ### Setup surface
 
@@ -380,7 +384,7 @@ The workspace component that opens any artifact. It paints a disclosed body with
 
 ### Viewer
 
-Surface presentation for one artifact kind, used only by the editor. Source, prose, a report, and any other kind are the same editor. Kind selects the viewer. A viewer paints a body the workspace view already disclosed. It is not a capability, it is not on the action frontier, and it does not execute the artifact, read storage, or receive a locator. The plain-text viewer presents every kind. A richer viewer may add structure for the kinds it accepts. A check the goal can reuse is a separate capability. The editor may show that capability's recorded result. It does not invoke the catalogue to paint.
+Tapestry presentation for one artifact kind, used only by the editor. Source, prose, a report, and any other kind are the same editor. Kind selects the viewer. A viewer paints a body the workspace view already disclosed. It is not a capability, it is not on the action frontier, and it does not execute the artifact, read storage, or receive a locator. The plain-text viewer presents every kind. A richer viewer may add structure for the kinds it accepts. A check the goal can reuse is a separate capability. The editor may show that capability's recorded result. It does not invoke the catalogue to paint.
 
 ### Component tree
 
@@ -425,7 +429,8 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 - Say **held-out report**, not *test output*, for what protected evaluation returns to an implementer.
 - Never use **deterministic** to describe generated tests; their execution is deterministic, while their authorship and correctness require evidence.
 - Say **operator**, not *user*, for the principal that configures Weave and decides pending requests through an operator surface.
-- Say **operator surface**, not *client* or *UI*, for in-process presentation over runtime state.
+- Say **Tapestry**, not *Weave*, for the visual presentation layer. Weave is the runtime. AgentFabric is the capability subsystem, and AgentSOP is its contract layer. Neither sits inside the runtime.
+- Say **operator surface**, not *client* or *UI*, for a Tapestry presentation over runtime state.
 - Say **project** for the durable container. A repository may be attached to a project. The npm workspace is the package layout, not a project.
 - Say **workspace**, not *dashboard* or *mode*, for the adaptive operator surface. There is no chat, code, research, or agent mode.
 - Say **shell**, not *frame* or *chrome*, for the fixed structure of a workspace. *Frame* remains the name of framing: `profile.frame@1`, the `goal.frame` site, and the `framing` role.

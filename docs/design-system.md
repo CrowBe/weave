@@ -1,10 +1,19 @@
-# Operator design system
+# Tapestry
 
-This is a plan for the project workspace: the shell, the theme, and the
-component vocabulary. It is not a milestone, and it does not change an
-acceptance boundary in [VISION.md](../VISION.md). The workspace is an adapter
-over runtime state. Conversation remains evidence. Responding remains an
-action.
+This is a plan for the visual presentation layer: the workspace, the shell,
+the theme, and the component vocabulary. It is not a milestone, and it does
+not change an acceptance boundary in [VISION.md](../VISION.md). Conversation
+remains evidence. Responding remains an action.
+
+Three pieces stay separate:
+
+- **Weave** is the runtime. It owns state, policy, and scheduling.
+- **AgentFabric** is the capability subsystem. AgentSOP is its contract layer.
+  Weave calls the capability host. AgentFabric does not sit inside the runtime
+  and does not import it.
+- **Tapestry** is the visual presentation layer. It can attach to Weave, and
+  to another runtime, through a binding. Its core imports neither Weave nor
+  AgentFabric.
 
 Terms live in [CONTEXT.md](../CONTEXT.md). This document uses them.
 
@@ -12,7 +21,7 @@ Two sentences hold the plan:
 
 > Predictable navigation, adaptive attention.
 
-> Weave starts as the simplest interface appropriate to the interaction and
+> Tapestry starts as the simplest interface appropriate to the interaction and
 > surfaces richer controls, work, artifacts, and observability as they become
 > useful.
 
@@ -175,7 +184,7 @@ mark for a status role, or gives one value to a pair that must differ. A
 missing media binding is valid. A renderer that needs a binding it does not
 have refuses to paint, and names the missing role.
 
-A conformance check on the surface package confirms that components reference
+A conformance check on the Tapestry package confirms that components reference
 role names from `tokens@1` only, contain no literal color or type values, and
 use `decision-*` roles only on cut-through components. The check covers
 trusted source. It does not inspect model output. The check also rejects
@@ -608,30 +617,34 @@ the same specification. This plan does not design that renderer.
 
 ## 10. Ownership
 
-A future `packages/surface` owns the setup surface, local configuration, the
+A future `packages/tapestry` owns the setup surface, local configuration, the
 project record, `tokens@1`, the theme records, the shell, the components,
-`vocabulary.workspace@1`, the default tree, arrange-view reduction, request
-formation, arrangement validation, the session record, and painting.
+the viewers, `vocabulary.workspace@1`, the default tree, arrange-view
+reduction, request formation, arrangement validation, the session record, and
+painting. That package imports neither Weave nor AgentFabric. It may depend
+on the gateway's request and outcome types for `workspace.arrange`, supplied
+at bootstrap.
 
-It may depend on Weave view and ingress types and on the gateway's request,
-outcome, and `InferenceGateway` types. Those are supplied at bootstrap.
-`packages/weave` gains the `view.workspace@1` renderer and the read port. It
-does not learn regions, tokens, vocabulary, placements, or sessions, and it
-does not put `workspace.arrange` on the action frontier.
+A Weave binding, outside that package, supplies the read port and the ingress
+handle. Another runtime supplies its own binding. `packages/weave` gains the
+`view.workspace@1` renderer and the read port for its binding. It does not
+learn regions, tokens, vocabulary, placements, or sessions, and it does not
+put `workspace.arrange` on the action frontier.
 
 `packages/gateway` is unchanged. `workspace.arrange` is a judgment-site
 string. Routing evidence accrues per site. Jev, or any other routed unit that
 answers `choice`, may serve it.
 
-AgentSOP and AgentFabric import nothing from the surface package. The
-surface package does not import them. Shell components and viewers are not
-capabilities. A check the goal can reuse is a capability in the one
-catalogue, scheduled by the runtime. The editor only paints a result that
-state already holds.
+AgentSOP and AgentFabric import nothing from Tapestry. Tapestry's core
+imports nothing from them or from Weave. Shell components and viewers are not
+capabilities. A check the attached runtime can reuse is a capability in that
+runtime's catalogue, scheduled by the runtime. The editor only paints a
+result the binding already disclosed.
 
-When the package exists, `checks/import-direction.mjs` allows `surface` to
-depend on `weave` and `gateway`, and forbids `weave`, `gateway`, `agentsop`,
-and `agentfabric` from depending on `surface`.
+When the package exists, `checks/import-direction.mjs` allows `tapestry` to
+depend on `gateway`, and forbids `weave`, `gateway`, `agentsop`, and
+`agentfabric` from depending on `tapestry`. The Weave binding is a leaf: it
+may depend on `tapestry` and `weave`, and nothing depends on it.
 
 This plan does not choose a component toolkit, add a dependency, open a
 network protocol, generate component source, implement an Omarchy renderer,
