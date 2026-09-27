@@ -6,11 +6,15 @@ This file defines Weave's ubiquitous language. Use these terms consistently in c
 
 ### Weave
 
-The goal-directed runtime. Weave owns state transitions, scheduling, policy enforcement, evidence capture, and the action loop. Do not use *Weave* to mean a model, agent persona, or individual capability.
+The system. It comprises Loom, Fabric, and Tapestry. Do not use *Weave* to mean the runtime, a model, an agent persona, or an individual capability.
+
+### Loom
+
+The goal-directed runtime, namespaced Weave Loom. Loom owns state transitions, scheduling, policy enforcement, evidence capture, and the action loop. The package is `packages/weave` until a later rename. A model is not Loom.
 
 ### Goal
 
-The outcome Weave is currently authorized to pursue. A goal includes its scope and authority; it is not merely the latest operator observation.
+The outcome Loom is currently authorized to pursue. A goal includes its scope and authority; it is not merely the latest operator observation.
 
 ### State
 
@@ -58,7 +62,7 @@ Authorized, resource-bounded gathering of evidence about an existing invocation'
 
 ### Action
 
-A typed operation Weave may execute to advance a goal. Retrieval, execution, inference, clarification, approval, communication, waiting, and completion are all actions.
+A typed operation Loom may execute to advance a goal. Retrieval, execution, inference, clarification, approval, communication, waiting, and completion are all actions.
 
 ### Action frontier
 
@@ -100,7 +104,7 @@ A decision-layer estimate associated with a candidate action or bounded semantic
 
 ### Inference
 
-Requested model work such as reasoning, synthesis, classification, transformation, or language generation. Inference is an action available to Weave, not the owner of the loop.
+Requested model work such as reasoning, synthesis, classification, transformation, or language generation. Inference is an action available to Loom, not the owner of the loop.
 
 ### Inference role
 
@@ -120,7 +124,7 @@ An operation a goal appears to need, described by semantic purpose, expected eff
 
 ### Inference gateway
 
-The module that performs bounded model work under explicit scope, acceptance, authority, and resource limits. It owns routing, attempts, and evaluation, while goal scheduling and state transitions remain Weave’s responsibility.
+The module that performs bounded model work under explicit scope, acceptance, authority, and resource limits. It owns routing, attempts, and evaluation, while goal scheduling and state transitions remain Loom’s responsibility.
 
 ### Routed unit
 
@@ -162,11 +166,11 @@ The standardized statement of a capability's purpose, inputs, outputs, invariant
 
 ### AgentSOP
 
-The contract layer within the AgentFabric subsystem, defining capability meaning, typed inputs and outputs, effects, authority, references, and failures. It has no dependency on either runtime. It is built in this repository; the external AgentFabric repository is a conceptual reference only.
+The contract layer within Fabric, defining capability meaning, typed inputs and outputs, effects, authority, references, and failures. It has no dependency on either runtime. The package is `packages/agentsop`. The external AgentFabric repository is a conceptual reference only.
 
-### AgentFabric
+### Fabric
 
-The bounded capability subsystem that owns contracts through AgentSOP and governs construction evidence, invocation, admission, revocation, and audit. It ships with Weave while remaining independent of Weave’s goals, state, and scheduling. It is built in this repository, not imported from the external repository of the same name.
+The capability subsystem, namespaced Weave Fabric. It owns contracts through AgentSOP and governs construction evidence, invocation, admission, revocation, and audit. It ships inside Weave and stays independent of Loom’s goals, state, and scheduling. The package is `packages/agentfabric`. Say *Fabric* in architecture vocabulary. *AgentFabric* names that package and the external conceptual reference, not a second subsystem.
 
 ### Resource reference
 
@@ -178,11 +182,11 @@ A declared consequence of invoking a capability, drawn from a closed, versioned 
 
 ### Principal
 
-An identity to which authority can be granted. Weave, a goal, or an external caller may be a principal; a model is not.
+An identity to which authority can be granted. Loom, a goal, or an external caller may be a principal; a model is not.
 
 ### Grant
 
-Authority for a principal to invoke a capability, scoped to resources and effects. Weave's policy issues an execution grant per action at dispatch; the host checks it at invocation. Admission does not issue one.
+Authority for a principal to invoke a capability, scoped to resources and effects. Loom's policy issues an execution grant per action at dispatch; the host checks it at invocation. Admission does not issue one.
 
 ### Approval
 
@@ -214,7 +218,7 @@ One executable realization of a capability contract. Local code, a remote servic
 
 ### Capability host
 
-The interface through which a runtime accesses capability discovery, invocation, and lifecycle operations. AgentFabric supplies it without exposing Weave to its internal implementation.
+The interface through which a runtime accesses capability discovery, invocation, and lifecycle operations. Fabric supplies it without exposing Loom to its internal implementation.
 
 ### Capability registry
 
@@ -244,7 +248,7 @@ A needed capability that cannot yet be satisfied reliably and requires explorati
 
 ### Optimisation
 
-An evidence-backed change that improves how Weave achieves authorized outcomes for a declared workload while preserving protected constraints. It can change capabilities, operating strategies, or the harness implementation without expanding authority.
+An evidence-backed change that improves how Loom achieves authorized outcomes for a declared workload while preserving protected constraints. It can change capabilities, operating strategies, or the harness implementation without expanding authority.
 
 ### Operating strategy
 
@@ -300,7 +304,7 @@ The record of where a contract, test, or implementation came from, including sou
 
 ### Tapestry
 
-The visual presentation layer. It paints a workspace for an operator and submits that operator's observations through the attached runtime's ingress. It holds no goal state, schedules no action, and issues no grant. Its core imports no runtime and no capability host. Weave is one runtime it can attach to. Another runtime attaches through its own binding. The shell, theme, viewers, and session record belong to Tapestry.
+The visual presentation layer, namespaced Weave Tapestry. It paints a workspace for an operator and submits that operator's observations through the attached runtime's ingress. It holds no goal state, no project record, schedules no action, and issues no grant. Its core imports no runtime and no capability host. Loom is the runtime it attaches to. The shell, theme, viewers, and session record belong to Tapestry. The project record does not.
 
 ### Operator
 
@@ -308,7 +312,7 @@ The principal that configures Weave locally, opens goals, and decides requests t
 
 ### Project
 
-The durable container an operator works in. A project makes repositories, documents, artifacts, capabilities, and history available by name. Availability is not a grant, not a slice fill, not disclosure, and not a reason to show the resource. A project holds many goals over time. It is not an npm workspace, and it is not itself a goal.
+The durable, presentation-independent record of what may be relevant to Loom: repositories, documents, artifacts, capability availability, history references, and goals over time. Loom holds it, so a headless invocation has it when Tapestry is absent. Availability is not a grant, not a slice fill, not disclosure, and not a reason to show the resource. A project is not an npm workspace, and it is not itself a goal.
 
 ### Operator surface
 
@@ -320,11 +324,11 @@ The deterministic terminal operator surface that writes local configuration befo
 
 ### Local configuration
 
-The versioned local record the setup surface writes: the operator principal, the selected theme record, the arrangement allowance, the per-key request cap, and the destinations permitted to `workspace.arrange`. A session cites its digest. It is not goal state and not a project. The principal must be one the runtime is configured to accept. The record itself grants nothing.
+The versioned local record the setup surface writes: the operator principal, the initial theme, the arrangement allowance, the per-key request cap, and the destinations permitted to `workspace.arrange`. A session cites the digest of that record apart from the theme. It is not goal state and not a project. The principal must be one the runtime is configured to accept. The record itself grants nothing.
 
 ### Session
 
-The attachment of one workspace to one project on a running runtime. It fixes the theme record, the component vocabulary version, and the arrangement allowance. A session may begin before a goal is open and may continue after a goal closes. It ends when the operator detaches or the runtime stops. Ending a session detaches the workspace. It does not complete, pause, or cancel a goal, release a reservation, or write to the observation log. A new session starts clear of the previous session's placements and pins. Recovery does not restore a session.
+The attachment of one workspace to one project on Loom. It fixes the component vocabulary version and the arrangement allowance. The current theme is paint state on the session record and may change without ending the session. A session may begin before a goal is open and may continue after a goal closes. It ends when the operator detaches or the runtime stops. Ending a session detaches the workspace. It does not complete, pause, or cancel a goal, release a reservation, or write to the observation log. A new session starts clear of the previous session's placements and pins. Recovery does not restore a session.
 
 ### Session record
 
@@ -360,7 +364,7 @@ A placement the operator marks as a hard constraint for the session. A pin occup
 
 ### Theme
 
-A versioned record of token values chosen at setup, covering every role in a versioned token role set. Components name token roles. One theme record resolves every paint in a session. A judgment does not see or set it. Renderers bind the same roles to their own media.
+A versioned record of token values, covering every role in a versioned token role set. Components name token roles. The current theme resolves every paint. Changing it repaints and does not detach the session. A judgment does not see or set it. Renderers bind the same roles to their own media.
 
 ### Component
 
@@ -404,10 +408,12 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 
 ## Language constraints
 
-- Say **runtime**, not *LLM agent*, when referring to Weave as a whole.
+- Say **Loom**, not *runtime* as a product name and not *LLM agent*, for the goal-directed loop. *Runtime* remains the ordinary word for that loop. Weave is the system, not the runtime.
+- Say **Fabric**, not *AgentFabric*, in architecture vocabulary. *AgentFabric* is the package name `packages/agentfabric` and the external conceptual reference.
+- Say **Tapestry** for the visual presentation layer. The package, when it exists, is `packages/tapestry`.
 - Say **observation**, not *message*, for a general state input.
 - Say **action frontier**, not *next action*, when concurrency is possible.
-- Say **capability**, not *tool*, for an operation governed by an AgentFabric contract.
+- Say **capability**, not *tool*, for an operation governed by a Fabric contract.
 - Say **implementation**, not *capability*, for replaceable executable code.
 - Say **implementation**, not *resolver*, for code that satisfies a contract; *resolver context* remains the name of the interface it receives.
 - Say **resource reference**, not *path*, *URL*, or *locator*, for what a capability input names. Locators stay inside the host.
@@ -429,7 +435,7 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 - Say **held-out report**, not *test output*, for what protected evaluation returns to an implementer.
 - Never use **deterministic** to describe generated tests; their execution is deterministic, while their authorship and correctness require evidence.
 - Say **operator**, not *user*, for the principal that configures Weave and decides pending requests through an operator surface.
-- Say **Tapestry**, not *Weave*, for the visual presentation layer. Weave is the runtime. AgentFabric is the capability subsystem, and AgentSOP is its contract layer. Neither sits inside the runtime.
+- Say **Weave** for the system. Say **Loom** for its runtime, **Fabric** for its capability subsystem, and **Tapestry** for its presentation layer. A project record belongs to Loom. A session record belongs to Tapestry.
 - Say **operator surface**, not *client* or *UI*, for a Tapestry presentation over runtime state.
 - Say **project** for the durable container. A repository may be attached to a project. The npm workspace is the package layout, not a project.
 - Say **workspace**, not *dashboard* or *mode*, for the adaptive operator surface. There is no chat, code, research, or agent mode.

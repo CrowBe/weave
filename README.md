@@ -21,7 +21,7 @@ Start with:
 - [VISION.md](./VISION.md) — what Weave is and what it refuses to become.
 - [CONTEXT.md](./CONTEXT.md) — the project's ubiquitous language.
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — the high-level plan: layers, the cycle, state, judgment, capabilities, extension, optimisation, and vertical milestones.
-- [docs/design-system.md](./docs/design-system.md) — Tapestry, the visual presentation layer: a project, an adaptive workspace, one editor for any artifact, and the component vocabulary. A plan, not a milestone.
+- [docs/design-system.md](./docs/design-system.md) — Tapestry, the presentation layer. Weave is the system; Loom is the runtime; Fabric is the capability subsystem. A plan, not a milestone.
 - [docs/agentfabric-concepts.md](./docs/agentfabric-concepts.md) — which capability-system concepts carry over from the external AgentFabric, which do not, and the in-repo surface to build.
 - [docs/m0-inspect-and-report.md](./docs/m0-inspect-and-report.md) — the behavioral contract and checks for the first milestone.
 - [M1 — publish under authority](./docs/m1-publish-under-authority.md) — approvals,

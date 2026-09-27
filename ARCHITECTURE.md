@@ -645,15 +645,20 @@ vision's authority, evidence, concurrency, or admission requirements.
 ## 12. Tapestry
 
 Tapestry is the visual presentation layer, planned in
-[docs/design-system.md](docs/design-system.md). It is not a milestone, it is
-not a Weave module, and it does not change the acceptance boundary. Its core
-imports neither Weave nor AgentFabric. Weave is one runtime it can attach to,
-through a binding that supplies a read port and ingress. The import rule
-allows another runtime later. This plan does not design that binding or a
-presentation protocol.
+[docs/design-system.md](docs/design-system.md). It is not a milestone and it
+does not change the acceptance boundary.
 
-AgentFabric stays the capability subsystem. AgentSOP is its contract layer.
-Weave calls the capability host. AgentFabric does not sit inside the runtime.
+Weave is the system. Loom is the runtime (`packages/weave`). Fabric is the
+capability subsystem (`packages/agentfabric`); AgentSOP is its contract
+layer. Tapestry is presentation. Loom calls the capability host. Fabric does
+not sit inside the runtime. Tapestry's core imports neither Loom nor Fabric.
+It attaches to Loom through a binding that supplies a read port and ingress.
+The import rule allows another runtime later. This plan does not design that
+binding, a presentation protocol, or a thread and process model.
+
+The project record belongs to Loom. Tapestry receives a disclosed index
+through the binding. Availability is not disclosure, and it does not require
+Tapestry to be present.
 
 A project is the durable container. It can make repositories, documents,
 artifacts, capabilities, and history available by name. Availability grants
@@ -674,8 +679,8 @@ of role `working`. The closed vocabulary, the default tree, and the theme
 tokens stay. The vocabulary names semantic components and interaction states.
 It names no toolkit. One editor opens any artifact. Source and prose are
 kinds of that editor, painted by Tapestry viewers, not by a second capability
-catalogue. A check the runtime can reuse is an ordinary AgentFabric
-capability. The editor may show a result the binding already disclosed. It
+catalogue. A check Loom can reuse is an ordinary Fabric capability. The
+editor may show a result the binding already disclosed. It
 does not dispatch one. Web is the first renderer of the shell. A later
 native renderer is out of scope here.
 
