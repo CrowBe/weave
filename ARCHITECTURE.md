@@ -664,14 +664,15 @@ without the previous session's pins.
 adaptive region the operator has not claimed, through one `choice` evaluation
 of role `working`. The closed vocabulary, the default tree, and the theme
 tokens stay. The vocabulary names semantic components and interaction states.
-It names no toolkit. One editor opens any artifact. A reader, chosen by
-kind, supplies presentation and the default checks for that kind. A missing
-reader still shows a disclosed body as text. Web is the first renderer of
-that specification. A later native renderer is out of scope here.
+It names no toolkit. One editor opens any artifact by invoking
+`artifact.present`. Source and prose are kinds of that one capability.
+Implementations live in AgentFabric. The plain-text implementation presents
+every kind. The editor paints the semantic presentation. Web is the first
+renderer of the shell. A later native renderer is out of scope here.
 
 Arrangements, placements, and pins live on a session record, not in the
 observation log, so presentation cannot reject an in-flight
-`weights.recorded`. Components are trusted presentation code, not
-capabilities. Jev may serve `workspace.arrange`. It does not define the
+`weights.recorded`. Shell components are trusted presentation code. Viewers are capabilities.
+Jev may serve `workspace.arrange`. It does not define the
 vocabulary, the theme, or the shell. External transport and more than one
 operator remain the open authority question in §11.

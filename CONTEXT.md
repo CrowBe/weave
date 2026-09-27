@@ -376,11 +376,11 @@ A versioned product the workspace can open: source, prose, a report, a publicati
 
 ### Editor
 
-The one component that opens any artifact. It is agent-first: it shows what work produced, and operator correction goes through an existing observation or grant. It is not a mode and not a second runtime. A reader, chosen by artifact kind, supplies presentation and default checks.
+The workspace component that opens any artifact. It invokes `artifact.present` and paints the presentation with the session theme. It is agent-first: it shows what work produced, and operator correction goes through an existing observation or grant. It is not a mode, not a second runtime, and not a capability.
 
-### Reader
+### Viewer
 
-The trusted presentation for one artifact kind, including the checks that are on by default for that kind. Prose kinds default to a typo check. Source kinds default to lint and a language service when those capabilities are available. A missing reader or a missing check still shows a disclosed body as text. A reader does not execute the artifact.
+An implementation of the `artifact.present` capability. The operation is the same for source, prose, a report, and any other kind. Kind selects the implementation. The output is a semantic presentation and its diagnostics. A viewer declares no effect when the disclosed body is its input, and it does not execute the artifact. The plain-text implementation presents every kind. A further implementation may add structure or checks for the kinds it accepts.
 
 ### Component tree
 
@@ -436,8 +436,8 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 - Say **component**, not *widget* or *capability*, for trusted presentation code in the component vocabulary.
 - Say **conversational surface**, not *chat*, for the component that presents and accepts operator input.
 - Say **artifact**, not *file*, for what the editor opens. A locator stays in the host.
-- Say **editor**, not *IDE* or *mode*, for the one component that opens any artifact.
-- Say **reader**, not *interpreter* or *plugin*, for the kind-specific presentation and its default checks. A reader does not execute the artifact.
+- Say **editor**, not *IDE* or *mode*, for the workspace component that opens an artifact. The editor is not a capability.
+- Say **viewer**, not *reader*, *interpreter*, or *plugin*, for an implementation of `artifact.present`. Source and prose are kinds of that one operation.
 - Say **session** for a workspace's attachment to a project on a running runtime. A session is not a transcript, a compaction unit, a scheduler lane, or a restart boundary.
 - Say **session record**, not *journal* or *log*, for the workspace's ephemeral record. The journal is the observation log.
 - Say **workspace view**, not *screen* or *prompt*, for the state view a workspace renders.
