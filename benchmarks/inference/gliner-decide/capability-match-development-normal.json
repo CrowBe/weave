@@ -1,0 +1,261 @@
+{
+  "status": "experimental",
+  "site": "capability.match",
+  "kind": "choice",
+  "checkpoint": "fastino/GLiNER2.5-Decide",
+  "revision": "7ee5da4c2415e32259bcdc0b1a7367c32ce8d6f6",
+  "corpus_sha256": "97628dd14e682f544e4d2645efb7091a6dea0587e79049d27cf67a10df260fb3",
+  "split": "development",
+  "order": "normal",
+  "device": "cpu",
+  "threads": 2,
+  "torch": "2.14.0+cpu",
+  "peak_rss_kib": 4269580,
+  "summary": {
+    "n": 18,
+    "correct": 15,
+    "accuracy": 0.8333333333333334,
+    "no_match_cases": 3,
+    "false_match": 3,
+    "false_no_match": 0,
+    "uniform_floor": 0.25,
+    "majority_label_floor": 0.3333333333333333,
+    "median_ms": 676.0250000000001,
+    "p95_ms": 735.85,
+    "relevant_flip": 4,
+    "irrelevant_hold": 6,
+    "groups": 6,
+    "by_catalogue": {
+      "documents": {
+        "n": 6,
+        "correct": 5
+      },
+      "tables": {
+        "n": 6,
+        "correct": 5
+      },
+      "text": {
+        "n": 6,
+        "correct": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "id": "documents.read-or-assemble.base",
+      "group": "documents.read-or-assemble",
+      "catalogue": "documents",
+      "arm": "base",
+      "label": "c2",
+      "predicted": "c2",
+      "correct": true,
+      "top_score": 0.9918335676193237,
+      "option_count": 4,
+      "latency_ms": 710.53
+    },
+    {
+      "id": "documents.read-or-assemble.relevant",
+      "group": "documents.read-or-assemble",
+      "catalogue": "documents",
+      "arm": "relevant",
+      "label": "c0",
+      "predicted": "c0",
+      "correct": true,
+      "top_score": 0.9963298439979553,
+      "option_count": 4,
+      "latency_ms": 735.85
+    },
+    {
+      "id": "documents.read-or-assemble.irrelevant",
+      "group": "documents.read-or-assemble",
+      "catalogue": "documents",
+      "arm": "irrelevant",
+      "label": "c2",
+      "predicted": "c2",
+      "correct": true,
+      "top_score": 0.9910178184509277,
+      "option_count": 4,
+      "latency_ms": 699.94
+    },
+    {
+      "id": "documents.publish-or-sign.base",
+      "group": "documents.publish-or-sign",
+      "catalogue": "documents",
+      "arm": "base",
+      "label": "c1",
+      "predicted": "c1",
+      "correct": true,
+      "top_score": 0.9988456964492798,
+      "option_count": 4,
+      "latency_ms": 680.96
+    },
+    {
+      "id": "documents.publish-or-sign.relevant",
+      "group": "documents.publish-or-sign",
+      "catalogue": "documents",
+      "arm": "relevant",
+      "label": "none",
+      "predicted": "c1",
+      "correct": false,
+      "top_score": 0.6009256839752197,
+      "option_count": 4,
+      "latency_ms": 700.67
+    },
+    {
+      "id": "documents.publish-or-sign.irrelevant",
+      "group": "documents.publish-or-sign",
+      "catalogue": "documents",
+      "arm": "irrelevant",
+      "label": "c1",
+      "predicted": "c1",
+      "correct": true,
+      "top_score": 0.998526930809021,
+      "option_count": 4,
+      "latency_ms": 684.95
+    },
+    {
+      "id": "text.redact-or-summarize.base",
+      "group": "text.redact-or-summarize",
+      "catalogue": "text",
+      "arm": "base",
+      "label": "c1",
+      "predicted": "c1",
+      "correct": true,
+      "top_score": 0.9589618444442749,
+      "option_count": 4,
+      "latency_ms": 673.27
+    },
+    {
+      "id": "text.redact-or-summarize.relevant",
+      "group": "text.redact-or-summarize",
+      "catalogue": "text",
+      "arm": "relevant",
+      "label": "c2",
+      "predicted": "c2",
+      "correct": true,
+      "top_score": 0.9651597738265991,
+      "option_count": 4,
+      "latency_ms": 689.56
+    },
+    {
+      "id": "text.redact-or-summarize.irrelevant",
+      "group": "text.redact-or-summarize",
+      "catalogue": "text",
+      "arm": "irrelevant",
+      "label": "c1",
+      "predicted": "c1",
+      "correct": true,
+      "top_score": 0.9745912551879883,
+      "option_count": 4,
+      "latency_ms": 673.96
+    },
+    {
+      "id": "text.translate-or-transcribe.base",
+      "group": "text.translate-or-transcribe",
+      "catalogue": "text",
+      "arm": "base",
+      "label": "c0",
+      "predicted": "c0",
+      "correct": true,
+      "top_score": 0.9991011619567871,
+      "option_count": 4,
+      "latency_ms": 647.38
+    },
+    {
+      "id": "text.translate-or-transcribe.relevant",
+      "group": "text.translate-or-transcribe",
+      "catalogue": "text",
+      "arm": "relevant",
+      "label": "none",
+      "predicted": "c0",
+      "correct": false,
+      "top_score": 0.9913560152053833,
+      "option_count": 4,
+      "latency_ms": 660.3
+    },
+    {
+      "id": "text.translate-or-transcribe.irrelevant",
+      "group": "text.translate-or-transcribe",
+      "catalogue": "text",
+      "arm": "irrelevant",
+      "label": "c0",
+      "predicted": "c0",
+      "correct": true,
+      "top_score": 0.9990577101707458,
+      "option_count": 4,
+      "latency_ms": 658.65
+    },
+    {
+      "id": "tables.aggregate-or-filter.base",
+      "group": "tables.aggregate-or-filter",
+      "catalogue": "tables",
+      "arm": "base",
+      "label": "c0",
+      "predicted": "c0",
+      "correct": true,
+      "top_score": 0.9962284564971924,
+      "option_count": 4,
+      "latency_ms": 672.51
+    },
+    {
+      "id": "tables.aggregate-or-filter.relevant",
+      "group": "tables.aggregate-or-filter",
+      "catalogue": "tables",
+      "arm": "relevant",
+      "label": "c2",
+      "predicted": "c2",
+      "correct": true,
+      "top_score": 0.998356282711029,
+      "option_count": 4,
+      "latency_ms": 780.39
+    },
+    {
+      "id": "tables.aggregate-or-filter.irrelevant",
+      "group": "tables.aggregate-or-filter",
+      "catalogue": "tables",
+      "arm": "irrelevant",
+      "label": "c0",
+      "predicted": "c0",
+      "correct": true,
+      "top_score": 0.9964640736579895,
+      "option_count": 4,
+      "latency_ms": 667.6
+    },
+    {
+      "id": "tables.chart-or-forecast.base",
+      "group": "tables.chart-or-forecast",
+      "catalogue": "tables",
+      "arm": "base",
+      "label": "c1",
+      "predicted": "c1",
+      "correct": true,
+      "top_score": 0.9995337724685669,
+      "option_count": 4,
+      "latency_ms": 641.99
+    },
+    {
+      "id": "tables.chart-or-forecast.relevant",
+      "group": "tables.chart-or-forecast",
+      "catalogue": "tables",
+      "arm": "relevant",
+      "label": "none",
+      "predicted": "c0",
+      "correct": false,
+      "top_score": 0.7785376906394958,
+      "option_count": 4,
+      "latency_ms": 669.77
+    },
+    {
+      "id": "tables.chart-or-forecast.irrelevant",
+      "group": "tables.chart-or-forecast",
+      "catalogue": "tables",
+      "arm": "irrelevant",
+      "label": "c1",
+      "predicted": "c1",
+      "correct": true,
+      "top_score": 0.9997066855430603,
+      "option_count": 4,
+      "latency_ms": 678.09
+    }
+  ]
+}

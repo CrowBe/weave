@@ -1,0 +1,110 @@
+{
+  "status": "synthetic CPU fine-tuning pilot; not routing or promotion evidence",
+  "base_revision": "7ee5da4c2415e32259bcdc0b1a7367c32ce8d6f6",
+  "recipe": "60 steps, one epoch, batch 1, seed 42, float32, rank-8 LoRA on encoder query/value",
+  "sites": {
+    "capability.match": {
+      "train_sha256": "5666df39ce9e340dd37716060da7c849b3b3a8a783cb0481cf4863355277cdab",
+      "train_rows": 60,
+      "train_groups": 10,
+      "adapter_sha256": "38cb21b5ec9293971cef31209acf584a8261b872973b1d1f49e25899aa19f962",
+      "adapter_bytes": 3160056,
+      "trainable_parameters": 786432,
+      "load_s": 3.32,
+      "setup_s": 0.05,
+      "train_s": 140.79,
+      "peak_rss_kib": 4270044,
+      "global_step": 60,
+      "splits": {
+        "validation": {
+          "sha256": "30f552fd847604795e80bdb715b4b935f1edc343e999b8804ac3c365b0eadf5b",
+          "rows": 18,
+          "groups": 3,
+          "base_correct": 14,
+          "adapter_correct": 14,
+          "prediction_changes": [],
+          "base_median_ms": 991.78,
+          "adapter_median_ms": 992.635
+        },
+        "test": {
+          "sha256": "89befa093d86ffed4e00ce02a84a0c68cfc6f44d5752f5e11fbceee05c51ddce",
+          "rows": 18,
+          "groups": 3,
+          "base_correct": 16,
+          "adapter_correct": 16,
+          "prediction_changes": [],
+          "base_median_ms": 971.6949999999999,
+          "adapter_median_ms": 971.85
+        }
+      }
+    },
+    "result.evaluate": {
+      "train_sha256": "caca34cf9068a0dc772c11b5455b96ac1695083604e25cde5a92e34b70b70609",
+      "train_rows": 60,
+      "train_groups": 10,
+      "adapter_sha256": "bfba2fb96112696641f9f1b8dde709c4d084b4f37cac799759f3acc318f30a61",
+      "adapter_bytes": 3160056,
+      "trainable_parameters": 786432,
+      "load_s": 7.37,
+      "setup_s": 0.1,
+      "train_s": 138.71,
+      "peak_rss_kib": 4269588,
+      "global_step": 60,
+      "splits": {
+        "validation": {
+          "sha256": "7c61519c311746f6f15d1834843c0d6ff0f87d8eb29abf19686fb8768400541d",
+          "rows": 18,
+          "groups": 3,
+          "base_correct": 16,
+          "adapter_correct": 17,
+          "prediction_changes": [
+            {
+              "id": "evaluate.failure-versus-progress.v0.relevant",
+              "expected": "partial",
+              "base": "unmet",
+              "adapter": "partial"
+            }
+          ],
+          "base_median_ms": 770.36,
+          "adapter_median_ms": 829.895
+        },
+        "test": {
+          "sha256": "c628eeb751d95c79119415a385343522362236aae42993362b72bd2788ab844b",
+          "rows": 24,
+          "groups": 4,
+          "base_correct": 18,
+          "adapter_correct": 20,
+          "prediction_changes": [
+            {
+              "id": "evaluate.fold-input-coverage.v0.relevant",
+              "expected": "partial",
+              "base": "unmet",
+              "adapter": "partial"
+            },
+            {
+              "id": "evaluate.fold-input-coverage.v1.relevant",
+              "expected": "partial",
+              "base": "unmet",
+              "adapter": "partial"
+            },
+            {
+              "id": "evaluate.multi-stage-goal.v1.base",
+              "expected": "partial",
+              "base": "unknown",
+              "adapter": "met"
+            },
+            {
+              "id": "evaluate.multi-stage-goal.v1.irrelevant",
+              "expected": "partial",
+              "base": "unknown",
+              "adapter": "met"
+            }
+          ],
+          "base_median_ms": 757.22,
+          "adapter_median_ms": 774.145
+        }
+      }
+    }
+  },
+  "base_weights_sha256": "40a5a23ff860dc3dff426cecd1048cacdd29c648c96db209dad818e9686dc997"
+}

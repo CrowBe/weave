@@ -1,0 +1,89 @@
+{
+  "version": "weave.training-seed.v1",
+  "site": "result.evaluate",
+  "kind": "choice",
+  "status": "authored synthetic seed; no production traces",
+  "source_contracts": [
+    "packages/agentfabric/src/contracts.ts",
+    "packages/weave/src/types.ts",
+    "packages/weave/test/m0.test.ts",
+    "packages/weave/test/m1-fixture.ts"
+  ],
+  "prompt": "How well does the recorded result satisfy the stated success criterion? Classify only from the disclosed evidence.",
+  "labels": {
+    "met": "The stated success criterion is supported by the disclosed result and evidence",
+    "partial": "Some required work is evidenced, but at least one stated success condition remains unmet",
+    "unmet": "The disclosed result contradicts a required success condition or records failure",
+    "unknown": "The disclosed evidence is insufficient to tell whether the success criterion was met"
+  },
+  "groups": [
+    {"id":"evaluate.inspect-source-identity","split":"train","family":"source-inspection","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Success criterion: inspect source {a} and record its current revision and digest. Result: inspection for {a} contains revision 4 and a digest. Evidence: the host read receipt identifies {a} at revision 4.","label":"met"},
+      {"arm":"relevant","text":"Success criterion: inspect source {a} and record its current revision and digest. Result: inspection for {b} contains revision 4 and a digest. Evidence: the host read receipt identifies {b}; there is no {a} inspection.","label":"unmet"},
+      {"arm":"irrelevant","text":"Success criterion: inspect source {a} and record its current revision and digest. Result: inspection for {a} contains revision 4 and a digest. Evidence: the host read receipt identifies {a} at revision 4; the queue is called morning.","label":"met"}]},
+    {"id":"evaluate.inspect-two-sources","split":"train","family":"source-inspection","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Success criterion: inspect both {a} and {b}. Result: the {a} inspection is recorded; {b} has not been read. Evidence: one host read receipt for {a}.","label":"partial"},
+      {"arm":"relevant","text":"Success criterion: inspect both {a} and {b}. Result: inspections for both are recorded. Evidence: separate host read receipts for {a} and {b}.","label":"met"},
+      {"arm":"irrelevant","text":"Success criterion: inspect both {a} and {b}. Result: the {a} inspection is recorded; {b} has not been read. Evidence: one host read receipt for {a}; the request arrived overnight.","label":"partial"}]},
+    {"id":"evaluate.inspect-evidence-missing","split":"train","family":"source-inspection","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Success criterion: prove that {a} was inspected at its current revision. Result: a draft note says {a} was read. Evidence: no host read receipt or revision is disclosed.","label":"unknown"},
+      {"arm":"relevant","text":"Success criterion: prove that {a} was inspected at its current revision. Result: {a} was read. Evidence: a host read receipt identifies {a} and matches the current revision.","label":"met"},
+      {"arm":"irrelevant","text":"Success criterion: prove that {a} was inspected at its current revision. Result: a draft note says {a} was read. Evidence: no host read receipt or revision is disclosed; the note title is {b}.","label":"unknown"}]},
+    {"id":"evaluate.inspect-stale-revision","split":"train","family":"source-inspection","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Success criterion: inspect the current revision of {a}. Result: an inspection for revision 2 exists. Evidence: the source is now revision 3 and no revision-3 inspection exists.","label":"unmet"},
+      {"arm":"relevant","text":"Success criterion: inspect the current revision of {a}. Result: an inspection for revision 3 exists. Evidence: the source is revision 3 and the host read receipt matches.","label":"met"},
+      {"arm":"irrelevant","text":"Success criterion: inspect the current revision of {a}. Result: an inspection for revision 2 exists. Evidence: the source is now revision 3 and no revision-3 inspection exists; {b} is unrelated.","label":"unmet"}]},
+    {"id":"evaluate.assemble-source-coverage","split":"train","family":"report-assembly","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Success criterion: assemble a report covering observations from {a} and {b}. Result: the report contains sections for both. Evidence: the read set names current inspections of {a} and {b}.","label":"met"},
+      {"arm":"relevant","text":"Success criterion: assemble a report covering observations from {a} and {b}. Result: the report has only a {a} section. Evidence: the read set has no {b} inspection.","label":"partial"},
+      {"arm":"irrelevant","text":"Success criterion: assemble a report covering observations from {a} and {b}. Result: the report contains sections for {b} and {a}. Evidence: the read set names current inspections of both.","label":"met"}]},
+    {"id":"evaluate.assemble-criterion-coverage","split":"train","family":"report-assembly","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Success criterion: report the cause and mitigation recorded for {a}. Result: the report states the cause but omits the mitigation. Evidence: the {a} inspection contains both facts.","label":"partial"},
+      {"arm":"relevant","text":"Success criterion: report the cause and mitigation recorded for {a}. Result: the report states both the cause and mitigation. Evidence: the {a} inspection supports both facts.","label":"met"},
+      {"arm":"irrelevant","text":"Success criterion: report the cause and mitigation recorded for {a}. Result: the report states the cause but omits the mitigation. Evidence: the {a} inspection contains both facts; section title is {b}.","label":"partial"}]},
+    {"id":"evaluate.assemble-unsupported-claim","split":"train","family":"report-assembly","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Success criterion: report only source-backed findings about {a}. Result: the report asserts a new cause that the source never states. Evidence: the {a} inspection explicitly contradicts that cause.","label":"unmet"},
+      {"arm":"relevant","text":"Success criterion: report only source-backed findings about {a}. Result: the report states the source's recorded cause without adding claims. Evidence: the {a} inspection supports that cause.","label":"met"},
+      {"arm":"irrelevant","text":"Success criterion: report only source-backed findings about {a}. Result: the report asserts a new cause that the source never states. Evidence: the {a} inspection explicitly contradicts that cause; author is {b}.","label":"unmet"}]},
+    {"id":"evaluate.publish-receipt-identity","split":"train","family":"report-publication","variants":[{"a":"quarterly","b":"annual"},{"a":"draft","b":"final"}],"arms":[
+      {"arm":"base","text":"Success criterion: publish the checked {a} report at destination {a}. Result: publication receipt names destination {a} and the expected report digest. Evidence: committed revision is recorded.","label":"met"},
+      {"arm":"relevant","text":"Success criterion: publish the checked {a} report at destination {a}. Result: publication receipt names destination {b}, not {a}. Evidence: no write to {a} is recorded.","label":"unmet"},
+      {"arm":"irrelevant","text":"Success criterion: publish the checked {a} report at destination {a}. Result: publication receipt names destination {a} and the expected report digest. Evidence: committed revision is recorded; receipt ID is 42.","label":"met"}]},
+    {"id":"evaluate.publish-uncertain-outcome","split":"train","family":"report-publication","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Success criterion: confirm publication of the {a} report. Result: the write attempt timed out. Evidence: no receipt or destination readback is available.","label":"unknown"},
+      {"arm":"relevant","text":"Success criterion: confirm publication of the {a} report. Result: a receipt and destination readback match the {a} report digest. Evidence: committed revision is recorded.","label":"met"},
+      {"arm":"irrelevant","text":"Success criterion: confirm publication of the {a} report. Result: the write attempt timed out. Evidence: no receipt or destination readback is available; request label is {b}.","label":"unknown"}]},
+    {"id":"evaluate.publish-content-versus-effect","split":"train","family":"report-publication","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Success criterion: publish a report containing risk and owner for {a}. Result: a publication receipt exists, but the published report includes risk only. Evidence: the owner field is absent.","label":"partial"},
+      {"arm":"relevant","text":"Success criterion: publish a report containing risk and owner for {a}. Result: a publication receipt exists and the published report includes both fields. Evidence: readback confirms risk and owner.","label":"met"},
+      {"arm":"irrelevant","text":"Success criterion: publish a report containing risk and owner for {a}. Result: a publication receipt exists, but the published report includes risk only. Evidence: the owner field is absent; title is {b}.","label":"partial"}]},
+    {"id":"evaluate.publish-stale-readset","split":"validation","family":"revision-binding","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Success criterion: publish a checked report bound to current {a} and {b} revisions. Result: the receipt commits a report built from their current revisions. Evidence: the read set matches both current revisions.","label":"met"},
+      {"arm":"relevant","text":"Success criterion: publish a checked report bound to current {a} and {b} revisions. Result: the receipt commits a report built from an old {a} revision. Evidence: the current {a} revision differs from the read set.","label":"unmet"},
+      {"arm":"irrelevant","text":"Success criterion: publish a checked report bound to current {a} and {b} revisions. Result: the receipt commits a report built from their current revisions. Evidence: the read set matches both; entries are listed {b} then {a}.","label":"met"}]},
+    {"id":"evaluate.assemble-missing-readset","split":"validation","family":"evidence-gap","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Success criterion: verify that the {a} report is bound to its source revisions. Result: a report body is shown. Evidence: its read set and source revisions are undisclosed.","label":"unknown"},
+      {"arm":"relevant","text":"Success criterion: verify that the {a} report is bound to its source revisions. Result: a report body is shown. Evidence: its read set names {a} at the current revision.","label":"met"},
+      {"arm":"irrelevant","text":"Success criterion: verify that the {a} report is bound to its source revisions. Result: a report body is shown. Evidence: its read set and source revisions are undisclosed; display title is {b}.","label":"unknown"}]},
+    {"id":"evaluate.failure-versus-progress","split":"validation","family":"failure-path","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Success criterion: inspect {a} and include it in the report. Result: access to {a} was denied; no inspection or report entry exists. Evidence: host failure code is access_denied.","label":"unmet"},
+      {"arm":"relevant","text":"Success criterion: inspect {a} and include it in the report. Result: {a} was inspected but its report entry is still absent. Evidence: a read receipt exists; no assembled entry exists.","label":"partial"},
+      {"arm":"irrelevant","text":"Success criterion: inspect {a} and include it in the report. Result: access to {a} was denied; no inspection or report entry exists. Evidence: host failure code is access_denied; {b} was read separately.","label":"unmet"}]},
+    {"id":"evaluate.normalize-result","split":"test","family":"transformation","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Success criterion: return {a} text with repeated whitespace collapsed and edges trimmed. Result: the output has one space between words and no edge spaces. Evidence: output was checked against the requested normalization.","label":"met"},
+      {"arm":"relevant","text":"Success criterion: return {a} text with repeated whitespace collapsed and edges trimmed. Result: the output still has repeated spaces. Evidence: comparison shows the normalization was not performed.","label":"unmet"},
+      {"arm":"irrelevant","text":"Success criterion: return {b} text with repeated whitespace collapsed and edges trimmed. Result: the output has one space between words and no edge spaces. Evidence: output was checked against the requested normalization.","label":"met"}]},
+    {"id":"evaluate.fold-input-coverage","split":"test","family":"digest-folding","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Success criterion: fold the inspection digests for {a} and {b}. Result: the canonical fold includes both digests. Evidence: the input list and fold output agree.","label":"met"},
+      {"arm":"relevant","text":"Success criterion: fold the inspection digests for {a} and {b}. Result: the fold includes {a} only. Evidence: {b} was omitted from the fold input.","label":"partial"},
+      {"arm":"irrelevant","text":"Success criterion: fold the inspection digests for {b} and {a}. Result: the canonical fold includes both digests. Evidence: the input list and fold output agree.","label":"met"}]},
+    {"id":"evaluate.multi-stage-goal","split":"test","family":"composed-outcome","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Success criterion: inspect {a} and {b}, assemble their report, and publish it. Result: inspections and assembled report exist; no publication receipt exists. Evidence: read set covers both sources.","label":"partial"},
+      {"arm":"relevant","text":"Success criterion: inspect {a} and {b}, assemble their report, and publish it. Result: inspections, assembled report, and matching publication receipt exist. Evidence: read set and destination readback match.","label":"met"},
+      {"arm":"irrelevant","text":"Success criterion: inspect {b} and {a}, assemble their report, and publish it. Result: inspections and assembled report exist; no publication receipt exists. Evidence: read set covers both sources.","label":"partial"}]},
+    {"id":"evaluate.publish-uncertain-versus-failed","split":"test","family":"effect-outcome","variants":[{"a":"quarterly","b":"annual"},{"a":"draft","b":"final"}],"arms":[
+      {"arm":"base","text":"Success criterion: publish the {a} report. Result: the write timed out. Evidence: no receipt, failure response, or destination readback is available.","label":"unknown"},
+      {"arm":"relevant","text":"Success criterion: publish the {a} report. Result: the host rejected the write before committing it. Evidence: a definitive failure response and unchanged destination revision are recorded.","label":"unmet"},
+      {"arm":"irrelevant","text":"Success criterion: publish the {b} report. Result: the write timed out. Evidence: no receipt, failure response, or destination readback is available.","label":"unknown"}]}
+  ]
+}

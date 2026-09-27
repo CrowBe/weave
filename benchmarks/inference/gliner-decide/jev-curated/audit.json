@@ -1,0 +1,386 @@
+{
+  "version": "capability.match.jev-curation.v1",
+  "status": "fixture-derived exploratory training seed; no independent production labels or held-out quality claim",
+  "prompt": "Which one listed capability contract performs the requested operation by itself? Choose none when no single contract does. Select semantic fit only; this does not grant execution authority.",
+  "source_rows": 9,
+  "training_candidates": 8,
+  "quarantined": 1,
+  "rows": [
+    {
+      "id": "m0-inspect",
+      "group": "inspect",
+      "desired": "For one named text source, obtain its current revision, line count, and digest.",
+      "situation": "The source is registered. No inspection result exists yet.",
+      "catalogue": [
+        "source.inspect",
+        "report.assemble"
+      ],
+      "label": "source.inspect",
+      "provenance": {
+        "fixture": "packages/weave/test/fixture.ts",
+        "cycle": 1,
+        "operation": "source.inspect",
+        "candidate_id": "source.inspect#b75649b5e39f",
+        "eligibility": "allowed"
+      },
+      "presented": {
+        "c0": "{\"purpose\":\"Assemble inspection results into a report that records the read set it was assembled under\",\"input\":{\"inspections\":\"[InspectionResult]\"},\"output\":{\"entries\":\"[InspectionResult]\",\"read_set\":\"[{resource, revision}]\"},\"effects\":[]}",
+        "c1": "{\"purpose\":\"Inspect one text source and report its revision, line count, and digest\",\"input\":{\"source\":\"ResourceRef\"},\"output\":{\"source\":\"ResourceRef\",\"revision\":\"integer\",\"line_count\":\"integer\",\"digest\":\"string\"},\"effects\":[{\"input\":\"source\",\"mode\":\"read\"}]}",
+        "none": "No single listed capability performs the requested operation."
+      },
+      "expected_wire_label": "c1",
+      "jev": {
+        "status": "accepted",
+        "choice": "c1",
+        "probabilities": {
+          "none": 0,
+          "c1": 1,
+          "c0": 0
+        },
+        "routed_unit_id": "choice@typesafe-curation",
+        "spent_micros": 21.798000000000002
+      },
+      "decision": "training_candidate"
+    },
+    {
+      "id": "m0-assemble",
+      "group": "assemble",
+      "desired": "Turn the completed source inspections into a report retaining their source read set.",
+      "situation": "Both source inspection results are available.",
+      "catalogue": [
+        "source.inspect",
+        "report.assemble"
+      ],
+      "label": "report.assemble",
+      "provenance": {
+        "fixture": "packages/weave/test/fixture.ts",
+        "cycle": 3,
+        "operation": "report.assemble",
+        "candidate_id": "report.assemble#041e448b94d8",
+        "eligibility": "allowed"
+      },
+      "presented": {
+        "c0": "{\"purpose\":\"Assemble inspection results into a report that records the read set it was assembled under\",\"input\":{\"inspections\":\"[InspectionResult]\"},\"output\":{\"entries\":\"[InspectionResult]\",\"read_set\":\"[{resource, revision}]\"},\"effects\":[]}",
+        "c1": "{\"purpose\":\"Inspect one text source and report its revision, line count, and digest\",\"input\":{\"source\":\"ResourceRef\"},\"output\":{\"source\":\"ResourceRef\",\"revision\":\"integer\",\"line_count\":\"integer\",\"digest\":\"string\"},\"effects\":[{\"input\":\"source\",\"mode\":\"read\"}]}",
+        "none": "No single listed capability performs the requested operation."
+      },
+      "expected_wire_label": "c0",
+      "jev": {
+        "status": "accepted",
+        "choice": "c0",
+        "probabilities": {
+          "none": 0.01,
+          "c1": 0,
+          "c0": 0.99
+        },
+        "routed_unit_id": "choice@typesafe-curation",
+        "spent_micros": 21.503999999999998
+      },
+      "decision": "training_candidate"
+    },
+    {
+      "id": "m1-publish",
+      "group": "publish",
+      "desired": "Write the already checked report to its existing destination and return a publication receipt.",
+      "situation": "The report is assembled. The trace shows approval is required before dispatch.",
+      "catalogue": [
+        "source.inspect",
+        "report.assemble",
+        "report.publish"
+      ],
+      "label": "report.publish",
+      "provenance": {
+        "fixture": "packages/weave/test/m1-fixture.ts",
+        "cycle": 4,
+        "operation": "report.publish",
+        "candidate_id": "report.publish#791673f4219e",
+        "eligibility": "approval_required"
+      },
+      "presented": {
+        "c0": "{\"purpose\":\"Inspect one text source and report its revision, line count, and digest\",\"input\":{\"source\":\"ResourceRef\"},\"output\":{\"source\":\"ResourceRef\",\"revision\":\"integer\",\"line_count\":\"integer\",\"digest\":\"string\"},\"effects\":[{\"input\":\"source\",\"mode\":\"read\"}]}",
+        "c1": "{\"purpose\":\"Conditionally write a checked report to an existing destination\",\"input\":{\"report\":\"Report\",\"read_set\":\"[{resource, revision}]\",\"sources\":\"[ResourceRef]\",\"destination\":\"ResourceRef\",\"expected_revision\":\"integer\"},\"output\":{\"invocation_id\":\"string\",\"report_digest\":\"string\",\"destination\":\"ResourceRef\",\"committed_revision\":\"integer\"},\"effects\":[{\"input\":\"sources\",\"mode\":\"read\"},{\"input\":\"destination\",\"mode\":\"write\"}]}",
+        "c2": "{\"purpose\":\"Assemble inspection results into a report that records the read set it was assembled under\",\"input\":{\"inspections\":\"[InspectionResult]\"},\"output\":{\"entries\":\"[InspectionResult]\",\"read_set\":\"[{resource, revision}]\"},\"effects\":[]}",
+        "none": "No single listed capability performs the requested operation."
+      },
+      "expected_wire_label": "c1",
+      "jev": {
+        "status": "accepted",
+        "choice": "c1",
+        "probabilities": {
+          "c2": 0,
+          "none": 0.36,
+          "c0": 0,
+          "c1": 0.64
+        },
+        "routed_unit_id": "choice@typesafe-curation",
+        "spent_micros": 26.586
+      },
+      "decision": "training_candidate"
+    },
+    {
+      "id": "m3-fold-gap",
+      "group": "fold-admission",
+      "desired": "Fold the inspection digests into one canonical digest.",
+      "situation": "The fold implementation has not been admitted. The trace opens a capability gap.",
+      "catalogue": [
+        "source.inspect",
+        "report.assemble",
+        "report.publish"
+      ],
+      "label": "none",
+      "provenance": {
+        "fixture": "packages/weave/test/m3-fixture.ts",
+        "cycle": 1,
+        "operation": "gap.search",
+        "candidate_id": "gap.search#5f349f0f5771",
+        "eligibility": "allowed"
+      },
+      "presented": {
+        "c0": "{\"purpose\":\"Inspect one text source and report its revision, line count, and digest\",\"input\":{\"source\":\"ResourceRef\"},\"output\":{\"source\":\"ResourceRef\",\"revision\":\"integer\",\"line_count\":\"integer\",\"digest\":\"string\"},\"effects\":[{\"input\":\"source\",\"mode\":\"read\"}]}",
+        "c1": "{\"purpose\":\"Conditionally write a checked report to an existing destination\",\"input\":{\"report\":\"Report\",\"read_set\":\"[{resource, revision}]\",\"sources\":\"[ResourceRef]\",\"destination\":\"ResourceRef\",\"expected_revision\":\"integer\"},\"output\":{\"invocation_id\":\"string\",\"report_digest\":\"string\",\"destination\":\"ResourceRef\",\"committed_revision\":\"integer\"},\"effects\":[{\"input\":\"sources\",\"mode\":\"read\"},{\"input\":\"destination\",\"mode\":\"write\"}]}",
+        "c2": "{\"purpose\":\"Assemble inspection results into a report that records the read set it was assembled under\",\"input\":{\"inspections\":\"[InspectionResult]\"},\"output\":{\"entries\":\"[InspectionResult]\",\"read_set\":\"[{resource, revision}]\"},\"effects\":[]}",
+        "none": "No single listed capability performs the requested operation."
+      },
+      "expected_wire_label": "none",
+      "jev": {
+        "status": "accepted",
+        "choice": "none",
+        "probabilities": {
+          "c2": 0.05,
+          "c1": 0,
+          "none": 0.95,
+          "c0": 0
+        },
+        "routed_unit_id": "choice@typesafe-curation",
+        "spent_micros": 26.418
+      },
+      "decision": "training_candidate"
+    },
+    {
+      "id": "m3-fold-admitted",
+      "group": "fold-admission",
+      "desired": "Fold the inspection digests into one canonical digest.",
+      "situation": "The fold implementation is now admitted; inspection results are available.",
+      "catalogue": [
+        "source.inspect",
+        "report.assemble",
+        "report.publish",
+        "report.fold"
+      ],
+      "label": "report.fold",
+      "provenance": {
+        "fixture": "packages/weave/test/m3-fixture.ts",
+        "cycle": 15,
+        "operation": "report.fold",
+        "candidate_id": "report.fold#554424d47163",
+        "eligibility": "allowed"
+      },
+      "presented": {
+        "c0": "{\"purpose\":\"Assemble inspection results into a report that records the read set it was assembled under\",\"input\":{\"inspections\":\"[InspectionResult]\"},\"output\":{\"entries\":\"[InspectionResult]\",\"read_set\":\"[{resource, revision}]\"},\"effects\":[]}",
+        "c1": "{\"purpose\":\"Inspect one text source and report its revision, line count, and digest\",\"input\":{\"source\":\"ResourceRef\"},\"output\":{\"source\":\"ResourceRef\",\"revision\":\"integer\",\"line_count\":\"integer\",\"digest\":\"string\"},\"effects\":[{\"input\":\"source\",\"mode\":\"read\"}]}",
+        "c2": "{\"purpose\":\"Conditionally write a checked report to an existing destination\",\"input\":{\"report\":\"Report\",\"read_set\":\"[{resource, revision}]\",\"sources\":\"[ResourceRef]\",\"destination\":\"ResourceRef\",\"expected_revision\":\"integer\"},\"output\":{\"invocation_id\":\"string\",\"report_digest\":\"string\",\"destination\":\"ResourceRef\",\"committed_revision\":\"integer\"},\"effects\":[{\"input\":\"sources\",\"mode\":\"read\"},{\"input\":\"destination\",\"mode\":\"write\"}]}",
+        "c3": "{\"purpose\":\"Fold inspection digests into one canonical digest\",\"input\":{\"inspections\":\"[InspectionResult]\"},\"output\":{\"fold\":\"string\"},\"effects\":[]}",
+        "none": "No single listed capability performs the requested operation."
+      },
+      "expected_wire_label": "c3",
+      "jev": {
+        "status": "accepted",
+        "choice": "c3",
+        "probabilities": {
+          "c2": 0,
+          "c1": 0,
+          "none": 0,
+          "c0": 0,
+          "c3": 1
+        },
+        "routed_unit_id": "choice@typesafe-curation",
+        "spent_micros": 28.35
+      },
+      "decision": "training_candidate"
+    },
+    {
+      "id": "m3-assemble-after-fold",
+      "group": "assemble",
+      "desired": "Assemble the inspection results and the already computed fold into the checked report.",
+      "situation": "The fold action has completed. The report still needs assembly.",
+      "catalogue": [
+        "source.inspect",
+        "report.assemble",
+        "report.publish",
+        "report.fold"
+      ],
+      "label": "report.assemble",
+      "provenance": {
+        "fixture": "packages/weave/test/m3-fixture.ts",
+        "cycle": 16,
+        "operation": "report.assemble",
+        "candidate_id": "report.assemble#84832d0b3e1a",
+        "eligibility": "allowed"
+      },
+      "presented": {
+        "c0": "{\"purpose\":\"Conditionally write a checked report to an existing destination\",\"input\":{\"report\":\"Report\",\"read_set\":\"[{resource, revision}]\",\"sources\":\"[ResourceRef]\",\"destination\":\"ResourceRef\",\"expected_revision\":\"integer\"},\"output\":{\"invocation_id\":\"string\",\"report_digest\":\"string\",\"destination\":\"ResourceRef\",\"committed_revision\":\"integer\"},\"effects\":[{\"input\":\"sources\",\"mode\":\"read\"},{\"input\":\"destination\",\"mode\":\"write\"}]}",
+        "c1": "{\"purpose\":\"Fold inspection digests into one canonical digest\",\"input\":{\"inspections\":\"[InspectionResult]\"},\"output\":{\"fold\":\"string\"},\"effects\":[]}",
+        "c2": "{\"purpose\":\"Assemble inspection results into a report that records the read set it was assembled under\",\"input\":{\"inspections\":\"[InspectionResult]\"},\"output\":{\"entries\":\"[InspectionResult]\",\"read_set\":\"[{resource, revision}]\"},\"effects\":[]}",
+        "c3": "{\"purpose\":\"Inspect one text source and report its revision, line count, and digest\",\"input\":{\"source\":\"ResourceRef\"},\"output\":{\"source\":\"ResourceRef\",\"revision\":\"integer\",\"line_count\":\"integer\",\"digest\":\"string\"},\"effects\":[{\"input\":\"source\",\"mode\":\"read\"}]}",
+        "none": "No single listed capability performs the requested operation."
+      },
+      "expected_wire_label": "c2",
+      "jev": {
+        "status": "accepted",
+        "choice": "none",
+        "probabilities": {
+          "none": 0.94,
+          "c1": 0,
+          "c3": 0,
+          "c0": 0.05,
+          "c2": 0.01
+        },
+        "routed_unit_id": "choice@typesafe-curation",
+        "spent_micros": 28.601999999999997
+      },
+      "decision": "quarantine"
+    },
+    {
+      "id": "contrast-inspect-and-publish",
+      "group": "composition-gap",
+      "desired": "In one operation, inspect an unexamined source, assemble a checked report, and publish it.",
+      "situation": "No inspection result or checked report exists.",
+      "catalogue": [
+        "source.inspect",
+        "report.assemble",
+        "report.publish"
+      ],
+      "label": "none",
+      "provenance": {
+        "contract_contrast": [
+          "source.inspect",
+          "report.assemble",
+          "report.publish"
+        ]
+      },
+      "presented": {
+        "c0": "{\"purpose\":\"Assemble inspection results into a report that records the read set it was assembled under\",\"input\":{\"inspections\":\"[InspectionResult]\"},\"output\":{\"entries\":\"[InspectionResult]\",\"read_set\":\"[{resource, revision}]\"},\"effects\":[]}",
+        "c1": "{\"purpose\":\"Conditionally write a checked report to an existing destination\",\"input\":{\"report\":\"Report\",\"read_set\":\"[{resource, revision}]\",\"sources\":\"[ResourceRef]\",\"destination\":\"ResourceRef\",\"expected_revision\":\"integer\"},\"output\":{\"invocation_id\":\"string\",\"report_digest\":\"string\",\"destination\":\"ResourceRef\",\"committed_revision\":\"integer\"},\"effects\":[{\"input\":\"sources\",\"mode\":\"read\"},{\"input\":\"destination\",\"mode\":\"write\"}]}",
+        "c2": "{\"purpose\":\"Inspect one text source and report its revision, line count, and digest\",\"input\":{\"source\":\"ResourceRef\"},\"output\":{\"source\":\"ResourceRef\",\"revision\":\"integer\",\"line_count\":\"integer\",\"digest\":\"string\"},\"effects\":[{\"input\":\"source\",\"mode\":\"read\"}]}",
+        "none": "No single listed capability performs the requested operation."
+      },
+      "expected_wire_label": "none",
+      "jev": {
+        "status": "accepted",
+        "choice": "none",
+        "probabilities": {
+          "c1": 0.01,
+          "c2": 0,
+          "c0": 0,
+          "none": 0.99
+        },
+        "routed_unit_id": "choice@typesafe-curation",
+        "spent_micros": 26.586
+      },
+      "decision": "training_candidate"
+    },
+    {
+      "id": "contrast-redact",
+      "group": "text-gap",
+      "desired": "Remove personal names from a text value while keeping the other words unchanged.",
+      "situation": "The available text operation only collapses whitespace.",
+      "catalogue": [
+        "source.inspect",
+        "report.assemble",
+        "report.publish",
+        "text.normalize"
+      ],
+      "label": "none",
+      "provenance": {
+        "contract_contrast": [
+          "text.normalize"
+        ]
+      },
+      "presented": {
+        "c0": "{\"purpose\":\"Inspect one text source and report its revision, line count, and digest\",\"input\":{\"source\":\"ResourceRef\"},\"output\":{\"source\":\"ResourceRef\",\"revision\":\"integer\",\"line_count\":\"integer\",\"digest\":\"string\"},\"effects\":[{\"input\":\"source\",\"mode\":\"read\"}]}",
+        "c1": "{\"purpose\":\"Conditionally write a checked report to an existing destination\",\"input\":{\"report\":\"Report\",\"read_set\":\"[{resource, revision}]\",\"sources\":\"[ResourceRef]\",\"destination\":\"ResourceRef\",\"expected_revision\":\"integer\"},\"output\":{\"invocation_id\":\"string\",\"report_digest\":\"string\",\"destination\":\"ResourceRef\",\"committed_revision\":\"integer\"},\"effects\":[{\"input\":\"sources\",\"mode\":\"read\"},{\"input\":\"destination\",\"mode\":\"write\"}]}",
+        "c2": "{\"purpose\":\"Assemble inspection results into a report that records the read set it was assembled under\",\"input\":{\"inspections\":\"[InspectionResult]\"},\"output\":{\"entries\":\"[InspectionResult]\",\"read_set\":\"[{resource, revision}]\"},\"effects\":[]}",
+        "c3": "{\"purpose\":\"Collapse whitespace in one text value\",\"input\":{\"text\":\"string\"},\"output\":{\"text\":\"string\"},\"effects\":[]}",
+        "none": "No single listed capability performs the requested operation."
+      },
+      "expected_wire_label": "none",
+      "jev": {
+        "status": "accepted",
+        "choice": "none",
+        "probabilities": {
+          "none": 0.99,
+          "c3": 0.01,
+          "c1": 0,
+          "c2": 0,
+          "c0": 0
+        },
+        "routed_unit_id": "choice@typesafe-curation",
+        "spent_micros": 28.014
+      },
+      "decision": "training_candidate"
+    },
+    {
+      "id": "contrast-normalize",
+      "group": "text-gap",
+      "desired": "Collapse repeated spaces and line breaks in one supplied text value.",
+      "situation": "A text value is supplied.",
+      "catalogue": [
+        "source.inspect",
+        "report.assemble",
+        "report.publish",
+        "text.normalize"
+      ],
+      "label": "text.normalize",
+      "provenance": {
+        "contract_source": "packages/weave/src/normalize-author.ts"
+      },
+      "presented": {
+        "c0": "{\"purpose\":\"Inspect one text source and report its revision, line count, and digest\",\"input\":{\"source\":\"ResourceRef\"},\"output\":{\"source\":\"ResourceRef\",\"revision\":\"integer\",\"line_count\":\"integer\",\"digest\":\"string\"},\"effects\":[{\"input\":\"source\",\"mode\":\"read\"}]}",
+        "c1": "{\"purpose\":\"Assemble inspection results into a report that records the read set it was assembled under\",\"input\":{\"inspections\":\"[InspectionResult]\"},\"output\":{\"entries\":\"[InspectionResult]\",\"read_set\":\"[{resource, revision}]\"},\"effects\":[]}",
+        "c2": "{\"purpose\":\"Collapse whitespace in one text value\",\"input\":{\"text\":\"string\"},\"output\":{\"text\":\"string\"},\"effects\":[]}",
+        "c3": "{\"purpose\":\"Conditionally write a checked report to an existing destination\",\"input\":{\"report\":\"Report\",\"read_set\":\"[{resource, revision}]\",\"sources\":\"[ResourceRef]\",\"destination\":\"ResourceRef\",\"expected_revision\":\"integer\"},\"output\":{\"invocation_id\":\"string\",\"report_digest\":\"string\",\"destination\":\"ResourceRef\",\"committed_revision\":\"integer\"},\"effects\":[{\"input\":\"sources\",\"mode\":\"read\"},{\"input\":\"destination\",\"mode\":\"write\"}]}",
+        "none": "No single listed capability performs the requested operation."
+      },
+      "expected_wire_label": "c2",
+      "jev": {
+        "status": "accepted",
+        "choice": "c2",
+        "probabilities": {
+          "c3": 0,
+          "c0": 0,
+          "none": 0,
+          "c1": 0,
+          "c2": 1
+        },
+        "routed_unit_id": "choice@typesafe-curation",
+        "spent_micros": 27.762
+      },
+      "decision": "training_candidate"
+    }
+  ],
+  "model": "jev-latest",
+  "destination": "typesafe-ai",
+  "contract_revisions": {
+    "source.inspect": {
+      "revision": "r1",
+      "sha256": "bf8b7ceb95294a8f0a6e04a81eaa96ea564c774c8f3fc674aa4c84b72c1d1419"
+    },
+    "report.assemble": {
+      "revision": "r1",
+      "sha256": "96ec02ba2b50588ffed2f3e1692814e2a1e7902823191d676fc7eb3d63ef198e"
+    },
+    "report.publish": {
+      "revision": "r1",
+      "sha256": "a8ca018164bd2a83a38feb7d3ff20d7f9a08618a47abb4ed3d2867b682dc8d87"
+    },
+    "text.normalize": {
+      "revision": "r1",
+      "sha256": "a84497f98648e2b3dcf066c2f5f54c0c1759b76803f469764617048969c71893"
+    },
+    "report.fold": {
+      "revision": "r1",
+      "sha256": "d67eaa851a1a28f1ab8dc103903e3b1289d2549509384bc5a3441cb1c854baee"
+    }
+  },
+  "source_sha256": "51d3a9752523038e72b3473b74be39994c12a08ac8506dc8e3909c947ab2ca15"
+}

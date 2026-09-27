@@ -1,0 +1,142 @@
+{
+  "version": "capability.match.choice.v1",
+  "site": "capability.match",
+  "kind": "choice",
+  "candidate_scope": "Illustrative catalogue entries for an offline semantic matching experiment; not admitted Weave capabilities",
+  "catalogues": {
+    "documents": {
+      "c2": "Read a named source and return source-backed observations without producing a report",
+      "c0": "Turn already collected observations into a report draft without publishing it",
+      "c1": "Write an already assembled report to the designated report resource",
+      "none": "None of these operations satisfies the desired operation"
+    },
+    "text": {
+      "c1": "Remove personal identifiers from supplied text and return redacted text",
+      "c2": "Summarize supplied text while preserving its main claims",
+      "c0": "Translate supplied written text into a requested language",
+      "none": "None of these operations satisfies the desired operation"
+    },
+    "tables": {
+      "c0": "Calculate grouped totals and counts from supplied table rows",
+      "c2": "Select table rows that satisfy a supplied predicate",
+      "c1": "Create a chart from supplied numerical table rows",
+      "none": "None of these operations satisfies the desired operation"
+    },
+    "calendar": {
+      "c1": "Find free time slots for attendees without creating an event",
+      "c0": "Create a calendar event for a specified time and attendees",
+      "c2": "Cancel an existing calendar event by its reference",
+      "none": "None of these operations satisfies the desired operation"
+    },
+    "code": {
+      "c2": "Run the existing test suite and return its results without editing code",
+      "c1": "Format supplied source code and return the formatted code",
+      "c0": "Build a software package from source and return the build artifact",
+      "none": "None of these operations satisfies the desired operation"
+    },
+    "messages": {
+      "c0": "Draft a message for review without sending it",
+      "c2": "Send an already approved message to its named recipient",
+      "c1": "Archive an inbox message without deleting it",
+      "none": "None of these operations satisfies the desired operation"
+    }
+  },
+  "groups": [
+    {
+      "id": "documents.read-or-assemble", "split": "development", "catalogue": "documents",
+      "arms": [
+        {"arm": "base", "desired": "Obtain source-backed observations from the unread audit ledger. The report can wait.", "label": "c2"},
+        {"arm": "relevant", "desired": "The audit ledger has been read and its observations are available. Produce the report draft now, leaving publication for later.", "label": "c0"},
+        {"arm": "irrelevant", "desired": "Obtain source-backed observations from the unread inventory ledger. The report can wait.", "label": "c2"}
+      ]
+    },
+    {
+      "id": "documents.publish-or-sign", "split": "development", "catalogue": "documents",
+      "arms": [
+        {"arm": "base", "desired": "The report is assembled. Place it in the designated reporting resource.", "label": "c1"},
+        {"arm": "relevant", "desired": "The report is assembled. Apply a cryptographic signature to it, then return the signed document.", "label": "none"},
+        {"arm": "irrelevant", "desired": "The report is assembled. Place it in the designated quarterly reporting resource.", "label": "c1"}
+      ]
+    },
+    {
+      "id": "text.redact-or-summarize", "split": "development", "catalogue": "text",
+      "arms": [
+        {"arm": "base", "desired": "Return the supplied complaint with names, phone numbers, and addresses removed while keeping the complaint text.", "label": "c1"},
+        {"arm": "relevant", "desired": "Return a short account of the complaint's main claims. Keep the original identifiers in the source; no redacted copy is requested.", "label": "c2"},
+        {"arm": "irrelevant", "desired": "Return the supplied support note with names, phone numbers, and addresses removed while keeping the note text.", "label": "c1"}
+      ]
+    },
+    {
+      "id": "text.translate-or-transcribe", "split": "development", "catalogue": "text",
+      "arms": [
+        {"arm": "base", "desired": "Render this written French notice in English and return the translated text.", "label": "c0"},
+        {"arm": "relevant", "desired": "Listen to this French audio recording and return a transcript in French.", "label": "none"},
+        {"arm": "irrelevant", "desired": "Render this written Spanish notice in English and return the translated text.", "label": "c0"}
+      ]
+    },
+    {
+      "id": "tables.aggregate-or-filter", "split": "development", "catalogue": "tables",
+      "arms": [
+        {"arm": "base", "desired": "From the supplied sales rows, return the total amount and row count for each region.", "label": "c0"},
+        {"arm": "relevant", "desired": "From the supplied sales rows, return only entries whose region is west; no totals are needed.", "label": "c2"},
+        {"arm": "irrelevant", "desired": "From the supplied expense rows, return the total amount and row count for each region.", "label": "c0"}
+      ]
+    },
+    {
+      "id": "tables.chart-or-forecast", "split": "development", "catalogue": "tables",
+      "arms": [
+        {"arm": "base", "desired": "Plot the supplied monthly revenue rows as a chart for review.", "label": "c1"},
+        {"arm": "relevant", "desired": "Predict next month's revenue from the supplied monthly rows and return a numeric forecast.", "label": "none"},
+        {"arm": "irrelevant", "desired": "Plot the supplied monthly cost rows as a chart for review.", "label": "c1"}
+      ]
+    },
+    {
+      "id": "calendar.search-or-create", "split": "test", "catalogue": "calendar",
+      "arms": [
+        {"arm": "base", "desired": "Find a free half-hour for Maya and Lee next week; leave their calendars unchanged.", "label": "c1"},
+        {"arm": "relevant", "desired": "Book a half-hour event for Maya and Lee at 10:00 next Tuesday.", "label": "c0"},
+        {"arm": "irrelevant", "desired": "Find a free half-hour for Ada and Lee next week; leave their calendars unchanged.", "label": "c1"}
+      ]
+    },
+    {
+      "id": "calendar.cancel-or-book-travel", "split": "test", "catalogue": "calendar",
+      "arms": [
+        {"arm": "base", "desired": "Remove the existing calendar event for the Friday planning meeting using its event reference.", "label": "c2"},
+        {"arm": "relevant", "desired": "Book train travel for the Friday planning meeting and return a ticket confirmation.", "label": "none"},
+        {"arm": "irrelevant", "desired": "Remove the existing calendar event for the Friday design meeting using its event reference.", "label": "c2"}
+      ]
+    },
+    {
+      "id": "code.test-or-build", "split": "test", "catalogue": "code",
+      "arms": [
+        {"arm": "base", "desired": "Execute the existing tests for this package and report which passed or failed. Do not change source files.", "label": "c2"},
+        {"arm": "relevant", "desired": "Compile this package and return the resulting distributable artifact.", "label": "c0"},
+        {"arm": "irrelevant", "desired": "Execute the existing tests for the parser package and report which passed or failed. Do not change source files.", "label": "c2"}
+      ]
+    },
+    {
+      "id": "code.format-or-scan", "split": "test", "catalogue": "code",
+      "arms": [
+        {"arm": "base", "desired": "Apply the project's formatting rules to this source file and return formatted code.", "label": "c1"},
+        {"arm": "relevant", "desired": "Inspect this source file for known security vulnerabilities and return a finding report.", "label": "none"},
+        {"arm": "irrelevant", "desired": "Apply the project's formatting rules to the parser source file and return formatted code.", "label": "c1"}
+      ]
+    },
+    {
+      "id": "messages.draft-or-send", "split": "test", "catalogue": "messages",
+      "arms": [
+        {"arm": "base", "desired": "Prepare a reply to the requester for review. Do not transmit it yet.", "label": "c0"},
+        {"arm": "relevant", "desired": "The reply has been approved. Transmit that exact message to the requester now.", "label": "c2"},
+        {"arm": "irrelevant", "desired": "Prepare a reply to the maintainer for review. Do not transmit it yet.", "label": "c0"}
+      ]
+    },
+    {
+      "id": "messages.archive-or-delete", "split": "test", "catalogue": "messages",
+      "arms": [
+        {"arm": "base", "desired": "Move the reviewed inbox message into the archive, retaining it for later retrieval.", "label": "c1"},
+        {"arm": "relevant", "desired": "Permanently erase the reviewed inbox message so it cannot be retrieved.", "label": "none"},
+        {"arm": "irrelevant", "desired": "Move the reviewed newsletter message into the archive, retaining it for later retrieval.", "label": "c1"}
+      ]
+    }
+  ]
+}

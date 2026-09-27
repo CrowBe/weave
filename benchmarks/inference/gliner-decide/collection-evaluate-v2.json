@@ -1,0 +1,1206 @@
+{
+  "version": "weave.training-seed.v1",
+  "site": "result.evaluate",
+  "kind": "choice",
+  "status": "authored synthetic seed; no production traces; new v2 scenario families",
+  "source_contracts": [
+    "packages/agentfabric/src/contracts.ts",
+    "packages/weave/src/types.ts",
+    "packages/weave/src/validation.ts",
+    "packages/weave/src/candidates.ts",
+    "packages/weave/test/m1.test.ts"
+  ],
+  "prompt": "How well does the recorded outcome satisfy the stated success criterion? Judge only from disclosed evidence. Claims, plans, summaries, and model output are not proof of an effect.",
+  "labels": {
+    "met": "The stated success criterion is supported by the disclosed result and evidence.",
+    "partial": "Some required work is evidenced, but at least one stated condition remains unmet or incomplete.",
+    "unmet": "Disclosed evidence shows a required condition failed, was contradicted, or did not occur.",
+    "unknown": "Disclosed evidence is insufficient or conflicting, so the criterion cannot be established."
+  },
+  "groups": [
+    {
+      "id": "eval2.reconciliation-confirmed",
+      "split": "train",
+      "family": "effect-reconciliation",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Confirm that {a} committed. Result: The lookup reports committed and returns invocation {a}. Evidence: Host lookup record: committed; invocation identity matches. The workspace theme is {b}.",
+          "label": "met"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Confirm that {a} committed. Result: The lookup reports not committed and confirms no effect for {a}. Evidence: Host lookup record: stopped before commit; destination unchanged.",
+          "label": "unmet"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Confirm that {a} committed. Result: The lookup reports committed and returns invocation {a}. Evidence: Host lookup record: committed; invocation identity matches. The unrelated display tag is {b}.",
+          "label": "met"
+        }
+      ]
+    },
+    {
+      "id": "eval2.reconciliation-partial",
+      "split": "train",
+      "family": "effect-reconciliation",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Confirm both the status and identity of {a}. Result: The lookup confirms committed status, but omits invocation identity. Evidence: Status is terminal; invocation identity is absent. The workspace theme is {b}.",
+          "label": "partial"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Confirm both the status and identity of {a}. Result: The lookup confirms committed status and matching invocation identity. Evidence: Host lookup binds committed status to the requested invocation.",
+          "label": "met"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Confirm both the status and identity of {a}. Result: The lookup confirms committed status, but omits invocation identity. Evidence: Status is terminal; invocation identity is absent. The unrelated display tag is {b}.",
+          "label": "partial"
+        }
+      ]
+    },
+    {
+      "id": "eval2.write-readback",
+      "split": "train",
+      "family": "effect-reconciliation",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Verify that the destination contains the expected {a} digest. Result: A write receipt exists but readback has a different digest. Evidence: Readback digest differs from the expected digest. The workspace theme is {b}.",
+          "label": "unmet"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Verify that the destination contains the expected {a} digest. Result: A write receipt exists; destination readback was not obtained. Evidence: Receipt records an attempt, but resulting content is not disclosed.",
+          "label": "unknown"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Verify that the destination contains the expected {a} digest. Result: A write receipt exists but readback has a different digest. Evidence: Readback digest differs from the expected digest. The unrelated display tag is {b}.",
+          "label": "unmet"
+        }
+      ]
+    },
+    {
+      "id": "eval2.readback-fields",
+      "split": "train",
+      "family": "effect-reconciliation",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Verify destination {a} contains fields {b} and owner. Result: Readback text is not disclosed. Evidence: Only a success message is shown, without destination content. The workspace theme is {b}.",
+          "label": "unknown"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Verify destination {a} contains fields {b} and owner. Result: Readback contains {b}, but owner is missing. Evidence: Readback evidence omits owner.",
+          "label": "partial"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Verify destination {a} contains fields {b} and owner. Result: Readback text is not disclosed. Evidence: Only a success message is shown, without destination content. The unrelated display tag is {b}.",
+          "label": "unknown"
+        }
+      ]
+    },
+    {
+      "id": "eval2.failed-before-effect",
+      "split": "train",
+      "family": "failure-and-uncertainty",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Complete effect {a} successfully. Result: The host rejected the request before execution. Evidence: Definitive rejection and unchanged destination revision are recorded. The workspace theme is {b}.",
+          "label": "unmet"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Complete effect {a} successfully. Result: The host accepted the request and returned a matching receipt. Evidence: Receipt confirms the requested effect committed.",
+          "label": "met"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Complete effect {a} successfully. Result: The host rejected the request before execution. Evidence: Definitive rejection and unchanged destination revision are recorded. The unrelated display tag is {b}.",
+          "label": "unmet"
+        }
+      ]
+    },
+    {
+      "id": "eval2.failure-some-steps",
+      "split": "train",
+      "family": "failure-and-uncertainty",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Complete both {a} and {b} steps. Result: Step {a} succeeded; step {b} returned a definitive failure. Evidence: Receipts show first step committed and second failed. The workspace theme is {b}.",
+          "label": "partial"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Complete both {a} and {b} steps. Result: Both steps have matching success receipts. Evidence: Receipts bind both requested steps to committed outcomes.",
+          "label": "met"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Complete both {a} and {b} steps. Result: Step {a} succeeded; step {b} returned a definitive failure. Evidence: Receipts show first step committed and second failed. The unrelated display tag is {b}.",
+          "label": "partial"
+        }
+      ]
+    },
+    {
+      "id": "eval2.retry-idempotency",
+      "split": "train",
+      "family": "retry-and-identity",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Retry {a} without creating a duplicate effect. Result: The retry lookup finds the original committed invocation. Evidence: Matching idempotency key and one committed invocation are recorded. The workspace theme is {b}.",
+          "label": "met"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Retry {a} without creating a duplicate effect. Result: The retry creates a second committed invocation. Evidence: Two distinct committed invocation IDs share the request key.",
+          "label": "unmet"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Retry {a} without creating a duplicate effect. Result: The retry lookup finds the original committed invocation. Evidence: Matching idempotency key and one committed invocation are recorded. The unrelated display tag is {b}.",
+          "label": "met"
+        }
+      ]
+    },
+    {
+      "id": "eval2.retry-dedup-key",
+      "split": "train",
+      "family": "retry-and-identity",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Ensure {a} and its retry share the same idempotency key. Result: The retry key is not included in the trace. Evidence: No key or invocation comparison is disclosed. The workspace theme is {b}.",
+          "label": "unknown"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Ensure {a} and its retry share the same idempotency key. Result: The retry uses a different key and commits separately. Evidence: Attempt records show different keys and two invocation IDs.",
+          "label": "unmet"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Ensure {a} and its retry share the same idempotency key. Result: The retry key is not included in the trace. Evidence: No key or invocation comparison is disclosed. The unrelated display tag is {b}.",
+          "label": "unknown"
+        }
+      ]
+    },
+    {
+      "id": "eval2.retry-no-claim",
+      "split": "train",
+      "family": "retry-and-identity",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Establish whether retrying {a} duplicated the effect. Result: Trace shows one terminal committed invocation. Evidence: Host lookup enumerates one matching invocation. The workspace theme is {b}.",
+          "label": "met"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Establish whether retrying {a} duplicated the effect. Result: The summary says “retried safely” but trace is omitted. Evidence: A narrative claim alone supplies no invocation evidence.",
+          "label": "unknown"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Establish whether retrying {a} duplicated the effect. Result: Trace shows one terminal committed invocation. Evidence: Host lookup enumerates one matching invocation. The unrelated display tag is {b}.",
+          "label": "met"
+        }
+      ]
+    },
+    {
+      "id": "eval2.approval-bound",
+      "split": "train",
+      "family": "approval-and-scope",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Publish {a} only under approval bound to its digest. Result: The approval is for a different report digest. Evidence: Binding digest differs from the effect request. The workspace theme is {b}.",
+          "label": "unmet"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Publish {a} only under approval bound to its digest. Result: An approval is mentioned but its binding is absent. Evidence: No decision record or bound digest is disclosed.",
+          "label": "unknown"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Publish {a} only under approval bound to its digest. Result: The approval is for a different report digest. Evidence: Binding digest differs from the effect request. The unrelated display tag is {b}.",
+          "label": "unmet"
+        }
+      ]
+    },
+    {
+      "id": "eval2.approval-record",
+      "split": "train",
+      "family": "approval-and-scope",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Have a current, in-scope approval for {a} from an entitled principal. Result: A message says “approved” with no authenticated decision. Evidence: No principal, scope, or decision record is present. The workspace theme is {b}.",
+          "label": "unknown"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Have a current, in-scope approval for {a} from an entitled principal. Result: The entitled principal approved the current request. Evidence: Decision record is approved, in scope, and current.",
+          "label": "met"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Have a current, in-scope approval for {a} from an entitled principal. Result: A message says “approved” with no authenticated decision. Evidence: No principal, scope, or decision record is present. The unrelated display tag is {b}.",
+          "label": "unknown"
+        }
+      ]
+    },
+    {
+      "id": "eval2.approval-expired",
+      "split": "train",
+      "family": "approval-and-scope",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Use an approval that remains valid at execution time for {a}. Result: The execution tick is within the approval validity interval. Evidence: Bound request and approval interval include the execution tick. The workspace theme is {b}.",
+          "label": "met"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Use an approval that remains valid at execution time for {a}. Result: Execution occurs after the approval expiry tick. Evidence: Recorded clock tick is later than valid_until_tick.",
+          "label": "unmet"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Use an approval that remains valid at execution time for {a}. Result: The execution tick is within the approval validity interval. Evidence: Bound request and approval interval include the execution tick. The unrelated display tag is {b}.",
+          "label": "met"
+        }
+      ]
+    },
+    {
+      "id": "eval2.approval-revoked",
+      "split": "train",
+      "family": "approval-and-scope",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Ensure {a} is not published after its approval is revoked. Result: A write commits after revocation. Evidence: Ordered trace places revocation before committed write. The workspace theme is {b}.",
+          "label": "unmet"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Ensure {a} is not published after its approval is revoked. Result: A revocation notice exists but ordering and effect status are absent. Evidence: No sequence or destination evidence resolves the outcome.",
+          "label": "unknown"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Ensure {a} is not published after its approval is revoked. Result: A write commits after revocation. Evidence: Ordered trace places revocation before committed write. The unrelated display tag is {b}.",
+          "label": "unmet"
+        }
+      ]
+    },
+    {
+      "id": "eval2.approval-principal",
+      "split": "train",
+      "family": "approval-and-scope",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Verify the decision principal is entitled to approve {a}. Result: Principal identity is redacted from all records. Evidence: Entitlement cannot be checked from disclosed evidence. The workspace theme is {b}.",
+          "label": "unknown"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Verify the decision principal is entitled to approve {a}. Result: Authority record grants this principal the required scope. Evidence: Decision principal and current authority record match.",
+          "label": "met"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Verify the decision principal is entitled to approve {a}. Result: Principal identity is redacted from all records. Evidence: Entitlement cannot be checked from disclosed evidence. The unrelated display tag is {b}.",
+          "label": "unknown"
+        }
+      ]
+    },
+    {
+      "id": "eval2.cancel-before-commit",
+      "split": "train",
+      "family": "cancellation-and-ordering",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Cancel {a} before commit and leave no effect. Result: Cancellation is acknowledged before commit; destination is unchanged. Evidence: Ordered host evidence confirms stopped execution and no write. The workspace theme is {b}.",
+          "label": "met"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Cancel {a} before commit and leave no effect. Result: Commit occurs before cancellation takes effect. Evidence: Receipt sequence places commit before cancel acknowledgement.",
+          "label": "unmet"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Cancel {a} before commit and leave no effect. Result: Cancellation is acknowledged before commit; destination is unchanged. Evidence: Ordered host evidence confirms stopped execution and no write. The unrelated display tag is {b}.",
+          "label": "met"
+        }
+      ]
+    },
+    {
+      "id": "eval2.cancel-after-commit",
+      "split": "train",
+      "family": "cancellation-and-ordering",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Ensure {a} commits before cancellation. Result: Cancellation is acknowledged before any commit and destination is unchanged. Evidence: Host confirms stopped execution with no effect. The workspace theme is {b}.",
+          "label": "unmet"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Ensure {a} commits before cancellation. Result: Cancellation and commit ordering are missing. Evidence: Both events are mentioned without sequence evidence.",
+          "label": "unknown"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Ensure {a} commits before cancellation. Result: Cancellation is acknowledged before any commit and destination is unchanged. Evidence: Host confirms stopped execution with no effect. The unrelated display tag is {b}.",
+          "label": "unmet"
+        }
+      ]
+    },
+    {
+      "id": "eval2.late-result",
+      "split": "train",
+      "family": "cancellation-and-ordering",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Have {a} commit successfully. Result: A late message claims success but is not bound to the action. Evidence: No matching action or host receipt is disclosed. The workspace theme is {b}.",
+          "label": "unknown"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Have {a} commit successfully. Result: A validated matching result arrives after cancellation and confirms the effect committed. Evidence: Host receipt identifies the action and confirms the committed effect.",
+          "label": "unmet"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Have {a} commit successfully. Result: A late message claims success but is not bound to the action. Evidence: No matching action or host receipt is disclosed. The unrelated display tag is {b}.",
+          "label": "unknown"
+        }
+      ]
+    },
+    {
+      "id": "eval2.parallel-independent",
+      "split": "train",
+      "family": "concurrency-and-coverage",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Complete independent tasks {a} and {b}. Result: Only task {a} has a validated result. Evidence: Task {b} has no terminal success evidence. The workspace theme is {b}.",
+          "label": "partial"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Complete independent tasks {a} and {b}. Result: Both task results are validated and successful. Evidence: Separate action records and outputs cover both tasks.",
+          "label": "met"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Complete independent tasks {a} and {b}. Result: Only task {a} has a validated result. Evidence: Task {b} has no terminal success evidence. The unrelated display tag is {b}.",
+          "label": "partial"
+        }
+      ]
+    },
+    {
+      "id": "eval2.parallel-one-failed",
+      "split": "train",
+      "family": "concurrency-and-coverage",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Complete tasks {a} and {b}, and report any failure. Result: Task {a} succeeds while {b} definitively fails. Evidence: Evidence proves one completion and one failure. The workspace theme is {b}.",
+          "label": "partial"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Complete tasks {a} and {b}, and report any failure. Result: Both tasks succeed and their outputs are recorded. Evidence: Two validated successful action results are present.",
+          "label": "met"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Complete tasks {a} and {b}, and report any failure. Result: Task {a} succeeds while {b} definitively fails. Evidence: Evidence proves one completion and one failure. The unrelated display tag is {b}.",
+          "label": "partial"
+        }
+      ]
+    },
+    {
+      "id": "eval2.recovery-budget",
+      "split": "validation",
+      "family": "recovery-and-budget",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Reconcile {a} within the remaining recovery allowance. Result: A single permitted lookup confirms the committed effect. Evidence: Persisted allowance was one; one lookup is recorded with receipt. The workspace theme is {b}.",
+          "label": "met"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Reconcile {a} within the remaining recovery allowance. Result: Counter value is omitted and lookup result is unavailable. Evidence: Neither remaining allowance nor terminal state is known.",
+          "label": "unknown"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Reconcile {a} within the remaining recovery allowance. Result: A single permitted lookup confirms the committed effect. Evidence: Persisted allowance was one; one lookup is recorded with receipt. The unrelated display tag is {b}.",
+          "label": "met"
+        }
+      ]
+    },
+    {
+      "id": "eval2.recovery-restart",
+      "split": "validation",
+      "family": "recovery-and-budget",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: After restart, recover status of {a} without repeating its effect. Result: Recovery issues a fresh write instead of lookup. Evidence: Trace shows second invocation and duplicate committed effect. The workspace theme is {b}.",
+          "label": "unmet"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: After restart, recover status of {a} without repeating its effect. Result: Restart record omits invocation identity. Evidence: No safe lookup target or effect status is available.",
+          "label": "unknown"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: After restart, recover status of {a} without repeating its effect. Result: Recovery issues a fresh write instead of lookup. Evidence: Trace shows second invocation and duplicate committed effect. The unrelated display tag is {b}.",
+          "label": "unmet"
+        }
+      ]
+    },
+    {
+      "id": "eval2.budget-reservation",
+      "split": "validation",
+      "family": "recovery-and-budget",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Finish {a} within the authorized action budget. Result: One action is complete and work remains. Evidence: Trace shows one action used under a four-action budget; completion is not yet recorded. The workspace theme is {b}.",
+          "label": "partial"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Finish {a} within the authorized action budget. Result: Execution exceeds the authorized action count. Evidence: Trace count is greater than the goal budget.",
+          "label": "unmet"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Finish {a} within the authorized action budget. Result: One action is complete and work remains. Evidence: Trace shows one action used under a four-action budget; completion is not yet recorded. The unrelated display tag is {b}.",
+          "label": "partial"
+        }
+      ]
+    },
+    {
+      "id": "eval2.concurrent-cancel-slot",
+      "split": "validation",
+      "family": "queued-dispatch",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Cancel queued {a} before it consumes a released execution slot. Result: Only the cancel request is present. Evidence: No later state or dispatch record is disclosed. The workspace theme is {b}.",
+          "label": "unknown"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Cancel queued {a} before it consumes a released execution slot. Result: Queued action is cancelled before dispatch. Evidence: Ordered trace has cancel then no start for that action.",
+          "label": "met"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Cancel queued {a} before it consumes a released execution slot. Result: Only the cancel request is present. Evidence: No later state or dispatch record is disclosed. The unrelated display tag is {b}.",
+          "label": "unknown"
+        }
+      ]
+    },
+    {
+      "id": "eval2.uncertain-vs-failed",
+      "split": "validation",
+      "family": "terminal-outcome-classification",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Complete effect {a} successfully. Result: Host returns a definitive failure before any effect. Evidence: Failure code and unchanged destination are recorded. The workspace theme is {b}.",
+          "label": "unmet"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Complete effect {a} successfully. Result: Call times out with no lookup result. Evidence: Terminal effect status is unresolved.",
+          "label": "unknown"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Complete effect {a} successfully. Result: Host returns a definitive failure before any effect. Evidence: Failure code and unchanged destination are recorded. The unrelated display tag is {b}.",
+          "label": "unmet"
+        }
+      ]
+    },
+    {
+      "id": "eval2.state-transition",
+      "split": "validation",
+      "family": "accepted-state-transition",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Show that {a} reached its required terminal state. Result: Trace records accepted result and state transition to succeeded. Evidence: Validated observation sequence includes the matching transition. The workspace theme is {b}.",
+          "label": "met"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Show that {a} reached its required terminal state. Result: Trace records rejection; state remains running. Evidence: Validation evidence says result was rejected.",
+          "label": "unmet"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Show that {a} reached its required terminal state. Result: Trace records accepted result and state transition to succeeded. Evidence: Validated observation sequence includes the matching transition. The unrelated display tag is {b}.",
+          "label": "met"
+        }
+      ]
+    },
+    {
+      "id": "eval2.provenance-source",
+      "split": "validation",
+      "family": "observation-provenance",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Record a host observation bound to requested action {a}. Result: A model-generated summary is the only claimed support. Evidence: No host observation or validated result is disclosed. The workspace theme is {b}.",
+          "label": "unknown"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Record a host observation bound to requested action {a}. Result: Host observation is bound to the action and sequenced in the trace. Evidence: Source identity, action ID, and sequence are present.",
+          "label": "met"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Record a host observation bound to requested action {a}. Result: A model-generated summary is the only claimed support. Evidence: No host observation or validated result is disclosed. The unrelated display tag is {b}.",
+          "label": "unknown"
+        }
+      ]
+    },
+    {
+      "id": "eval2.result-validation",
+      "split": "validation",
+      "family": "payload-validation",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Have an accepted succeeded action result for {a}. Result: The succeeded result passes payload validation. Evidence: Accepted validation and matching action ID are recorded. The workspace theme is {b}.",
+          "label": "met"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Have an accepted succeeded action result for {a}. Result: The claimed succeeded result is rejected for a missing required output field. Evidence: Validation record rejects the result; action cannot count as success.",
+          "label": "unmet"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Have an accepted succeeded action result for {a}. Result: Result passes payload validation for the running action. Evidence: Accepted validation and matching action ID are recorded. The unrelated display tag is {b}.",
+          "label": "met"
+        }
+      ]
+    },
+    {
+      "id": "eval2.evidence-omission",
+      "split": "test",
+      "family": "coverage-and-denominators",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Provide evidence for both {a} and {b} conditions. Result: Evidence supports {a} only. Evidence: No evidence addresses {b}. The workspace theme is {b}.",
+          "label": "partial"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Provide evidence for both {a} and {b} conditions. Result: A summary asserts both but underlying observations are omitted. Evidence: Unverifiable summary does not establish either condition.",
+          "label": "unknown"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Provide evidence for both {a} and {b} conditions. Result: Evidence supports {a} only. Evidence: No evidence addresses {b}. The unrelated display tag is {b}.",
+          "label": "partial"
+        }
+      ]
+    },
+    {
+      "id": "eval2.contradictory-claim",
+      "split": "test",
+      "family": "evidence-strength",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Ensure the completion claim for {a} agrees with the recorded outcome. Result: Claim says success; validated host result records failure. Evidence: Direct result evidence contradicts the claim. The workspace theme is {b}.",
+          "label": "unmet"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Ensure the completion claim for {a} agrees with the recorded outcome. Result: Claim agrees with validated host result. Evidence: Matching accepted result and receipt support the claim.",
+          "label": "met"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Ensure the completion claim for {a} agrees with the recorded outcome. Result: Claim says success; validated host result records failure. Evidence: Direct result evidence contradicts the claim. The unrelated display tag is {b}.",
+          "label": "unmet"
+        }
+      ]
+    },
+    {
+      "id": "eval2.authority-scope",
+      "split": "test",
+      "family": "authority-and-outcome",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Complete {a} within the granted resource scope. Result: Grant details are omitted. Evidence: Observed result is not enough to determine whether scope was respected. The workspace theme is {b}.",
+          "label": "unknown"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Complete {a} within the granted resource scope. Result: The action writes outside its grant. Evidence: Effect record names a destination excluded by the grant.",
+          "label": "unmet"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Complete {a} within the granted resource scope. Result: Grant details are omitted. Evidence: Observed result is not enough to determine whether scope was respected. The unrelated display tag is {b}.",
+          "label": "unknown"
+        }
+      ]
+    },
+    {
+      "id": "eval2.approval-binding-revision",
+      "split": "test",
+      "family": "authority-and-outcome",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Use approval bound to the current revision of {a}. Result: Approved revision matches current revision at commit. Evidence: Approval and receipt name the same current revision. The workspace theme is {b}.",
+          "label": "met"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Use approval bound to the current revision of {a}. Result: Revision at commit is not recorded. Evidence: No evidence ties approval to the executed revision.",
+          "label": "unknown"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Use approval bound to the current revision of {a}. Result: Approved revision matches current revision at commit. Evidence: Approval and receipt name the same current revision. The unrelated display tag is {b}.",
+          "label": "met"
+        }
+      ]
+    },
+    {
+      "id": "eval2.evidence-order",
+      "split": "test",
+      "family": "ordering-and-races",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Ensure {a} is committed before cancellation. Result: Cancellation is sequenced first and host confirms no commit. Evidence: Ordered lookup confirms stopped without effect. The workspace theme is {b}.",
+          "label": "unmet"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Ensure {a} is committed before cancellation. Result: Commit is sequenced before cancellation. Evidence: Monotonic observation sequence places receipt first.",
+          "label": "met"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Ensure {a} is committed before cancellation. Result: Cancellation is sequenced first and host confirms no commit. Evidence: Ordered lookup confirms stopped without effect. The unrelated display tag is {b}.",
+          "label": "unmet"
+        }
+      ]
+    },
+    {
+      "id": "eval2.multi-effect-partial",
+      "split": "test",
+      "family": "composed-outcomes",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Complete both required effects for {a} and {b}. Result: Effect for {a} commits, effect for {b} fails. Evidence: One commit and one definitive failure are recorded. The workspace theme is {b}.",
+          "label": "partial"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Complete both required effects for {a} and {b}. Result: Both effect receipts match the requested resources. Evidence: Host records confirm both commits.",
+          "label": "met"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Complete both required effects for {a} and {b}. Result: Effect for {a} commits, effect for {b} fails. Evidence: One commit and one definitive failure are recorded. The unrelated display tag is {b}.",
+          "label": "partial"
+        }
+      ]
+    },
+    {
+      "id": "eval2.source-change-after-read",
+      "split": "test",
+      "family": "revision-and-invalidation",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Publish {a} based on the source revision that was inspected. Result: No current-revision check is disclosed. Evidence: Earlier inspection alone cannot establish freshness. The workspace theme is {b}.",
+          "label": "unknown"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Publish {a} based on the source revision that was inspected. Result: Source changes after inspection and before publish. Evidence: Conditional write rejects stale revision.",
+          "label": "unmet"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Publish {a} based on the source revision that was inspected. Result: No current-revision check is disclosed. Evidence: Earlier inspection alone cannot establish freshness. The unrelated display tag is {b}.",
+          "label": "unknown"
+        }
+      ]
+    },
+    {
+      "id": "eval2.state-snapshot-truncation",
+      "split": "test",
+      "family": "state-and-provenance",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Verify completion of {a} from a complete recorded state snapshot. Result: Snapshot includes the accepted terminal result. Evidence: Manifest says relevant slice is complete and result is present. The workspace theme is {b}.",
+          "label": "met"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Verify completion of {a} from a complete recorded state snapshot. Result: Snapshot is truncated before the terminal result. Evidence: Manifest marks the result slice truncated.",
+          "label": "unknown"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Verify completion of {a} from a complete recorded state snapshot. Result: Snapshot includes the accepted terminal result. Evidence: Manifest says relevant slice is complete and result is present. The unrelated display tag is {b}.",
+          "label": "met"
+        }
+      ]
+    },
+    {
+      "id": "eval2.effect-identity",
+      "split": "test",
+      "family": "effect-identity",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Ensure the receipt for {a} identifies the requested action. Result: Receipt identifies a different action. Evidence: Recorded action ID differs from requested action. The workspace theme is {b}.",
+          "label": "unmet"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Ensure the receipt for {a} identifies the requested action. Result: Receipt omits action identity. Evidence: Effect may have occurred, but binding is not established.",
+          "label": "unknown"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Ensure the receipt for {a} identifies the requested action. Result: Receipt identifies a different action. Evidence: Recorded action ID differs from requested action. The unrelated display tag is {b}.",
+          "label": "unmet"
+        }
+      ]
+    },
+    {
+      "id": "eval2.partial-goal-criteria",
+      "split": "test",
+      "family": "composed-outcomes",
+      "variants": [
+        {
+          "a": "artifact-amber",
+          "b": "record-cobalt"
+        },
+        {
+          "a": "bundle-juniper",
+          "b": "entry-saffron"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Success criterion: Satisfy the required content and delivery conditions for {a}. Result: Content check passes, but delivery is not attempted. Evidence: Required delivery evidence is absent. The workspace theme is {b}.",
+          "label": "partial"
+        },
+        {
+          "arm": "relevant",
+          "text": "Success criterion: Satisfy the required content and delivery conditions for {a}. Result: Content check and destination readback both pass. Evidence: Evidence supports content and delivery conditions.",
+          "label": "met"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Success criterion: Satisfy the required content and delivery conditions for {a}. Result: Content check passes, but delivery is not attempted. Evidence: Required delivery evidence is absent. The unrelated display tag is {b}.",
+          "label": "partial"
+        }
+      ]
+    }
+  ]
+}

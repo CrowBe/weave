@@ -1,0 +1,261 @@
+{
+  "status": "experimental",
+  "site": "capability.match",
+  "kind": "choice",
+  "checkpoint": "fastino/GLiNER2.5-Decide",
+  "revision": "7ee5da4c2415e32259bcdc0b1a7367c32ce8d6f6",
+  "corpus_sha256": "97628dd14e682f544e4d2645efb7091a6dea0587e79049d27cf67a10df260fb3",
+  "split": "test",
+  "order": "reverse",
+  "device": "cpu",
+  "threads": 2,
+  "torch": "2.14.0+cpu",
+  "peak_rss_kib": 4269808,
+  "summary": {
+    "n": 18,
+    "correct": 16,
+    "accuracy": 0.8888888888888888,
+    "no_match_cases": 3,
+    "false_match": 2,
+    "false_no_match": 0,
+    "uniform_floor": 0.25,
+    "majority_label_floor": 0.3333333333333333,
+    "median_ms": 682.955,
+    "p95_ms": 708.94,
+    "relevant_flip": 6,
+    "irrelevant_hold": 6,
+    "groups": 6,
+    "by_catalogue": {
+      "calendar": {
+        "n": 6,
+        "correct": 5
+      },
+      "code": {
+        "n": 6,
+        "correct": 5
+      },
+      "messages": {
+        "n": 6,
+        "correct": 6
+      }
+    }
+  },
+  "rows": [
+    {
+      "id": "calendar.search-or-create.base",
+      "group": "calendar.search-or-create",
+      "catalogue": "calendar",
+      "arm": "base",
+      "label": "c1",
+      "predicted": "c1",
+      "correct": true,
+      "top_score": 0.9999386072158813,
+      "option_count": 4,
+      "latency_ms": 708.94
+    },
+    {
+      "id": "calendar.search-or-create.relevant",
+      "group": "calendar.search-or-create",
+      "catalogue": "calendar",
+      "arm": "relevant",
+      "label": "c0",
+      "predicted": "c0",
+      "correct": true,
+      "top_score": 0.9828934073448181,
+      "option_count": 4,
+      "latency_ms": 694.39
+    },
+    {
+      "id": "calendar.search-or-create.irrelevant",
+      "group": "calendar.search-or-create",
+      "catalogue": "calendar",
+      "arm": "irrelevant",
+      "label": "c1",
+      "predicted": "c1",
+      "correct": true,
+      "top_score": 0.9999421834945679,
+      "option_count": 4,
+      "latency_ms": 742.44
+    },
+    {
+      "id": "calendar.cancel-or-book-travel.base",
+      "group": "calendar.cancel-or-book-travel",
+      "catalogue": "calendar",
+      "arm": "base",
+      "label": "c2",
+      "predicted": "c2",
+      "correct": true,
+      "top_score": 0.9998868703842163,
+      "option_count": 4,
+      "latency_ms": 682.69
+    },
+    {
+      "id": "calendar.cancel-or-book-travel.relevant",
+      "group": "calendar.cancel-or-book-travel",
+      "catalogue": "calendar",
+      "arm": "relevant",
+      "label": "none",
+      "predicted": "c0",
+      "correct": false,
+      "top_score": 0.425740510225296,
+      "option_count": 4,
+      "latency_ms": 685.17
+    },
+    {
+      "id": "calendar.cancel-or-book-travel.irrelevant",
+      "group": "calendar.cancel-or-book-travel",
+      "catalogue": "calendar",
+      "arm": "irrelevant",
+      "label": "c2",
+      "predicted": "c2",
+      "correct": true,
+      "top_score": 0.9998830556869507,
+      "option_count": 4,
+      "latency_ms": 683.22
+    },
+    {
+      "id": "code.test-or-build.base",
+      "group": "code.test-or-build",
+      "catalogue": "code",
+      "arm": "base",
+      "label": "c2",
+      "predicted": "c2",
+      "correct": true,
+      "top_score": 0.9999815225601196,
+      "option_count": 4,
+      "latency_ms": 708.09
+    },
+    {
+      "id": "code.test-or-build.relevant",
+      "group": "code.test-or-build",
+      "catalogue": "code",
+      "arm": "relevant",
+      "label": "c0",
+      "predicted": "c0",
+      "correct": true,
+      "top_score": 0.9833663702011108,
+      "option_count": 4,
+      "latency_ms": 656.38
+    },
+    {
+      "id": "code.test-or-build.irrelevant",
+      "group": "code.test-or-build",
+      "catalogue": "code",
+      "arm": "irrelevant",
+      "label": "c2",
+      "predicted": "c2",
+      "correct": true,
+      "top_score": 0.9999812841415405,
+      "option_count": 4,
+      "latency_ms": 697.79
+    },
+    {
+      "id": "code.format-or-scan.base",
+      "group": "code.format-or-scan",
+      "catalogue": "code",
+      "arm": "base",
+      "label": "c1",
+      "predicted": "c1",
+      "correct": true,
+      "top_score": 0.9981610178947449,
+      "option_count": 4,
+      "latency_ms": 677.01
+    },
+    {
+      "id": "code.format-or-scan.relevant",
+      "group": "code.format-or-scan",
+      "catalogue": "code",
+      "arm": "relevant",
+      "label": "none",
+      "predicted": "c2",
+      "correct": false,
+      "top_score": 0.6794872283935547,
+      "option_count": 4,
+      "latency_ms": 672.47
+    },
+    {
+      "id": "code.format-or-scan.irrelevant",
+      "group": "code.format-or-scan",
+      "catalogue": "code",
+      "arm": "irrelevant",
+      "label": "c1",
+      "predicted": "c1",
+      "correct": true,
+      "top_score": 0.9982348680496216,
+      "option_count": 4,
+      "latency_ms": 696.13
+    },
+    {
+      "id": "messages.draft-or-send.base",
+      "group": "messages.draft-or-send",
+      "catalogue": "messages",
+      "arm": "base",
+      "label": "c0",
+      "predicted": "c0",
+      "correct": true,
+      "top_score": 0.9994468092918396,
+      "option_count": 4,
+      "latency_ms": 696.7
+    },
+    {
+      "id": "messages.draft-or-send.relevant",
+      "group": "messages.draft-or-send",
+      "catalogue": "messages",
+      "arm": "relevant",
+      "label": "c2",
+      "predicted": "c2",
+      "correct": true,
+      "top_score": 0.9997898936271667,
+      "option_count": 4,
+      "latency_ms": 651.78
+    },
+    {
+      "id": "messages.draft-or-send.irrelevant",
+      "group": "messages.draft-or-send",
+      "catalogue": "messages",
+      "arm": "irrelevant",
+      "label": "c0",
+      "predicted": "c0",
+      "correct": true,
+      "top_score": 0.9980158805847168,
+      "option_count": 4,
+      "latency_ms": 651.23
+    },
+    {
+      "id": "messages.archive-or-delete.base",
+      "group": "messages.archive-or-delete",
+      "catalogue": "messages",
+      "arm": "base",
+      "label": "c1",
+      "predicted": "c1",
+      "correct": true,
+      "top_score": 0.9894802570343018,
+      "option_count": 4,
+      "latency_ms": 654.83
+    },
+    {
+      "id": "messages.archive-or-delete.relevant",
+      "group": "messages.archive-or-delete",
+      "catalogue": "messages",
+      "arm": "relevant",
+      "label": "none",
+      "predicted": "none",
+      "correct": true,
+      "top_score": 0.6644323468208313,
+      "option_count": 4,
+      "latency_ms": 640.45
+    },
+    {
+      "id": "messages.archive-or-delete.irrelevant",
+      "group": "messages.archive-or-delete",
+      "catalogue": "messages",
+      "arm": "irrelevant",
+      "label": "c1",
+      "predicted": "c1",
+      "correct": true,
+      "top_score": 0.9764097929000854,
+      "option_count": 4,
+      "latency_ms": 653.65
+    }
+  ]
+}

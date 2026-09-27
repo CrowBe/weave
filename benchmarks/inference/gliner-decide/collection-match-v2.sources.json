@@ -1,0 +1,134 @@
+{
+  "version": "weave.training-seed.sources.v1",
+  "corpus": "collection-match-v2.json",
+  "corpus_status": "synthetic authoring; not production traces or promotion evidence",
+  "label_basis": "The five positive labels are the exact operations described by the referenced contract purposes and I/O/effect boundaries. none means no single listed contract fully satisfies the request.",
+  "sources": [
+    {
+      "path": "packages/agentfabric/src/contracts.ts",
+      "covers": [
+        "source.inspect",
+        "report.assemble",
+        "report.publish"
+      ],
+      "evidence": "Contract purpose, typed input/output, effects, permissions, and failures."
+    },
+    {
+      "path": "packages/weave/src/normalize-author.ts",
+      "covers": [
+        "text.normalize"
+      ],
+      "evidence": "text.normalize r1 purpose, one text input and normalized text output."
+    },
+    {
+      "path": "packages/weave/src/fold-author.ts",
+      "covers": [
+        "report.fold"
+      ],
+      "evidence": "report.fold r1 purpose, inspection collection input, canonical digest output."
+    },
+    {
+      "path": "VISION.md",
+      "covers": [
+        "authority boundary"
+      ],
+      "evidence": "Inference outputs are observations; capability admission, execution authority, and policy remain separate."
+    },
+    {
+      "path": "CONTEXT.md",
+      "covers": [
+        "terminology"
+      ],
+      "evidence": "Capability contract and observation vocabulary used in this corpus."
+    }
+  ],
+  "splits": {
+    "train": 20,
+    "validation": 8,
+    "test": 10
+  },
+  "each_group": {
+    "variants": 2,
+    "arms": [
+      "base",
+      "relevant",
+      "irrelevant"
+    ]
+  },
+  "known_ambiguities": [
+    "Synthetic unsupported tasks can sometimes be composed from multiple capabilities, but the prompt requires one contract to satisfy the request by itself.",
+    "Some natural-language requests omit implementation-specific preconditions such as supplied inspection data or an existing destination; labels assume stated preconditions exactly and do not infer access or authority.",
+    "report.publish means a capability contract match only; it does not establish the caller has a grant or approval."
+  ],
+  "held_out_groups": [
+    "match-v2.21-unsupported-ocr",
+    "match-v2.22-unsupported-translation",
+    "match-v2.23-unsupported-redaction",
+    "match-v2.24-unsupported-signing",
+    "match-v2.25-unsupported-create",
+    "match-v2.26-unsupported-summary",
+    "match-v2.27-unsupported-merge",
+    "match-v2.28-unsupported-batch",
+    "match-v2.29-unsupported-composition",
+    "match-v2.30-unsupported-delete",
+    "match-v2.31-unsupported-edit",
+    "match-v2.32-unsupported-inference",
+    "match-v2.33-unsupported-delivery",
+    "match-v2.34-unsupported-extraction",
+    "match-v2.35-unsupported-validation",
+    "match-v2.36-unsupported-new-file",
+    "match-v2.37-unsupported-transform",
+    "match-v2.38-unsupported-multi-effect"
+  ],
+  "held_out_scope": "These are groups held out from this v2 corpus training split. Their semantic families are not all novel relative to the older collection-match corpus or its held-out groups.",
+  "overlap_limitations": [
+    {
+      "v2_group": "match-v2.21-unsupported-ocr",
+      "prior_group": "match.inspect-versus-ocr",
+      "prior_split": "validation",
+      "note": "OCR near-miss semantics overlap directly."
+    },
+    {
+      "v2_group": "match-v2.22-unsupported-translation",
+      "prior_group": "match.assemble-versus-translate",
+      "prior_split": "validation",
+      "note": "Translation near-miss semantics overlap directly."
+    },
+    {
+      "v2_group": "match-v2.23-unsupported-redaction",
+      "prior_group": "match.normalize-versus-redact",
+      "prior_split": "train",
+      "note": "Redaction near-miss semantics appeared in prior training."
+    },
+    {
+      "v2_group": "match-v2.24-unsupported-signing",
+      "prior_group": "match.fold-versus-sign",
+      "prior_split": "train",
+      "note": "Signing near-miss semantics appeared in prior training."
+    },
+    {
+      "v2_group": "match-v2.25-unsupported-create",
+      "prior_group": "match.destination-existence",
+      "prior_split": "test",
+      "note": "Destination creation versus existing-destination precondition appeared in the prior held-out test."
+    },
+    {
+      "v2_group": "match-v2.26-unsupported-summary",
+      "prior_group": "match.assemble-versus-summarize",
+      "prior_split": "train",
+      "note": "Summarization near-miss semantics appeared in prior training."
+    },
+    {
+      "v2_group": "match-v2.29-unsupported-composition",
+      "prior_group": "match.composition-trap",
+      "prior_split": "validation",
+      "note": "Single-contract versus multi-step composition semantics overlap."
+    },
+    {
+      "v2_group": "match-v2.33-unsupported-delivery",
+      "prior_group": "match.publish-versus-message",
+      "prior_split": "train",
+      "note": "Email delivery versus publishing semantics appeared in prior training."
+    }
+  ]
+}

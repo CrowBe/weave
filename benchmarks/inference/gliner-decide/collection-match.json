@@ -1,0 +1,86 @@
+{
+  "version": "weave.training-seed.v1",
+  "site": "capability.match",
+  "kind": "choice",
+  "status": "authored synthetic seed; no production traces",
+  "source_contracts": [
+    "packages/agentfabric/src/contracts.ts",
+    "packages/weave/src/normalize-author.ts",
+    "packages/weave/src/fold-author.ts"
+  ],
+  "prompt": "Which listed contract can perform the desired operation by itself? Choose none if no single listed contract can.",
+  "labels": {
+    "inspect": "Read one named text source and return its resource reference, revision, line count, and digest; do not produce a report",
+    "assemble": "Assemble supplied inspection results into a report with the source read set; do not write an external destination",
+    "publish": "Conditionally write an already checked report to an existing destination and return a publication receipt",
+    "normalize": "Collapse whitespace in one supplied text value and return the normalized text",
+    "fold": "Combine inspection digests into one canonical fold digest",
+    "none": "No single listed contract performs the requested operation"
+  },
+  "groups": [
+    {"id":"match.inspect-versus-assemble","split":"train","family":"input-phase","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Read the unread {a} source and return its revision, line count, and digest. A report is not requested yet.","label":"inspect"},
+      {"arm":"relevant","text":"The {a} inspection result is already available. Turn it into a report draft with its read set.","label":"assemble"},
+      {"arm":"irrelevant","text":"Read the unread {b} source and return its revision, line count, and digest. A report is not requested yet.","label":"inspect"}]},
+    {"id":"match.inspect-versus-fold","split":"train","family":"output-shape","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Examine source {a} and return its own content digest and current revision.","label":"inspect"},
+      {"arm":"relevant","text":"Given completed inspections for {a} and {b}, produce one canonical digest combining their digests.","label":"fold"},
+      {"arm":"irrelevant","text":"Examine source {b} and return its own content digest and current revision.","label":"inspect"}]},
+    {"id":"match.assemble-versus-publish","split":"train","family":"effect-boundary","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Use completed {a} and {b} inspections to create a checked report in memory. Do not write the destination.","label":"assemble"},
+      {"arm":"relevant","text":"The checked {a} and {b} report already exists. Write it to the existing destination and return a receipt.","label":"publish"},
+      {"arm":"irrelevant","text":"Use completed {b} and {a} inspections to create a checked report in memory. Do not write the destination.","label":"assemble"}]},
+    {"id":"match.assemble-versus-summarize","split":"train","family":"near-miss","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Build a report from the already supplied {a} and {b} inspection results and record their read set.","label":"assemble"},
+      {"arm":"relevant","text":"Read an unrelated long essay about {a} and produce a short prose summary of its arguments.","label":"none"},
+      {"arm":"irrelevant","text":"Build a report from the already supplied {b} and {a} inspection results and record their read set.","label":"assemble"}]},
+    {"id":"match.publish-versus-assemble","split":"train","family":"effect-boundary","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Place the checked report covering {a} in the existing report destination and return the committed revision.","label":"publish"},
+      {"arm":"relevant","text":"Combine the completed {a} inspections into a report draft, retaining their source revisions; do not publish.","label":"assemble"},
+      {"arm":"irrelevant","text":"Place the checked report covering {b} in the existing report destination and return the committed revision.","label":"publish"}]},
+    {"id":"match.publish-versus-message","split":"train","family":"near-miss","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Conditionally write the checked {a} report to its existing destination and get a publication receipt.","label":"publish"},
+      {"arm":"relevant","text":"Send the checked {a} report as an email attachment to the requester.","label":"none"},
+      {"arm":"irrelevant","text":"Conditionally write the checked {b} report to its existing destination and get a publication receipt.","label":"publish"}]},
+    {"id":"match.normalize-versus-redact","split":"train","family":"near-miss","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Collapse repeated spaces and line breaks in the supplied {a} text, returning the same words with normalized spacing.","label":"normalize"},
+      {"arm":"relevant","text":"Remove personal names and phone numbers from the supplied {a} text while preserving its layout.","label":"none"},
+      {"arm":"irrelevant","text":"Collapse repeated spaces and line breaks in the supplied {b} text, returning the same words with normalized spacing.","label":"normalize"}]},
+    {"id":"match.normalize-versus-fold","split":"train","family":"input-shape","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Take a single {a} text string and trim the edges while collapsing internal whitespace.","label":"normalize"},
+      {"arm":"relevant","text":"Take inspection digests for {a} and {b} and combine them into one canonical digest.","label":"fold"},
+      {"arm":"irrelevant","text":"Take a single {b} text string and trim the edges while collapsing internal whitespace.","label":"normalize"}]},
+    {"id":"match.fold-versus-report","split":"train","family":"output-shape","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"From the {a} and {b} inspection digests, return the canonical fold string only.","label":"fold"},
+      {"arm":"relevant","text":"From the {a} and {b} inspection results, return a report listing each source and its revision.","label":"assemble"},
+      {"arm":"irrelevant","text":"From the {b} and {a} inspection digests, return the canonical fold string only.","label":"fold"}]},
+    {"id":"match.fold-versus-sign","split":"train","family":"near-miss","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Calculate one canonical digest from the supplied inspection digests for {a} and {b}.","label":"fold"},
+      {"arm":"relevant","text":"Cryptographically sign the {a} report with a private key and return the signature.","label":"none"},
+      {"arm":"irrelevant","text":"Calculate one canonical digest from the supplied inspection digests for {b} and {a}.","label":"fold"}]},
+    {"id":"match.inspect-versus-ocr","split":"validation","family":"medium-mismatch","variants":[{"a":"invoice","b":"receipt"},{"a":"diagram","b":"screenshot"}],"arms":[
+      {"arm":"base","text":"Read the named {a} text source and report its revision, number of lines, and digest.","label":"inspect"},
+      {"arm":"relevant","text":"Read the words printed inside a scanned {a} image and return recognized text.","label":"none"},
+      {"arm":"irrelevant","text":"Read the named {b} text source and report its revision, number of lines, and digest.","label":"inspect"}]},
+    {"id":"match.assemble-versus-translate","split":"validation","family":"transformation-mismatch","variants":[{"a":"review","b":"audit"},{"a":"weekly","b":"monthly"}],"arms":[
+      {"arm":"base","text":"Assemble the supplied inspection observations into a {a} report with a source read set.","label":"assemble"},
+      {"arm":"relevant","text":"Translate the completed {a} report into Japanese while preserving its layout.","label":"none"},
+      {"arm":"irrelevant","text":"Assemble the supplied inspection observations into a {b} report with a source read set.","label":"assemble"}]},
+    {"id":"match.composition-trap","split":"validation","family":"multi-step","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"The {a} inspection results are ready; assemble them into a report now.","label":"assemble"},
+      {"arm":"relevant","text":"First read the unread {a} source, then assemble a report from the new inspection in one operation.","label":"none"},
+      {"arm":"irrelevant","text":"The {b} inspection results are ready; assemble them into a report now.","label":"assemble"}]},
+    {"id":"match.destination-existence","split":"test","family":"effect-precondition","variants":[{"a":"quarterly","b":"annual"},{"a":"draft","b":"final"}],"arms":[
+      {"arm":"base","text":"Write the checked {a} report to an existing destination and return the receipt.","label":"publish"},
+      {"arm":"relevant","text":"Create a brand-new destination and then write the checked {a} report into it in one operation.","label":"none"},
+      {"arm":"irrelevant","text":"Write the checked {b} report to an existing destination and return the receipt.","label":"publish"}]},
+    {"id":"match.report-versus-normalize","split":"test","family":"output-shape","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Collapse repeated whitespace in the {a} text and return only the cleaned text.","label":"normalize"},
+      {"arm":"relevant","text":"Use the {a} inspection observations to create a structured report and source read set.","label":"assemble"},
+      {"arm":"irrelevant","text":"Collapse repeated whitespace in the {b} text and return only the cleaned text.","label":"normalize"}]},
+    {"id":"match.fold-versus-hash","split":"test","family":"near-miss","variants":[{"a":"alpha","b":"beta"},{"a":"cedar","b":"maple"}],"arms":[
+      {"arm":"base","text":"Combine the {a} and {b} inspection digests into the canonical fold value.","label":"fold"},
+      {"arm":"relevant","text":"Compute a SHA-256 hash of the complete {a} report bytes and return the hex string.","label":"none"},
+      {"arm":"irrelevant","text":"Combine the {b} and {a} inspection digests into the canonical fold value.","label":"fold"}]}
+  ]
+}

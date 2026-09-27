@@ -1,0 +1,156 @@
+{
+  "version": "weave.synthetic-corpus-source.v1",
+  "corpus": "collection-evaluate-v2.json",
+  "purpose": "Weave-specific synthetic supervision for result.evaluate; compare success criteria with disclosed outcome evidence.",
+  "authorship": "Independently authored synthetic scenario groups; no production traces or verbatim examples copied from v1. Several scenarios intentionally share semantic themes with v1, as listed in semantic_overlap_with_v1.",
+  "source_contracts": [
+    {
+      "path": "packages/agentfabric/src/contracts.ts",
+      "use": "Grounds record shapes and evidence boundaries; source text is not copied as a scenario."
+    },
+    {
+      "path": "packages/weave/src/types.ts",
+      "use": "Grounds record shapes and evidence boundaries; source text is not copied as a scenario."
+    },
+    {
+      "path": "packages/weave/src/validation.ts",
+      "use": "Grounds record shapes and evidence boundaries; source text is not copied as a scenario."
+    },
+    {
+      "path": "packages/weave/src/candidates.ts",
+      "use": "Grounds record shapes and evidence boundaries; source text is not copied as a scenario."
+    },
+    {
+      "path": "packages/weave/test/m1.test.ts",
+      "use": "Grounds record shapes and evidence boundaries; source text is not copied as a scenario."
+    }
+  ],
+  "label_policy": "met only when evidence supports criterion; partial when only some required work is evidenced; unmet when evidence proves failure/contradiction; unknown when evidence is absent, unbound, or conflicting. Result claims and plans are not proof.",
+  "split_policy": "Group-level semantic-family holdout among v2 splits: train 19 groups, validation 8 groups, test 10 groups. This does not imply semantic independence from v1; each group has two wording variants and base/relevant/irrelevant arms.",
+  "group_counts": {
+    "train": 19,
+    "validation": 8,
+    "test": 10
+  },
+  "groups_by_family": {
+    "effect-reconciliation": [
+      "eval2.reconciliation-confirmed",
+      "eval2.reconciliation-partial",
+      "eval2.write-readback",
+      "eval2.readback-fields"
+    ],
+    "failure-and-uncertainty": [
+      "eval2.failed-before-effect",
+      "eval2.failure-some-steps"
+    ],
+    "retry-and-identity": [
+      "eval2.retry-idempotency",
+      "eval2.retry-dedup-key",
+      "eval2.retry-no-claim"
+    ],
+    "approval-and-scope": [
+      "eval2.approval-bound",
+      "eval2.approval-record",
+      "eval2.approval-expired",
+      "eval2.approval-revoked",
+      "eval2.approval-principal"
+    ],
+    "cancellation-and-ordering": [
+      "eval2.cancel-before-commit",
+      "eval2.cancel-after-commit",
+      "eval2.late-result"
+    ],
+    "concurrency-and-coverage": [
+      "eval2.parallel-independent",
+      "eval2.parallel-one-failed"
+    ],
+    "recovery-and-budget": [
+      "eval2.recovery-budget",
+      "eval2.recovery-restart",
+      "eval2.budget-reservation"
+    ],
+    "queued-dispatch": [
+      "eval2.concurrent-cancel-slot"
+    ],
+    "terminal-outcome-classification": [
+      "eval2.uncertain-vs-failed"
+    ],
+    "accepted-state-transition": [
+      "eval2.state-transition"
+    ],
+    "observation-provenance": [
+      "eval2.provenance-source"
+    ],
+    "payload-validation": [
+      "eval2.result-validation"
+    ],
+    "coverage-and-denominators": [
+      "eval2.evidence-omission"
+    ],
+    "evidence-strength": [
+      "eval2.contradictory-claim"
+    ],
+    "authority-and-outcome": [
+      "eval2.authority-scope",
+      "eval2.approval-binding-revision"
+    ],
+    "ordering-and-races": [
+      "eval2.evidence-order"
+    ],
+    "composed-outcomes": [
+      "eval2.multi-effect-partial",
+      "eval2.partial-goal-criteria"
+    ],
+    "revision-and-invalidation": [
+      "eval2.source-change-after-read"
+    ],
+    "state-and-provenance": [
+      "eval2.state-snapshot-truncation"
+    ],
+    "effect-identity": [
+      "eval2.effect-identity"
+    ]
+  },
+  "semantic_overlap_with_v1": [
+    {
+      "v2_group": "eval2.failed-before-effect",
+      "v1_analogue": "evaluate.publish-uncertain-versus-failed",
+      "overlap": "Definitive failure versus unresolved publication outcome."
+    },
+    {
+      "v2_group": "eval2.cancel-after-commit",
+      "v1_analogue": "evaluate.failure-versus-progress",
+      "overlap": "Distinguishing terminal effect state from incomplete or uncertain progress."
+    },
+    {
+      "v2_group": "eval2.late-result",
+      "v1_analogue": "evaluate.publish-uncertain-versus-failed",
+      "overlap": "Using terminal effect evidence to distinguish committed from not committed."
+    },
+    {
+      "v2_group": "eval2.reconciliation-confirmed",
+      "v1_analogue": "evaluate.publish-uncertain-outcome",
+      "overlap": "Receipt/readback evidence for a committed publication."
+    },
+    {
+      "v2_group": "eval2.write-readback",
+      "v1_analogue": "evaluate.publish-content-versus-effect",
+      "overlap": "Publication receipt does not alone prove destination content."
+    },
+    {
+      "v2_group": "eval2.source-change-after-read",
+      "v1_analogue": "evaluate.publish-stale-readset",
+      "overlap": "Stale source revisions invalidate publication success."
+    },
+    {
+      "v2_group": "eval2.failure-some-steps",
+      "v1_analogue": "evaluate.failure-versus-progress",
+      "overlap": "Partial completion when one required step fails."
+    },
+    {
+      "v2_group": "eval2.partial-goal-criteria",
+      "v1_analogue": "evaluate.multi-stage-goal",
+      "overlap": "A composed outcome can be partially complete."
+    }
+  ]
+}

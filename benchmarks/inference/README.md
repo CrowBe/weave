@@ -1,4 +1,47 @@
-# Local inference experiments
+# Inference experiments
+
+## Decision-model evidence — 2026-09-27
+
+These are exploratory measurements for bounded judgment sites. Model predictions
+are observations; the runtime still validates bindings and applies policy.
+None of the models or adapters below is admitted as a new route by this work.
+The [Decision Index and BEV review](../../docs/research/jev-decision-index-and-bev.md)
+separates public benchmark rankings from local results.
+
+| Paired 125-case transfer set | Correct | Ordinal cases correct | Evidence |
+| --- | ---: | ---: | --- |
+| Hosted Jev | 104/125 | 9/10 | [existing transfer run](jev/README.md) |
+| Local Kev 4B | 97/125 | 6/10 | [existing local run](kev/README.md) |
+| Decider 4B v2.1 | 96/125 | 4/10 | [paired report](decider-4b/README.md) |
+| Decider 2B v11 | 83/125 | 2/10 | [paired report](decider-2b/README.md) |
+| GLiNER2.5-Decide base | 61/125 | 2/10 | [classification probe](gliner-decide/README.md) |
+
+The transfer set is small and may overlap public model training. It does not
+establish performance on Weave's `capability.match` or `result.evaluate` sites.
+[Hopper](hopper/README.md) and [Decision 1.0 Lux](decision-lux/README.md)
+have documented local no-run dispositions; neither has a local quality score.
+
+The [BEV sample](bev-sample/README.md) tests the typed-decision harness on 24
+manually reviewed cases. Kev matched 17/24 labels; a paired 12-case Jev subset
+matched 11/12 versus Kev's 10/12. This is not a protected Weave benchmark.
+The [dataset audit](../../docs/research/bev-decision-150k-audit.md) records
+split overlap, label balance, source-text injection, and redistribution limits.
+
+## Focused GLiNER tool-selection work
+
+The [GLiNER report](gliner-decide/README.md) and
+[two-site pilot](gliner-decide/weave-v2.md) retain the cases, split boundaries,
+reproducible scripts, and case-level predictions. On synthetic, group-held-out
+test cases, separate fresh-base LoRA adapters moved `capability.match` from
+44/60 to 57/60 and `result.evaluate` from 40/60 to 49/60. Evaluation regressed
+on some cases, and neither result is production routing evidence. A separate
+[BEV tool-suitability proxy](gliner-decide/bev-tool-v1.md) is source-specific.
+
+The [Jev-curated seed](gliner-decide/jev-curated/README.md) contains eight
+accepted fixture and contract-authored `capability.match` training rows plus
+an audit of one quarantined disagreement. There are no production runtime
+traces yet. The seed is too small to justify another fine-tune and is not a
+held-out promotion set.
 
 ## Retired generative setup — 2026-09-20
 

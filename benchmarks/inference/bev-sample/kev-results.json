@@ -1,0 +1,879 @@
+{
+  "status": "complete",
+  "dataset": {
+    "name": "avbiswas/bev-decision-150K",
+    "revision": "f83fe8b97094112fa305bfc793be07c8f8742282",
+    "split": "test",
+    "train_sha256": "1b163182db155ba986c8ab8d3d582ac09ec1b1dcbc13c65d048e61379be9fe5b",
+    "test_sha256": "eba9f9df6ad54ccdc3aa6516ab97e4f9dea4030422e0dc90510b85e462206a61"
+  },
+  "selection": {
+    "seed": "weave-bev-smoke-v1",
+    "cells": [
+      {
+        "domain": "Support and intent routing",
+        "type": "choice",
+        "question_key": null,
+        "n": 4
+      },
+      {
+        "domain": "Tool and workflow decisions",
+        "type": "choice",
+        "question_key": null,
+        "n": 4
+      },
+      {
+        "domain": "Reading comprehension",
+        "type": "noul",
+        "question_key": "answer",
+        "n": 4
+      },
+      {
+        "domain": "Tool and workflow decisions",
+        "type": "noul",
+        "question_key": "should_call_available_tool",
+        "n": 4
+      },
+      {
+        "domain": "Retail, product, and shopping",
+        "type": "score",
+        "question_key": "invoice_value_band",
+        "n": 4
+      },
+      {
+        "domain": "Sentiment, emotion, and moderation",
+        "type": "score",
+        "question_key": "sentiment",
+        "n": 4
+      }
+    ],
+    "reviewed_exclusions": {
+      "test:7009:answer": "airport location wording makes the published false label ambiguous",
+      "test:8655:should_call_available_tool": "place search could help the booking request, making the published false label ambiguous"
+    },
+    "label_balance": {
+      "Reading comprehension / noul": {
+        "true": 2,
+        "false": 2
+      },
+      "Retail, product, and shopping / score": {
+        "0": 2,
+        "1+": 2
+      }
+    },
+    "filters": "short state; no contact/URL/override pattern; no NFKC exact train-state match; valid typed question"
+  },
+  "requested_cases": 24,
+  "model": {
+    "name": "Kev",
+    "run": "/home/bencrow/.local/share/weave/kev/models/kev-4b",
+    "device": "cpu",
+    "base": "Qwen/Qwen3-4B-Base",
+    "base_revision": "906bfd4b4dc7f14ee4320094d8b41684abff8539",
+    "adapter_sha256": "3fa10d8646f567e884ea47841b2f3d5f2d135b81a4447a8ea79a6fc94e9c6ae1",
+    "head_sha256": "dad87f7e60c8b3f1eec8bee83858a5429c6ab06dc96385a935bc88e6b468a45d",
+    "training_config_sha256": "b79f9744e4fcea7473b47f75aefcf9d239d95459e55fcace17d953ba77a42365"
+  },
+  "records": [
+    {
+      "id": "test:13793:request_intent",
+      "row_index": 13793,
+      "domain": "Support and intent routing",
+      "type": "choice",
+      "label": "reminder",
+      "status": "accepted",
+      "elapsed_ms": 2916.7,
+      "result": {
+        "raw_probabilities": {
+          "measurement_conversion": 1.1033157534257043e-05,
+          "todo_list": 0.07063838094472885,
+          "play_music": 2.746720019786153e-05,
+          "reminder": 0.929323136806488
+        },
+        "option_keys": [
+          "measurement_conversion",
+          "todo_list",
+          "play_music",
+          "reminder"
+        ],
+        "expected": "reminder",
+        "predicted": "reminder",
+        "correct": true,
+        "latency_ms": 2914.4084440195,
+        "input_tokens": 42
+      }
+    },
+    {
+      "id": "test:11984:request_domain",
+      "row_index": 11984,
+      "domain": "Support and intent routing",
+      "type": "choice",
+      "label": "meta",
+      "status": "accepted",
+      "elapsed_ms": 3120.2,
+      "result": {
+        "raw_probabilities": {
+          "meta": 0.6191721558570862,
+          "auto_and_commute": 0.36998650431632996,
+          "small_talk": 0.010105244815349579,
+          "banking": 0.0007360964664258063
+        },
+        "option_keys": [
+          "meta",
+          "auto_and_commute",
+          "small_talk",
+          "banking"
+        ],
+        "expected": "meta",
+        "predicted": "meta",
+        "correct": true,
+        "latency_ms": 3119.090171996504,
+        "input_tokens": 46
+      }
+    },
+    {
+      "id": "test:17755:request_domain",
+      "row_index": 17755,
+      "domain": "Support and intent routing",
+      "type": "choice",
+      "label": "work",
+      "status": "accepted",
+      "elapsed_ms": 3464.0,
+      "result": {
+        "raw_probabilities": {
+          "work": 0.13006943464279175,
+          "meta": 0.8206866383552551,
+          "kitchen_and_dining": 0.035525888204574585,
+          "banking": 0.013718117959797382
+        },
+        "option_keys": [
+          "work",
+          "meta",
+          "kitchen_and_dining",
+          "banking"
+        ],
+        "expected": "work",
+        "predicted": "meta",
+        "correct": false,
+        "latency_ms": 3463.0704679875635,
+        "input_tokens": 51
+      }
+    },
+    {
+      "id": "test:15393:request_domain",
+      "row_index": 15393,
+      "domain": "Support and intent routing",
+      "type": "choice",
+      "label": "utility",
+      "status": "accepted",
+      "elapsed_ms": 3418.2,
+      "result": {
+        "raw_probabilities": {
+          "utility": 0.44693589210510254,
+          "banking": 0.007568271830677986,
+          "auto_and_commute": 0.024032842367887497,
+          "work": 0.5214630365371704
+        },
+        "option_keys": [
+          "utility",
+          "banking",
+          "auto_and_commute",
+          "work"
+        ],
+        "expected": "utility",
+        "predicted": "work",
+        "correct": false,
+        "latency_ms": 3417.2060879936907,
+        "input_tokens": 51
+      }
+    },
+    {
+      "id": "test:24142:size_argument",
+      "row_index": 24142,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "medium",
+      "status": "accepted",
+      "elapsed_ms": 7160.6,
+      "result": {
+        "raw_probabilities": {
+          "small": 0.017191559076309204,
+          "medium": 0.05606178566813469,
+          "large": 0.926746666431427
+        },
+        "option_keys": [
+          "small",
+          "medium",
+          "large"
+        ],
+        "expected": "medium",
+        "predicted": "large",
+        "correct": false,
+        "latency_ms": 7159.179684997071,
+        "input_tokens": 122
+      }
+    },
+    {
+      "id": "test:20236:service_tool",
+      "row_index": 20236,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "ride_request",
+      "status": "accepted",
+      "elapsed_ms": 7534.6,
+      "result": {
+        "raw_probabilities": {
+          "pizza_ordering": 2.7704604690370616e-06,
+          "movie_tickets": 1.7488446246716194e-06,
+          "restaurant_reservation": 9.752468031365424e-06,
+          "coffee_ordering": 7.865028806008922e-07,
+          "ride_request": 0.9999831914901733,
+          "auto_repair_appointment": 1.7649410892772721e-06
+        },
+        "option_keys": [
+          "pizza_ordering",
+          "movie_tickets",
+          "restaurant_reservation",
+          "coffee_ordering",
+          "ride_request",
+          "auto_repair_appointment"
+        ],
+        "expected": "ride_request",
+        "predicted": "ride_request",
+        "correct": true,
+        "latency_ms": 7533.109401992988,
+        "input_tokens": 129
+      }
+    },
+    {
+      "id": "test:20050:service_tool",
+      "row_index": 20050,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "pizza_ordering",
+      "status": "accepted",
+      "elapsed_ms": 7458.9,
+      "result": {
+        "raw_probabilities": {
+          "pizza_ordering": 0.99972003698349,
+          "movie_tickets": 4.28954126618919e-06,
+          "restaurant_reservation": 0.0002420013479422778,
+          "coffee_ordering": 1.6446723748231307e-05,
+          "ride_request": 1.4043727787793614e-05,
+          "auto_repair_appointment": 3.1178876724879956e-06
+        },
+        "option_keys": [
+          "pizza_ordering",
+          "movie_tickets",
+          "restaurant_reservation",
+          "coffee_ordering",
+          "ride_request",
+          "auto_repair_appointment"
+        ],
+        "expected": "pizza_ordering",
+        "predicted": "pizza_ordering",
+        "correct": true,
+        "latency_ms": 7457.535185996676,
+        "input_tokens": 127
+      }
+    },
+    {
+      "id": "test:23693:service_tool",
+      "row_index": 23693,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "coffee_ordering",
+      "status": "accepted",
+      "elapsed_ms": 8183.7,
+      "result": {
+        "raw_probabilities": {
+          "pizza_ordering": 2.735606540227309e-05,
+          "movie_tickets": 6.435797331505455e-06,
+          "restaurant_reservation": 5.271164627629332e-05,
+          "coffee_ordering": 0.999875545501709,
+          "ride_request": 3.31618866766803e-05,
+          "auto_repair_appointment": 4.8263905227940995e-06
+        },
+        "option_keys": [
+          "pizza_ordering",
+          "movie_tickets",
+          "restaurant_reservation",
+          "coffee_ordering",
+          "ride_request",
+          "auto_repair_appointment"
+        ],
+        "expected": "coffee_ordering",
+        "predicted": "coffee_ordering",
+        "correct": true,
+        "latency_ms": 8182.603369990829,
+        "input_tokens": 142
+      }
+    },
+    {
+      "id": "test:4701:answer",
+      "row_index": 4701,
+      "domain": "Reading comprehension",
+      "type": "noul",
+      "label": true,
+      "status": "accepted",
+      "elapsed_ms": 7251.8,
+      "result": {
+        "raw_probabilities": {
+          "false": 0.0006481888121925294,
+          "true": 0.9993517994880676
+        },
+        "option_keys": [
+          "false",
+          "true"
+        ],
+        "expected": true,
+        "predicted": "true",
+        "correct": true,
+        "latency_ms": 7250.376950018108,
+        "input_tokens": 124
+      }
+    },
+    {
+      "id": "test:7311:answer",
+      "row_index": 7311,
+      "domain": "Reading comprehension",
+      "type": "noul",
+      "label": true,
+      "status": "accepted",
+      "elapsed_ms": 5425.7,
+      "result": {
+        "raw_probabilities": {
+          "false": 0.0003773996722884476,
+          "true": 0.9996225833892822
+        },
+        "option_keys": [
+          "false",
+          "true"
+        ],
+        "expected": true,
+        "predicted": "true",
+        "correct": true,
+        "latency_ms": 5424.580264982069,
+        "input_tokens": 89
+      }
+    },
+    {
+      "id": "test:4078:answer",
+      "row_index": 4078,
+      "domain": "Reading comprehension",
+      "type": "noul",
+      "label": false,
+      "status": "accepted",
+      "elapsed_ms": 4080.0,
+      "result": {
+        "raw_probabilities": {
+          "false": 0.9903064966201782,
+          "true": 0.009693548083305359
+        },
+        "option_keys": [
+          "false",
+          "true"
+        ],
+        "expected": false,
+        "predicted": "false",
+        "correct": true,
+        "latency_ms": 4078.988256980665,
+        "input_tokens": 64
+      }
+    },
+    {
+      "id": "test:1267:answer",
+      "row_index": 1267,
+      "domain": "Reading comprehension",
+      "type": "noul",
+      "label": false,
+      "status": "accepted",
+      "elapsed_ms": 8673.8,
+      "result": {
+        "raw_probabilities": {
+          "false": 0.026323486119508743,
+          "true": 0.9736765623092651
+        },
+        "option_keys": [
+          "false",
+          "true"
+        ],
+        "expected": false,
+        "predicted": "true",
+        "correct": false,
+        "latency_ms": 8672.297373006586,
+        "input_tokens": 152
+      }
+    },
+    {
+      "id": "test:8654:should_call_available_tool",
+      "row_index": 8654,
+      "domain": "Tool and workflow decisions",
+      "type": "noul",
+      "label": false,
+      "status": "accepted",
+      "elapsed_ms": 3681.3,
+      "result": {
+        "raw_probabilities": {
+          "false": 0.9917172789573669,
+          "true": 0.008282765746116638
+        },
+        "option_keys": [
+          "false",
+          "true"
+        ],
+        "expected": false,
+        "predicted": "false",
+        "correct": true,
+        "latency_ms": 3680.5364550091326,
+        "input_tokens": 58
+      }
+    },
+    {
+      "id": "test:8711:should_call_available_tool",
+      "row_index": 8711,
+      "domain": "Tool and workflow decisions",
+      "type": "noul",
+      "label": true,
+      "status": "accepted",
+      "elapsed_ms": 6643.4,
+      "result": {
+        "raw_probabilities": {
+          "false": 0.0019021889893338084,
+          "true": 0.998097836971283
+        },
+        "option_keys": [
+          "false",
+          "true"
+        ],
+        "expected": true,
+        "predicted": "true",
+        "correct": true,
+        "latency_ms": 6642.203173018061,
+        "input_tokens": 113
+      }
+    },
+    {
+      "id": "test:8709:should_call_available_tool",
+      "row_index": 8709,
+      "domain": "Tool and workflow decisions",
+      "type": "noul",
+      "label": true,
+      "status": "accepted",
+      "elapsed_ms": 4078.6,
+      "result": {
+        "raw_probabilities": {
+          "false": 0.0026184467133134604,
+          "true": 0.9973815083503723
+        },
+        "option_keys": [
+          "false",
+          "true"
+        ],
+        "expected": true,
+        "predicted": "true",
+        "correct": true,
+        "latency_ms": 4077.7054469799623,
+        "input_tokens": 66
+      }
+    },
+    {
+      "id": "test:8644:should_call_available_tool",
+      "row_index": 8644,
+      "domain": "Tool and workflow decisions",
+      "type": "noul",
+      "label": false,
+      "status": "accepted",
+      "elapsed_ms": 7120.2,
+      "result": {
+        "raw_probabilities": {
+          "false": 0.9996324777603149,
+          "true": 0.00036753472522832453
+        },
+        "option_keys": [
+          "false",
+          "true"
+        ],
+        "expected": false,
+        "predicted": "false",
+        "correct": true,
+        "latency_ms": 7119.189946999541,
+        "input_tokens": 121
+      }
+    },
+    {
+      "id": "test:16145:invoice_value_band",
+      "row_index": 16145,
+      "domain": "Retail, product, and shopping",
+      "type": "score",
+      "label": 0,
+      "status": "accepted",
+      "elapsed_ms": 16209.7,
+      "result": {
+        "raw_probabilities": {
+          "0": 0.3301672339439392,
+          "1": 0.43554186820983887,
+          "2": 0.22668702900409698,
+          "3": 0.007603779900819063
+        },
+        "option_keys": [
+          "0",
+          "1",
+          "2",
+          "3"
+        ],
+        "expected": 0,
+        "predicted": "1",
+        "correct": false,
+        "latency_ms": 16206.134806998307,
+        "input_tokens": 300,
+        "expected_level": 0.9117273470107109,
+        "rounded_level": 1,
+        "rounded_correct": false,
+        "ordinal_absolute_error": 1
+      }
+    },
+    {
+      "id": "test:12460:invoice_value_band",
+      "row_index": 12460,
+      "domain": "Retail, product, and shopping",
+      "type": "score",
+      "label": 0,
+      "status": "accepted",
+      "elapsed_ms": 9589.4,
+      "result": {
+        "raw_probabilities": {
+          "0": 0.1658240556716919,
+          "1": 0.5218738913536072,
+          "2": 0.30611652135849,
+          "3": 0.006185581441968679
+        },
+        "option_keys": [
+          "0",
+          "1",
+          "2",
+          "3"
+        ],
+        "expected": 0,
+        "predicted": "1",
+        "correct": false,
+        "latency_ms": 9588.065331015969,
+        "input_tokens": 166,
+        "expected_level": 1.1526636209641548,
+        "rounded_level": 1,
+        "rounded_correct": false,
+        "ordinal_absolute_error": 1
+      }
+    },
+    {
+      "id": "test:12863:invoice_value_band",
+      "row_index": 12863,
+      "domain": "Retail, product, and shopping",
+      "type": "score",
+      "label": 1,
+      "status": "accepted",
+      "elapsed_ms": 16137.0,
+      "result": {
+        "raw_probabilities": {
+          "0": 0.09861509501934052,
+          "1": 0.39381009340286255,
+          "2": 0.4329610764980316,
+          "3": 0.07461366057395935
+        },
+        "option_keys": [
+          "0",
+          "1",
+          "2",
+          "3"
+        ],
+        "expected": 1,
+        "predicted": "2",
+        "correct": false,
+        "latency_ms": 16133.940058993176,
+        "input_tokens": 297,
+        "expected_level": 1.4835733386556311,
+        "rounded_level": 1,
+        "rounded_correct": true,
+        "ordinal_absolute_error": 0
+      }
+    },
+    {
+      "id": "test:13459:invoice_value_band",
+      "row_index": 13459,
+      "domain": "Retail, product, and shopping",
+      "type": "score",
+      "label": 2,
+      "status": "accepted",
+      "elapsed_ms": 12644.0,
+      "result": {
+        "raw_probabilities": {
+          "0": 0.040925972163677216,
+          "1": 0.30443620681762695,
+          "2": 0.5679848194122314,
+          "3": 0.08665304630994797
+        },
+        "option_keys": [
+          "0",
+          "1",
+          "2",
+          "3"
+        ],
+        "expected": 2,
+        "predicted": "2",
+        "correct": true,
+        "latency_ms": 12642.750006023562,
+        "input_tokens": 232,
+        "expected_level": 1.700364908559699,
+        "rounded_level": 2,
+        "rounded_correct": true,
+        "ordinal_absolute_error": 0
+      }
+    },
+    {
+      "id": "test:6899:sentiment",
+      "row_index": 6899,
+      "domain": "Sentiment, emotion, and moderation",
+      "type": "score",
+      "label": 1,
+      "status": "accepted",
+      "elapsed_ms": 3318.3,
+      "result": {
+        "raw_probabilities": {
+          "0": 0.2171284556388855,
+          "1": 0.754396915435791,
+          "2": 0.02805246226489544,
+          "3": 0.00037635708576999605,
+          "4": 4.575940329232253e-05
+        },
+        "option_keys": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "expected": 1,
+        "predicted": "1",
+        "correct": true,
+        "latency_ms": 3317.4614449962974,
+        "input_tokens": 52,
+        "expected_level": 0.8118139895658778,
+        "rounded_level": 1,
+        "rounded_correct": true,
+        "ordinal_absolute_error": 0
+      }
+    },
+    {
+      "id": "test:2684:sentiment",
+      "row_index": 2684,
+      "domain": "Sentiment, emotion, and moderation",
+      "type": "score",
+      "label": 3,
+      "status": "accepted",
+      "elapsed_ms": 3280.6,
+      "result": {
+        "raw_probabilities": {
+          "0": 0.0010936021571978927,
+          "1": 0.006917265243828297,
+          "2": 0.09923097491264343,
+          "3": 0.7675650715827942,
+          "4": 0.12519308924674988
+        },
+        "option_keys": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "expected": 3,
+        "predicted": "3",
+        "correct": true,
+        "latency_ms": 3279.5410029939376,
+        "input_tokens": 50,
+        "expected_level": 3.008846777347049,
+        "rounded_level": 3,
+        "rounded_correct": true,
+        "ordinal_absolute_error": 0
+      }
+    },
+    {
+      "id": "test:5611:sentiment",
+      "row_index": 5611,
+      "domain": "Sentiment, emotion, and moderation",
+      "type": "score",
+      "label": 1,
+      "status": "accepted",
+      "elapsed_ms": 2571.4,
+      "result": {
+        "raw_probabilities": {
+          "0": 0.05278006196022034,
+          "1": 0.5871099233627319,
+          "2": 0.34097418189048767,
+          "3": 0.01594449393451214,
+          "4": 0.0031914126593619585
+        },
+        "option_keys": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "expected": 1,
+        "predicted": "1",
+        "correct": true,
+        "latency_ms": 2570.5211180029437,
+        "input_tokens": 38,
+        "expected_level": 1.3296573214462561,
+        "rounded_level": 1,
+        "rounded_correct": true,
+        "ordinal_absolute_error": 0
+      }
+    },
+    {
+      "id": "test:6709:sentiment",
+      "row_index": 6709,
+      "domain": "Sentiment, emotion, and moderation",
+      "type": "score",
+      "label": 2,
+      "status": "accepted",
+      "elapsed_ms": 3908.7,
+      "result": {
+        "raw_probabilities": {
+          "0": 0.001049220678396523,
+          "1": 0.02397192269563675,
+          "2": 0.199298694729805,
+          "3": 0.7703139781951904,
+          "4": 0.005366166587918997
+        },
+        "option_keys": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "expected": 2,
+        "predicted": "3",
+        "correct": false,
+        "latency_ms": 3907.627959997626,
+        "input_tokens": 62,
+        "expected_level": 2.7549759602385415,
+        "rounded_level": 3,
+        "rounded_correct": false,
+        "ordinal_absolute_error": 1
+      }
+    }
+  ],
+  "summary": {
+    "Reading comprehension / noul": {
+      "n": 4,
+      "argmax_correct": 3,
+      "argmax_accuracy": 0.75,
+      "decision_correct": 3,
+      "decision_accuracy": 0.75,
+      "first_option_baseline_correct": 2,
+      "sample_majority_baseline_correct": 2
+    },
+    "Retail, product, and shopping / score": {
+      "n": 4,
+      "argmax_correct": 1,
+      "argmax_accuracy": 0.25,
+      "decision_correct": 2,
+      "decision_accuracy": 0.5,
+      "first_option_baseline_correct": 2,
+      "sample_majority_baseline_correct": 2,
+      "score_rounded_correct": 2,
+      "score_ordinal_absolute_error_total": 2,
+      "score_expected_absolute_error_mean": 0.7118998495176995
+    },
+    "Sentiment, emotion, and moderation / score": {
+      "n": 4,
+      "argmax_correct": 3,
+      "argmax_accuracy": 0.75,
+      "decision_correct": 3,
+      "decision_accuracy": 0.75,
+      "first_option_baseline_correct": 0,
+      "sample_majority_baseline_correct": 2,
+      "score_rounded_correct": 3,
+      "score_ordinal_absolute_error_total": 1,
+      "score_expected_absolute_error_mean": 0.32041651736649224
+    },
+    "Support and intent routing / choice": {
+      "n": 4,
+      "argmax_correct": 2,
+      "argmax_accuracy": 0.5,
+      "decision_correct": 2,
+      "decision_accuracy": 0.5,
+      "first_option_baseline_correct": 3,
+      "sample_majority_baseline_correct": 1
+    },
+    "Tool and workflow decisions / choice": {
+      "n": 4,
+      "argmax_correct": 3,
+      "argmax_accuracy": 0.75,
+      "decision_correct": 3,
+      "decision_accuracy": 0.75,
+      "first_option_baseline_correct": 1,
+      "sample_majority_baseline_correct": 1
+    },
+    "Tool and workflow decisions / noul": {
+      "n": 4,
+      "argmax_correct": 4,
+      "argmax_accuracy": 1.0,
+      "decision_correct": 4,
+      "decision_accuracy": 1.0,
+      "first_option_baseline_correct": 2,
+      "sample_majority_baseline_correct": 2
+    },
+    "overall": {
+      "n": 24,
+      "argmax_correct": 16,
+      "argmax_accuracy": 0.6666666666666666,
+      "decision_correct": 17,
+      "decision_accuracy": 0.7083333333333334,
+      "first_option_baseline_correct": 10,
+      "sample_majority_baseline_correct": 10,
+      "score_rounded_correct": 5,
+      "score_ordinal_absolute_error_total": 3,
+      "score_expected_absolute_error_mean": 0.5161581834420959
+    },
+    "type:choice": {
+      "n": 8,
+      "argmax_correct": 5,
+      "argmax_accuracy": 0.625,
+      "decision_correct": 5,
+      "decision_accuracy": 0.625,
+      "first_option_baseline_correct": 4,
+      "sample_majority_baseline_correct": 2
+    },
+    "type:noul": {
+      "n": 8,
+      "argmax_correct": 7,
+      "argmax_accuracy": 0.875,
+      "decision_correct": 7,
+      "decision_accuracy": 0.875,
+      "first_option_baseline_correct": 4,
+      "sample_majority_baseline_correct": 4
+    },
+    "type:score": {
+      "n": 8,
+      "argmax_correct": 4,
+      "argmax_accuracy": 0.5,
+      "decision_correct": 5,
+      "decision_accuracy": 0.625,
+      "first_option_baseline_correct": 2,
+      "sample_majority_baseline_correct": 4,
+      "score_rounded_correct": 5,
+      "score_ordinal_absolute_error_total": 3,
+      "score_expected_absolute_error_mean": 0.5161581834420959
+    }
+  },
+  "peak_rss_kib": 20107484,
+  "wall_elapsed_seconds": 170.08,
+  "sample_sha256": {
+    "cases": "23f86243618876c4a3a12a67f49742e205c461c3c3dbad64311caceaee13aa21",
+    "labels": "4fe564dad2f149f476b91dd84c0e512f5dc87bea56b8533cf492ab791eb90669"
+  }
+}

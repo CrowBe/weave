@@ -1,0 +1,502 @@
+{
+  "status": "complete",
+  "dataset": {
+    "name": "avbiswas/bev-decision-150K",
+    "revision": "f83fe8b97094112fa305bfc793be07c8f8742282",
+    "split": "test",
+    "train_sha256": "1b163182db155ba986c8ab8d3d582ac09ec1b1dcbc13c65d048e61379be9fe5b",
+    "test_sha256": "eba9f9df6ad54ccdc3aa6516ab97e4f9dea4030422e0dc90510b85e462206a61"
+  },
+  "method": "deterministic paired selection; positions 0 and 2 for balanced label cells / all other cells positions 0 and 1",
+  "sample_sha256": {
+    "cases": "23f86243618876c4a3a12a67f49742e205c461c3c3dbad64311caceaee13aa21",
+    "labels": "4fe564dad2f149f476b91dd84c0e512f5dc87bea56b8533cf492ab791eb90669"
+  },
+  "route": "Vercel AI Gateway (preferFree throttle policy; spend is measured, not assumed zero)",
+  "cost_accounting": "micros (1e-6 currency units); reported values follow gateway accounting",
+  "requested_cases": 12,
+  "records": [
+    {
+      "id": "test:13793:request_intent",
+      "row_index": 13793,
+      "domain": "Support and intent routing",
+      "type": "choice",
+      "question_key": "request_intent",
+      "status": "accepted",
+      "routed_unit_id": "choice@vercel",
+      "model": "typesafe-ai/jev",
+      "latency_ms": 918,
+      "spent": 14.489999999999998,
+      "attempts": [
+        {
+          "model": "typesafe-ai/jev",
+          "status": "accepted",
+          "cost": 14.489999999999998,
+          "input_tokens": 345
+        }
+      ],
+      "raw_answer": {
+        "type": "choice",
+        "choice": "reminder",
+        "probabilities": {
+          "measurement_conversion": 0,
+          "todo_list": 0.08,
+          "reminder": 0.92,
+          "play_music": 0
+        }
+      },
+      "predicted": "reminder",
+      "correct": true,
+      "label": "reminder",
+      "kev_correct": true,
+      "kev_prediction": "reminder"
+    },
+    {
+      "id": "test:11984:request_domain",
+      "row_index": 11984,
+      "domain": "Support and intent routing",
+      "type": "choice",
+      "question_key": "request_domain",
+      "status": "accepted",
+      "routed_unit_id": "choice@vercel",
+      "model": "typesafe-ai/jev",
+      "latency_ms": 488,
+      "spent": 14.616,
+      "attempts": [
+        {
+          "model": "typesafe-ai/jev",
+          "status": "accepted",
+          "cost": 14.616,
+          "input_tokens": 348
+        }
+      ],
+      "raw_answer": {
+        "type": "choice",
+        "choice": "auto_and_commute",
+        "probabilities": {
+          "meta": 0.41,
+          "auto_and_commute": 0.44,
+          "banking": 0.02,
+          "small_talk": 0.13
+        }
+      },
+      "predicted": "auto_and_commute",
+      "correct": false,
+      "label": "meta",
+      "kev_correct": true,
+      "kev_prediction": "meta"
+    },
+    {
+      "id": "test:24142:size_argument",
+      "row_index": 24142,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "question_key": "size_argument",
+      "status": "accepted",
+      "routed_unit_id": "choice@vercel",
+      "model": "typesafe-ai/jev",
+      "latency_ms": 346,
+      "spent": 17.471999999999998,
+      "attempts": [
+        {
+          "model": "typesafe-ai/jev",
+          "status": "accepted",
+          "cost": 17.471999999999998,
+          "input_tokens": 416
+        }
+      ],
+      "raw_answer": {
+        "type": "choice",
+        "choice": "medium",
+        "probabilities": {
+          "medium": 0.73,
+          "large": 0.27,
+          "small": 0
+        }
+      },
+      "predicted": "medium",
+      "correct": true,
+      "label": "medium",
+      "kev_correct": false,
+      "kev_prediction": "large"
+    },
+    {
+      "id": "test:20236:service_tool",
+      "row_index": 20236,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "question_key": "service_tool",
+      "status": "accepted",
+      "routed_unit_id": "choice@vercel",
+      "model": "typesafe-ai/jev",
+      "latency_ms": 466,
+      "spent": 18.732,
+      "attempts": [
+        {
+          "model": "typesafe-ai/jev",
+          "status": "accepted",
+          "cost": 18.732,
+          "input_tokens": 446
+        }
+      ],
+      "raw_answer": {
+        "type": "choice",
+        "choice": "ride_request",
+        "probabilities": {
+          "movie_tickets": 0,
+          "auto_repair_appointment": 0,
+          "restaurant_reservation": 0,
+          "ride_request": 1,
+          "coffee_ordering": 0,
+          "pizza_ordering": 0
+        }
+      },
+      "predicted": "ride_request",
+      "correct": true,
+      "label": "ride_request",
+      "kev_correct": true,
+      "kev_prediction": "ride_request"
+    },
+    {
+      "id": "test:4701:answer",
+      "row_index": 4701,
+      "domain": "Reading comprehension",
+      "type": "noul",
+      "question_key": "answer",
+      "status": "accepted",
+      "routed_unit_id": "boolean@vercel",
+      "model": "typesafe-ai/jev",
+      "latency_ms": 348,
+      "spent": 16.212,
+      "attempts": [
+        {
+          "model": "typesafe-ai/jev",
+          "status": "accepted",
+          "cost": 16.212,
+          "input_tokens": 386
+        }
+      ],
+      "raw_answer": {
+        "type": "boolean",
+        "probability": 0.97
+      },
+      "predicted": true,
+      "probability_true": 0.97,
+      "correct": true,
+      "label": true,
+      "kev_correct": true,
+      "kev_prediction": "true"
+    },
+    {
+      "id": "test:4078:answer",
+      "row_index": 4078,
+      "domain": "Reading comprehension",
+      "type": "noul",
+      "question_key": "answer",
+      "status": "accepted",
+      "routed_unit_id": "boolean@vercel",
+      "model": "typesafe-ai/jev",
+      "latency_ms": 333,
+      "spent": 13.482,
+      "attempts": [
+        {
+          "model": "typesafe-ai/jev",
+          "status": "accepted",
+          "cost": 13.482,
+          "input_tokens": 321
+        }
+      ],
+      "raw_answer": {
+        "type": "boolean",
+        "probability": 0.15
+      },
+      "predicted": false,
+      "probability_true": 0.15,
+      "correct": true,
+      "label": false,
+      "kev_correct": true,
+      "kev_prediction": "false"
+    },
+    {
+      "id": "test:8654:should_call_available_tool",
+      "row_index": 8654,
+      "domain": "Tool and workflow decisions",
+      "type": "noul",
+      "question_key": "should_call_available_tool",
+      "status": "accepted",
+      "routed_unit_id": "boolean@vercel",
+      "model": "typesafe-ai/jev",
+      "latency_ms": 333,
+      "spent": 13.271999999999998,
+      "attempts": [
+        {
+          "model": "typesafe-ai/jev",
+          "status": "accepted",
+          "cost": 13.271999999999998,
+          "input_tokens": 316
+        }
+      ],
+      "raw_answer": {
+        "type": "boolean",
+        "probability": 0.46
+      },
+      "predicted": false,
+      "probability_true": 0.46,
+      "correct": true,
+      "label": false,
+      "kev_correct": true,
+      "kev_prediction": "false"
+    },
+    {
+      "id": "test:8711:should_call_available_tool",
+      "row_index": 8711,
+      "domain": "Tool and workflow decisions",
+      "type": "noul",
+      "question_key": "should_call_available_tool",
+      "status": "accepted",
+      "routed_unit_id": "boolean@vercel",
+      "model": "typesafe-ai/jev",
+      "latency_ms": 350,
+      "spent": 15.623999999999999,
+      "attempts": [
+        {
+          "model": "typesafe-ai/jev",
+          "status": "accepted",
+          "cost": 15.623999999999999,
+          "input_tokens": 372
+        }
+      ],
+      "raw_answer": {
+        "type": "boolean",
+        "probability": 0.96
+      },
+      "predicted": true,
+      "probability_true": 0.96,
+      "correct": true,
+      "label": true,
+      "kev_correct": true,
+      "kev_prediction": "true"
+    },
+    {
+      "id": "test:16145:invoice_value_band",
+      "row_index": 16145,
+      "domain": "Retail, product, and shopping",
+      "type": "score",
+      "question_key": "invoice_value_band",
+      "status": "accepted",
+      "routed_unit_id": "score@vercel",
+      "model": "typesafe-ai/jev",
+      "latency_ms": 312,
+      "spent": 24.444000000000003,
+      "attempts": [
+        {
+          "model": "typesafe-ai/jev",
+          "status": "accepted",
+          "cost": 24.444000000000003,
+          "input_tokens": 582
+        }
+      ],
+      "raw_answer": {
+        "type": "score",
+        "score": 0.01,
+        "probabilities": {
+          "0": 1,
+          "1": 0,
+          "2": 0,
+          "3": 0
+        }
+      },
+      "expected_score": 0.01,
+      "predicted": 0,
+      "correct": true,
+      "absolute_error": 0.01,
+      "label": 0,
+      "kev_correct": false,
+      "kev_predicted": 1,
+      "kev_expected_level": 0.9117273470107109,
+      "kev_prediction": 1
+    },
+    {
+      "id": "test:12863:invoice_value_band",
+      "row_index": 12863,
+      "domain": "Retail, product, and shopping",
+      "type": "score",
+      "question_key": "invoice_value_band",
+      "status": "accepted",
+      "routed_unit_id": "score@vercel",
+      "model": "typesafe-ai/jev",
+      "latency_ms": 463,
+      "spent": 24.317999999999998,
+      "attempts": [
+        {
+          "model": "typesafe-ai/jev",
+          "status": "accepted",
+          "cost": 24.317999999999998,
+          "input_tokens": 579
+        }
+      ],
+      "raw_answer": {
+        "type": "score",
+        "score": 1.13,
+        "probabilities": {
+          "0": 0,
+          "1": 0.86,
+          "2": 0.14,
+          "3": 0
+        }
+      },
+      "expected_score": 1.13,
+      "predicted": 1,
+      "correct": true,
+      "absolute_error": 0.1299999999999999,
+      "label": 1,
+      "kev_correct": true,
+      "kev_predicted": 1,
+      "kev_expected_level": 1.4835733386556311,
+      "kev_prediction": 1
+    },
+    {
+      "id": "test:6899:sentiment",
+      "row_index": 6899,
+      "domain": "Sentiment, emotion, and moderation",
+      "type": "score",
+      "question_key": "sentiment",
+      "status": "accepted",
+      "routed_unit_id": "score@vercel",
+      "model": "typesafe-ai/jev",
+      "latency_ms": 404,
+      "spent": 14.112,
+      "attempts": [
+        {
+          "model": "typesafe-ai/jev",
+          "status": "accepted",
+          "cost": 14.112,
+          "input_tokens": 336
+        }
+      ],
+      "raw_answer": {
+        "type": "score",
+        "score": 0.72,
+        "probabilities": {
+          "0": 0.28,
+          "1": 0.72,
+          "2": 0,
+          "3": 0,
+          "4": 0
+        }
+      },
+      "expected_score": 0.72,
+      "predicted": 1,
+      "correct": true,
+      "absolute_error": 0.28,
+      "label": 1,
+      "kev_correct": true,
+      "kev_predicted": 1,
+      "kev_expected_level": 0.8118139895658778,
+      "kev_prediction": 1
+    },
+    {
+      "id": "test:2684:sentiment",
+      "row_index": 2684,
+      "domain": "Sentiment, emotion, and moderation",
+      "type": "score",
+      "question_key": "sentiment",
+      "status": "accepted",
+      "routed_unit_id": "score@vercel",
+      "model": "typesafe-ai/jev",
+      "latency_ms": 613,
+      "spent": 14.027999999999999,
+      "attempts": [
+        {
+          "model": "typesafe-ai/jev",
+          "status": "accepted",
+          "cost": 14.027999999999999,
+          "input_tokens": 334
+        }
+      ],
+      "raw_answer": {
+        "type": "score",
+        "score": 3.21,
+        "probabilities": {
+          "0": 0,
+          "1": 0,
+          "2": 0,
+          "3": 0.78,
+          "4": 0.22
+        }
+      },
+      "expected_score": 3.21,
+      "predicted": 3,
+      "correct": true,
+      "absolute_error": 0.20999999999999996,
+      "label": 3,
+      "kev_correct": true,
+      "kev_predicted": 3,
+      "kev_expected_level": 3.008846777347049,
+      "kev_prediction": 3
+    }
+  ],
+  "selected_ids": [
+    "test:13793:request_intent",
+    "test:11984:request_domain",
+    "test:24142:size_argument",
+    "test:20236:service_tool",
+    "test:4701:answer",
+    "test:4078:answer",
+    "test:8654:should_call_available_tool",
+    "test:8711:should_call_available_tool",
+    "test:16145:invoice_value_band",
+    "test:12863:invoice_value_band",
+    "test:6899:sentiment",
+    "test:2684:sentiment"
+  ],
+  "per_cell": {
+    "Support and intent routing / choice": {
+      "n": 2,
+      "jev_correct": 1,
+      "kev_correct": 2,
+      "mean_latency_ms": 703
+    },
+    "Tool and workflow decisions / choice": {
+      "n": 2,
+      "jev_correct": 2,
+      "kev_correct": 1,
+      "mean_latency_ms": 406
+    },
+    "Reading comprehension / noul": {
+      "n": 2,
+      "jev_correct": 2,
+      "kev_correct": 2,
+      "mean_latency_ms": 340.5
+    },
+    "Tool and workflow decisions / noul": {
+      "n": 2,
+      "jev_correct": 2,
+      "kev_correct": 2,
+      "mean_latency_ms": 341.5
+    },
+    "Retail, product, and shopping / score": {
+      "n": 2,
+      "jev_correct": 2,
+      "kev_correct": 1,
+      "mean_latency_ms": 387.5
+    },
+    "Sentiment, emotion, and moderation / score": {
+      "n": 2,
+      "jev_correct": 2,
+      "kev_correct": 2,
+      "mean_latency_ms": 508.5
+    }
+  },
+  "paired": {
+    "n": 12,
+    "jev_correct": 11,
+    "kev_correct": 10,
+    "both_correct": 9,
+    "jev_only": 2,
+    "kev_only": 1,
+    "neither": 0,
+    "total_spent_micros": 200.802,
+    "mean_latency_ms": 447.8333333333333
+  }
+}
