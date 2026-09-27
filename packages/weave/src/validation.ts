@@ -52,6 +52,7 @@ const EXPECTED_SOURCE: Readonly<Record<PayloadType, readonly ProvenanceKind[]>> 
   'strategy.promoted': ['operator'],
   'strategy.rolled_back': ['runtime'],
   'provider.keepalive': ['gateway', 'host'],
+  'destination.policy': ['operator'],
 };
 
 function rejected(reason: string): Validation {
@@ -209,7 +210,19 @@ export function validate(input: ObservationInput, state: State): Validation {
       return validateRollback(payload, state);
     case 'provider.keepalive':
       return ACCEPTED;
+    case 'destination.policy':
+      return validateDestinationPolicy(payload);
   }
+}
+
+function validateDestinationPolicy(payload: Record<string, unknown>): Validation {
+  if (!isNonEmptyString(payload['resource'])) {
+    return rejected('destination.policy requires a resource');
+  }
+  if (!isStringArray(payload['destinations']) || payload['destinations'].length === 0) {
+    return rejected('destination.policy requires destinations');
+  }
+  return ACCEPTED;
 }
 
 function validateGoal(payload: Record<string, unknown>, state: State): Validation {
@@ -782,6 +795,9 @@ function validateProfileRecord(payload: Record<string, unknown>, state: State): 
   }
   if (payload['slices'] !== undefined && !isStringArray(payload['slices'])) {
     return rejected('profile.recorded slices must be ids');
+  }
+  if (payload['schema_for'] !== undefined && !isStringArray(payload['schema_for'])) {
+    return rejected('profile.recorded schema_for must be operation ids');
   }
   if (state.profiles[payload['id']]) {
     return rejected(`profile ${payload['id']} is already recorded`);

@@ -7,8 +7,10 @@
  */
 export { createInferenceGateway, type GatewayConfig } from './gateway.js';
 export {
+  priceAttempt,
   route,
   worstCaseCost,
+  type AttemptPrice,
   type ExclusionReason,
   type RouteExclusion,
   type RoutingDecision,

@@ -224,6 +224,19 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   /** Fixture source writer: subject to the same coordinator as publication. */
+  /** Hold read locks for a runtime action. A write to one of these resources waits. */
+  holdReads(invocation_id: string, resources: readonly string[]): void {
+    this.coordinator.acquire(
+      invocation_id,
+      resources.map((resource) => ({ resource, mode: 'read' as const })),
+      (ref) => this.store.lookupRef(ref)?.canonical_id ?? ref,
+    );
+  }
+
+  releaseReads(invocation_id: string): void {
+    this.coordinator.release(invocation_id);
+  }
+
   tryWriteSource(handle: ResourceRef, content: string): { ok: true; revision: number } | { ok: false; reason: 'conflict' | 'unknown' } {
     const issued = this.store.lookupRef(handle);
     if (!issued || issued.kind !== 'source') {

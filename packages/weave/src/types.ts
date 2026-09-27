@@ -50,6 +50,13 @@ export interface Goal {
   readonly destination?: ResourceId;
   readonly authority: { readonly read: readonly ResourceId[]; readonly write?: readonly ResourceId[] };
   readonly framing?: boolean;
+  /**
+   * Destinations this goal permits for inference. Policy may narrow them
+   * from the action read set. Absent keeps the local destination only.
+   */
+  readonly destinations?: readonly string[];
+  /** Read-only review on this goal. It is not a child goal. */
+  readonly review?: boolean;
   /** A transformation the catalogue cannot yet perform. Selects `crystallize_and_report@1`. */
   readonly gap?: {
     readonly operation: string;
@@ -193,6 +200,8 @@ export interface ViewSliceManifest {
   readonly revisions: readonly Seq[];
   readonly truncated: boolean;
   readonly omitted: readonly ViewOmission[];
+  /** Set when this slice was filled by a shared assembly. */
+  readonly assembly_id?: string;
 }
 
 export interface StateView {
@@ -210,6 +219,12 @@ export interface InferenceTermsRecord {
   readonly deadline: number;
   readonly cost_ceiling: number;
   readonly max_attempts: number;
+  readonly prefix_digest?: string;
+  readonly prefix_cache?: {
+    readonly routed_unit_id: string;
+    readonly prefix_digest: string;
+    readonly cached_tokens: number;
+  };
 }
 
 export interface InferenceRequestedPayload {
@@ -361,6 +376,7 @@ export const PAYLOAD_TYPES = [
   'strategy.promoted',
   'strategy.rolled_back',
   'provider.keepalive',
+  'destination.policy',
 ] as const;
 export type PayloadType = (typeof PAYLOAD_TYPES)[number];
 
@@ -454,6 +470,7 @@ export interface ContextProfileRecord {
   readonly catalogue_budget: number;
   readonly slices?: readonly string[];
   readonly prefix?: string;
+  readonly schema_for?: readonly string[];
 }
 
 export interface ExperimentRecord {
@@ -539,6 +556,7 @@ export interface State {
   readonly crystallization: CrystallizationState;
   readonly conclusions: readonly CachedConclusion[];
   readonly policies: readonly PolicyRecord[];
+  readonly destination_policies: readonly { readonly resource: string; readonly destinations: readonly string[] }[];
   readonly normalized: Readonly<Record<ResourceId, { readonly text: string; readonly revision: number; readonly evidence: Seq }>>;
   readonly workload: readonly WorkloadCase[];
   readonly corrections: readonly HumanCorrection[];
@@ -583,6 +601,8 @@ export interface ActionRecord {
   readonly grant: Grant | null;
   readonly invocation_id: string | null;
   readonly reconciled: boolean;
+  /** Set when the action failed. The same candidate and failure are not dispatched again. */
+  readonly failure?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -655,6 +675,8 @@ export interface CycleRecord {
   }[];
   readonly not_selected: readonly { readonly candidate_id: CandidateId; readonly reason: NotSelectedReason }[];
   readonly outcome: CycleOutcome;
+  /** Slice-assembly cost charged on this cycle. A shared assembly is counted once. */
+  readonly cost_micros: number;
 }
 
 export interface Trace {

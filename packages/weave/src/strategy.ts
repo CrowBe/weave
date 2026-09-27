@@ -32,7 +32,13 @@ export function isCorePatch(candidate: unknown): boolean {
 
 export function stablePrefixBytes(profile: FrameProfile, view: StateView): string {
   const content = view.content;
-  const catalogue = isRecord(content) && Array.isArray(content['catalogue']) ? content['catalogue'] : [];
+  const catalogue = isRecord(content)
+    ? Array.isArray(content['catalogue'])
+      ? content['catalogue']
+      : Array.isArray(content['catalogue_index'])
+        ? content['catalogue_index']
+        : []
+    : [];
   return stableStringify({
     profile: profile.id,
     profile_version: profile.version,
@@ -154,10 +160,15 @@ export function amendmentMovesProtocol(experiment: ExperimentRecord, payload: Re
 
 function catalogueIds(content: unknown): Set<string> {
   const ids = new Set<string>();
-  if (!isRecord(content) || !Array.isArray(content['catalogue'])) {
+  if (!isRecord(content)) {
     return ids;
   }
-  for (const entry of content['catalogue']) {
+  const entries = Array.isArray(content['catalogue_index'])
+    ? content['catalogue_index']
+    : Array.isArray(content['catalogue'])
+      ? content['catalogue']
+      : [];
+  for (const entry of entries) {
     if (isRecord(entry) && typeof entry['id'] === 'string') {
       ids.add(entry['id']);
     }
