@@ -1,0 +1,252 @@
+{
+  "status": "synthetic adapter probe",
+  "checkpoint": "fastino/GLiNER2.5-Decide",
+  "revision": "7ee5da4c2415e32259bcdc0b1a7367c32ce8d6f6",
+  "split": "validation",
+  "device": "cpu",
+  "threads": 2,
+  "torch": "2.14.0+cpu",
+  "sites": {
+    "result.evaluate": {
+      "split_sha256": "7c61519c311746f6f15d1834843c0d6ff0f87d8eb29abf19686fb8768400541d",
+      "summary": {
+        "n": 18,
+        "correct": 17,
+        "groups": 3,
+        "label_counts": {
+          "met": 6,
+          "unmet": 6,
+          "unknown": 4,
+          "partial": 2
+        },
+        "majority_floor": 6,
+        "uniform_floor": 4.5,
+        "relevant_flips": 5,
+        "irrelevant_holds": 6,
+        "contrast_pairs": 6,
+        "median_ms": 829.895,
+        "p95_ms": 890.48
+      },
+      "rows": [
+        {
+          "id": "evaluate.publish-stale-readset.v0.base",
+          "group": "evaluate.publish-stale-readset",
+          "variant": 0,
+          "arm": "base",
+          "label": "met",
+          "predicted": "met",
+          "correct": true,
+          "top_score": 1.0,
+          "option_count": 4,
+          "latency_ms": 790.01
+        },
+        {
+          "id": "evaluate.publish-stale-readset.v0.relevant",
+          "group": "evaluate.publish-stale-readset",
+          "variant": 0,
+          "arm": "relevant",
+          "label": "unmet",
+          "predicted": "unmet",
+          "correct": true,
+          "top_score": 0.9998341798782349,
+          "option_count": 4,
+          "latency_ms": 914.48
+        },
+        {
+          "id": "evaluate.publish-stale-readset.v0.irrelevant",
+          "group": "evaluate.publish-stale-readset",
+          "variant": 0,
+          "arm": "irrelevant",
+          "label": "met",
+          "predicted": "met",
+          "correct": true,
+          "top_score": 0.9999998807907104,
+          "option_count": 4,
+          "latency_ms": 851.14
+        },
+        {
+          "id": "evaluate.publish-stale-readset.v1.base",
+          "group": "evaluate.publish-stale-readset",
+          "variant": 1,
+          "arm": "base",
+          "label": "met",
+          "predicted": "met",
+          "correct": true,
+          "top_score": 0.9999997615814209,
+          "option_count": 4,
+          "latency_ms": 853.48
+        },
+        {
+          "id": "evaluate.publish-stale-readset.v1.relevant",
+          "group": "evaluate.publish-stale-readset",
+          "variant": 1,
+          "arm": "relevant",
+          "label": "unmet",
+          "predicted": "unmet",
+          "correct": true,
+          "top_score": 0.9990988969802856,
+          "option_count": 4,
+          "latency_ms": 839.1
+        },
+        {
+          "id": "evaluate.publish-stale-readset.v1.irrelevant",
+          "group": "evaluate.publish-stale-readset",
+          "variant": 1,
+          "arm": "irrelevant",
+          "label": "met",
+          "predicted": "met",
+          "correct": true,
+          "top_score": 0.9999996423721313,
+          "option_count": 4,
+          "latency_ms": 846.92
+        },
+        {
+          "id": "evaluate.assemble-missing-readset.v0.base",
+          "group": "evaluate.assemble-missing-readset",
+          "variant": 0,
+          "arm": "base",
+          "label": "unknown",
+          "predicted": "unknown",
+          "correct": true,
+          "top_score": 0.9999992847442627,
+          "option_count": 4,
+          "latency_ms": 770.25
+        },
+        {
+          "id": "evaluate.assemble-missing-readset.v0.relevant",
+          "group": "evaluate.assemble-missing-readset",
+          "variant": 0,
+          "arm": "relevant",
+          "label": "met",
+          "predicted": "met",
+          "correct": true,
+          "top_score": 0.9999996423721313,
+          "option_count": 4,
+          "latency_ms": 777.4
+        },
+        {
+          "id": "evaluate.assemble-missing-readset.v0.irrelevant",
+          "group": "evaluate.assemble-missing-readset",
+          "variant": 0,
+          "arm": "irrelevant",
+          "label": "unknown",
+          "predicted": "unknown",
+          "correct": true,
+          "top_score": 0.9999991655349731,
+          "option_count": 4,
+          "latency_ms": 832.03
+        },
+        {
+          "id": "evaluate.assemble-missing-readset.v1.base",
+          "group": "evaluate.assemble-missing-readset",
+          "variant": 1,
+          "arm": "base",
+          "label": "unknown",
+          "predicted": "unknown",
+          "correct": true,
+          "top_score": 0.9999996423721313,
+          "option_count": 4,
+          "latency_ms": 771.63
+        },
+        {
+          "id": "evaluate.assemble-missing-readset.v1.relevant",
+          "group": "evaluate.assemble-missing-readset",
+          "variant": 1,
+          "arm": "relevant",
+          "label": "met",
+          "predicted": "met",
+          "correct": true,
+          "top_score": 0.9999996423721313,
+          "option_count": 4,
+          "latency_ms": 774.41
+        },
+        {
+          "id": "evaluate.assemble-missing-readset.v1.irrelevant",
+          "group": "evaluate.assemble-missing-readset",
+          "variant": 1,
+          "arm": "irrelevant",
+          "label": "unknown",
+          "predicted": "unknown",
+          "correct": true,
+          "top_score": 0.9999997615814209,
+          "option_count": 4,
+          "latency_ms": 826.65
+        },
+        {
+          "id": "evaluate.failure-versus-progress.v0.base",
+          "group": "evaluate.failure-versus-progress",
+          "variant": 0,
+          "arm": "base",
+          "label": "unmet",
+          "predicted": "unmet",
+          "correct": true,
+          "top_score": 0.9922882318496704,
+          "option_count": 4,
+          "latency_ms": 824.77
+        },
+        {
+          "id": "evaluate.failure-versus-progress.v0.relevant",
+          "group": "evaluate.failure-versus-progress",
+          "variant": 0,
+          "arm": "relevant",
+          "label": "partial",
+          "predicted": "partial",
+          "correct": true,
+          "top_score": 0.7543721795082092,
+          "option_count": 4,
+          "latency_ms": 818.97
+        },
+        {
+          "id": "evaluate.failure-versus-progress.v0.irrelevant",
+          "group": "evaluate.failure-versus-progress",
+          "variant": 0,
+          "arm": "irrelevant",
+          "label": "unmet",
+          "predicted": "unmet",
+          "correct": true,
+          "top_score": 0.9883888959884644,
+          "option_count": 4,
+          "latency_ms": 890.48
+        },
+        {
+          "id": "evaluate.failure-versus-progress.v1.base",
+          "group": "evaluate.failure-versus-progress",
+          "variant": 1,
+          "arm": "base",
+          "label": "unmet",
+          "predicted": "unmet",
+          "correct": true,
+          "top_score": 0.9774528741836548,
+          "option_count": 4,
+          "latency_ms": 834.5
+        },
+        {
+          "id": "evaluate.failure-versus-progress.v1.relevant",
+          "group": "evaluate.failure-versus-progress",
+          "variant": 1,
+          "arm": "relevant",
+          "label": "partial",
+          "predicted": "unmet",
+          "correct": false,
+          "top_score": 0.9915087223052979,
+          "option_count": 4,
+          "latency_ms": 827.76
+        },
+        {
+          "id": "evaluate.failure-versus-progress.v1.irrelevant",
+          "group": "evaluate.failure-versus-progress",
+          "variant": 1,
+          "arm": "irrelevant",
+          "label": "unmet",
+          "predicted": "unmet",
+          "correct": true,
+          "top_score": 0.7961074709892273,
+          "option_count": 4,
+          "latency_ms": 849.34
+        }
+      ]
+    }
+  },
+  "adapter_sha256": "bfba2fb96112696641f9f1b8dde709c4d084b4f37cac799759f3acc318f30a61",
+  "peak_rss_kib": 4269280
+}

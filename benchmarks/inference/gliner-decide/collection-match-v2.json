@@ -1,0 +1,1238 @@
+{
+  "version": "weave.training-seed.v1",
+  "site": "capability.match",
+  "kind": "choice",
+  "status": "authored synthetic seed; no production traces; labels describe contract fit only",
+  "source_contracts": [
+    "packages/agentfabric/src/contracts.ts",
+    "packages/weave/src/normalize-author.ts",
+    "packages/weave/src/fold-author.ts"
+  ],
+  "prompt": "Which listed capability contract can perform the requested operation by itself? Choose none if no single listed contract can. A match is a semantic suggestion only; it grants no authority to invoke or execute.",
+  "labels": {
+    "inspect": "Read one named text source and return its resource reference, revision, line count, and digest.",
+    "assemble": "Assemble supplied inspection results into a report with the source read set; do not write an external destination.",
+    "publish": "Conditionally write an already checked report to an existing destination and return a publication receipt.",
+    "normalize": "Collapse whitespace in one supplied text value and return the normalized text.",
+    "fold": "Fold inspection digests into one canonical digest.",
+    "none": "No single listed contract performs the requested operation."
+  },
+  "groups": [
+    {
+      "id": "match-v2.01-phase",
+      "split": "train",
+      "family": "phase",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 01",
+          "b": "supplier register batch 01"
+        },
+        {
+          "a": "incident transcript batch 01",
+          "b": "release notes batch 01"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Read one named {a} source and return its revision, line count, and digest.",
+          "label": "inspect"
+        },
+        {
+          "arm": "relevant",
+          "text": "The {a} inspection is supplied; assemble it into a report that records its read set.",
+          "label": "assemble"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Read one named {b} source and return its revision, line count, and digest.",
+          "label": "inspect"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.02-input-shape",
+      "split": "train",
+      "family": "input-shape",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 02",
+          "b": "supplier register batch 02"
+        },
+        {
+          "a": "incident transcript batch 02",
+          "b": "release notes batch 02"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Given inspection results for {a} and {b}, assemble a report retaining the source read set.",
+          "label": "assemble"
+        },
+        {
+          "arm": "relevant",
+          "text": "Given inspection digests for {a} and {b}, fold them into one canonical digest.",
+          "label": "fold"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Given inspection results for {b} and {a}, assemble a report retaining the source read set.",
+          "label": "assemble"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.03-effect-boundary",
+      "split": "train",
+      "family": "effect-boundary",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 03",
+          "b": "supplier register batch 03"
+        },
+        {
+          "a": "incident transcript batch 03",
+          "b": "release notes batch 03"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Write the checked {a} report to its existing destination and return a publication receipt.",
+          "label": "publish"
+        },
+        {
+          "arm": "relevant",
+          "text": "Assemble supplied {a} inspections into an in-memory report and read set; do not write a destination.",
+          "label": "assemble"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Write the checked {b} report to its existing destination and return a publication receipt.",
+          "label": "publish"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.04-text-transform",
+      "split": "train",
+      "family": "text-transform",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 04",
+          "b": "supplier register batch 04"
+        },
+        {
+          "a": "incident transcript batch 04",
+          "b": "release notes batch 04"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Collapse repeated spaces and line breaks in the supplied {a} text.",
+          "label": "normalize"
+        },
+        {
+          "arm": "relevant",
+          "text": "Remove personal names from the supplied {a} text while preserving the remaining layout.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Collapse repeated spaces and line breaks in the supplied {b} text.",
+          "label": "normalize"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.05-digest-shape",
+      "split": "train",
+      "family": "digest-shape",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 05",
+          "b": "supplier register batch 05"
+        },
+        {
+          "a": "incident transcript batch 05",
+          "b": "release notes batch 05"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Fold the supplied inspection digests for {a} and {b} into one canonical digest.",
+          "label": "fold"
+        },
+        {
+          "arm": "relevant",
+          "text": "Hash the complete {a} report bytes with SHA-256 and return the hexadecimal digest.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Fold the supplied inspection digests for {b} and {a} into one canonical digest.",
+          "label": "fold"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.06-resource-read",
+      "split": "train",
+      "family": "resource-read",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 06",
+          "b": "supplier register batch 06"
+        },
+        {
+          "a": "incident transcript batch 06",
+          "b": "release notes batch 06"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Read the named {a} source and return its current revision with line count.",
+          "label": "inspect"
+        },
+        {
+          "arm": "relevant",
+          "text": "Read the words visible in the scanned {a} image and transcribe them.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Read the named {b} source and return its current revision with line count.",
+          "label": "inspect"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.07-report-content",
+      "split": "train",
+      "family": "report-content",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 07",
+          "b": "supplier register batch 07"
+        },
+        {
+          "a": "incident transcript batch 07",
+          "b": "release notes batch 07"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Assemble supplied inspection results for {a} into a report with their revisions.",
+          "label": "assemble"
+        },
+        {
+          "arm": "relevant",
+          "text": "Translate the supplied {a} report into French while keeping its structure.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Assemble supplied inspection results for {b} into a report with their revisions.",
+          "label": "assemble"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.08-precondition",
+      "split": "train",
+      "family": "precondition",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 08",
+          "b": "supplier register batch 08"
+        },
+        {
+          "a": "incident transcript batch 08",
+          "b": "release notes batch 08"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Conditionally write a checked {a} report to an existing destination at its expected revision.",
+          "label": "publish"
+        },
+        {
+          "arm": "relevant",
+          "text": "Create a new destination and then write the checked {a} report there in one operation.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Conditionally write a checked {b} report to an existing destination at its expected revision.",
+          "label": "publish"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.09-whitespace-scope",
+      "split": "train",
+      "family": "whitespace-scope",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 09",
+          "b": "supplier register batch 09"
+        },
+        {
+          "a": "incident transcript batch 09",
+          "b": "release notes batch 09"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Normalize whitespace within the one supplied {a} text value.",
+          "label": "normalize"
+        },
+        {
+          "arm": "relevant",
+          "text": "Normalize whitespace across a collection of files under {a} and save each file.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Normalize whitespace within the one supplied {b} text value.",
+          "label": "normalize"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.10-fold-input",
+      "split": "train",
+      "family": "fold-input",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 10",
+          "b": "supplier register batch 10"
+        },
+        {
+          "a": "incident transcript batch 10",
+          "b": "release notes batch 10"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Fold inspection digests for {a} and {b} into one canonical digest.",
+          "label": "fold"
+        },
+        {
+          "arm": "relevant",
+          "text": "Fold full inspection records for {a} and {b} into a structured report with read set.",
+          "label": "assemble"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Fold inspection digests for {b} and {a} into one canonical digest.",
+          "label": "fold"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.11-publish-input",
+      "split": "train",
+      "family": "publish-input",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 11",
+          "b": "supplier register batch 11"
+        },
+        {
+          "a": "incident transcript batch 11",
+          "b": "release notes batch 11"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Write the already checked report for {a} to its existing destination and return committed revision.",
+          "label": "publish"
+        },
+        {
+          "arm": "relevant",
+          "text": "Inspect {a} and automatically decide which destination to create for the report.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Write the already checked report for {b} to its existing destination and return committed revision.",
+          "label": "publish"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.12-report-read-set",
+      "split": "train",
+      "family": "report-read-set",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 12",
+          "b": "supplier register batch 12"
+        },
+        {
+          "a": "incident transcript batch 12",
+          "b": "release notes batch 12"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Assemble the supplied inspections into a report recording the revisions read for {a} and {b}.",
+          "label": "assemble"
+        },
+        {
+          "arm": "relevant",
+          "text": "Publish that assembled report to its existing destination and return a receipt. This concerns {a}.",
+          "label": "publish"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Assemble the supplied inspections into a report recording the revisions read for {b} and {a}.",
+          "label": "assemble"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.13-inspection-output",
+      "split": "train",
+      "family": "inspection-output",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 13",
+          "b": "supplier register batch 13"
+        },
+        {
+          "a": "incident transcript batch 13",
+          "b": "release notes batch 13"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Read {a} and return its resource reference, revision, line count, and digest.",
+          "label": "inspect"
+        },
+        {
+          "arm": "relevant",
+          "text": "Return only the digest by folding inspection digests from {a} and {b}.",
+          "label": "fold"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Read {b} and return its resource reference, revision, line count, and digest.",
+          "label": "inspect"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.14-single-value",
+      "split": "train",
+      "family": "single-value",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 14",
+          "b": "supplier register batch 14"
+        },
+        {
+          "a": "incident transcript batch 14",
+          "b": "release notes batch 14"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Collapse whitespace in this single supplied text value about {a}.",
+          "label": "normalize"
+        },
+        {
+          "arm": "relevant",
+          "text": "Summarize the supplied text about {a} in three sentences.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Collapse whitespace in this single supplied text value about {b}.",
+          "label": "normalize"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.15-effect-boundary",
+      "split": "train",
+      "family": "effect-boundary",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 15",
+          "b": "supplier register batch 15"
+        },
+        {
+          "a": "incident transcript batch 15",
+          "b": "release notes batch 15"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Assemble the supplied {a} inspection result into a report without external writes.",
+          "label": "assemble"
+        },
+        {
+          "arm": "relevant",
+          "text": "Append the report to an existing {a} destination and return the resulting revision.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Assemble the supplied {b} inspection result into a report without external writes.",
+          "label": "assemble"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.16-canonical-fold",
+      "split": "train",
+      "family": "canonical-fold",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 16",
+          "b": "supplier register batch 16"
+        },
+        {
+          "a": "incident transcript batch 16",
+          "b": "release notes batch 16"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Combine inspection digests for {a} and {b} using the canonical fold operation.",
+          "label": "fold"
+        },
+        {
+          "arm": "relevant",
+          "text": "Combine the inspection source names and revisions into a report for {a} and {b}.",
+          "label": "assemble"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Combine inspection digests for {b} and {a} using the canonical fold operation.",
+          "label": "fold"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.17-resource-identity",
+      "split": "train",
+      "family": "resource-identity",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 17",
+          "b": "supplier register batch 17"
+        },
+        {
+          "a": "incident transcript batch 17",
+          "b": "release notes batch 17"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Inspect named source {a} and report the source reference and current revision.",
+          "label": "inspect"
+        },
+        {
+          "arm": "relevant",
+          "text": "Inspect {a} and change its content to normalize whitespace.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Inspect named source {b} and report the source reference and current revision.",
+          "label": "inspect"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.18-text-preservation",
+      "split": "train",
+      "family": "text-preservation",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 18",
+          "b": "supplier register batch 18"
+        },
+        {
+          "a": "incident transcript batch 18",
+          "b": "release notes batch 18"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Collapse whitespace in supplied {a} text while keeping all words unchanged.",
+          "label": "normalize"
+        },
+        {
+          "arm": "relevant",
+          "text": "Rewrite the supplied {a} text for a friendlier tone while keeping its meaning.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Collapse whitespace in supplied {b} text while keeping all words unchanged.",
+          "label": "normalize"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.19-checked-report",
+      "split": "train",
+      "family": "checked-report",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 19",
+          "b": "supplier register batch 19"
+        },
+        {
+          "a": "incident transcript batch 19",
+          "b": "release notes batch 19"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Conditionally write the already checked report for {a} to its existing destination.",
+          "label": "publish"
+        },
+        {
+          "arm": "relevant",
+          "text": "Check whether the {a} report is accurate and explain any mistakes.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Conditionally write the already checked report for {b} to its existing destination.",
+          "label": "publish"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.20-report-vs-fold",
+      "split": "train",
+      "family": "report-vs-fold",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 20",
+          "b": "supplier register batch 20"
+        },
+        {
+          "a": "incident transcript batch 20",
+          "b": "release notes batch 20"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Assemble the supplied inspections for {a} and {b} as a report with a source read set.",
+          "label": "assemble"
+        },
+        {
+          "arm": "relevant",
+          "text": "Produce a canonical digest by folding the supplied inspection digests for {a} and {b}.",
+          "label": "fold"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Assemble the supplied inspections for {b} and {a} as a report with a source read set.",
+          "label": "assemble"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.21-unsupported-ocr",
+      "split": "validation",
+      "family": "unsupported-ocr",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 21",
+          "b": "supplier register batch 21"
+        },
+        {
+          "a": "incident transcript batch 21",
+          "b": "release notes batch 21"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Read the text source named {a} and return its revision, line count, and digest.",
+          "label": "inspect"
+        },
+        {
+          "arm": "relevant",
+          "text": "Extract text from the scanned image {a}, correct OCR errors, and return the transcription.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Read the text source named {b} and return its revision, line count, and digest.",
+          "label": "inspect"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.22-unsupported-translation",
+      "split": "validation",
+      "family": "unsupported-translation",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 22",
+          "b": "supplier register batch 22"
+        },
+        {
+          "a": "incident transcript batch 22",
+          "b": "release notes batch 22"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Assemble supplied inspection results for {a} into a report that records the read set.",
+          "label": "assemble"
+        },
+        {
+          "arm": "relevant",
+          "text": "Translate the supplied {a} report into Japanese and preserve tables and headings.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Assemble supplied inspection results for {b} into a report that records the read set.",
+          "label": "assemble"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.23-unsupported-redaction",
+      "split": "validation",
+      "family": "unsupported-redaction",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 23",
+          "b": "supplier register batch 23"
+        },
+        {
+          "a": "incident transcript batch 23",
+          "b": "release notes batch 23"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Normalize whitespace in the single supplied {a} text value.",
+          "label": "normalize"
+        },
+        {
+          "arm": "relevant",
+          "text": "Redact names and account numbers from {a} and retain a record of removed values.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Normalize whitespace in the single supplied {b} text value.",
+          "label": "normalize"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.24-unsupported-signing",
+      "split": "validation",
+      "family": "unsupported-signing",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 24",
+          "b": "supplier register batch 24"
+        },
+        {
+          "a": "incident transcript batch 24",
+          "b": "release notes batch 24"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Fold inspection digests for {a} and {b} into one canonical digest.",
+          "label": "fold"
+        },
+        {
+          "arm": "relevant",
+          "text": "Sign the {a} report with an organization private key and return a verifiable signature.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Fold inspection digests for {b} and {a} into one canonical digest.",
+          "label": "fold"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.25-unsupported-create",
+      "split": "validation",
+      "family": "unsupported-create",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 25",
+          "b": "supplier register batch 25"
+        },
+        {
+          "a": "incident transcript batch 25",
+          "b": "release notes batch 25"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Publish a checked {a} report conditionally to its existing destination.",
+          "label": "publish"
+        },
+        {
+          "arm": "relevant",
+          "text": "Provision a new destination, set its access policy, then publish the checked {a} report.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Publish a checked {b} report conditionally to its existing destination.",
+          "label": "publish"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.26-unsupported-summary",
+      "split": "validation",
+      "family": "unsupported-summary",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 26",
+          "b": "supplier register batch 26"
+        },
+        {
+          "a": "incident transcript batch 26",
+          "b": "release notes batch 26"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Read named text source {a} and return its line count and digest.",
+          "label": "inspect"
+        },
+        {
+          "arm": "relevant",
+          "text": "Summarize the argument in {a} as five bullet points for an executive.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Read named text source {b} and return its line count and digest.",
+          "label": "inspect"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.27-unsupported-merge",
+      "split": "validation",
+      "family": "unsupported-merge",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 27",
+          "b": "supplier register batch 27"
+        },
+        {
+          "a": "incident transcript batch 27",
+          "b": "release notes batch 27"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Assemble supplied inspection results for {a} and {b} into a report with a read set.",
+          "label": "assemble"
+        },
+        {
+          "arm": "relevant",
+          "text": "Merge conflicting report drafts for {a} and {b}, resolving disagreements using judgment.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Assemble supplied inspection results for {b} and {a} into a report with a read set.",
+          "label": "assemble"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.28-unsupported-batch",
+      "split": "validation",
+      "family": "unsupported-batch",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 28",
+          "b": "supplier register batch 28"
+        },
+        {
+          "a": "incident transcript batch 28",
+          "b": "release notes batch 28"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Collapse whitespace in the one supplied text value {a}.",
+          "label": "normalize"
+        },
+        {
+          "arm": "relevant",
+          "text": "Recursively normalize every text file in directory {a}, overwriting each source.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Collapse whitespace in the one supplied text value {b}.",
+          "label": "normalize"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.29-unsupported-composition",
+      "split": "test",
+      "family": "unsupported-composition",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 29",
+          "b": "supplier register batch 29"
+        },
+        {
+          "a": "incident transcript batch 29",
+          "b": "release notes batch 29"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Assemble the already supplied inspection results for {a} into a report with a read set.",
+          "label": "assemble"
+        },
+        {
+          "arm": "relevant",
+          "text": "First inspect unread source {a}, then assemble its result and publish it in one operation.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Assemble the already supplied inspection results for {b} into a report with a read set.",
+          "label": "assemble"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.30-unsupported-delete",
+      "split": "test",
+      "family": "unsupported-delete",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 30",
+          "b": "supplier register batch 30"
+        },
+        {
+          "a": "incident transcript batch 30",
+          "b": "release notes batch 30"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Conditionally publish checked report {a} to its existing destination.",
+          "label": "publish"
+        },
+        {
+          "arm": "relevant",
+          "text": "Delete the existing {a} destination after confirming the report is obsolete.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Conditionally publish checked report {b} to its existing destination.",
+          "label": "publish"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.31-unsupported-edit",
+      "split": "test",
+      "family": "unsupported-edit",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 31",
+          "b": "supplier register batch 31"
+        },
+        {
+          "a": "incident transcript batch 31",
+          "b": "release notes batch 31"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Read source {a} and return its revision, line count, and digest.",
+          "label": "inspect"
+        },
+        {
+          "arm": "relevant",
+          "text": "Edit source {a} to remove duplicate paragraphs, then report the changes.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Read source {b} and return its revision, line count, and digest.",
+          "label": "inspect"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.32-unsupported-inference",
+      "split": "test",
+      "family": "unsupported-inference",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 32",
+          "b": "supplier register batch 32"
+        },
+        {
+          "a": "incident transcript batch 32",
+          "b": "release notes batch 32"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Fold supplied inspection digests for {a} and {b} into one canonical digest.",
+          "label": "fold"
+        },
+        {
+          "arm": "relevant",
+          "text": "Infer which inspection is more trustworthy and explain the likely source of error. This concerns {a}.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Fold supplied inspection digests for {b} and {a} into one canonical digest.",
+          "label": "fold"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.33-unsupported-delivery",
+      "split": "test",
+      "family": "unsupported-delivery",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 33",
+          "b": "supplier register batch 33"
+        },
+        {
+          "a": "incident transcript batch 33",
+          "b": "release notes batch 33"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Publish the checked {a} report to its existing destination and return a receipt.",
+          "label": "publish"
+        },
+        {
+          "arm": "relevant",
+          "text": "Email the {a} report to the requester and confirm delivery.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Publish the checked {b} report to its existing destination and return a receipt.",
+          "label": "publish"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.34-unsupported-extraction",
+      "split": "test",
+      "family": "unsupported-extraction",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 34",
+          "b": "supplier register batch 34"
+        },
+        {
+          "a": "incident transcript batch 34",
+          "b": "release notes batch 34"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Normalize whitespace in the supplied text value {a}.",
+          "label": "normalize"
+        },
+        {
+          "arm": "relevant",
+          "text": "Extract all dates, names, and amounts from {a} into a table.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Normalize whitespace in the supplied text value {b}.",
+          "label": "normalize"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.35-unsupported-validation",
+      "split": "test",
+      "family": "unsupported-validation",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 35",
+          "b": "supplier register batch 35"
+        },
+        {
+          "a": "incident transcript batch 35",
+          "b": "release notes batch 35"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Assemble supplied inspections for {a} into a report and preserve their read set.",
+          "label": "assemble"
+        },
+        {
+          "arm": "relevant",
+          "text": "Verify that every source in {a} is factually accurate using external references.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Assemble supplied inspections for {b} into a report and preserve their read set.",
+          "label": "assemble"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.36-unsupported-new-file",
+      "split": "test",
+      "family": "unsupported-new-file",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 36",
+          "b": "supplier register batch 36"
+        },
+        {
+          "a": "incident transcript batch 36",
+          "b": "release notes batch 36"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Inspect the named {a} source and return its revision and digest.",
+          "label": "inspect"
+        },
+        {
+          "arm": "relevant",
+          "text": "Search the filesystem for a similarly named source that may not be provided to the operation. This concerns {a}.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Inspect the named {b} source and return its revision and digest.",
+          "label": "inspect"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.37-unsupported-transform",
+      "split": "test",
+      "family": "unsupported-transform",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 37",
+          "b": "supplier register batch 37"
+        },
+        {
+          "a": "incident transcript batch 37",
+          "b": "release notes batch 37"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Fold inspection digests for {a} and {b} into the canonical digest.",
+          "label": "fold"
+        },
+        {
+          "arm": "relevant",
+          "text": "Encrypt the {a} report with a chosen key and return ciphertext.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Fold inspection digests for {b} and {a} into the canonical digest.",
+          "label": "fold"
+        }
+      ]
+    },
+    {
+      "id": "match-v2.38-unsupported-multi-effect",
+      "split": "test",
+      "family": "unsupported-multi-effect",
+      "variants": [
+        {
+          "a": "quarterly ledger batch 38",
+          "b": "supplier register batch 38"
+        },
+        {
+          "a": "incident transcript batch 38",
+          "b": "release notes batch 38"
+        }
+      ],
+      "arms": [
+        {
+          "arm": "base",
+          "text": "Write the checked {a} report to its existing destination conditionally.",
+          "label": "publish"
+        },
+        {
+          "arm": "relevant",
+          "text": "Create a destination, rewrite the report content, publish it, and notify subscribers. This concerns {a}.",
+          "label": "none"
+        },
+        {
+          "arm": "irrelevant",
+          "text": "Write the checked {b} report to its existing destination conditionally.",
+          "label": "publish"
+        }
+      ]
+    }
+  ]
+}

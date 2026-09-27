@@ -1,0 +1,252 @@
+{
+  "status": "synthetic adapter probe",
+  "checkpoint": "fastino/GLiNER2.5-Decide",
+  "revision": "7ee5da4c2415e32259bcdc0b1a7367c32ce8d6f6",
+  "split": "test",
+  "device": "cpu",
+  "threads": 2,
+  "torch": "2.14.0+cpu",
+  "sites": {
+    "capability.match": {
+      "split_sha256": "89befa093d86ffed4e00ce02a84a0c68cfc6f44d5752f5e11fbceee05c51ddce",
+      "summary": {
+        "n": 18,
+        "correct": 16,
+        "groups": 3,
+        "label_counts": {
+          "c0": 8,
+          "none": 4,
+          "c3": 2,
+          "c2": 4
+        },
+        "majority_floor": 8,
+        "uniform_floor": 3.0,
+        "relevant_flips": 4,
+        "irrelevant_holds": 6,
+        "contrast_pairs": 6,
+        "median_ms": 971.85,
+        "p95_ms": 1048.8
+      },
+      "rows": [
+        {
+          "id": "match.destination-existence.v0.base",
+          "group": "match.destination-existence",
+          "variant": 0,
+          "arm": "base",
+          "label": "c0",
+          "predicted": "c0",
+          "correct": true,
+          "top_score": 1.0,
+          "option_count": 6,
+          "latency_ms": 1407.39
+        },
+        {
+          "id": "match.destination-existence.v0.relevant",
+          "group": "match.destination-existence",
+          "variant": 0,
+          "arm": "relevant",
+          "label": "none",
+          "predicted": "c0",
+          "correct": false,
+          "top_score": 0.9999878406524658,
+          "option_count": 6,
+          "latency_ms": 1010.39
+        },
+        {
+          "id": "match.destination-existence.v0.irrelevant",
+          "group": "match.destination-existence",
+          "variant": 0,
+          "arm": "irrelevant",
+          "label": "c0",
+          "predicted": "c0",
+          "correct": true,
+          "top_score": 1.0,
+          "option_count": 6,
+          "latency_ms": 957.7
+        },
+        {
+          "id": "match.destination-existence.v1.base",
+          "group": "match.destination-existence",
+          "variant": 1,
+          "arm": "base",
+          "label": "c0",
+          "predicted": "c0",
+          "correct": true,
+          "top_score": 1.0,
+          "option_count": 6,
+          "latency_ms": 957.43
+        },
+        {
+          "id": "match.destination-existence.v1.relevant",
+          "group": "match.destination-existence",
+          "variant": 1,
+          "arm": "relevant",
+          "label": "none",
+          "predicted": "c0",
+          "correct": false,
+          "top_score": 0.9999997615814209,
+          "option_count": 6,
+          "latency_ms": 993.55
+        },
+        {
+          "id": "match.destination-existence.v1.irrelevant",
+          "group": "match.destination-existence",
+          "variant": 1,
+          "arm": "irrelevant",
+          "label": "c0",
+          "predicted": "c0",
+          "correct": true,
+          "top_score": 1.0,
+          "option_count": 6,
+          "latency_ms": 961.7
+        },
+        {
+          "id": "match.report-versus-normalize.v0.base",
+          "group": "match.report-versus-normalize",
+          "variant": 0,
+          "arm": "base",
+          "label": "c0",
+          "predicted": "c0",
+          "correct": true,
+          "top_score": 1.0,
+          "option_count": 6,
+          "latency_ms": 967.42
+        },
+        {
+          "id": "match.report-versus-normalize.v0.relevant",
+          "group": "match.report-versus-normalize",
+          "variant": 0,
+          "arm": "relevant",
+          "label": "c3",
+          "predicted": "c3",
+          "correct": true,
+          "top_score": 1.0,
+          "option_count": 6,
+          "latency_ms": 1048.8
+        },
+        {
+          "id": "match.report-versus-normalize.v0.irrelevant",
+          "group": "match.report-versus-normalize",
+          "variant": 0,
+          "arm": "irrelevant",
+          "label": "c0",
+          "predicted": "c0",
+          "correct": true,
+          "top_score": 1.0,
+          "option_count": 6,
+          "latency_ms": 958.16
+        },
+        {
+          "id": "match.report-versus-normalize.v1.base",
+          "group": "match.report-versus-normalize",
+          "variant": 1,
+          "arm": "base",
+          "label": "c0",
+          "predicted": "c0",
+          "correct": true,
+          "top_score": 1.0,
+          "option_count": 6,
+          "latency_ms": 957.66
+        },
+        {
+          "id": "match.report-versus-normalize.v1.relevant",
+          "group": "match.report-versus-normalize",
+          "variant": 1,
+          "arm": "relevant",
+          "label": "c3",
+          "predicted": "c3",
+          "correct": true,
+          "top_score": 0.9999992847442627,
+          "option_count": 6,
+          "latency_ms": 971.85
+        },
+        {
+          "id": "match.report-versus-normalize.v1.irrelevant",
+          "group": "match.report-versus-normalize",
+          "variant": 1,
+          "arm": "irrelevant",
+          "label": "c0",
+          "predicted": "c0",
+          "correct": true,
+          "top_score": 1.0,
+          "option_count": 6,
+          "latency_ms": 962.92
+        },
+        {
+          "id": "match.fold-versus-hash.v0.base",
+          "group": "match.fold-versus-hash",
+          "variant": 0,
+          "arm": "base",
+          "label": "c2",
+          "predicted": "c2",
+          "correct": true,
+          "top_score": 1.0,
+          "option_count": 6,
+          "latency_ms": 958.2
+        },
+        {
+          "id": "match.fold-versus-hash.v0.relevant",
+          "group": "match.fold-versus-hash",
+          "variant": 0,
+          "arm": "relevant",
+          "label": "none",
+          "predicted": "none",
+          "correct": true,
+          "top_score": 0.642512857913971,
+          "option_count": 6,
+          "latency_ms": 1005.15
+        },
+        {
+          "id": "match.fold-versus-hash.v0.irrelevant",
+          "group": "match.fold-versus-hash",
+          "variant": 0,
+          "arm": "irrelevant",
+          "label": "c2",
+          "predicted": "c2",
+          "correct": true,
+          "top_score": 1.0,
+          "option_count": 6,
+          "latency_ms": 971.85
+        },
+        {
+          "id": "match.fold-versus-hash.v1.base",
+          "group": "match.fold-versus-hash",
+          "variant": 1,
+          "arm": "base",
+          "label": "c2",
+          "predicted": "c2",
+          "correct": true,
+          "top_score": 1.0,
+          "option_count": 6,
+          "latency_ms": 971.95
+        },
+        {
+          "id": "match.fold-versus-hash.v1.relevant",
+          "group": "match.fold-versus-hash",
+          "variant": 1,
+          "arm": "relevant",
+          "label": "none",
+          "predicted": "none",
+          "correct": true,
+          "top_score": 0.48876163363456726,
+          "option_count": 6,
+          "latency_ms": 992.89
+        },
+        {
+          "id": "match.fold-versus-hash.v1.irrelevant",
+          "group": "match.fold-versus-hash",
+          "variant": 1,
+          "arm": "irrelevant",
+          "label": "c2",
+          "predicted": "c2",
+          "correct": true,
+          "top_score": 1.0,
+          "option_count": 6,
+          "latency_ms": 999.69
+        }
+      ]
+    }
+  },
+  "adapter_sha256": "38cb21b5ec9293971cef31209acf584a8261b872973b1d1f49e25899aa19f962",
+  "peak_rss_kib": 4269248
+}

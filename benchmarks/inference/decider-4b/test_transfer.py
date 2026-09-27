@@ -1,0 +1,41 @@
+import importlib.util
+import unittest
+from pathlib import Path
+
+
+spec = importlib.util.spec_from_file_location("transfer", Path(__file__).with_name("transfer.py"))
+transfer = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(transfer)
+
+
+class ScoreAnswerTests(unittest.TestCase):
+    def test_choice_uses_returned_option_and_its_probability(self):
+        self.assertEqual(transfer.score_answer(
+            {"type": "choice"}, "b", {"choice": "b", "probabilities": {"a": 0.2, "b": 0.8}},
+        ), ("b", True, 0.8, None))
+
+    def test_noul_uses_half_threshold_and_probability_of_prediction(self):
+        self.assertEqual(transfer.score_answer({"type": "noul"}, False, {"noul": 0.2}),
+                         (False, True, 0.8, None))
+        self.assertEqual(transfer.score_answer({"type": "noul"}, True, {"noul": 0.5}),
+                         (True, True, 0.5, None))
+
+    def test_score_rounds_half_up_and_records_error(self):
+        answer = {"score": 2.5, "probabilities": {"3": 0.4}}
+        self.assertEqual(transfer.score_answer({"type": "score"}, 3, answer),
+                         (3, True, 0.4, 0.5))
+
+    def test_unknown_type_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "unknown question type"):
+            transfer.score_answer({"type": "other"}, 1, {})
+
+    def test_label_is_excluded_from_native_question(self):
+        record = {"question": {"type": "choice", "instructions": "Pick", "criteria": {"a": "A", "b": "B"},
+                               "label": "b"}, "label": "b"}
+        request_question = transfer.model_question(record)
+        self.assertEqual(request_question, {"type": "choice", "instructions": "Pick", "criteria": {"a": "A", "b": "B"}})
+        self.assertNotIn("label", request_question)
+
+
+if __name__ == "__main__":
+    unittest.main()
