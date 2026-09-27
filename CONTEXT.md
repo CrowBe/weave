@@ -370,6 +370,18 @@ The closed, versioned set of components, regions, offers, applicability conditio
 
 The component that presents disclosed operator observations and accepts operator input. It is the usual occupant of the main surface when nothing richer is useful. It is not a mode, and it is not the state of the runtime.
 
+### Artifact
+
+A versioned product the workspace can open: source, prose, a report, a publication, or anything an action emits. The workspace binds its identity, kind, and revision. A body is shown only when the workspace view discloses it. A locator is not an artifact.
+
+### Editor
+
+The one component that opens any artifact. It is agent-first: it shows what work produced, and operator correction goes through an existing observation or grant. It is not a mode and not a second runtime. A reader, chosen by artifact kind, supplies presentation and default checks.
+
+### Reader
+
+The trusted presentation for one artifact kind, including the checks that are on by default for that kind. Prose kinds default to a typo check. Source kinds default to lint and a language service when those capabilities are available. A missing reader or a missing check still shows a disclosed body as text. A reader does not execute the artifact.
+
 ### Component tree
 
 The shell's regions with the components bound in each, resolved against one workspace view revision, one theme record, and the session's placements and pins. It records ids, regions, and slice names. It carries no markup, pixel coordinates, or token values.
@@ -423,6 +435,9 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 - Say **arrangement**, not *composition* or *layout*, for an admitted assignment of components to adaptive regions. A composition is a capability assembled from capabilities.
 - Say **component**, not *widget* or *capability*, for trusted presentation code in the component vocabulary.
 - Say **conversational surface**, not *chat*, for the component that presents and accepts operator input.
+- Say **artifact**, not *file*, for what the editor opens. A locator stays in the host.
+- Say **editor**, not *IDE* or *mode*, for the one component that opens any artifact.
+- Say **reader**, not *interpreter* or *plugin*, for the kind-specific presentation and its default checks. A reader does not execute the artifact.
 - Say **session** for a workspace's attachment to a project on a running runtime. A session is not a transcript, a compaction unit, a scheduler lane, or a restart boundary.
 - Say **session record**, not *journal* or *log*, for the workspace's ephemeral record. The journal is the observation log.
 - Say **workspace view**, not *screen* or *prompt*, for the state view a workspace renders.

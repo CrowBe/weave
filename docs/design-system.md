@@ -345,7 +345,7 @@ grant. Nothing in the declaration names a renderer.
 | `approval.pending@1` | `cut-through`, and adaptive regions only by operator placement | `approvals` | one instance per pending request | `approval.decided` (`approved` or `denied`) |
 | `admission.pending@1` | `cut-through`, and adaptive regions only by operator placement | `admission` | one instance per requested admission | `admission.decided` (`admitted`) |
 | `work.actions@1` | `main.primary`, `main.bottom` | `actions` | `actions` is non-empty | `action.cancel_requested` |
-| `artifact.view@1` | `main.primary`, `main.bottom` | `artifacts` | `artifacts` is disclosed and non-empty | |
+| `editor@1` | `main.primary`, `main.bottom` | `artifacts` | `artifacts` is disclosed and non-empty | a correction, only as an existing observation or a granted write |
 | `crystallization.progress@1` | `main.primary`, `main.bottom` | `crystallization` | crystallization is non-empty | |
 | `notice.list@1` | `main.primary`, `main.bottom`, `right.drawer` | `notices` | `notices` is non-empty | |
 | `frontier.table@1` | adaptive regions, by nav placement or arrangement | `candidates`, `cycle` | `candidates` is non-empty | |
@@ -368,10 +368,9 @@ The payload is not in the runtime. Until it exists, the component renders
 disclosed observations and the submit control stays disabled. Text in that
 component does not authorize, complete, or dispatch anything.
 
-`artifact.view` shows identity, kind, and revision, and the body only when
-the slice includes it. A renderer may draw a richer binding of that same
-component, including source text. The vocabulary does not gain a code editor,
-a diff widget, or a research mode by that binding.
+`editor@1` is the one opener for every artifact. Readers, and the checks they
+default on, are specified in §6.1. Arrangement chooses the editor. It does
+not choose a reader, a language, or a checker.
 
 What each component shows:
 
@@ -403,8 +402,9 @@ What each component shows:
   is present, cancel-requested, and reconciliation. An uncertain outcome stays
   uncertain. A requested cancellation stays requested until the action record
   says otherwise.
-- `artifact.view` shows the artifact's identity and revision. A withheld body
-  is an omission, not an empty artifact.
+- `editor` shows the artifact's identity, kind, and revision, and the disclosed
+  body through the reader for that kind. A withheld body is an omission, not
+  an empty artifact. A missing reader shows the body as text.
 - `notice.list` shows the fact, sequence, provenance, and validation status.
   A rejected notice is labeled rejected. A notice is not a grant and not
   dispatched work.
@@ -430,6 +430,35 @@ add those paths.
 Navigation always reaches the observability components. Opening one from
 `nav` writes a placement. Arrangement cannot clear it. The next session does
 not keep it.
+
+### 6.1 Editor
+
+Any artifact an action emits, and any document the project makes available,
+opens in `editor@1`. The project index is the navigator the operator sees:
+names, kinds, and resource references. Locators stay in the host. There is
+one navigator and one editor, whatever the kind.
+
+A reader is selected from the artifact kind by a deterministic table the
+surface package ships. The table is replaceable data. The first rows are the
+sensible defaults, not a catalogue of servers:
+
+| Kind | Default checks |
+| --- | --- |
+| Prose | typo check |
+| Source | lint, and a language service when a capability for that kind is available |
+| Anything else | none |
+
+A check runs as a capability under the goal's authority, like any other read.
+The editor does not start a server, hold credentials, or gain a filesystem of
+its own. An unavailable check is marked omitted. The body still shows.
+
+An operator correction is an existing observation type or a write under a
+grant the runtime already issued. Keystrokes do not write by themselves.
+
+This plan does not choose dictionaries, linters, language servers, or how a
+buffer is stored. Those can wait until an artifact kind needs them. The
+editor's promise is smaller: whatever an agent outputs, the workspace can
+open it, and the kind brings its usual checks when they exist.
 
 ### Default tree
 
@@ -618,9 +647,11 @@ or edit `VISION.md`.
 4. **Project persistence.** Where the project record and its attachments live,
    and whether an attachment of a repository is a resource reference the host
    already knows how to mint.
-5. **Artifact slice.** `report` and `publication` exist on `State`. The
-   `artifacts` slice's exact fields, and when a body is disclosable, are not
-   fixed.
+5. **Artifact slice and readers.** `report` and `publication` exist on
+   `State`. The `artifacts` slice's exact fields, and when a body is
+   disclosable, are not fixed. Which prose and source kinds ship a reader,
+   and which capabilities back a typo check, a lint, or a language service,
+   are not fixed either. The editor opens a disclosed body without them.
 6. **Renderer bindings.** Web is first. Which token bindings that renderer
    must supply, and how a missing binding fails, are open. Omarchy is a later
    renderer of this specification, not part of this plan.

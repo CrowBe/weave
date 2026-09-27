@@ -664,8 +664,10 @@ without the previous session's pins.
 adaptive region the operator has not claimed, through one `choice` evaluation
 of role `working`. The closed vocabulary, the default tree, and the theme
 tokens stay. The vocabulary names semantic components and interaction states.
-It names no toolkit. Web is the first renderer of that specification. A later
-native renderer is out of scope here.
+It names no toolkit. One editor opens any artifact. A reader, chosen by
+kind, supplies presentation and the default checks for that kind. A missing
+reader still shows a disclosed body as text. Web is the first renderer of
+that specification. A later native renderer is out of scope here.
 
 Arrangements, placements, and pins live on a session record, not in the
 observation log, so presentation cannot reject an in-flight
