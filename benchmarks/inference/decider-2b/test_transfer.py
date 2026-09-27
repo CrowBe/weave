@@ -25,6 +25,15 @@ class ScoreAnswerTests(unittest.TestCase):
         self.assertEqual(transfer.score_answer({"type": "score"}, 3, answer),
                          (3, True, 0.4, 0.5))
 
+    def test_report_names_derived_probability_and_preserves_provider_answer(self):
+        answer = {"choice": "b", "probabilities": {"a": 0.2, "b": 0.8}, "confidence": 0.7}
+        record = {"id": "case", "source": "fixture", "question": {"type": "choice"},
+                  "label": "b", "jev_correct": True, "kev_correct": False}
+        row = transfer.report_row(record, answer, 12)
+        self.assertEqual(row["selected_probability"], 0.8)
+        self.assertNotIn("confidence", row)
+        self.assertEqual(row["answer"], answer)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,6 @@
 import unittest
 
-from run import classify_input, summarize
+from run import classify_input, decode_prediction, summarize
 from capability_match import load_cases, schema_for, summarize as summarize_match
 
 
@@ -28,6 +28,13 @@ class MappingTests(unittest.TestCase):
             "labels": {"yes": "Deleted", "no": "Still present"},
             "prompt": "Was it deleted?",
         })
+
+    def test_boolean_prediction_rejects_an_unexpected_class(self):
+        question = {"type": "noul"}
+        self.assertTrue(decode_prediction(question, {"label": "yes"}))
+        self.assertFalse(decode_prediction(question, {"label": "no"}))
+        with self.assertRaisesRegex(ValueError, "unexpected NOUL label"):
+            decode_prediction(question, {"label": "unexpected"})
 
     def test_score_levels_are_classes_with_descriptions(self):
         record = {

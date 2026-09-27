@@ -80,6 +80,18 @@ def write_report(path, report):
     temporary.replace(path)
 
 
+def report_row(record, answer, latency_ms):
+    predicted, correct, selected_probability, score_error = score_answer(
+        record["question"], record["label"], answer)
+    return {
+        "id": record["id"], "source": record["source"], "type": record["question"]["type"],
+        "label": record["label"], "predicted": predicted, "correct": correct,
+        "selected_probability": selected_probability, "score_error": score_error,
+        "jev_correct": record["jev_correct"], "kev_correct": record["kev_correct"],
+        "answer": answer, "latency_ms": latency_ms,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL)
@@ -124,15 +136,8 @@ def main():
         start = time.monotonic()
         response = model.system_one(record["state"], {record["question_id"]: record["question"]})
         answer = response["answers"][record["question_id"]]
-        predicted, correct, confidence, score_error = score_answer(record["question"], record["label"], answer)
-        report["rows"].append({
-            "id": record["id"], "source": record["source"], "type": record["question"]["type"],
-            "label": record["label"], "predicted": predicted, "correct": correct,
-            "confidence": confidence, "score_error": score_error,
-            "jev_correct": record["jev_correct"], "kev_correct": record["kev_correct"],
-            "answer": answer,
-            "latency_ms": round((time.monotonic() - start) * 1000),
-        })
+        report["rows"].append(report_row(
+            record, answer, round((time.monotonic() - start) * 1000)))
         write_report(args.output, report)
         if (index + 1) % 10 == 0 or index + 1 == len(planned):
             print(f"{index + 1}/{len(planned)} scored; correct {sum(row['correct'] for row in report['rows'])}/{len(report['rows'])}", flush=True)

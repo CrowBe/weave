@@ -98,12 +98,13 @@ def prepare():
                 "splits": {}}
     for split, rows in cases.items():
         path = OUT / f"{split}.jsonl"
+        index_path = OUT / f"{split}-index.jsonl"
         path.write_text("".join(json.dumps(training_case(x), ensure_ascii=False) + "\n" for x in rows))
-        (OUT / f"{split}-index.jsonl").write_text(
+        index_path.write_text(
             "".join(json.dumps({k: x[k] for k in ("id", "group", "label")}) + "\n" for x in rows))
         manifest["splits"][split] = {"rows": len(rows), "groups": len({x["group"] for x in rows}),
                                     "labels": dict(Counter(x["label"] for x in rows)),
-                                    "sha256": digest(path)}
+                                    "sha256": digest(path), "index_sha256": digest(index_path)}
     (OUT / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(json.dumps(manifest, indent=2), flush=True)
 
@@ -111,13 +112,26 @@ def prepare():
 def load_split(split):
     manifest = json.loads((OUT / "manifest.json").read_text())
     path = OUT / f"{split}.jsonl"
+    index_path = OUT / f"{split}-index.jsonl"
     if digest(path) != manifest["splits"][split]["sha256"]:
         raise ValueError("split changed")
+    if digest(index_path) != manifest["splits"][split]["index_sha256"]:
+        raise ValueError("index changed")
     data = [json.loads(s) for s in path.read_text().splitlines()]
-    index = [json.loads(s) for s in (OUT / f"{split}-index.jsonl").read_text().splitlines()]
-    if len(data) != len(index):
+    index = [json.loads(s) for s in index_path.read_text().splitlines()]
+    if len(data) != len(index) or len(data) != manifest["splits"][split]["rows"]:
         raise ValueError("index mismatch")
+    for case, meta in zip(data, index):
+        true_label = case["output"]["classifications"][0]["true_label"]
+        if true_label != [meta["label"]]:
+            raise ValueError(f"label mismatch for {meta['id']}")
     return data, index, manifest
+
+
+def probe_row(meta, result, latency_ms):
+    return {"id": meta["id"], "group": meta["group"], "label": meta["label"],
+            "prediction": result["label"], "top_score": result.get("confidence"),
+            "latency_ms": latency_ms}
 
 
 def train():
@@ -167,9 +181,7 @@ def probe(split, adapter):
     for case, meta in zip(data, index):
         start = time.perf_counter()
         result = model.classify_text(case["input"], schema, include_confidence=True)["tool_suitability"]
-        rows.append({"id": meta["id"], "group": meta["group"], "label": meta["label"],
-                     "prediction": result["label"], "confidence": result.get("confidence"),
-                     "latency_ms": round((time.perf_counter() - start) * 1000, 2)})
+        rows.append(probe_row(meta, result, round((time.perf_counter() - start) * 1000, 2)))
     report = {"split": split, "arm": "adapter" if adapter else "base",
               "split_sha256": manifest["splits"][split]["sha256"],
               "base_sha256": digest(MODEL / "model.safetensors"),

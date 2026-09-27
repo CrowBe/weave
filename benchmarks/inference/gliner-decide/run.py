@@ -56,6 +56,19 @@ def classify_input(record):
     return state, {"answer": {"labels": labels, "prompt": prompt}}, question
 
 
+def decode_prediction(question, answer):
+    if not isinstance(answer, dict) or "label" not in answer:
+        raise ValueError(f"unexpected classification result: {answer!r}")
+    raw = answer["label"]
+    if question["type"] == "noul":
+        if raw not in ("yes", "no"):
+            raise ValueError(f"unexpected NOUL label: {raw!r}")
+        return raw == "yes"
+    if question["type"] == "score":
+        return int(raw)
+    return raw
+
+
 def selected_records():
     # Exact ids of the existing 125-case hosted Jev / Kev comparison, in its
     # recorded order. This avoids a newly favorable sample for this model.
@@ -124,11 +137,7 @@ def main():
         result = model.classify_text(state, schema, include_confidence=True)
         elapsed_ms = (time.perf_counter() - started) * 1000
         answer = result["answer"]
-        if not isinstance(answer, dict) or "label" not in answer:
-            raise ValueError(f"unexpected confidence result: {result!r}")
-        raw = answer["label"]
-        predicted = (raw == "yes") if question["type"] == "noul" else (
-            int(raw) if question["type"] == "score" else raw)
+        predicted = decode_prediction(question, answer)
         row = {
             "id": record["_meta"]["id"],
             "group": record["_meta"]["group_id"],

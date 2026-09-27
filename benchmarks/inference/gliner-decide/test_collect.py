@@ -54,6 +54,7 @@ class CollectionTest(unittest.TestCase):
                     self.assertEqual(len(training), len(index))
                     self.assertEqual(len(training), manifest["examples"][split])
                     self.assertEqual(collect.digest(directory / f"{split}.jsonl"), manifest["output_sha256"][split])
+                    self.assertEqual(collect.digest(directory / f"{split}-index.jsonl"), manifest["index_sha256"][split])
                     for item, meta in zip(training, index):
                         classification = item["output"]["classifications"][0]
                         self.assertEqual(classification["true_label"], [meta["wire_label"]])
@@ -61,6 +62,31 @@ class CollectionTest(unittest.TestCase):
                         self.assertEqual(set(classification["labels"]), set(classification["label_descriptions"]))
                         self.assertEqual(meta["split"], split)
                     self.assertEqual(len({m["group"] for m in index}), manifest["group_counts"][split])
+
+    def test_load_split_rejects_reordered_index(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            collect.build(temporary)
+            directory = Path(temporary) / "capability.match"
+            index_path = directory / "validation-index.jsonl"
+            lines = index_path.read_text().splitlines()
+            index_path.write_text("\n".join(reversed(lines)) + "\n")
+            with self.assertRaisesRegex(ValueError, "index digest differs"):
+                collect.load_split(directory, "validation")
+
+    def test_load_split_rejects_mismatched_paired_label(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            collect.build(temporary)
+            directory = Path(temporary) / "capability.match"
+            index_path = directory / "validation-index.jsonl"
+            rows = [json.loads(line) for line in index_path.read_text().splitlines()]
+            rows[0]["wire_label"] = "wrong"
+            index_path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+            manifest_path = directory / "manifest.json"
+            manifest = json.loads(manifest_path.read_text())
+            manifest["index_sha256"]["validation"] = collect.digest(index_path)
+            manifest_path.write_text(json.dumps(manifest) + "\n")
+            with self.assertRaisesRegex(ValueError, "label differs"):
+                collect.load_split(directory, "validation")
 
     def test_match_options_are_opaque_and_order_varies(self):
         rows = collect.expand(HERE / "collection-match.json")

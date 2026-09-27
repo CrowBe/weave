@@ -1,6 +1,10 @@
 import importlib.util
+import hashlib
+import json
 from pathlib import Path
+import tempfile
 import unittest
+from unittest import mock
 
 
 SPEC = importlib.util.spec_from_file_location("bev_tool", Path(__file__).with_name("bev_tool.py"))
@@ -35,6 +39,48 @@ class BevToolSplitTest(unittest.TestCase):
         case = bev_tool.training_case({"text": "request and available tool", "label": "skip"})
         self.assertEqual(case["input"], "request and available tool")
         self.assertEqual(case["output"]["classifications"][0]["true_label"], ["skip"])
+
+    def test_load_split_binds_index_digest_and_paired_label(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            data_path = output / "validation.jsonl"
+            index_path = output / "validation-index.jsonl"
+            case = bev_tool.training_case({"text": "request", "label": "use_tool"})
+            data_path.write_text(json.dumps(case) + "\n")
+            index_path.write_text(json.dumps({"id": "case", "group": "group", "label": "skip"}) + "\n")
+            manifest = {"splits": {"validation": {
+                "rows": 1, "sha256": hashlib.sha256(data_path.read_bytes()).hexdigest(),
+                "index_sha256": hashlib.sha256(index_path.read_bytes()).hexdigest(),
+            }}}
+            (output / "manifest.json").write_text(json.dumps(manifest) + "\n")
+            with mock.patch.object(bev_tool, "OUT", output):
+                with self.assertRaisesRegex(ValueError, "label mismatch"):
+                    bev_tool.load_split("validation")
+
+    def test_load_split_rejects_changed_index(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            data_path = output / "validation.jsonl"
+            index_path = output / "validation-index.jsonl"
+            case = bev_tool.training_case({"text": "request", "label": "use_tool"})
+            data_path.write_text(json.dumps(case) + "\n")
+            index_path.write_text(json.dumps({"id": "case", "group": "group", "label": "use_tool"}) + "\n")
+            manifest = {"splits": {"validation": {
+                "rows": 1, "sha256": hashlib.sha256(data_path.read_bytes()).hexdigest(),
+                "index_sha256": hashlib.sha256(index_path.read_bytes()).hexdigest(),
+            }}}
+            (output / "manifest.json").write_text(json.dumps(manifest) + "\n")
+            index_path.write_text(json.dumps({"id": "other", "group": "group", "label": "use_tool"}) + "\n")
+            with mock.patch.object(bev_tool, "OUT", output):
+                with self.assertRaisesRegex(ValueError, "index changed"):
+                    bev_tool.load_split("validation")
+
+    def test_probe_row_names_provider_confidence_as_top_score(self):
+        row = bev_tool.probe_row(
+            {"id": "case", "group": "group", "label": "use_tool"},
+            {"label": "use_tool", "confidence": 0.75}, 3.5)
+        self.assertEqual(row["top_score"], 0.75)
+        self.assertNotIn("confidence", row)
 
 
 if __name__ == "__main__":

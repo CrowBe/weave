@@ -123,6 +123,26 @@ def wire_case(row):
     return training, index
 
 
+def load_split(directory, split):
+    directory = Path(directory)
+    manifest = json.loads((directory / "manifest.json").read_text())
+    data_path = directory / f"{split}.jsonl"
+    index_path = directory / f"{split}-index.jsonl"
+    if digest(data_path) != manifest["output_sha256"][split]:
+        raise ValueError(f"{split} data digest differs from manifest")
+    if digest(index_path) != manifest["index_sha256"][split]:
+        raise ValueError(f"{split} index digest differs from manifest")
+    data = [json.loads(line) for line in data_path.read_text().splitlines()]
+    index = [json.loads(line) for line in index_path.read_text().splitlines()]
+    if len(data) != len(index) or len(data) != manifest["examples"][split]:
+        raise ValueError(f"{split} index does not align")
+    for case, meta in zip(data, index):
+        true_label = case["output"]["classifications"][0]["true_label"]
+        if true_label != [meta["wire_label"]]:
+            raise ValueError(f"{split} label differs for {meta['id']}")
+    return data, index, manifest
+
+
 def build(output_dir):
     all_rows = [expand(path) for path in SOURCES]
     source_digests = {path.name: digest(path) for path in SOURCES}
@@ -152,6 +172,7 @@ def build(output_dir):
             "groups": {split: sorted(groups[split]) for split in SPLITS},
             "group_counts": {split: len(groups[split]) for split in SPLITS},
             "output_sha256": {split: digest(directory / f"{split}.jsonl") for split in SPLITS},
+            "index_sha256": {split: digest(directory / f"{split}-index.jsonl") for split in SPLITS},
         }
         (directory / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
         manifests[site] = manifest

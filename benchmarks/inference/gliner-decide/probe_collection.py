@@ -67,13 +67,7 @@ def main():
         report["adapter_sha256"] = collect.digest(args.adapter / "adapter_model.safetensors")
     for site in ((args.site,) if args.site else ("capability.match", "result.evaluate")):
         directory = args.data / site
-        manifest = json.loads((directory / "manifest.json").read_text())
-        if manifest["output_sha256"][args.split] != collect.digest(directory / f"{args.split}.jsonl"):
-            raise ValueError(f"{args.split} digest changed for {site}")
-        cases = [json.loads(line) for line in (directory / f"{args.split}.jsonl").read_text().splitlines()]
-        index = [json.loads(line) for line in (directory / f"{args.split}-index.jsonl").read_text().splitlines()]
-        if len(cases) != len(index) or len(cases) != manifest["examples"][args.split]:
-            raise ValueError(f"{args.split} index does not align for {site}")
+        cases, index, manifest = collect.load_split(directory, args.split)
         outcomes = []
         for case, meta in zip(cases, index):
             classification = case["output"]["classifications"][0]
