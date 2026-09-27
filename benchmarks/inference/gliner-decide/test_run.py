@@ -45,6 +45,22 @@ class MappingTests(unittest.TestCase):
         _, schema, _ = classify_input(record)
         self.assertEqual(schema["answer"]["labels"], {"0": "On time", "1": "Late"})
 
+    def test_score_prediction_requires_an_exact_ordinal_class(self):
+        question = {"type": "score", "criteria": ["On time", "Late"]}
+        self.assertEqual(decode_prediction(question, {"label": "1"}), 1)
+        for malformed in (True, 1, "2", "unexpected"):
+            with self.subTest(label=malformed):
+                with self.assertRaisesRegex(ValueError, "unexpected score label"):
+                    decode_prediction(question, {"label": malformed})
+
+    def test_choice_prediction_requires_a_declared_option_key(self):
+        question = {"type": "choice", "criteria": {"a": "Read backup", "b": "Stop"}}
+        self.assertEqual(decode_prediction(question, {"label": "a"}), "a")
+        for malformed in (True, "c", ["a"]):
+            with self.subTest(label=malformed):
+                with self.assertRaisesRegex(ValueError, "unexpected choice label"):
+                    decode_prediction(question, {"label": malformed})
+
     def test_majority_floor_is_per_source(self):
         rows = [
             {"source": "a", "label": "x", "correct": True, "latency_ms": 1},

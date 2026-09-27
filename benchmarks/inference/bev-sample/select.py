@@ -7,8 +7,6 @@ import re
 import unicodedata
 from pathlib import Path
 
-import pyarrow.parquet as pq
-
 ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
 REVISION = "f83fe8b97094112fa305bfc793be07c8f8742282"
@@ -43,6 +41,13 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def require_digest(path, expected, split):
+    observed = sha(path)
+    if observed != expected:
+        raise ValueError(f"BEV {split} source digest mismatch: {observed}")
+    return observed
+
+
 def eligible(state, q):
     if not isinstance(state, str) or not 20 <= len(state) <= 850:
         return False
@@ -72,9 +77,13 @@ def label_bucket(kind, label):
 
 
 def main():
+    import pyarrow.parquet as pq
+
     train_path, test_path = DATA / "train.parquet", DATA / "test.parquet"
-    assert sha(train_path) == "1b163182db155ba986c8ab8d3d582ac09ec1b1dcbc13c65d048e61379be9fe5b"
-    assert sha(test_path) == "eba9f9df6ad54ccdc3aa6516ab97e4f9dea4030422e0dc90510b85e462206a61"
+    train_sha = require_digest(
+        train_path, "1b163182db155ba986c8ab8d3d582ac09ec1b1dcbc13c65d048e61379be9fe5b", "train")
+    test_sha = require_digest(
+        test_path, "eba9f9df6ad54ccdc3aa6516ab97e4f9dea4030422e0dc90510b85e462206a61", "test")
     train_states = {normalized(s) for s in pq.read_table(train_path, columns=["state"]).column("state").to_pylist()}
     test = pq.read_table(test_path).to_pylist()
     pools = {(domain, kind, qkey): [] for domain, kind, qkey, _ in CELLS}
@@ -117,7 +126,7 @@ def main():
                                        "criteria": q.get("criteria") if q.get("criteria") is not None else {}}})
             labels.append({"id": ident, "label": q["label"]})
     dataset = {"name": "avbiswas/bev-decision-150K", "revision": REVISION,
-               "split": "test", "train_sha256": sha(train_path), "test_sha256": sha(test_path)}
+               "split": "test", "train_sha256": train_sha, "test_sha256": test_sha}
     selection = {"seed": SEED, "cells": [{"domain": d, "type": k, "question_key": q, "n": n} for d, k, q, n in CELLS],
                  "reviewed_exclusions": REVIEWED_EXCLUSIONS,
                  "label_balance": {f"{d} / {k}": quota for (d, k), quota in BALANCE.items()},

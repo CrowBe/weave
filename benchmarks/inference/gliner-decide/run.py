@@ -65,8 +65,15 @@ def decode_prediction(question, answer):
             raise ValueError(f"unexpected NOUL label: {raw!r}")
         return raw == "yes"
     if question["type"] == "score":
+        labels = {str(i) for i in range(len(question["criteria"]))}
+        if type(raw) is not str or raw not in labels:
+            raise ValueError(f"unexpected score label: {raw!r}")
         return int(raw)
-    return raw
+    if question["type"] == "choice":
+        if type(raw) is not str or raw not in question["criteria"]:
+            raise ValueError(f"unexpected choice label: {raw!r}")
+        return raw
+    raise ValueError(f"unexpected question type: {question['type']!r}")
 
 
 def selected_records():
