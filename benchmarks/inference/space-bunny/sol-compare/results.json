@@ -1,0 +1,1724 @@
+{
+  "status": "exploratory quality-only comparison",
+  "observed_at": "2026-09-25T05:06:41.326Z",
+  "corpus_sha256": "d2a9f10c3793d423caaab080317844a961c8dfd8654e164896e1044a6e74115b",
+  "models": [
+    "stealth/space-bunny-alpha",
+    "gpt-6-sol"
+  ],
+  "settings": {
+    "bunny": "Nous adapter, temperature 0, max_output_tokens 8192",
+    "sol": "Codex CLI 0.157.0, fresh ephemeral session, read-only, medium effort",
+    "tools": "forbidden in prompt; Codex event log checked"
+  },
+  "pricing": {
+    "stealth/space-bunny-alpha": {
+      "prompt": "0.0000000000",
+      "completion": "0.0000000000"
+    }
+  },
+  "rows": [
+    {
+      "id": "math.speed",
+      "category": "quantitative",
+      "batch": 0,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "52.5",
+      "answer": "52.5",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 395,
+          "output_tokens": 335
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "logic.boxes",
+      "category": "logic",
+      "batch": 0,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "C",
+      "answer": "C",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 395,
+          "output_tokens": 335
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "code.alias",
+      "category": "code",
+      "batch": 0,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "[[1, 3], [2]]",
+      "answer": "[1, 3]",
+      "correct": false,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 395,
+          "output_tokens": 335
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "read.release",
+      "category": "reading",
+      "batch": 0,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "v5",
+      "answer": "v5",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 395,
+          "output_tokens": 335
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "math.speed",
+      "category": "quantitative",
+      "batch": 0,
+      "model": "gpt-6-sol",
+      "expected": "52.5",
+      "answer": "52.5",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "logic.boxes",
+      "category": "logic",
+      "batch": 0,
+      "model": "gpt-6-sol",
+      "expected": "C",
+      "answer": "C",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "code.alias",
+      "category": "code",
+      "batch": 0,
+      "model": "gpt-6-sol",
+      "expected": "[[1, 3], [2]]",
+      "answer": "[[1, 3], [2]]",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "read.release",
+      "category": "reading",
+      "batch": 0,
+      "model": "gpt-6-sol",
+      "expected": "v5",
+      "answer": "v5",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "math.percent",
+      "category": "quantitative",
+      "batch": 1,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "252",
+      "answer": "252",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 355,
+          "output_tokens": 188
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "logic.order1",
+      "category": "logic",
+      "batch": 1,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "T",
+      "answer": "T",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 355,
+          "output_tokens": 188
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "code.default",
+      "category": "code",
+      "batch": 1,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "1 2",
+      "answer": "1 2",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 355,
+          "output_tokens": 188
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "read.checks",
+      "category": "reading",
+      "batch": 1,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "13",
+      "answer": "13",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 355,
+          "output_tokens": 188
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "math.percent",
+      "category": "quantitative",
+      "batch": 1,
+      "model": "gpt-6-sol",
+      "expected": "252",
+      "answer": "252",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "logic.order1",
+      "category": "logic",
+      "batch": 1,
+      "model": "gpt-6-sol",
+      "expected": "T",
+      "answer": "T",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "code.default",
+      "category": "code",
+      "batch": 1,
+      "model": "gpt-6-sol",
+      "expected": "1 2",
+      "answer": "1 2",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "read.checks",
+      "category": "reading",
+      "batch": 1,
+      "model": "gpt-6-sol",
+      "expected": "13",
+      "answer": "13",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "math.draw",
+      "category": "quantitative",
+      "batch": 2,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "5/9",
+      "answer": "5/9",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 370,
+          "output_tokens": 258
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "logic.implication",
+      "category": "logic",
+      "batch": 2,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "Y",
+      "answer": "Y",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 370,
+          "output_tokens": 258
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "code.comprehension",
+      "category": "code",
+      "batch": 2,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "[6, 7]",
+      "answer": "[6, 7]",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 370,
+          "output_tokens": 258
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "read.stock",
+      "category": "reading",
+      "batch": 2,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "26",
+      "answer": "26",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 370,
+          "output_tokens": 258
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "math.draw",
+      "category": "quantitative",
+      "batch": 2,
+      "model": "gpt-6-sol",
+      "expected": "5/9",
+      "answer": "5/9",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "logic.implication",
+      "category": "logic",
+      "batch": 2,
+      "model": "gpt-6-sol",
+      "expected": "Y",
+      "answer": "Y",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "code.comprehension",
+      "category": "code",
+      "batch": 2,
+      "model": "gpt-6-sol",
+      "expected": "[6, 7]",
+      "answer": "[6, 7]",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "read.stock",
+      "category": "reading",
+      "batch": 2,
+      "model": "gpt-6-sol",
+      "expected": "26",
+      "answer": "26",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "math.work",
+      "category": "quantitative",
+      "batch": 3,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "18/5",
+      "answer": "18/5",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 380,
+          "output_tokens": 242
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "logic.types",
+      "category": "logic",
+      "batch": 3,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "A",
+      "answer": "A",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 380,
+          "output_tokens": 242
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "code.loopelse",
+      "category": "code",
+      "batch": 3,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "7",
+      "answer": "7",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 380,
+          "output_tokens": 242
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "read.available",
+      "category": "reading",
+      "batch": 3,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "21",
+      "answer": "21",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 380,
+          "output_tokens": 242
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "math.work",
+      "category": "quantitative",
+      "batch": 3,
+      "model": "gpt-6-sol",
+      "expected": "18/5",
+      "answer": "18/5",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "logic.types",
+      "category": "logic",
+      "batch": 3,
+      "model": "gpt-6-sol",
+      "expected": "A",
+      "answer": "A",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "code.loopelse",
+      "category": "code",
+      "batch": 3,
+      "model": "gpt-6-sol",
+      "expected": "7",
+      "answer": "7",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "read.available",
+      "category": "reading",
+      "batch": 3,
+      "model": "gpt-6-sol",
+      "expected": "21",
+      "answer": "21",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "math.remainders",
+      "category": "quantitative",
+      "batch": 4,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "47",
+      "answer": "47",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 365,
+          "output_tokens": 394
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "logic.sets",
+      "category": "logic",
+      "batch": 4,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "no",
+      "answer": "no",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 365,
+          "output_tokens": 394
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "code.setdefault",
+      "category": "code",
+      "batch": 4,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "[1, 2]",
+      "answer": "[1, 2]",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 365,
+          "output_tokens": 394
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "read.order",
+      "category": "reading",
+      "batch": 4,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "deploy",
+      "answer": "deploy",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 365,
+          "output_tokens": 394
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "math.remainders",
+      "category": "quantitative",
+      "batch": 4,
+      "model": "gpt-6-sol",
+      "expected": "47",
+      "answer": "47",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "logic.sets",
+      "category": "logic",
+      "batch": 4,
+      "model": "gpt-6-sol",
+      "expected": "no",
+      "answer": "no",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "code.setdefault",
+      "category": "code",
+      "batch": 4,
+      "model": "gpt-6-sol",
+      "expected": "[1, 2]",
+      "answer": "[1, 2]",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "read.order",
+      "category": "reading",
+      "batch": 4,
+      "model": "gpt-6-sol",
+      "expected": "deploy",
+      "answer": "deploy",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "math.weighted",
+      "category": "quantitative",
+      "batch": 5,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "20",
+      "answer": "20",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 355,
+          "output_tokens": 170
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "logic.or",
+      "category": "logic",
+      "batch": 5,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "yes",
+      "answer": "yes",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 355,
+          "output_tokens": 170
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "code.map",
+      "category": "code",
+      "batch": 5,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "9",
+      "answer": "9",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 355,
+          "output_tokens": 170
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "read.cause",
+      "category": "reading",
+      "batch": 5,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "no",
+      "answer": "no",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 355,
+          "output_tokens": 170
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "math.weighted",
+      "category": "quantitative",
+      "batch": 5,
+      "model": "gpt-6-sol",
+      "expected": "20",
+      "answer": "20",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "logic.or",
+      "category": "logic",
+      "batch": 5,
+      "model": "gpt-6-sol",
+      "expected": "yes",
+      "answer": "yes",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "code.map",
+      "category": "code",
+      "batch": 5,
+      "model": "gpt-6-sol",
+      "expected": "9",
+      "answer": "9",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "read.cause",
+      "category": "reading",
+      "batch": 5,
+      "model": "gpt-6-sol",
+      "expected": "no",
+      "answer": "no",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "math.tank",
+      "category": "quantitative",
+      "batch": 6,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "17/40",
+      "answer": "1/2",
+      "correct": false,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 385,
+          "output_tokens": 154
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "logic.order2",
+      "category": "logic",
+      "batch": 6,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "D",
+      "answer": "D",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 385,
+          "output_tokens": 154
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "code.spread",
+      "category": "code",
+      "batch": 6,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "5",
+      "answer": "5",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 385,
+          "output_tokens": 154
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "read.deadline",
+      "category": "reading",
+      "batch": 6,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "Tuesday",
+      "answer": "Tuesday",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 385,
+          "output_tokens": 154
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "math.tank",
+      "category": "quantitative",
+      "batch": 6,
+      "model": "gpt-6-sol",
+      "expected": "17/40",
+      "answer": "17/40",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "logic.order2",
+      "category": "logic",
+      "batch": 6,
+      "model": "gpt-6-sol",
+      "expected": "D",
+      "answer": "D",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "code.spread",
+      "category": "code",
+      "batch": 6,
+      "model": "gpt-6-sol",
+      "expected": "5",
+      "answer": "5",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "read.deadline",
+      "category": "reading",
+      "batch": 6,
+      "model": "gpt-6-sol",
+      "expected": "Tuesday",
+      "answer": "Tuesday",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "math.trip",
+      "category": "quantitative",
+      "batch": 7,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "50",
+      "answer": "50",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 378,
+          "output_tokens": 193
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "logic.switches",
+      "category": "logic",
+      "batch": 7,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "KM",
+      "answer": "LM",
+      "correct": false,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 378,
+          "output_tokens": 193
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "code.nullish",
+      "category": "code",
+      "batch": 7,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "7",
+      "answer": "7",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 378,
+          "output_tokens": 193
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "read.source",
+      "category": "reading",
+      "batch": 7,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "18",
+      "answer": "18",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 378,
+          "output_tokens": 193
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "math.trip",
+      "category": "quantitative",
+      "batch": 7,
+      "model": "gpt-6-sol",
+      "expected": "50",
+      "answer": "50",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "logic.switches",
+      "category": "logic",
+      "batch": 7,
+      "model": "gpt-6-sol",
+      "expected": "KM",
+      "answer": "KM",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "code.nullish",
+      "category": "code",
+      "batch": 7,
+      "model": "gpt-6-sol",
+      "expected": "7",
+      "answer": "7",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "read.source",
+      "category": "reading",
+      "batch": 7,
+      "model": "gpt-6-sol",
+      "expected": "18",
+      "answer": "18",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "math.conditional",
+      "category": "quantitative",
+      "batch": 8,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "3/4",
+      "answer": "3/4",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 366,
+          "output_tokens": 174
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "logic.negation",
+      "category": "logic",
+      "batch": 8,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "yes",
+      "answer": "yes",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 366,
+          "output_tokens": 174
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "code.closure",
+      "category": "code",
+      "batch": 8,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "0,2,4",
+      "answer": "0,2,4",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 366,
+          "output_tokens": 174
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "read.unknown",
+      "category": "reading",
+      "batch": 8,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "yes",
+      "answer": "yes",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 366,
+          "output_tokens": 174
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "math.conditional",
+      "category": "quantitative",
+      "batch": 8,
+      "model": "gpt-6-sol",
+      "expected": "3/4",
+      "answer": "3/4",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "logic.negation",
+      "category": "logic",
+      "batch": 8,
+      "model": "gpt-6-sol",
+      "expected": "yes",
+      "answer": "yes",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "code.closure",
+      "category": "code",
+      "batch": 8,
+      "model": "gpt-6-sol",
+      "expected": "0,2,4",
+      "answer": "0,2,4",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "read.unknown",
+      "category": "reading",
+      "batch": 8,
+      "model": "gpt-6-sol",
+      "expected": "yes",
+      "answer": "yes",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "math.recurrence",
+      "category": "quantitative",
+      "batch": 9,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "41",
+      "answer": "41",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 367,
+          "output_tokens": 214
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "logic.one-false",
+      "category": "logic",
+      "batch": 9,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "FT",
+      "answer": "FT",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 367,
+          "output_tokens": 214
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "code.sort",
+      "category": "code",
+      "batch": 9,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "12,3,8",
+      "answer": "12,3,8",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 367,
+          "output_tokens": 214
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "read.mostrecent",
+      "category": "reading",
+      "batch": 9,
+      "model": "stealth/space-bunny-alpha",
+      "expected": "A",
+      "answer": "A",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "usage": {
+          "input_tokens": 367,
+          "output_tokens": 214
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "id": "math.recurrence",
+      "category": "quantitative",
+      "batch": 9,
+      "model": "gpt-6-sol",
+      "expected": "41",
+      "answer": "41",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "logic.one-false",
+      "category": "logic",
+      "batch": 9,
+      "model": "gpt-6-sol",
+      "expected": "FT",
+      "answer": "FT",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "code.sort",
+      "category": "code",
+      "batch": 9,
+      "model": "gpt-6-sol",
+      "expected": "12,3,8",
+      "answer": "12,3,8",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "id": "read.mostrecent",
+      "category": "reading",
+      "batch": 9,
+      "model": "gpt-6-sol",
+      "expected": "A",
+      "answer": "A",
+      "correct": true,
+      "status": "completed",
+      "format_error": null,
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    }
+  ],
+  "calls": [
+    {
+      "batch": 0,
+      "model": "stealth/space-bunny-alpha",
+      "raw": "{\"math.speed\":\"52.5\",\"logic.boxes\":\"C\",\"code.alias\":\"[1, 3]\",\"read.release\":\"v5\"}",
+      "status": "completed",
+      "detail": {
+        "usage": {
+          "input_tokens": 395,
+          "output_tokens": 335
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "batch": 0,
+      "model": "gpt-6-sol",
+      "raw": "{\"math.speed\":\"52.5\",\"logic.boxes\":\"C\",\"code.alias\":\"[[1, 3], [2]]\",\"read.release\":\"v5\"}",
+      "status": "completed",
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "batch": 1,
+      "model": "stealth/space-bunny-alpha",
+      "raw": "{\"math.percent\":\"252\",\"logic.order1\":\"T\",\"code.default\":\"1 2\",\"read.checks\":\"13\"}",
+      "status": "completed",
+      "detail": {
+        "usage": {
+          "input_tokens": 355,
+          "output_tokens": 188
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "batch": 1,
+      "model": "gpt-6-sol",
+      "raw": "{\"math.percent\":\"252\",\"logic.order1\":\"T\",\"code.default\":\"1 2\",\"read.checks\":\"13\"}",
+      "status": "completed",
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "batch": 2,
+      "model": "stealth/space-bunny-alpha",
+      "raw": "{\"math.draw\":\"5/9\",\"logic.implication\":\"Y\",\"code.comprehension\":\"[6, 7]\",\"read.stock\":\"26\"}",
+      "status": "completed",
+      "detail": {
+        "usage": {
+          "input_tokens": 370,
+          "output_tokens": 258
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "batch": 2,
+      "model": "gpt-6-sol",
+      "raw": "{\"math.draw\":\"5/9\",\"logic.implication\":\"Y\",\"code.comprehension\":\"[6, 7]\",\"read.stock\":\"26\"}",
+      "status": "completed",
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "batch": 3,
+      "model": "stealth/space-bunny-alpha",
+      "raw": "{\"math.work\":\"18/5\",\"logic.types\":\"A\",\"code.loopelse\":\"7\",\"read.available\":\"21\"}",
+      "status": "completed",
+      "detail": {
+        "usage": {
+          "input_tokens": 380,
+          "output_tokens": 242
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "batch": 3,
+      "model": "gpt-6-sol",
+      "raw": "{\"math.work\":\"18/5\",\"logic.types\":\"A\",\"code.loopelse\":\"7\",\"read.available\":\"21\"}",
+      "status": "completed",
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "batch": 4,
+      "model": "stealth/space-bunny-alpha",
+      "raw": "{\"math.remainders\":\"47\",\"logic.sets\":\"no\",\"code.setdefault\":\"[1, 2]\",\"read.order\":\"deploy\"}",
+      "status": "completed",
+      "detail": {
+        "usage": {
+          "input_tokens": 365,
+          "output_tokens": 394
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "batch": 4,
+      "model": "gpt-6-sol",
+      "raw": "{\"math.remainders\":\"47\",\"logic.sets\":\"no\",\"code.setdefault\":\"[1, 2]\",\"read.order\":\"deploy\"}",
+      "status": "completed",
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "batch": 5,
+      "model": "stealth/space-bunny-alpha",
+      "raw": "{\"math.weighted\":\"20\",\"logic.or\":\"yes\",\"code.map\":\"9\",\"read.cause\":\"no\"}",
+      "status": "completed",
+      "detail": {
+        "usage": {
+          "input_tokens": 355,
+          "output_tokens": 170
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "batch": 5,
+      "model": "gpt-6-sol",
+      "raw": "{\"math.weighted\":\"20\",\"logic.or\":\"yes\",\"code.map\":\"9\",\"read.cause\":\"no\"}",
+      "status": "completed",
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "batch": 6,
+      "model": "stealth/space-bunny-alpha",
+      "raw": "{\"math.tank\":\"1/2\",\"logic.order2\":\"D\",\"code.spread\":\"5\",\"read.deadline\":\"Tuesday\"}",
+      "status": "completed",
+      "detail": {
+        "usage": {
+          "input_tokens": 385,
+          "output_tokens": 154
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "batch": 6,
+      "model": "gpt-6-sol",
+      "raw": "{\"math.tank\":\"17/40\",\"logic.order2\":\"D\",\"code.spread\":\"5\",\"read.deadline\":\"Tuesday\"}",
+      "status": "completed",
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "batch": 7,
+      "model": "stealth/space-bunny-alpha",
+      "raw": "{\"math.trip\":\"50\",\"logic.switches\":\"LM\",\"code.nullish\":\"7\",\"read.source\":\"18\"}",
+      "status": "completed",
+      "detail": {
+        "usage": {
+          "input_tokens": 378,
+          "output_tokens": 193
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "batch": 7,
+      "model": "gpt-6-sol",
+      "raw": "{\"math.trip\":\"50\",\"logic.switches\":\"KM\",\"code.nullish\":\"7\",\"read.source\":\"18\"}",
+      "status": "completed",
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "batch": 8,
+      "model": "stealth/space-bunny-alpha",
+      "raw": "{\"math.conditional\":\"3/4\",\"logic.negation\":\"yes\",\"code.closure\":\"0,2,4\",\"read.unknown\":\"yes\"}",
+      "status": "completed",
+      "detail": {
+        "usage": {
+          "input_tokens": 366,
+          "output_tokens": 174
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "batch": 8,
+      "model": "gpt-6-sol",
+      "raw": "{\"math.conditional\":\"3/4\",\"logic.negation\":\"yes\",\"code.closure\":\"0,2,4\",\"read.unknown\":\"yes\"}",
+      "status": "completed",
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    },
+    {
+      "batch": 9,
+      "model": "stealth/space-bunny-alpha",
+      "raw": "{\"math.recurrence\":\"41\",\"logic.one-false\":\"FT\",\"code.sort\":\"12,3,8\",\"read.mostrecent\":\"A\"}",
+      "status": "completed",
+      "detail": {
+        "usage": {
+          "input_tokens": 367,
+          "output_tokens": 214
+        },
+        "finish_reason": "stop",
+        "attempts": []
+      }
+    },
+    {
+      "batch": 9,
+      "model": "gpt-6-sol",
+      "raw": "{\"math.recurrence\":\"41\",\"logic.one-false\":\"FT\",\"code.sort\":\"12,3,8\",\"read.mostrecent\":\"A\"}",
+      "status": "completed",
+      "detail": {
+        "exit_code": 0,
+        "tool_event_count": 0,
+        "error_tail": null
+      }
+    }
+  ],
+  "summary": {
+    "stealth/space-bunny-alpha": {
+      "correct": 37,
+      "n": 40,
+      "by_category": {
+        "quantitative": {
+          "correct": 9,
+          "n": 10
+        },
+        "logic": {
+          "correct": 9,
+          "n": 10
+        },
+        "code": {
+          "correct": 9,
+          "n": 10
+        },
+        "reading": {
+          "correct": 10,
+          "n": 10
+        }
+      },
+      "failed_batches": 0,
+      "format_failed_batches": 0
+    },
+    "gpt-6-sol": {
+      "correct": 40,
+      "n": 40,
+      "by_category": {
+        "quantitative": {
+          "correct": 10,
+          "n": 10
+        },
+        "logic": {
+          "correct": 10,
+          "n": 10
+        },
+        "code": {
+          "correct": 10,
+          "n": 10
+        },
+        "reading": {
+          "correct": 10,
+          "n": 10
+        }
+      },
+      "failed_batches": 0,
+      "format_failed_batches": 0
+    }
+  }
+}

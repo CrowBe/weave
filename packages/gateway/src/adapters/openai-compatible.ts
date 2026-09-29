@@ -30,6 +30,8 @@ import type {
 export interface OpenAiCompatibleProvider {
   readonly id: AdapterId;
   readonly defaultBaseURL: string;
+  /** Vendor-required request tags, when the standard chat body is insufficient. */
+  readonly requestTags?: readonly string[];
   /**
    * A vendor-specific delay read from a refusal's headers, in milliseconds.
    * Consulted only when the response carries no standard `Retry-After`.
@@ -75,6 +77,7 @@ export function openAiCompatibleAdapter(
             messages: messagesFor(call),
             max_tokens: call.settings.max_output_tokens,
             ...(call.settings.temperature === undefined ? {} : { temperature: call.settings.temperature }),
+            ...(provider.requestTags === undefined ? {} : { tags: provider.requestTags }),
           }),
           ...(call.signal === undefined ? {} : { signal: call.signal }),
         });

@@ -1,0 +1,736 @@
+{
+  "status": "exploratory authored general-reasoning probe; not a model ranking",
+  "observed_at": "2026-09-25T04:41:25.824Z",
+  "corpus_sha256": "eb082f6641acd00d4d7f7fca97133fd1c7553bf6bb1b8f89e7af1f0799191a24",
+  "models": [
+    "stealth/space-bunny-alpha",
+    "stepfun/step-3.7-flash:free"
+  ],
+  "pricing": {
+    "stealth/space-bunny-alpha": {
+      "prompt": "0.0000000000",
+      "completion": "0.0000000000"
+    },
+    "stepfun/step-3.7-flash:free": {
+      "prompt": "0",
+      "completion": "0"
+    }
+  },
+  "settings": {
+    "temperature": 0,
+    "max_output_tokens": 1024,
+    "reasoning_effort": "provider default (not configurable through gateway adapter)"
+  },
+  "rows": [
+    {
+      "id": "quant.average-speed",
+      "category": "quantitative",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "C",
+      "predicted": "C",
+      "correct": true,
+      "status": "completed",
+      "raw": "C",
+      "latency_ms": 1571,
+      "usage": {
+        "input_tokens": 222,
+        "output_tokens": 39
+      },
+      "failure": null
+    },
+    {
+      "id": "quant.average-speed",
+      "category": "quantitative",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "C",
+      "predicted": "C",
+      "correct": true,
+      "status": "completed",
+      "raw": "C",
+      "latency_ms": 4910,
+      "usage": {
+        "input_tokens": 102,
+        "output_tokens": 379
+      },
+      "failure": null
+    },
+    {
+      "id": "quant.dice",
+      "category": "quantitative",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "D",
+      "predicted": "D",
+      "correct": true,
+      "status": "completed",
+      "raw": "D",
+      "latency_ms": 2152,
+      "usage": {
+        "input_tokens": 210,
+        "output_tokens": 58
+      },
+      "failure": null
+    },
+    {
+      "id": "quant.dice",
+      "category": "quantitative",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "D",
+      "predicted": "D",
+      "correct": true,
+      "status": "completed",
+      "raw": "D",
+      "latency_ms": 2581,
+      "usage": {
+        "input_tokens": 90,
+        "output_tokens": 197
+      },
+      "failure": null
+    },
+    {
+      "id": "quant.committee",
+      "category": "quantitative",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "B",
+      "predicted": "B",
+      "correct": true,
+      "status": "completed",
+      "raw": "B",
+      "latency_ms": 1818,
+      "usage": {
+        "input_tokens": 205,
+        "output_tokens": 41
+      },
+      "failure": null
+    },
+    {
+      "id": "quant.committee",
+      "category": "quantitative",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "B",
+      "predicted": "B",
+      "correct": true,
+      "status": "completed",
+      "raw": "B",
+      "latency_ms": 3378,
+      "usage": {
+        "input_tokens": 85,
+        "output_tokens": 95
+      },
+      "failure": null
+    },
+    {
+      "id": "quant.remainders",
+      "category": "quantitative",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "B",
+      "predicted": "B",
+      "correct": true,
+      "status": "completed",
+      "raw": "B",
+      "latency_ms": 3451,
+      "usage": {
+        "input_tokens": 207,
+        "output_tokens": 87
+      },
+      "failure": null
+    },
+    {
+      "id": "quant.remainders",
+      "category": "quantitative",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "B",
+      "predicted": "B",
+      "correct": true,
+      "status": "completed",
+      "raw": "B",
+      "latency_ms": 4355,
+      "usage": {
+        "input_tokens": 87,
+        "output_tokens": 116
+      },
+      "failure": null
+    },
+    {
+      "id": "quant.percentages",
+      "category": "quantitative",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "A",
+      "predicted": "A",
+      "correct": true,
+      "status": "completed",
+      "raw": "A",
+      "latency_ms": 1918,
+      "usage": {
+        "input_tokens": 216,
+        "output_tokens": 39
+      },
+      "failure": null
+    },
+    {
+      "id": "quant.percentages",
+      "category": "quantitative",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "A",
+      "predicted": "A",
+      "correct": true,
+      "status": "completed",
+      "raw": "A",
+      "latency_ms": 2778,
+      "usage": {
+        "input_tokens": 96,
+        "output_tokens": 117
+      },
+      "failure": null
+    },
+    {
+      "id": "logic.boxes",
+      "category": "logic",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "D",
+      "predicted": "B",
+      "correct": false,
+      "status": "completed",
+      "raw": "B",
+      "latency_ms": 2442,
+      "usage": {
+        "input_tokens": 228,
+        "output_tokens": 165
+      },
+      "failure": null
+    },
+    {
+      "id": "logic.boxes",
+      "category": "logic",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "D",
+      "predicted": null,
+      "correct": false,
+      "status": "failed",
+      "raw": null,
+      "latency_ms": 6552,
+      "usage": null,
+      "failure": {
+        "code": "malformed_response",
+        "message": "nous-portal: response carried no text content",
+        "retryable": false
+      }
+    },
+    {
+      "id": "logic.order",
+      "category": "logic",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "C",
+      "predicted": "C",
+      "correct": true,
+      "status": "completed",
+      "raw": "C",
+      "latency_ms": 2060,
+      "usage": {
+        "input_tokens": 211,
+        "output_tokens": 2
+      },
+      "failure": null
+    },
+    {
+      "id": "logic.order",
+      "category": "logic",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "C",
+      "predicted": "C",
+      "correct": true,
+      "status": "completed",
+      "raw": "C",
+      "latency_ms": 2691,
+      "usage": {
+        "input_tokens": 91,
+        "output_tokens": 190
+      },
+      "failure": null
+    },
+    {
+      "id": "logic.truth-tellers",
+      "category": "logic",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "B",
+      "predicted": "B",
+      "correct": true,
+      "status": "completed",
+      "raw": "B",
+      "latency_ms": 2420,
+      "usage": {
+        "input_tokens": 238,
+        "output_tokens": 93
+      },
+      "failure": null
+    },
+    {
+      "id": "logic.truth-tellers",
+      "category": "logic",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "B",
+      "predicted": null,
+      "correct": false,
+      "status": "failed",
+      "raw": null,
+      "latency_ms": 5799,
+      "usage": null,
+      "failure": {
+        "code": "malformed_response",
+        "message": "nous-portal: response carried no text content",
+        "retryable": false
+      }
+    },
+    {
+      "id": "logic.implication",
+      "category": "logic",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "A",
+      "predicted": "A",
+      "correct": true,
+      "status": "completed",
+      "raw": "A",
+      "latency_ms": 2250,
+      "usage": {
+        "input_tokens": 206,
+        "output_tokens": 39
+      },
+      "failure": null
+    },
+    {
+      "id": "logic.implication",
+      "category": "logic",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "A",
+      "predicted": null,
+      "correct": false,
+      "status": "failed",
+      "raw": null,
+      "latency_ms": 14245,
+      "usage": null,
+      "failure": {
+        "code": "malformed_response",
+        "message": "nous-portal: response carried no text content",
+        "retryable": false
+      }
+    },
+    {
+      "id": "logic.exclusive-choice",
+      "category": "logic",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "B",
+      "predicted": "B",
+      "correct": true,
+      "status": "completed",
+      "raw": "B",
+      "latency_ms": 3263,
+      "usage": {
+        "input_tokens": 217,
+        "output_tokens": 64
+      },
+      "failure": null
+    },
+    {
+      "id": "logic.exclusive-choice",
+      "category": "logic",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "B",
+      "predicted": "B",
+      "correct": true,
+      "status": "completed",
+      "raw": "B",
+      "latency_ms": 6385,
+      "usage": {
+        "input_tokens": 97,
+        "output_tokens": 497
+      },
+      "failure": null
+    },
+    {
+      "id": "code.python-alias",
+      "category": "code",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "A",
+      "predicted": "A",
+      "correct": true,
+      "status": "completed",
+      "raw": "A",
+      "latency_ms": 1534,
+      "usage": {
+        "input_tokens": 230,
+        "output_tokens": 55
+      },
+      "failure": null
+    },
+    {
+      "id": "code.python-alias",
+      "category": "code",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "A",
+      "predicted": null,
+      "correct": false,
+      "status": "failed",
+      "raw": null,
+      "latency_ms": 1188,
+      "usage": null,
+      "failure": {
+        "code": "rate_limited",
+        "message": "nous-portal 429: {\"status\":429,\"message\":\"You've reached this model's current fair-share rate limit. It adapts to demand — retry after the indicated delay, or try an alternate model.\",\"reason\":\"rate_limited\",\"retry_after\":2,\"alternates\":[\"google/gemini-3.5-flash\",\"qwen/qwen3-max\",\"z-ai/glm-4.5-air\"]}",
+        "retryable": true,
+        "retry_after_ms": 2000
+      }
+    },
+    {
+      "id": "code.javascript-map",
+      "category": "code",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "C",
+      "predicted": "C",
+      "correct": true,
+      "status": "completed",
+      "raw": "C",
+      "latency_ms": 1348,
+      "usage": {
+        "input_tokens": 228,
+        "output_tokens": 41
+      },
+      "failure": null
+    },
+    {
+      "id": "code.javascript-map",
+      "category": "code",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "C",
+      "predicted": "C",
+      "correct": true,
+      "status": "completed",
+      "raw": "C",
+      "latency_ms": 6208,
+      "usage": {
+        "input_tokens": 108,
+        "output_tokens": 523
+      },
+      "failure": null
+    },
+    {
+      "id": "code.python-loop",
+      "category": "code",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "D",
+      "predicted": "D",
+      "correct": true,
+      "status": "completed",
+      "raw": "D",
+      "latency_ms": 1758,
+      "usage": {
+        "input_tokens": 224,
+        "output_tokens": 48
+      },
+      "failure": null
+    },
+    {
+      "id": "code.python-loop",
+      "category": "code",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "D",
+      "predicted": null,
+      "correct": false,
+      "status": "failed",
+      "raw": null,
+      "latency_ms": 428,
+      "usage": null,
+      "failure": {
+        "code": "rate_limited",
+        "message": "nous-portal 429: {\"status\":429,\"message\":\"You've reached this model's current fair-share rate limit. It adapts to demand — retry after the indicated delay, or try an alternate model.\",\"reason\":\"rate_limited\",\"retry_after\":6,\"alternates\":[\"openai/o3-mini\",\"moonshotai/kimi-k2-thinking\",\"bytedance-seed/seed-2-1-turbo\"]}",
+        "retryable": true,
+        "retry_after_ms": 6000
+      }
+    },
+    {
+      "id": "code.binary-search",
+      "category": "code",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "A",
+      "predicted": "A",
+      "correct": true,
+      "status": "completed",
+      "raw": "A",
+      "latency_ms": 1107,
+      "usage": {
+        "input_tokens": 240,
+        "output_tokens": 2
+      },
+      "failure": null
+    },
+    {
+      "id": "code.binary-search",
+      "category": "code",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "A",
+      "predicted": null,
+      "correct": false,
+      "status": "failed",
+      "raw": null,
+      "latency_ms": 425,
+      "usage": null,
+      "failure": {
+        "code": "rate_limited",
+        "message": "nous-portal 429: {\"status\":429,\"message\":\"You've reached this model's current fair-share rate limit. It adapts to demand — retry after the indicated delay, or try an alternate model.\",\"reason\":\"rate_limited\",\"retry_after\":4,\"alternates\":[\"openai/o3-mini\",\"moonshotai/kimi-k2-thinking\",\"bytedance-seed/seed-2-1-turbo\"]}",
+        "retryable": true,
+        "retry_after_ms": 4000
+      }
+    },
+    {
+      "id": "code.complexity",
+      "category": "code",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "C",
+      "predicted": "C",
+      "correct": true,
+      "status": "completed",
+      "raw": "C",
+      "latency_ms": 2207,
+      "usage": {
+        "input_tokens": 212,
+        "output_tokens": 43
+      },
+      "failure": null
+    },
+    {
+      "id": "code.complexity",
+      "category": "code",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "C",
+      "predicted": "C",
+      "correct": true,
+      "status": "completed",
+      "raw": "C",
+      "latency_ms": 5043,
+      "usage": {
+        "input_tokens": 92,
+        "output_tokens": 191
+      },
+      "failure": null
+    },
+    {
+      "id": "reading.version",
+      "category": "reading",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "C",
+      "predicted": "C",
+      "correct": true,
+      "status": "completed",
+      "raw": "C",
+      "latency_ms": 1533,
+      "usage": {
+        "input_tokens": 216,
+        "output_tokens": 32
+      },
+      "failure": null
+    },
+    {
+      "id": "reading.version",
+      "category": "reading",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "C",
+      "predicted": "C",
+      "correct": true,
+      "status": "completed",
+      "raw": "C",
+      "latency_ms": 4292,
+      "usage": {
+        "input_tokens": 96,
+        "output_tokens": 167
+      },
+      "failure": null
+    },
+    {
+      "id": "reading.causation",
+      "category": "reading",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "D",
+      "predicted": "D",
+      "correct": true,
+      "status": "completed",
+      "raw": "D",
+      "latency_ms": 1952,
+      "usage": {
+        "input_tokens": 228,
+        "output_tokens": 32
+      },
+      "failure": null
+    },
+    {
+      "id": "reading.causation",
+      "category": "reading",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "D",
+      "predicted": "D",
+      "correct": true,
+      "status": "completed",
+      "raw": "D",
+      "latency_ms": 3230,
+      "usage": {
+        "input_tokens": 108,
+        "output_tokens": 109
+      },
+      "failure": null
+    },
+    {
+      "id": "reading.dependencies",
+      "category": "reading",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "A",
+      "predicted": "A",
+      "correct": true,
+      "status": "completed",
+      "raw": "A",
+      "latency_ms": 1358,
+      "usage": {
+        "input_tokens": 233,
+        "output_tokens": 37
+      },
+      "failure": null
+    },
+    {
+      "id": "reading.dependencies",
+      "category": "reading",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "A",
+      "predicted": "A",
+      "correct": true,
+      "status": "completed",
+      "raw": "A",
+      "latency_ms": 3698,
+      "usage": {
+        "input_tokens": 113,
+        "output_tokens": 193
+      },
+      "failure": null
+    },
+    {
+      "id": "reading.shortest-path",
+      "category": "reading",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "B",
+      "predicted": "B",
+      "correct": true,
+      "status": "completed",
+      "raw": "B",
+      "latency_ms": 1944,
+      "usage": {
+        "input_tokens": 223,
+        "output_tokens": 66
+      },
+      "failure": null
+    },
+    {
+      "id": "reading.shortest-path",
+      "category": "reading",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "B",
+      "predicted": null,
+      "correct": false,
+      "status": "failed",
+      "raw": null,
+      "latency_ms": 6466,
+      "usage": null,
+      "failure": {
+        "code": "malformed_response",
+        "message": "nous-portal: response carried no text content",
+        "retryable": false
+      }
+    },
+    {
+      "id": "reading.insufficient",
+      "category": "reading",
+      "model": "stealth/space-bunny-alpha",
+      "expected": "D",
+      "predicted": "D",
+      "correct": true,
+      "status": "completed",
+      "raw": "D",
+      "latency_ms": 3876,
+      "usage": {
+        "input_tokens": 219,
+        "output_tokens": 43
+      },
+      "failure": null
+    },
+    {
+      "id": "reading.insufficient",
+      "category": "reading",
+      "model": "stepfun/step-3.7-flash:free",
+      "expected": "D",
+      "predicted": null,
+      "correct": false,
+      "status": "failed",
+      "raw": null,
+      "latency_ms": 507,
+      "usage": null,
+      "failure": {
+        "code": "rate_limited",
+        "message": "nous-portal 429: {\"status\":429,\"message\":\"You've reached this model's current fair-share rate limit. It adapts to demand — retry after the indicated delay, or try an alternate model.\",\"reason\":\"rate_limited\",\"retry_after\":15,\"alternates\":[\"openai/gpt-6-astra-fast\",\"qwen/qwen3-vl-8b-thinking\",\"bytedance-seed/seed-2.0-lite\"]}",
+        "retryable": true,
+        "retry_after_ms": 15000
+      }
+    }
+  ],
+  "summary": {
+    "stealth/space-bunny-alpha": {
+      "n": 20,
+      "correct": 19,
+      "provider_failures": 0,
+      "format_failures": 0,
+      "median_ms": 1948,
+      "p95_ms": 3451,
+      "input_tokens": 4413,
+      "output_tokens": 1026,
+      "categories": {
+        "quantitative": {
+          "n": 5,
+          "correct": 5
+        },
+        "logic": {
+          "n": 5,
+          "correct": 4
+        },
+        "code": {
+          "n": 5,
+          "correct": 5
+        },
+        "reading": {
+          "n": 5,
+          "correct": 5
+        }
+      }
+    },
+    "stepfun/step-3.7-flash:free": {
+      "n": 20,
+      "correct": 12,
+      "provider_failures": 8,
+      "format_failures": 0,
+      "median_ms": 3995,
+      "p95_ms": 6552,
+      "input_tokens": 1165,
+      "output_tokens": 2774,
+      "categories": {
+        "quantitative": {
+          "n": 5,
+          "correct": 5
+        },
+        "logic": {
+          "n": 5,
+          "correct": 2
+        },
+        "code": {
+          "n": 5,
+          "correct": 2
+        },
+        "reading": {
+          "n": 5,
+          "correct": 3
+        }
+      }
+    }
+  }
+}
