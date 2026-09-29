@@ -48,10 +48,11 @@ export const NOUS_PORTAL_OBSERVED_FREE_LIMITS = [
 ] as const;
 
 /**
- * The zero-priced models, confirmed against the live catalogue. Every one has
- * a paid twin at the same id without the `:free` suffix, and the suffix is
- * what makes it free — `meituan/longcat-2.0` bills, `meituan/longcat-2.0:free`
- * does not.
+ * The zero-priced IDs observed in the live catalogue. Most use a `:free`
+ * suffix; `stealth/space-bunny-alpha` is zero-priced at its exact ID.
+ * Catalogue pricing is discovery data, not a serving guarantee: on 2026-09-25
+ * LongCat's free ID was listed at zero price but its inference endpoint
+ * rejected requests as "no longer free". Never switch to a paid twin.
  */
 export const NOUS_PORTAL_FREE_MODELS = {
   lingFlashFin: 'inclusionai/ling-3.0-flash-fin:free',
@@ -59,6 +60,7 @@ export const NOUS_PORTAL_FREE_MODELS = {
   longcat: 'meituan/longcat-2.0:free',
   lagunaS: 'poolside/laguna-s-2.1:free',
   lagunaXS: 'poolside/laguna-xs-2.1:free',
+  spaceBunny: 'stealth/space-bunny-alpha',
   stepFlash: 'stepfun/step-3.7-flash:free',
   solarPro: 'upstage/solar-pro4:free',
 } as const;
@@ -70,6 +72,9 @@ export function nousPortalAdapter(options: NousPortalOptions): GenerationAdapter
     {
       id: NOUS_PORTAL_ADAPTER,
       defaultBaseURL: NOUS_PORTAL_BASE_URL,
+      // Observed on 2026-09-22 with an API key: some listed free models return
+      // 400 "missing tags" without a user tag. The public OpenAPI omits it.
+      requestTags: ['user=weave'],
       // Relative seconds, so no clock is needed. Requests reset before tokens
       // in the common case, but take whichever is further out: coming back
       // while the other limit still bites earns a second refusal.

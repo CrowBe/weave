@@ -1,0 +1,29 @@
+{
+  "version": "space-bunny-vs-sol.hard.v1",
+  "status": "fresh, self-contained, authored synthetic prompts; no private data",
+  "cases": [
+    {"id":"hard.math.count","category":"quantitative","prompt":"Among integers 1 through 200 inclusive, how many are divisible by 4 or 6 but not by 9? Give the integer only.","expected":"56"},
+    {"id":"hard.math.urn","category":"quantitative","prompt":"A bag has 5 red, 4 blue, and 3 green balls. Draw 3 without replacement. What is the probability of exactly 2 red and 1 blue? Give a reduced fraction.","expected":"2/11"},
+    {"id":"hard.math.pumps","category":"quantitative","prompt":"Pump A fills a pool in 6 hours and pump B in 9 hours. A drain empties a full pool in 18 hours. Starting empty, all three operate together. How many hours until full? Give a reduced fraction.","expected":"9/2"},
+    {"id":"hard.math.crt","category":"quantitative","prompt":"Find the smallest positive integer n with n mod 7 = 4, n mod 11 = 6, and n mod 13 = 9. Give the integer only.","expected":"347"},
+    {"id":"hard.math.path","category":"quantitative","prompt":"An undirected graph has weighted edges A-B 7, A-C 3, B-D 4, B-E 8, C-B 2, C-D 9, C-F 5, F-D 1, D-E 2, F-E 9. What is the shortest path cost from A to E? Give the integer only.","expected":"11"},
+
+    {"id":"hard.logic.signs","category":"logic","prompt":"A prize is in exactly one of five boxes A through E. Signs read: A says 'in A'; B says 'in C'; C says 'in D'; D says 'not in A'; E says 'not in B'. Exactly one sign is true. Which box contains the prize? Give one letter.","expected":"B"},
+    {"id":"hard.logic.orders","category":"logic","prompt":"Six distinct tasks A through F are ordered. A precedes B and C; B precedes D; C precedes E; D and E each precede F. How many complete orders satisfy all constraints? Give the integer only.","expected":"6"},
+    {"id":"hard.logic.assignments","category":"logic","prompt":"Exactly two of Boolean variables A, B, C are true. A implies B. C implies not A. How many assignments satisfy all constraints? Give the integer only.","expected":"2"},
+    {"id":"hard.logic.knights","category":"logic","prompt":"A, B, and C each always tell the truth or always lie. A says 'B is a liar.' B says 'C is a liar.' C says 'A and B are the same type.' Which of A, B, C tells the truth? Give all truthful letters in alphabetical order, with no separator, or 'none'.","expected":"B"},
+    {"id":"hard.logic.must","category":"logic","prompt":"Exactly two of P,Q,R,S are true. P implies Q. R implies S. Q implies not S. Q is true. Which of P,Q,R,S must be false in every valid assignment? Give all forced-false letters alphabetically with no separator.","expected":"RS"},
+
+    {"id":"hard.code.finally","category":"code","prompt":"What does this Python print? Give the printed value exactly: def f():\n    try: return [1]\n    finally: return [2]\nprint(f())","expected":"[2]"},
+    {"id":"hard.code.repeat","category":"code","prompt":"What does this Python print? Give the printed value exactly: a=[[0]]*3; a[1][0]=7; print(a)","expected":"[[7], [7], [7]]"},
+    {"id":"hard.code.maplength","category":"code","prompt":"What does this JavaScript print? Give the printed value exactly: const a=[1,2,3]; const b=a.map((x,i)=>{if(i===0)a.push(4);return x*2}); console.log(b.join(',')+':'+a.length);","expected":"2,4,6:4"},
+    {"id":"hard.code.closures","category":"code","prompt":"What does this Python print? Give the printed value exactly: fs=[]\nfor i in range(3): fs.append(lambda i=i: i*2)\nprint(sum(f() for f in fs))","expected":"6"},
+    {"id":"hard.code.dictkeys","category":"code","prompt":"What does this Python print? Give the printed value exactly: d={True:'a', 1:'b', 1.0:'c'}; print(len(d), d[True])","expected":"1 c"},
+
+    {"id":"hard.read.deploy","category":"reading","prompt":"Deployment log: v6 was built Monday, tested Tuesday, and deployed Wednesday. v7 was built Wednesday, tested Thursday, and scheduled for Friday. On Friday morning that schedule was cancelled. A draft note on Friday afternoon calls v7 'the current release', but records no deployment. According to recorded deployments, which version is live? Answer v6, v7, both, or unknown.","expected":"v6"},
+    {"id":"hard.read.stock","category":"reading","prompt":"Warehouse note: the count at opening is 48 units. Four are damaged and segregated, 9 usable units are received, 11 usable units ship, and 7 remaining usable units are reserved for another customer. Damaged units cannot be sold; reserved units cannot be sold today. How many can be sold today? Give an integer.","expected":"35"},
+    {"id":"hard.read.deadline","category":"reading","prompt":"The review desk processes arrivals before 16:00 on the same business day. Arrivals at or after 16:00 wait for the next business day. It works Monday through Friday; Monday is a listed holiday. A file arrives Friday at 16:02. Which weekday is its first scheduled review? Give the weekday name only.","expected":"Tuesday"},
+    {"id":"hard.read.evidence","category":"reading","prompt":"A report says 32 of 40 users of treatment A improved and 24 of 40 users of treatment B improved. Users selected their treatment; the groups' initial severity was not recorded. Does the report establish that A caused a higher improvement rate? Answer yes or no only.","expected":"no"},
+    {"id":"hard.read.budget","category":"reading","prompt":"A project begins with a 1200 budget. It pays 240 for materials and 310 for labor. It places a 150 refundable deposit, which has not yet been refunded, and reserves 200 for a future invoice. How much money is currently uncommitted and available to spend? Give an integer.","expected":"300"}
+  ]
+}
