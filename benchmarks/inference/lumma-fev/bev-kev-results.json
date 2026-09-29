@@ -1,0 +1,1208 @@
+{
+  "status": "complete",
+  "dataset": {
+    "name": "avbiswas/bev-decision-150K",
+    "revision": "f83fe8b97094112fa305bfc793be07c8f8742282"
+  },
+  "selection": "105 existing filtered should_call_available_tool test rows; 24 tool_selection request groups by SHA256(normalized request), each in original and reversed option order",
+  "sample_sha256": {
+    "cases": "d521a1307f94ebaff30b985447c10336fdbf3859d4739c9e68cf2a51b328e393",
+    "labels": "35996decca07f290a786c85d3c99e1bb29f61e0a42bfa9e4997e748677c6cbc4"
+  },
+  "requested_cases": 48,
+  "model": {
+    "name": "Kev",
+    "run": "/home/bencrow/.local/share/weave/kev/models/kev-4b",
+    "device": "cpu",
+    "base": "Qwen/Qwen3-4B-Base",
+    "base_revision": "906bfd4b4dc7f14ee4320094d8b41684abff8539",
+    "adapter_sha256": "3fa10d8646f567e884ea47841b2f3d5f2d135b81a4447a8ea79a6fc94e9c6ae1",
+    "head_sha256": "dad87f7e60c8b3f1eec8bee83858a5429c6ab06dc96385a935bc88e6b468a45d",
+    "training_config_sha256": "b79f9744e4fcea7473b47f75aefcf9d239d95459e55fcace17d953ba77a42365"
+  },
+  "records": [
+    {
+      "id": "test:8532:tool_selection:original",
+      "row_index": 8532,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_pace",
+      "status": "accepted",
+      "elapsed_ms": 7291.1,
+      "result": {
+        "raw_probabilities": {
+          "calculate_pace": 0.9999499320983887,
+          "add_note": 5.012020483263768e-05
+        },
+        "option_keys": [
+          "calculate_pace",
+          "add_note"
+        ],
+        "expected": "calculate_pace",
+        "predicted": "calculate_pace",
+        "correct": true,
+        "latency_ms": 7282.82385901548,
+        "input_tokens": 181
+      }
+    },
+    {
+      "id": "test:8532:tool_selection:reversed",
+      "row_index": 8532,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_pace",
+      "status": "accepted",
+      "elapsed_ms": 7259.3,
+      "result": {
+        "raw_probabilities": {
+          "add_note": 6.371934432536364e-06,
+          "calculate_pace": 0.9999936819076538
+        },
+        "option_keys": [
+          "add_note",
+          "calculate_pace"
+        ],
+        "expected": "calculate_pace",
+        "predicted": "calculate_pace",
+        "correct": true,
+        "latency_ms": 7255.793048010673,
+        "input_tokens": 181
+      }
+    },
+    {
+      "id": "test:8322:tool_selection:original",
+      "row_index": 8322,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_shipping_cost",
+      "status": "accepted",
+      "elapsed_ms": 10267.3,
+      "result": {
+        "raw_probabilities": {
+          "calculate_shipping_cost": 0.9999933242797852,
+          "check_email_availability": 6.660123290203046e-06
+        },
+        "option_keys": [
+          "calculate_shipping_cost",
+          "check_email_availability"
+        ],
+        "expected": "calculate_shipping_cost",
+        "predicted": "calculate_shipping_cost",
+        "correct": true,
+        "latency_ms": 10260.743320046458,
+        "input_tokens": 260
+      }
+    },
+    {
+      "id": "test:8322:tool_selection:reversed",
+      "row_index": 8322,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_shipping_cost",
+      "status": "accepted",
+      "elapsed_ms": 10129.5,
+      "result": {
+        "raw_probabilities": {
+          "check_email_availability": 2.5777762857615016e-06,
+          "calculate_shipping_cost": 0.9999973773956299
+        },
+        "option_keys": [
+          "check_email_availability",
+          "calculate_shipping_cost"
+        ],
+        "expected": "calculate_shipping_cost",
+        "predicted": "calculate_shipping_cost",
+        "correct": true,
+        "latency_ms": 10126.299229974393,
+        "input_tokens": 260
+      }
+    },
+    {
+      "id": "test:8435:tool_selection:original",
+      "row_index": 8435,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "execute_program",
+      "status": "accepted",
+      "elapsed_ms": 6704.6,
+      "result": {
+        "raw_probabilities": {
+          "execute_program": 0.9999961853027344,
+          "generate_username": 3.8428347579611e-06
+        },
+        "option_keys": [
+          "execute_program",
+          "generate_username"
+        ],
+        "expected": "execute_program",
+        "predicted": "execute_program",
+        "correct": true,
+        "latency_ms": 6700.921976997051,
+        "input_tokens": 174
+      }
+    },
+    {
+      "id": "test:8435:tool_selection:reversed",
+      "row_index": 8435,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "execute_program",
+      "status": "accepted",
+      "elapsed_ms": 6803.7,
+      "result": {
+        "raw_probabilities": {
+          "generate_username": 1.7904244486999232e-06,
+          "execute_program": 0.9999982118606567
+        },
+        "option_keys": [
+          "generate_username",
+          "execute_program"
+        ],
+        "expected": "execute_program",
+        "predicted": "execute_program",
+        "correct": true,
+        "latency_ms": 6802.775076997932,
+        "input_tokens": 174
+      }
+    },
+    {
+      "id": "test:8460:tool_selection:original",
+      "row_index": 8460,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_loan_interest",
+      "status": "accepted",
+      "elapsed_ms": 9971.7,
+      "result": {
+        "raw_probabilities": {
+          "calculate_loan_interest": 0.999995231628418,
+          "calculate_tax": 4.759952389576938e-06
+        },
+        "option_keys": [
+          "calculate_loan_interest",
+          "calculate_tax"
+        ],
+        "expected": "calculate_loan_interest",
+        "predicted": "calculate_loan_interest",
+        "correct": true,
+        "latency_ms": 9969.999632972758,
+        "input_tokens": 254
+      }
+    },
+    {
+      "id": "test:8460:tool_selection:reversed",
+      "row_index": 8460,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_loan_interest",
+      "status": "accepted",
+      "elapsed_ms": 10598.1,
+      "result": {
+        "raw_probabilities": {
+          "calculate_tax": 1.2222304803799489e-06,
+          "calculate_loan_interest": 0.9999988079071045
+        },
+        "option_keys": [
+          "calculate_tax",
+          "calculate_loan_interest"
+        ],
+        "expected": "calculate_loan_interest",
+        "predicted": "calculate_loan_interest",
+        "correct": true,
+        "latency_ms": 10597.032308985945,
+        "input_tokens": 254
+      }
+    },
+    {
+      "id": "test:8173:tool_selection:original",
+      "row_index": 8173,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_tax",
+      "status": "accepted",
+      "elapsed_ms": 9094.2,
+      "result": {
+        "raw_probabilities": {
+          "calculate_tax": 0.9999849796295166,
+          "calculate_loan_payment": 1.4961491615395062e-05
+        },
+        "option_keys": [
+          "calculate_tax",
+          "calculate_loan_payment"
+        ],
+        "expected": "calculate_tax",
+        "predicted": "calculate_tax",
+        "correct": true,
+        "latency_ms": 9090.903366042767,
+        "input_tokens": 222
+      }
+    },
+    {
+      "id": "test:8173:tool_selection:reversed",
+      "row_index": 8173,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_tax",
+      "status": "accepted",
+      "elapsed_ms": 9001.0,
+      "result": {
+        "raw_probabilities": {
+          "calculate_loan_payment": 3.885363184963353e-06,
+          "calculate_tax": 0.9999960660934448
+        },
+        "option_keys": [
+          "calculate_loan_payment",
+          "calculate_tax"
+        ],
+        "expected": "calculate_tax",
+        "predicted": "calculate_tax",
+        "correct": true,
+        "latency_ms": 8997.44876899058,
+        "input_tokens": 222
+      }
+    },
+    {
+      "id": "test:8155:tool_selection:original",
+      "row_index": 8155,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "get_lyrics",
+      "status": "accepted",
+      "elapsed_ms": 7953.9,
+      "result": {
+        "raw_probabilities": {
+          "get_lyrics": 0.9999951124191284,
+          "calculate_bmi": 4.935548986395588e-06
+        },
+        "option_keys": [
+          "get_lyrics",
+          "calculate_bmi"
+        ],
+        "expected": "get_lyrics",
+        "predicted": "get_lyrics",
+        "correct": true,
+        "latency_ms": 7949.626597983297,
+        "input_tokens": 192
+      }
+    },
+    {
+      "id": "test:8155:tool_selection:reversed",
+      "row_index": 8155,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "get_lyrics",
+      "status": "accepted",
+      "elapsed_ms": 7988.3,
+      "result": {
+        "raw_probabilities": {
+          "calculate_bmi": 1.8177611309511121e-06,
+          "get_lyrics": 0.9999982118606567
+        },
+        "option_keys": [
+          "calculate_bmi",
+          "get_lyrics"
+        ],
+        "expected": "get_lyrics",
+        "predicted": "get_lyrics",
+        "correct": true,
+        "latency_ms": 7987.428346998058,
+        "input_tokens": 192
+      }
+    },
+    {
+      "id": "test:8323:tool_selection:original",
+      "row_index": 8323,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "search_books",
+      "status": "accepted",
+      "elapsed_ms": 7312.4,
+      "result": {
+        "raw_probabilities": {
+          "search_books": 0.9999938011169434,
+          "get_stock_price": 6.151696652523242e-06
+        },
+        "option_keys": [
+          "search_books",
+          "get_stock_price"
+        ],
+        "expected": "search_books",
+        "predicted": "search_books",
+        "correct": true,
+        "latency_ms": 7311.47776596481,
+        "input_tokens": 177
+      }
+    },
+    {
+      "id": "test:8323:tool_selection:reversed",
+      "row_index": 8323,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "search_books",
+      "status": "accepted",
+      "elapsed_ms": 7180.0,
+      "result": {
+        "raw_probabilities": {
+          "get_stock_price": 1.8500774103813455e-06,
+          "search_books": 0.9999980926513672
+        },
+        "option_keys": [
+          "get_stock_price",
+          "search_books"
+        ],
+        "expected": "search_books",
+        "predicted": "search_books",
+        "correct": true,
+        "latency_ms": 7179.161005013157,
+        "input_tokens": 177
+      }
+    },
+    {
+      "id": "test:8066:tool_selection:original",
+      "row_index": 8066,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "get_news",
+      "status": "accepted",
+      "elapsed_ms": 5560.1,
+      "result": {
+        "raw_probabilities": {
+          "get_news": 0.9999808073043823,
+          "search_product": 1.922562842082698e-05
+        },
+        "option_keys": [
+          "get_news",
+          "search_product"
+        ],
+        "expected": "get_news",
+        "predicted": "get_news",
+        "correct": true,
+        "latency_ms": 5559.284766030032,
+        "input_tokens": 136
+      }
+    },
+    {
+      "id": "test:8066:tool_selection:reversed",
+      "row_index": 8066,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "get_news",
+      "status": "accepted",
+      "elapsed_ms": 5569.4,
+      "result": {
+        "raw_probabilities": {
+          "search_product": 3.939975613320712e-06,
+          "get_news": 0.9999960660934448
+        },
+        "option_keys": [
+          "search_product",
+          "get_news"
+        ],
+        "expected": "get_news",
+        "predicted": "get_news",
+        "correct": true,
+        "latency_ms": 5568.623528000899,
+        "input_tokens": 136
+      }
+    },
+    {
+      "id": "test:8514:tool_selection:original",
+      "row_index": 8514,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_shipping_cost",
+      "status": "accepted",
+      "elapsed_ms": 9811.2,
+      "result": {
+        "raw_probabilities": {
+          "calculate_shipping_cost": 0.9999756813049316,
+          "calculate_distance": 2.4304876205860637e-05
+        },
+        "option_keys": [
+          "calculate_shipping_cost",
+          "calculate_distance"
+        ],
+        "expected": "calculate_shipping_cost",
+        "predicted": "calculate_shipping_cost",
+        "correct": true,
+        "latency_ms": 9810.02635700861,
+        "input_tokens": 241
+      }
+    },
+    {
+      "id": "test:8514:tool_selection:reversed",
+      "row_index": 8514,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_shipping_cost",
+      "status": "accepted",
+      "elapsed_ms": 9888.4,
+      "result": {
+        "raw_probabilities": {
+          "calculate_distance": 7.055889000184834e-06,
+          "calculate_shipping_cost": 0.9999929666519165
+        },
+        "option_keys": [
+          "calculate_distance",
+          "calculate_shipping_cost"
+        ],
+        "expected": "calculate_shipping_cost",
+        "predicted": "calculate_shipping_cost",
+        "correct": true,
+        "latency_ms": 9882.811666990165,
+        "input_tokens": 241
+      }
+    },
+    {
+      "id": "test:7987:tool_selection:original",
+      "row_index": 7987,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "play_music",
+      "status": "accepted",
+      "elapsed_ms": 8288.0,
+      "result": {
+        "raw_probabilities": {
+          "play_music": 0.999996542930603,
+          "calculate_tip": 3.419111635594163e-06
+        },
+        "option_keys": [
+          "play_music",
+          "calculate_tip"
+        ],
+        "expected": "play_music",
+        "predicted": "play_music",
+        "correct": true,
+        "latency_ms": 8286.591371987015,
+        "input_tokens": 194
+      }
+    },
+    {
+      "id": "test:7987:tool_selection:reversed",
+      "row_index": 7987,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "play_music",
+      "status": "accepted",
+      "elapsed_ms": 8045.3,
+      "result": {
+        "raw_probabilities": {
+          "calculate_tip": 1.4367863059305819e-06,
+          "play_music": 0.9999985694885254
+        },
+        "option_keys": [
+          "calculate_tip",
+          "play_music"
+        ],
+        "expected": "play_music",
+        "predicted": "play_music",
+        "correct": true,
+        "latency_ms": 8044.369764975272,
+        "input_tokens": 194
+      }
+    },
+    {
+      "id": "test:7920:tool_selection:original",
+      "row_index": 7920,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_discount",
+      "status": "accepted",
+      "elapsed_ms": 9873.8,
+      "result": {
+        "raw_probabilities": {
+          "calculate_discount": 0.99998939037323,
+          "convert_currency": 1.0600513633107767e-05
+        },
+        "option_keys": [
+          "calculate_discount",
+          "convert_currency"
+        ],
+        "expected": "calculate_discount",
+        "predicted": "calculate_discount",
+        "correct": true,
+        "latency_ms": 9872.037132969126,
+        "input_tokens": 244
+      }
+    },
+    {
+      "id": "test:7920:tool_selection:reversed",
+      "row_index": 7920,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_discount",
+      "status": "accepted",
+      "elapsed_ms": 9926.5,
+      "result": {
+        "raw_probabilities": {
+          "convert_currency": 4.279918812244432e-06,
+          "calculate_discount": 0.9999957084655762
+        },
+        "option_keys": [
+          "convert_currency",
+          "calculate_discount"
+        ],
+        "expected": "calculate_discount",
+        "predicted": "calculate_discount",
+        "correct": true,
+        "latency_ms": 9923.655523976777,
+        "input_tokens": 244
+      }
+    },
+    {
+      "id": "test:8529:tool_selection:original",
+      "row_index": 8529,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_discounted_price",
+      "status": "accepted",
+      "elapsed_ms": 10138.9,
+      "result": {
+        "raw_probabilities": {
+          "calculate_discounted_price": 0.9999539852142334,
+          "generate_password": 4.599846579367295e-05
+        },
+        "option_keys": [
+          "calculate_discounted_price",
+          "generate_password"
+        ],
+        "expected": "calculate_discounted_price",
+        "predicted": "calculate_discounted_price",
+        "correct": true,
+        "latency_ms": 10135.99811703898,
+        "input_tokens": 213
+      }
+    },
+    {
+      "id": "test:8529:tool_selection:reversed",
+      "row_index": 8529,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_discounted_price",
+      "status": "accepted",
+      "elapsed_ms": 13207.3,
+      "result": {
+        "raw_probabilities": {
+          "generate_password": 1.1987333891738672e-05,
+          "calculate_discounted_price": 0.9999879598617554
+        },
+        "option_keys": [
+          "generate_password",
+          "calculate_discounted_price"
+        ],
+        "expected": "calculate_discounted_price",
+        "predicted": "calculate_discounted_price",
+        "correct": true,
+        "latency_ms": 13203.38655199157,
+        "input_tokens": 213
+      }
+    },
+    {
+      "id": "test:7982:tool_selection:original",
+      "row_index": 7982,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_sales_tax",
+      "status": "accepted",
+      "elapsed_ms": 8747.3,
+      "result": {
+        "raw_probabilities": {
+          "calculate_sales_tax": 0.999992847442627,
+          "search_news": 7.195595117082121e-06
+        },
+        "option_keys": [
+          "calculate_sales_tax",
+          "search_news"
+        ],
+        "expected": "calculate_sales_tax",
+        "predicted": "calculate_sales_tax",
+        "correct": true,
+        "latency_ms": 8744.713155028876,
+        "input_tokens": 180
+      }
+    },
+    {
+      "id": "test:7982:tool_selection:reversed",
+      "row_index": 7982,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_sales_tax",
+      "status": "accepted",
+      "elapsed_ms": 7390.0,
+      "result": {
+        "raw_probabilities": {
+          "search_news": 3.7675481507903896e-06,
+          "calculate_sales_tax": 0.9999961853027344
+        },
+        "option_keys": [
+          "search_news",
+          "calculate_sales_tax"
+        ],
+        "expected": "calculate_sales_tax",
+        "predicted": "calculate_sales_tax",
+        "correct": true,
+        "latency_ms": 7389.183785999194,
+        "input_tokens": 180
+      }
+    },
+    {
+      "id": "test:8185:tool_selection:original",
+      "row_index": 8185,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "search_recipes",
+      "status": "accepted",
+      "elapsed_ms": 6784.9,
+      "result": {
+        "raw_probabilities": {
+          "search_recipes": 0.9999936819076538,
+          "get_lyrics": 6.3380016399605665e-06
+        },
+        "option_keys": [
+          "search_recipes",
+          "get_lyrics"
+        ],
+        "expected": "search_recipes",
+        "predicted": "search_recipes",
+        "correct": true,
+        "latency_ms": 6782.339085999411,
+        "input_tokens": 168
+      }
+    },
+    {
+      "id": "test:8185:tool_selection:reversed",
+      "row_index": 8185,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "search_recipes",
+      "status": "accepted",
+      "elapsed_ms": 7483.1,
+      "result": {
+        "raw_probabilities": {
+          "get_lyrics": 2.634187012517941e-06,
+          "search_recipes": 0.9999973773956299
+        },
+        "option_keys": [
+          "get_lyrics",
+          "search_recipes"
+        ],
+        "expected": "search_recipes",
+        "predicted": "search_recipes",
+        "correct": true,
+        "latency_ms": 7482.041546027176,
+        "input_tokens": 168
+      }
+    },
+    {
+      "id": "test:8544:tool_selection:original",
+      "row_index": 8544,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_mortgage",
+      "status": "accepted",
+      "elapsed_ms": 9061.5,
+      "result": {
+        "raw_probabilities": {
+          "calculate_mortgage": 0.9999949932098389,
+          "check_website_status": 5.0319235924689565e-06
+        },
+        "option_keys": [
+          "calculate_mortgage",
+          "check_website_status"
+        ],
+        "expected": "calculate_mortgage",
+        "predicted": "calculate_mortgage",
+        "correct": true,
+        "latency_ms": 9060.169487958774,
+        "input_tokens": 213
+      }
+    },
+    {
+      "id": "test:8544:tool_selection:reversed",
+      "row_index": 8544,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_mortgage",
+      "status": "accepted",
+      "elapsed_ms": 8505.5,
+      "result": {
+        "raw_probabilities": {
+          "check_website_status": 1.4400086456589634e-06,
+          "calculate_mortgage": 0.9999985694885254
+        },
+        "option_keys": [
+          "check_website_status",
+          "calculate_mortgage"
+        ],
+        "expected": "calculate_mortgage",
+        "predicted": "calculate_mortgage",
+        "correct": true,
+        "latency_ms": 8504.677664954215,
+        "input_tokens": 213
+      }
+    },
+    {
+      "id": "test:8612:tool_selection:original",
+      "row_index": 8612,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "play_music",
+      "status": "accepted",
+      "elapsed_ms": 7027.0,
+      "result": {
+        "raw_probabilities": {
+          "play_music": 0.9999896287918091,
+          "generate_random_quote": 1.0391786418040283e-05
+        },
+        "option_keys": [
+          "play_music",
+          "generate_random_quote"
+        ],
+        "expected": "play_music",
+        "predicted": "play_music",
+        "correct": true,
+        "latency_ms": 7024.638585979119,
+        "input_tokens": 173
+      }
+    },
+    {
+      "id": "test:8612:tool_selection:reversed",
+      "row_index": 8612,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "play_music",
+      "status": "accepted",
+      "elapsed_ms": 6935.7,
+      "result": {
+        "raw_probabilities": {
+          "generate_random_quote": 7.036046099528903e-06,
+          "play_music": 0.9999929666519165
+        },
+        "option_keys": [
+          "generate_random_quote",
+          "play_music"
+        ],
+        "expected": "play_music",
+        "predicted": "play_music",
+        "correct": true,
+        "latency_ms": 6934.867043979466,
+        "input_tokens": 173
+      }
+    },
+    {
+      "id": "test:8206:tool_selection:original",
+      "row_index": 8206,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "search_news",
+      "status": "accepted",
+      "elapsed_ms": 8433.2,
+      "result": {
+        "raw_probabilities": {
+          "search_news": 0.9999843835830688,
+          "convert_currency": 1.5595538570778444e-05
+        },
+        "option_keys": [
+          "search_news",
+          "convert_currency"
+        ],
+        "expected": "search_news",
+        "predicted": "search_news",
+        "correct": true,
+        "latency_ms": 8432.264567993116,
+        "input_tokens": 207
+      }
+    },
+    {
+      "id": "test:8206:tool_selection:reversed",
+      "row_index": 8206,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "search_news",
+      "status": "accepted",
+      "elapsed_ms": 8396.2,
+      "result": {
+        "raw_probabilities": {
+          "convert_currency": 4.719740445580101e-06,
+          "search_news": 0.999995231628418
+        },
+        "option_keys": [
+          "convert_currency",
+          "search_news"
+        ],
+        "expected": "search_news",
+        "predicted": "search_news",
+        "correct": true,
+        "latency_ms": 8395.352477033157,
+        "input_tokens": 207
+      }
+    },
+    {
+      "id": "test:8313:tool_selection:original",
+      "row_index": 8313,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "search_videos",
+      "status": "accepted",
+      "elapsed_ms": 8119.6,
+      "result": {
+        "raw_probabilities": {
+          "search_videos": 0.9999853372573853,
+          "search_jobs": 1.4703183296660427e-05
+        },
+        "option_keys": [
+          "search_videos",
+          "search_jobs"
+        ],
+        "expected": "search_videos",
+        "predicted": "search_videos",
+        "correct": true,
+        "latency_ms": 8118.7496310449205,
+        "input_tokens": 202
+      }
+    },
+    {
+      "id": "test:8313:tool_selection:reversed",
+      "row_index": 8313,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "search_videos",
+      "status": "accepted",
+      "elapsed_ms": 8118.8,
+      "result": {
+        "raw_probabilities": {
+          "search_jobs": 4.700044883065857e-06,
+          "search_videos": 0.9999953508377075
+        },
+        "option_keys": [
+          "search_jobs",
+          "search_videos"
+        ],
+        "expected": "search_videos",
+        "predicted": "search_videos",
+        "correct": true,
+        "latency_ms": 8117.96412197873,
+        "input_tokens": 202
+      }
+    },
+    {
+      "id": "test:8061:tool_selection:original",
+      "row_index": 8061,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_discounted_price",
+      "status": "accepted",
+      "elapsed_ms": 9942.6,
+      "result": {
+        "raw_probabilities": {
+          "calculate_discounted_price": 0.9999643564224243,
+          "calculate_profit_margin": 3.561312405508943e-05
+        },
+        "option_keys": [
+          "calculate_discounted_price",
+          "calculate_profit_margin"
+        ],
+        "expected": "calculate_discounted_price",
+        "predicted": "calculate_discounted_price",
+        "correct": true,
+        "latency_ms": 9941.578012949321,
+        "input_tokens": 236
+      }
+    },
+    {
+      "id": "test:8061:tool_selection:reversed",
+      "row_index": 8061,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_discounted_price",
+      "status": "accepted",
+      "elapsed_ms": 9802.2,
+      "result": {
+        "raw_probabilities": {
+          "calculate_profit_margin": 8.750859706196934e-06,
+          "calculate_discounted_price": 0.9999912977218628
+        },
+        "option_keys": [
+          "calculate_profit_margin",
+          "calculate_discounted_price"
+        ],
+        "expected": "calculate_discounted_price",
+        "predicted": "calculate_discounted_price",
+        "correct": true,
+        "latency_ms": 9800.96888699336,
+        "input_tokens": 236
+      }
+    },
+    {
+      "id": "test:7935:tool_selection:original",
+      "row_index": 7935,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "get_current_time",
+      "status": "accepted",
+      "elapsed_ms": 5154.7,
+      "result": {
+        "raw_probabilities": {
+          "get_current_time": 0.9999815225601196,
+          "generate_random_quote": 1.8471775547368452e-05
+        },
+        "option_keys": [
+          "get_current_time",
+          "generate_random_quote"
+        ],
+        "expected": "get_current_time",
+        "predicted": "get_current_time",
+        "correct": true,
+        "latency_ms": 5153.983975993469,
+        "input_tokens": 121
+      }
+    },
+    {
+      "id": "test:7935:tool_selection:reversed",
+      "row_index": 7935,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "get_current_time",
+      "status": "accepted",
+      "elapsed_ms": 5112.1,
+      "result": {
+        "raw_probabilities": {
+          "generate_random_quote": 1.770427479641512e-05,
+          "get_current_time": 0.9999822378158569
+        },
+        "option_keys": [
+          "generate_random_quote",
+          "get_current_time"
+        ],
+        "expected": "get_current_time",
+        "predicted": "get_current_time",
+        "correct": true,
+        "latency_ms": 5111.008409992792,
+        "input_tokens": 121
+      }
+    },
+    {
+      "id": "test:8366:tool_selection:original",
+      "row_index": 8366,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "generate_barcode",
+      "status": "accepted",
+      "elapsed_ms": 8534.0,
+      "result": {
+        "raw_probabilities": {
+          "generate_barcode": 0.9999969005584717,
+          "analyze_sentiment": 3.1505162496614503e-06
+        },
+        "option_keys": [
+          "generate_barcode",
+          "analyze_sentiment"
+        ],
+        "expected": "generate_barcode",
+        "predicted": "generate_barcode",
+        "correct": true,
+        "latency_ms": 8533.123117987998,
+        "input_tokens": 203
+      }
+    },
+    {
+      "id": "test:8366:tool_selection:reversed",
+      "row_index": 8366,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "generate_barcode",
+      "status": "accepted",
+      "elapsed_ms": 11038.0,
+      "result": {
+        "raw_probabilities": {
+          "analyze_sentiment": 1.6965259419521317e-06,
+          "generate_barcode": 0.9999983310699463
+        },
+        "option_keys": [
+          "analyze_sentiment",
+          "generate_barcode"
+        ],
+        "expected": "generate_barcode",
+        "predicted": "generate_barcode",
+        "correct": true,
+        "latency_ms": 11036.655883013736,
+        "input_tokens": 203
+      }
+    },
+    {
+      "id": "test:8213:tool_selection:original",
+      "row_index": 8213,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_discount",
+      "status": "accepted",
+      "elapsed_ms": 11463.3,
+      "result": {
+        "raw_probabilities": {
+          "calculate_discount": 0.9999921321868896,
+          "get_definition": 7.895886483311187e-06
+        },
+        "option_keys": [
+          "calculate_discount",
+          "get_definition"
+        ],
+        "expected": "calculate_discount",
+        "predicted": "calculate_discount",
+        "correct": true,
+        "latency_ms": 11462.18371501891,
+        "input_tokens": 199
+      }
+    },
+    {
+      "id": "test:8213:tool_selection:reversed",
+      "row_index": 8213,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "calculate_discount",
+      "status": "accepted",
+      "elapsed_ms": 8823.2,
+      "result": {
+        "raw_probabilities": {
+          "get_definition": 2.336789520995808e-06,
+          "calculate_discount": 0.999997615814209
+        },
+        "option_keys": [
+          "get_definition",
+          "calculate_discount"
+        ],
+        "expected": "calculate_discount",
+        "predicted": "calculate_discount",
+        "correct": true,
+        "latency_ms": 8822.229309007525,
+        "input_tokens": 199
+      }
+    },
+    {
+      "id": "test:8346:tool_selection:original",
+      "row_index": 8346,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "get_movie_details",
+      "status": "accepted",
+      "elapsed_ms": 6688.5,
+      "result": {
+        "raw_probabilities": {
+          "get_movie_details": 0.999991774559021,
+          "calculate_age": 8.228072147176135e-06
+        },
+        "option_keys": [
+          "get_movie_details",
+          "calculate_age"
+        ],
+        "expected": "get_movie_details",
+        "predicted": "get_movie_details",
+        "correct": true,
+        "latency_ms": 6687.685451004654,
+        "input_tokens": 163
+      }
+    },
+    {
+      "id": "test:8346:tool_selection:reversed",
+      "row_index": 8346,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "get_movie_details",
+      "status": "accepted",
+      "elapsed_ms": 6666.4,
+      "result": {
+        "raw_probabilities": {
+          "calculate_age": 5.170851181901526e-06,
+          "get_movie_details": 0.9999948740005493
+        },
+        "option_keys": [
+          "calculate_age",
+          "get_movie_details"
+        ],
+        "expected": "get_movie_details",
+        "predicted": "get_movie_details",
+        "correct": true,
+        "latency_ms": 6665.465152007528,
+        "input_tokens": 163
+      }
+    },
+    {
+      "id": "test:8351:tool_selection:original",
+      "row_index": 8351,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "search_images",
+      "status": "accepted",
+      "elapsed_ms": 8076.7,
+      "result": {
+        "raw_probabilities": {
+          "search_images": 0.9999946355819702,
+          "calculate_loan_interest": 5.410648554970976e-06
+        },
+        "option_keys": [
+          "search_images",
+          "calculate_loan_interest"
+        ],
+        "expected": "search_images",
+        "predicted": "search_images",
+        "correct": true,
+        "latency_ms": 8075.864944024943,
+        "input_tokens": 189
+      }
+    },
+    {
+      "id": "test:8351:tool_selection:reversed",
+      "row_index": 8351,
+      "domain": "Tool and workflow decisions",
+      "type": "choice",
+      "label": "search_images",
+      "status": "accepted",
+      "elapsed_ms": 7818.9,
+      "result": {
+        "raw_probabilities": {
+          "calculate_loan_interest": 2.0689494704129174e-06,
+          "search_images": 0.9999979734420776
+        },
+        "option_keys": [
+          "calculate_loan_interest",
+          "search_images"
+        ],
+        "expected": "search_images",
+        "predicted": "search_images",
+        "correct": true,
+        "latency_ms": 7816.797061008401,
+        "input_tokens": 189
+      }
+    }
+  ],
+  "summary": {
+    "Tool and workflow decisions / choice": {
+      "n": 48,
+      "argmax_correct": 48,
+      "argmax_accuracy": 1.0,
+      "decision_correct": 48,
+      "decision_accuracy": 1.0,
+      "first_option_baseline_correct": 24,
+      "sample_majority_baseline_correct": 4
+    },
+    "overall": {
+      "n": 48,
+      "argmax_correct": 48,
+      "argmax_accuracy": 1.0,
+      "decision_correct": 48,
+      "decision_accuracy": 1.0,
+      "first_option_baseline_correct": 24,
+      "sample_majority_baseline_correct": 4
+    },
+    "type:choice": {
+      "n": 48,
+      "argmax_correct": 48,
+      "argmax_accuracy": 1.0,
+      "decision_correct": 48,
+      "decision_accuracy": 1.0,
+      "first_option_baseline_correct": 24,
+      "sample_majority_baseline_correct": 4
+    }
+  },
+  "peak_rss_kib": 20281580,
+  "wall_elapsed_seconds": 413.88
+}

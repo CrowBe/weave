@@ -1,5 +1,22 @@
 # Inference experiments
 
+## Follow-on model and routing probes — 2026-09-29
+
+The [Space Bunny Alpha probe](space-bunny/README.md) records a live Nous Portal
+smoke test and self-authored general reasoning cases. A separate
+[60-case comparison](space-bunny/sol-compare/README.md) scored Space Bunny
+56/60 and GPT-6 Sol 60/60. These small, authored sets do not establish a broad
+quality ranking or a Weave judgment-site route.
+
+The [Lumma-Fev probe](lumma-fev/README.md) records local model and BEV transfer
+results, with [site-fit analysis](../../docs/research/lumma-fev-weave.md).
+Related research notes cover
+[Jev routing implementations](../../docs/research/jev-model-routing-implementations.md),
+[TypeSafe's System One adapter](../../docs/research/typesafe-system-one-adapter-weave-decision-sites.md),
+[FluidInference](../../docs/research/fluidinference.md), and
+[CLM](../../docs/research/jacky-kwok-clm.md). These are research evidence,
+not admitted implementations or production routing changes.
+
 ## Decision-model evidence — 2026-09-27
 
 These are exploratory measurements for bounded judgment sites. Model predictions

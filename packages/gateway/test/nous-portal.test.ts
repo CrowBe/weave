@@ -97,6 +97,16 @@ describe('nous-portal adapter', () => {
     assert.equal(result.usage.output_tokens, 3);
   });
 
+  it('sends the user tag required by free models through the Portal API key', async () => {
+    let body: Record<string, unknown> | undefined;
+    const fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(JSON.stringify(LIVE_BODY), { status: 200 });
+    }) as typeof globalThis.fetch;
+    await nousPortalAdapter({ apiKey: 'k', fetch }).execute(CALL);
+    assert.deepEqual(body?.['tags'], ['user=weave']);
+  });
+
   it('turns the relative reset header into an exact retry delay', async () => {
     const failure = await refusalWith(LIVE_HEADERS);
     assert.equal(failure.code, 'rate_limited');
@@ -136,10 +146,13 @@ describe('nous-portal adapter', () => {
     assert.throws(() => nousPortalAdapter({ apiKey: '' }), /nousPortalAdapter requires an apiKey/);
   });
 
-  it('names the seven zero-priced models with the :free suffix that makes them free', () => {
+  it('names the eight catalogue-listed zero-priced IDs, including unsuffixed Space Bunny', () => {
     const ids = Object.values(NOUS_PORTAL_FREE_MODELS);
-    assert.equal(ids.length, 7);
-    for (const id of ids) assert.ok(id.endsWith(':free'), `${id} must carry the :free suffix`);
+    assert.equal(ids.length, 8);
+    assert.equal(NOUS_PORTAL_FREE_MODELS.spaceBunny, 'stealth/space-bunny-alpha');
+    for (const id of ids.filter((id) => id !== NOUS_PORTAL_FREE_MODELS.spaceBunny)) {
+      assert.ok(id.endsWith(':free'), `${id} must carry the :free suffix`);
+    }
     assert.deepEqual([...NOUS_PORTAL_OBSERVED_FREE_LIMITS], [
       { requests: 400, window_ms: 60_000 },
       { requests: 16_800, window_ms: 3_600_000 },

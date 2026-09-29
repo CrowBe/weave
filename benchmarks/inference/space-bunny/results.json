@@ -1,0 +1,685 @@
+{
+  "status": "exploratory, authored synthetic cases; not routing evidence",
+  "observed_at": "2026-09-25T04:32:13.056Z",
+  "adapter": "nous-portal",
+  "model": "stealth/space-bunny-alpha",
+  "endpoint": "https://inference-api.nousresearch.com/v1",
+  "settings": {
+    "max_output_tokens": 1024,
+    "temperature": 0,
+    "reasoning_effort": "provider default (not configurable through the gateway adapter)"
+  },
+  "catalogue": {
+    "id": "stealth/space-bunny-alpha",
+    "pricing": {
+      "prompt": "0.0000000000",
+      "completion": "0.0000000000"
+    },
+    "context_length": 1000000,
+    "supported_parameters": [
+      "include_reasoning",
+      "max_tokens",
+      "reasoning",
+      "reasoning_effort",
+      "response_format",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_p"
+    ]
+  },
+  "sites": {
+    "capability.match": {
+      "validation_sha256": "30f552fd847604795e80bdb715b4b935f1edc343e999b8804ac3c365b0eadf5b",
+      "summary": {
+        "n": 18,
+        "correct": 18,
+        "completed": 18,
+        "format_failures": 0,
+        "provider_failures": 0,
+        "majority_label_floor": 8,
+        "independent_groups": 3,
+        "contrast_pairs": 6,
+        "relevant_flips": 6,
+        "irrelevant_holds": 6,
+        "false_matches": 0,
+        "median_ms": 1644,
+        "median_output_tokens": 3
+      },
+      "rows": [
+        {
+          "id": "match.inspect-versus-ocr.v0.base",
+          "group": "match.inspect-versus-ocr",
+          "variant": 0,
+          "arm": "base",
+          "expected": "c3",
+          "predicted": "c3",
+          "correct": true,
+          "status": "completed",
+          "raw": "c3",
+          "latency_ms": 1263,
+          "usage": {
+            "input_tokens": 317,
+            "output_tokens": 3
+          },
+          "failure": null
+        },
+        {
+          "id": "match.inspect-versus-ocr.v0.relevant",
+          "group": "match.inspect-versus-ocr",
+          "variant": 0,
+          "arm": "relevant",
+          "expected": "none",
+          "predicted": "none",
+          "correct": true,
+          "status": "completed",
+          "raw": "none",
+          "latency_ms": 3581,
+          "usage": {
+            "input_tokens": 313,
+            "output_tokens": 104
+          },
+          "failure": null
+        },
+        {
+          "id": "match.inspect-versus-ocr.v0.irrelevant",
+          "group": "match.inspect-versus-ocr",
+          "variant": 0,
+          "arm": "irrelevant",
+          "expected": "c3",
+          "predicted": "c3",
+          "correct": true,
+          "status": "completed",
+          "raw": "c3",
+          "latency_ms": 1637,
+          "usage": {
+            "input_tokens": 317,
+            "output_tokens": 3
+          },
+          "failure": null
+        },
+        {
+          "id": "match.inspect-versus-ocr.v1.base",
+          "group": "match.inspect-versus-ocr",
+          "variant": 1,
+          "arm": "base",
+          "expected": "c3",
+          "predicted": "c3",
+          "correct": true,
+          "status": "completed",
+          "raw": "c3",
+          "latency_ms": 1536,
+          "usage": {
+            "input_tokens": 317,
+            "output_tokens": 3
+          },
+          "failure": null
+        },
+        {
+          "id": "match.inspect-versus-ocr.v1.relevant",
+          "group": "match.inspect-versus-ocr",
+          "variant": 1,
+          "arm": "relevant",
+          "expected": "none",
+          "predicted": "none",
+          "correct": true,
+          "status": "completed",
+          "raw": "none",
+          "latency_ms": 2147,
+          "usage": {
+            "input_tokens": 313,
+            "output_tokens": 127
+          },
+          "failure": null
+        },
+        {
+          "id": "match.inspect-versus-ocr.v1.irrelevant",
+          "group": "match.inspect-versus-ocr",
+          "variant": 1,
+          "arm": "irrelevant",
+          "expected": "c3",
+          "predicted": "c3",
+          "correct": true,
+          "status": "completed",
+          "raw": "c3",
+          "latency_ms": 1263,
+          "usage": {
+            "input_tokens": 317,
+            "output_tokens": 3
+          },
+          "failure": null
+        },
+        {
+          "id": "match.assemble-versus-translate.v0.base",
+          "group": "match.assemble-versus-translate",
+          "variant": 0,
+          "arm": "base",
+          "expected": "c4",
+          "predicted": "c4",
+          "correct": true,
+          "status": "completed",
+          "raw": "c4",
+          "latency_ms": 2218,
+          "usage": {
+            "input_tokens": 315,
+            "output_tokens": 80
+          },
+          "failure": null
+        },
+        {
+          "id": "match.assemble-versus-translate.v0.relevant",
+          "group": "match.assemble-versus-translate",
+          "variant": 0,
+          "arm": "relevant",
+          "expected": "none",
+          "predicted": "none",
+          "correct": true,
+          "status": "completed",
+          "raw": "none",
+          "latency_ms": 1598,
+          "usage": {
+            "input_tokens": 311,
+            "output_tokens": 81
+          },
+          "failure": null
+        },
+        {
+          "id": "match.assemble-versus-translate.v0.irrelevant",
+          "group": "match.assemble-versus-translate",
+          "variant": 0,
+          "arm": "irrelevant",
+          "expected": "c4",
+          "predicted": "c4",
+          "correct": true,
+          "status": "completed",
+          "raw": "c4",
+          "latency_ms": 2112,
+          "usage": {
+            "input_tokens": 315,
+            "output_tokens": 77
+          },
+          "failure": null
+        },
+        {
+          "id": "match.assemble-versus-translate.v1.base",
+          "group": "match.assemble-versus-translate",
+          "variant": 1,
+          "arm": "base",
+          "expected": "c4",
+          "predicted": "c4",
+          "correct": true,
+          "status": "completed",
+          "raw": "c4",
+          "latency_ms": 1689,
+          "usage": {
+            "input_tokens": 315,
+            "output_tokens": 3
+          },
+          "failure": null
+        },
+        {
+          "id": "match.assemble-versus-translate.v1.relevant",
+          "group": "match.assemble-versus-translate",
+          "variant": 1,
+          "arm": "relevant",
+          "expected": "none",
+          "predicted": "none",
+          "correct": true,
+          "status": "completed",
+          "raw": "none",
+          "latency_ms": 1743,
+          "usage": {
+            "input_tokens": 311,
+            "output_tokens": 65
+          },
+          "failure": null
+        },
+        {
+          "id": "match.assemble-versus-translate.v1.irrelevant",
+          "group": "match.assemble-versus-translate",
+          "variant": 1,
+          "arm": "irrelevant",
+          "expected": "c4",
+          "predicted": "c4",
+          "correct": true,
+          "status": "completed",
+          "raw": "c4",
+          "latency_ms": 1645,
+          "usage": {
+            "input_tokens": 315,
+            "output_tokens": 3
+          },
+          "failure": null
+        },
+        {
+          "id": "match.composition-trap.v0.base",
+          "group": "match.composition-trap",
+          "variant": 0,
+          "arm": "base",
+          "expected": "c4",
+          "predicted": "c4",
+          "correct": true,
+          "status": "completed",
+          "raw": "c4",
+          "latency_ms": 1643,
+          "usage": {
+            "input_tokens": 313,
+            "output_tokens": 3
+          },
+          "failure": null
+        },
+        {
+          "id": "match.composition-trap.v0.relevant",
+          "group": "match.composition-trap",
+          "variant": 0,
+          "arm": "relevant",
+          "expected": "none",
+          "predicted": "none",
+          "correct": true,
+          "status": "completed",
+          "raw": "none",
+          "latency_ms": 1140,
+          "usage": {
+            "input_tokens": 318,
+            "output_tokens": 2
+          },
+          "failure": null
+        },
+        {
+          "id": "match.composition-trap.v0.irrelevant",
+          "group": "match.composition-trap",
+          "variant": 0,
+          "arm": "irrelevant",
+          "expected": "c4",
+          "predicted": "c4",
+          "correct": true,
+          "status": "completed",
+          "raw": "c4",
+          "latency_ms": 1212,
+          "usage": {
+            "input_tokens": 313,
+            "output_tokens": 3
+          },
+          "failure": null
+        },
+        {
+          "id": "match.composition-trap.v1.base",
+          "group": "match.composition-trap",
+          "variant": 1,
+          "arm": "base",
+          "expected": "c4",
+          "predicted": "c4",
+          "correct": true,
+          "status": "completed",
+          "raw": "c4",
+          "latency_ms": 1233,
+          "usage": {
+            "input_tokens": 313,
+            "output_tokens": 3
+          },
+          "failure": null
+        },
+        {
+          "id": "match.composition-trap.v1.relevant",
+          "group": "match.composition-trap",
+          "variant": 1,
+          "arm": "relevant",
+          "expected": "none",
+          "predicted": "none",
+          "correct": true,
+          "status": "completed",
+          "raw": "none",
+          "latency_ms": 6069,
+          "usage": {
+            "input_tokens": 318,
+            "output_tokens": 614
+          },
+          "failure": null
+        },
+        {
+          "id": "match.composition-trap.v1.irrelevant",
+          "group": "match.composition-trap",
+          "variant": 1,
+          "arm": "irrelevant",
+          "expected": "c4",
+          "predicted": "c4",
+          "correct": true,
+          "status": "completed",
+          "raw": "c4",
+          "latency_ms": 2216,
+          "usage": {
+            "input_tokens": 313,
+            "output_tokens": 74
+          },
+          "failure": null
+        }
+      ]
+    },
+    "result.evaluate": {
+      "validation_sha256": "7c61519c311746f6f15d1834843c0d6ff0f87d8eb29abf19686fb8768400541d",
+      "summary": {
+        "n": 18,
+        "correct": 17,
+        "completed": 18,
+        "format_failures": 0,
+        "provider_failures": 0,
+        "majority_label_floor": 6,
+        "independent_groups": 3,
+        "contrast_pairs": 6,
+        "relevant_flips": 6,
+        "irrelevant_holds": 5,
+        "false_matches": 0,
+        "median_ms": 1750,
+        "median_output_tokens": 3
+      },
+      "rows": [
+        {
+          "id": "evaluate.publish-stale-readset.v0.base",
+          "group": "evaluate.publish-stale-readset",
+          "variant": 0,
+          "arm": "base",
+          "expected": "met",
+          "predicted": "met",
+          "correct": true,
+          "status": "completed",
+          "raw": "met",
+          "latency_ms": 5210,
+          "usage": {
+            "input_tokens": 290,
+            "output_tokens": 412
+          },
+          "failure": null
+        },
+        {
+          "id": "evaluate.publish-stale-readset.v0.relevant",
+          "group": "evaluate.publish-stale-readset",
+          "variant": 0,
+          "arm": "relevant",
+          "expected": "unmet",
+          "predicted": "unmet",
+          "correct": true,
+          "status": "completed",
+          "raw": "unmet",
+          "latency_ms": 1545,
+          "usage": {
+            "input_tokens": 293,
+            "output_tokens": 3
+          },
+          "failure": null
+        },
+        {
+          "id": "evaluate.publish-stale-readset.v0.irrelevant",
+          "group": "evaluate.publish-stale-readset",
+          "variant": 0,
+          "arm": "irrelevant",
+          "expected": "met",
+          "predicted": "met",
+          "correct": true,
+          "status": "completed",
+          "raw": "met",
+          "latency_ms": 2558,
+          "usage": {
+            "input_tokens": 295,
+            "output_tokens": 84
+          },
+          "failure": null
+        },
+        {
+          "id": "evaluate.publish-stale-readset.v1.base",
+          "group": "evaluate.publish-stale-readset",
+          "variant": 1,
+          "arm": "base",
+          "expected": "met",
+          "predicted": "met",
+          "correct": true,
+          "status": "completed",
+          "raw": "met",
+          "latency_ms": 1902,
+          "usage": {
+            "input_tokens": 290,
+            "output_tokens": 47
+          },
+          "failure": null
+        },
+        {
+          "id": "evaluate.publish-stale-readset.v1.relevant",
+          "group": "evaluate.publish-stale-readset",
+          "variant": 1,
+          "arm": "relevant",
+          "expected": "unmet",
+          "predicted": "unmet",
+          "correct": true,
+          "status": "completed",
+          "raw": "unmet",
+          "latency_ms": 1269,
+          "usage": {
+            "input_tokens": 293,
+            "output_tokens": 3
+          },
+          "failure": null
+        },
+        {
+          "id": "evaluate.publish-stale-readset.v1.irrelevant",
+          "group": "evaluate.publish-stale-readset",
+          "variant": 1,
+          "arm": "irrelevant",
+          "expected": "met",
+          "predicted": "met",
+          "correct": true,
+          "status": "completed",
+          "raw": "met",
+          "latency_ms": 2650,
+          "usage": {
+            "input_tokens": 295,
+            "output_tokens": 197
+          },
+          "failure": null
+        },
+        {
+          "id": "evaluate.assemble-missing-readset.v0.base",
+          "group": "evaluate.assemble-missing-readset",
+          "variant": 0,
+          "arm": "base",
+          "expected": "unknown",
+          "predicted": "unknown",
+          "correct": true,
+          "status": "completed",
+          "raw": "unknown",
+          "latency_ms": 2777,
+          "usage": {
+            "input_tokens": 286,
+            "output_tokens": 2
+          },
+          "failure": null
+        },
+        {
+          "id": "evaluate.assemble-missing-readset.v0.relevant",
+          "group": "evaluate.assemble-missing-readset",
+          "variant": 0,
+          "arm": "relevant",
+          "expected": "met",
+          "predicted": "met",
+          "correct": true,
+          "status": "completed",
+          "raw": "met",
+          "latency_ms": 3065,
+          "usage": {
+            "input_tokens": 287,
+            "output_tokens": 174
+          },
+          "failure": null
+        },
+        {
+          "id": "evaluate.assemble-missing-readset.v0.irrelevant",
+          "group": "evaluate.assemble-missing-readset",
+          "variant": 0,
+          "arm": "irrelevant",
+          "expected": "unknown",
+          "predicted": "unknown",
+          "correct": true,
+          "status": "completed",
+          "raw": "unknown",
+          "latency_ms": 1268,
+          "usage": {
+            "input_tokens": 291,
+            "output_tokens": 2
+          },
+          "failure": null
+        },
+        {
+          "id": "evaluate.assemble-missing-readset.v1.base",
+          "group": "evaluate.assemble-missing-readset",
+          "variant": 1,
+          "arm": "base",
+          "expected": "unknown",
+          "predicted": "unknown",
+          "correct": true,
+          "status": "completed",
+          "raw": "unknown",
+          "latency_ms": 1598,
+          "usage": {
+            "input_tokens": 286,
+            "output_tokens": 2
+          },
+          "failure": null
+        },
+        {
+          "id": "evaluate.assemble-missing-readset.v1.relevant",
+          "group": "evaluate.assemble-missing-readset",
+          "variant": 1,
+          "arm": "relevant",
+          "expected": "met",
+          "predicted": "met",
+          "correct": true,
+          "status": "completed",
+          "raw": "met",
+          "latency_ms": 2867,
+          "usage": {
+            "input_tokens": 287,
+            "output_tokens": 216
+          },
+          "failure": null
+        },
+        {
+          "id": "evaluate.assemble-missing-readset.v1.irrelevant",
+          "group": "evaluate.assemble-missing-readset",
+          "variant": 1,
+          "arm": "irrelevant",
+          "expected": "unknown",
+          "predicted": "unmet",
+          "correct": false,
+          "status": "completed",
+          "raw": "unmet",
+          "latency_ms": 5938,
+          "usage": {
+            "input_tokens": 291,
+            "output_tokens": 385
+          },
+          "failure": null
+        },
+        {
+          "id": "evaluate.failure-versus-progress.v0.base",
+          "group": "evaluate.failure-versus-progress",
+          "variant": 0,
+          "arm": "base",
+          "expected": "unmet",
+          "predicted": "unmet",
+          "correct": true,
+          "status": "completed",
+          "raw": "unmet",
+          "latency_ms": 1093,
+          "usage": {
+            "input_tokens": 289,
+            "output_tokens": 3
+          },
+          "failure": null
+        },
+        {
+          "id": "evaluate.failure-versus-progress.v0.relevant",
+          "group": "evaluate.failure-versus-progress",
+          "variant": 0,
+          "arm": "relevant",
+          "expected": "partial",
+          "predicted": "partial",
+          "correct": true,
+          "status": "completed",
+          "raw": "partial",
+          "latency_ms": 1976,
+          "usage": {
+            "input_tokens": 289,
+            "output_tokens": 45
+          },
+          "failure": null
+        },
+        {
+          "id": "evaluate.failure-versus-progress.v0.irrelevant",
+          "group": "evaluate.failure-versus-progress",
+          "variant": 0,
+          "arm": "irrelevant",
+          "expected": "unmet",
+          "predicted": "unmet",
+          "correct": true,
+          "status": "completed",
+          "raw": "unmet",
+          "latency_ms": 1141,
+          "usage": {
+            "input_tokens": 294,
+            "output_tokens": 3
+          },
+          "failure": null
+        },
+        {
+          "id": "evaluate.failure-versus-progress.v1.base",
+          "group": "evaluate.failure-versus-progress",
+          "variant": 1,
+          "arm": "base",
+          "expected": "unmet",
+          "predicted": "unmet",
+          "correct": true,
+          "status": "completed",
+          "raw": "unmet",
+          "latency_ms": 1414,
+          "usage": {
+            "input_tokens": 289,
+            "output_tokens": 3
+          },
+          "failure": null
+        },
+        {
+          "id": "evaluate.failure-versus-progress.v1.relevant",
+          "group": "evaluate.failure-versus-progress",
+          "variant": 1,
+          "arm": "relevant",
+          "expected": "partial",
+          "predicted": "partial",
+          "correct": true,
+          "status": "completed",
+          "raw": "partial",
+          "latency_ms": 1246,
+          "usage": {
+            "input_tokens": 289,
+            "output_tokens": 2
+          },
+          "failure": null
+        },
+        {
+          "id": "evaluate.failure-versus-progress.v1.irrelevant",
+          "group": "evaluate.failure-versus-progress",
+          "variant": 1,
+          "arm": "irrelevant",
+          "expected": "unmet",
+          "predicted": "unmet",
+          "correct": true,
+          "status": "completed",
+          "raw": "unmet",
+          "latency_ms": 1210,
+          "usage": {
+            "input_tokens": 294,
+            "output_tokens": 3
+          },
+          "failure": null
+        }
+      ]
+    }
+  }
+}

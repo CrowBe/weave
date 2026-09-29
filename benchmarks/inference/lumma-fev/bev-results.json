@@ -1,0 +1,2610 @@
+{
+  "status": "exploratory local BEV capability proxy; not Weave route evidence",
+  "checkpoint": "FrontiersMind/Lumma-fev-4b",
+  "revision": "7e6e82c7db7ee401f4cd7acae9d59f2b75b2b7c2",
+  "bev_revision": "f83fe8b97094112fa305bfc793be07c8f8742282",
+  "source_sha256": {
+    "train": "1b163182db155ba986c8ab8d3d582ac09ec1b1dcbc13c65d048e61379be9fe5b",
+    "test": "eba9f9df6ad54ccdc3aa6516ab97e4f9dea4030422e0dc90510b85e462206a61"
+  },
+  "cases_sha256": "5a04da6d55a9bba7addf7154f0a81d08ed9e4783067a1c7732f09468924df4d6",
+  "labels_sha256": "0b2278d53d52e56c24c31312e950807810bf8eb8dcdf4deaded3f8bef0aa68f6",
+  "gliner_report_sha256": "ae67e68d51e35c6f16e23eae35bf681f45185b8c4f6686bde5219227926c2170",
+  "selection": "105 existing filtered should_call_available_tool test rows; 24 tool_selection request groups by SHA256(normalized request), each in original and reversed option order",
+  "run": {
+    "device": "cpu",
+    "dtype": "float32",
+    "threads": 2,
+    "python": "3.12.14",
+    "interface": "native decide; labels excluded"
+  },
+  "rows": [
+    {
+      "id": "test:8630:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 4964.7,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8631:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 4154.76,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8632:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": true,
+      "correct": false,
+      "answer": {
+        "type": "noul",
+        "noul": 0.924
+      },
+      "latency_ms": 4351.21,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8633:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 2546.76,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8634:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 4748.89,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8635:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.1114
+      },
+      "latency_ms": 4689.39,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8636:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 4364.34,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8637:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0001
+      },
+      "latency_ms": 4866.78,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8638:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 5758.91,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8639:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0072
+      },
+      "latency_ms": 3640.91,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8640:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": true,
+      "correct": false,
+      "answer": {
+        "type": "noul",
+        "noul": 0.9999
+      },
+      "latency_ms": 3523.11,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8641:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 4937.87,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8642:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0001
+      },
+      "latency_ms": 2503.66,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8643:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 2628.34,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8644:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 4899.04,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8645:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0018
+      },
+      "latency_ms": 4413.37,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8646:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": true,
+      "correct": false,
+      "answer": {
+        "type": "noul",
+        "noul": 0.9999
+      },
+      "latency_ms": 3900.54,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8647:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 3619.11,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8648:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": true,
+      "correct": false,
+      "answer": {
+        "type": "noul",
+        "noul": 0.924
+      },
+      "latency_ms": 4088.29,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8649:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 4189.56,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8650:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 4531.5,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8651:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 2754.84,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8652:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.4539
+      },
+      "latency_ms": 3708.81,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8653:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": true,
+      "correct": false,
+      "answer": {
+        "type": "noul",
+        "noul": 0.8682
+      },
+      "latency_ms": 4342.26,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8654:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0007
+      },
+      "latency_ms": 2659.48,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8655:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": true,
+      "correct": false,
+      "answer": {
+        "type": "noul",
+        "noul": 0.9424
+      },
+      "latency_ms": 5647.2,
+      "gliner_predicted": true,
+      "gliner_correct": false
+    },
+    {
+      "id": "test:8656:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 5328.27,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8657:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 2823.05,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8658:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 5090.32,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8659:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 6234.06,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8660:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 3972.45,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8661:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": true,
+      "correct": false,
+      "answer": {
+        "type": "noul",
+        "noul": 0.9467
+      },
+      "latency_ms": 4377.2,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8662:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 4183.39,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8663:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 2915.94,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8664:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 4571.28,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8665:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 2791.5,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8666:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0001
+      },
+      "latency_ms": 2833.7,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8667:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 6943.3,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8668:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 2690.08,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8669:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 5771.1,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8670:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 4743.7,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8671:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": true,
+      "correct": false,
+      "answer": {
+        "type": "noul",
+        "noul": 0.9498
+      },
+      "latency_ms": 4421.67,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8672:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0049
+      },
+      "latency_ms": 3885.27,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8673:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 2542.95,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8674:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 5184.12,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8675:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 3801.21,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8676:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": true,
+      "correct": false,
+      "answer": {
+        "type": "noul",
+        "noul": 0.9995
+      },
+      "latency_ms": 4304.81,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8677:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 2947.55,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8678:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": true,
+      "correct": false,
+      "answer": {
+        "type": "noul",
+        "noul": 0.9992
+      },
+      "latency_ms": 4114.2,
+      "gliner_predicted": true,
+      "gliner_correct": false
+    },
+    {
+      "id": "test:8679:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 3883.91,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8680:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 2751.21,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8681:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": true,
+      "correct": false,
+      "answer": {
+        "type": "noul",
+        "noul": 0.8867
+      },
+      "latency_ms": 4452.84,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8682:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": true,
+      "correct": false,
+      "answer": {
+        "type": "noul",
+        "noul": 0.9996
+      },
+      "latency_ms": 4225.58,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8684:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 3719.19,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8685:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.2326
+      },
+      "latency_ms": 3612.09,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8686:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 4941.97,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8687:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 5843.53,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8688:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": true,
+      "correct": false,
+      "answer": {
+        "type": "noul",
+        "noul": 0.9993
+      },
+      "latency_ms": 5836.79,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8689:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 3765.45,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8690:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": false,
+      "predicted": false,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 0.0
+      },
+      "latency_ms": 2516.32,
+      "gliner_predicted": false,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8691:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 5086.96,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8692:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 4246.62,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8693:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 4903.76,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8694:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 3738.65,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8695:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 3123.06,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8696:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 3472.33,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8697:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 3783.42,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8698:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 5838.7,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8699:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 4700.45,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8700:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 3708.82,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8701:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 5863.97,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8703:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 2525.96,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8704:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 4107.6,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8705:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 4410.66,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8706:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 5327.29,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8707:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 3761.42,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8708:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 4938.42,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8709:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 3076.81,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8710:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 4665.34,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8711:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 4728.48,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8712:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 3950.68,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8713:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 6275.96,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8714:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 6745.76,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8715:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 4550.68,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8716:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 2927.04,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8717:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 4858.61,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8718:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 4867.79,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8719:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 2587.75,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8720:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 5038.18,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8721:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 5835.63,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8722:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 2568.96,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8723:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 4381.29,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8724:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 4381.33,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8726:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 5299.81,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8727:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 3751.37,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8728:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 3679.86,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8729:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 5508.84,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8730:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 4047.44,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8731:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 4576.09,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8732:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 3781.12,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8733:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 6435.73,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8734:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 4434.14,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8735:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 6397.62,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8737:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 6296.24,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8738:should_call_available_tool",
+      "slice": "tool_suitability",
+      "kind": "noul",
+      "label": true,
+      "predicted": true,
+      "correct": true,
+      "answer": {
+        "type": "noul",
+        "noul": 1.0
+      },
+      "latency_ms": 3484.11,
+      "gliner_predicted": true,
+      "gliner_correct": true
+    },
+    {
+      "id": "test:8532:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_pace",
+      "predicted": "calculate_pace",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_pace",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_pace": 1.0,
+          "add_note": 0.0
+        }
+      },
+      "latency_ms": 8163.32,
+      "group": "00017b5bab34484e77054867fdf0acb3546aaa63ad0b4327165d7952093852bf",
+      "order": "original"
+    },
+    {
+      "id": "test:8532:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_pace",
+      "predicted": "calculate_pace",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_pace",
+        "confidence": 1.0,
+        "probabilities": {
+          "add_note": 0.0,
+          "calculate_pace": 1.0
+        }
+      },
+      "latency_ms": 7445.61,
+      "group": "00017b5bab34484e77054867fdf0acb3546aaa63ad0b4327165d7952093852bf",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8322:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_shipping_cost",
+      "predicted": "calculate_shipping_cost",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_shipping_cost",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_shipping_cost": 1.0,
+          "check_email_availability": 0.0
+        }
+      },
+      "latency_ms": 10441.51,
+      "group": "003f59990c4c9fab13c539a553b72d85e0d2ad123983d2c0a6b8ea860d4a9499",
+      "order": "original"
+    },
+    {
+      "id": "test:8322:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_shipping_cost",
+      "predicted": "calculate_shipping_cost",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_shipping_cost",
+        "confidence": 1.0,
+        "probabilities": {
+          "check_email_availability": 0.0,
+          "calculate_shipping_cost": 1.0
+        }
+      },
+      "latency_ms": 10669.95,
+      "group": "003f59990c4c9fab13c539a553b72d85e0d2ad123983d2c0a6b8ea860d4a9499",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8435:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "execute_program",
+      "predicted": "execute_program",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "execute_program",
+        "confidence": 1.0,
+        "probabilities": {
+          "execute_program": 1.0,
+          "generate_username": 0.0
+        }
+      },
+      "latency_ms": 7253.14,
+      "group": "00ce182d4522b7933aa1edcdfcfc093ef3d1b6dec863352596ebefa293e3c675",
+      "order": "original"
+    },
+    {
+      "id": "test:8435:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "execute_program",
+      "predicted": "execute_program",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "execute_program",
+        "confidence": 1.0,
+        "probabilities": {
+          "generate_username": 0.0,
+          "execute_program": 1.0
+        }
+      },
+      "latency_ms": 7167.91,
+      "group": "00ce182d4522b7933aa1edcdfcfc093ef3d1b6dec863352596ebefa293e3c675",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8460:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_loan_interest",
+      "predicted": "calculate_loan_interest",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_loan_interest",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_loan_interest": 1.0,
+          "calculate_tax": 0.0
+        }
+      },
+      "latency_ms": 10538.14,
+      "group": "018e0dd6ce33ba4e7cd4de29aad9b188df27fa3da7cdfac9dd699e7ada51fe8b",
+      "order": "original"
+    },
+    {
+      "id": "test:8460:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_loan_interest",
+      "predicted": "calculate_loan_interest",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_loan_interest",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_tax": 0.0,
+          "calculate_loan_interest": 1.0
+        }
+      },
+      "latency_ms": 10210.56,
+      "group": "018e0dd6ce33ba4e7cd4de29aad9b188df27fa3da7cdfac9dd699e7ada51fe8b",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8173:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_tax",
+      "predicted": "calculate_tax",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_tax",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_tax": 1.0,
+          "calculate_loan_payment": 0.0
+        }
+      },
+      "latency_ms": 9082.74,
+      "group": "01f1870da942282fd6a68211dd813b718698b8a3ce4dd6b786e4741fe3e40c8b",
+      "order": "original"
+    },
+    {
+      "id": "test:8173:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_tax",
+      "predicted": "calculate_tax",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_tax",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_loan_payment": 0.0,
+          "calculate_tax": 1.0
+        }
+      },
+      "latency_ms": 9021.95,
+      "group": "01f1870da942282fd6a68211dd813b718698b8a3ce4dd6b786e4741fe3e40c8b",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8155:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "get_lyrics",
+      "predicted": "get_lyrics",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "get_lyrics",
+        "confidence": 1.0,
+        "probabilities": {
+          "get_lyrics": 1.0,
+          "calculate_bmi": 0.0
+        }
+      },
+      "latency_ms": 7740.4,
+      "group": "04aaca4527b3fe68439500546ae173c5d312ae089abd44661d97c3a9ffdebf07",
+      "order": "original"
+    },
+    {
+      "id": "test:8155:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "get_lyrics",
+      "predicted": "get_lyrics",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "get_lyrics",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_bmi": 0.0,
+          "get_lyrics": 1.0
+        }
+      },
+      "latency_ms": 7795.97,
+      "group": "04aaca4527b3fe68439500546ae173c5d312ae089abd44661d97c3a9ffdebf07",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8323:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "search_books",
+      "predicted": "search_books",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "search_books",
+        "confidence": 1.0,
+        "probabilities": {
+          "search_books": 1.0,
+          "get_stock_price": 0.0
+        }
+      },
+      "latency_ms": 7560.21,
+      "group": "04ef21773263e8b136703642f4672b04f59c1be43a39fde1c6bd8a0046a2819a",
+      "order": "original"
+    },
+    {
+      "id": "test:8323:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "search_books",
+      "predicted": "search_books",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "search_books",
+        "confidence": 1.0,
+        "probabilities": {
+          "get_stock_price": 0.0,
+          "search_books": 1.0
+        }
+      },
+      "latency_ms": 7212.06,
+      "group": "04ef21773263e8b136703642f4672b04f59c1be43a39fde1c6bd8a0046a2819a",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8066:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "get_news",
+      "predicted": "get_news",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "get_news",
+        "confidence": 1.0,
+        "probabilities": {
+          "get_news": 1.0,
+          "search_product": 0.0
+        }
+      },
+      "latency_ms": 5712.6,
+      "group": "05fe3cb59d364e6f471d4b15c01ab59f081740c9bb0b7ced137f224a18d20e66",
+      "order": "original"
+    },
+    {
+      "id": "test:8066:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "get_news",
+      "predicted": "get_news",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "get_news",
+        "confidence": 1.0,
+        "probabilities": {
+          "search_product": 0.0,
+          "get_news": 1.0
+        }
+      },
+      "latency_ms": 5710.1,
+      "group": "05fe3cb59d364e6f471d4b15c01ab59f081740c9bb0b7ced137f224a18d20e66",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8514:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_shipping_cost",
+      "predicted": "calculate_shipping_cost",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_shipping_cost",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_shipping_cost": 1.0,
+          "calculate_distance": 0.0
+        }
+      },
+      "latency_ms": 9756.2,
+      "group": "060d73b07419b9b0783083af568f596688f7d9c7c6d2c7765bde2f03dc1d0959",
+      "order": "original"
+    },
+    {
+      "id": "test:8514:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_shipping_cost",
+      "predicted": "calculate_shipping_cost",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_shipping_cost",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_distance": 0.0,
+          "calculate_shipping_cost": 1.0
+        }
+      },
+      "latency_ms": 9771.72,
+      "group": "060d73b07419b9b0783083af568f596688f7d9c7c6d2c7765bde2f03dc1d0959",
+      "order": "reversed"
+    },
+    {
+      "id": "test:7987:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "play_music",
+      "predicted": "play_music",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "play_music",
+        "confidence": 1.0,
+        "probabilities": {
+          "play_music": 1.0,
+          "calculate_tip": 0.0
+        }
+      },
+      "latency_ms": 8055.67,
+      "group": "071c2dc88771ddc662aafd013671f960aef61238d215b21f608a926be7d1b9d1",
+      "order": "original"
+    },
+    {
+      "id": "test:7987:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "play_music",
+      "predicted": "play_music",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "play_music",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_tip": 0.0,
+          "play_music": 1.0
+        }
+      },
+      "latency_ms": 8022.43,
+      "group": "071c2dc88771ddc662aafd013671f960aef61238d215b21f608a926be7d1b9d1",
+      "order": "reversed"
+    },
+    {
+      "id": "test:7920:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_discount",
+      "predicted": "calculate_discount",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_discount",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_discount": 1.0,
+          "convert_currency": 0.0
+        }
+      },
+      "latency_ms": 9812.87,
+      "group": "0770eee994fc7632483b53d94ab6ade1e2cbd4b33f47373710cc67ece9ab846b",
+      "order": "original"
+    },
+    {
+      "id": "test:7920:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_discount",
+      "predicted": "calculate_discount",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_discount",
+        "confidence": 1.0,
+        "probabilities": {
+          "convert_currency": 0.0,
+          "calculate_discount": 1.0
+        }
+      },
+      "latency_ms": 9918.01,
+      "group": "0770eee994fc7632483b53d94ab6ade1e2cbd4b33f47373710cc67ece9ab846b",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8529:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_discounted_price",
+      "predicted": "calculate_discounted_price",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_discounted_price",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_discounted_price": 1.0,
+          "generate_password": 0.0
+        }
+      },
+      "latency_ms": 8749.73,
+      "group": "080710ae87368e32f6db92049e20cd899b34cd23511b5724ba5bd6ff524e1755",
+      "order": "original"
+    },
+    {
+      "id": "test:8529:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_discounted_price",
+      "predicted": "calculate_discounted_price",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_discounted_price",
+        "confidence": 1.0,
+        "probabilities": {
+          "generate_password": 0.0,
+          "calculate_discounted_price": 1.0
+        }
+      },
+      "latency_ms": 8744.62,
+      "group": "080710ae87368e32f6db92049e20cd899b34cd23511b5724ba5bd6ff524e1755",
+      "order": "reversed"
+    },
+    {
+      "id": "test:7982:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_sales_tax",
+      "predicted": "calculate_sales_tax",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_sales_tax",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_sales_tax": 1.0,
+          "search_news": 0.0
+        }
+      },
+      "latency_ms": 7345.9,
+      "group": "087323bbb2133de6043f6992d805e7df7b8aaf589168a6e548c2217a16f924b6",
+      "order": "original"
+    },
+    {
+      "id": "test:7982:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_sales_tax",
+      "predicted": "calculate_sales_tax",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_sales_tax",
+        "confidence": 1.0,
+        "probabilities": {
+          "search_news": 0.0,
+          "calculate_sales_tax": 1.0
+        }
+      },
+      "latency_ms": 7389.19,
+      "group": "087323bbb2133de6043f6992d805e7df7b8aaf589168a6e548c2217a16f924b6",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8185:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "search_recipes",
+      "predicted": "search_recipes",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "search_recipes",
+        "confidence": 1.0,
+        "probabilities": {
+          "search_recipes": 1.0,
+          "get_lyrics": 0.0
+        }
+      },
+      "latency_ms": 6864.97,
+      "group": "0896c2179a88c041d7f939d38af236fc382311e91a272093f2396b277d12a979",
+      "order": "original"
+    },
+    {
+      "id": "test:8185:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "search_recipes",
+      "predicted": "search_recipes",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "search_recipes",
+        "confidence": 1.0,
+        "probabilities": {
+          "get_lyrics": 0.0,
+          "search_recipes": 1.0
+        }
+      },
+      "latency_ms": 6921.73,
+      "group": "0896c2179a88c041d7f939d38af236fc382311e91a272093f2396b277d12a979",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8544:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_mortgage",
+      "predicted": "calculate_mortgage",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_mortgage",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_mortgage": 1.0,
+          "check_website_status": 0.0
+        }
+      },
+      "latency_ms": 8677.08,
+      "group": "08b3ac29b7f7a6e0acb396aa9c9416a12cc5f8649e1853c8811c3b953fde100b",
+      "order": "original"
+    },
+    {
+      "id": "test:8544:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_mortgage",
+      "predicted": "calculate_mortgage",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_mortgage",
+        "confidence": 1.0,
+        "probabilities": {
+          "check_website_status": 0.0,
+          "calculate_mortgage": 1.0
+        }
+      },
+      "latency_ms": 9065.43,
+      "group": "08b3ac29b7f7a6e0acb396aa9c9416a12cc5f8649e1853c8811c3b953fde100b",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8612:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "play_music",
+      "predicted": "play_music",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "play_music",
+        "confidence": 1.0,
+        "probabilities": {
+          "play_music": 1.0,
+          "generate_random_quote": 0.0
+        }
+      },
+      "latency_ms": 7171.77,
+      "group": "0908e15341edfff3df10af967ec14ad184985082eb882073b62206a9c0707fc3",
+      "order": "original"
+    },
+    {
+      "id": "test:8612:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "play_music",
+      "predicted": "play_music",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "play_music",
+        "confidence": 1.0,
+        "probabilities": {
+          "generate_random_quote": 0.0,
+          "play_music": 1.0
+        }
+      },
+      "latency_ms": 7057.41,
+      "group": "0908e15341edfff3df10af967ec14ad184985082eb882073b62206a9c0707fc3",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8206:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "search_news",
+      "predicted": "search_news",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "search_news",
+        "confidence": 1.0,
+        "probabilities": {
+          "search_news": 1.0,
+          "convert_currency": 0.0
+        }
+      },
+      "latency_ms": 8540.09,
+      "group": "0af581f1dfdfcbd19603623a2e8ccab89b289cd92ad451597cb1a06a4af3e20d",
+      "order": "original"
+    },
+    {
+      "id": "test:8206:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "search_news",
+      "predicted": "search_news",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "search_news",
+        "confidence": 1.0,
+        "probabilities": {
+          "convert_currency": 0.0,
+          "search_news": 1.0
+        }
+      },
+      "latency_ms": 8576.43,
+      "group": "0af581f1dfdfcbd19603623a2e8ccab89b289cd92ad451597cb1a06a4af3e20d",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8313:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "search_videos",
+      "predicted": "search_videos",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "search_videos",
+        "confidence": 1.0,
+        "probabilities": {
+          "search_videos": 1.0,
+          "search_jobs": 0.0
+        }
+      },
+      "latency_ms": 8288.91,
+      "group": "0bbaab9d15ca6f5ff0727c39985837e7384fb2220b299af48489c0bcca0f678a",
+      "order": "original"
+    },
+    {
+      "id": "test:8313:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "search_videos",
+      "predicted": "search_videos",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "search_videos",
+        "confidence": 1.0,
+        "probabilities": {
+          "search_jobs": 0.0,
+          "search_videos": 1.0
+        }
+      },
+      "latency_ms": 8283.39,
+      "group": "0bbaab9d15ca6f5ff0727c39985837e7384fb2220b299af48489c0bcca0f678a",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8061:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_discounted_price",
+      "predicted": "calculate_discounted_price",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_discounted_price",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_discounted_price": 1.0,
+          "calculate_profit_margin": 0.0
+        }
+      },
+      "latency_ms": 9674.18,
+      "group": "0bc3308d2ea3de3d820f06b23f5d2a3b5c7ba9b6c8bd75bfe0b038b3f11bacbd",
+      "order": "original"
+    },
+    {
+      "id": "test:8061:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_discounted_price",
+      "predicted": "calculate_discounted_price",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_discounted_price",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_profit_margin": 0.0,
+          "calculate_discounted_price": 1.0
+        }
+      },
+      "latency_ms": 9477.8,
+      "group": "0bc3308d2ea3de3d820f06b23f5d2a3b5c7ba9b6c8bd75bfe0b038b3f11bacbd",
+      "order": "reversed"
+    },
+    {
+      "id": "test:7935:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "get_current_time",
+      "predicted": "get_current_time",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "get_current_time",
+        "confidence": 1.0,
+        "probabilities": {
+          "get_current_time": 1.0,
+          "generate_random_quote": 0.0
+        }
+      },
+      "latency_ms": 5065.28,
+      "group": "0c10d3429194eb4d5d0fa98a5add708f8e07de77bb1d1c70169e2fa7342a6153",
+      "order": "original"
+    },
+    {
+      "id": "test:7935:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "get_current_time",
+      "predicted": "get_current_time",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "get_current_time",
+        "confidence": 1.0,
+        "probabilities": {
+          "generate_random_quote": 0.0,
+          "get_current_time": 1.0
+        }
+      },
+      "latency_ms": 5137.88,
+      "group": "0c10d3429194eb4d5d0fa98a5add708f8e07de77bb1d1c70169e2fa7342a6153",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8366:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "generate_barcode",
+      "predicted": "generate_barcode",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "generate_barcode",
+        "confidence": 1.0,
+        "probabilities": {
+          "generate_barcode": 1.0,
+          "analyze_sentiment": 0.0
+        }
+      },
+      "latency_ms": 8310.99,
+      "group": "0c88d892993da1f0bff1039be14212d7fcc75a5f682c8c6ddf9c91f50ad088a8",
+      "order": "original"
+    },
+    {
+      "id": "test:8366:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "generate_barcode",
+      "predicted": "generate_barcode",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "generate_barcode",
+        "confidence": 1.0,
+        "probabilities": {
+          "analyze_sentiment": 0.0,
+          "generate_barcode": 1.0
+        }
+      },
+      "latency_ms": 8453.24,
+      "group": "0c88d892993da1f0bff1039be14212d7fcc75a5f682c8c6ddf9c91f50ad088a8",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8213:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_discount",
+      "predicted": "calculate_discount",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_discount",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_discount": 1.0,
+          "get_definition": 0.0
+        }
+      },
+      "latency_ms": 8610.95,
+      "group": "0ce616d32d3d6325456763b278ffbecbfb6a3b833cb8b9df5a3b5845251f85ee",
+      "order": "original"
+    },
+    {
+      "id": "test:8213:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "calculate_discount",
+      "predicted": "calculate_discount",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "calculate_discount",
+        "confidence": 1.0,
+        "probabilities": {
+          "get_definition": 0.0,
+          "calculate_discount": 1.0
+        }
+      },
+      "latency_ms": 9298.02,
+      "group": "0ce616d32d3d6325456763b278ffbecbfb6a3b833cb8b9df5a3b5845251f85ee",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8346:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "get_movie_details",
+      "predicted": "get_movie_details",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "get_movie_details",
+        "confidence": 1.0,
+        "probabilities": {
+          "get_movie_details": 1.0,
+          "calculate_age": 0.0
+        }
+      },
+      "latency_ms": 6893.13,
+      "group": "0d6a197ef9ac710abcd328a4528614d9930afc4b54e45b97e76356fdb89dd61c",
+      "order": "original"
+    },
+    {
+      "id": "test:8346:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "get_movie_details",
+      "predicted": "get_movie_details",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "get_movie_details",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_age": 0.0,
+          "get_movie_details": 1.0
+        }
+      },
+      "latency_ms": 6838.06,
+      "group": "0d6a197ef9ac710abcd328a4528614d9930afc4b54e45b97e76356fdb89dd61c",
+      "order": "reversed"
+    },
+    {
+      "id": "test:8351:tool_selection:original",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "search_images",
+      "predicted": "search_images",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "search_images",
+        "confidence": 1.0,
+        "probabilities": {
+          "search_images": 1.0,
+          "calculate_loan_interest": 0.0
+        }
+      },
+      "latency_ms": 7851.44,
+      "group": "0d7535a282b77fefe48f2ba95a17c9b79d8f454a57d9f579f2f375109c232cbb",
+      "order": "original"
+    },
+    {
+      "id": "test:8351:tool_selection:reversed",
+      "slice": "tool_selection",
+      "kind": "choice",
+      "label": "search_images",
+      "predicted": "search_images",
+      "correct": true,
+      "answer": {
+        "type": "choice",
+        "choice": "search_images",
+        "confidence": 1.0,
+        "probabilities": {
+          "calculate_loan_interest": 0.0,
+          "search_images": 1.0
+        }
+      },
+      "latency_ms": 7628.77,
+      "group": "0d7535a282b77fefe48f2ba95a17c9b79d8f454a57d9f579f2f375109c232cbb",
+      "order": "reversed"
+    }
+  ],
+  "summary": {
+    "tool_suitability": {
+      "n": 105,
+      "lumma_correct": 92,
+      "median_ms": 4342.26,
+      "p95_ms": 6234.06,
+      "gliner_correct": 103,
+      "lumma_only": 0,
+      "gliner_only": 11,
+      "by_label": {
+        "true": {
+          "n": 45,
+          "lumma_correct": 45,
+          "gliner_correct": 45
+        },
+        "false": {
+          "n": 60,
+          "lumma_correct": 47,
+          "gliner_correct": 58
+        }
+      }
+    },
+    "tool_selection": {
+      "n": 48,
+      "lumma_correct": 48,
+      "median_ms": 8223.355,
+      "p95_ms": 10210.56,
+      "by_order": {
+        "original": {
+          "n": 24,
+          "correct": 24
+        },
+        "reversed": {
+          "n": 24,
+          "correct": 24
+        }
+      },
+      "complete_pairs": 24,
+      "both_correct": 24,
+      "same_prediction": 24,
+      "first_option_baseline": {
+        "original": 24,
+        "reversed": 0
+      }
+    }
+  },
+  "runtime": {
+    "torch": "2.14.0+cpu",
+    "transformers": "5.15.0",
+    "load_s": 5.37,
+    "peak_rss_kib": 22841736
+  }
+}
