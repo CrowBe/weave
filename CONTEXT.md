@@ -6,7 +6,7 @@ This file defines Weave's ubiquitous language. Use these terms consistently in c
 
 ### Weave
 
-The system. It comprises Loom, Fabric, and Tapestry. Do not use *Weave* to mean the runtime, a model, an agent persona, or an individual capability.
+The composable system. Loom, Fabric, and Tapestry are its reference runtime, capability subsystem, and presentation layer; a composition may replace any of them through a bounded interface. Do not use *Weave* to mean the runtime, a model, an agent persona, or an individual capability.
 
 ### Loom
 
@@ -170,7 +170,7 @@ The contract layer within Fabric, defining capability meaning, typed inputs and 
 
 ### Fabric
 
-The capability subsystem, namespaced Weave Fabric. It owns contracts through AgentSOP and governs construction evidence, invocation, admission, revocation, and audit. It ships inside Weave and stays independent of Loom’s goals, state, and scheduling. The package is `packages/agentfabric`. Say *Fabric* in architecture vocabulary. *AgentFabric* names that package and the external conceptual reference, not a second subsystem.
+The reference capability subsystem, namespaced Weave Fabric. It owns contracts through AgentSOP and governs construction evidence, invocation, admission, revocation, and audit. It ships with the reference Weave stack and stays independent of Loom’s goals, state, and scheduling. The package is `packages/agentfabric`. Say *Fabric* in architecture vocabulary. *AgentFabric* names that package and the external conceptual reference, not a second subsystem.
 
 ### Resource reference
 
@@ -218,7 +218,7 @@ One executable realization of a capability contract. Local code, a remote servic
 
 ### Capability host
 
-The interface through which a runtime accesses capability discovery, invocation, and lifecycle operations. Fabric supplies it without exposing Loom to its internal implementation.
+The interface through which a runtime accesses capability discovery, invocation, and lifecycle operations. Fabric supplies the reference implementation without exposing Loom to its internals. Another provider may satisfy the interface.
 
 ### Capability registry
 
@@ -304,7 +304,7 @@ The record of where a contract, test, or implementation came from, including sou
 
 ### Tapestry
 
-The visual presentation layer, namespaced Weave Tapestry. It paints a workspace for an operator and submits that operator's observations through the attached runtime's ingress. It holds no goal state, no project record, schedules no action, and issues no grant. Its core imports no runtime and no capability host. Loom is the runtime it attaches to. The shell, theme, viewers, and session record belong to Tapestry. The project record does not.
+The visual presentation layer, namespaced Weave Tapestry. It paints a workspace for an operator and submits that operator's observations through a narrow runtime-facing binding. It holds no goal state or project record, schedules no action, and issues no grant. Its core imports no runtime and no capability host. Loom supplies the reference binding; another runtime can supply one. The shell, theme, built-in view handlers, and session record belong to Tapestry. The project record does not.
 
 ### Operator
 
@@ -328,7 +328,7 @@ The versioned local record the setup surface writes: the operator principal, the
 
 ### Session
 
-The attachment of one workspace to one project on Loom. It fixes the component vocabulary version and the arrangement allowance. The current theme is paint state on the session record and may change without ending the session. A session may begin before a goal is open and may continue after a goal closes. It ends when the operator detaches or the runtime stops. Ending a session detaches the workspace. It does not complete, pause, or cancel a goal, release a reservation, or write to the observation log. A new session starts clear of the previous session's placements and pins. Recovery does not restore a session.
+The attachment of one workspace to one project through the runtime-facing binding. It fixes the component vocabulary version and the arrangement allowance. The current theme is paint state on the session record and may change without ending the session. A session may begin before a goal is open and may continue after a goal closes. It ends when the operator detaches or the runtime stops. Ending a session detaches the workspace. It does not complete, pause, or cancel a goal, release a reservation, or write to the observation log. A new session starts clear of the previous session's placements and pins. Recovery does not restore a session.
 
 ### Session record
 
@@ -384,11 +384,19 @@ A versioned product the workspace can open: source, prose, a report, a publicati
 
 ### Editor
 
-The workspace component that opens any artifact. It paints a disclosed body with the session theme, using the viewer for that artifact's kind. It is agent-first: it shows what work produced, and operator correction goes through an existing observation or grant. It is not a mode, not a second runtime, and not a capability.
+The workspace component that opens any artifact. It holds the surrounding workspace semantics while a compatible view handler presents the disclosed artifact through a runner. It is agent-first: it shows what work produced, and operator correction goes through an existing observation or grant. It is not a mode, a second runtime, or a capability.
 
-### Viewer
+### View contract
 
-Tapestry presentation for one artifact kind, used only by the editor. Source, prose, a report, and any other kind are the same editor. Kind selects the viewer. A viewer paints a body the workspace view already disclosed. It is not a capability, it is not on the action frontier, and it does not execute the artifact, read storage, or receive a locator. The plain-text viewer presents every kind. A richer viewer may add structure for the kinds it accepts. A check the goal can reuse is a separate capability. The editor may show that capability's recorded result. It does not invoke the catalogue to paint.
+The semantic requirements for presenting or editing an artifact kind, including the disclosed data and narrowed operator interactions. It names no renderer or external program and grants no access by itself.
+
+### View handler
+
+A Tapestry presentation binding that declares which view contracts it can satisfy and what disclosed data and narrowed interactions it needs. A built-in handler is a default, not a privileged kind. Configured external and custom handlers are possible. A handler is not a capability or a second source of goal state.
+
+### Runner
+
+The implementation used by a view handler to present an artifact: a built-in renderer, web or native surface, terminal program, or existing desktop application. Runner-specific integration stays at the edge. The runner does not gain authority merely because the editor opens an artifact. A reusable check remains a separate capability under the attached runtime's authority; the editor may show its recorded result without dispatching it.
 
 ### Component tree
 
@@ -448,7 +456,7 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 - Say **conversational surface**, not *chat*, for the component that presents and accepts operator input.
 - Say **artifact**, not *file*, for what the editor opens. A locator stays in the host.
 - Say **editor**, not *IDE* or *mode*, for the workspace component that opens an artifact. The editor is not a capability.
-- Say **viewer**, not *capability*, *reader*, or *plugin*, for how the editor paints one artifact kind. There is one capability catalogue. A viewer is not in it.
+- Say **view contract**, **view handler**, and **runner** for the semantic presentation requirement, its binding, and its implementation. A view handler is not a capability.
 - Say **session** for a workspace's attachment to a project on a running runtime. A session is not a transcript, a compaction unit, a scheduler lane, or a restart boundary.
 - Say **session record**, not *journal* or *log*, for the workspace's ephemeral record. The journal is the observation log.
 - Say **workspace view**, not *screen* or *prompt*, for the state view a workspace renders.

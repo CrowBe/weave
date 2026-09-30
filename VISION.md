@@ -2,7 +2,7 @@
 
 Weave exists to build software that expands what it can reliably do and improves how it does it, through evidence-backed changes to its capabilities and operating strategies.
 
-Weave is the system. Loom is its runtime. Fabric is its capability subsystem. Tapestry is its presentation layer. The names of the packages are unchanged: `packages/weave` is Loom, and `packages/agentfabric` is Fabric.
+Weave is the composable system. Loom is its reference runtime, Fabric its reference capability subsystem, and Tapestry its reference presentation layer. A component can be replaced through a bounded interface without requiring its neighbours to adopt its internals. The names of the packages are unchanged: `packages/weave` is Loom, and `packages/agentfabric` is Fabric.
 
 Most agent systems place a generative model at the centre of a loop: the model receives a message, decides what to do, calls tools, and speaks again. Weave treats that as an implementation accident. A user message, a tool result, an inference result, an approval, an error, and a change in the environment are all observations that update state. From that state, Weave continuously weighs the actions available to it, executes the viable frontier—concurrently when it can—and evaluates the state that follows.
 
@@ -56,7 +56,7 @@ The frontier is where models improvise: reasoning about an unfamiliar problem, c
 
 Crystallization begins with the contract, not the implementation. When Weave identifies a recurring semantic purpose or a gap in its action space, it establishes the capability's inputs, outputs, invariants, failure modes, effects, permissions, success evidence, and execution constraints. That contract may be induced from successful traces or designed before implementation. Either direction must converge on the same thing: an independently testable statement of what the capability means.
 
-AgentFabric standardizes this boundary between intelligence and software. It defines the capability contract and the lifecycle through which a proposed capability is tested, packaged, versioned, admitted, observed, and revoked. Weave uses that standard; it does not hide capability semantics inside its own scheduler or prompts.
+Fabric provides the reference boundary between intelligence and software. It defines the capability contract and the lifecycle through which a proposed capability is tested, packaged, versioned, admitted, observed, and revoked. Loom uses its capability host through a narrow interface; another provider can satisfy that interface without adopting Fabric's internals. Weave does not hide capability semantics inside Loom's scheduler or prompts.
 
 Once a contract is established, Weave generates executable tests before implementation. Independent inference can explore examples, boundaries, invariants, failures, permissions, side effects, retries, cancellation, and adversarial cases in parallel. Proposed tests must themselves earn trust: they are checked against known evidence, placeholder or invalid implementations, and mutations where useful. Contradictory tests expose an incomplete contract rather than becoming competing instructions to the implementer.
 
