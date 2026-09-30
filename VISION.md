@@ -2,6 +2,8 @@
 
 Weave exists to build software that expands what it can reliably do and improves how it does it, through evidence-backed changes to its capabilities and operating strategies.
 
+Weave is the composable system. Loom is its reference runtime, Fabric its reference capability subsystem, and Tapestry its reference presentation layer. A component can be replaced through a bounded interface without requiring its neighbours to adopt its internals. The names of the packages are unchanged: `packages/weave` is Loom, and `packages/agentfabric` is Fabric.
+
 Most agent systems place a generative model at the centre of a loop: the model receives a message, decides what to do, calls tools, and speaks again. Weave treats that as an implementation accident. A user message, a tool result, an inference result, an approval, an error, and a change in the environment are all observations that update state. From that state, Weave continuously weighs the actions available to it, executes the viable frontier—concurrently when it can—and evaluates the state that follows.
 
 Generative intelligence is part of this system, but it is not the system. It is invoked when the current software cannot adequately advance the goal. When that exploration produces a safe, repeatable solution, Weave can crystallize it into a capability that future runs can execute directly. Reasoning moves toward the frontier; proven work becomes software.
@@ -54,7 +56,7 @@ The frontier is where models improvise: reasoning about an unfamiliar problem, c
 
 Crystallization begins with the contract, not the implementation. When Weave identifies a recurring semantic purpose or a gap in its action space, it establishes the capability's inputs, outputs, invariants, failure modes, effects, permissions, success evidence, and execution constraints. That contract may be induced from successful traces or designed before implementation. Either direction must converge on the same thing: an independently testable statement of what the capability means.
 
-AgentFabric standardizes this boundary between intelligence and software. It defines the capability contract and the lifecycle through which a proposed capability is tested, packaged, versioned, admitted, observed, and revoked. Weave uses that standard; it does not hide capability semantics inside its own scheduler or prompts.
+Fabric provides the reference boundary between intelligence and software. It defines the capability contract and the lifecycle through which a proposed capability is tested, packaged, versioned, admitted, observed, and revoked. Loom uses its capability host through a narrow interface; another provider can satisfy that interface without adopting Fabric's internals. Weave does not hide capability semantics inside Loom's scheduler or prompts.
 
 Once a contract is established, Weave generates executable tests before implementation. Independent inference can explore examples, boundaries, invariants, failures, permissions, side effects, retries, cancellation, and adversarial cases in parallel. Proposed tests must themselves earn trust: they are checked against known evidence, placeholder or invalid implementations, and mutations where useful. Contradictory tests expose an incomplete contract rather than becoming competing instructions to the implementer.
 
@@ -104,7 +106,7 @@ The core should remain small enough to trust: state transitions, policy enforcem
 
 ## Scope
 
-Weave is a goal-directed runtime for selecting, parallelizing, evaluating, expanding, and optimising software capabilities and operating strategies over evolving state.
+Loom is the goal-directed runtime inside Weave: it selects, parallelizes, evaluates, expands, and optimises software capabilities and operating strategies over evolving state.
 
 It is not a chatbot framework with a more elaborate tool loop. Conversation is one interface and responding is one action.
 
@@ -116,6 +118,6 @@ It is not a replacement for deterministic application logic. Its purpose is to d
 
 It is not defined by Jev, any generative model, any provider, or any tool protocol. Those are replaceable participants in the architecture.
 
-A change aligns with Weave when it makes evolving state more explicit; improves action weighting or parallel execution; preserves deterministic authority boundaries; makes inference more interchangeable and empirically routed; turns semantic intent into a testable AgentFabric contract; turns repeated reasoning into a constrained, evaluated capability; strengthens provenance, observability, rollback, or evaluation; demonstrates a scoped improvement against a versioned baseline without weakening protected constraints; or expands the reliable action frontier without hiding how.
+A change aligns with Weave when it makes evolving state more explicit; improves action weighting or parallel execution; preserves deterministic authority boundaries; makes inference more interchangeable and empirically routed; turns semantic intent into a testable Fabric contract; turns repeated reasoning into a constrained, evaluated capability; strengthens provenance, observability, rollback, or evaluation; demonstrates a scoped improvement against a versioned baseline without weakening protected constraints; or expands the reliable action frontier without hiding how.
 
 A change should be resisted when it gives a model implicit control of the loop; treats conversation history as the only state; serializes independent work around artificial turns; lets probabilistic judgment override hard policy; equates generated code or generated tests with trusted evidence; crystallizes behavior without a reusable contract, demonstrated red, and deterministic validation; couples the runtime's identity to one model or vendor; optimizes cost at the expense of the required quality; mistakes activity for progress; lets an optimiser redefine success or promote its own changes without the required evidence and authority; or makes the system more capable by making it less legible.

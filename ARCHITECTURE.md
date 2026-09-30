@@ -18,7 +18,7 @@ implementation when a separately governed release can prove its contracts.
 
 | Vision requirement | Architectural consequence |
 | --- | --- |
-| The runtime is the agent | Weave alone owns goal state, action lifecycle, and consequential state transitions. |
+| The runtime is the agent | Loom owns goal state, action lifecycle, and consequential state transitions in the reference stack. |
 | Models provide observations | Proposals and judgments carry provenance; deterministic validation and policy decide which transitions they may support. |
 | Independent work proceeds concurrently | Scheduling is driven by dependencies, resource conflicts, and arriving observations, not batches of model calls. |
 | Familiar work becomes software | Capability contracts are reusable; candidate formation and task procedures can evolve without editing the control core. |
@@ -33,8 +33,9 @@ travel planning, or the internal stages of a particular domain procedure.
 ## 2. Responsibilities and package ownership
 
 These are logical modules, not a requirement for separate services or processes.
-Start with one runtime. Keep AgentSOP and AgentFabric in separate packages to
-enforce their ownership; the other modules need not become separate packages.
+Start with Loom as the reference runtime. Keep AgentSOP and Fabric in separate
+packages to enforce their ownership; the other modules need not become
+separate packages.
 
 | Module | Owns | Must not own |
 | --- | --- | --- |
@@ -42,30 +43,31 @@ enforce their ownership; the other modules need not become separate packages.
 | Decision layer | Weights and uncertainty for eligible action candidates | Grants, dispatch, or changes to goal success criteria |
 | Policy and scheduler | Eligibility, approvals, budget reservations, dependencies, conflicts, dispatch and cancellation | Domain-specific planning or semantic truth |
 | Inference gateway | Bounded provider execution, deterministic routing, attempt accounting and evaluation | Goal scheduling, ambient state access, or self-defined success |
-| Capability host | Contract lookup, invocation, construction evidence, admission, revocation and execution enforcement | Weave goals, threads, or frontier selection |
+| Capability host | Contract lookup, invocation, construction evidence, admission, revocation and execution enforcement | Loom goals, threads, or frontier selection |
 
-Weave owns the first three modules and composes the inference gateway with the
+Loom owns the first three modules and composes the inference gateway with a
 capability host. The gateway has an explicit inference request interface usable
-by both Weave and a generative implementation; it does not require importing
-Weave state or its scheduler. Provider adapters implement that interface's
+by both Loom and a generative implementation; it does not require importing
+Loom state or its scheduler. Provider adapters implement that interface's
 execution needs.
 
-AgentFabric is the bounded capability subsystem that ships inside this
+Fabric is the bounded reference capability subsystem that ships inside this
 repository. AgentSOP is its contract layer: meaning, typed inputs and outputs,
-effects, authority, references, and failures. AgentSOP imports neither runtime;
-AgentFabric may depend on AgentSOP but never on Weave. Weave reaches AgentFabric
-through the capability host interface and may use AgentSOP contract types.
-Package checks and tests independent of Weave must enforce these directions.
+effects, authority, references, and failures. AgentSOP imports no runtime;
+Fabric may depend on AgentSOP but never on Loom. Loom reaches Fabric through
+the capability host interface and may use AgentSOP contract types. Another
+provider can satisfy that interface without taking on Fabric internals.
+Package checks and tests independent of Loom must enforce these directions.
 
 Both packages are built in this repository as an npm workspace in TypeScript
 (`packages/agentsop`, `packages/weave`; `packages/agentfabric` arrives with
 M1). The inference gateway is `packages/gateway`: it is a separate package for
-the same reason AgentSOP is, since Weave and an AgentFabric generative
+the same reason AgentSOP is, since Loom and a Fabric generative
 implementation must both be able to call it and neither may reach the other
 through it. It imports nothing in-repo, and provider adapters sit behind their
 own entry points so the request interface carries no provider dependency.
 Package-direction and no-ambient-clock checks live under `checks/` and run
-without Weave's tests. The external AgentFabric repository
+without Loom's tests. The external AgentFabric repository
 is a conceptual reference, not a dependency or a code source: the contract
 invariants it established (durable contracts, opaque references separated from
 locators and from authority, a closed effect vocabulary, grant matching, failure
@@ -349,10 +351,10 @@ operations and declared dependencies. It has no ambient session or state access.
 A generic untyped model dispatch operation is not a substitute for contracts such
 as classification, extraction, or goal decomposition.
 
-AgentFabric checks invocation authority as well as admission. The effective
+Fabric checks invocation authority as well as admission. The effective
 authority of nested work is bounded by the goal, caller, contract, and granted
 resources and effects. Admission does not issue an execution grant. Revocation
-prevents further invocation and is surfaced to Weave for pending and running
+prevents further invocation and is surfaced to Loom for pending and running
 work; already completed external effects remain part of the record.
 
 Generative implementations declare inference as a dependency with enforceable
@@ -374,8 +376,8 @@ implementation choice to prove before use.
 
 ## 8. Crystallization is a governed workflow
 
-Extension uses ordinary actions and dependencies on threads. AgentFabric owns
-the reusable lifecycle and admission requirements; Weave schedules the work
+Extension uses ordinary actions and dependencies on threads. Fabric owns
+the reusable lifecycle and admission requirements; Loom schedules the work
 without embedding a domain-specific pipeline in its core.
 
 ```text
@@ -465,8 +467,8 @@ budgets, data boundaries, and effect controls apply in full. No publication or
 other external effect is duplicated merely to obtain an experimental comparison.
 
 Promotion checks version-bound evidence and current authority, then activates a
-candidate only for its declared scope. AgentFabric admits new capability
-implementations where necessary; Weave governs which operating strategy is active.
+candidate only for its declared scope. Fabric admits new capability
+implementations where necessary; Loom governs which operating strategy is active.
 The release path owns deployment of control-core revisions. These are separate
 operations, and none grants permission to execute a task. Experiments and active
 versions are recorded in state so outcomes remain attributable. Pending or running
@@ -591,7 +593,7 @@ scheduler, or host projects.
   native types, or both).
 - Inference request and response types live in `packages/gateway`. AgentSOP
   declares inference limits and a structural `infer` port without importing the
-  gateway; AgentFabric supplies the gateway through the resolver context. Closed
+  gateway; Fabric supplies the gateway through the resolver context. Closed
   by [M2](docs/m2-handle-a-novel-request.md).
 - How the scheduler combines weights, cost, and risk when weights from different
   judgment sites share no calibrated scale (§4). The initial rule must be ordinal
@@ -645,15 +647,21 @@ vision's authority, evidence, concurrency, or admission requirements.
 ## 12. Tapestry
 
 Tapestry is the visual presentation layer, planned in
-[docs/design-system.md](docs/design-system.md). It is not a milestone, it is
-not a Weave module, and it does not change the acceptance boundary. Its core
-imports neither Weave nor AgentFabric. Weave is one runtime it can attach to,
-through a binding that supplies a read port and ingress. The import rule
-allows another runtime later. This plan does not design that binding or a
-presentation protocol.
+[docs/design-system.md](docs/design-system.md). It is not a milestone and it
+does not change the acceptance boundary.
 
-AgentFabric stays the capability subsystem. AgentSOP is its contract layer.
-Weave calls the capability host. AgentFabric does not sit inside the runtime.
+Weave is the system. Loom is the runtime (`packages/weave`). Fabric is the
+capability subsystem (`packages/agentfabric`); AgentSOP is its contract
+layer. Tapestry is presentation. Loom uses a capability host that Fabric
+implements in the reference stack. Fabric does not sit inside the runtime.
+Tapestry's core imports neither Loom nor Fabric. It attaches to a runtime
+through a narrow binding that supplies a disclosed read port and ingress; Loom
+provides the reference binding. This plan does not design a universal
+presentation protocol or a thread and process model.
+
+The project record belongs to Loom. Tapestry receives a disclosed index
+through the binding. Availability is not disclosure, and it does not require
+Tapestry to be present.
 
 A project is the durable container. It can make repositories, documents,
 artifacts, capabilities, and history available by name. Availability grants
@@ -672,16 +680,17 @@ without the previous session's pins.
 adaptive region the operator has not claimed, through one `choice` evaluation
 of role `working`. The closed vocabulary, the default tree, and the theme
 tokens stay. The vocabulary names semantic components and interaction states.
-It names no toolkit. One editor opens any artifact. Source and prose are
-kinds of that editor, painted by Tapestry viewers, not by a second capability
-catalogue. A check the runtime can reuse is an ordinary AgentFabric
-capability. The editor may show a result the binding already disclosed. It
-does not dispatch one. Web is the first renderer of the shell. A later
-native renderer is out of scope here.
+It names no toolkit. The editor opens artifacts through a semantic view
+contract, a compatible view handler, and a runner. A built-in renderer is a
+default runner; configured external or custom runners are possible without
+becoming capabilities. A reusable check goes through Loom's capability host
+under a grant. The editor may show a result the binding already disclosed;
+opening it does not dispatch that check. Web is the first shell renderer. A
+later native shell renderer is out of scope here.
 
 Arrangements, placements, and pins live on a session record, not in the
 observation log, so presentation cannot reject an in-flight
-`weights.recorded`. Shell components and viewers are Tapestry presentation code, not
-capabilities. Jev may serve `workspace.arrange`. It does not define the
-vocabulary, the theme, or the shell. External transport and more than one
+`weights.recorded`. Shell components and built-in view handlers are Tapestry
+presentation code, not capabilities. Jev may serve `workspace.arrange`. It
+does not define the vocabulary, the theme, or the shell. External transport and more than one
 operator remain the open authority question in §11.

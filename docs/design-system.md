@@ -5,22 +5,28 @@ the theme, and the component vocabulary. It is not a milestone, and it does
 not change an acceptance boundary in [VISION.md](../VISION.md). Conversation
 remains evidence. Responding remains an action.
 
-Three pieces stay separate:
+Four names stay separate:
 
-- **Weave** is the runtime. It owns state, policy, and scheduling.
-- **AgentFabric** is the capability subsystem. AgentSOP is its contract layer.
-  Weave calls the capability host. AgentFabric does not sit inside the runtime
-  and does not import it.
-- **Tapestry** is the visual presentation layer. It can attach to Weave, and
-  to another runtime, through a binding. Its core imports neither Weave nor
-  AgentFabric.
+- **Weave** is the system.
+- **Loom** is the runtime. It owns state, policy, and scheduling. The package
+  remains `packages/weave`.
+- **Fabric** is the reference capability subsystem. AgentSOP is its contract
+  layer. Loom uses its capability host through a narrow interface; another
+  provider can satisfy that interface. Fabric does not import Loom. The
+  package remains `packages/agentfabric`.
+- **Tapestry** is the visual presentation layer. It attaches through a narrow
+  runtime-facing binding. Loom supplies the reference binding; another runtime
+  may supply one. Tapestry's core imports neither Loom nor Fabric.
 
-The split is an import boundary. Weave already keeps its loop free of
-catalogue internals. Tapestry keeps paint free of that loop. A viewer stays
-out of the catalogue, and a goal's check stays out of the shell. The binding
-is a read port and an ingress handle. This plan does not add a presentation
-protocol, a second state model, or a second runtime binding. Another runtime
-is allowed by the imports. It is not a thing to design yet.
+The split is an import boundary. Loom already keeps its loop free of
+catalogue internals. Tapestry keeps presentation free of that loop. A view
+handler stays out of the capability catalogue, and a goal's check stays out
+of the shell. The project record stays with Loom, so a headless invocation
+still has it. The binding supplies a disclosed read port and a narrowed
+ingress handle. This plan does not add a universal presentation protocol or a
+second state model. Threads, input
+routing, pause and resume, and sandboxed document work are Loom concerns and
+are not requirements here.
 
 Terms live in [CONTEXT.md](../CONTEXT.md). This document uses them.
 
@@ -76,7 +82,7 @@ Occupancy of a region follows one precedence:
 or placement holds, one component id from that region's offer. It sends one
 evaluation request of kind `choice` and role `working`. The answer becomes an
 arrangement only at the state revision it evaluated, against the session's
-vocabulary and theme, and only within the arrangement allowance. Navigation,
+vocabulary, and only within the arrangement allowance. Navigation,
 the cut-through, pins, and placements are settled before the request.
 
 An unusable, stale, rejected, or superseded answer leaves the last admitted
@@ -105,8 +111,11 @@ and does not advance them.
 A project lists attachments by kind and name: repository, document, artifact,
 capability, history. Each attachment is a resource reference plus a label.
 The list is availability. It does not issue a grant, disclose a body, or
-surface a component. Cross-goal access to retained evidence still requires
-the policy that already governs durable knowledge.
+surface a component. Loom holds the project record. Tapestry does not. A
+headless Loom invocation uses the same record. Cross-goal access to retained
+evidence still requires the policy that already governs durable knowledge.
+The binding exposes attachment names to Tapestry. Attaching a resource still
+neither discloses its body nor puts it on screen.
 
 The setup surface is a fixed sequence:
 
@@ -137,9 +146,10 @@ restore a session.
 ## 3. Theme
 
 Components name token roles. A theme record supplies every role in
-`tokens@1`. One theme resolves every paint in a session. A judgment neither
-sees nor sets it. Changing theme means detaching, running setup, and
-attaching again.
+`tokens@1`. The current theme resolves every paint. A judgment neither sees
+nor sets it. Choosing another shipped theme repaints the workspace. It does
+not detach the session, clear pins, or clear placements. Layout is
+session-scoped. Theme selection is not.
 
 Color never carries meaning alone. Every status role has a text mark, so a
 monochrome renderer loses nothing.
@@ -197,10 +207,9 @@ use `decision-*` roles only on cut-through components. The check covers
 trusted source. It does not inspect model output. The check also rejects
 toolkit names in the vocabulary: DOM, CSS, React, and pixel coordinates.
 
-A session fixes one theme reference: id, version, and digest. Every component
-tree and every arrangement cites it. Arrangement validation rejects a
-mismatch. The arrange view, the request, the answer, and the arrangement
-contain no token names and no token values.
+Paint resolves the current theme. An arrangement does not cite it. The
+arrange view, the request, the answer, and the arrangement contain no token
+names and no token values. A theme change invalidates paint only.
 
 ### Interaction states
 
@@ -384,10 +393,9 @@ The payload is not in the runtime. Until it exists, the component renders
 disclosed observations and the submit control stays disabled. Text in that
 component does not authorize, complete, or dispatch anything.
 
-`editor@1` is the one opener for every artifact. Viewers are specified in
-§6.1. They are surface presentation, not catalogue entries. Arrangement
-chooses the editor. It does not choose a viewer, and it does not invoke a
-capability to paint.
+`editor@1` is the shell's opener for every artifact. The view contract,
+handler, and runner seam is described in §6.1. Arrangement chooses the
+editor, not a handler or runner, and opening it does not invoke a capability.
 
 What each component shows:
 
@@ -419,10 +427,11 @@ What each component shows:
   is present, cancel-requested, and reconciliation. An uncertain outcome stays
   uncertain. A requested cancellation stays requested until the action record
   says otherwise.
-- `editor` shows the artifact's identity, kind, and revision, and paints the
-  disclosed body with the viewer for that kind. A withheld body is an
-  omission, not an empty artifact. A recorded check result already in state
-  may be shown with the body. Painting does not invoke the catalogue.
+- `editor` shows the artifact's identity, kind, and revision, and presents
+  its disclosed body through a compatible view handler and runner. A withheld
+  body is an omission, not an empty artifact. A recorded check result already
+  in state may be shown with the body. Presentation does not invoke the
+  capability catalogue.
 - `notice.list` shows the fact, sequence, provenance, and validation status.
   A rejected notice is labeled rejected. A notice is not a grant and not
   dispatched work.
@@ -454,31 +463,36 @@ not keep it.
 Any artifact an action emits, and any document the project makes available,
 opens in `editor@1`. The project index is the navigator the operator sees:
 names, kinds, and resource references. Locators stay in the host. Source and
-an agent-written document open in that same editor.
+an agent-written document enter the same shell component.
 
-Weave has one capability catalogue. AgentFabric owns it. A capability is an
-operation that can advance a goal, invoked by the runtime under a grant.
-There is no second catalogue for the shell.
+Presentation follows a semantic **view contract → view handler → runner**
+seam. The contract states what kind of artifact and interactions are needed.
+A handler declares which contracts it can satisfy and the disclosed data and
+narrowed operator actions it requires. A runner provides the implementation:
+a built-in renderer, web or native surface, terminal program, or existing
+desktop application. Built-in handlers are defaults; an operator may configure
+an external or custom handler for a kind. This plan fixes the ownership seam,
+not a universal handler protocol or a runner-selection algorithm.
 
-A viewer is not in that catalogue. Kind selects a viewer inside the editor.
-The plain-text viewer accepts every kind. A richer viewer may mark structure
-for the kinds it accepts. Both paint a body the workspace view already
-disclosed. A withheld body is an omission. The viewer does not read storage,
-receive a locator, or run on the action frontier.
+The editor keeps the shell, theme, region, placement, navigation, lifecycle,
+and selection semantics. It passes only disclosed data and narrowed actions to
+the selected handler. A withheld body remains an omission. Neither opening an
+artifact nor selecting a handler grants a runner access to undisclosed data or
+permission to act. Runner-specific integration stays at the edge.
 
-A typo check, a lint, or a language diagnostic is a different thing. If the
-goal can reuse the result, that operation is an ordinary capability, with a
-contract, admission, and a grant, the same as any other operation. The editor
-may paint a result that is already in state. Opening the editor does not
-dispatch the capability, and the surface does not keep a private copy of the
-catalogue.
+The presentation handlers are not entries in the capability catalogue. In
+the reference stack, Fabric supplies the capability host used by Loom. A
+reusable typo check, lint, or language diagnostic remains a capability under
+a contract, admission, and a grant. The editor may present its result after
+the runtime discloses it; opening the editor does not dispatch that check.
+Another capability provider may satisfy Loom's host boundary.
 
 An operator correction is an existing observation type or a write under a
 grant the runtime already issued. Keystrokes do not write by themselves.
 
-Which viewers ship beyond plain text can wait. So can the contract for any
-check a goal will reuse. Neither choice splits reading code from reading a
-document, and neither adds a system-capability type.
+The first built-in handler may use plain text for any disclosed artifact.
+Which additional handlers and runners ship can wait. So can the contract for
+any check a goal will reuse.
 
 ### Default tree
 
@@ -554,7 +568,8 @@ session record with its reason.
    is `accepted`.
 2. The current goal revision equals the revision the request evaluated.
    Otherwise the reason is `stale`. With no open goal, no request is formed.
-3. The vocabulary reference and the theme reference equal the session's.
+3. The vocabulary reference equals the session's. The theme is not part of
+   the check.
 4. The shape is closed: contested adaptive-region ids mapped to component ids
    or, for the drawer, `collapsed`. No `nav`. No `cut-through`. No pinned or
    placed region. No extra field.
@@ -624,17 +639,19 @@ the same specification. This plan does not design that renderer.
 
 ## 10. Ownership
 
-A future `packages/tapestry` owns the setup surface, local configuration, the
-project record, `tokens@1`, the theme records, the shell, the components,
-the viewers, `vocabulary.workspace@1`, the default tree, arrange-view
-reduction, request formation, arrangement validation, the session record, and
-painting. That package imports neither Weave nor AgentFabric. It may depend
-on the gateway's request and outcome types for `workspace.arrange`, supplied
-at bootstrap.
+Loom owns the project record. `packages/tapestry` does not.
 
-A Weave binding, outside that package, supplies the read port and the ingress
-handle. Another runtime supplies its own binding. `packages/weave` gains the
-`view.workspace@1` renderer and the read port for its binding. It does not
+`packages/tapestry` owns the setup surface, local configuration, `tokens@1`,
+the theme records, the shell, the components, the built-in view handlers,
+`vocabulary.workspace@1`, the default tree, arrange-view reduction, request
+formation, arrangement validation, the session record, and painting. That
+package imports neither Loom nor Fabric. It may depend on the gateway's
+request and outcome types for `workspace.arrange`, supplied at bootstrap.
+
+A runtime-facing binding, outside that package, supplies the read port, the
+ingress handle, and the disclosed project index. Loom provides the reference
+binding: `packages/weave` gains the
+`view.workspace@1` renderer and the read port for that binding. It does not
 learn regions, tokens, vocabulary, placements, or sessions, and it does not
 put `workspace.arrange` on the action frontier.
 
@@ -642,20 +659,22 @@ put `workspace.arrange` on the action frontier.
 string. Routing evidence accrues per site. Jev, or any other routed unit that
 answers `choice`, may serve it.
 
-AgentSOP and AgentFabric import nothing from Tapestry. Tapestry's core
-imports nothing from them or from Weave. Shell components and viewers are not
-capabilities. A check the attached runtime can reuse is a capability in that
-runtime's catalogue, scheduled by the runtime. The editor only paints a
-result the binding already disclosed.
+AgentSOP and Fabric import nothing from Tapestry. Tapestry's core imports
+nothing from them or from Loom. Shell components and built-in view handlers
+are not capabilities. A check Loom can reuse goes through its capability
+host under a grant. The editor only presents a result the binding already
+disclosed.
 
 When the package exists, `checks/import-direction.mjs` allows `tapestry` to
 depend on `gateway`, and forbids `weave`, `gateway`, `agentsop`, and
-`agentfabric` from depending on `tapestry`. The Weave binding is a leaf: it
-may depend on `tapestry` and `weave`, and nothing depends on it.
+`agentfabric` from depending on `tapestry`. The reference Loom binding is a
+leaf: it may depend on `tapestry` and `weave`, and nothing depends on it. A
+binding for another runtime follows the same boundary.
 
 This plan does not choose a component toolkit, add a dependency, open a
-network protocol, generate component source, implement an Omarchy renderer,
-or edit `VISION.md`.
+network protocol, generate component source, or implement an Omarchy
+renderer. The names in `VISION.md` match this vocabulary. The acceptance
+boundary is unchanged.
 
 ## 11. Open questions
 
@@ -671,12 +690,13 @@ or edit `VISION.md`.
    Its payload, what transitions it may support, and how it relates to
    `goal.opened` are not specified. Until they are, the submit control stays
    disabled.
-4. **Project persistence.** Where the project record and its attachments live,
-   and whether an attachment of a repository is a resource reference the host
-   already knows how to mint.
+4. **Project record shape.** Loom owns the record. Where it is stored, and
+   whether an attachment of a repository is a resource reference the host
+   already knows how to mint, are not fixed. Tapestry does not keep a second
+   copy.
 5. **Artifact slice.** `report` and `publication` exist on `State`. The
    `artifacts` slice's exact fields, and when a body is disclosable, are not
-   fixed. Which viewers ship beyond plain text is not fixed either. A check
+   fixed. Which handlers and runners ship beyond plain text is not fixed. A check
    worth reusing across goals gets its own capability contract later. The
    editor does not dispatch it.
 6. **Renderer bindings.** Web is first. Which token bindings that renderer
