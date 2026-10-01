@@ -1,0 +1,13 @@
+{
+  "name": "@weave/tapestry",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Tapestry: the presentation core. Vocabulary, theme roles, and the default tree. Imports no runtime, capability host, or renderer toolkit.",
+  "exports": {
+    ".": "./dist/src/index.js"
+  },
+  "files": [
+    "dist"
+  ]
+}

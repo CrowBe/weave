@@ -68,12 +68,18 @@ versioned records, and the framing view lists the host catalogue.
 
 `packages/agentsop` holds the contract layer, `packages/agentfabric` the enforcing
 host, and `packages/weave` the runtime. `packages/gateway` supplies bounded
-generation and typed evaluation through replaceable providers. Requires Node
-22 or later; offline entailment contract tests also require Python 3.
+generation and typed evaluation through replaceable providers. `packages/tapestry`
+holds the presentation core for the first workspace slice: project navigation,
+the conversational surface, and a pending authority request. `packages/tapestry-web`
+paints that tree. `packages/loom-binding` discloses a workspace view from recorded
+Loom state and does not hand the renderer a locator or the runtime's internal
+state. Requires Node 22 or later; offline entailment contract tests also require
+Python 3.
 
 ```bash
 npm install
-npm run verify   # structural checks, build, runtime and gateway suites, examples, Jev benchmarks, and entailment and decision contract tests
+npm run verify           # structural checks, build, suites, the web host, examples, and contract tests
+npm run host:workspace   # read-only web workspace at http://127.0.0.1:5173
 ```
 
 Local inference experiments and their recorded evidence live under
