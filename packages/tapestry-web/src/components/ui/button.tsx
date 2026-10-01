@@ -4,7 +4,7 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
@@ -13,11 +13,14 @@ const buttonVariants = cva(
         outline: 'border border-border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
+        segment:
+          'h-6 rounded-[5px] px-2.5 text-xs font-medium text-muted-foreground shadow-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--focus)] aria-pressed:bg-secondary aria-pressed:text-foreground aria-pressed:shadow-xs',
       },
       size: {
         default: 'h-9 px-4 py-2',
         sm: 'h-8 rounded-md px-3 text-xs',
         lg: 'h-10 rounded-md px-6',
+        segment: 'h-6 rounded-[5px] px-2.5 text-xs',
       },
     },
     defaultVariants: {

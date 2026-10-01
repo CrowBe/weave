@@ -22,8 +22,8 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-destructive: var(--destructive);
-  --font-sans: ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, monospace;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }
 
 html,
@@ -37,4 +37,50 @@ body {
   background: var(--canvas);
   color: var(--text);
   font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 20px;
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-testid='shell'] {
+  --hairline: color-mix(in oklab, var(--border) 70%, var(--canvas));
+  --hairline-soft: color-mix(in oklab, var(--border) 40%, var(--canvas));
+  --hover: color-mix(in oklab, var(--surface-raised) 65%, var(--canvas));
+  font-synthesis: none;
+  scrollbar-width: thin;
+}
+
+summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+details .digest-open,
+details .digest-panel {
+  display: none;
+}
+
+details[open] .digest-open {
+  display: inline;
+}
+
+details[open] .digest-closed,
+details[open] .digest-short {
+  display: none;
+}
+
+details[open] .digest-panel {
+  display: block;
+}
+
+.digest-chunk {
+  margin-right: 1ch;
+}
+
+.digest-chunk:nth-child(4n) {
+  margin-right: 0;
 }
