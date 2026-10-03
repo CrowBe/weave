@@ -86,6 +86,22 @@ A named place where bounded judgment is requested for a specific purpose, with t
 
 The judgment site that evaluates state against possible actions and returns weights. Jev is the initial model type behind it. The decision layer proposes weights; it does not select models and it does not override policy.
 
+### Acceptance line
+
+A proposed statement that a task is done. It names one fact, the artifact or command output that can show it, and an escape for when that state cannot show the fact. A proposal is an observation. It does not change the goal and it does not grant execution.
+
+### Acceptance fact
+
+An acceptance line that code has admitted. It is one observable fact. A count, a date, a total, or a taste judgment is not an acceptance fact. An acceptance fact is one boolean question — a Noul on the System One wire — and nothing else.
+
+### Criteria gate
+
+The judgment site `task.criteria`. Before a run it asks whether each proposed line is one property and observable from the named evidence. Low confidence is an explicit revise or reject. The site does not write a plan, select an action, do arithmetic, or grant execution. It is not the decision layer and it is not `frontier.weigh`.
+
+### Task validation
+
+The judgment site `task.validate`. It asks one boolean question per acceptance fact about a state built from that fact and its artifact or command output. Code decides done from thresholds declared before the run, and from the constraints and authority declared for that task. A constraint such as do-not-send is not a ban on every task: it fails a command only when this task declares it and this task's authority does not permit the effect. An ask permits a smaller consequential command when that constraint is declared; it does not authorize send or delete. Those constraints are not Noul questions. A write-up is not part of the validation state and cannot override a failed fact. The site grants nothing and executes nothing. It is not `frontier.weigh`.
+
 ### Action proposal
 
 A suggested operation, binding, or dependency structure recorded as an observation. It can inform candidate formation but carries no authority to execute.
@@ -462,3 +478,6 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 - Say **workspace view**, not *screen* or *prompt*, for the state view a workspace renders.
 - Say **indicator**, not *notice* or *alert*, for a shell status mark. An opportunity notice is an operator observation.
 - Say **`workspace.arrange`**, not *Jev*, for the judgment site that proposes an arrangement. Jev is a model type that may answer `choice`.
+- Say **acceptance line** for a proposal and **acceptance fact** for a line code has admitted. On the System One wire a boolean question is a Noul. The request kind remains `boolean`.
+- Say **criteria gate** for `task.criteria` and **task validation** for `task.validate`. Jev may answer either site. Neither site is the decision layer, and neither is `frontier.weigh`.
+- Say **confidence** for the provider statistic published beside a boolean probability. It is not a weight and not a quality score.

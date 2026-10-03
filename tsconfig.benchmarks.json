@@ -6,5 +6,9 @@
     "noEmit": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["benchmarks/inference/jev/**/*.ts", "benchmarks/inference/bev-sample/**/*.ts"]
+  "include": [
+    "benchmarks/inference/jev/**/*.ts",
+    "benchmarks/inference/bev-sample/**/*.ts",
+    "benchmarks/task-acceptance/**/*.ts"
+  ]
 }
