@@ -1,0 +1,32 @@
+{
+  "name": "@weave/tapestry-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Web renderer for the Tapestry workspace slice. Owns shadcn/ui source and CSS bindings. Imports the presentation core only.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@radix-ui/react-scroll-area": "^1.2.10",
+    "@radix-ui/react-separator": "^1.1.7",
+    "@radix-ui/react-slot": "^1.2.3",
+    "@weave/tapestry": "*",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "tailwind-merge": "^3.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.13",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.3",
+    "tailwindcss": "^4.1.13",
+    "typescript": "^7.0.2",
+    "vite": "^7.1.7"
+  }
+}

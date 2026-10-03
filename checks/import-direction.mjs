@@ -7,6 +7,10 @@
  *                inference request interface must not drag either in
  *   agentfabric  imports agentsop and gateway only
  *   weave        imports agentsop, agentfabric and gateway only
+ *   tapestry     imports nothing in-repo and no renderer toolkit
+ *   tapestry-web imports tapestry only
+ *   loom-binding imports tapestry and weave only; its tests may compose the
+ *                reference host to exercise the read port
  *   the fake host (weave test code) depends only on the host interface (agentsop)
  *
  * Consumers (benchmarks/, examples/) are leaves. They may import any package —
@@ -29,7 +33,18 @@ const ALLOWED = {
   gateway: new Set(),
   agentfabric: new Set(['agentsop', 'gateway']),
   weave: new Set(['agentsop', 'agentfabric', 'gateway']),
+  tapestry: new Set(),
+  'tapestry-web': new Set(['tapestry']),
+  'loom-binding': new Set(['tapestry', 'weave']),
 };
+
+/** Test-only edges. Production source stays on ALLOWED. */
+const TEST_EXTRA = {
+  'loom-binding': new Set(['agentfabric', 'agentsop']),
+};
+
+const TAPESTRY_TOOLKIT =
+  /^(react|react-dom|react\/jsx-runtime|vite|@radix-ui\/|class-variance-authority|tailwindcss|lucide-react|shadcn|@weave\/weave|@weave\/agentfabric|@weave\/gateway)(?:\/|$)/;
 
 const FAKE_HOST_ALLOWED = new Set(['agentsop']);
 
@@ -46,7 +61,7 @@ function walk(dir) {
     const full = join(dir, entry);
     if (entry === 'node_modules' || entry === 'dist') continue;
     if (statSync(full).isDirectory()) out.push(...walk(full));
-    else if (full.endsWith('.ts') || full.endsWith('.mts') || full.endsWith('.js') || full.endsWith('.mjs')) out.push(full);
+    else if (/\.(ts|mts|tsx|js|mjs|jsx)$/.test(full)) out.push(full);
   }
   return out;
 }
@@ -58,7 +73,7 @@ function packageOf(file) {
 }
 
 function targetPackage(specifier, fromFile) {
-  const scoped = specifier.match(/^@weave\/([a-z]+)(?:\/|$)/);
+  const scoped = specifier.match(/^@weave\/([a-z][a-z0-9-]*)(?:\/|$)/);
   if (scoped) return scoped[1];
   if (specifier.startsWith('.')) {
     return packageOf(resolve(dirname(fromFile), specifier));
@@ -102,10 +117,20 @@ for (const pkg of Object.keys(ALLOWED)) {
         }
         continue;
       }
-      const allowed = isFakeHost ? FAKE_HOST_ALLOWED : isTest ? new Set([...ALLOWED[pkg], pkg]) : ALLOWED[pkg];
+      const allowed = isFakeHost
+        ? FAKE_HOST_ALLOWED
+        : isTest
+          ? new Set([...ALLOWED[pkg], pkg, ...(TEST_EXTRA[pkg] ?? [])])
+          : ALLOWED[pkg];
       if (!allowed.has(target)) {
         violations.push(`${relative(root, file)}: ${pkg} may not import ${target} ('${specifier}')`);
       }
+      if (pkg === 'tapestry' && TAPESTRY_TOOLKIT.test(specifier)) {
+        violations.push(`${relative(root, file)}: tapestry may not import a renderer or runtime ('${specifier}')`);
+      }
+    }
+    if (pkg === 'tapestry' && (file.endsWith('.tsx') || file.endsWith('.jsx'))) {
+      violations.push(`${relative(root, file)}: tapestry core exports no JSX`);
     }
   }
 }

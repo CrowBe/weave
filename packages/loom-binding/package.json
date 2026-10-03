@@ -1,0 +1,21 @@
+{
+  "name": "@weave/loom-binding",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Reference Loom binding. Translates recorded runtime state into a disclosed Tapestry workspace view.",
+  "exports": {
+    ".": "./dist/src/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@weave/tapestry": "*",
+    "@weave/weave": "*"
+  },
+  "devDependencies": {
+    "@weave/agentfabric": "*",
+    "@weave/agentsop": "*"
+  }
+}

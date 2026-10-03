@@ -4,6 +4,8 @@
     { "path": "packages/agentsop" },
     { "path": "packages/agentfabric" },
     { "path": "packages/gateway" },
-    { "path": "packages/weave" }
+    { "path": "packages/weave" },
+    { "path": "packages/tapestry" },
+    { "path": "packages/loom-binding" }
   ]
 }
