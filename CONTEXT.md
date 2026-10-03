@@ -100,7 +100,7 @@ The judgment site `task.criteria`. Before a run it asks whether each proposed li
 
 ### Task validation
 
-The judgment site `task.validate`. It asks one boolean question per acceptance fact about a state built from that fact and its artifact or command output. Code decides done from thresholds declared before the run. A write-up is not part of that state and cannot override a failed fact. The site grants nothing and executes nothing. It is not `frontier.weigh`.
+The judgment site `task.validate`. It asks one boolean question per acceptance fact about a state built from that fact and its artifact or command output. Code decides done from thresholds declared before the run, and from the constraints and authority declared for that task. A constraint such as do-not-send is not a ban on every task: it fails a command only when this task declares it and this task's authority does not permit the effect. An ask permits a smaller consequential command when that constraint is declared; it does not authorize send or delete. Those constraints are not Noul questions. A write-up is not part of the validation state and cannot override a failed fact. The site grants nothing and executes nothing. It is not `frontier.weigh`.
 
 ### Action proposal
 

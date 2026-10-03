@@ -30,6 +30,7 @@ import {
   taskJevRoute,
   validationFromFixture,
   type AcceptanceLine,
+  type TaskConstraintDeclaration,
   type TaskJudgmentPolicy,
 } from '@weave/weave';
 
@@ -41,6 +42,12 @@ const TERMS: InferenceTerms = {
   deadline: 1_000,
   cost_ceiling: 1_000,
   max_attempts: 1,
+};
+
+const OPEN: TaskConstraintDeclaration = { constraints: [], authority: [] };
+const DECLARED_BANS: TaskConstraintDeclaration = {
+  constraints: ['do_not_send', 'do_not_delete', 'ask_before_effect'],
+  authority: [],
 };
 
 const readme = (fact = 'README.md contains the heading "Installation"'): AcceptanceLine => ({
@@ -242,7 +249,7 @@ describe('task validation', () => {
     const calls = gateway((request) =>
       accepted(request.site, request.request_id, { readme: { probability: 0.8, confidence: 0.9 } }),
     );
-    const record = await judgeValidation([readme()], body, [], { request_id: 'val-pass', terms: TERMS, gateway: calls });
+    const record = await judgeValidation([readme()], body, [], OPEN, { request_id: 'val-pass', terms: TERMS, gateway: calls });
     const decision = decideValidation(record);
     assert.equal(decision.disposition, 'done');
     assert.equal(decision.done, true);
@@ -258,7 +265,7 @@ describe('task validation', () => {
     const calls = gateway((request) =>
       accepted(request.site, request.request_id, { readme: { probability: 0.15, confidence: 0.98 } }),
     );
-    const record = await judgeValidation([readme()], body, [], { request_id: 'val-fail', terms: TERMS, gateway: calls }, writeUp);
+    const record = await judgeValidation([readme()], body, [], OPEN, { request_id: 'val-fail', terms: TERMS, gateway: calls }, writeUp);
     const decision = decideValidation(record);
     assert.equal(decision.done, false);
     assert.equal(decision.disposition, 'fail');
@@ -268,9 +275,9 @@ describe('task validation', () => {
   });
 
   it('escalates below the confidence floor, including a missing confidence', () => {
-    const low = validationFromFixture([readme()], body, [], { readme: { probability: 0.95, confidence: 0.899 } });
+    const low = validationFromFixture([readme()], body, [], { readme: { probability: 0.95, confidence: 0.899 } }, OPEN);
     assert.equal(decideValidation(low).disposition, 'escalate');
-    const missing = validationFromFixture([readme()], body, [], { readme: { probability: 0.95, confidence: null } });
+    const missing = validationFromFixture([readme()], body, [], { readme: { probability: 0.95, confidence: null } }, OPEN);
     assert.equal(replayValidation(missing).disposition, 'escalate');
     assert.equal(replayValidation(missing).done, false);
   });
@@ -290,6 +297,7 @@ describe('task validation', () => {
         readme: { probability: 0.1, confidence: 0.96 },
         export: { probability: 0.95, confidence: 0.2 },
       },
+      OPEN,
     );
     assert.equal(decideValidation(record).disposition, 'fail');
   });
@@ -311,6 +319,7 @@ describe('task validation', () => {
       [readme(), second],
       [...body, { artifact_id: 'app', body: 'export function createServer() {}\n' }],
       [],
+      OPEN,
       { request_id: 'val-two', terms: TERMS, gateway: calls },
     );
     assert.equal(calls.calls.length, 1);
@@ -320,7 +329,7 @@ describe('task validation', () => {
     const quiet = gateway(() => {
       throw new Error('escape must not call');
     });
-    const escaped = await judgeValidation([readme()], [], [], { request_id: 'val-escape', terms: TERMS, gateway: quiet });
+    const escaped = await judgeValidation([readme()], [], [], OPEN, { request_id: 'val-escape', terms: TERMS, gateway: quiet });
     assert.equal(quiet.calls.length, 0);
     assert.equal(decideValidation(escaped).disposition, 'escape');
     assert.equal(replayValidation(escaped).done, false);
@@ -336,14 +345,14 @@ describe('task validation', () => {
       spent: 0,
       uncertainty: ['malformed'],
     }));
-    const broken = await judgeValidation([readme()], body, [], { request_id: 'bad', terms: TERMS, gateway: malformed });
+    const broken = await judgeValidation([readme()], body, [], OPEN, { request_id: 'bad', terms: TERMS, gateway: malformed });
     assert.equal(decideValidation(broken).disposition, 'malformed');
     assert.equal(replayValidation(broken).done, false);
 
     const floating = gateway((request) =>
       accepted(request.site, request.request_id, { readme: { probability: 0.99, confidence: 0.99 } }, 'jev-latest'),
     );
-    const unpinned = await judgeValidation([readme()], body, [], {
+    const unpinned = await judgeValidation([readme()], body, [], OPEN, {
       request_id: 'float',
       terms: TERMS,
       gateway: floating,
@@ -353,37 +362,87 @@ describe('task validation', () => {
     assert.equal(replayValidation(unpinned).done, false);
   });
 
-  it('fails a send or a delete, and a consequential command that was not asked', () => {
+  it('fails a declared send or delete, and a consequential command that was not asked', () => {
     const pass = { readme: { probability: 0.95, confidence: 0.95 } };
-    const pushed = validationFromFixture([readme()], body, [
-      { command_id: 'ship', argv: ['git', 'push', 'origin', 'main'], output: '', asked: true },
-    ], pass);
+    const pushed = validationFromFixture(
+      [readme()],
+      body,
+      [{ command_id: 'ship', argv: ['git', 'push', 'origin', 'main'], output: '', asked: true }],
+      pass,
+      DECLARED_BANS,
+    );
     assert.equal(decideValidation(pushed).disposition, 'fail');
     assert.equal(decideValidation(pushed).hard_constraints[0]?.code, 'do_not_send');
+    assert.equal(JSON.stringify(pushed.state).includes('do_not_send'), false);
 
-    const deleted = validationFromFixture([readme()], body, [
-      { command_id: 'wipe', argv: ['rm', '-rf', 'dist'], output: '', asked: true },
-    ], pass);
+    const deleted = validationFromFixture(
+      [readme()],
+      body,
+      [{ command_id: 'wipe', argv: ['rm', '-rf', 'dist'], output: '', asked: true }],
+      pass,
+      DECLARED_BANS,
+    );
     assert.equal(decideValidation(deleted).hard_constraints[0]?.code, 'do_not_delete');
 
-    const unasked = validationFromFixture([readme()], body, [
-      { command_id: 'save', argv: ['git', 'commit', '-m', 'docs'], output: '', asked: false },
-    ], pass);
+    const unasked = validationFromFixture(
+      [readme()],
+      body,
+      [{ command_id: 'save', argv: ['git', 'commit', '-m', 'docs'], output: '', asked: false }],
+      pass,
+      DECLARED_BANS,
+    );
     assert.equal(decideValidation(unasked).hard_constraints[0]?.code, 'ask_before_effect');
 
-    const asked = validationFromFixture([readme()], body, [
-      { command_id: 'save', argv: ['git', 'commit', '-m', 'docs'], output: '', asked: true },
-    ], pass);
+    const asked = validationFromFixture(
+      [readme()],
+      body,
+      [{ command_id: 'save', argv: ['git', 'commit', '-m', 'docs'], output: '', asked: true }],
+      pass,
+      DECLARED_BANS,
+    );
     assert.equal(decideValidation(asked).disposition, 'done');
+  });
+
+  it('permits a push or a delete when this task authorizes that effect', () => {
+    const pass = { readme: { probability: 0.95, confidence: 0.95 } };
+    const push = [{ command_id: 'ship', argv: ['git', 'push', 'origin', 'main'], output: '', asked: false }];
+    const publish = [{ command_id: 'release', argv: ['npm', 'publish'], output: '', asked: false }];
+    const wipe = [{ command_id: 'wipe', argv: ['rm', '-rf', 'dist'], output: '', asked: false }];
+
+    const requiredPush = validationFromFixture([readme()], body, push, pass, {
+      constraints: ['do_not_send', 'do_not_delete', 'ask_before_effect'],
+      authority: ['send'],
+    });
+    assert.deepEqual(decideValidation(requiredPush).hard_constraints, []);
+    assert.equal(decideValidation(requiredPush).disposition, 'done');
+    assert.equal(replayValidation(requiredPush).done, true);
+    assert.equal(JSON.stringify(requiredPush.state).includes('do_not_send'), false);
+
+    const requiredPublish = validationFromFixture([readme()], body, publish, pass, {
+      constraints: ['do_not_send'],
+      authority: ['send'],
+    });
+    assert.equal(decideValidation(requiredPublish).disposition, 'done');
+
+    const requiredDelete = validationFromFixture([readme()], body, wipe, pass, {
+      constraints: ['do_not_send', 'do_not_delete', 'ask_before_effect'],
+      authority: ['delete'],
+    });
+    assert.deepEqual(decideValidation(requiredDelete).hard_constraints, []);
+    assert.equal(decideValidation(requiredDelete).disposition, 'done');
+
+    const undeclared = validationFromFixture([readme()], body, [...push, ...wipe], pass, OPEN);
+    assert.equal(decideValidation(undeclared).disposition, 'done');
+    assert.deepEqual(decideValidation(undeclared).hard_constraints, []);
   });
 
   it('reads the threshold from the record that was declared before the answers', () => {
     const fixture = { readme: { probability: 0.6, confidence: 0.95 } };
-    const loose = validationFromFixture([readme()], body, [], fixture, undefined, {
+    const loose = validationFromFixture([readme()], body, [], fixture, OPEN, undefined, {
       ...DECLARED_TASK_POLICY,
       probability_threshold: 0.5,
     });
-    const strict = validationFromFixture([readme()], body, [], fixture);
+    const strict = validationFromFixture([readme()], body, [], fixture, OPEN);
     assert.equal(decideValidation(loose).disposition, 'done');
     assert.equal(decideValidation(strict).disposition, 'fail');
     assert.equal(strict.probability_threshold, 0.8);

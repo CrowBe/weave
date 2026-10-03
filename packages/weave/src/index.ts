@@ -70,6 +70,7 @@ export {
   type CommandRecord,
   type CriteriaDecision,
   type CriteriaRecord,
+  type TaskConstraintDeclaration,
   type TaskJudgmentPolicy,
   type ValidationDecision,
   type ValidationRecord,

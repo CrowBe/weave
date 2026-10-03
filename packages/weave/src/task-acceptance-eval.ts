@@ -15,6 +15,8 @@ import type { InferenceGateway, InferenceTerms } from '@weave/gateway';
 import {
   DECLARED_TASK_POLICY,
   ACCEPTANCE_LINE_CONTRACT,
+  TASK_AUTHORITY_EFFECTS,
+  TASK_HARD_CONSTRAINTS,
   TASK_JEV_MODEL_ID,
   criteriaFromFixture,
   decideCriteria,
@@ -23,6 +25,7 @@ import {
   judgeValidation,
   validationFromFixture,
   type AcceptanceLine,
+  type TaskConstraintDeclaration,
   type CriteriaDecision,
   type NoulFixture,
   type ValidationDecision,
@@ -47,6 +50,7 @@ export interface FrozenTask {
     readonly output: string;
     readonly asked: boolean;
   }[];
+  readonly declaration: TaskConstraintDeclaration;
   readonly write_up: string;
   readonly fixture_criteria: NoulFixture;
   readonly fixture_validation: NoulFixture;
@@ -137,7 +141,14 @@ export function loadFrozenSet(raw: unknown): readonly FrozenTask[] {
     const criteria = criteriaFromFixture(task.proposed_lines, task.fixture_criteria);
     const decision = decideCriteria(criteria);
     if (decision.malformed !== null) throw new Error(`${task.id} criteria fixture is malformed`);
-    validationFromFixture(decision.entered, task.artifacts, task.commands, task.fixture_validation, task.write_up);
+    validationFromFixture(
+      decision.entered,
+      task.artifacts,
+      task.commands,
+      task.fixture_validation,
+      task.declaration,
+      task.write_up,
+    );
   }
   if (tune === 0 || holdout === 0 || holdout >= tune) {
     throw new Error('frozen set needs a smaller holdout split beside tune');
@@ -240,6 +251,7 @@ async function liveValidation(
     criteria.entered,
     task.artifacts,
     task.commands,
+    task.declaration,
     {
       request_id: `${task.id}:validate`,
       terms: input.terms,
@@ -262,7 +274,14 @@ function offlineView(task: FrozenTask): PipelineView {
     };
   }
   const validation = decideValidation(
-    validationFromFixture(criteria.entered, task.artifacts, task.commands, task.fixture_validation, task.write_up),
+    validationFromFixture(
+      criteria.entered,
+      task.artifacts,
+      task.commands,
+      task.fixture_validation,
+      task.declaration,
+      task.write_up,
+    ),
   );
   return viewOf(criteria, validation);
 }
@@ -353,6 +372,7 @@ function parseTask(raw: unknown, index: number): FrozenTask {
   if (typeof raw['label_done'] !== 'boolean') throw new Error(`${id} label_done must be boolean`);
   const artifacts = parseArtifacts(raw['artifacts'], id);
   const commands = parseCommands(raw['commands'], id);
+  const declaration = parseDeclaration(raw, id);
   const write_up = stringField(raw['write_up'], `${id} write_up`);
   const fixture_criteria = parseFixture(raw['fixture_criteria'], `${id} fixture_criteria`);
   const fixture_validation = parseFixture(raw['fixture_validation'], `${id} fixture_validation`);
@@ -367,6 +387,7 @@ function parseTask(raw: unknown, index: number): FrozenTask {
     label_done: raw['label_done'],
     artifacts,
     commands,
+    declaration,
     write_up,
     fixture_criteria,
     fixture_validation,
@@ -426,6 +447,20 @@ function parseCommands(raw: unknown, taskId: string): FrozenTask['commands'] {
       asked: item['asked'],
     };
   });
+}
+
+function parseDeclaration(raw: Record<string, unknown>, taskId: string): TaskConstraintDeclaration {
+  return {
+    constraints: closedList(raw['constraints'], TASK_HARD_CONSTRAINTS, `${taskId} constraints`),
+    authority: closedList(raw['authority'], TASK_AUTHORITY_EFFECTS, `${taskId} authority`),
+  };
+}
+
+function closedList<T extends string>(raw: unknown, allowed: readonly T[], label: string): readonly T[] {
+  if (!Array.isArray(raw) || !raw.every((item) => typeof item === 'string' && allowed.includes(item as T))) {
+    throw new Error(`${label} must list only ${allowed.join(', ')}`);
+  }
+  return raw as readonly T[];
 }
 
 function parseFixture(raw: unknown, label: string): NoulFixture {

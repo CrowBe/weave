@@ -9,7 +9,9 @@
  *
  * This is not the decision layer. It does not weigh `frontier.weigh`, select
  * an action, do arithmetic, or grant execution. A write-up is not part of the
- * state a question may see.
+ * state a question may see. Hard constraints are the constraints and authority
+ * declared for this task. They are enforced in code and are not Noul questions.
+ * `do_not_send` and `do_not_delete` are not global operation bans.
  *
  * Assumptions the repository cannot verify from a provider call:
  * - The month name "may" is not treated as a date signal, because the same
@@ -223,13 +225,31 @@ export interface ValidationRecord {
   readonly malformed: string | null;
   readonly answers: Readonly<Record<string, NoulAnswerRecord>>;
   readonly commands: readonly CommandRecord[];
+  readonly declaration: TaskConstraintDeclaration;
   readonly write_up_ignored: true;
 }
 
 export type ValidationDisposition = 'done' | 'fail' | 'escalate' | 'malformed' | 'escape';
 
+export const TASK_HARD_CONSTRAINTS = ['do_not_send', 'do_not_delete', 'ask_before_effect'] as const;
+export type TaskHardConstraint = (typeof TASK_HARD_CONSTRAINTS)[number];
+
+/** Effects a task may authorize. Send and delete are not implied by an ask. */
+export const TASK_AUTHORITY_EFFECTS = ['send', 'delete'] as const;
+export type TaskAuthorityEffect = (typeof TASK_AUTHORITY_EFFECTS)[number];
+
+/**
+ * Constraints and authority for one task, declared before validation.
+ * A constraint applies only when it is listed here. Authority for `send` or
+ * `delete` permits that effect even when the matching constraint is listed.
+ */
+export interface TaskConstraintDeclaration {
+  readonly constraints: readonly TaskHardConstraint[];
+  readonly authority: readonly TaskAuthorityEffect[];
+}
+
 export interface HardConstraintFailure {
-  readonly code: 'do_not_send' | 'do_not_delete' | 'ask_before_effect';
+  readonly code: TaskHardConstraint;
   readonly command_id: string;
 }
 
@@ -454,20 +474,21 @@ export function validationFromFixture(
   artifacts: readonly ArtifactBody[],
   commands: readonly CommandRecord[],
   fixture: NoulFixture,
+  declaration: TaskConstraintDeclaration,
   writeUp?: string,
   policy?: TaskJudgmentPolicy,
 ): ValidationRecord {
   const resolved = policyOf(policy);
   const facts = factsFor(admitted, artifacts, commands);
   const shown = facts.filter((fact) => fact.evidence !== null);
-  if (shown.length === 0) return validationRecord(resolved, facts, commands, null, null, writeUp);
+  if (shown.length === 0) return validationRecord(resolved, facts, commands, declaration, null, null, writeUp);
   const answers: Record<string, NoulAnswerRecord> = {};
   for (const fact of shown) {
     const answer = fixture[fact.line_id];
     if (answer === undefined) throw new Error(`fixture missing validation for ${fact.line_id}`);
     answers[fact.line_id] = answer;
   }
-  return validationRecord(resolved, facts, commands, answers, null, writeUp);
+  return validationRecord(resolved, facts, commands, declaration, answers, null, writeUp);
 }
 
 export function decideCriteria(record: CriteriaRecord): CriteriaDecision {
@@ -521,7 +542,7 @@ export function replayCriteria(record: CriteriaRecord): CriteriaDecision {
 }
 
 export function decideValidation(record: ValidationRecord): ValidationDecision {
-  const constraints = hardConstraints(record.commands);
+  const constraints = hardConstraints(record.commands, record.declaration);
   if (record.model !== TASK_JEV_MODEL_ID) {
     return validationDecision('malformed', ['unpinned_model'], [], constraints);
   }
@@ -603,13 +624,14 @@ export async function judgeValidation(
   admitted: readonly AcceptanceLine[],
   artifacts: readonly ArtifactBody[],
   commands: readonly CommandRecord[],
+  declaration: TaskConstraintDeclaration,
   call: JudgmentCall,
   writeUp?: string,
 ): Promise<ValidationRecord> {
   const policy = policyOf(call.policy);
   const facts = factsFor(admitted, artifacts, commands);
   const shown = facts.filter((fact) => fact.evidence !== null);
-  if (shown.length === 0) return validationRecord(policy, facts, commands, null, null, writeUp);
+  if (shown.length === 0) return validationRecord(policy, facts, commands, declaration, null, null, writeUp);
   const state = validationState(shown);
   const questions = validationQuestions(shown);
   const outcome = await call.gateway.evaluate({
@@ -622,7 +644,7 @@ export async function judgeValidation(
     terms: call.terms,
   });
   const reduced = reduceOutcome(outcome, Object.keys(questions));
-  return validationRecord(policy, facts, commands, reduced.answers, reduced.malformed, writeUp);
+  return validationRecord(policy, facts, commands, declaration, reduced.answers, reduced.malformed, writeUp);
 }
 
 export function taskJevRoute(adapter: string, destination: string): RoutedUnit {
@@ -648,13 +670,20 @@ export function taskJevRoute(adapter: string, destination: string): RoutedUnit {
   };
 }
 
-export function hardConstraints(commands: readonly CommandRecord[]): readonly HardConstraintFailure[] {
+export function hardConstraints(
+  commands: readonly CommandRecord[],
+  declaration: TaskConstraintDeclaration,
+): readonly HardConstraintFailure[] {
+  const constraints = new Set(declaration.constraints);
+  const authority = new Set(declaration.authority);
   const failures: HardConstraintFailure[] = [];
   for (const command of commands) {
     const effect = commandEffect(command.argv);
-    if (effect === 'send') failures.push({ code: 'do_not_send', command_id: command.command_id });
-    else if (effect === 'delete') failures.push({ code: 'do_not_delete', command_id: command.command_id });
-    else if (effect === 'consequential' && !command.asked) {
+    if (effect === 'send' && constraints.has('do_not_send') && !authority.has('send')) {
+      failures.push({ code: 'do_not_send', command_id: command.command_id });
+    } else if (effect === 'delete' && constraints.has('do_not_delete') && !authority.has('delete')) {
+      failures.push({ code: 'do_not_delete', command_id: command.command_id });
+    } else if (effect === 'consequential' && constraints.has('ask_before_effect') && !command.asked) {
       failures.push({ code: 'ask_before_effect', command_id: command.command_id });
     }
   }
@@ -691,6 +720,7 @@ function validationRecord(
   policy: TaskJudgmentPolicy,
   facts: readonly ValidationFact[],
   commands: readonly CommandRecord[],
+  declaration: TaskConstraintDeclaration,
   answers: Readonly<Record<string, NoulAnswerRecord>> | null,
   malformed: string | null,
   writeUp: string | undefined,
@@ -710,6 +740,7 @@ function validationRecord(
     malformed,
     answers: answers ?? {},
     commands,
+    declaration,
     write_up_ignored: true,
   };
 }
