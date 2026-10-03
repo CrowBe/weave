@@ -320,7 +320,7 @@ The record of where a contract, test, or implementation came from, including sou
 
 ### Tapestry
 
-The visual presentation layer, namespaced Weave Tapestry. It paints a workspace for an operator and submits that operator's observations through a narrow runtime-facing binding. It holds no goal state or project record, schedules no action, and issues no grant. Its core imports no runtime and no capability host. Loom supplies the reference binding; another runtime can supply one. The shell, theme, built-in view handlers, and session record belong to Tapestry. The project record does not.
+The visual presentation layer, namespaced Weave Tapestry. It paints a workspace for an operator and submits that operator's observations through a narrow runtime-facing binding. It holds no goal state or project record, schedules no action, and issues no grant. Its core imports no runtime and no capability host. Loom supplies the reference binding; another runtime can supply one. The shell, theme, built-in view handlers, and session record belong to Tapestry. The project record does not. In this repository the core is `packages/tapestry`, the web renderer is `packages/tapestry-web`, and the reference binding is `packages/loom-binding`.
 
 ### Operator
 
