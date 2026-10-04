@@ -3,7 +3,7 @@
 This is the behavioral contract for the milestone in
 [ARCHITECTURE.md §10](../ARCHITECTURE.md). It extends
 [M2](m2-handle-a-novel-request.md). Terms follow
-[CONTEXT.md](../CONTEXT.md). The checks below are requirements, not claims of
+[GLOSSARY.md](../GLOSSARY.md). The checks below are requirements, not claims of
 implemented behavior. Demonstrate red before implementation and retain the
 M0–M2 checks when proving green.
 

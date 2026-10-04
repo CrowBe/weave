@@ -1,6 +1,6 @@
 /**
  * The inference gateway: bounded provider execution under the caller's terms
- * (ARCHITECTURE.md §6, CONTEXT.md "Inference gateway").
+ * (ARCHITECTURE.md §6, GLOSSARY.md "Inference gateway").
  *
  * It may retry or escalate within the terms; it cannot rescope the request or
  * relax acceptance. Every attempt is recorded and charged, including malformed

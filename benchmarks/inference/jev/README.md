@@ -5,7 +5,7 @@ capability. Everything here is measurement.
 
 ## What is under test
 
-CONTEXT.md defines a **judgment site** as "a named place where bounded judgment
+GLOSSARY.md defines a **judgment site** as "a named place where bounded judgment
 is requested for a specific purpose, with typed inputs and outputs and its own
 evaluation history." The repository has the first three. Nothing yet produces
 the fourth. This directory produces it for hosted Jev.
@@ -176,7 +176,7 @@ These bind every number this directory produces.
   view renderer, which the import-direction check explicitly permits.
 - **Do not author corpus cases from `transfer-v4`.** Its manifest declares
   `in_distribution: false` with every source in `holdout_sources`. That suite
-  is Kev's eval split. Weave's **held-out report** (`CONTEXT.md`) is counts
+  is Kev's eval split. Weave's **held-out report** (`GLOSSARY.md`) is counts
   and failure codes from the protected admission split. The M3 contract states
   that after that split is drawn, corpus authors do not receive its cases.
   Those rules cover Weave's admission corpus. New Weave cases have to be

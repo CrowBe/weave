@@ -15,7 +15,7 @@ acceptance cases in the relevant milestone.
 
 ## Evidence and limits
 
-Read VISION.md, CONTEXT.md and ARCHITECTURE.md in the current checkout, plus the live
+Read VISION.md, GLOSSARY.md and ARCHITECTURE.md in the current checkout, plus the live
 [PR #4](https://github.com/CrowBe/weave/pull/4) body and full diff, especially
 AgentSOP's host interface, runtime execution/replay, observation validation, and
 M0-T04–T19. The PR is titled “M0: inspect and report — contract layer, runtime, and

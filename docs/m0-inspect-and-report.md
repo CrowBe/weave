@@ -3,7 +3,7 @@
 This is the behavioral contract for the first milestone in
 [ARCHITECTURE.md §10](../ARCHITECTURE.md). It fixes the fixture, the records the
 runtime produces, and the checks that must be red before implementation begins
-and green before M0 is complete. Terms follow [CONTEXT.md](../CONTEXT.md).
+and green before M0 is complete. Terms follow [GLOSSARY.md](../GLOSSARY.md).
 
 Everything here is in-memory and deterministic. There is no inference, no
 effectful capability, no approval, no persistence beyond the in-memory log, and

@@ -3,7 +3,7 @@
 This is the behavioral contract for the milestone in
 [ARCHITECTURE.md §10](../ARCHITECTURE.md). It extends
 [M4](m4-measure-reuse.md). Terms follow
-[CONTEXT.md](../CONTEXT.md). The checks below are requirements, not claims of
+[GLOSSARY.md](../GLOSSARY.md). The checks below are requirements, not claims of
 implemented behavior. Demonstrate red before implementation and retain the
 M0–M4 checks when proving green.
 

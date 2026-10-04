@@ -1,6 +1,6 @@
 /**
  * Routing — the deterministic selection step inside the gateway
- * (CONTEXT.md "Routing", ARCHITECTURE.md §6).
+ * (GLOSSARY.md "Routing", ARCHITECTURE.md §6).
  *
  * Policy filters by operation, kind, privacy, required quality, context limit
  * and affordability first. Only then does evaluation evidence order what

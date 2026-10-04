@@ -19,7 +19,7 @@ AgentSOP defines what a capability means and what an implementation's resolver c
 Start with:
 
 - [VISION.md](./VISION.md) — what Weave is and what it refuses to become.
-- [CONTEXT.md](./CONTEXT.md) — the project's ubiquitous language.
+- [GLOSSARY.md](./GLOSSARY.md) — the project's ubiquitous language.
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — the high-level plan: layers, the cycle, state, judgment, capabilities, extension, optimisation, and vertical milestones.
 - [docs/design-system.md](./docs/design-system.md) — Tapestry, the reference presentation layer. Weave is the system; Loom and Fabric are its reference runtime and capability subsystem. A plan, not a milestone.
 - [docs/agentfabric-concepts.md](./docs/agentfabric-concepts.md) — which capability-system concepts carry over from the external AgentFabric, which do not, and the in-repo surface to build.

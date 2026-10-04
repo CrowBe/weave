@@ -4,7 +4,7 @@ This is the behavioral contract for the third milestone in
 [ARCHITECTURE.md §10](../ARCHITECTURE.md). It extends
 [M0](m0-inspect-and-report.md) by routing one model through the bounded
 inference gateway already in `packages/gateway`. Terms follow
-[CONTEXT.md](../CONTEXT.md). The checks below are requirements, not claims of
+[GLOSSARY.md](../GLOSSARY.md). The checks below are requirements, not claims of
 implemented behavior. Demonstrate red before implementation and retain M0 and
 M1's checks when proving green.
 
