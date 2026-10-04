@@ -1,7 +1,7 @@
 # Architecture
 
 This is a proposed architecture derived from [VISION.md](./VISION.md), using the
-language in [CONTEXT.md](./CONTEXT.md). It assigns responsibilities, invariants,
+language in [GLOSSARY.md](./GLOSSARY.md). It assigns responsibilities, invariants,
 and the evidence needed to proceed. Interfaces, storage choices, and schemas
 remain to be proved by a small implementation. Nothing here claims those checks
 already exist.
@@ -501,7 +501,7 @@ outcome and checks across the modules it touches. Build only the state, policy,
 host, and inference support needed for that milestone; do not finish a
 horizontal layer first. Keep earlier scenarios running as each milestone adds one
 consequential behavior. (*Slice* is reserved for the state-query term in
-[CONTEXT.md](./CONTEXT.md).)
+[GLOSSARY.md](./GLOSSARY.md).)
 
 - **M0 — inspect and report.** Run the fixture goal with two fixed, read-only
   capabilities and scripted weights. Observe inputs, form and authorize

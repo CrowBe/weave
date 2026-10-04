@@ -1,6 +1,6 @@
 # OpenClaw and Hermes: operational lessons for Weave
 
-Research date: 2026-09-18. Read against `VISION.md`, `CONTEXT.md`, and
+Research date: 2026-09-18. Read against `VISION.md`, `GLOSSARY.md`, and
 `ARCHITECTURE.md`. External findings below are verified against current first-party
 documentation, not a checkout or runtime test. URLs are live documentation rather
 than pinned releases; implementation parity and historical versions remain unverified.

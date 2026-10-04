@@ -28,7 +28,7 @@ caller-provided candidate set. See the [model card's architecture and API](https
 [typed question quickstart](https://huggingface.co/convaiinnovations/laya#quickstart),
 and [license](https://huggingface.co/convaiinnovations/laya#license).
 
-That contract contrasts with our [GLiNER2.5-Decide probe](../../benchmarks/inference/gliner-decide/README.md): GLiNER takes text and label candidates for single-label classification, and our Jev mapping is an experiment rather than a native protocol. On the existing 125-case transfer set, GLiNER reached 61/125 while Jev reached 104/125. Laya natively presents the `choice`/`score`/`noul` question forms discussed in `CONTEXT.md`'s **judgment site** and **action-weight judgment** terms. This makes it a much cleaner candidate to test at those contracts, but it is not evidence that it performs better on Weave data.
+That contract contrasts with our [GLiNER2.5-Decide probe](../../benchmarks/inference/gliner-decide/README.md): GLiNER takes text and label candidates for single-label classification, and our Jev mapping is an experiment rather than a native protocol. On the existing 125-case transfer set, GLiNER reached 61/125 while Jev reached 104/125. Laya natively presents the `choice`/`score`/`noul` question forms discussed in `GLOSSARY.md`'s **judgment site** and **action-weight judgment** terms. This makes it a much cleaner candidate to test at those contracts, but it is not evidence that it performs better on Weave data.
 
 FluidInference's `laya-coreml` card says its conversion preserves the upstream
 weights at revision `1c5edc17a7acd8701df6fc341c0d179f1c62c982`. It reports

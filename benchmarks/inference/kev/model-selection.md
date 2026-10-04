@@ -1,6 +1,6 @@
 # Kev as a local decision-inference fallback
 
-Research date: 2026-09-20. Read against `VISION.md` and `CONTEXT.md`.
+Research date: 2026-09-20. Read against `VISION.md` and `GLOSSARY.md`.
 This is source research and a hardware-fit assessment, not a Kev inference benchmark.
 No model weights were downloaded and no runtime configuration was changed.
 

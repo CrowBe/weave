@@ -28,7 +28,7 @@ second state model. Threads, input
 routing, pause and resume, and sandboxed document work are Loom concerns and
 are not requirements here.
 
-Terms live in [CONTEXT.md](../CONTEXT.md). This document uses them.
+Terms live in [GLOSSARY.md](../GLOSSARY.md). This document uses them.
 
 Two sentences hold the plan:
 

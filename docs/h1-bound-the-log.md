@@ -3,7 +3,7 @@
 This is a follow-up hardening step after
 [M5](m5-improve-an-operating-strategy.md). It is not a milestone: it adds no
 goal outcome. It closes log-wide failure modes that M3 handles only for one
-capability output. Terms follow [CONTEXT.md](../CONTEXT.md). The checks below
+capability output. Terms follow [GLOSSARY.md](../GLOSSARY.md). The checks below
 are requirements, not claims of implemented behavior. Demonstrate red before
 implementation and retain the M0–M5 checks when proving green.
 

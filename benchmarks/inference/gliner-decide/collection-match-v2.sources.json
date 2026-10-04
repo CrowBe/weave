@@ -35,7 +35,7 @@
       "evidence": "Inference outputs are observations; capability admission, execution authority, and policy remain separate."
     },
     {
-      "path": "CONTEXT.md",
+      "path": "GLOSSARY.md",
       "covers": [
         "terminology"
       ],

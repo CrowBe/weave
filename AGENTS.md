@@ -3,7 +3,7 @@
 ## Read first
 
 1. Read `VISION.md` before making architectural or product decisions.
-2. Read `CONTEXT.md` and use its terms exactly.
+2. Read `GLOSSARY.md` and use its terms exactly.
 3. Inspect the current code and tests before proposing a change.
 
 ## Work
@@ -28,7 +28,7 @@
 - Make the smallest coherent change that advances the requested outcome.
 - Do not add speculative abstractions, compatibility layers, or dependencies.
 - Add or update tests with behavioral changes.
-- Update `CONTEXT.md` when introducing or changing a domain term.
+- Update `GLOSSARY.md` when introducing or changing a domain term.
 - Update `VISION.md` only when an acceptance boundary changes.
 - Record assumptions when the repository cannot verify them.
 - Do not weaken permissions, validation, or held-out checks to make a test pass.

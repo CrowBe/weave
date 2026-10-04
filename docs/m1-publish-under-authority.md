@@ -3,7 +3,7 @@
 This is the behavioral contract for the second milestone in
 [ARCHITECTURE.md §10](../ARCHITECTURE.md). It extends
 [M0](m0-inspect-and-report.md) through one authorized publication, using the
-in-repo enforcing AgentFabric host. Terms follow [CONTEXT.md](../CONTEXT.md).
+in-repo enforcing AgentFabric host. Terms follow [GLOSSARY.md](../GLOSSARY.md).
 The checks below are requirements, not claims of implemented behavior. Demonstrate
 red before implementation and retain M0's checks when proving green.
 

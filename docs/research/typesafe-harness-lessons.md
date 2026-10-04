@@ -1,6 +1,6 @@
 # TypeSafe harness notes: what Weave should take
 
-Research date: 2026-09-21. Read against `VISION.md`, `CONTEXT.md`, `ARCHITECTURE.md`,
+Research date: 2026-09-21. Read against `VISION.md`, `GLOSSARY.md`, `ARCHITECTURE.md`,
 and the M0–M5 and H1 contracts on `main` at `6e4a662`. This note is research-time
 evidence. The acceptance cases it proposed are now the
 [M6 contract](../m6-route-a-reconstructed-view.md). This note is not that

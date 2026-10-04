@@ -8,7 +8,7 @@ does not satisfy the milestone.
 The notes below record an earlier `report.fold` fixture that adds
 `crystallize_and_report@1`. Its checks are `packages/weave/test/m3.test.ts`
 and `packages/agentfabric/test/lifecycle.test.ts`. An offline run is
-`npm run example:crystallize`. Terms follow [CONTEXT.md](../CONTEXT.md).
+`npm run example:crystallize`. Terms follow [GLOSSARY.md](../GLOSSARY.md).
 
 ## 1. Outcome and scope
 

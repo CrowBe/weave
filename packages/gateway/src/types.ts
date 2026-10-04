@@ -1,5 +1,5 @@
 /**
- * Inference gateway shapes, transcribed from CONTEXT.md ("Inference gateway",
+ * Inference gateway shapes, transcribed from GLOSSARY.md ("Inference gateway",
  * "Inference kind", "Judgment site", "Context profile", "Routed unit",
  * "Routing", "Decision layer") and ARCHITECTURE.md §6.
  *
@@ -48,7 +48,7 @@ export interface Timer {
 // ---------------------------------------------------------------------------
 // Request vocabulary. Kinds belong to the gateway, not the capability
 // catalogue: a capability is named for its operation, and its generative
-// implementation declares the kind (CONTEXT.md "Inference kind").
+// implementation declares the kind (GLOSSARY.md "Inference kind").
 // ---------------------------------------------------------------------------
 
 export const INFERENCE_ROLES = ['framing', 'working', 'extension'] as const;
@@ -258,7 +258,7 @@ export interface EvaluationRequest<K extends EvaluationKind = EvaluationKind> {
 // ---------------------------------------------------------------------------
 // Routed units. A versioned context profile, prompt template, model and
 // settings selected together; evaluation evidence attaches to the combination
-// (CONTEXT.md "Routed unit").
+// (GLOSSARY.md "Routed unit").
 // ---------------------------------------------------------------------------
 
 export interface ModelSettings {

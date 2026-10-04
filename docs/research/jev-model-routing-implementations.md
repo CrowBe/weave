@@ -1,6 +1,6 @@
 # Jev model routing: implementation evidence for Weave
 
-Research date: 2026-09-22. Read against `VISION.md`, `CONTEXT.md`,
+Research date: 2026-09-22. Read against `VISION.md`, `GLOSSARY.md`,
 `ARCHITECTURE.md`, `packages/gateway/src/routing.ts`, and its gateway tests.
 Sources below are maintainers' repositories and documentation as available on this
 date. This was a source review, not a checkout, test run, live Jev call, or
