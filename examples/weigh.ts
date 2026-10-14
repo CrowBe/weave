@@ -24,6 +24,7 @@
  *
  *   npm run example:weigh
  */
+import { localBudgetGate } from './quota-local.ts';
 import { existsSync, readFileSync } from 'node:fs';
 import {
   applyRouteOverlay,
@@ -124,6 +125,7 @@ function jevRoutes(kind: EvaluationKind): RoutedUnit[] {
 }
 
 const gateway = createInferenceGateway({
+  ...localBudgetGate(),
   routes: [...jevRoutes('score'), ...jevRoutes('boolean')],
   evaluators: [
     ...(apiKey ? [vercelAiGatewayEvaluator({ apiKey })] : []),
