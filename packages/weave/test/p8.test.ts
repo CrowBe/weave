@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -643,6 +643,99 @@ test('resume after a crash repeats no finished attempt and keeps the execution i
       evaluate: async () => { throw new Error('repeated'); },
     };
     assert.deepEqual(await runImplementationStep(work, quietPorts, quiet.journal), result);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a torn final line is repaired so later attempts stay loadable and resume does not repeat one', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-p8-tear-'));
+  try {
+    const path = join(dir, 'attempts.jsonl');
+    const work = input();
+    const first = driver({
+      journal: new FileAttemptJournal(path),
+      evaluations: [{ c1: { p: .2, conf: 1 } }],
+    });
+    first.crashesAt = 2;
+    await assert.rejects(() => runImplementationStep(work, first.ports, first.journal), /simulated-crash/);
+    const before = readFileSync(path, 'utf8');
+    assert.equal(before.endsWith('\n'), true);
+    assert.equal(before.trim().split('\n').length, 1);
+    appendFileSync(path, '{"schema":"impl.att');
+    const second = driver({
+      journal: new FileAttemptJournal(path),
+      evaluations: [{ c1: { p: .2, conf: 1 } }, { c1: { p: 1, conf: 1 } }],
+    });
+    const result = await runImplementationStep(work, second.ports, second.journal);
+    assert.deepEqual(second.generateIds, ['exec-1:a2:gen', 'exec-1:a3:gen']);
+    assert.equal(result.status, 'passed');
+    assert.equal(result.goal_done, false);
+    assert.deepEqual(result.attempts.map(attempt => attempt.id), ['exec-1:a1', 'exec-1:a2', 'exec-1:a3']);
+    assert.equal(result.attempts[0]?.status, 'failed');
+    assert.equal(result.attempts[1]?.status, 'failed');
+    assert.equal(result.attempts[1]?.parentId, 'exec-1:a1');
+    assert.equal(result.attempts[2]?.status, 'passed');
+    assert.equal(result.attempts[2]?.parentId, 'exec-1:a2');
+    const raw = readFileSync(path, 'utf8');
+    assert.equal(raw.endsWith('\n'), true);
+    const lines = raw.split('\n').filter(line => line.length > 0);
+    assert.equal(lines.length, 3);
+    for (const line of lines) JSON.parse(line);
+    const loaded = new FileAttemptJournal(path).load('exec-1');
+    assert.deepEqual(loaded.map(entry => entry.id), ['exec-1:a1', 'exec-1:a2', 'exec-1:a3']);
+    const quiet = driver({ journal: new FileAttemptJournal(path) });
+    const quietPorts: ImplementPorts = {
+      ...quiet.ports,
+      generate: async () => { throw new Error('repeated'); },
+      evaluate: async () => { throw new Error('repeated'); },
+    };
+    assert.deepEqual(await runImplementationStep(work, quietPorts, quiet.journal), result);
+    assert.equal(quiet.generateIds.length, 0);
+    const onlyTorn = join(dir, 'only.jsonl');
+    writeFileSync(onlyTorn, '{"schema":"impl.att');
+    assert.deepEqual(new FileAttemptJournal(onlyTorn).load('exec-1'), []);
+    assert.equal(readFileSync(onlyTorn, 'utf8'), '');
+    const corrupt = join(dir, 'corrupt.jsonl');
+    const kept = lines[0];
+    assert.ok(kept);
+    writeFileSync(corrupt, `${kept}\n{not-json}\n${kept}\n`);
+    assert.throws(() => new FileAttemptJournal(corrupt).load('exec-1'), /impl\.attempt/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a finished attempt missing its newline is kept when the next attempt is appended', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-p8-nl-'));
+  try {
+    const path = join(dir, 'attempts.jsonl');
+    const work = input();
+    const first = driver({
+      journal: new FileAttemptJournal(path),
+      evaluations: [{ c1: { p: .2, conf: 1 } }],
+    });
+    first.crashesAt = 2;
+    await assert.rejects(() => runImplementationStep(work, first.ports, first.journal), /simulated-crash/);
+    const text = readFileSync(path, 'utf8');
+    assert.equal(text.endsWith('\n'), true);
+    writeFileSync(path, text.slice(0, -1));
+    const second = driver({
+      journal: new FileAttemptJournal(path),
+      evaluations: [{ c1: { p: 1, conf: 1 } }],
+    });
+    const result = await runImplementationStep(work, second.ports, second.journal);
+    assert.deepEqual(second.generateIds, ['exec-1:a2:gen']);
+    assert.equal(result.status, 'passed');
+    assert.equal(result.goal_done, false);
+    assert.equal(result.attempts.length, 2);
+    assert.equal(result.attempts[0]?.id, 'exec-1:a1');
+    assert.equal(result.attempts[1]?.parentId, 'exec-1:a1');
+    const loaded = new FileAttemptJournal(path).load('exec-1');
+    assert.deepEqual(loaded.map(entry => entry.id), ['exec-1:a1', 'exec-1:a2']);
+    const raw = readFileSync(path, 'utf8');
+    assert.equal(raw.endsWith('\n'), true);
+    for (const line of raw.split('\n').filter(line => line.length > 0)) JSON.parse(line);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

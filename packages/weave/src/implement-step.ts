@@ -6,7 +6,7 @@
  * uses a fresh grant of equal scope from the composition-root issuer. A decision
  * answer cannot mint a grant, raise the tier past the ceiling, or complete the goal.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, truncateSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { effectSetsEqual, isWellFormedRef, type CapabilityHost, type Grant, type GrantAuthority } from '@weave/agentsop';
 import type {
@@ -789,7 +789,7 @@ export class MemoryAttemptJournal implements AttemptJournal {
   }
 }
 
-/** JSONL attempt log. A torn final line is ignored; earlier lines still resume. */
+/** JSONL attempt log. A torn final line is repaired before the next read or append. */
 export class FileAttemptJournal implements AttemptJournal {
   constructor(readonly path: string) {
     const directory = dirname(path);
@@ -804,7 +804,25 @@ export class FileAttemptJournal implements AttemptJournal {
     appendFileSync(this.path, `${JSON.stringify(entry)}\n`);
   }
 }
+/**
+ * A crash can end the file mid-record. Drop that unparseable tail so the next
+ * record starts on its own line. A complete record that is missing its newline
+ * is terminated instead, so a finished attempt is kept.
+ */
+function repairTornTail(path: string): void {
+  const bytes = readFileSync(path);
+  if (bytes.length === 0 || bytes[bytes.length - 1] === 0x0a) return;
+  const breakAt = bytes.lastIndexOf(0x0a);
+  try {
+    JSON.parse(bytes.subarray(breakAt + 1).toString('utf8'));
+  } catch {
+    truncateSync(path, breakAt + 1);
+    return;
+  }
+  appendFileSync(path, '\n');
+}
 function readEntries(path: string): JournalEntry[] {
+  repairTornTail(path);
   const lines = readFileSync(path, 'utf8').split('\n');
   if (lines.at(-1) === '') lines.pop();
   const entries: JournalEntry[] = [];
