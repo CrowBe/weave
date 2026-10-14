@@ -23,24 +23,27 @@ export function normalizeQuotaSnapshot(value: unknown): QuotaSnapshot | undefine
   const providers: QuotaSnapshot['providers'][number][] = [];
   for (const raw of data.providers) {
     const provider = object(raw);
-    if (typeof provider?.provider !== 'string' || !provider.provider.trim() || !Array.isArray(provider.windows)) continue;
+    if (typeof provider?.provider !== 'string' || !provider.provider.trim()) continue;
     // Preserve ambiguous account evidence: a known cap must survive duplicates.
     const windows: QuotaSnapshot['providers'][number]['windows'][number][] = [];
-    for (const rawWindow of provider.windows) {
+    let malformed = !Array.isArray(provider.windows);
+    for (const rawWindow of Array.isArray(provider.windows) ? provider.windows : []) {
       const window = object(rawWindow);
-      if (typeof window?.id !== 'string') continue;
+      if (typeof window?.id !== 'string' || !window.id.trim()) { malformed = true; continue; }
       const remaining = window.percentRemaining;
       const pace = object(window.pace);
+      if (typeof remaining !== 'number' || !Number.isFinite(remaining) || remaining < 0 || remaining > 100 ||
+          timestamp(window.resetsAt) === null || (window.pace !== undefined && typeof pace?.status !== 'string')) malformed = true;
       windows.push({ id: window.id, percentRemaining: typeof remaining === 'number' && Number.isFinite(remaining) && remaining >= 0 && remaining <= 100 ? remaining : null,
         resetsAt: timestamp(window.resetsAt),
         ...(typeof pace?.status === 'string' ? { pace: { status: pace.status } } : {}),
       });
     }
-    if (windows.length === 0) continue;
+    if (windows.length === 0) malformed = true;
     const state = object(provider.state);
     const refreshedAt = timestamp(state?.refreshedAt);
     const staleReuse = state?.reused === true && (refreshedAt === null || refreshedAt > observed_at || observed_at - refreshedAt >= 60_000);
-    providers.push({ provider: provider.provider, status: staleReuse ? 'stale' : typeof provider.status === 'string' ? provider.status : 'unknown', windows });
+    providers.push({ provider: provider.provider, status: malformed ? 'unknown' : staleReuse ? 'stale' : typeof provider.status === 'string' ? provider.status : 'unknown', windows });
   }
   return { observed_at, providers };
 }
