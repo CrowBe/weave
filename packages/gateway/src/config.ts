@@ -45,7 +45,7 @@ function httpUrl(value: unknown): boolean {
   } catch { return false; }
 }
 
-/** Errors name fields, never echo configuration values or credentials. */
+/** Errors name fields, never echo field values. */
 export function parseRouteConfig(json: unknown): RouteConfigResult {
   const errors: string[] = [];
   const check = (valid: boolean, path: string) => { if (!valid) errors.push(`invalid ${path}`); };

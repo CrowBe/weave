@@ -148,7 +148,7 @@ A versioned context profile, prompt template, model, and settings selected toget
 
 ### Tier
 
-A configured routed-unit attribute: `decision`, `flash`, `standard`, or `strong`. A tier identifies the role and resource class requested for a step; it is not a quality bar. Routing still enforces quality, destinations, context, and budget independently of tier.
+A configured routed-unit attribute: `decision`, `flash`, `standard`, or `strong`. A tier identifies the role and resource class requested for a step; it is not a quality bar. Routing still enforces quality, destinations, context, and budget independently of tier. It is a routing attribute and is unrelated to execution tier.
 
 ### Decision provider
 
@@ -476,6 +476,7 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 - Say **milestone**, not *slice*, for an M-numbered increment of the plan. A slice is a query over state.
 - Say **trusted ingress**, not *authenticated client*, for the in-process handle that may submit privileged observations.
 - Say **execution tier**, not *sandbox*, for where an implementation runs. A label is not containment.
+- Say **tier** for the routed-unit class; say **execution tier** for trusted/untrusted placement.
 - Say **held-out report**, not *test output*, for what protected evaluation returns to an implementer.
 - Never use **deterministic** to describe generated tests; their execution is deterministic, while their authorship and correctness require evidence.
 - Say **operator**, not *user*, for the principal that configures Weave and decides pending requests through an operator surface.

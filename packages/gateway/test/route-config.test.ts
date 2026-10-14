@@ -38,12 +38,24 @@ it('excludes unavailable adapters with stable order; absent availability is a no
   assert.deepEqual(result.order.map(u => u.adapter), ['codex', 'claude-code']);
   assert.deepEqual(route(units, target, terms, 20, { codex: 'available' }), baseline);
 });
+it('treats a malformed own availability entry as unavailable', () => {
+  const units = table();
+  for (const availability of [{ codex: null }, { codex: {} }, { codex: { status: undefined } }]) {
+    const result = route(units, target, terms, 20, availability as never);
+    assert.deepEqual(result.order.map(u => u.adapter), ['grok-build', 'claude-code']);
+    assert.deepEqual(result.excluded, [{ routed_unit_id: 'codex.flash', reason: 'provider_unavailable' }]);
+  }
+});
 it('an empty table still blocks without attempting a provider', async () => {
-  const gateway = createInferenceGateway({ routes: [], clock: { now: () => 0 } });
-  const result = await gateway.generate({ request_id: 'empty', site: 'test', role: 'working', kind: 'transform', input: { instructions: '', prompt: 'work' }, terms });
-  assert.equal(result.status, 'blocked');
-  if (result.status === 'blocked') assert.equal(result.reason, 'no_route');
-  assert.deepEqual(result.attempts, []);
+  const result = parseRouteConfig({ ...example(), units: [] });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.table, []);
+  const gateway = createInferenceGateway({ routes: result.table, clock: { now: () => 0 } });
+  const outcome = await gateway.generate({ request_id: 'empty', site: 'test', role: 'working', kind: 'transform', input: { instructions: '', prompt: 'work' }, terms });
+  assert.equal(outcome.status, 'blocked');
+  if (outcome.status === 'blocked') assert.equal(outcome.reason, 'no_route');
+  assert.deepEqual(outcome.attempts, []);
 });
 const cases: [string, (config: any) => void, string][] = [
   ['duplicate id', c => c.units.push(c.units[0]), 'units[3].routed_unit_id: duplicate'],
