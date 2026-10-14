@@ -5,7 +5,7 @@ This is the behavioral contract for the planned milestone in
 [M6](m6-route-a-reconstructed-view.md). Terms follow
 [GLOSSARY.md](../GLOSSARY.md). These requirements describe the target, not
 implemented loop behavior. P0 establishes this contract; P1 supplies tier and
-availability routing plus pure configuration validation. P2 supplies local ChatGPT authentication and a Responses adapter. P3 supplies the TypeSafe decision provider behind one evaluation interface. P4–P12 remain planned.
+availability routing plus pure configuration validation. P2 supplies local ChatGPT authentication and a Responses adapter. P3 supplies the TypeSafe decision provider behind one evaluation interface. P4 supplies the budget gate; P5–P12 remain planned.
 Demonstrate red before implementation, prove green with deterministic fixtures,
 and retain M0–M6 checks. Live provider runs are non-gating evidence.
 
@@ -205,7 +205,7 @@ Each PR is small. Each must pass `npm run verify`, adds tests to the existing `n
 | P1 | **Tiered route table from config**: `tier` on `RoutedUnit`; pure config validator in gateway; file loading only in the composition root; `ProviderAvailability` port | Gateway still does no env/fs reads; an unavailable provider is excluded with reason `provider_unavailable`; deterministic order preserved | routing tests: exclusion, tie order, empty table gives a blocked outcome |
 | P2 | **Sign in with ChatGPT** (early): `packages/auth-chatgpt` (PKCE, loopback, persisted host id and issued client_id, ID-token/JWKS validation, refresh) plus an `openai-chatgpt-plan` Responses generate adapter; **live probe of `/v1/decisions` with the OAuth token** | No client secret; token file 0600; token never on argv or in logs; unit is `auth_required` until signed in; probe result recorded in the doc | mocked auth server and fetch; nonce, aud and expiry failure cases; Responses stream parse |
 | P3 | **TypeSafe decision provider behind one interface**: split `typesafe-ai.ts` into a wire profile plus HTTP transport; configurable base URL; `decision.provider` is `typesafe-jev` only | One `EvaluationAdapter`; provider and base URL come from config; a provider with no matching evaluate unit is rejected; the credential never appears in errors or logs. OpenAI Decisions, Cloudflare, and Vercel decision fallbacks stay deferred | Contract suite with a fake fetch: noul, choice, score, missing confidence, 400/401/422/429/529/5xx, malformed body, documented request shape, credential redaction. Config tests for provider selection, local base URL, and the missing evaluate unit |
-| P4 | **Budget gate**: `QuotaPort` (a `quota-axi --json` snapshot supplied as data) plus `budget.policy@1` | No dispatch once a provider's week is 80% used; pause until `resetsAt`; pace `ahead` downgrades the tier | fixtures at 79/80/95% used, unknown pace, stale, missing, or unknown snapshot fails closed for every quota-tracked tier |
+| P4 | **Budget gate**: `QuotaPort` (a `quota-axi --json` snapshot supplied as data) plus `budget.policy@1` | No dispatch once a provider's week is 80% used; pause until `resetsAt`; pace `ahead` downgrades the tier | fixtures at 79/80/95% used, unknown pace, stale, missing, or unknown snapshot fails closed for strong |
 | P5 | **Decision sites D1, D2, D8** (triage, route, progress) in `packages/weave/src/sites/` | Below-threshold answers take the recorded fallback; a stale answer is rejected; the scripted layer still passes M0–M6 | fake provider answers; replay determinism |
 | P6 | **D3 preselect plus D4/D7 guardrails** | Preselect only narrows the disclosed catalogue slice; a block becomes an approval request | M6 slice tests; guard asymmetry tests |
 | P7 | **`shell.run@1` plus `repo.test/lint/build`, and CLI backends** (`codex exec`, `claude -p`, `grok`) as generate adapters, prompt on stdin | Effects enforced by grant; env values never on argv or in logs; timeout and cancel honoured | Fabric host tests with the canary-env leak pattern; stub CLIs |
@@ -219,7 +219,7 @@ Order: P0 → P1 → P2 ChatGPT sign-in → P3 TypeSafe decision provider. OpenA
 
 ## 8. Budget
 
-**Hard policy: no dispatch may take a provider beyond 80% of its weekly budget.**
+**Hard policy: no dispatch once the injected account snapshot shows a provider at ≥80% weekly usage.**
 
 **Loop mechanism (P4).** The hard rule: the loop stops at 80% of weekly quota, checked with `quota-axi --json`.
 
@@ -227,8 +227,8 @@ Order: P0 → P1 → P2 ChatGPT sign-in → P3 TypeSafe decision provider. OpenA
 - **Weekly gate:** if `percentRemaining ≤ 20` (80% used) for the provider a unit draws on, the unit is excluded (`weekly_budget_cap`). If no eligible unit remains for the step, the loop records `loop.paused{until: resetsAt}` and stops dispatching. It resumes at reset, through the injected clock and timer only. The cap is enforced against the whole week, including use outside Weave, because quota-axi reports the account total. That is stricter than "Weave's share", and safe.
 - **Five-hour window:** if `≤ 10%`, prefer another provider; if none, wait until that reset (the gateway already waits on known delays).
 - **Pace:** `ahead` downgrades `strong` to `standard` except for the audit step, which pauses instead. An audit should not be done by a weaker model.
-- **Fail closed:** a stale, missing, or `unknown` snapshot is at the cap for every quota-tracked tier (`decision`, `flash`, `standard`, and `strong`). Each such unit is excluded (`weekly_budget_cap`) until a fresh snapshot shows its provider under the 80% weekly gate.
-- **Metered providers:** the per-run `cost_ceiling` in micros. A weekly metered cap is configured in the same policy record.
+- **Fail closed:** stale, missing, or unknown quota excludes `strong` and quota-tracked `standard` units (`quota_unknown`). `decision` and `flash` may proceed under the gateway cost ceiling, as requested for P4. A known weekly cap remains a veto for every tier, including stale observations.
+- **Metered providers:** the existing per-run `cost_ceiling` in micros remains enforced. Weekly dollar accounting is not supplied by quota-axi window percentages and remains deferred.
 
 
 ## 9. Acceptance evidence and unresolved assumptions
@@ -244,9 +244,10 @@ by a decision answer or audit report.
 P1 does not instantiate decision or CLI adapters, read quotas, authenticate,
 assemble tidy state, or execute this loop. Configured model names, credentials,
 CLI availability, and OAuth access are operator assumptions until subsequent
-phases supply evidence. P4 must fix snapshot freshness, account/provider quota
-mapping, and reservation bounds before implementing the weekly gate. A stale,
-missing, or unknown snapshot is at the cap for every quota-tracked tier. The
+phases supply evidence. P4 fixes snapshot freshness and account/provider quota mapping. The snapshot
+gate uses observed account totals; it does not estimate or reserve a future
+provider quota delta. A cached observation cannot establish usage incurred
+after it was collected, including concurrent calls or use outside Weave. The
 repository cannot establish live provider entitlement or quota guarantees from
 configuration alone.
 
@@ -349,3 +350,40 @@ that provider's `base_url` into the adapter. The default is `https://api.typesaf
 Loopback HTTP is the local TypeSafe or Jev route. `decision.fallback` stays in
 the configuration and is not routed. OpenAI Decisions, Cloudflare Workers AI,
 and a Vercel decision route are deferred. There is no second decision adapter.
+
+
+## P4 — Budget gate contract and evidence
+
+`budget.policy@1` applies after routing's operation, kind, tier, destination,
+quality, context and cost constraints, before each generation or evaluation
+attempt, including retries, waits and fallbacks. `quota_provider` is an optional
+routed-unit attribute naming the whole-account quota-axi provider, independent
+of its adapter and destination. A strong unit without that mapping fails closed.
+The example subscription units name `codex`, `claude` and `grok`; Grok quota
+support is an operator assumption until quota-axi supplies that provider.
+
+`QuotaPort.read()` returns normalized snapshot data (`observed_at`, provider
+status, weekly/five-hour windows, numeric reset times and pace). Only the local
+composition-root helper runs `quota-axi --json`, with a 60s cache and concurrent
+refresh deduplication. It converts ISO timestamps and strips CLI diagnostics.
+Freshness requires a `fresh` provider, observation age ≤60s, and a future weekly
+reset. Missing, duplicate, malformed or expired windows cannot clear strong work.
+Unknown pace also fails closed; `ahead` permits a standard route only when no
+eligible strong route remains and quality and authority still hold.
+
+When no budget-eligible unit remains, the outcome carries `paused` with shape
+`{type:'loop.paused', policy:'budget.policy@1', request_id, site, reason, until}`.
+An injected `persist_pause` port is awaited; local roots append the record to
+`~/.local/state/weave/loop-paused.jsonl`. `until` is the earliest known reset, or
+null when a fresh observation is needed. This records the pause but adds no
+scheduler or resume consumer. A reset is permission to recheck, never permission
+to dispatch from the old snapshot. Five-hour pressure excludes the provider in
+favor of another eligible provider; when none remains, it records a pause until
+the five-hour reset. The future audit tier must request `tier:'strong', audit:true`
+and use this same gate at every audit-round dispatch; pace pressure pauses audit.
+
+All providers unavailable has its own blocked reason `provider_unavailable`
+(issue #44); an empty or otherwise incompatible table remains `no_route`.
+Offline fixtures cover 79/80/95% usage, stale/missing quota, unknown pace,
+downgrade constraints, audit pause, five-hour preference, retry rechecks,
+cancellation, deadlines, snapshot cache concurrency and durable pause records.
