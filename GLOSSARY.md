@@ -146,6 +146,26 @@ The module that performs bounded model work under explicit scope, acceptance, au
 
 A versioned context profile, prompt template, model, and settings selected together for inference. Evaluation evidence attaches to that combination.
 
+### Tier
+
+A configured routed-unit attribute: `decision`, `flash`, `standard`, or `strong`. A tier identifies the role and resource class requested for a step; it is not a quality bar. Routing still enforces quality, destinations, context, and budget independently of tier.
+
+### Decision provider
+
+An evaluation adapter serving judgment sites in the decision-model loop, selected by configuration. OpenAI Decisions and TypeSafe Jev are examples. Its typed answers are observations; deterministic policy decides transitions and authority to execute.
+
+### Wire profile
+
+Pure request and response translation for one provider's protocol, carried by a shared transport. A wire profile maps the gateway's typed questions and answers to and from the provider's shapes; it does not own routing, policy, credentials, or runtime state.
+
+### Tidy state
+
+The `view.audit@1` state view handed to the audit tier. It assembles the goal, criteria, plan, recorded decisions, artifacts, checks, evaluations, open issues, and budget from authorized slices, with omissions, source revisions, and a digest. It preserves evidence rather than replacing state with a transcript summary.
+
+### Audit tier
+
+The review stage that requests a `strong` routed unit to examine tidy state for gaps, defects, regressions, and scope creep. An audit report is an observation; its claim that the goal is met cannot replace deterministic success evidence or grant execution authority. Budget pressure pauses this stage rather than weakening its requested tier.
+
 ### Routing
 
 The deterministic selection step inside the gateway. It minimizes expected total cost of reaching the declared quality bar — retries and escalation included — using recorded per-site success rates, cost, latency, privacy, and context limits. When a prefix cache is supplied, that cost includes a hit discount or one reload.
