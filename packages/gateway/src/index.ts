@@ -28,3 +28,5 @@ export {
   type DecisionProviderBinding,
   type RouteConfigResult,
 } from './config.js';
+
+export { BUDGET_POLICY, budgetRoute } from './budget.js';

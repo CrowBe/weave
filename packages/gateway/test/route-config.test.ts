@@ -250,7 +250,7 @@ it('gateway passes availability into generation and evaluation routing', async (
   let calls = 0;
   const evaluatorIds = [...new Set([...units.filter((unit) => unit.operation === 'evaluate').map((unit) => unit.adapter), evaluateUnit.adapter])];
   const gateway = createInferenceGateway({
-    routes: [...units, evaluateUnit], clock: { now: () => 0 }, availability: { 'grok-build': 'auth_required', codex: 'auth_required', 'claude-code': 'auth_required', decision: 'auth_required' },
+    routes: [...units, evaluateUnit], clock: { now: () => 0 }, availability: { 'grok-build': 'auth_required', codex: 'auth_required', 'claude-code': 'auth_required', decision: 'auth_required', ...Object.fromEntries(evaluatorIds.map(id => [id, 'auth_required' as const])) },
     adapters: units.filter((unit) => unit.operation === 'generate').map(unit => ({ id: unit.adapter, async execute() { calls++; throw new Error('must not call'); } })),
     evaluators: evaluatorIds.map((id) => ({ id, async evaluate() { calls++; throw new Error('must not call'); } })),
   });
@@ -258,7 +258,7 @@ it('gateway passes availability into generation and evaluation routing', async (
   const evaluate = await gateway.evaluate({ request_id: 'unavailable', site: 'test', role: 'working', kind: 'boolean', state: 'work', questions: { q: { type: 'boolean', instructions: 'pass?' } }, terms });
   for (const result of [generate, evaluate]) {
     assert.equal(result.status, 'blocked');
-    if (result.status === 'blocked') assert.equal(result.reason, 'no_route');
+    if (result.status === 'blocked') assert.equal(result.reason, 'provider_unavailable');
     assert.deepEqual(result.attempts, []);
   }
   assert.equal(calls, 0);

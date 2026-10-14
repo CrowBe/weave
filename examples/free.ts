@@ -21,6 +21,7 @@
  *
  *   npm run example:free
  */
+import { localBudgetGate } from './quota-local.ts';
 import {
   createInferenceGateway,
   type GenerationRequest,
@@ -138,6 +139,7 @@ const timer: Timer = {
 };
 
 const gateway = createInferenceGateway({
+  ...localBudgetGate(),
   routes: ROUTES,
   adapters: [
     ...(nousKey ? [nousPortalAdapter({ apiKey: nousKey })] : []),

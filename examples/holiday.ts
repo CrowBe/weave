@@ -14,6 +14,7 @@
  *
  *   npm run example:gateway
  */
+import { localBudgetGate } from './quota-local.ts';
 import { createInferenceGateway, type GenerationRequest, type RoutedUnit } from '@weave/gateway';
 import {
   VERCEL_AI_GATEWAY_ADAPTER,
@@ -60,6 +61,7 @@ const ROUTES: RoutedUnit[] = [
 ];
 
 const gateway = createInferenceGateway({
+  ...localBudgetGate(),
   routes: ROUTES,
   adapters: [vercelAiGatewayAdapter({ apiKey })],
   // The runtime injects its own clock; a script may read the wall clock here.

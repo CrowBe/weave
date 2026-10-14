@@ -37,7 +37,8 @@
       "price": {
         "input_per_mtok": 0,
         "output_per_mtok": 0
-      }
+      },
+      "quota_provider": "grok"
     },
     {
       "routed_unit_id": "codex.flash",
@@ -59,7 +60,8 @@
       "price": {
         "input_per_mtok": 0,
         "output_per_mtok": 0
-      }
+      },
+      "quota_provider": "codex"
     },
     {
       "routed_unit_id": "claude-code.strong",
@@ -81,7 +83,8 @@
       "price": {
         "input_per_mtok": 0,
         "output_per_mtok": 0
-      }
+      },
+      "quota_provider": "claude"
     },
     {
       "routed_unit_id": "typesafe-jev.boolean",

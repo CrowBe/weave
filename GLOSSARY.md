@@ -178,6 +178,18 @@ A recorded match between one routed unit and the digest of a view's stable prefi
 
 An implementation of a capability contract that depends on inference. Its admission requires applicable deterministic checks and versioned evaluation evidence; its maturity and execution scope are limited by that evidence and policy.
 
+### Quota snapshot
+
+An injected observation of whole-account quota-axi provider totals, with collection time, provider status, quota windows, reset times and pace. It is data for deterministic budget policy, not authority to execute. A routed unit's `quota_provider` names the account provider independently of adapter and destination.
+
+### Budget gate
+
+The deterministic `budget.policy@1` filter applied before every routed dispatch. Known weekly usage at ≥80% excludes the provider; five-hour pressure prefers another provider or pauses; ahead pace downgrades strong work to standard while audit pauses. Unknown quota fails closed for strong, while decision and flash remain bounded by the gateway cost ceiling.
+
+### Loop pause record
+
+Persisted `loop.paused` evidence that budget policy stopped dispatch, carrying the reason and a known reset time (`until`), or null when a new observation is required. It does not schedule resumption or confer authority at reset.
+
 ### Policy
 
 Deterministic rules that bound action: permissions, approvals, spending limits, data boundaries, and destructive-operation controls. Policy always outranks a probabilistic recommendation.
