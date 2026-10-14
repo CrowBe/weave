@@ -91,3 +91,5 @@ bounded baseline-quality local fallback for typed evaluation, with its source,
 environment and weights kept outside the checkout. See the
 [Kev operating guide](./benchmarks/inference/kev/SERVICE.md) for external
 service registration, privacy-only routing and fallback composition.
+
+Use `npm run example:chatgpt-signin` to continue with ChatGPT, then `npm run example:chatgpt-probe -- --out .local/chatgpt-probe.json` to record live API evidence (create `.local/` first).

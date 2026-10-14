@@ -5,7 +5,7 @@ This is the behavioral contract for the planned milestone in
 [M6](m6-route-a-reconstructed-view.md). Terms follow
 [GLOSSARY.md](../GLOSSARY.md). These requirements describe the target, not
 implemented loop behavior. P0 establishes this contract; P1 supplies tier and
-availability routing plus pure configuration validation. P2–P12 remain planned.
+availability routing plus pure configuration validation. P2 supplies local ChatGPT authentication and a Responses adapter; P3–P12 remain planned.
 Demonstrate red before implementation, prove green with deterministic fixtures,
 and retain M0–M6 checks. Live provider runs are non-gating evidence.
 
@@ -241,3 +241,82 @@ mapping, and reservation bounds before implementing the weekly gate. A stale,
 missing, or unknown snapshot is at the cap for every quota-tracked tier. The
 repository cannot establish live provider entitlement or quota guarantees from
 configuration alone.
+
+
+## P2 — Sign in with ChatGPT and Responses
+
+Landed `@weave/auth-chatgpt`, an independent stdlib-only package with injected
+fetch, clock readings, and a credential-store port. It persists a UUID URI host
+ID before authorization, uses PKCE S256, state and nonce, validates RS256 ID
+signatures and issuer/audience/expiry/nonce, and checks the token response's
+plan-usage scope. Returning sign-in reuses the selected issued client ID and
+checks the validated subject before replacing credentials. The filesystem
+implementation writes atomically with file mode 0600 and directory mode 0700.
+No runtime or Fabric package imports authentication.
+
+`@weave/gateway/openai-chatgpt-plan` sends credential-injected Responses calls to
+`openai.chatgpt-plan`. Its SSE parser accepts success only at
+`response.completed`. Usage limits become `quota_exhausted` without an inferred
+reset; temporary usage unavailability and interrupted streams become
+`unavailable`; incomplete output becomes `malformed_response`. HTTP diagnostics
+retain status, body, structured error code/param and request ID with the access
+token redacted. The gateway's existing closed failure vocabulary is unchanged.
+
+Run the composition roots locally on the browser's machine:
+
+```sh
+npm run example:chatgpt-signin
+mkdir -p .local
+npm run example:chatgpt-probe -- --out .local/chatgpt-probe.json
+```
+
+Sign-in accepts `--port` (default 1455), `--timeout-ms` (default 600000), and
+`--credentials` (default `~/.config/weave/chatgpt.json`). Probe accepts
+`--credentials` and requires `--out`. The listener binds only 127.0.0.1 before
+printing the authorize URL. Neither script accepts credentials on argv or logs
+tokens. A lock file excludes concurrent sign-in/refresh commands; a stale lock
+fails closed and requires operator removal after confirming the old process
+stopped. Temporary refresh failures preserve the saved credentials; documented
+terminal refresh errors discard unusable tokens while retaining host and issued
+registration identity for reauthorization. Until credentials exist and plan
+usage is granted, the composition must supply `auth_required` availability for
+the `openai-chatgpt-plan` adapter; configuration alone establishes no entitlement.
+
+The probe records the actual HTTP status, request ID and raw body (including SSE)
+for models, Responses, and Decisions, redacting credential values. It preserves
+server model order and selects the first `visibility: "list"` slug. If models
+cannot be listed it records a skipped Responses call rather than guessing a
+model; the Decisions probe still runs. The Decisions body follows the official
+[choice example](https://developers.openai.com/api/docs/guides/decisions), using
+`gpt-6-luna` and the duplicate-charge input. The `/v1/decisions` probe is **pending
+the captain's sign-in**. No live OAuth entitlement or endpoint support is claimed;
+neither sign-in nor live probes were run during implementation.
+
+Conservative choices and limits:
+
+- Optional returning `id_token_hint` and `login_hint` are omitted so the printed
+  authorize URL contains no retained token. Returning users may see the account
+  selector. No forced consent parameters are sent.
+- The published JWKS URL is `https://auth.openai.com/.well-known/jwks.json`,
+  confirmed by [OpenAI's identity validation guide](https://developers.openai.com/siwc/website).
+  Keys are fetched for validation rather than introducing a cache. Expiration
+  has zero clock-skew tolerance. Refresh ID tokens, when supplied, are signature,
+  issuer, audience, expiry and subject checked; there is no authorization nonce
+  in a refresh grant. A refresh omitting an ID token retains the validated identity.
+- Each credential file selects one registration. There is no account-switching
+  UI or automatic multi-account merge. The command never replaces a returning
+  registration with a different client ID or subject.
+- Preview restrictions forbid `max_output_tokens` and `temperature`, so the
+  Responses adapter omits both. Caller cancellation still bounds execution;
+  the provider's actual usage is reported, and unknown usage remains unknown.
+- Identity-only credentials remain signed in but cannot invoke plan inference.
+  No automatic billing fallback, retries, or guessed quota-reset times are added.
+
+P2 deterministic evidence: missing-module red preceded implementation; 11 auth
+cases, 15 Responses adapter cases, and two CLI lock/redaction cases pass on
+Node 22. Build, structural checks, web build/typecheck, example and benchmark
+typechecks, Jev tests, Python contract suites and the standalone offline
+acceptance command pass. The exact requested `npm exec --yes --package=node@22
+-- npm run verify` was attempted: its existing task-acceptance command tests
+fail because this sandbox's `spawnSync` returns `EPERM` and empty stdout, which
+those tests attempt to parse as JSON. No tests or permissions were weakened.
