@@ -75,6 +75,7 @@ const cases: [string, (config: any) => void, string][] = [
   ['same fallback', c => c.decision.fallback = c.decision.provider, 'decision.fallback: must differ'],
   ['missing primary', c => c.decision.provider = 'absent', 'decision.provider: must exist'],
   ['missing fallback', c => c.decision.fallback = 'absent', 'decision.fallback: must exist'],
+  ['absent fallback', c => delete c.decision.fallback, 'decision.fallback'],
   ['invalid URL scheme', c => c.decision.providers['typesafe-jev'].base_url = 'file:///tmp/x', 'decision.providers.typesafe-jev.base_url'],
   ['invalid URL', c => c.decision.providers['typesafe-jev'].base_url = 'https://', 'decision.providers.typesafe-jev.base_url'],
   ['missing settings', c => delete c.units[0].settings, 'units[0].settings'],
@@ -171,6 +172,35 @@ it('rejects non-env-name key_env values', () => {
     const result = parseRouteConfig(input);
     assert.equal(result.ok, false);
     if (!result.ok) assert.ok(result.errors.some(e => e.includes('decision.providers.typesafe-jev.key_env')), result.errors.join('; '));
+  }
+});
+it('rejects auth values outside chatgpt-oauth and api-key', () => {
+  for (const auth of ['sk-example-not-a-real-key', 'chatgpt_oauth', 'bearer']) {
+    const input = example();
+    input.decision.providers['typesafe-jev'].auth = auth;
+    const result = parseRouteConfig(input);
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.ok(result.errors.some(e => e.includes('decision.providers.typesafe-jev.auth')), result.errors.join('; '));
+  }
+  const accepted = example();
+  accepted.decision.providers['typesafe-jev'].auth = 'api-key';
+  assert.equal(parseRouteConfig(accepted).ok, true);
+});
+it('rejects whitespace-padded identifiers', () => {
+  const cases: [(config: any) => void, (errors: string[]) => boolean][] = [
+    [c => { c.units[0].routed_unit_id = ' grok-build.flash'; }, errors => errors.includes('invalid units[0].routed_unit_id')],
+    [c => { c.units[0].adapter = ' grok-build'; }, errors => errors.includes('invalid units[0].adapter')],
+    [c => { c.units[0].destination = ' xai.grok-build'; }, errors => errors.includes('invalid units[0].destination')],
+    [c => { c.decision.provider = ' openai-decisions'; }, errors => errors.includes('invalid decision.provider')],
+    [c => { c.decision.fallback = ' typesafe-jev'; }, errors => errors.includes('invalid decision.fallback')],
+    [c => { c.decision.providers[' typesafe-jev'] = c.decision.providers['typesafe-jev']; }, errors => errors.some(e => e.includes('decision.providers: expected unpadded identifier'))],
+  ];
+  for (const [mutate, matches] of cases) {
+    const input = example();
+    mutate(input);
+    const result = parseRouteConfig(input);
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.ok(matches(result.errors), result.errors.join('; '));
   }
 });
 it('returns config copies detached from all caller-owned nested data', () => {

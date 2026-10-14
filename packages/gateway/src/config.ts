@@ -4,13 +4,15 @@ import {
   type RoutedUnit, type RouteTable,
 } from './types.js';
 
+const DECISION_AUTH = ['chatgpt-oauth', 'api-key'] as const;
+
 export interface DecisionConfig {
   readonly provider: string;
   readonly fallback: string | null;
   readonly providers: Record<string, {
     base_url: string;
     model: string;
-    auth?: string;
+    auth?: (typeof DECISION_AUTH)[number];
     key_env?: string;
   }>;
 }
@@ -25,6 +27,10 @@ function object(value: unknown): value is ObjectValue {
 }
 function text(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
+}
+/** Ids compare and match exactly, so surrounding whitespace is a different invalid value. */
+function identifier(value: unknown): value is string {
+  return text(value) && value === value.trim();
 }
 function number(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
@@ -65,9 +71,10 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
       'quality', 'context_limit_tokens', 'settings', 'price', 'rate_limits',
       'evidence', 'tier', 'operation', 'kind'], path);
     for (const key of ['routed_unit_id', 'context_profile', 'prompt_template', 'adapter', 'model', 'destination']) {
-      check(text(unit[key]), `${path}.${key}`);
+      const idField = key === 'routed_unit_id' || key === 'adapter' || key === 'destination';
+      check((idField ? identifier : text)(unit[key]), `${path}.${key}`);
     }
-    if (text(unit.routed_unit_id)) {
+    if (identifier(unit.routed_unit_id)) {
       check(!ids.has(unit.routed_unit_id), `${path}.routed_unit_id: duplicate`);
       ids.add(unit.routed_unit_id);
     }
@@ -111,20 +118,21 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
   if (!object(decision)) check(false, 'decision');
   else {
     keys(decision, ['provider', 'fallback', 'providers'], 'decision');
-    check(text(decision.provider), 'decision.provider');
-    check(decision.fallback === null || text(decision.fallback), 'decision.fallback');
+    check(identifier(decision.provider), 'decision.provider');
+    check(decision.fallback === null || identifier(decision.fallback), 'decision.fallback');
     check(decision.fallback === null || decision.fallback !== decision.provider, 'decision.fallback: must differ from provider');
     if (!object(decision.providers)) check(false, 'decision.providers');
     else {
-      check(text(decision.provider) && Object.hasOwn(decision.providers, decision.provider), 'decision.provider: must exist in providers');
-      check(decision.fallback === null || (text(decision.fallback) && Object.hasOwn(decision.providers, decision.fallback)), 'decision.fallback: must exist in providers');
+      check(identifier(decision.provider) && Object.hasOwn(decision.providers, decision.provider), 'decision.provider: must exist in providers');
+      check(decision.fallback === null || (identifier(decision.fallback) && Object.hasOwn(decision.providers, decision.fallback)), 'decision.fallback: must exist in providers');
       Object.entries(decision.providers).forEach(([id, provider]) => {
         const path = `decision.providers.${id}`;
+        check(identifier(id), 'decision.providers: expected unpadded identifier');
         if (!object(provider)) { check(false, path); return; }
         keys(provider, ['base_url', 'model', 'auth', 'key_env'], path);
         check(httpUrl(provider.base_url), `${path}.base_url: expected HTTPS or loopback HTTP URL without userinfo, query, or fragment`);
         check(text(provider.model), `${path}.model`);
-        check(provider.auth === undefined || text(provider.auth), `${path}.auth`);
+        check(provider.auth === undefined || member(provider.auth, DECISION_AUTH), `${path}.auth`);
         check(provider.key_env === undefined || (typeof provider.key_env === 'string' &&
           /^[A-Z_][A-Z0-9_]*$/.test(provider.key_env)), `${path}.key_env: expected environment variable name`);
       });

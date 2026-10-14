@@ -164,7 +164,7 @@ The `view.audit@1` state view handed to the audit tier. It assembles the goal, c
 
 ### Audit tier
 
-The review stage that requests a `strong` routed unit to examine tidy state for gaps, defects, regressions, and scope creep. An audit report is an observation; its claim that the goal is met cannot replace deterministic success evidence or grant execution authority. Budget pressure pauses this stage rather than weakening its requested tier.
+The review stage that requests a `strong` routed unit to examine tidy state for gaps, defects, regressions, and scope creep. It is a stage that requests tier `strong` and is not a member of the tier vocabulary. An audit report is an observation; its claim that the goal is met cannot replace deterministic success evidence or grant execution authority. Budget pressure pauses this stage rather than weakening its requested tier.
 
 ### Routing
 
