@@ -4,7 +4,7 @@ import type { CapabilityContract, InvocationOutcome } from '@weave/agentsop';
 
 const openStores = new Set<string>();
 
-export type ResourceKind = 'source' | 'destination';
+export type ResourceKind = 'source' | 'destination' | 'workspace';
 
 export interface PublicationRecord {
   readonly invocation_id: string;
