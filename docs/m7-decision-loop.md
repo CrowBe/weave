@@ -95,9 +95,10 @@ P12 will extend that arrangement to compatible endpoints, including local ones.
 Refusal, malformed answers, and unavailable providers must lead to recorded
 fallback or pause. Missing confidence triggers fallback only where the site's
 provider-specific rule requires it. OpenAI predicate answers supply probability
-only; D5 uses the probability-only band below. Providers that return confidence
+only; D5 uses the provisional probability-only band below, to be tuned in P10
+on the tune split. Providers that return confidence
 must also meet D5's confidence floor; probability does not replace that statistic.
-Switching providers changes the destination and is permitted only
+The planned P3 provider-switch policy changes the destination and is permitted only
 when both destinations are allowed by `terms.destinations`. A local Jev endpoint
 may serve privacy-restricted sites only after earning site-specific evidence.
 
@@ -117,7 +118,7 @@ an authorized API-key route or configure TypeSafe Jev; do not infer entitlement.
 | D2 `loop.route` | choice | Which tier fits this unit of work? | `flash` / `standard` / `strong` | conf ≥ 0.75 | `standard`. A deterministic budget gate can only *downgrade* or pause, never upgrade past the ceiling. |
 | D3 `loop.preselect` | boolean per catalogue entry, top-k | Is capability or skill X relevant to this step? | p(true) per entry | include if p ≥ 0.5; cap k=8 | the full catalogue index (M6 slice), never the schemas |
 | D4 `guard.input` | boolean per rule | Does this input or plan violate rule R (secret exfiltration, scope broadening, destructive effect without grant, injection)? | p(violation) | block if p ≥ 0.3 (deliberately asymmetric) | **block, then approval request** |
-| D5 `eval.output` | boolean per success criterion | Does the artifact satisfy criterion C? | p(true), plus conf when supplied by the provider | OpenAI Decisions predicate: pass if p ≥ 0.85, fail if p ≤ 0.15, otherwise uncertain (treat as fail/retry). TypeSafe Jev and other providers that return confidence: pass if p ≥ 0.8 and conf ≥ 0.9 (existing `confidence_floor`); missing confidence is below the floor. | treat as fail and retry, up to N=2 per step, then escalate the tier once, then hand to audit with `open_issue` |
+| D5 `eval.output` | boolean per success criterion | Does the artifact satisfy criterion C? | p(true), plus conf when supplied by the provider | OpenAI Decisions predicate (provisional assumption; P10 tunes on the tune split): pass if p ≥ 0.85, fail if p ≤ 0.15, otherwise uncertain (treat as fail/retry). TypeSafe Jev and other providers that return confidence: pass if p ≥ 0.8 and conf ≥ 0.9 (existing `confidence_floor`); missing confidence is below the floor. | treat as fail and retry, up to N=2 per step, then escalate the tier once, then hand to audit with `open_issue` |
 | D6 `audit.dispose` | choice per finding | What do we do with audit finding F? | `fix_now` / `defer` / `reject_as_out_of_scope` / `needs_human` | conf ≥ 0.75 | `needs_human` |
 | D7 `guard.output` | boolean | Does the output introduce an effect outside the grant (writes, network, secrets)? | p(violation) | block if p ≥ 0.3 | block. Deterministic effect enforcement (Fabric) stays the real gate. |
 | D8 `loop.continue` | choice | Is progress continuing? | `progressing` / `stalled` / `regressing` | conf ≥ 0.7 | `stalled`, which triggers a stop condition |
@@ -143,8 +144,10 @@ still `baseline` or `high`, independently checked. Prices are nonnegative finite
 micros per million tokens; subscription examples declare zero token prices.
 Quota accounting is a separate P4 gate, not an implication of zero cost.
 
-`ProviderAvailability` is caller-supplied data keyed by adapter/provider
-id only. Entries are `available`, `exhausted`, `auth_required`, or
+`ProviderAvailability` is caller-supplied data keyed by exact routed-unit adapter
+ids, not provider or destination ids. The composition root must map quota-provider
+ids to adapters (for example, quota provider `claude` to adapter `claude-code`).
+Only own entries are consulted; unmatched keys are ignored. Entries are `available`, `exhausted`, `auth_required`, or
 `unavailable`, or `{ status, recheck_after? }`. Any explicit nonavailable adapter match
 excludes a unit with `provider_unavailable`. Missing entries preserve existing
 behavior. `recheck_after` is an injected timestamp for the root to act on;
@@ -153,9 +156,15 @@ Filtering and existing evidence ordering stay deterministic.
 
 Validation rejects duplicate routed-unit ids, invalid operation/kind pairs,
 unknown tiers, malformed route fields, negative or nonnumeric prices, missing
-configured decision providers, identical primary and fallback, and non-http(s)
-base URLs. Adapters remain credential-injected. Switching decision providers is
-a destination change and requires both destinations in the request's terms.
+configured decision providers, identical primary and fallback, and base URLs other than HTTPS or HTTP on loopback hosts (`127.0.0.1`,
+`::1`, `localhost`). Adapters remain credential-injected.
+
+P3 assumption: per-provider destinations will come from each provider's routed
+unit or be added to its provider record in P3. Switching decision providers will
+require both destinations in the request's terms. P1's `DecisionConfig.providers`
+has no destination field and P1 does not enforce provider-switch destinations.
+The example CLI units declare remote vendor destinations even when the CLI
+process runs locally.
 
 ## 6. Loop-back and stop conditions
 

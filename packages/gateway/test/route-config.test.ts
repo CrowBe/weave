@@ -4,7 +4,7 @@ import { it } from 'node:test';
 import { parseRouteConfig, route, createInferenceGateway, type InferenceTerms } from '@weave/gateway';
 
 const example = () => JSON.parse(readFileSync(new URL('../../../../weave.routes.example.json', import.meta.url), 'utf8'));
-const terms: InferenceTerms = { quality: 'baseline', destinations: ['local'], max_context_tokens: 100, deadline: 1000, cost_ceiling: 100, max_attempts: 2 };
+const terms: InferenceTerms = { quality: 'baseline', destinations: ['xai.grok-build', 'openai.codex', 'anthropic.claude-code'], max_context_tokens: 100, deadline: 1000, cost_ceiling: 100, max_attempts: 2 };
 const target = { operation: 'generate', kind: 'transform' } as const;
 function table() {
   const result = parseRouteConfig(example());
@@ -33,7 +33,7 @@ it('excludes unavailable adapters with stable order; absent availability is a no
   }
   assert.deepEqual(route(units, target, terms, 20, { local: 'unavailable' }), baseline);
   const collision = units.map((unit, i) => i === 0 ? { ...unit, adapter: 'local', destination: 'remote' } : unit);
-  const result = route(collision, target, { ...terms, destinations: ['local', 'remote'] }, 20, { local: 'unavailable' });
+  const result = route(collision, target, { ...terms, destinations: [...terms.destinations, 'remote'] }, 20, { local: 'unavailable' });
   assert.deepEqual(result.excluded, [{ routed_unit_id: units[0]!.routed_unit_id, reason: 'provider_unavailable' }]);
   assert.deepEqual(result.order.map(u => u.adapter), ['codex', 'claude-code']);
   assert.deepEqual(route(units, target, terms, 20, { codex: 'available' }), baseline);
@@ -159,4 +159,37 @@ it('returns config copies detached from all caller-owned nested data', () => {
   assert.deepEqual(result, snapshot);
   result.decision.providers['typesafe-jev']!.model = 'output-change';
   assert.equal(input.decision.providers['typesafe-jev'].model, 'changed');
+});
+
+it('excludes remote CLI units from local-only requests', () => {
+  const units = table();
+  assert.deepEqual(units.map(u => u.destination), ['xai.grok-build', 'openai.codex', 'anthropic.claude-code']);
+  const result = route(units, target, { ...terms, destinations: ['local'] }, 20);
+  assert.deepEqual(result.order, []);
+  assert.deepEqual(result.excluded, units.map(u => ({
+    routed_unit_id: u.routed_unit_id, reason: 'destination_not_permitted',
+  })));
+});
+it('ignores inherited availability and quota-provider or destination keys', () => {
+  const units = table();
+  const baseline = route(units, target, terms, 20);
+  assert.deepEqual(route(units, target, terms, 20, Object.create({ codex: 'exhausted' })), baseline);
+  assert.deepEqual(route(units, target, terms, 20, { claude: 'exhausted', 'openai.codex': 'unavailable' }), baseline);
+});
+for (const [url, ok] of [
+  ['http://127.0.0.1:8080', true],
+  ['http://[::1]:8080', true],
+  ['http://localhost:8080', true],
+  ['https://api.openai.com', true],
+  ['http://api.openai.com', false],
+  ['http://192.168.1.1', false],
+  ['http://localhost.example.com', false],
+  ['http://[::2]', false],
+  ['http://user:password@localhost', false],
+] as const) it(`validates provider transport security: ${url}`, () => {
+  const input = example();
+  input.decision.providers['typesafe-jev'].base_url = url;
+  const result = parseRouteConfig(input);
+  assert.equal(result.ok, ok);
+  if (!result.ok) assert.ok(result.errors.some(e => e.includes('decision.providers.typesafe-jev.base_url')));
 });

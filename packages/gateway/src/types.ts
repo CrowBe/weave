@@ -83,9 +83,11 @@ export type DataDestination = string;
 export const TIERS = ['decision', 'flash', 'standard', 'strong'] as const;
 export type Tier = (typeof TIERS)[number];
 
-/** Caller-supplied status keyed by adapter/provider id only.
- * Rechecking belongs to the composition root; metadata never implies availability. */
 export type ProviderStatus = 'available' | 'exhausted' | 'auth_required' | 'unavailable';
+/** Caller-supplied status keyed by exact routed-unit adapter ids, not provider
+ * or destination ids. The composition root must map quota-provider ids to adapters.
+ * Only own entries are consulted; missing or unmatched keys leave routing unchanged.
+ * Rechecking belongs to the composition root; metadata never implies availability. */
 export type ProviderAvailability = Readonly<Record<string, ProviderStatus | {
   readonly status: ProviderStatus;
   readonly recheck_after?: Timestamp;
