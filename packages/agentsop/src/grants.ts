@@ -12,6 +12,11 @@ export interface Grant {
   readonly contract_rev: string;
   readonly permissions: readonly ResourceEffect[];
   readonly effects: readonly ResourceEffect[];
+  /**
+   * Bound process-effect tokens (`process.spawn`, `fs.write:<ref>`).
+   * Present when the contract declares process effects. Exact set match.
+   */
+  readonly process_effects?: readonly string[];
   /** Sequence number of the observation under which the grant was issued. */
   readonly issued_at: number;
 }
@@ -35,6 +40,8 @@ export function grantCovers(
   contract_rev: string,
   requiredPermissions: readonly ResourceEffect[],
   declaredEffects?: readonly ResourceEffect[],
+  /** When set, the grant's process-effect tokens must equal this set. */
+  declaredProcessEffects?: readonly string[],
 ): GrantMatch {
   if (!grant) {
     return { ok: false, code: 'DENIED', reason: 'no grant' };
@@ -60,7 +67,26 @@ export function grantCovers(
   if (declaredEffects !== undefined && !effectSetsEqual(grant.effects, declaredEffects)) {
     return { ok: false, code: 'DENIED', reason: 'grant effects do not equal the declared effect set' };
   }
+  if (declaredProcessEffects !== undefined && !stringSetsEqual(grant.process_effects ?? [], declaredProcessEffects)) {
+    return { ok: false, code: 'DENIED', reason: 'grant process effects do not match' };
+  }
   return { ok: true };
+}
+
+function stringSetsEqual(granted: readonly string[], declared: readonly string[]): boolean {
+  if (granted.length !== declared.length) {
+    return false;
+  }
+  const left = new Set(granted);
+  if (left.size !== granted.length) {
+    return false;
+  }
+  for (const token of declared) {
+    if (!left.delete(token)) {
+      return false;
+    }
+  }
+  return left.size === 0;
 }
 
 /**
@@ -90,6 +116,7 @@ export function createGrantAuthority(): GrantAuthority {
         permissions: fields.permissions,
         effects: fields.effects,
         issued_at: fields.issued_at,
+        ...(fields.process_effects === undefined ? {} : { process_effects: [...fields.process_effects] }),
       };
       issued.add(grant);
       return grant;

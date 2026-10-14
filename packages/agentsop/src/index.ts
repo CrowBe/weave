@@ -31,6 +31,17 @@ export {
 } from './failures.js';
 
 export {
+  bindProcessEffects,
+  PROCESS_EFFECT_VOCABULARY_REVISION,
+  PROCESS_EFFECTS,
+  processEffectToken,
+  validateProcessEffectSelectors,
+  type ProcessBindResult,
+  type ProcessEffectName,
+  type ProcessEffectSelector,
+} from './process-effects.js';
+
+export {
   createGrantAuthority,
   grantCovers,
   type Grant,
