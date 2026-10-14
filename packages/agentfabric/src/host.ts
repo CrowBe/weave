@@ -1,4 +1,7 @@
+import { isAbsolute, resolve, sep } from 'node:path';
+import { statSync } from 'node:fs';
 import {
+  bindProcessEffects,
   bindSelectors,
   grantCovers,
   validateCatalogue,
@@ -24,6 +27,25 @@ import { GENERATION_KINDS, type GenerationKind, type InferenceGateway } from '@w
 import { acceptCapabilityOutput } from './bounds.js';
 import { ResourceCoordinator } from './coordinator.js';
 import { FIXTURE_CONTRACTS, REPORT_ASSEMBLE, REPORT_PUBLISH, SOURCE_INSPECT } from './contracts.js';
+import { newFilesInside, runProcess, snapshotFiles } from './process-spawn.js';
+import { REPO_BUILD, REPO_LINT, REPO_TEST, SHELL_RUN, shellCatalogue } from './shell-contracts.js';
+import {
+  SHELL_TAIL_CHARS,
+  containsSecret,
+  freezeRepoCommands,
+  isRepoOperation,
+  isShellOperation,
+  lookupEnv,
+  parseShellCall,
+  redactArgv,
+  redactSecrets,
+  traceInOrder,
+  type ParsedShellCall,
+  type RepoCommands,
+  type ShellFailure,
+  type ShellHostOptions,
+  type ShellTraceRecord,
+} from './shell.js';
 import { contentDigest, digest } from './digest.js';
 import { IsolateRunner, isolatedCall } from './isolate.js';
 import {
@@ -76,6 +98,15 @@ interface OpenInvocation {
   readonly binding_digest: string;
   phase: 'held' | 'before_commit' | 'after_commit' | 'done';
   cancel_requested: boolean;
+  /** Aborted by requestCancel. Shell runs observe it and kill the child. */
+  readonly abort: AbortController;
+  shellArgv: readonly string[];
+  shellStdin: string;
+  shellEnv: Record<string, string>;
+  shellSecrets: string[];
+  shellEnvAllow: readonly string[];
+  shellTimeout: number;
+  shellCwdRef: string;
   resolve: (outcome: InvocationOutcome) => void;
   committed: PublicationRecord | null;
   outcome: InvocationOutcome | null;
@@ -125,6 +156,10 @@ export class AgentFabricHost implements CapabilityHost {
   readonly lookups: { invocation_id: string; granted: boolean }[] = [];
   faults: HostFaults;
   private readonly gateway: InferenceGateway | undefined;
+  private readonly shellOptions: ShellHostOptions | undefined;
+  private readonly repoCommands: RepoCommands | undefined;
+  private readonly shellTraceLog: ShellTraceRecord[] = [];
+  private readonly shellSpawns: { argv: string[]; env_names: string[] }[] = [];
   /** Cost ceilings already admitted against each contract's max_cost. */
   private readonly inferenceCharged = new Map<string, number>();
   private inferenceSeq = 0;
@@ -143,12 +178,18 @@ export class AgentFabricHost implements CapabilityHost {
     faults?: HostFaults;
     contracts?: readonly CapabilityContract[];
     gateway?: InferenceGateway;
+    shell?: ShellHostOptions;
   }) {
     this.authority = options.authority;
     this.store = options.store ?? new FabricStore();
     this.faults = { ...options.faults };
     this.gateway = options.gateway;
-    const contracts = options.contracts ?? FIXTURE_CONTRACTS;
+    this.shellOptions = options.shell;
+    this.repoCommands = options.shell?.repo === undefined ? undefined : freezeRepoCommands(options.shell.repo);
+    const base = options.contracts ?? FIXTURE_CONTRACTS;
+    const extras = options.shell ? shellCatalogue(this.repoCommands !== undefined) : [];
+    const seen = new Set(base.map((contract) => contract.id));
+    const contracts = [...base, ...extras.filter((contract) => !seen.has(contract.id))];
     const catalogue = validateCatalogue(contracts);
     if (!catalogue.ok) {
       throw new Error(`INVALID_CATALOGUE: ${catalogue.reason}`);
@@ -165,15 +206,67 @@ export class AgentFabricHost implements CapabilityHost {
     return this.store.snapshot();
   }
 
-  static restore(authority: GrantAuthority, snapshot: FabricSnapshot, faults?: HostFaults): AgentFabricHost {
-    const options: { authority: GrantAuthority; store: FabricStore; faults?: HostFaults } = {
+  static restore(
+    authority: GrantAuthority,
+    snapshot: FabricSnapshot,
+    faults?: HostFaults,
+    shell?: ShellHostOptions,
+  ): AgentFabricHost {
+    const options: {
+      authority: GrantAuthority;
+      store: FabricStore;
+      faults?: HostFaults;
+      shell?: ShellHostOptions;
+    } = {
       authority,
       store: FabricStore.restore(snapshot),
     };
     if (faults) {
       options.faults = faults;
     }
+    if (shell) {
+      options.shell = shell;
+    }
     return new AgentFabricHost(options);
+  }
+
+  /** A workspace directory the host may spawn in. The locator stays in the store. */
+  registerWorkspace(locator: string): ResourceRef {
+    if (!isAbsolute(locator) || !isDirectory(locator)) {
+      throw new Error('workspace locator must be an absolute directory');
+    }
+    const canonical_id = this.store.allocateCanonical();
+    this.store.putResource({
+      canonical_id,
+      kind: 'workspace',
+      locator,
+      revision: 1,
+      content: '',
+      publication: null,
+    });
+    return this.store.issue(canonical_id, 'workspace');
+  }
+
+  /** Shell-out traces in id/parentId order. Environment values are not fields. */
+  shellTraces(): readonly ShellTraceRecord[] {
+    return this.shellTraceLog.map((record) => ({
+      ...traceInOrder(record),
+      argv: [...record.argv],
+      env_allow: [...record.env_allow],
+      artifacts: [...record.artifacts],
+    }));
+  }
+
+  shellTraceJsonl(): string {
+    if (this.shellTraceLog.length === 0) {
+      return '';
+    }
+    return this.shellTraceLog.map((record) => JSON.stringify(traceInOrder(record))).join('\n') + '\n';
+  }
+
+  /** Argv and environment names of spawn attempts. Values are not recorded. */
+  spawnRecords(): readonly { argv: readonly string[]; env_names: readonly string[] }[] {
+    return this.shellSpawns.map((record) => ({ argv: [...record.argv], env_names: [...record.env_names] }));
   }
 
   registerSource(locator: string, content: string): ResourceRef {
@@ -657,6 +750,7 @@ export class AgentFabricHost implements CapabilityHost {
     const open = this.open.get(invocation_id);
     if (open) {
       open.cancel_requested = true;
+      open.abort.abort();
     }
     const record = this.store.getInvocation(invocation_id);
     if (record) {
@@ -716,6 +810,27 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   private advance(open: OpenInvocation): void {
+    if (isShellOperation(open.operation)) {
+      if (open.phase !== 'held') {
+        return;
+      }
+      open.phase = 'before_commit';
+      void this.performShell(open).then(
+        (outcome) => {
+          if (open.phase === 'done') {
+            return;
+          }
+          this.finish(open, outcome);
+        },
+        () => {
+          if (open.phase === 'done') {
+            return;
+          }
+          this.finish(open, { outcome: 'failed', failure: 'spawn_failed' });
+        },
+      );
+      return;
+    }
     if (this.status.get(open.operation) === 'unavailable') {
       this.finish(open, { outcome: 'failed', failure: 'UNRESOLVED' });
       return;
@@ -936,10 +1051,21 @@ export class AgentFabricHost implements CapabilityHost {
     if (!declared.ok) {
       return this.reject(declared.code, declared.reason);
     }
+    let processTokens: readonly string[] | undefined;
+    if (contract.process_effects !== undefined) {
+      const boundProcess = bindProcessEffects(contract.process_effects, boundInputs);
+      if (!boundProcess.ok) {
+        return this.reject(boundProcess.code, boundProcess.reason);
+      }
+      processTokens = boundProcess.tokens;
+    }
     if (!this.authority.isIssued(grant) || !this.authority.isValid(grant)) {
       return this.reject('DENIED', 'grant is not a currently valid issued grant');
     }
-    const covered = grantCovers(grant, operation, contract.revision, required.bound, declared.bound);
+    const covered =
+      processTokens === undefined
+        ? grantCovers(grant, operation, contract.revision, required.bound, declared.bound)
+        : grantCovers(grant, operation, contract.revision, required.bound, declared.bound, processTokens);
     if (!covered.ok) {
       return this.reject(covered.code, covered.reason);
     }
@@ -975,6 +1101,18 @@ export class AgentFabricHost implements CapabilityHost {
         },
       };
     }
+    let shellCall: ParsedShellCall | null = null;
+    let shellEnv: Record<string, string> = {};
+    let shellSecrets: string[] = [];
+    if (isShellOperation(operation)) {
+      const preparedShell = this.prepareShell(operation, boundInputs);
+      if (!preparedShell.ok) {
+        return this.reject(preparedShell.code, preparedShell.reason);
+      }
+      shellCall = preparedShell.call;
+      shellEnv = preparedShell.env;
+      shellSecrets = preparedShell.secrets;
+    }
     if (!this.authority.markInvoked(grant as Grant)) {
       return this.reject('DENIED', 'grant has already been used for an invocation');
     }
@@ -992,6 +1130,8 @@ export class AgentFabricHost implements CapabilityHost {
         }
       } else if (operation === SOURCE_INSPECT.id && issued.kind !== 'source') {
         return this.reject('KIND_MISMATCH', 'source reference has the wrong kind');
+      } else if (isShellOperation(operation) && issued.kind !== 'workspace') {
+        return this.reject('KIND_MISMATCH', 'workspace reference has the wrong kind');
       }
     }
     const conflict = this.coordinator.acquire(invocation_id, declared.bound, (ref) => {
@@ -1015,6 +1155,14 @@ export class AgentFabricHost implements CapabilityHost {
       binding_digest,
       phase: 'held',
       cancel_requested: false,
+      abort: new AbortController(),
+      shellArgv: shellCall?.argv ?? [],
+      shellStdin: shellCall?.stdin ?? '',
+      shellEnv,
+      shellSecrets,
+      shellEnvAllow: shellCall?.env_allow ?? [],
+      shellTimeout: shellCall?.timeout_ms ?? 0,
+      shellCwdRef: shellCall?.cwd_ref ?? '',
       resolve: () => undefined,
       committed: null,
       outcome: null,
@@ -1031,6 +1179,189 @@ export class AgentFabricHost implements CapabilityHost {
       cancel_requested: false,
     };
     return { kind: 'open', open, record };
+  }
+
+  private configuredArgv(operation: string): readonly string[] | null {
+    if (!this.repoCommands) {
+      return null;
+    }
+    if (operation === REPO_TEST.id) {
+      return this.repoCommands.test;
+    }
+    if (operation === REPO_LINT.id) {
+      return this.repoCommands.lint;
+    }
+    if (operation === REPO_BUILD.id) {
+      return this.repoCommands.build;
+    }
+    return null;
+  }
+
+  /**
+   * Resolve argv and environment before the grant is consumed.
+   * Repo commands take argv from host config. A value named by env_allow is
+   * injected later and must not already be on argv or stdin.
+   */
+  private prepareShell(
+    operation: string,
+    inputs: Record<string, unknown>,
+  ):
+    | { ok: true; call: ParsedShellCall; env: Record<string, string>; secrets: string[] }
+    | { ok: false; code: FailureCode; reason: string } {
+    if (!this.shellOptions) {
+      return { ok: false, code: 'DENIED', reason: 'denied' };
+    }
+    const configured = this.configuredArgv(operation);
+    if (isRepoOperation(operation) && !configured) {
+      return { ok: false, code: 'DENIED', reason: 'denied' };
+    }
+    const argv = configured ?? (Array.isArray(inputs['argv']) ? inputs['argv'] : []);
+    const parsed = parseShellCall(inputs, argv);
+    if (!parsed.ok) {
+      return { ok: false, code: 'INVALID_INPUT', reason: parsed.reason };
+    }
+    const looked = lookupEnv(this.shellOptions.env, parsed.value.env_allow);
+    if (!looked.ok) {
+      return { ok: false, code: 'DENIED', reason: 'denied' };
+    }
+    if (containsSecret([parsed.value.stdin, ...parsed.value.argv], looked.secrets)) {
+      return { ok: false, code: 'DENIED', reason: 'denied' };
+    }
+    return { ok: true, call: parsed.value, env: { ...looked.env }, secrets: [...looked.secrets] };
+  }
+
+  private async performShell(open: OpenInvocation): Promise<InvocationOutcome> {
+    try {
+      if (!this.shellOptions) {
+        this.pushShellTrace(open, { exit: null, failure: 'denied', duration_ms: 0, stdout_tail: '', stderr_tail: '', artifacts: [] });
+        return { outcome: 'failed', failure: 'denied' };
+      }
+      if (open.cancel_requested || open.abort.signal.aborted) {
+        this.pushShellTrace(open, { exit: null, failure: 'cancelled', duration_ms: 0, stdout_tail: '', stderr_tail: '', artifacts: [] });
+        return { outcome: 'failed', failure: 'cancelled' };
+      }
+      const resource = this.resourceFor(open.shellCwdRef);
+      if (!resource || resource.kind !== 'workspace') {
+        this.pushShellTrace(open, { exit: null, failure: 'spawn_failed', duration_ms: 0, stdout_tail: '', stderr_tail: '', artifacts: [] });
+        return { outcome: 'failed', failure: 'spawn_failed' };
+      }
+      const requested = this.shellOptions.tail_chars;
+      const tail_chars =
+        typeof requested === 'number' && Number.isInteger(requested) && requested >= 1 && requested <= 65_536
+          ? requested
+          : SHELL_TAIL_CHARS;
+      this.shellSpawns.push({
+        argv: redactArgv(open.shellArgv, open.shellSecrets),
+        env_names: Object.keys(open.shellEnv).sort(),
+      });
+      const before = snapshotFiles(resource.locator);
+      const result = await runProcess({
+        argv: open.shellArgv,
+        cwd: resource.locator,
+        env: open.shellEnv,
+        stdin: open.shellStdin,
+        timeout_ms: open.shellTimeout,
+        signal: open.abort.signal,
+        clock: this.shellOptions.clock,
+        timer: this.shellOptions.timer,
+        tail_chars,
+      });
+      const stdout_tail = redactSecrets(result.stdout_tail, open.shellSecrets);
+      const stderr_tail = redactSecrets(result.stderr_tail, open.shellSecrets);
+      if (!result.ok) {
+        this.pushShellTrace(open, {
+          exit: null,
+          failure: result.failure,
+          duration_ms: result.duration_ms,
+          stdout_tail,
+          stderr_tail,
+          artifacts: [],
+        });
+        return { outcome: 'failed', failure: result.failure };
+      }
+      const created = newFilesInside(resource.locator, before, snapshotFiles(resource.locator));
+      const artifacts = this.issueArtifacts(resource.locator, created);
+      this.pushShellTrace(open, {
+        exit: result.exit,
+        failure: null,
+        duration_ms: result.duration_ms,
+        stdout_tail,
+        stderr_tail,
+        artifacts,
+      });
+      return {
+        outcome: 'succeeded',
+        output: {
+          exit: result.exit,
+          stdout_truncated: result.stdout_truncated,
+          stdout_tail,
+          stderr_tail,
+          duration_ms: result.duration_ms,
+          artifacts,
+        },
+      };
+    } finally {
+      open.shellEnv = {};
+      open.shellSecrets = [];
+    }
+  }
+
+  private pushShellTrace(
+    open: OpenInvocation,
+    fields: {
+      exit: number | null;
+      failure: ShellFailure | null;
+      duration_ms: number;
+      stdout_tail: string;
+      stderr_tail: string;
+      artifacts: readonly string[];
+    },
+  ): void {
+    const record = {
+      schema: 'shell.trace@1' as const,
+      argv: redactArgv(open.shellArgv, open.shellSecrets),
+      cwd_ref: open.shellCwdRef,
+      env_allow: [...open.shellEnvAllow],
+      exit: fields.exit,
+      failure: fields.failure,
+      duration_ms: fields.duration_ms,
+      stdout_tail: redactSecrets(fields.stdout_tail, open.shellSecrets),
+      stderr_tail: redactSecrets(fields.stderr_tail, open.shellSecrets),
+      artifacts: [...fields.artifacts],
+    };
+    if (isRepoOperation(open.operation)) {
+      this.shellTraceLog.push({ ...record, id: open.invocation_id, parentId: null, operation: open.operation });
+      this.shellTraceLog.push({
+        ...record,
+        id: `${open.invocation_id}:shell`,
+        parentId: open.invocation_id,
+        operation: SHELL_RUN.id,
+      });
+      return;
+    }
+    this.shellTraceLog.push({ ...record, id: open.invocation_id, parentId: null, operation: open.operation });
+  }
+
+  private issueArtifacts(root: string, relativePaths: readonly string[]): string[] {
+    const refs: string[] = [];
+    const rootResolved = resolve(root);
+    for (const rel of relativePaths) {
+      const full = resolve(root, rel);
+      if (full !== rootResolved && !full.startsWith(`${rootResolved}${sep}`)) {
+        continue;
+      }
+      const canonical_id = this.store.allocateCanonical();
+      this.store.putResource({
+        canonical_id,
+        kind: 'source',
+        locator: full,
+        revision: 1,
+        content: '',
+        publication: null,
+      });
+      refs.push(this.store.issue(canonical_id, 'source'));
+    }
+    return refs;
   }
 
   private performInspect(open: OpenInvocation): InvocationOutcome {
@@ -1252,6 +1583,10 @@ const TRUSTED_BUILTINS: ReadonlySet<string> = new Set([
   SOURCE_INSPECT.id,
   REPORT_ASSEMBLE.id,
   REPORT_PUBLISH.id,
+  SHELL_RUN.id,
+  REPO_TEST.id,
+  REPO_LINT.id,
+  REPO_BUILD.id,
 ]);
 
 function trustedBuiltin(id: string): boolean {
@@ -1280,10 +1615,22 @@ function closedShape(
   }
   for (const key of expected) {
     if (!(key in inputs)) {
+      const typeName = schema[key];
+      if (typeof typeName === 'string' && typeName.endsWith('?')) {
+        continue;
+      }
       return { ok: false, reason: `missing field '${key}'` };
     }
   }
   return { ok: true };
+}
+
+function isDirectory(locator: string): boolean {
+  try {
+    return statSync(locator).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 export { FIXTURE_CONTRACTS, REPORT_ASSEMBLE, REPORT_PUBLISH, SOURCE_INSPECT };
