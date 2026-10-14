@@ -1,32 +1,38 @@
 /**
  * Provider adapter: TypeSafe AI's System One API, called directly.
  *
- * TypeSafe direct is the sole default decision provider. The Vercel AI
- * Gateway route and other fallbacks (OpenAI Decisions, Cloudflare Workers AI)
- * are deferred.
+ * The wire profile below is the request and response mapping for
+ * `/v1/systemone`. HTTP, status classification, and credential redaction live
+ * in the shared decision transport. TypeSafe direct is the sole decision
+ * provider. OpenAI Decisions, Cloudflare Workers AI, and the Vercel route are
+ * deferred; a second profile can use the same transport later.
  *
  * Note the destination. Content sent here crosses a different boundary than
  * content sent to Vercel, so `TYPESAFE_AI_DESTINATION` is its own value and a
- * caller reaches this route only by naming it in `terms.destinations`. Falling
- * back to a different vendor is a disclosure decision, not plumbing.
+ * caller reaches this route only by naming it in `terms.destinations`.
  *
  * The wire vocabulary is not quite the gateway's. TypeSafe calls a boolean
- * question a `noul` and returns its probability under that name; this adapter
- * translates in both directions so the shape difference stops here.
+ * question a `noul` and returns its probability under that name; this profile
+ * translates in both directions so the shape difference stops here. Choice and
+ * score criteria stay under `criteria` — not `choices` or `levels`.
  *
  * Depends on nothing but `fetch`, and reads no ambient state: credentials and
- * the HTTP implementation both arrive as options.
+ * the HTTP implementation both arrive as options. `baseURL` selects a locally
+ * run TypeSafe or Jev without changing the profile. The default is
+ * `https://api.typesafe.ai`.
  */
 import type {
   EvaluationAdapter,
   EvaluationAnswer,
-  EvaluationAnswers,
   EvaluationCall,
-  EvaluationProviderResult,
   EvaluationQuestion,
-  ProviderFailure,
   QuestionId,
 } from '../types.js';
+import {
+  evaluationTransport,
+  type DecisionParse,
+  type DecisionWireProfile,
+} from './decision-transport.js';
 
 export const TYPESAFE_AI_ADAPTER = 'typesafe-ai';
 
@@ -46,76 +52,40 @@ export interface TypesafeAiOptions {
   readonly fetch?: typeof globalThis.fetch;
 }
 
+/** Request and response mapping for `/v1/systemone`. No HTTP and no credentials. */
+export const typesafeWire: DecisionWireProfile = {
+  id: TYPESAFE_AI_ADAPTER,
+  path: '/v1/systemone',
+  // Present on hosted responses. It is the only handle on a call once it has been made.
+  requestIdHeader: 'x-typesafe-request-id',
+  toBody(call: EvaluationCall): unknown {
+    return {
+      state: call.state,
+      model: call.model,
+      questions: Object.fromEntries(
+        Object.entries(call.questions).map(([id, question]) => [id, toWireQuestion(question)]),
+      ),
+    };
+  },
+  parse(body: unknown): DecisionParse {
+    return parseBody(body);
+  },
+};
+
 export function typesafeAiEvaluator(options: TypesafeAiOptions): EvaluationAdapter {
   if (options.apiKey.trim().length === 0) {
     throw new Error('typesafeAiEvaluator requires an apiKey');
   }
-  const baseURL = (options.baseURL ?? TYPESAFE_AI_BASE_URL).replace(/\/+$/, '');
-  const doFetch = options.fetch ?? globalThis.fetch;
-
-  return {
-    id: TYPESAFE_AI_ADAPTER,
-    async evaluate(call: EvaluationCall): Promise<EvaluationProviderResult> {
-      let response: Response;
-      try {
-        response = await doFetch(`${baseURL}/v1/systemone`, {
-          method: 'POST',
-          headers: {
-            authorization: `Bearer ${options.apiKey}`,
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify({
-            state: call.state,
-            model: call.model,
-            questions: Object.fromEntries(
-              Object.entries(call.questions).map(([id, q]) => [id, toWireQuestion(q)]),
-            ),
-          }),
-          ...(call.signal === undefined ? {} : { signal: call.signal }),
-        });
-      } catch (error: unknown) {
-        return { status: 'failed', failure: classifyTransport(error) };
-      }
-
-      // The request id is undocumented but present, and it is the only handle
-      // on a call once it has been made. Take it whether or not the call worked.
-      const requestId = response.headers.get('x-typesafe-request-id') ?? undefined;
-
-      if (!response.ok) {
-        return {
-          status: 'failed',
-          failure: classifyStatus(response.status, await textOf(response), requestId),
-        };
-      }
-
-      let body: unknown;
-      try {
-        body = await response.json();
-      } catch {
-        return {
-          status: 'failed',
-          failure: malformed('response body was not JSON', requestId),
-        };
-      }
-
-      const parsed = parseBody(body);
-      if ('error' in parsed) {
-        return { status: 'failed', failure: malformed(parsed.error, requestId) };
-      }
-
-      return {
-        status: 'completed',
-        answers: parsed.answers,
-        usage: parsed.usage,
-        provider_response_id: requestId,
-        confidence: parsed.confidence,
-      };
-    },
-  };
+  return evaluationTransport(typesafeWire, {
+    credential: options.apiKey,
+    defaultBaseURL: TYPESAFE_AI_BASE_URL,
+    ...(options.baseURL === undefined ? {} : { baseURL: options.baseURL }),
+    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+  });
 }
 
 // ---------------------------------------------------------------------------
-// Request translation. `boolean` is `noul` on the wire.
+// Request translation. `boolean` is `noul` on the wire. Criteria stay `criteria`.
 // ---------------------------------------------------------------------------
 
 type WireQuestion = Readonly<Record<string, unknown>>;
@@ -141,28 +111,23 @@ function toWireQuestion(question: EvaluationQuestion): WireQuestion {
 }
 
 // ---------------------------------------------------------------------------
-// Response translation. Read defensively: an unparseable answer is a malformed
-// response, not a judgment to be acted on.
+// Response translation. An unparseable answer is a malformed response, not a
+// judgment. Confidence is copied only when the provider publishes a number.
+// Absence is not zero: missing confidence stays below the floor.
 // ---------------------------------------------------------------------------
 
-interface ParsedBody {
-  readonly answers: EvaluationAnswers;
-  readonly confidence: Readonly<Record<QuestionId, number>> | undefined;
-  readonly usage: { readonly input_tokens: number | undefined; readonly output_tokens: number | undefined };
-}
-
-function parseBody(body: unknown): ParsedBody | { readonly error: string } {
-  if (!isRecord(body)) return { error: 'response body was not an object' };
+function parseBody(body: unknown): DecisionParse {
+  if (!isRecord(body)) return { status: 'malformed', detail: 'response body was not an object' };
 
   const rawAnswers = body['answers'];
-  if (!isRecord(rawAnswers)) return { error: 'response carried no answers object' };
+  if (!isRecord(rawAnswers)) return { status: 'malformed', detail: 'response carried no answers object' };
 
   const answers: Record<QuestionId, EvaluationAnswer> = {};
   const confidence: Record<QuestionId, number> = {};
 
   for (const [id, raw] of Object.entries(rawAnswers)) {
     const answer = toAnswer(raw);
-    if (answer === null) return { error: `answer '${id}' was not a recognised shape` };
+    if (answer === null) return { status: 'malformed', detail: `answer '${id}' was not a recognised shape` };
     answers[id] = answer;
 
     if (isRecord(raw) && typeof raw['confidence'] === 'number') {
@@ -172,6 +137,7 @@ function parseBody(body: unknown): ParsedBody | { readonly error: string } {
 
   const usage = isRecord(body['usage']) ? body['usage'] : {};
   return {
+    status: 'completed',
     answers,
     confidence: Object.keys(confidence).length > 0 ? confidence : undefined,
     usage: {
@@ -225,43 +191,4 @@ function numberMap(value: unknown): Record<string, number> | undefined {
     if (typeof entry === 'number') out[key] = entry;
   }
   return Object.keys(out).length > 0 ? out : undefined;
-}
-
-// ---------------------------------------------------------------------------
-// Failure classification, against the documented status codes.
-// ---------------------------------------------------------------------------
-
-function classifyStatus(status: number, detail: string, requestId: string | undefined): ProviderFailure {
-  const message = withRequestId(`typesafe-ai responded ${status}: ${detail}`, requestId);
-  if (status === 401 || status === 403) return { code: 'unauthorized', message, retryable: false };
-  if (status === 402) return { code: 'quota_exhausted', message, retryable: false };
-  if (status === 429) return { code: 'rate_limited', message, retryable: true };
-  // 529 is TypeSafe's "overloaded"; it lands here with the other 5xx.
-  if (status >= 500) return { code: 'unavailable', message, retryable: true };
-  return { code: 'invalid_request', message, retryable: false };
-}
-
-function classifyTransport(error: unknown): ProviderFailure {
-  const message = error instanceof Error ? error.message : String(error);
-  const name = error instanceof Error ? error.name : '';
-  if (name === 'AbortError') return { code: 'cancelled', message, retryable: false };
-  if (name === 'TimeoutError') return { code: 'timeout', message, retryable: false };
-  // A transport fault says nothing about the request; another attempt is fair.
-  return { code: 'unavailable', message, retryable: true };
-}
-
-function malformed(detail: string, requestId: string | undefined): ProviderFailure {
-  return { code: 'malformed_response', message: withRequestId(detail, requestId), retryable: false };
-}
-
-function withRequestId(message: string, requestId: string | undefined): string {
-  return requestId === undefined ? message : `${message} (request ${requestId})`;
-}
-
-async function textOf(response: Response): Promise<string> {
-  try {
-    return (await response.text()).slice(0, 500);
-  } catch {
-    return '<unreadable body>';
-  }
 }
