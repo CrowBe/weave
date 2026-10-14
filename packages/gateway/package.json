@@ -11,7 +11,8 @@
     "./kev-local": "./dist/src/adapters/kev-local.js",
     "./open-router": "./dist/src/adapters/open-router.js",
     "./nous-portal": "./dist/src/adapters/nous-portal.js",
-    "./openai-chatgpt-plan": "./dist/src/adapters/openai-chatgpt-plan.js"
+    "./openai-chatgpt-plan": "./dist/src/adapters/openai-chatgpt-plan.js",
+    "./cli-generate": "./dist/src/adapters/cli-generate.js"
   },
   "files": [
     "dist"
