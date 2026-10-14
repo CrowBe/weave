@@ -1,6 +1,7 @@
 import { selectorsEqual } from './refs.js';
 import { INFERENCE_ROLES, type CapabilityContract } from './contracts.js';
 import type { FailureCode } from './failures.js';
+import { validateProcessEffectSelectors } from './process-effects.js';
 
 export type CatalogueResult =
   | { readonly ok: true }
@@ -21,6 +22,10 @@ export function validateCatalogue(contracts: readonly CapabilityContract[]): Cat
   for (const contract of contracts) {
     if (!selectorsEqual(contract.effects, contract.permissions)) {
       return fail(`${contract.id}: declared effects must equal authorized effects`);
+    }
+    const processEffects = validateProcessEffectSelectors(contract.id, contract.input, contract.process_effects);
+    if (processEffects) {
+      return fail(processEffects);
     }
     for (const dep of contract.depends_on) {
       if (!byId.has(dep)) {

@@ -5,6 +5,7 @@
  * cases are the same shape; access to the held-out split is not decided here.
  */
 import { isEffect, type Effect } from './effects.js';
+import { validateProcessEffectSelectors } from './process-effects.js';
 import { selectorsEqual, type EffectSelector } from './refs.js';
 import type { CapabilityContract, InferenceLimits } from './contracts.js';
 
@@ -103,6 +104,10 @@ export function validateContractDocument(contract: CapabilityContract): CorpusCh
   if (!Array.isArray(contract.depends_on) || contract.depends_on.some((id) => !isNonEmpty(id))) {
     return fail(`${contract.id}: depends_on must be a list of capability ids`);
   }
+  const processEffects = validateProcessEffectSelectors(contract.id, contract.input, contract.process_effects);
+  if (processEffects) {
+    return fail(processEffects);
+  }
   if (contract.inference) {
     const inference = invalidInference(contract.inference);
     if (inference) {
@@ -139,6 +144,7 @@ function semanticBody(contract: CapabilityContract): {
   effects: readonly EffectSelector[];
   permissions: readonly EffectSelector[];
   failures: readonly string[];
+  process_effects: CapabilityContract['process_effects'] | null;
   depends_on: readonly string[];
   inference: InferenceLimits | null;
 } {
@@ -149,6 +155,7 @@ function semanticBody(contract: CapabilityContract): {
     effects: contract.effects,
     permissions: contract.permissions,
     failures: contract.failures,
+    process_effects: contract.process_effects ?? null,
     depends_on: contract.depends_on,
     inference: contract.inference ?? null,
   };

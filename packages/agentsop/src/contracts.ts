@@ -1,5 +1,6 @@
 import { isWellFormedRef, type EffectSelector, type ResourceEffect } from './refs.js';
 import type { FailureCode } from './failures.js';
+import type { ProcessEffectSelector } from './process-effects.js';
 
 export const INFERENCE_ROLES = ['framing', 'working', 'extension'] as const;
 export type InferenceRole = (typeof INFERENCE_ROLES)[number];
@@ -32,6 +33,11 @@ export interface CapabilityContract {
   readonly effects: readonly EffectSelector[];
   readonly permissions: readonly EffectSelector[];
   readonly failures: readonly string[];
+  /**
+   * Process shell-out effects. Absent on capabilities that do not spawn.
+   * The bound tokens must equal the grant's `process_effects`.
+   */
+  readonly process_effects?: readonly ProcessEffectSelector[];
   /** Allow-list of capability ids this implementation may invoke. Empty is none. */
   readonly depends_on: readonly string[];
   /** When present, the resolver context must supply a bounded `infer` port. */
