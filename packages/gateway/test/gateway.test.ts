@@ -744,6 +744,19 @@ describe('gateway explicit refusals', () => {
     assert.equal(a.calls, 0);
   });
 
+  it('blocks an unknown tier as an invalid request', async () => {
+    const a = adapter();
+    const gateway = createInferenceGateway({ routes, adapters: [a], clock: fakeClock() });
+    const outcome = await gateway.generate(request({
+      terms: { ...TERMS, tier: 'fast' } as unknown as GenerationRequest['terms'],
+    }));
+
+    assert.equal(outcome.status, 'blocked');
+    assert.equal(outcome.status === 'blocked' ? outcome.reason : '', 'invalid_request');
+    assert.equal(a.calls, 0);
+    assert.ok(outcome.uncertainty.some((entry) => entry === 'terms.tier must be a known tier'));
+  });
+
   it('honours a caller acceptance check it may not relax', async () => {
     const a = scriptedAdapter('one', [completed('plain prose')]);
     const gateway = createInferenceGateway({

@@ -156,8 +156,9 @@ Filtering and existing evidence ordering stay deterministic.
 
 Validation rejects duplicate routed-unit ids, invalid operation/kind pairs,
 unknown tiers, malformed route fields, negative or nonnumeric prices, missing
-configured decision providers, identical primary and fallback, and base URLs other than HTTPS or HTTP on loopback hosts (`127.0.0.1`,
-`::1`, `localhost`). Adapters remain credential-injected.
+configured decision providers, identical primary and fallback, and base URLs
+other than HTTPS or HTTP on loopback hosts (`127.0.0.1`, `::1`, `localhost`)
+without userinfo, a query string, or a fragment. Adapters remain credential-injected.
 
 P3 assumption: per-provider destinations will come from each provider's routed
 unit or be added to its provider record in P3. Switching decision providers will
@@ -189,7 +190,7 @@ Each PR is small. Each must pass `npm run verify`, adds tests to the existing `n
 | P1 | **Tiered route table from config**: `tier` on `RoutedUnit`; pure config validator in gateway; file loading only in the composition root; `ProviderAvailability` port | Gateway still does no env/fs reads; an unavailable provider is excluded with reason `provider_unavailable`; deterministic order preserved | routing tests: exclusion, tie order, empty table gives a blocked outcome |
 | P2 | **Sign in with ChatGPT** (early): `packages/auth-chatgpt` (PKCE, loopback, persisted host id and issued client_id, ID-token/JWKS validation, refresh) plus an `openai-chatgpt-plan` Responses generate adapter; **live probe of `/v1/decisions` with the OAuth token** | No client secret; token file 0600; token never on argv or in logs; unit is `auth_required` until signed in; probe result recorded in the doc | mocked auth server and fetch; nonce, aud and expiry failure cases; Responses stream parse |
 | P3 | **Decision providers behind one interface**: refactor `typesafe-ai.ts` into wire profile plus transport with a configurable base URL; add `openai-decisions.ts` (predicate/choice/score/refusal); `decision.provider` and `fallback` config | Same `EvaluationAdapter` for both; provider chosen by config only; local TypeSafe base URL works; refusal leads to fallback; fallback only when both destinations are permitted | **shared contract suite run against both profiles**: every question type, refusal, missing confidence, 401/429/5xx, malformed body, key never in logs |
-| P4 | **Budget gate**: `QuotaPort` (a `quota-axi --json` snapshot supplied as data) plus `budget.policy@1` | No dispatch once a provider's week is 80% used; pause until `resetsAt`; pace `ahead` downgrades the tier | fixtures at 79/80/95% used, unknown pace, stale snapshot fails closed |
+| P4 | **Budget gate**: `QuotaPort` (a `quota-axi --json` snapshot supplied as data) plus `budget.policy@1` | No dispatch once a provider's week is 80% used; pause until `resetsAt`; pace `ahead` downgrades the tier | fixtures at 79/80/95% used, unknown pace, stale, missing, or unknown snapshot fails closed for every quota-tracked tier |
 | P5 | **Decision sites D1, D2, D8** (triage, route, progress) in `packages/weave/src/sites/` | Below-threshold answers take the recorded fallback; a stale answer is rejected; the scripted layer still passes M0–M6 | fake provider answers; replay determinism |
 | P6 | **D3 preselect plus D4/D7 guardrails** | Preselect only narrows the disclosed catalogue slice; a block becomes an approval request | M6 slice tests; guard asymmetry tests |
 | P7 | **`shell.run@1` plus `repo.test/lint/build`, and CLI backends** (`codex exec`, `claude -p`, `grok`) as generate adapters, prompt on stdin | Effects enforced by grant; env values never on argv or in logs; timeout and cancel honoured | Fabric host tests with the canary-env leak pattern; stub CLIs |
@@ -211,7 +212,7 @@ Order: P0 → P1 → **P2 ChatGPT sign-in, early, because both the OpenAI decisi
 - **Weekly gate:** if `percentRemaining ≤ 20` (80% used) for the provider a unit draws on, the unit is excluded (`weekly_budget_cap`). If no eligible unit remains for the step, the loop records `loop.paused{until: resetsAt}` and stops dispatching. It resumes at reset, through the injected clock and timer only. The cap is enforced against the whole week, including use outside Weave, because quota-axi reports the account total. That is stricter than "Weave's share", and safe.
 - **Five-hour window:** if `≤ 10%`, prefer another provider; if none, wait until that reset (the gateway already waits on known delays).
 - **Pace:** `ahead` downgrades `strong` to `standard` except for the audit step, which pauses instead. An audit should not be done by a weaker model.
-- **Fail closed:** a stale, missing or `unknown` snapshot is treated as at the cap for `strong` and allowed for `decision` and `flash`, but only within the gateway cost ceiling.
+- **Fail closed:** a stale, missing, or `unknown` snapshot is at the cap for every quota-tracked tier (`decision`, `flash`, `standard`, and `strong`). Each such unit is excluded (`weekly_budget_cap`) until a fresh snapshot shows its provider under the 80% weekly gate.
 - **Metered providers:** the per-run `cost_ceiling` in micros. A weekly metered cap is configured in the same policy record.
 
 
@@ -229,6 +230,7 @@ P1 does not instantiate decision or CLI adapters, read quotas, authenticate,
 assemble tidy state, or execute this loop. Configured model names, credentials,
 CLI availability, and OAuth access are operator assumptions until subsequent
 phases supply evidence. P4 must fix snapshot freshness, account/provider quota
-mapping (including standard-tier behavior for unknown snapshots), and reservation
-bounds before implementing the weekly gate. The repository cannot establish live
-provider entitlement or quota guarantees from configuration alone.
+mapping, and reservation bounds before implementing the weekly gate. A stale,
+missing, or unknown snapshot is at the cap for every quota-tracked tier. The
+repository cannot establish live provider entitlement or quota guarantees from
+configuration alone.

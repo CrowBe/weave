@@ -41,7 +41,7 @@ function httpUrl(value: unknown): boolean {
     const url = new URL(value);
     const loopback = ['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname);
     return (url.protocol === 'https:' || (url.protocol === 'http:' && loopback)) &&
-      url.username === '' && url.password === '';
+      url.username === '' && url.password === '' && url.search === '' && url.hash === '';
   } catch { return false; }
 }
 
@@ -120,7 +120,7 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
         const path = `decision.providers.${id}`;
         if (!object(provider)) { check(false, path); return; }
         keys(provider, ['base_url', 'model', 'auth', 'key_env'], path);
-        check(httpUrl(provider.base_url), `${path}.base_url: expected HTTPS or loopback HTTP URL without credentials`);
+        check(httpUrl(provider.base_url), `${path}.base_url: expected HTTPS or loopback HTTP URL without userinfo, query, or fragment`);
         check(text(provider.model), `${path}.model`);
         check(provider.auth === undefined || text(provider.auth), `${path}.auth`);
         check(provider.key_env === undefined || (typeof provider.key_env === 'string' &&

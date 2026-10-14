@@ -146,12 +146,20 @@ for (const [name, mutate, expected] of [
   ['evidence', (c: any) => c.units[0].evidence = { attempts: 1, accepted: 1, extra: true }, 'units[0].evidence.extra'],
   ['rate limit', (c: any) => c.units[0].rate_limits = [{ requests: 1, window_ms: 1, extra: true }], 'units[0].rate_limits[0].extra'],
   ['provider', (c: any) => c.decision.providers['typesafe-jev'].extra = true, 'decision.providers.typesafe-jev.extra'],
-  ['literal key', (c: any) => c.decision.providers['typesafe-jev'].key_env = 'sk-example-not-a-real-key', 'decision.providers.typesafe-jev.key_env'],
-] as const) it(`rejects unknown keys or literal credentials: ${name}`, () => {
+] as const) it(`rejects unknown keys: ${name}`, () => {
   const input = example(); mutate(input);
   const result = parseRouteConfig(input);
   assert.equal(result.ok, false);
   if (!result.ok) assert.ok(result.errors.some(e => e.includes(expected)), result.errors.join('; '));
+});
+it('rejects non-env-name key_env values', () => {
+  for (const keyEnv of ['sk-example-not-a-real-key', 'lower_case', '1KEY']) {
+    const input = example();
+    input.decision.providers['typesafe-jev'].key_env = keyEnv;
+    const result = parseRouteConfig(input);
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.ok(result.errors.some(e => e.includes('decision.providers.typesafe-jev.key_env')), result.errors.join('; '));
+  }
 });
 it('returns config copies detached from all caller-owned nested data', () => {
   const input = example();
@@ -198,6 +206,8 @@ for (const [url, ok] of [
   ['http://localhost.example.com', false],
   ['http://[::2]', false],
   ['http://user:password@localhost', false],
+  ['https://api.typesafe.ai/?api_key=sk-example', false],
+  ['https://api.typesafe.ai/#fragment', false],
 ] as const) it(`validates provider transport security: ${url}`, () => {
   const input = example();
   input.decision.providers['typesafe-jev'].base_url = url;

@@ -18,6 +18,7 @@ import { priceAttempt, route, worstCaseCost, type RouteExclusion } from './routi
 import {
   answersMatchQuestions,
   nonEmptyText,
+  TIERS,
   type AttemptRecord,
   type BlockedReason,
   type Clock,
@@ -457,6 +458,7 @@ function missingAdapter<T>(unit: RoutedUnit): AttemptResult<T> {
 // ---------------------------------------------------------------------------
 
 function invalidTerms(terms: InferenceTerms): string | null {
+  if (terms.tier !== undefined && !TIERS.includes(terms.tier)) return 'terms.tier must be a known tier';
   if (terms.max_attempts < 1) return 'terms.max_attempts must be at least 1';
   if (terms.max_attempts_per_route !== undefined && terms.max_attempts_per_route < 1) {
     return 'terms.max_attempts_per_route must be at least 1';
