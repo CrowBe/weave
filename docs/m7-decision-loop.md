@@ -5,7 +5,7 @@ This is the behavioral contract for the planned milestone in
 [M6](m6-route-a-reconstructed-view.md). Terms follow
 [GLOSSARY.md](../GLOSSARY.md). These requirements describe the target, not
 implemented loop behavior. P0 establishes this contract; P1 supplies tier and
-availability routing plus pure configuration validation. P2 supplies local ChatGPT authentication and a Responses adapter. P3 supplies the TypeSafe decision provider behind one evaluation interface. P4 supplies the budget gate; P5 supplies D1, D2, D8 and intake choice sites with pure transitions. P6 supplies D3 preselection and D4/D7 boolean guards. Full-loop integration and P7–P12 remain planned.
+availability routing plus pure configuration validation. P2 supplies local ChatGPT authentication and a Responses adapter. P3 supplies the TypeSafe decision provider behind one evaluation interface. P4 supplies the budget gate; P5 supplies D1, D2, D8 and intake choice sites with pure transitions. P6 supplies D3 preselection and D4/D7 boolean guards. P7 supplies `shell.run@1`, the repo checks, and CLI generate backends. P8 supplies the implementation-tier step and D5. Full-loop integration and P9–P12 remain planned.
 Demonstrate red before implementation, prove green with deterministic fixtures,
 and retain M0–M6 checks. Live provider runs are non-gating evidence.
 
@@ -459,3 +459,36 @@ No outage retries another semantic operation. Boolean observations preserve
 fixed question text identifies guard rules. Raw input and rule payloads are never
 recorded. Full-loop transport/persistence remain outside these pure sites;
 ScriptedDecisionLayer and M0–M6 behavior are unchanged.
+
+## P8 — Implementation-tier step and D5
+
+P8 runs one implementation step for a unit that already has a D2 tier, has passed the P4 budget gate, and has passed D3/D4. It does not wire audit, D6, loop-back, or goal completion. `goal_done` on the step result is always false.
+
+The step calls `generate` once at the routed tier, then each configured check (`repo.test`, `repo.lint`, `repo.build`) through `host.invoke(grant, …)`. Grants are inputs. A decision answer cannot mint one, and check argv stays in host configuration. The step digests configured argv for evidence and does not put it on the invocation. Env names may be passed; env values are not. Process output stays redacted by the host. A credential-shaped stdout tail is dropped rather than copied. Check artifact refs are kept only when they are `ref_` or `gen_` handles.
+
+D5 (`eval.output`) asks one boolean question per success criterion. The observation reuses `decision-site@1` key order, with site `eval.output` and answer `pass`, `fail`, or null. The question text is fixed: "Does the artifact satisfy this success criterion?" Criterion statements are disclosed to the evaluator and are not copied into the observation, the attempt journal, or the step result. Question ids are ordinal (`criterion_N`). A criterion passes only when its answer clears shape admission, `p >= 0.8`, and `confidence >= 0.9` (the existing `confidence_floor`). Missing, non-numeric, low-confidence, stale, unparseable, or unknown-site answers fail that criterion. A provider outage, a thrown evaluate port, or a null outcome uses D5's deterministic fallback: every criterion fails with `decision_unavailable`. D5 does not read another site's answer. The OpenAI probability-only band in §4b stays deferred with that provider. P5 `admissionReason` is unchanged, including `provider_failed` classification.
+
+A red check fails the attempt even when every D5 criterion passes. On failure the step retries the same routed tier up to N times (`retries`, default 2), and the next prompt lists the failing criterion ids and check ids. It then escalates exactly one tier (`flash` to `standard`, or `standard` to `strong`) once. Escalation cannot pass the D2 ceiling. The budget port can downgrade a same-tier attempt or pause it. A downgrade is not escalation and cannot raise the tier. If the ceiling or the budget port blocks the escalated tier, the step does not generate again. It appends `impl.stop@1` and raises one `open_issue@1` for the audit tier. The issue carries the failing `criterion_id`s and check ids. Its source is `check` when a check failed, otherwise `eval`.
+
+Crash safety uses one `execution_id` for every attempt and the escalation. Each finished attempt is appended to the attempt journal before the next attempt starts. A restart loads that journal, skips finished attempts, and continues. A torn final JSONL line is ignored. Replay of a finished journal calls no provider and no host.
+
+```text
+impl.step@1 {
+  schema, execution_id, status: 'passed'|'failed'|'paused', goal_done: false,
+  reason: 'invalid_input'|null, tier, ceiling, effective_tier, escalated,
+  attempts, artifact_refs, checks, evals, observations, open_issue
+}
+impl.attempt@1 {
+  schema, id, parentId, execution_id, attempt, requested_tier, effective_tier,
+  escalated, status, generate_request_id, artifact_refs, checks, evals,
+  observations, failing_criterion_ids, failing_check_ids, pause
+}
+checks: { check_id, argv_digest, exit, passed, tail, artifacts }
+evals: { criterion_id, verdict_probability, confidence, passed }
+open_issue@1 {
+  schema, issue_id, execution_id, source: 'check'|'eval', criterion_ids, check_ids,
+  text, severity: 'blocker', blocked_by: 'ceiling'|'budget'|null
+}
+```
+
+Generate text is digested to a `gen_` ref for the step record. The text is disclosed only on the in-memory D5 request. Pausing for budget or cancellation does not raise an open issue and does not complete the goal.

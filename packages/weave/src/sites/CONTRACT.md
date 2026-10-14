@@ -65,3 +65,42 @@ The fx permissions documentation describes prompt injection or malicious behavio
 review and holding actions when review fails. The concrete injection checklist
 above is a provisional local interpretation, not a claimed upstream rubric.
 Source: https://fx.sh/docs/configure-fx/permissions.md
+
+## P8 output evaluation and the implementation step
+
+D5 (`eval.output`) is one boolean question per success criterion. `evaluateOutputEval`
+captures the disclosed criteria, asks ordinal questions `criterion_N`, and then
+calls pure `transitionOutputEval`. The observation is `decision-site@1` in the
+same key order as P5, with site `eval.output`, fixed question text, and answer
+`pass`, `fail`, or null. `accepted` means the answer cleared shape and the
+confidence floor. `passed` on the eval record is the criterion gate: `p >= 0.8`
+and `confidence >= 0.9`. Missing confidence is below the floor. A confident
+answer below 0.8 is `fail` with reason `below_probability` and is not a fallback.
+Low confidence, a missing or unparseable answer, a stale revision, or a mismatch
+fails that criterion and sets `fallback_used`. An outage or a thrown port fails
+every criterion with `decision_unavailable`. Another site's answer is a mismatch,
+not a pass. Unknown answer keys are counted with fixed text and are not copied.
+Criterion statements and raw state are not copied into the observation. An unsafe
+criterion id cannot pass and is replaced by its ordinal key.
+
+The implementation step (`impl.step@1`) is separate from the pure site. It
+generates once at the routed tier, invokes each configured `repo.test`,
+`repo.lint`, or `repo.build` with the grant it was given, then runs D5. Check
+evidence is `{ check_id, argv_digest, exit, passed, tail, artifacts }`. Eval
+evidence is `{ criterion_id, verdict_probability, confidence, passed }`. A red
+check fails the attempt even when D5 passes. The step retries the same tier up
+to N times (default 2), then escalates one tier once, never past the D2 ceiling.
+A budget downgrade stays at or below the requested tier. A budget pause or a
+blocked escalation does not mint a grant and does not complete the goal.
+`goal_done` is false. The terminal blocker is `open_issue@1`:
+
+```text
+{ schema, issue_id, execution_id, source: 'check'|'eval', criterion_ids,
+  check_ids, text, severity: 'blocker', blocked_by: 'ceiling'|'budget'|null }
+```
+
+Finished attempts are `impl.attempt@1` records under one `execution_id`, linked
+by `id` and `parentId`, appended before the next attempt. A stop is
+`impl.stop@1` and carries the open issue. Replay reads that journal and does
+not call a provider. Generate text is not stored on the attempt; the step keeps
+a `gen_` digest ref. Env values are not inputs to this step.
