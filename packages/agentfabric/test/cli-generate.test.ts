@@ -133,6 +133,17 @@ describe('stub CLI generate adapters', () => {
       });
     });
 
+    it(`${name} fails explicitly when stdout exceeds the shell tail bound`, async () => {
+      await withAdapter(factory, ['--flood', '20000'], 5_000, [], async (adapter) => {
+        const result = await adapter.execute(generation());
+        assert.equal(result.status, 'failed');
+        if (result.status === 'failed') {
+          assert.match(result.failure.message, /stdout.*truncated/);
+          assert.equal(result.failure.retryable, false);
+        }
+      });
+    });
+
     it(`${name} maps a nonzero stub exit to a typed failure`, async () => {
       await withAdapter(factory, ['--exit', '7'], 5_000, [], async (adapter) => {
         const result = await adapter.execute(generation());

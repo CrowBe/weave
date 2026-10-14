@@ -26,6 +26,7 @@ export interface ProcessRunRequest {
 export interface ProcessRunSuccess {
   readonly ok: true;
   readonly exit: number;
+  readonly stdout_truncated: boolean;
   readonly stdout_tail: string;
   readonly stderr_tail: string;
   readonly duration_ms: number;
@@ -132,6 +133,7 @@ export async function runProcess(request: ProcessRunRequest): Promise<ProcessRun
     return {
       ok: true,
       exit: winner.info.code,
+      stdout_truncated: stdout.truncated,
       stdout_tail: stdout.value(),
       stderr_tail: stderr.value(),
       duration_ms: elapsed(started, request.clock),
@@ -239,13 +241,16 @@ function kill(child: ChildProcess, signal: NodeJS.Signals): void {
 
 class Tail {
   private text = '';
+  truncated = false;
 
   constructor(private readonly limit: number) {}
 
   push(chunk: Buffer): void {
+    if (chunk.length > this.limit) this.truncated = true;
     const slice = chunk.length > this.limit ? chunk.subarray(chunk.length - this.limit) : chunk;
     this.text += slice.toString('utf8');
     if (this.text.length > this.limit) {
+      this.truncated = true;
       this.text = this.text.slice(this.text.length - this.limit);
     }
   }

@@ -14,6 +14,7 @@ const PROCESS_EFFECTS: readonly ProcessEffectSelector[] = [
 const SHELL_OUTPUT: CapabilityContract['output'] = {
   exit: 'integer',
   stdout_tail: 'string',
+  stdout_truncated: 'boolean',
   stderr_tail: 'string',
   duration_ms: 'integer',
   artifacts: 'ResourceRef[]',

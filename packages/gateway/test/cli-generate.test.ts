@@ -48,7 +48,7 @@ const vendors: readonly [string, (options: CliGenerateOptions) => GenerationAdap
 describe('cli generate adapters', () => {
   for (const [name, factory, argv] of vendors) {
     it(`${name} sends the prompt on stdin and not on argv`, async () => {
-      const port = recording({ status: 'completed', exit: 0, stdout_tail: 'ok', stderr_tail: '', duration_ms: 1 });
+      const port = recording({ status: 'completed', stdout_truncated: false, exit: 0, stdout_tail: 'ok', stderr_tail: '', duration_ms: 1 });
       const adapter = factory({ spawn: port.spawn, cwd_ref: 'ref_ws', timeout_ms: 1000 });
       const result = await adapter.execute(call);
       assert.equal(result.status, 'completed');
@@ -65,8 +65,16 @@ describe('cli generate adapters', () => {
     });
   }
 
+  it('does not report truncated stdout as a completed answer', async () => {
+    const port = recording({ status: 'completed', exit: 0, stdout_truncated: true,
+      stdout_tail: 'partial answer', stderr_tail: '', duration_ms: 1 });
+    const result = await claudePrintAdapter({ spawn: port.spawn, cwd_ref: 'ref_ws', timeout_ms: 1000 }).execute(call);
+    assert.equal(result.status, 'failed');
+    if (result.status === 'failed') assert.match(result.failure.message, /stdout.*truncated/);
+  });
+
   it('maps a nonzero exit and a timeout to typed failures', async () => {
-    const nonzero = recording({ status: 'completed', exit: 7, stdout_tail: 'PROMPT-TOKEN-p7', stderr_tail: '', duration_ms: 1 });
+    const nonzero = recording({ status: 'completed', stdout_truncated: false, exit: 7, stdout_tail: 'PROMPT-TOKEN-p7', stderr_tail: '', duration_ms: 1 });
     const exited = await codexExecAdapter({ spawn: nonzero.spawn, cwd_ref: 'ref_ws', timeout_ms: 1000 }).execute(call);
     assert.equal(exited.status, 'failed');
     if (exited.status === 'failed') {

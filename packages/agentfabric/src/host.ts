@@ -1293,6 +1293,7 @@ export class AgentFabricHost implements CapabilityHost {
         outcome: 'succeeded',
         output: {
           exit: result.exit,
+          stdout_truncated: result.stdout_truncated,
           stdout_tail,
           stderr_tail,
           duration_ms: result.duration_ms,

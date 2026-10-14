@@ -67,6 +67,7 @@ function mapShellOutcome(outcome: InvocationOutcome): CliSpawnResult {
     return {
       status: 'completed',
       exit: outcome.output.exit,
+      stdout_truncated: outcome.output.stdout_truncated,
       stdout_tail: outcome.output.stdout_tail,
       stderr_tail: outcome.output.stderr_tail,
       duration_ms: outcome.output.duration_ms,
@@ -83,6 +84,7 @@ function mapShellOutcome(outcome: InvocationOutcome): CliSpawnResult {
 
 function isShellOutput(value: unknown): value is {
   exit: number;
+  stdout_truncated: boolean;
   stdout_tail: string;
   stderr_tail: string;
   duration_ms: number;
@@ -93,6 +95,7 @@ function isShellOutput(value: unknown): value is {
   const record = value as Record<string, unknown>;
   return (
     typeof record['exit'] === 'number' &&
+    typeof record['stdout_truncated'] === 'boolean' &&
     typeof record['stdout_tail'] === 'string' &&
     typeof record['stderr_tail'] === 'string' &&
     typeof record['duration_ms'] === 'number'

@@ -13,7 +13,7 @@ issued.
 
 ```text
 input    { argv, cwd_ref, env_allow, timeout_ms, stdin? }
-output   { exit, stdout_tail, stderr_tail, duration_ms, artifacts }
+output   { exit, stdout_tail, stdout_truncated, stderr_tail, duration_ms, artifacts }
 effects  process.spawn, fs.write:<cwd_ref>
 failures timeout | denied | spawn_failed | cancelled
 ```
@@ -31,7 +31,8 @@ workspace. Process-effect tokens are an additional exact set on the grant:
 `process.spawn` and `fs.write:<cwd_ref>`. Missing either token is denial.
 Adding a process effect is a vocabulary revision (`PROCESS_EFFECT_VOCABULARY_REVISION`).
 
-Stdout and stderr tails keep the last 4096 characters. New files inside the
+Stdout and stderr tails keep the last 4096 characters (configurable up to 65,536).
+`stdout_truncated` records whether stdout was discarded before redaction. New files inside the
 workspace come back as resource references, not locators. `duration_ms` is
 read from the injected clock. Timeout and cancel abort that same injected
 timer and then signal the process group on POSIX (`SIGTERM`, then `SIGKILL`
@@ -76,7 +77,8 @@ failures:
 | `denied` | `unauthorized` |
 | `spawn_failed` | `unavailable` |
 | exit nonzero | `unavailable` (`exited N`) |
-| exit 0 | completed text is the stdout tail |
+| exit 0, stdout truncated | `unavailable` (`cli generate stdout was truncated`), non-retryable |
+| exit 0, stdout intact | completed text is the full stdout body, with `stop` |
 
 Tests drive stub scripts. They do not execute the real `codex`, `claude`,
 or `grok` binaries and they do not use the network.

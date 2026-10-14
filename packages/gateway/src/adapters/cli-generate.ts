@@ -33,6 +33,7 @@ export type CliSpawnResult =
   | {
       readonly status: 'completed';
       readonly exit: number;
+      readonly stdout_truncated: boolean;
       readonly stdout_tail: string;
       readonly stderr_tail: string;
       readonly duration_ms: number;
@@ -122,6 +123,9 @@ function toProvider(result: CliSpawnResult): GenerationProviderResult {
   }
   if (result.exit !== 0) {
     return failed('unavailable', `cli generate exited ${result.exit}`);
+  }
+  if (result.stdout_truncated) {
+    return failed('unavailable', 'cli generate stdout was truncated');
   }
   return {
     status: 'completed',
