@@ -23,12 +23,12 @@ export function normalizeQuotaSnapshot(value: unknown): QuotaSnapshot | undefine
   const providers: QuotaSnapshot['providers'][number][] = [];
   for (const raw of data.providers) {
     const provider = object(raw);
-    if (typeof provider?.provider !== 'string' || !provider.provider.trim() || !Array.isArray(provider.windows)) return undefined;
+    if (typeof provider?.provider !== 'string' || !provider.provider.trim() || !Array.isArray(provider.windows)) continue;
     // Preserve ambiguous account evidence: a known cap must survive duplicates.
     const windows: QuotaSnapshot['providers'][number]['windows'][number][] = [];
     for (const rawWindow of provider.windows) {
       const window = object(rawWindow);
-      if (typeof window?.id !== 'string') return undefined;
+      if (typeof window?.id !== 'string') continue;
       const remaining = window.percentRemaining;
       const pace = object(window.pace);
       windows.push({ id: window.id, percentRemaining: typeof remaining === 'number' && Number.isFinite(remaining) && remaining >= 0 && remaining <= 100 ? remaining : null,
@@ -36,6 +36,7 @@ export function normalizeQuotaSnapshot(value: unknown): QuotaSnapshot | undefine
         ...(typeof pace?.status === 'string' ? { pace: { status: pace.status } } : {}),
       });
     }
+    if (windows.length === 0) continue;
     const state = object(provider.state);
     const refreshedAt = timestamp(state?.refreshedAt);
     const staleReuse = state?.reused === true && (refreshedAt === null || refreshedAt > observed_at || observed_at - refreshedAt >= 60_000);
