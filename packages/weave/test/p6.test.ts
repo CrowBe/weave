@@ -1,14 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { EvaluationOutcome, InferenceGateway } from '@weave/gateway';
-import { grantCovers } from '@weave/agentsop';
+import { createGrantAuthority, grantCovers } from '@weave/agentsop';
+import { AgentFabricHost, SOURCE_INSPECT } from '@weave/agentfabric';
+import { renderFrameView } from '../src/views.js';
+import { scenario } from './fixture.js';
 import { transitionBooleanSite, evaluateBooleanSite, INPUT_RULES } from '../src/sites/boolean.js';
 const current = { state_revision: 1, state_updated_at: 10 };
 const input = { ...current, request_id: 'r1', state: { text: 'CANARY_SECRET' }, needs_dispatch: true,
   terms: { quality: 'baseline' as const, destinations: ['local'], max_context_tokens: 100,
     deadline: 100, cost_ceiling: 10, max_attempts: 1 },
   catalogue_index: Array.from({ length: 12 }, (_, n) => ({ id: `op${n}`, purpose: 'disclosed', input: { secret: 'SCHEMA_SECRET' } })) };
-function recorded(site: string, keys: readonly string[], p = .29, confidence: number | undefined = 1) {
+function recorded(site: string, keys: readonly string[], p = .29, confidence?: number) {
+  if (arguments.length < 4) confidence = 1;
   const outcome: EvaluationOutcome<'boolean'> = { status: 'accepted', kind: 'boolean', site, request_id: 'r1',
     answers: Object.fromEntries(keys.map(key => [key, { type: 'boolean' as const, probability: p }])),
     confidence: confidence === undefined ? undefined : Object.fromEntries(keys.map(key => [key, confidence])),
@@ -79,4 +83,102 @@ test('evaluate uses site semantics once, handles thrown secrets and in-flight re
     assert.equal(result.status, site === 'loop.preselect' ? 'transition' : 'needs_human');
     assert.ok(!JSON.stringify(result.observations).includes('CANARY'));
   }
+});
+
+test('D7 clean observation cannot bypass Fabric denial for a widened resource', () => {
+  const authority = createGrantAuthority();
+  const host = new AgentFabricHost({ authority });
+  const alpha = host.registerSource('mem:alpha', 'a');
+  const gamma = host.registerSource('mem:gamma', 'g');
+  const grant = authority.issue({ action_id: 'a:1:1', operation: SOURCE_INSPECT.id,
+    contract_rev: SOURCE_INSPECT.revision, permissions: [{ resource: alpha, mode: 'read' }],
+    effects: [{ resource: alpha, mode: 'read' }], issued_at: 1 });
+  const clean = transitionBooleanSite('guard.output', input, recorded('guard.output', ['decision']), current);
+  assert.equal(clean.status, 'transition');
+  const denied = host.invoke(grant, SOURCE_INSPECT.id, { source: gamma });
+  assert.equal(denied.kind, 'rejected');
+  assert.equal((denied as { code: string }).code, 'DENIED');
+  assert.equal(host.resourceAccesses.length, 0);
+});
+
+test('D3 consumes the budgeted M6 index rather than the registry or schema slice', () => {
+  const state = scenario().runtime.state();
+  const frame = renderFrameView(state, input.catalogue_index.map(entry => ({ ...entry, input: { token: 'SCHEMA_SECRET' } })),
+    { id: 'p6-index', version: 1, catalogue_budget: 3, schema_for: ['op0'] });
+  const content = frame.content as { catalogue_index: { id: string; purpose: string }[] };
+  const bounded = { ...input, catalogue_index: content.catalogue_index };
+  const r = recorded('loop.preselect', ['entry_0', 'entry_1', 'entry_2', 'op9'], 1);
+  const narrowed = transitionBooleanSite('loop.preselect', bounded, r, current);
+  assert.deepEqual(narrowed.catalogue_index, content.catalogue_index);
+  assert.equal(narrowed.observations.at(-1)?.reason, 'unknown_answer');
+  const fallback = transitionBooleanSite('loop.preselect', bounded, { ...r, outcome: null }, current);
+  assert.deepEqual(fallback.catalogue_index, content.catalogue_index);
+  assert.ok(!JSON.stringify(fallback).includes('SCHEMA_SECRET'));
+});
+
+test('D3 ranks probabilities descending, excludes below .5 and accepts .75 confidence', () => {
+  const r = recorded('loop.preselect', entries, .49, .75);
+  assert.equal(r.outcome.status, 'accepted');
+  const answers = { ...r.outcome.answers, entry_2: { type: 'boolean' as const, probability: .5 },
+    entry_4: { type: 'boolean' as const, probability: .9 } };
+  r.outcome = { ...r.outcome, answers };
+  assert.deepEqual(transitionBooleanSite('loop.preselect', input, r, current).catalogue_index.map(e => e.id), ['op4', 'op2']);
+});
+
+test('all boolean sites capture revisions and reject changes in flight; cancellation never passes a guard', async () => {
+  for (const site of ['loop.preselect', 'guard.input', 'guard.output'] as const) {
+    const keys = site === 'loop.preselect' ? entries : site === 'guard.input' ? INPUT_RULES : ['decision'];
+    for (const cancel of [false, true]) {
+      const controller = new AbortController();
+      let now = { ...current, observed_at: 10 };
+      const mutable = { ...input };
+      const port = { evaluate: async () => {
+        mutable.state_revision = 2;
+        if (cancel) controller.abort();
+        else now = { state_revision: 2, state_updated_at: 11, observed_at: 11 };
+        return recorded(site, keys).outcome;
+      } } as Pick<InferenceGateway, 'evaluate'>;
+      const result = await evaluateBooleanSite(site, mutable, port, () => now, controller.signal);
+      assert.equal(result.observations[0]?.reason, cancel ? 'cancelled' : 'stale_answer');
+      assert.equal(result.status, site === 'loop.preselect' ? cancel ? 'paused' : 'transition' : 'needs_human');
+    }
+    const controller = new AbortController(); controller.abort();
+    const result = await evaluateBooleanSite(site, input, { evaluate: async () => assert.fail('cancelled call') },
+      () => ({ ...current, observed_at: 10 }), controller.signal);
+    assert.ok(result.observations.every(o => !o.accepted));
+  }
+});
+
+test('empty disclosed index records evidence without calling evaluate', async () => {
+  const result = await evaluateBooleanSite('loop.preselect', { ...input, catalogue_index: [] },
+    { evaluate: async () => assert.fail('empty index needs no decision') }, () => ({ ...current, observed_at: 10 }));
+  assert.deepEqual(result.catalogue_index, []);
+  assert.equal(result.observations[0]?.reason, 'empty_index');
+});
+
+test('guard confidence threshold is inclusive and malformed shapes/statistics never pass', () => {
+  for (const site of ['guard.input', 'guard.output'] as const) {
+    const keys = site === 'guard.input' ? INPUT_RULES : ['decision'];
+    const r = recorded(site, keys, .29, .90);
+    assert.equal(transitionBooleanSite(site, input, r, current).status, 'transition');
+    assert.equal(r.outcome.status, 'accepted');
+    for (const malformed of [{ type: 'choice', choice: 'clean' }, { type: 'boolean', probability: -1 },
+      { type: 'boolean', probability: 1.1 }, { type: 'boolean', probability: '0' }]) {
+      const bad = { ...r, outcome: { ...r.outcome, answers: { ...r.outcome.answers, [keys[0]!]: malformed } } };
+      assert.equal(transitionBooleanSite(site, input, bad as typeof r, current).status, 'needs_human');
+    }
+    for (const conf of [-1, 1.1, NaN, Infinity]) {
+      assert.equal(transitionBooleanSite(site, input, recorded(site, keys, .1, conf), current).status, 'needs_human');
+    }
+  }
+});
+
+test('an evaluate port cannot widen the captured D3 index', async () => {
+  const port = { evaluate: async (request: { state: { catalogue_index: unknown[] } }) => {
+    request.state.catalogue_index.push({ id: 'outside', purpose: 'unauthorized' });
+    return recorded('loop.preselect', entries, 1).outcome;
+  } } as unknown as Pick<InferenceGateway, 'evaluate'>;
+  const result = await evaluateBooleanSite('loop.preselect', input, port, () => ({ ...current, observed_at: 10 }));
+  assert.deepEqual(result.catalogue_index, input.catalogue_index.map(({ id, purpose }) => ({ id, purpose })));
+  assert.equal(result.catalogue_index.some(e => e.id === 'outside'), false);
 });

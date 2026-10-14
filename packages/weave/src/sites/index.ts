@@ -66,18 +66,18 @@ export interface SiteTransition {
 }
 
 /** Bound opaque correlation ids; don't forward arbitrary provider text. */
-function correlation(value: unknown): string | null {
+export function correlation(value: unknown): string | null {
   return typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/.test(value) &&
     !/^(sk[-_]|Bearer|eyJ|gh[pousr]_|github_pat_|AKIA)/i.test(value) ? value : null;
 }
-function unit(value: unknown): value is number {
+export function unit(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
 }
 function validState(state: SiteState): boolean {
   return Number.isSafeInteger(state.state_revision) && state.state_revision >= 0 && Number.isFinite(state.state_updated_at);
 }
 
-function decisionUnavailable(outcome: EvaluationOutcome<'choice'> | null): boolean {
+export function decisionUnavailable(outcome: EvaluationOutcome | null): boolean {
   if (!outcome || outcome.paused !== undefined) return true;
   if (outcome.status === 'accepted') return false;
   if (outcome.status === 'blocked') return ['provider_unavailable', 'no_route', 'no_budget', 'quota_unknown',
@@ -101,12 +101,8 @@ export function transitionSite(site: DecisionSite, input: SiteInput, recorded: R
   const selected = answer === null ? undefined : probabilities?.[answer];
   const top_p = unit(selected) ? selected : null;
   let reason: SiteReason;
-  if (recorded.cancelled) reason = 'cancelled';
-  else if (!validState(input) || !validState(current) || !Number.isFinite(recorded.observed_at) ||
-      recorded.state_revision !== input.state_revision || input.state_revision !== current.state_revision ||
-      input.state_updated_at !== current.state_updated_at || recorded.observed_at < current.state_updated_at) reason = 'stale_answer';
-  else if (outcome && (outcome.request_id !== input.request_id || outcome.site !== site)) reason = 'mismatched_answer';
-  else if (decisionUnavailable(outcome)) reason = 'decision_unavailable';
+  const metadata = admissionReason(site, input, recorded, current);
+  if (metadata) reason = metadata;
   else if (!answered) reason = 'no_answer';
   else if (answered.kind !== 'choice' || answer === null) reason = 'invalid_answer';
   else if (confidence === null) reason = 'missing_confidence';
@@ -181,5 +177,19 @@ export function stopForNoProgress(history: readonly ProgressChoice[], issues: re
 }[]): 'no_progress' | 'repeated_issue' | null {
   if (history.length >= 2 && history.slice(-2).every(choice => choice === 'stalled' || choice === 'regressing')) return 'no_progress';
   if (issues.some(issue => issue.reappeared && issue.issue_id.length > 0 && Number.isSafeInteger(issue.fix_attempts) && issue.fix_attempts >= 2)) return 'repeated_issue';
+  return null;
+}
+
+/** Shared freshness, identity and outage gate for all site answer shapes. */
+export function admissionReason(site: string, input: SiteInput,
+  recorded: { readonly outcome: EvaluationOutcome | null; readonly state_revision: number;
+    readonly observed_at: number; readonly cancelled?: boolean }, current: SiteState): SiteReason | null {
+  const outcome = recorded.outcome;
+  if (recorded.cancelled) return 'cancelled';
+  if (!validState(input) || !validState(current) || !Number.isFinite(recorded.observed_at) ||
+    recorded.state_revision !== input.state_revision || input.state_revision !== current.state_revision ||
+    input.state_updated_at !== current.state_updated_at || recorded.observed_at < current.state_updated_at) return 'stale_answer';
+  if (outcome && (outcome.request_id !== input.request_id || outcome.site !== site)) return 'mismatched_answer';
+  if (decisionUnavailable(outcome)) return 'decision_unavailable';
   return null;
 }
