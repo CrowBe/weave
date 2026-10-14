@@ -36,7 +36,8 @@ function member(value: unknown, values: readonly string[]): boolean {
   return typeof value === 'string' && values.includes(value);
 }
 function httpUrl(value: unknown): boolean {
-  if (!text(value)) return false;
+  // `URL.search` and `URL.hash` are empty for a bare `?` or `#`, so reject the characters themselves.
+  if (!text(value) || value.includes('?') || value.includes('#')) return false;
   try {
     const url = new URL(value);
     const loopback = ['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname);
@@ -73,6 +74,7 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
     check(unit.operation === 'generate' || unit.operation === 'evaluate', `${path}.operation`);
     check(member(unit.kind, unit.operation === 'generate' ? GENERATION_KINDS : unit.operation === 'evaluate' ? EVALUATION_KINDS : []), `${path}.kind: operation/kind pair`);
     check(unit.tier === undefined || member(unit.tier, TIERS), `${path}.tier`);
+    check(unit.tier !== 'decision' || unit.operation === 'evaluate', `${path}.tier: decision tier requires evaluate`);
     check(member(unit.quality, QUALITY_BARS), `${path}.quality`);
     for (const key of ['context_profile_version', 'prompt_template_version', 'context_limit_tokens']) {
       check(positiveInteger(unit[key]), `${path}.${key}`);

@@ -155,10 +155,11 @@ routing never reads time or turns an expired entry into permission to dispatch.
 Filtering and existing evidence ordering stay deterministic.
 
 Validation rejects duplicate routed-unit ids, invalid operation/kind pairs,
-unknown tiers, malformed route fields, negative or nonnumeric prices, missing
-configured decision providers, identical primary and fallback, and base URLs
-other than HTTPS or HTTP on loopback hosts (`127.0.0.1`, `::1`, `localhost`)
-without userinfo, a query string, or a fragment. Adapters remain credential-injected.
+unknown tiers, a `decision` tier on a generate unit, malformed route fields,
+negative or nonnumeric prices, missing configured decision providers, identical
+primary and fallback, and base URLs other than HTTPS or HTTP on loopback hosts
+(`127.0.0.1`, `::1`, `localhost`) without userinfo, `?`, or `#`. Adapters remain
+credential-injected.
 
 P3 assumption: per-provider destinations will come from each provider's routed
 unit or be added to its provider record in P3. Switching decision providers will

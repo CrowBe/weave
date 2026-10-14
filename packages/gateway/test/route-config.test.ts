@@ -63,6 +63,9 @@ const cases: [string, (config: any) => void, string][] = [
   ['unknown kind', c => c.units[0].kind = 'other', 'units[0].kind: operation/kind pair'],
   ['wrong kind pair', c => c.units[0].kind = 'boolean', 'units[0].kind: operation/kind pair'],
   ['unknown tier', c => c.units[0].tier = 'fast', 'units[0].tier'],
+  ['decision tier on generate', c => c.units[0].tier = 'decision', 'units[0].tier: decision tier requires evaluate'],
+  ['missing operation', c => delete c.units[0].operation, 'units[0].operation'],
+  ['missing units', c => delete c.units, 'units: expected array'],
   ['negative output price', c => c.units[0].price.output_per_mtok = -1, 'units[0].price.output_per_mtok'],
   ['nonnumeric input price', c => c.units[0].price.input_per_mtok = '0', 'units[0].price.input_per_mtok'],
   ['missing price', c => delete c.units[0].price, 'units[0].price'],
@@ -95,6 +98,15 @@ for (const [name, mutate, expected] of cases) it(`rejects ${name}`, () => {
   const result = parseRouteConfig(input);
   assert.equal(result.ok, false);
   if (!result.ok) assert.ok(result.errors.some(e => e.includes(expected)), result.errors.join('; '));
+});
+it('accepts a decision tier on an evaluate unit', () => {
+  const input = example();
+  Object.assign(input.units[0], { tier: 'decision', operation: 'evaluate', kind: 'boolean' });
+  const result = parseRouteConfig(input);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.table[0]?.tier, 'decision');
+  assert.equal(result.table[0]?.operation, 'evaluate');
 });
 it('rejects malformed roots and permits null fallback, no tier, and an empty table', () => {
   for (const input of [null, [], {}, { units: [], decision: null }]) assert.equal(parseRouteConfig(input).ok, false);
@@ -208,6 +220,10 @@ for (const [url, ok] of [
   ['http://user:password@localhost', false],
   ['https://api.typesafe.ai/?api_key=sk-example', false],
   ['https://api.typesafe.ai/#fragment', false],
+  ['https://api.typesafe.ai/?', false],
+  ['https://api.typesafe.ai/#', false],
+  ['https://api.typesafe.ai?', false],
+  ['https://api.typesafe.ai#', false],
 ] as const) it(`validates provider transport security: ${url}`, () => {
   const input = example();
   input.decision.providers['typesafe-jev'].base_url = url;
