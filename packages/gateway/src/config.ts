@@ -135,6 +135,10 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
         check(provider.auth === undefined || member(provider.auth, DECISION_AUTH), `${path}.auth`);
         check(provider.key_env === undefined || (typeof provider.key_env === 'string' &&
           /^[A-Z_][A-Z0-9_]*$/.test(provider.key_env)), `${path}.key_env: expected environment variable name`);
+        check(provider.auth !== 'chatgpt-oauth' || provider.key_env === undefined,
+          `${path}.key_env: not allowed with chatgpt-oauth`);
+        check(provider.auth !== 'api-key' || provider.key_env !== undefined,
+          `${path}.key_env: required with api-key`);
       });
     }
   }

@@ -566,8 +566,13 @@ function cheapestWorstCase(order: readonly RoutedUnit[], terms: InferenceTerms):
   return Math.min(...order.map((u) => worstCaseCost(u, terms)));
 }
 
-/** Nothing was routable: say whether the money or the policy was the reason. */
+/**
+ * Nothing was routable: say whether the money or the policy was the reason.
+ * Operation, kind, and tier mismatches were never candidates for this request,
+ * so an unaffordable requested tier still reports `no_budget`.
+ */
 function blockedRoutingReason(excluded: readonly RouteExclusion[]): 'no_route' | 'no_budget' {
-  const considered = excluded.filter((e) => e.reason !== 'kind_mismatch' && e.reason !== 'operation_mismatch');
+  const considered = excluded.filter((e) =>
+    e.reason !== 'kind_mismatch' && e.reason !== 'operation_mismatch' && e.reason !== 'tier_mismatch');
   return considered.length > 0 && considered.every((e) => e.reason === 'unaffordable') ? 'no_budget' : 'no_route';
 }

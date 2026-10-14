@@ -18,9 +18,41 @@ it('parses the example without changing its units or decision config', () => {
 });
 it('filters tiers independently of quality and preserves order', () => {
   const units = table();
-  assert.deepEqual(route(units, target, { ...terms, tier: 'flash' }, 20).order.map(u => u.adapter), ['grok-build', 'codex']);
-  assert.equal(route(units, target, { ...terms, tier: 'flash' }, 20).excluded[0]?.reason, 'tier_mismatch');
+  const flash = route(units, target, { ...terms, tier: 'flash' }, 20);
+  assert.deepEqual(flash.order.map(u => u.adapter), ['grok-build', 'codex']);
+  assert.deepEqual(flash.excluded, [{ routed_unit_id: 'claude-code.strong', reason: 'tier_mismatch' }]);
   assert.equal(route(units, { ...target, tier: 'decision' }, terms, 20).order.length, 0);
+  const unclassified = units.map(({ tier, ...unit }) => unit);
+  assert.deepEqual(route(unclassified, target, { ...terms, tier: 'flash' }, 20).excluded, [
+    { routed_unit_id: 'grok-build.flash', reason: 'tier_mismatch' },
+    { routed_unit_id: 'codex.flash', reason: 'tier_mismatch' },
+    { routed_unit_id: 'claude-code.strong', reason: 'tier_mismatch' },
+  ]);
+});
+it('reports no_budget when the requested tier is unaffordable and another tier stays affordable', async () => {
+  const units = table().map(unit => unit.tier === 'flash'
+    ? { ...unit, price: { ...unit.price, output_per_mtok: 1_000_000 } }
+    : unit);
+  const open = route(units, target, terms, 20);
+  assert.deepEqual(open.order.map(u => u.routed_unit_id), ['claude-code.strong']);
+  assert.deepEqual(open.excluded, [
+    { routed_unit_id: 'grok-build.flash', reason: 'unaffordable' },
+    { routed_unit_id: 'codex.flash', reason: 'unaffordable' },
+  ]);
+  let calls = 0;
+  const gateway = createInferenceGateway({
+    routes: units,
+    clock: { now: () => 0 },
+    adapters: units.map(unit => ({ id: unit.adapter, async execute() { calls++; throw new Error('must not call'); } })),
+  });
+  const outcome = await gateway.generate({
+    request_id: 'flash-budget', site: 'test', role: 'working', kind: 'transform',
+    input: { instructions: '', prompt: 'work' }, terms: { ...terms, tier: 'flash' },
+  });
+  assert.equal(outcome.status, 'blocked');
+  if (outcome.status === 'blocked') assert.equal(outcome.reason, 'no_budget');
+  assert.deepEqual(outcome.attempts, []);
+  assert.equal(calls, 0);
 });
 it('excludes unavailable adapters with stable order; absent availability is a no-op', () => {
   const units = table();
@@ -84,6 +116,8 @@ const cases: [string, (config: any) => void, string][] = [
   ['missing providers', c => delete c.decision.providers, 'decision.providers'],
   ['invalid provider record', c => c.decision.providers['typesafe-jev'] = null, 'decision.providers.typesafe-jev'],
   ['invalid key env', c => c.decision.providers['typesafe-jev'].key_env = 12, 'decision.providers.typesafe-jev.key_env'],
+  ['oauth with key env', c => c.decision.providers['openai-decisions'].key_env = 'OPENAI_API_KEY', 'decision.providers.openai-decisions.key_env: not allowed with chatgpt-oauth'],
+  ['api-key without key env', c => c.decision.providers['openai-decisions'].auth = 'api-key', 'decision.providers.openai-decisions.key_env: required with api-key'],
   ['invalid unit', c => c.units[0] = null, 'units[0]'],
   ['missing adapter', c => delete c.units[0].adapter, 'units[0].adapter'],
   ['invalid profile version', c => c.units[0].context_profile_version = 0, 'units[0].context_profile_version'],
@@ -122,7 +156,11 @@ it('tier never relaxes quality or matches an unclassified unit', () => {
   assert.deepEqual(result.order, []);
   assert.equal(result.excluded[0]?.reason, 'quality_below_bar');
   const unclassified = units.map(({ tier, ...unit }) => unit);
-  assert.deepEqual(route(unclassified, target, { ...terms, tier: 'flash' }, 20).order, []);
+  assert.deepEqual(route(unclassified, target, { ...terms, tier: 'flash' }, 20).excluded, [
+    { routed_unit_id: 'grok-build.flash', reason: 'tier_mismatch' },
+    { routed_unit_id: 'codex.flash', reason: 'tier_mismatch' },
+    { routed_unit_id: 'claude-code.strong', reason: 'tier_mismatch' },
+  ]);
   assert.equal(route(units, { ...target, tier: 'strong' }, { ...terms, tier: 'flash' }, 20).order.length, 0);
 });
 it('availability retains evidence tie order and exclusion declaration order', () => {

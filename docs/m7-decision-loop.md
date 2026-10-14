@@ -133,7 +133,8 @@ reads no files, environment, or clock. The root may load `weave.routes.json` and
 an ignored `weave.routes.local.json` overlay. See
 [weave.routes.example.json](../weave.routes.example.json) for the P1 shape:
 `units` is a route table and `decision` declares `provider`, nullable `fallback`,
-and named `providers` with `base_url`, `model`, optional `auth` and `key_env`.
+and named `providers` with `base_url`, `model`, optional `auth`, and `key_env`.
+`auth: "chatgpt-oauth"` carries no `key_env`. `auth: "api-key"` requires one.
 These are configuration names, never embedded credentials. The example declares
 future adapters; parsing it does not install or execute them.
 
@@ -157,7 +158,8 @@ Filtering and existing evidence ordering stay deterministic.
 Validation rejects duplicate routed-unit ids, invalid operation/kind pairs,
 unknown tiers, a `decision` tier on a generate unit, malformed route fields,
 negative or nonnumeric prices, missing configured decision providers, identical
-primary and fallback, and base URLs other than HTTPS or HTTP on loopback hosts
+primary and fallback, a `key_env` on `chatgpt-oauth`, an `api-key` provider
+without a `key_env`, and base URLs other than HTTPS or HTTP on loopback hosts
 (`127.0.0.1`, `::1`, `localhost`) without userinfo, `?`, or `#`. Adapters remain
 credential-injected.
 
