@@ -21,7 +21,15 @@ it('filters tiers independently of quality and preserves order', () => {
   const flash = route(units, target, { ...terms, tier: 'flash' }, 20);
   assert.deepEqual(flash.order.map(u => u.adapter), ['grok-build', 'codex']);
   assert.deepEqual(flash.excluded, [{ routed_unit_id: 'claude-code.strong', reason: 'tier_mismatch' }]);
-  assert.equal(route(units, { ...target, tier: 'decision' }, terms, 20).order.length, 0);
+  const decisionTier = route(units, { ...target, tier: 'decision' }, terms, 20);
+  assert.deepEqual(decisionTier.order, []);
+  assert.deepEqual(decisionTier.excluded, units.map(unit => ({ routed_unit_id: unit.routed_unit_id, reason: 'tier_mismatch' })));
+  const strong = route(units, { ...target, tier: 'strong' }, terms, 20);
+  assert.deepEqual(strong.order.map(unit => unit.routed_unit_id), ['claude-code.strong']);
+  assert.deepEqual(strong.excluded, [
+    { routed_unit_id: 'grok-build.flash', reason: 'tier_mismatch' },
+    { routed_unit_id: 'codex.flash', reason: 'tier_mismatch' },
+  ]);
   const unclassified = units.map(({ tier, ...unit }) => unit);
   assert.deepEqual(route(unclassified, target, { ...terms, tier: 'flash' }, 20).excluded, [
     { routed_unit_id: 'grok-build.flash', reason: 'tier_mismatch' },
@@ -118,6 +126,8 @@ const cases: [string, (config: any) => void, string][] = [
   ['invalid key env', c => c.decision.providers['typesafe-jev'].key_env = 12, 'decision.providers.typesafe-jev.key_env'],
   ['oauth with key env', c => c.decision.providers['openai-decisions'].key_env = 'OPENAI_API_KEY', 'decision.providers.openai-decisions.key_env: not allowed with chatgpt-oauth'],
   ['api-key without key env', c => c.decision.providers['openai-decisions'].auth = 'api-key', 'decision.providers.openai-decisions.key_env: required with api-key'],
+  ['key env without auth', c => delete c.decision.providers['typesafe-jev'].auth, 'decision.providers.typesafe-jev.auth: required api-key with key_env'],
+  ['remote provider without credentials', c => { delete c.decision.providers['typesafe-jev'].auth; delete c.decision.providers['typesafe-jev'].key_env; }, 'decision.providers.typesafe-jev: expected auth or key_env'],
   ['invalid unit', c => c.units[0] = null, 'units[0]'],
   ['missing adapter', c => delete c.units[0].adapter, 'units[0].adapter'],
   ['invalid profile version', c => c.units[0].context_profile_version = 0, 'units[0].context_profile_version'],
@@ -150,17 +160,11 @@ it('rejects malformed roots and permits null fallback, no tier, and an empty tab
   input.units = []; assert.equal(parseRouteConfig(input).ok, true);
 });
 
-it('tier never relaxes quality or matches an unclassified unit', () => {
+it('tier never relaxes quality', () => {
   const units = table();
   const result = route(units, target, { ...terms, tier: 'flash', quality: 'high' }, 20);
   assert.deepEqual(result.order, []);
   assert.equal(result.excluded[0]?.reason, 'quality_below_bar');
-  const unclassified = units.map(({ tier, ...unit }) => unit);
-  assert.deepEqual(route(unclassified, target, { ...terms, tier: 'flash' }, 20).excluded, [
-    { routed_unit_id: 'grok-build.flash', reason: 'tier_mismatch' },
-    { routed_unit_id: 'codex.flash', reason: 'tier_mismatch' },
-    { routed_unit_id: 'claude-code.strong', reason: 'tier_mismatch' },
-  ]);
   assert.equal(route(units, { ...target, tier: 'strong' }, { ...terms, tier: 'flash' }, 20).order.length, 0);
 });
 it('availability retains evidence tie order and exclusion declaration order', () => {
@@ -212,6 +216,14 @@ it('rejects non-env-name key_env values', () => {
     if (!result.ok) assert.ok(result.errors.some(e => e.includes('decision.providers.typesafe-jev.key_env')), result.errors.join('; '));
   }
 });
+it('accepts a loopback provider that omits auth and key_env', () => {
+  const input = example();
+  const provider = input.decision.providers['typesafe-jev'];
+  delete provider.auth;
+  delete provider.key_env;
+  provider.base_url = 'http://127.0.0.1:8080';
+  assert.equal(parseRouteConfig(input).ok, true);
+});
 it('rejects auth values outside chatgpt-oauth and api-key', () => {
   for (const auth of ['sk-example-not-a-real-key', 'chatgpt_oauth', 'bearer']) {
     const input = example();
@@ -232,6 +244,10 @@ it('rejects whitespace-padded identifiers', () => {
     [c => { c.decision.provider = ' openai-decisions'; }, errors => errors.includes('invalid decision.provider')],
     [c => { c.decision.fallback = ' typesafe-jev'; }, errors => errors.includes('invalid decision.fallback')],
     [c => { c.decision.providers[' typesafe-jev'] = c.decision.providers['typesafe-jev']; }, errors => errors.some(e => e.includes('decision.providers: expected unpadded identifier'))],
+    [c => { c.units[0].model = ' opus'; }, errors => errors.includes('invalid units[0].model')],
+    [c => { c.units[0].context_profile = ' implementation'; }, errors => errors.includes('invalid units[0].context_profile')],
+    [c => { c.units[0].prompt_template = ' implementation'; }, errors => errors.includes('invalid units[0].prompt_template')],
+    [c => { c.decision.providers['typesafe-jev'].model = ' jev-latest'; }, errors => errors.includes('invalid decision.providers.typesafe-jev.model')],
   ];
   for (const [mutate, matches] of cases) {
     const input = example();

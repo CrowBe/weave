@@ -6,6 +6,7 @@ import {
 
 const DECISION_AUTH = ['chatgpt-oauth', 'api-key'] as const;
 
+/** `key_env` requires `auth: 'api-key'`. A non-loopback provider requires `auth` or `key_env`. */
 export interface DecisionConfig {
   readonly provider: string;
   readonly fallback: string | null;
@@ -28,9 +29,24 @@ function object(value: unknown): value is ObjectValue {
 function text(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
-/** Ids compare and match exactly, so surrounding whitespace is a different invalid value. */
+/** Identity fields compare and are sent as written, so surrounding whitespace is invalid. */
 function identifier(value: unknown): value is string {
   return text(value) && value === value.trim();
+}
+function loopbackHost(hostname: string): boolean {
+  return ['127.0.0.1', '[::1]', 'localhost'].includes(hostname);
+}
+/** A usable provider URL, or null when the transport rules reject it. */
+function providerUrl(value: unknown): URL | null {
+  // `URL.search` and `URL.hash` are empty for a bare `?` or `#`, so reject the characters themselves.
+  if (!text(value) || value.includes('?') || value.includes('#')) return null;
+  try {
+    const url = new URL(value);
+    const loopback = loopbackHost(url.hostname);
+    if ((url.protocol === 'https:' || (url.protocol === 'http:' && loopback)) &&
+      url.username === '' && url.password === '' && url.search === '' && url.hash === '') return url;
+    return null;
+  } catch { return null; }
 }
 function number(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
@@ -40,16 +56,6 @@ function positiveInteger(value: unknown): boolean {
 }
 function member(value: unknown, values: readonly string[]): boolean {
   return typeof value === 'string' && values.includes(value);
-}
-function httpUrl(value: unknown): boolean {
-  // `URL.search` and `URL.hash` are empty for a bare `?` or `#`, so reject the characters themselves.
-  if (!text(value) || value.includes('?') || value.includes('#')) return false;
-  try {
-    const url = new URL(value);
-    const loopback = ['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname);
-    return (url.protocol === 'https:' || (url.protocol === 'http:' && loopback)) &&
-      url.username === '' && url.password === '' && url.search === '' && url.hash === '';
-  } catch { return false; }
 }
 
 /** Errors name fields, never echo field values. */
@@ -71,8 +77,7 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
       'quality', 'context_limit_tokens', 'settings', 'price', 'rate_limits',
       'evidence', 'tier', 'operation', 'kind'], path);
     for (const key of ['routed_unit_id', 'context_profile', 'prompt_template', 'adapter', 'model', 'destination']) {
-      const idField = key === 'routed_unit_id' || key === 'adapter' || key === 'destination';
-      check((idField ? identifier : text)(unit[key]), `${path}.${key}`);
+      check(identifier(unit[key]), `${path}.${key}`);
     }
     if (identifier(unit.routed_unit_id)) {
       check(!ids.has(unit.routed_unit_id), `${path}.routed_unit_id: duplicate`);
@@ -130,8 +135,9 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
         check(identifier(id), 'decision.providers: expected unpadded identifier');
         if (!object(provider)) { check(false, path); return; }
         keys(provider, ['base_url', 'model', 'auth', 'key_env'], path);
-        check(httpUrl(provider.base_url), `${path}.base_url: expected HTTPS or loopback HTTP URL without userinfo, query, or fragment`);
-        check(text(provider.model), `${path}.model`);
+        const url = providerUrl(provider.base_url);
+        check(url !== null, `${path}.base_url: expected HTTPS or loopback HTTP URL without userinfo, query, or fragment`);
+        check(identifier(provider.model), `${path}.model`);
         check(provider.auth === undefined || member(provider.auth, DECISION_AUTH), `${path}.auth`);
         check(provider.key_env === undefined || (typeof provider.key_env === 'string' &&
           /^[A-Z_][A-Z0-9_]*$/.test(provider.key_env)), `${path}.key_env: expected environment variable name`);
@@ -139,6 +145,10 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
           `${path}.key_env: not allowed with chatgpt-oauth`);
         check(provider.auth !== 'api-key' || provider.key_env !== undefined,
           `${path}.key_env: required with api-key`);
+        check(provider.key_env === undefined || provider.auth === 'api-key',
+          `${path}.auth: required api-key with key_env`);
+        check(url === null || loopbackHost(url.hostname) || provider.auth !== undefined || provider.key_env !== undefined,
+          `${path}: expected auth or key_env`);
       });
     }
   }

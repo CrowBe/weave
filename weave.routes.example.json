@@ -11,6 +11,7 @@
       "typesafe-jev": {
         "base_url": "https://api.typesafe.ai",
         "model": "jev-latest",
+        "auth": "api-key",
         "key_env": "TYPESAFE_API_KEY"
       }
     }
