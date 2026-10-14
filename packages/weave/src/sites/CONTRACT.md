@@ -113,6 +113,8 @@ journal stays loadable. Replay reads that journal and does not call a provider.
 Generate text is not stored on the attempt; the step keeps a `gen_` digest ref.
 Env values are not inputs to this step.
 
+Each accepted generation run gets a fresh opaque check-run identity, combined with the full generated-text digest in every check invocation id. Recovery may regenerate an unfinished attempt, but its checks must execute again: neither a different output nor identical text from a workspace-editing backend may reuse committed checks from a prior generation run. The execution id and attempt number remain stable; finished attempts are still skipped. Check evidence belongs to that generation run and its recorded `gen_` artifact. Generate backends are responsible for applying workspace edits; the step does not apply generated text. This assumes a single writer controls the workspace during generation and checks.
+
 ## Local intake provider
 
 The gateway composition configures `decision.sites["intake.classify"] = "amos"`.

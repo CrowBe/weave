@@ -6,6 +6,7 @@
  * uses a fresh grant of equal scope from the composition-root issuer. A decision
  * answer cannot mint a grant, raise the tier past the ceiling, or complete the goal.
  */
+import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, truncateSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { effectSetsEqual, isWellFormedRef, type CapabilityHost, type Grant, type GrantAuthority } from '@weave/agentsop';
@@ -441,7 +442,7 @@ function attemptRecord(fields: AttemptRecord): AttemptRecord {
     pause: fields.pause,
   };
 }
-async function runChecks(input: Normalized, ports: ImplementPorts, attempt: number, signal: AbortSignal | undefined): Promise<CheckEvidence[]> {
+async function runChecks(input: Normalized, ports: ImplementPorts, attempt: number, generationIdentity: string, signal: AbortSignal | undefined): Promise<CheckEvidence[]> {
   const evidence: CheckEvidence[] = [];
   for (const check of input.checks) {
     if (signal?.aborted) break;
@@ -455,7 +456,7 @@ async function runChecks(input: Normalized, ports: ImplementPorts, attempt: numb
         cwd_ref: check.cwd_ref,
         env_allow: [...check.env_allow],
         timeout_ms: check.timeout_ms,
-      }, { invocation_id: `${input.execution_id}:a${attempt}:${check.operation}` });
+      }, { invocation_id: `${input.execution_id}:a${attempt}:${generationIdentity}:${check.operation}` });
       if (invoked.kind === 'rejected') {
         evidence.push({ check_id: check.operation, argv_digest, exit, passed, tail, artifacts });
         continue;
@@ -677,7 +678,10 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
       const digestHex = digest(outcome.text);
       const ref = `gen_${digestHex.slice(0, 32)}`;
       artifactRefs = [ref];
-      checks = await runChecks(normalized, ports, action.attempt, signal);
+      // Text alone does not identify workspace edits: even equal output text can
+      // accompany different edits on recovery. Never replay across generate runs.
+      const generationIdentity = `${digestHex}:${randomUUID()}`;
+      checks = await runChecks(normalized, ports, action.attempt, generationIdentity, signal);
       if (signal?.aborted) {
         history.push(remember(journal, attemptRecord({
           schema: IMPLEMENT_ATTEMPT_SCHEMA,

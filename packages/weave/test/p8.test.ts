@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createGrantAuthority, type Grant } from '@weave/agentsop';
-import { AgentFabricHost } from '@weave/agentfabric';
+import { AgentFabricHost, FabricStore } from '@weave/agentfabric';
 import type { EvaluationOutcome, EvaluationRequest, GenerationOutcome, GenerationRequest, InferenceTerms } from '@weave/gateway';
 import { DECLARED_TASK_POLICY } from '../src/task-acceptance.js';
 import { transitionOutputEval, OUTPUT_EVAL_POLICY, OUTPUT_EVAL_QUESTION } from '../src/sites/output-eval.js';
@@ -455,6 +455,86 @@ test('a real host accepts a fresh grant when a green check is retried after D5 f
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+for (const sameText of [false, true]) {
+test(`restart cannot replay green durable checks against a new generation (same text: ${sameText})`, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-p8-restart-'));
+  let store: FabricStore | undefined;
+  try {
+    const storePath = join(dir, 'fabric.json');
+    const journalPath = join(dir, 'attempts.jsonl');
+    const stub = join(dir, 'check.mjs');
+    writeFileSync(stub, "import { readFileSync, appendFileSync } from 'node:fs'; appendFileSync('runs', 'check\\n'); process.exit(Number(readFileSync('exit', 'utf8')));\n");
+    const authority = createGrantAuthority();
+    const argv = [process.execPath, stub];
+    const openHost = () => {
+      store = FabricStore.open(storePath);
+      return new AgentFabricHost({ store, authority, shell: {
+        env: { lookup: () => undefined }, clock: { now: () => 10 },
+        timer: { sleep: ms => new Promise(resolve => setTimeout(resolve, ms)) },
+        repo: { test: argv, lint: argv, build: argv },
+      } });
+    };
+    let host = openHost();
+    const cwd = host.registerWorkspace(dir);
+    const template = authority.issue({
+      action_id: 'repo-test', operation: 'repo.test', contract_rev: 'r1',
+      permissions: [{ resource: cwd, mode: 'write' }], effects: [{ resource: cwd, mode: 'write' }],
+      process_effects: ['process.spawn', `fs.write:${cwd}`], issued_at: 1,
+    });
+    const issuer = createEqualGrantIssuer(authority, [template]);
+    const work = input({ ceiling: 'flash', retries: 0, checks: [{
+      operation: 'repo.test', grant: template, cwd_ref: cwd, env_allow: [], timeout_ms: 5_000,
+    }] });
+    const world = driver({});
+    let generations = 0;
+    const ports: ImplementPorts = { ...world.ports,
+      generate: async request => {
+        generations += 1;
+        writeFileSync(join(dir, 'exit'), generations === 1 ? '0' : '1');
+        return { status: 'accepted', text: sameText ? 'same-text' : `change-${generations}`, request_id: request.request_id,
+          site: request.site, routed_unit_id: 'fake', provider_response_id: 'fake',
+          attempts: [], spent: 0, uncertainty: [] };
+      },
+      issueCheckGrant: held => issuer.issue(held),
+      invoke: (token, operation, inputs, options) => {
+        const committed = options?.invocation_id === undefined ? false
+          : store!.getInvocation(options.invocation_id)?.status === 'committed';
+        const handle = host.invoke(token, operation, inputs, options);
+        if (handle.kind === 'handle' && !committed) host.release(handle.action_id);
+        return handle;
+      },
+    };
+    const journal = new FileAttemptJournal(journalPath);
+    const crashJournal: AttemptJournal = {
+      load: id => journal.load(id),
+      append: () => { throw new Error('crash before attempt append'); },
+    };
+    await assert.rejects(runImplementationStep(work, ports, crashJournal));
+    assert.equal(journal.load(work.execution_id).length, 0);
+    assert.equal(store!.snapshot().invocations[0]?.status, 'committed');
+    assert.equal(readFileSync(join(dir, 'runs'), 'utf8'), 'check\n');
+    store!.close();
+    host = openHost();
+    const result = await runImplementationStep(work, ports, journal);
+    assert.equal(generations, 2);
+    assert.equal(result.status, 'failed');
+    assert.equal(result.checks[0]?.exit, 1);
+    assert.equal(result.checks[0]?.passed, false);
+    assert.equal(result.evals[0]?.passed, true);
+    assert.equal(result.execution_id, work.execution_id);
+    assert.equal(result.attempts[0]?.attempt, 1);
+    assert.equal(readFileSync(join(dir, 'runs'), 'utf8'), 'check\ncheck\n');
+    const finished = await runImplementationStep(work, ports, journal);
+    assert.deepEqual(finished, result);
+    assert.equal(generations, 2);
+  } finally {
+    store?.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+}
 
 test('a failed criterion is retried once and can pass on the same tier and execution', async () => {
   const world = driver({ evaluations: [{ c1: { p: .2, conf: .95 } }, { c1: { p: .95, conf: .95 } }] });
