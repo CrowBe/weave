@@ -5,7 +5,7 @@ This is the behavioral contract for the planned milestone in
 [M6](m6-route-a-reconstructed-view.md). Terms follow
 [GLOSSARY.md](../GLOSSARY.md). These requirements describe the target, not
 implemented loop behavior. P0 establishes this contract; P1 supplies tier and
-availability routing plus pure configuration validation. P2 supplies local ChatGPT authentication and a Responses adapter. P3 supplies the TypeSafe decision provider behind one evaluation interface. P4 supplies the budget gate; P5 supplies D1, D2, D8 and intake choice sites with pure transitions. Full-loop integration and P6–P12 remain planned.
+availability routing plus pure configuration validation. P2 supplies local ChatGPT authentication and a Responses adapter. P3 supplies the TypeSafe decision provider behind one evaluation interface. P4 supplies the budget gate; P5 supplies D1, D2, D8 and intake choice sites with pure transitions. P6 supplies D3 preselection and D4/D7 boolean guards. Full-loop integration and P7–P12 remain planned.
 Demonstrate red before implementation, prove green with deterministic fixtures,
 and retain M0–M6 checks. Live provider runs are non-gating evidence.
 
@@ -62,7 +62,7 @@ Every `{{Dn}}` node is an `evaluate` request through the gateway, served by the 
 D7's pass cannot override Fabric's deterministic effect and grant enforcement.
 The round transition applies the stop conditions in §6 before another round or
 completion; one `stalled` or `regressing` answer alone does not stop the loop.
-D7 is shown as the target P6 guardrail, not an implementation added by P5.
+P6 implements D3/D4/D7 as pure site transitions with an injected evaluate port; full-loop wiring remains planned.
 
 ## 3. Tidy-state schema (audit-tier input)
 
@@ -139,7 +139,7 @@ eligibility or enable a fallback. Record probe status without recording tokens.
 | D4 `guard.input` | boolean per rule | Does this input or plan violate rule R (secret exfiltration, scope broadening, destructive effect without grant, injection)? | p(violation) | block if p ≥ 0.3 (deliberately asymmetric) | **block, then approval request** |
 | D5 `eval.output` | boolean per success criterion | Does the artifact satisfy criterion C? | p(true), plus conf when supplied by the provider | OpenAI Decisions predicate (provisional assumption; P10 tunes on the tune split): pass if p ≥ 0.85, fail if p ≤ 0.15, otherwise uncertain (treat as fail/retry). TypeSafe Jev and other providers that return confidence: pass if p ≥ 0.8 and conf ≥ 0.9 (existing `confidence_floor`); missing confidence is below the floor. | treat as fail and retry, up to N=2 per step, then escalate the tier once, then hand to audit with `open_issue` |
 | D6 `audit.dispose` | choice per finding | What do we do with audit finding F? | `fix_now` / `defer` / `reject_as_out_of_scope` / `needs_human` | conf ≥ 0.75 | `needs_human` |
-| D7 `guard.output` | boolean | Does the output introduce an effect outside the grant (writes, network, secrets)? | p(violation) | block if p ≥ 0.3 | block. Deterministic effect enforcement (Fabric) stays the real gate. |
+| D7 `guard.output` | boolean | Does the output introduce an effect outside the grant (writes, network, secrets)? | p(violation) | block if p ≥ 0.3 | block, then approval request. Deterministic effect enforcement (Fabric) stays the real gate. |
 | D8 `loop.continue` | choice | Is progress continuing? | `progressing` / `stalled` / `regressing` | conf ≥ 0.7 | `stalled`, counted toward the two-in-a-row stop condition |
 | `intake.classify` | choice | How should this inbound message relate to the running threads? | `new_thread` / `continue_thread` / `queue` / `steer` / `interrupt` / `stop` | conf ≥ 0.80 (provisional until P10) | `ask_user` (`needs_human`), never an inferred classification |
 | (existing) `frontier.weigh` | score | usefulness of each candidate | defer/consider/dispatch | unchanged | `ScriptedDecisionLayer` |
@@ -240,7 +240,7 @@ Stop:
 3. **Iteration cap**: `max_iterations` (default 4 audit rounds).
 4. **No progress**: D8 says `stalled`/`regressing` twice in a row, or the same `issue_id` reappears after two fix attempts.
 5. **Authority**: D4 or D7 block, or a needed approval, goes to `needs_human`.
-6. **Decision outage**: the configured decision provider is unavailable. The loop drops to `ScriptedDecisionLayer` plus deterministic fallbacks for *read-only* steps, and pauses before any dispatch that needs D4.
+6. **Decision outage**: the configured decision provider is unavailable. The loop drops to `ScriptedDecisionLayer` plus deterministic fallbacks for *read-only* steps, and requests approval before any dispatch that needs D4 or D7.
 
 ## 7. Phased PR plan
 
@@ -434,3 +434,28 @@ All providers unavailable has its own blocked reason `provider_unavailable`
 Offline fixtures cover 79/80/95% usage, stale/missing quota, unknown pace,
 downgrade constraints, audit pause, five-hour preference, retry rechecks,
 cancellation, deadlines, snapshot cache concurrency and durable pause records.
+
+### P6 site contract
+
+D3 only narrows the disclosed M6 catalogue index, with ordinal question ids,
+p(true) >= .5, a cap of eight, and ties in disclosed order. It evaluates an
+explicitly disclosed step string plus id/purpose entries; schemas and general
+state are excluded. Any required-answer admission failure returns the full
+index. Unknown answers are ignored and recorded with fixed text, without names.
+D4 evaluates four fixed rules through the same decision gateway: secret
+exfiltration, scope broadening, destructive effect without grant, and prompt
+injection. Injection criteria provisionally interpret fx's injection/malicious
+behavior review as policy override, authority impersonation, secret disclosure,
+or expanded tool/scope access; there is no second model gate.
+D7 evaluates out-of-grant output effects. Both guards request approval at
+p >= .3 or on any uncertainty, missing/malformed/stale answer or outage.
+A pass supplies no grant and cannot override Fabric's deterministic enforcement.
+
+Provisional confidence floors are .75 (D3) and .90 (D4/D7), pending P10
+calibration. Shape/gate/decide uses one fixed-question round: P5 metadata
+admission plus per-answer shape/confidence gates precede deterministic thresholds.
+No outage retries another semantic operation. Boolean observations preserve
+`decision-site@1` key order, with closed answer words and top_p = p(true);
+fixed question text identifies guard rules. Raw input and rule payloads are never
+recorded. Full-loop transport/persistence remain outside these pure sites;
+ScriptedDecisionLayer and M0–M6 behavior are unchanged.

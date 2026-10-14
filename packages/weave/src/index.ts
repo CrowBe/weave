@@ -92,3 +92,7 @@ export {
   type DecisionSite, type SiteChoice, type SiteState, type SiteInput, type IntakeState,
   type RecordedSiteAnswer, type SiteReason, type SiteObservation, type SiteTransition, type ProgressChoice,
 } from './sites/index.js';
+
+export { BOOLEAN_SITE_POLICY, INPUT_RULES, evaluateBooleanSite, transitionBooleanSite,
+  type BooleanSite, type BooleanSiteInput, type CatalogueIndexEntry, type RecordedBooleanAnswer,
+  type BooleanObservation, type BooleanTransition } from './sites/boolean.js';

@@ -31,5 +31,37 @@ operator content, so that content is never copied into the record.
 
 `stopForNoProgress(history, issues)` stops on the last two stalled/regressing
 choices or a currently reappearing issue with at least two recorded fix attempts.
-Transport, persistence, full-loop integration and D3/D4/D7 implementation remain
+Transport, persistence and full-loop integration remain
 outside this contract. ScriptedDecisionLayer remains unchanged.
+
+## P6 boolean sites
+
+D3 receives only the already-disclosed M6 index (id/purpose) and an explicitly
+disclosed `preselect_step` string, never the general state or schemas.
+Questions use ordinal ids `entry_N`; successful selection sorts descending by
+probability then by original disclosed order, includes p >= .5, and caps at 8.
+Any missing, malformed, uncertain, stale or unavailable required answer returns
+that entire index. Unknown question ids are ignored and recorded as a count of
+fixed-text observations, never their names. Empty indexes need no evaluation.
+
+D4 asks the four fixed rules in one boolean evaluation: secret exfiltration,
+scope broadening, destructive effect without grant, and prompt injection.
+Injection criteria include instructions in untrusted content to override policy,
+impersonate authority, reveal secrets or expand tool/scope access; these feed the
+existing decision evaluation, rather than a second gate. D7 asks whether proposed
+output introduces effects outside the grant. Both escalate to needs_human for
+p >= .3 or any admission failure, with per-rule reasons. A clean judgment is
+only evidence and contains no grant or dispatch authority.
+
+Provisional confidence floors: .75 for D3 and .90 for D4/D7, pending P10
+calibration. Shape is the fixed question set, gate is P5 metadata admission plus
+per-answer confidence/shape validation, decide is the deterministic threshold.
+One round, no refinement or semantic substitution on outage. Unknown answers
+cannot repair missing required answers. Observations retain decision-site@1 key
+order; boolean answer is a fixed pass/block/include/exclude vocabulary, top_p
+is p(true), and question is fixed text (never a catalogue id or rule payload).
+
+The fx permissions documentation describes prompt injection or malicious behavior
+review and holding actions when review fails. The concrete injection checklist
+above is a provisional local interpretation, not a claimed upstream rubric.
+Source: https://fx.sh/docs/configure-fx/permissions.md
