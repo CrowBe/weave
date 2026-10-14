@@ -78,6 +78,14 @@ A causally related sequence of actions and observations within a goal. Threads m
 
 A bounded, typed, versioned rendering of authorized state for a particular consumer. It carries source revisions and disclosed omissions rather than serving as an independent source of truth.
 
+### Intake classification
+
+The channel-agnostic `intake.classify` judgment site proposes how an inbound
+message relates to summaries of running threads: `new_thread`,
+`continue_thread`, `queue`, `steer`, `interrupt`, or `stop`. A deterministic
+confidence rule records the observation and returns `ask_user` / `needs_human`
+when uncertain. Classification grants no authority to execute or interrupt.
+
 ### Judgment site
 
 A named place where bounded judgment is requested for a specific purpose, with typed inputs and outputs and its own evaluation history. Weighing, semantic matching, and response evaluation are distinct sites; a model such as Jev may serve more than one.
@@ -513,4 +521,4 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 - Say **`workspace.arrange`**, not *Jev*, for the judgment site that proposes an arrangement. Jev is a model type that may answer `choice`.
 - Say **acceptance line** for a proposal and **acceptance fact** for a line code has admitted. On the System One wire a boolean question is a Noul. The request kind remains `boolean`.
 - Say **criteria gate** for `task.criteria` and **task validation** for `task.validate`. Jev may answer either site. Neither site is the decision layer, and neither is `frontier.weigh`.
-- Say **confidence** for the provider statistic published beside a boolean probability. It is not a weight and not a quality score.
+- Say **confidence** for the provider statistic published beside a typed evaluation answer. It is not a weight and not a quality score.
