@@ -30,6 +30,7 @@ const packagesDir = join(root, 'packages');
 
 const ALLOWED = {
   agentsop: new Set(),
+  'auth-chatgpt': new Set(),
   gateway: new Set(),
   agentfabric: new Set(['agentsop', 'gateway']),
   weave: new Set(['agentsop', 'agentfabric', 'gateway']),

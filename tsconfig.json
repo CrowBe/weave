@@ -6,6 +6,7 @@
     { "path": "packages/gateway" },
     { "path": "packages/weave" },
     { "path": "packages/tapestry" },
-    { "path": "packages/loom-binding" }
+    { "path": "packages/loom-binding" },
+    { "path": "packages/auth-chatgpt" }
   ]
 }
