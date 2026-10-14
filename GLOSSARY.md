@@ -234,7 +234,7 @@ An opaque, host-issued handle to a resource, carrying a coarse kind and never a 
 
 ### Effect
 
-A declared consequence of invoking a capability, drawn from a closed, versioned vocabulary (`discover`, `read`, `create`, `write`, `append`, `delete`). Pure transformations declare none. Adding an effect is a contract revision.
+A declared consequence of invoking a capability, drawn from a closed, versioned vocabulary (`discover`, `read`, `create`, `write`, `append`, `delete`). Pure transformations declare none. Adding an effect is a contract revision. Process shell-out adds a second closed vocabulary beside those modes: `process.spawn` and `fs.write:<resource reference>`. A grant for that work matches the bound set exactly. `env_allow` names variables; the host injects the values, and those values are not arguments, logs, traces, or observations.
 
 ### Principal
 
