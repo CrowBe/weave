@@ -176,7 +176,7 @@ The review stage that requests a `strong` routed unit to examine tidy state for 
 
 ### Implementation step
 
-One generate call at a routed tier, followed by the configured repo checks and D5 output evaluation. Retries and a single tier escalation stay inside the step and share one execution id. The step records artifact refs, check outcomes, and criterion verdicts. It cannot mint a grant, pass the D2 ceiling, or complete the goal.
+One generate call at a routed tier, followed by the configured repo checks and D5 output evaluation. Retries and a single tier escalation stay inside the step and share one execution id. Each check on each attempt uses a fresh grant of equal scope from the composition root. The step records artifact refs, check outcomes, and criterion verdicts. It cannot mint a grant, pass the D2 ceiling, or complete the goal. A decision answer cannot mint one either.
 
 ### Open issue
 

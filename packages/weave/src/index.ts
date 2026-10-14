@@ -103,8 +103,9 @@ export {
 } from './sites/output-eval.js';
 export {
   DEFAULT_IMPLEMENT_RETRIES, FileAttemptJournal, IMPLEMENT_TIERS, MemoryAttemptJournal,
-  replayImplementationStep, runImplementationStep,
-  type AttemptJournal, type AttemptRecord, type CheckEvidence, type ImplementBudgetDecision,
-  type ImplementCheck, type ImplementEval, type ImplementPorts, type ImplementStepInput,
-  type ImplementStepResult, type ImplementTier, type JournalEntry, type OpenIssue, type StopRecord,
+  createEqualGrantIssuer, replayImplementationStep, runImplementationStep,
+  type AttemptJournal, type AttemptRecord, type CheckEvidence, type EqualGrantIssuer,
+  type ImplementBudgetDecision, type ImplementCheck, type ImplementEval, type ImplementPorts,
+  type ImplementStepInput, type ImplementStepResult, type ImplementTier, type JournalEntry,
+  type OpenIssue, type StopRecord,
 } from './implement-step.js';

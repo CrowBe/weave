@@ -3,12 +3,15 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Grant } from '@weave/agentsop';
+import { fileURLToPath } from 'node:url';
+import { createGrantAuthority, type Grant } from '@weave/agentsop';
+import { AgentFabricHost } from '@weave/agentfabric';
 import type { EvaluationOutcome, EvaluationRequest, GenerationOutcome, GenerationRequest, InferenceTerms } from '@weave/gateway';
 import { DECLARED_TASK_POLICY } from '../src/task-acceptance.js';
 import { transitionOutputEval, OUTPUT_EVAL_POLICY, OUTPUT_EVAL_QUESTION } from '../src/sites/output-eval.js';
 import {
-  DEFAULT_IMPLEMENT_RETRIES, FileAttemptJournal, MemoryAttemptJournal, replayImplementationStep, runImplementationStep,
+  DEFAULT_IMPLEMENT_RETRIES, FileAttemptJournal, MemoryAttemptJournal, createEqualGrantIssuer,
+  replayImplementationStep, runImplementationStep,
   type AttemptJournal, type ImplementBudgetDecision, type ImplementCheck, type ImplementPorts, type ImplementStepInput,
   type ImplementTier,
 } from '../src/implement-step.js';
@@ -23,6 +26,17 @@ const grant = {
 const state = { state_revision: 1, state_updated_at: 10 };
 function issued(operation: ImplementCheck['operation']): Grant {
   return { ...grant, action_id: operation, operation };
+}
+function grantScope(token: Grant | null | undefined) {
+  return {
+    action_id: token?.action_id ?? null,
+    operation: token?.operation ?? null,
+    contract_rev: token?.contract_rev ?? null,
+    permissions: token?.permissions ?? null,
+    effects: token?.effects ?? null,
+    process_effects: token?.process_effects ?? null,
+    issued_at: token?.issued_at ?? null,
+  };
 }
 function input(overrides: Partial<ImplementStepInput> = {}): ImplementStepInput {
   const check: ImplementCheck = {
@@ -149,6 +163,7 @@ function driver(options: {
   let generates = 0;
   let checks = 0;
   let evals = 0;
+  const usedGrants = new WeakSet<object>();
   const live = { ...state };
   const found: Driver = {
     input: work, generateIds, tiers, prompts, evalSites, evalStates, invokes,
@@ -193,6 +208,19 @@ function driver(options: {
         const omit = Object.values(scores).some(score => score.conf === undefined);
         return booleanOutcome(request.site, request.request_id, scores, omit);
       }) as ImplementPorts['evaluate'],
+      issueCheckGrant(held) {
+        const known = work.checks.some(check => check.grant === held);
+        if (!known) return null;
+        return {
+          action_id: held.action_id,
+          operation: held.operation,
+          contract_rev: held.contract_rev,
+          permissions: held.permissions.map(effect => ({ resource: effect.resource, mode: effect.mode })),
+          effects: held.effects.map(effect => ({ resource: effect.resource, mode: effect.mode })),
+          issued_at: held.issued_at,
+          ...(held.process_effects === undefined ? {} : { process_effects: [...held.process_effects] }),
+        };
+      },
       invoke(token, operation, inputs, invokeOptions) {
         checks += 1;
         invokes.push({
@@ -200,6 +228,8 @@ function driver(options: {
           ...(invokeOptions?.invocation_id === undefined ? {} : { invocation_id: invokeOptions.invocation_id }),
         });
         if (token === null || token.operation !== operation) return { kind: 'rejected', code: 'DENIED', reason: 'no grant' };
+        if (usedGrants.has(token)) return { kind: 'rejected', code: 'DENIED', reason: 'grant has already been used for an invocation' };
+        usedGrants.add(token);
         const exit = options.exits?.[checks - 1] ?? 0;
         return {
           kind: 'handle', action_id: token.action_id, invocation_id: invokeOptions?.invocation_id ?? token.action_id,
@@ -250,7 +280,9 @@ test('a passing toy goal records evidence and does not complete the goal', async
   assert.deepEqual(result.checks[0]?.artifacts, ['ref_1']);
   assert.match(result.artifact_refs[0] ?? '', /^gen_[a-f0-9]{32}$/);
   assert.equal(result.evals[0]?.passed, true);
-  assert.equal(world.invokes[0]?.grant, grant);
+  assert.notEqual(world.invokes[0]?.grant, grant);
+  assert.deepEqual(grantScope(world.invokes[0]?.grant), grantScope(grant));
+  assert.equal(world.ports.invoke(grant, 'repo.test', {}, { invocation_id: 'template-still-open' }).kind, 'handle');
   assert.deepEqual(world.invokes[0]?.inputs, { cwd_ref: 'workspace-1', env_allow: ['PUBLIC_NAME'], timeout_ms: 1000 });
   assert.equal(JSON.stringify(world.invokes[0]?.inputs).includes('argv'), false);
   const saved = JSON.stringify(world.journal.load('exec-1'));
@@ -264,6 +296,164 @@ test('a passing toy goal records evidence and does not complete the goal', async
   assert.deepEqual(again, result);
   assert.equal(world.generateIds.length, 1);
   assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), result);
+});
+
+test('a D5 failure retries with a fresh grant and passes when the checks stay green', async () => {
+  const world = driver({ evaluations: [{ c1: { p: .2, conf: .95 } }, { c1: { p: .95, conf: .95 } }] });
+  const result = await runImplementationStep(world.input, world.ports, world.journal);
+  assert.equal(result.status, 'passed');
+  assert.equal(result.goal_done, false);
+  assert.equal(result.attempts.length, 2);
+  assert.equal(result.attempts[0]?.status, 'failed');
+  assert.deepEqual(result.attempts[0]?.failing_criterion_ids, ['c1']);
+  assert.equal(result.attempts[0]?.checks[0]?.passed, true);
+  assert.equal(result.attempts[0]?.checks[0]?.exit, 0);
+  assert.equal(result.attempts[1]?.status, 'passed');
+  assert.equal(result.attempts[1]?.checks[0]?.passed, true);
+  assert.equal(result.attempts[1]?.checks[0]?.exit, 0);
+  assert.equal(world.invokes.length, 2);
+  assert.notEqual(world.invokes[0]?.grant, world.invokes[1]?.grant);
+  assert.notEqual(world.invokes[0]?.grant, grant);
+  assert.notEqual(world.invokes[1]?.grant, grant);
+  assert.deepEqual(grantScope(world.invokes[0]?.grant), grantScope(grant));
+  assert.deepEqual(grantScope(world.invokes[1]?.grant), grantScope(grant));
+  const reused = world.ports.invoke(world.invokes[0]?.grant ?? null, 'repo.test', {}, { invocation_id: 'reuse' });
+  assert.equal(reused.kind, 'rejected');
+  if (reused.kind === 'rejected') assert.equal(reused.reason, 'grant has already been used for an invocation');
+});
+
+test('the equal issuer refuses a wider grant and the step does not invoke one', async () => {
+  const authority = createGrantAuthority();
+  const held = authority.issue({
+    action_id: 'act-1', operation: 'repo.test', contract_rev: 'r1',
+    permissions: [{ resource: 'workspace-1', mode: 'write' }],
+    effects: [{ resource: 'workspace-1', mode: 'write' }],
+    process_effects: ['process.spawn', 'fs.write:workspace-1'], issued_at: 1,
+  });
+  const issuer = createEqualGrantIssuer(authority, [held]);
+  (held.permissions as { resource: string; mode: string }[]).push({ resource: 'ref_late', mode: 'read' });
+  const first = issuer.issue(held);
+  assert.ok(first);
+  assert.notEqual(first, held);
+  assert.deepEqual(first?.permissions, [{ resource: 'workspace-1', mode: 'write' }]);
+  (first?.permissions as { resource: string; mode: string }[]).push({ resource: 'ref_extra', mode: 'write' });
+  const second = issuer.issue(held);
+  assert.deepEqual(second?.permissions, [{ resource: 'workspace-1', mode: 'write' }]);
+  assert.notEqual(first, second);
+  assert.equal(authority.markInvoked(first), true);
+  assert.equal(authority.markInvoked(first), false);
+  assert.ok(second);
+  assert.equal(authority.markInvoked(second), true);
+  assert.equal(issuer.issue(second), null);
+  assert.equal(issuer.issue(structuredClone(held)), null);
+  const wider = authority.issue({
+    action_id: 'wider', operation: 'repo.test', contract_rev: 'r1',
+    permissions: [{ resource: 'workspace-1', mode: 'write' }, { resource: 'ref_other', mode: 'write' }],
+    effects: [{ resource: 'workspace-1', mode: 'write' }],
+    process_effects: ['process.spawn', 'fs.write:workspace-1'], issued_at: 1,
+  });
+  assert.equal(issuer.issue(wider), null);
+  assert.equal(issuer.issue({ schema: 'decision-site@1', answer: 'pass' } as unknown as Grant), null);
+  authority.revoke(held);
+  assert.equal(issuer.issue(held), null);
+
+  const world = driver({ input: input({ ceiling: 'flash', retries: 0 }) });
+  const ports: ImplementPorts = {
+    ...world.ports,
+    issueCheckGrant(template) {
+      return {
+        ...template,
+        permissions: [...template.permissions, { resource: 'ref_extra', mode: 'write' }],
+      };
+    },
+  };
+  const denied = await runImplementationStep(world.input, ports, world.journal);
+  assert.equal(world.invokes[0]?.grant, null);
+  assert.equal(denied.checks[0]?.passed, false);
+  assert.equal(denied.checks[0]?.exit, null);
+  assert.equal(denied.goal_done, false);
+});
+
+test('a real host accepts a fresh grant when a green check is retried after D5 fails', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-p8-grant-'));
+  try {
+    const authority = createGrantAuthority();
+    let now = 1_000;
+    const stub = fileURLToPath(new URL('../../../agentfabric/test/fixtures/stub-cli.mjs', import.meta.url));
+    const argv = [process.execPath, stub, '--exit', '0'];
+    const host = new AgentFabricHost({
+      authority,
+      shell: {
+        env: { lookup: () => undefined },
+        clock: { now: () => now },
+        timer: {
+          sleep(ms: number, signal?: AbortSignal) {
+            return new Promise((resolve, reject) => {
+              if (signal?.aborted) {
+                reject(new Error('aborted'));
+                return;
+              }
+              const handle = setTimeout(() => {
+                now += ms;
+                resolve();
+              }, ms);
+              signal?.addEventListener('abort', () => {
+                clearTimeout(handle);
+                reject(new Error('aborted'));
+              }, { once: true });
+            });
+          },
+        },
+        repo: { test: argv, lint: argv, build: argv },
+      },
+    });
+    const cwd = host.registerWorkspace(dir);
+    const template = authority.issue({
+      action_id: 'repo-test', operation: 'repo.test', contract_rev: 'r1',
+      permissions: [{ resource: cwd, mode: 'write' }],
+      effects: [{ resource: cwd, mode: 'write' }],
+      process_effects: ['process.spawn', `fs.write:${cwd}`], issued_at: 1,
+    });
+    const issuer = createEqualGrantIssuer(authority, [template]);
+    const world = driver({ evaluations: [{ c1: { p: .2, conf: .95 } }, { c1: { p: .95, conf: .95 } }] });
+    const used: Grant[] = [];
+    const ports: ImplementPorts = {
+      ...world.ports,
+      issueCheckGrant: held => issuer.issue(held),
+      invoke(token, operation, inputs, invokeOptions) {
+        if (token) used.push(token);
+        const handle = host.invoke(token, operation, inputs, invokeOptions);
+        if (handle.kind === 'handle') host.release(handle.action_id);
+        return handle;
+      },
+    };
+    const work = input({
+      checks: [{
+        operation: 'repo.test', grant: template, cwd_ref: cwd, env_allow: [], timeout_ms: 5_000, argv: ['node', 'stub'],
+      }],
+    });
+    const result = await runImplementationStep(work, ports, world.journal);
+    assert.equal(result.status, 'passed');
+    assert.equal(result.goal_done, false);
+    assert.equal(result.attempts.length, 2);
+    assert.equal(result.attempts[0]?.checks[0]?.exit, 0);
+    assert.equal(result.attempts[0]?.checks[0]?.passed, true);
+    assert.equal(result.attempts[0]?.status, 'failed');
+    assert.equal(result.attempts[1]?.checks[0]?.exit, 0);
+    assert.equal(result.attempts[1]?.checks[0]?.passed, true);
+    assert.equal(used.length, 2);
+    assert.notEqual(used[0], used[1]);
+    assert.notEqual(used[0], template);
+    assert.deepEqual(grantScope(used[0]), grantScope(template));
+    assert.deepEqual(grantScope(used[1]), grantScope(template));
+    assert.equal(authority.markInvoked(template), true);
+    const reused = host.invoke(used[0] ?? null, 'repo.test', { cwd_ref: cwd, env_allow: [], timeout_ms: 5_000 }, { invocation_id: 'reuse' });
+    assert.equal(reused.kind, 'rejected');
+    if (reused.kind === 'rejected') assert.equal(reused.reason, 'grant has already been used for an invocation');
+    assert.equal(JSON.stringify(result).includes(dir), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('a failed criterion is retried once and can pass on the same tier and execution', async () => {

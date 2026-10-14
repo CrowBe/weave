@@ -2,13 +2,13 @@
  * One implementation-tier step: generate, configured repo checks, then D5.
  *
  * The same execution id covers retries and the single escalation. Each finished
- * attempt is appended before the next one starts. A decision answer cannot mint
- * a grant, raise the tier past the ceiling, or complete the goal.
+ * attempt is appended before the next one starts. Each check on each attempt
+ * uses a fresh grant of equal scope from the composition-root issuer. A decision
+ * answer cannot mint a grant, raise the tier past the ceiling, or complete the goal.
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { CapabilityHost, Grant } from '@weave/agentsop';
-import { isWellFormedRef } from '@weave/agentsop';
+import { effectSetsEqual, isWellFormedRef, type CapabilityHost, type Grant, type GrantAuthority } from '@weave/agentsop';
 import type {
   GenerationKind,
   GenerationOutcome,
@@ -50,7 +50,10 @@ const EVAL_TEXT = 'Output evaluation failed for the listed criteria.';
 
 export interface ImplementCheck {
   readonly operation: ImplementCheckId;
-  /** Already issued. This step never issues or widens a grant. */
+  /**
+   * Held grant the composition root already issued. The step does not invoke
+   * this object twice and does not widen it. Null means the check is denied.
+   */
   readonly grant: Grant | null;
   readonly cwd_ref: string;
   readonly env_allow: readonly string[];
@@ -82,10 +85,22 @@ export interface ImplementBudgetRequest {
 export type ImplementBudgetDecision =
   | { readonly status: 'allow'; readonly tier: ImplementTier }
   | { readonly status: 'pause'; readonly reason: string; readonly until: number | null };
+/**
+ * Composition-root port. One fresh single-use grant equal in scope to `held`,
+ * or null. This is not a decision port: a decision answer cannot mint a grant.
+ */
+export interface EqualGrantIssuer {
+  issue(held: Grant): Grant | null;
+}
 export interface ImplementPorts {
   readonly generate: InferenceGateway['generate'];
   readonly evaluate: InferenceGateway['evaluate'];
   readonly invoke: CapabilityHost['invoke'];
+  /**
+   * Fresh grant for one check attempt. Supplied by the composition root.
+   * The step invokes the result only when its scope equals `held`.
+   */
+  readonly issueCheckGrant: EqualGrantIssuer['issue'];
   readonly now: () => number;
   readonly readState: () => SiteState;
   readonly budget?: (request: ImplementBudgetRequest) => ImplementBudgetDecision;
@@ -436,7 +451,7 @@ async function runChecks(input: Normalized, ports: ImplementPorts, attempt: numb
     let tail = '';
     let artifacts: string[] = [];
     try {
-      const invoked = ports.invoke(check.grant, check.operation, {
+      const invoked = ports.invoke(freshCheckGrant(ports, check.grant), check.operation, {
         cwd_ref: check.cwd_ref,
         env_allow: [...check.env_allow],
         timeout_ms: check.timeout_ms,
@@ -498,6 +513,62 @@ function blankEvals(input: Normalized, ports: ImplementPorts, requestId: string)
     evals: flatEval(transition),
     observations: [...transition.observations],
     failing: [...transition.failing_criterion_ids],
+  };
+}
+
+function copyGrant(fields: Grant): Grant {
+  return {
+    action_id: fields.action_id,
+    operation: fields.operation,
+    contract_rev: fields.contract_rev,
+    permissions: fields.permissions.map(effect => ({ resource: effect.resource, mode: effect.mode })),
+    effects: fields.effects.map(effect => ({ resource: effect.resource, mode: effect.mode })),
+    issued_at: fields.issued_at,
+    ...(fields.process_effects === undefined ? {} : { process_effects: [...fields.process_effects] }),
+  };
+}
+function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) return false;
+  const seen = new Set(left);
+  if (seen.size !== left.length) return false;
+  for (const token of right) {
+    if (!seen.delete(token)) return false;
+  }
+  return seen.size === 0;
+}
+/** Equal scope. Action id and issued_at are not scope. A wider set is not equal. */
+function sameGrantScope(held: Grant, issued: Grant): boolean {
+  return held.operation === issued.operation
+    && held.contract_rev === issued.contract_rev
+    && effectSetsEqual(held.permissions, issued.permissions)
+    && effectSetsEqual(held.effects, issued.effects)
+    && sameStringSet(held.process_effects ?? [], issued.process_effects ?? []);
+}
+function freshCheckGrant(ports: ImplementPorts, held: Grant | null): Grant | null {
+  if (!held) return null;
+  const issued = ports.issueCheckGrant(held);
+  if (!issued || !sameGrantScope(held, issued)) return null;
+  return issued;
+}
+
+/**
+ * Bind an authority to grants it has already issued. Scope is copied at bind
+ * time, so a later mutation of the held grant cannot widen a fresh one.
+ * Object identity is the hold: a field-equal copy, a wider grant, or a
+ * decision answer is refused. The held grant is not consumed.
+ */
+export function createEqualGrantIssuer(authority: GrantAuthority, held: readonly Grant[]): EqualGrantIssuer {
+  const scopes = new Map<Grant, Grant>();
+  for (const grant of held) {
+    if (!authority.isIssued(grant) || !authority.isValid(grant)) continue;
+    scopes.set(grant, copyGrant(grant));
+  }
+  return {
+    issue(template) {
+      const scope = scopes.get(template);
+      if (!scope || !authority.isValid(template)) return null;
+      return authority.issue(copyGrant(scope));
+    },
   };
 }
 

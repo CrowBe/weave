@@ -84,8 +84,13 @@ Criterion statements and raw state are not copied into the observation. An unsaf
 criterion id cannot pass and is replaced by its ordinal key.
 
 The implementation step (`impl.step@1`) is separate from the pure site. It
-generates once at the routed tier, invokes each configured `repo.test`,
-`repo.lint`, or `repo.build` with the grant it was given, then runs D5. Check
+generates once at the routed tier, then each configured `repo.test`,
+`repo.lint`, or `repo.build`. The check's grant is a held template. An injected
+issuer, supplied by the composition root and not by a decision answer, returns
+a fresh equally-scoped grant per attempt and per check. `createEqualGrantIssuer`
+copies that scope from a `GrantAuthority` grant it holds and refuses any other
+object. The step does not invoke a wider grant and does not consume the
+template. A decision answer cannot mint a grant. The step then runs D5. Check
 evidence is `{ check_id, argv_digest, exit, passed, tail, artifacts }`. Eval
 evidence is `{ criterion_id, verdict_probability, confidence, passed }`. A red
 check fails the attempt even when D5 passes. The step retries the same tier up
