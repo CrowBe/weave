@@ -10,6 +10,7 @@
 import {
   qualityClears,
   type InferenceTerms,
+  type BudgetReason,
   type Micros,
   type ProviderAvailability,
   type RoutedUnit,
@@ -26,6 +27,7 @@ export interface AttemptPrice {
 }
 
 export type ExclusionReason =
+  | BudgetReason
   | 'operation_mismatch'
   | 'kind_mismatch'
   | 'tier_mismatch'

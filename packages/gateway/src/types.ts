@@ -117,6 +117,8 @@ export interface PrefixCacheRecord {
 }
 
 export interface InferenceTerms {
+  /** Audit pressure pauses rather than downgrading the requested strong tier. */
+  readonly audit?: boolean;
   readonly tier?: Tier;
   readonly quality: QualityBar;
   readonly destinations: readonly DataDestination[];
@@ -313,6 +315,8 @@ export interface RouteEvidence {
 }
 
 export interface RoutedUnitBase {
+  /** Whole-account quota-axi provider id; independent of adapter and destination. */
+  readonly quota_provider?: string;
   readonly tier?: Tier;
   readonly routed_unit_id: RoutedUnitId;
   readonly context_profile: string;
@@ -461,7 +465,7 @@ export interface AttemptRecord {
   readonly disposition: AttemptDisposition;
 }
 
-export type BlockedReason = 'invalid_request' | 'no_route' | 'no_budget' | 'deadline_passed';
+export type BlockedReason = 'invalid_request' | 'no_route' | 'no_budget' | 'deadline_passed' | 'provider_unavailable' | BudgetReason;
 
 export type UnacceptedReason =
   | 'attempts_exhausted'
@@ -470,6 +474,7 @@ export type UnacceptedReason =
   | 'provider_failed';
 
 interface OutcomeBase {
+  readonly paused?: LoopPausedRecord;
   readonly request_id: string;
   readonly site: JudgmentSite;
   readonly attempts: readonly AttemptRecord[];
@@ -532,4 +537,32 @@ export function answersMatchQuestions(
   }
   const extra = Object.keys(answers).find((id) => questions[id] === undefined);
   return extra === undefined ? { status: 'accepted' } : { status: 'rejected', reason: `unasked_question:${extra}` };
+}
+
+/** Normalized quota-axi data. Time conversion and acquisition belong to the caller. */
+export interface QuotaSnapshot {
+  readonly observed_at: Timestamp;
+  readonly providers: readonly {
+    readonly provider: string;
+    readonly status?: string;
+    readonly windows: readonly {
+      readonly id: string;
+      readonly percentRemaining: number | null;
+      readonly resetsAt: Timestamp | null;
+      readonly pace?: { readonly status: string };
+    }[];
+  }[];
+}
+export interface QuotaPort {
+  read(): Promise<QuotaSnapshot | undefined>;
+}
+export type BudgetReason = 'weekly_budget_cap' | 'five_hour_budget_low' | 'quota_unknown' | 'budget_pace_ahead';
+export interface LoopPausedRecord {
+  readonly type: 'loop.paused';
+  readonly policy: 'budget.policy@1';
+  readonly request_id: string;
+  readonly site: string;
+  readonly reason: BudgetReason;
+  /** null means a fresh observation is required; no reset is known. */
+  readonly until: Timestamp | null;
 }

@@ -132,7 +132,7 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
     keys(unit, ['routed_unit_id', 'context_profile', 'context_profile_version',
       'prompt_template', 'prompt_template_version', 'adapter', 'model', 'destination',
       'quality', 'context_limit_tokens', 'settings', 'price', 'rate_limits',
-      'evidence', 'tier', 'operation', 'kind'], path);
+      'evidence', 'tier', 'operation', 'kind', 'quota_provider'], path);
     for (const key of ['routed_unit_id', 'context_profile', 'prompt_template', 'adapter', 'model', 'destination']) {
       check(identifier(unit[key]), `${path}.${key}`);
     }
@@ -142,6 +142,7 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
     }
     check(unit.operation === 'generate' || unit.operation === 'evaluate', `${path}.operation`);
     check(member(unit.kind, unit.operation === 'generate' ? GENERATION_KINDS : unit.operation === 'evaluate' ? EVALUATION_KINDS : []), `${path}.kind: operation/kind pair`);
+    check(unit.quota_provider === undefined || identifier(unit.quota_provider), `${path}.quota_provider`);
     check(unit.tier === undefined || member(unit.tier, TIERS), `${path}.tier`);
     check(unit.tier !== 'decision' || unit.operation === 'evaluate', `${path}.tier: decision tier requires evaluate`);
     check(member(unit.quality, QUALITY_BARS), `${path}.quality`);

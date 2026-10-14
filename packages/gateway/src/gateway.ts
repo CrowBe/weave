@@ -14,7 +14,8 @@
  * `runBounded` loop below, so neither operation can drift from the other's
  * accounting.
  */
-import { priceAttempt, route, worstCaseCost, type RouteExclusion } from './routing.js';
+import { budgetRoute } from './budget.js';
+import { priceAttempt, worstCaseCost, type RouteExclusion } from './routing.js';
 import {
   answersMatchQuestions,
   nonEmptyText,
@@ -36,6 +37,8 @@ import {
   type InferenceTerms,
   type Micros,
   type ProviderAvailability,
+  type QuotaPort,
+  type LoopPausedRecord,
   type ProviderFailure,
   type ProviderUsage,
   type QuestionId,
@@ -48,6 +51,9 @@ import {
 } from './types.js';
 
 export interface GatewayConfig {
+  readonly quota?: QuotaPort;
+  /** Awaited persistence; a failed write prevents further dispatch. */
+  readonly persist_pause?: (record: LoopPausedRecord) => Promise<void>;
   readonly availability?: ProviderAvailability;
   readonly routes: RouteTable;
   /** Adapters serving `operation: 'generate'` routes. */
@@ -98,6 +104,10 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
         signal,
         routes: config.routes,
         availability: config.availability,
+        quota: config.quota,
+        persist_pause: config.persist_pause,
+        request_id: request.request_id,
+        site: request.site,
         minEvidence,
         target: { operation: 'generate', kind: request.kind },
         terms: request.terms,
@@ -154,6 +164,10 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
         signal,
         routes: config.routes,
         availability: config.availability,
+        quota: config.quota,
+        persist_pause: config.persist_pause,
+        request_id: request.request_id,
+        site: request.site,
         minEvidence,
         target: { operation: 'evaluate', kind: request.kind },
         terms: request.terms,
@@ -247,6 +261,7 @@ type Settled<T> =
   | { readonly status: 'blocked'; readonly reason: BlockedReason };
 
 interface Bounded<T> {
+  readonly paused?: LoopPausedRecord;
   readonly settled: Settled<T>;
   readonly attempts: readonly AttemptRecord[];
   readonly spent: Micros;
@@ -254,6 +269,10 @@ interface Bounded<T> {
 }
 
 interface BoundedParams<T> {
+  readonly quota: QuotaPort | undefined;
+  readonly persist_pause: GatewayConfig['persist_pause'];
+  readonly request_id: string;
+  readonly site: string;
   readonly availability: ProviderAvailability | undefined;
   readonly clock: Clock;
   readonly timer: Timer | undefined;
@@ -285,138 +304,139 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
     return finish({ status: 'blocked', reason: 'deadline_passed' });
   }
 
-  const decision = route(params.routes, params.target, terms, params.minEvidence, params.availability);
-  uncertainty.push(...decision.uncertainty);
-  if (decision.order.length === 0) {
-    return finish({ status: 'blocked', reason: blockedRoutingReason(decision.excluded) });
-  }
-
   let lastFailed = false;
-  /** Set when the gateway waited; consumed by the next attempt's record. */
   let waitedMs = 0;
-
-  for (const unit of decision.order) {
+  const consumed = new Map<string, number>();
+  const exhausted = new Set<string>();
+  let lastOrder: readonly RoutedUnit[] = [];
+  while (true) {
+    if (attempts.length >= terms.max_attempts) {
+      return finish({ status: 'unaccepted', reason: 'attempts_exhausted' });
+    }
+    if (params.signal?.aborted) return finish({ status: 'unaccepted', reason: 'provider_failed' });
+    if (clock.now() >= terms.deadline) {
+      return finish(attempts.length ? { status: 'unaccepted', reason: 'deadline_reached' } : { status: 'blocked', reason: 'deadline_passed' });
+    }
+    let snapshot;
+    try { snapshot = await params.quota?.read(); } catch { snapshot = undefined; }
+    const decision = budgetRoute(params.routes, params.target, terms, params.minEvidence,
+      params.availability, snapshot, clock.now());
+    for (const note of decision.uncertainty) if (!uncertainty.includes(note)) uncertainty.push(note);
+    if (params.signal?.aborted) return finish({ status: 'unaccepted', reason: 'provider_failed' });
+    if (clock.now() >= terms.deadline) {
+      return finish(attempts.length ? { status: 'unaccepted', reason: 'deadline_reached' } : { status: 'blocked', reason: 'deadline_passed' });
+    }
+    if (decision.order.length === 0) {
+      if (decision.pause) {
+        const paused: LoopPausedRecord = { type: 'loop.paused', policy: 'budget.policy@1',
+          request_id: params.request_id, site: params.site, ...decision.pause };
+        await params.persist_pause?.(paused);
+        return { ...finish({ status: 'blocked', reason: paused.reason }), paused };
+      }
+      return finish({ status: 'blocked', reason: blockedRoutingReason(decision.excluded) });
+    }
+    lastOrder = decision.order;
+    const unit = decision.order.find(u => !exhausted.has(u.routed_unit_id) &&
+      (consumed.get(u.routed_unit_id) ?? 0) < perRoute && spent + worstCaseCost(u, terms) <= terms.cost_ceiling);
+    if (!unit) break;
     const worstCase = worstCaseCost(unit, terms);
+    consumed.set(unit.routed_unit_id, (consumed.get(unit.routed_unit_id) ?? 0) + 1);
 
-    let escalate = false;
-    let routeAttempts = 0;
-    while (!escalate) {
-      if (attempts.length >= terms.max_attempts) {
-        return finish({ status: 'unaccepted', reason: 'attempts_exhausted' });
+    const started_at = clock.now();
+    const result = await params.attempt(unit);
+    const ended_at = clock.now();
+
+    const metered = meteredCost(unit, terms, result.usage);
+    const cost = metered ?? worstCase;
+    if (metered === null) {
+      uncertainty.push(
+        `attempt ${attempts.length + 1} on ${unit.routed_unit_id}: usage unreported, charged worst case`,
+      );
+    } else if (priceAttempt(unit, terms, { input_tokens: result.usage.input_tokens ?? 0, output_tokens: result.usage.output_tokens ?? 0 }).cache_ignored) {
+      uncertainty.push(
+        `attempt ${attempts.length + 1} on ${unit.routed_unit_id}: prefix cache ignored, cached tokens exceed the input`,
+      );
+    }
+    spent += cost;
+
+    const base: Omit<AttemptRecord, 'disposition'> = {
+      attempt: attempts.length + 1,
+      routed_unit_id: unit.routed_unit_id,
+      model: unit.model,
+      started_at,
+      ended_at,
+      usage: result.usage,
+      cost,
+      cost_is_upper_bound: metered === null,
+      ...(waitedMs > 0 ? { waited_ms: waitedMs } : {}),
+    };
+    waitedMs = 0;
+
+    const disposition = result.disposition;
+
+    if (disposition.status === 'failed') {
+      attempts.push({ ...base, disposition: { status: 'failed', failure: disposition.failure } });
+      lastFailed = true;
+      if (disposition.failure.code === 'cancelled') {
+        return finish({ status: 'unaccepted', reason: 'provider_failed' });
       }
-      // This routed unit has had its share of the budget. Escalating keeps a
-      // fallback reachable when the first route keeps failing retryably.
-      if (routeAttempts >= perRoute) {
-        escalate = true;
-        break;
-      }
-      if (clock.now() >= terms.deadline) {
-        return finish({ status: 'unaccepted', reason: 'deadline_reached' });
-      }
-      // Reserve the worst case before spending it: concurrent callers
-      // cannot each plan against the same unreserved remainder.
-      if (spent + worstCase > terms.cost_ceiling) {
-        escalate = true;
-        break;
-      }
-
-      routeAttempts += 1;
-      const started_at = clock.now();
-      const result = await params.attempt(unit);
-      const ended_at = clock.now();
-
-      const metered = meteredCost(unit, terms, result.usage);
-      const cost = metered ?? worstCase;
-      if (metered === null) {
-        uncertainty.push(
-          `attempt ${attempts.length + 1} on ${unit.routed_unit_id}: usage unreported, charged worst case`,
-        );
-      } else if (priceAttempt(unit, terms, { input_tokens: result.usage.input_tokens ?? 0, output_tokens: result.usage.output_tokens ?? 0 }).cache_ignored) {
-        uncertainty.push(
-          `attempt ${attempts.length + 1} on ${unit.routed_unit_id}: prefix cache ignored, cached tokens exceed the input`,
-        );
-      }
-      spent += cost;
-
-      const base: Omit<AttemptRecord, 'disposition'> = {
-        attempt: attempts.length + 1,
-        routed_unit_id: unit.routed_unit_id,
-        model: unit.model,
-        started_at,
-        ended_at,
-        usage: result.usage,
-        cost,
-        cost_is_upper_bound: metered === null,
-        ...(waitedMs > 0 ? { waited_ms: waitedMs } : {}),
-      };
-      waitedMs = 0;
-
-      const disposition = result.disposition;
-
-      if (disposition.status === 'failed') {
-        attempts.push({ ...base, disposition: { status: 'failed', failure: disposition.failure } });
-        lastFailed = true;
-        if (disposition.failure.code === 'cancelled') {
-          return finish({ status: 'unaccepted', reason: 'provider_failed' });
-        }
-        // A retryable fault is worth the same route again; anything else
-        // means this routed unit is the wrong one for these terms.
-        if (!disposition.failure.retryable) {
-          escalate = true;
-          continue;
-        }
-
-        // Retryable, but not necessarily retryable *now*. A throttle refuses a
-        // second time if asked a second time, so an immediate retry spends an
-        // attempt to be told the same thing. Wait when a delay is known and
-        // fits; escalate when it does not, because a fallback that answers is
-        // worth more than a preferred route that is not ready yet.
-        const delay = retryDelayMs(disposition.failure, unit);
-        if (delay <= 0) continue;
-
-        if (params.timer === undefined) {
-          uncertainty.push(
-            `${unit.routed_unit_id}: waiting ${Math.round(delay)}ms was indicated but no timer is configured; escalated instead`,
-          );
-          escalate = true;
-        } else if (clock.now() + delay >= terms.deadline) {
-          // The caller's deadline is the bound on waiting. Sitting past it
-          // would turn a recoverable throttle into a missed deadline.
-          uncertainty.push(
-            `${unit.routed_unit_id}: waiting ${Math.round(delay)}ms would pass the deadline; escalated instead`,
-          );
-          escalate = true;
-        } else if (await sleepInterrupted(params.timer, delay, params.signal)) {
-          // The caller pulled out mid-wait. That ends the request the same way
-          // a cancelled provider call does, rather than starting an attempt
-          // nobody is waiting for any more.
-          return finish({ status: 'unaccepted', reason: 'provider_failed' });
-        } else {
-          waitedMs = delay;
-        }
+      // A retryable fault is worth the same route again; anything else
+      // means this routed unit is the wrong one for these terms.
+      if (!disposition.failure.retryable) {
+        exhausted.add(unit.routed_unit_id);
         continue;
       }
 
-      if (disposition.status === 'accepted') {
-        attempts.push({ ...base, disposition: { status: 'accepted' } });
-        return finish({
-          status: 'accepted',
-          value: disposition.value,
-          routed_unit_id: unit.routed_unit_id,
-          provider_response_id: disposition.provider_response_id,
-        });
-      }
+      // Retryable, but not necessarily retryable *now*. A throttle refuses a
+      // second time if asked a second time, so an immediate retry spends an
+      // attempt to be told the same thing. Wait when a delay is known and
+      // fits; escalate when it does not, because a fallback that answers is
+      // worth more than a preferred route that is not ready yet.
+      const delay = retryDelayMs(disposition.failure, unit);
+      if (delay <= 0) continue;
 
-      attempts.push({ ...base, disposition: { status: 'unaccepted', reason: disposition.reason } });
-      lastFailed = false;
-      // Acceptance is the caller's bar and the gateway may not lower it:
-      // retrying the same routed unit is unlikely to clear it, so escalate.
-      escalate = true;
+      if (params.timer === undefined) {
+        uncertainty.push(
+          `${unit.routed_unit_id}: waiting ${Math.round(delay)}ms was indicated but no timer is configured; escalated instead`,
+        );
+        exhausted.add(unit.routed_unit_id);
+      } else if (clock.now() + delay >= terms.deadline) {
+        // The caller's deadline is the bound on waiting. Sitting past it
+        // would turn a recoverable throttle into a missed deadline.
+        uncertainty.push(
+          `${unit.routed_unit_id}: waiting ${Math.round(delay)}ms would pass the deadline; escalated instead`,
+        );
+        exhausted.add(unit.routed_unit_id);
+      } else if (await sleepInterrupted(params.timer, delay, params.signal)) {
+        // The caller pulled out mid-wait. That ends the request the same way
+        // a cancelled provider call does, rather than starting an attempt
+        // nobody is waiting for any more.
+        return finish({ status: 'unaccepted', reason: 'provider_failed' });
+      } else {
+        waitedMs = delay;
+      }
+      continue;
     }
+
+    if (disposition.status === 'accepted') {
+      attempts.push({ ...base, disposition: { status: 'accepted' } });
+      return finish({
+        status: 'accepted',
+        value: disposition.value,
+        routed_unit_id: unit.routed_unit_id,
+        provider_response_id: disposition.provider_response_id,
+      });
+    }
+
+    attempts.push({ ...base, disposition: { status: 'unaccepted', reason: disposition.reason } });
+    lastFailed = false;
+    // Acceptance is the caller's bar and the gateway may not lower it:
+    // retrying the same routed unit is unlikely to clear it, so escalate.
+    exhausted.add(unit.routed_unit_id);
   }
 
   if (attempts.length === 0) return finish({ status: 'blocked', reason: 'no_budget' });
-  if (spent + cheapestWorstCase(decision.order, terms) > terms.cost_ceiling) {
+  if (spent + cheapestWorstCase(lastOrder, terms) > terms.cost_ceiling) {
     return finish({ status: 'unaccepted', reason: 'budget_exhausted' });
   }
   return finish({ status: 'unaccepted', reason: lastFailed ? 'provider_failed' : 'attempts_exhausted' });
@@ -426,13 +446,14 @@ function outcomeBase(
   request_id: string,
   site: string,
   bounded: Bounded<unknown>,
-): { request_id: string; site: string; attempts: readonly AttemptRecord[]; spent: Micros; uncertainty: readonly string[] } {
+): { request_id: string; site: string; attempts: readonly AttemptRecord[]; spent: Micros; uncertainty: readonly string[]; paused?: LoopPausedRecord } {
   return {
     request_id,
     site,
     attempts: bounded.attempts,
     spent: bounded.spent,
     uncertainty: bounded.uncertainty,
+    ...(bounded.paused ? { paused: bounded.paused } : {}),
   };
 }
 
@@ -458,6 +479,8 @@ function missingAdapter<T>(unit: RoutedUnit): AttemptResult<T> {
 // ---------------------------------------------------------------------------
 
 function invalidTerms(terms: InferenceTerms): string | null {
+  if (terms.audit !== undefined && typeof terms.audit !== 'boolean') return 'terms.audit must be boolean';
+  if (terms.audit && terms.tier !== 'strong') return 'audit requires strong tier';
   if (terms.tier !== undefined && !TIERS.includes(terms.tier)) return 'terms.tier must be a known tier';
   if (terms.max_attempts < 1) return 'terms.max_attempts must be at least 1';
   if (terms.max_attempts_per_route !== undefined && terms.max_attempts_per_route < 1) {
@@ -571,8 +594,9 @@ function cheapestWorstCase(order: readonly RoutedUnit[], terms: InferenceTerms):
  * Operation, kind, and tier mismatches were never candidates for this request,
  * so an unaffordable requested tier still reports `no_budget`.
  */
-function blockedRoutingReason(excluded: readonly RouteExclusion[]): 'no_route' | 'no_budget' {
+function blockedRoutingReason(excluded: readonly RouteExclusion[]): BlockedReason {
   const considered = excluded.filter((e) =>
     e.reason !== 'kind_mismatch' && e.reason !== 'operation_mismatch' && e.reason !== 'tier_mismatch');
+  if (considered.length > 0 && considered.every(e => e.reason === 'provider_unavailable')) return 'provider_unavailable';
   return considered.length > 0 && considered.every((e) => e.reason === 'unaffordable') ? 'no_budget' : 'no_route';
 }
