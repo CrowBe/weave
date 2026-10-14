@@ -12,7 +12,10 @@ const snapshot = { generatedAt: at, providers: [{ provider: 'claude', status: 'f
 test('quota normalization preserves account totals and source timestamps', () => {
   assert.deepEqual(normalizeQuotaSnapshot(snapshot), { observed_at: Date.parse(at), providers: [{ provider: 'claude', status: 'fresh', windows: [{ id: 'seven_day', percentRemaining: 21, resetsAt: Date.parse('2026-10-15T00:00:00.000Z'), pace: { status: 'ahead' } }] }] });
   assert.equal(normalizeQuotaSnapshot({ ...snapshot, generatedAt: 'unknown' }), undefined);
-  assert.equal(normalizeQuotaSnapshot({ ...snapshot, providers: [...snapshot.providers, ...snapshot.providers] }), undefined);
+  const duplicate = { ...snapshot.providers[0], windows: [{ ...snapshot.providers[0]!.windows[0], percentRemaining: 20 }] };
+  const ambiguous = normalizeQuotaSnapshot({ ...snapshot, providers: [...snapshot.providers, duplicate] });
+  assert.equal(ambiguous?.providers.length, 2);
+  assert.equal(ambiguous?.providers[1]?.windows[0]?.percentRemaining, 20);
 });
 
 test('quota normalization keeps incomplete evidence unknown and stale status intact', () => {

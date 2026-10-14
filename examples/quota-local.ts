@@ -21,11 +21,10 @@ export function normalizeQuotaSnapshot(value: unknown): QuotaSnapshot | undefine
   const observed_at = timestamp(data?.generatedAt);
   if (observed_at === null || !Array.isArray(data?.providers)) return undefined;
   const providers: QuotaSnapshot['providers'][number][] = [];
-  const seen = new Set<string>();
   for (const raw of data.providers) {
     const provider = object(raw);
-    if (typeof provider?.provider !== 'string' || !provider.provider.trim() || seen.has(provider.provider) || !Array.isArray(provider.windows)) return undefined;
-    seen.add(provider.provider);
+    if (typeof provider?.provider !== 'string' || !provider.provider.trim() || !Array.isArray(provider.windows)) return undefined;
+    // Preserve ambiguous account evidence: a known cap must survive duplicates.
     const windows: QuotaSnapshot['providers'][number]['windows'][number][] = [];
     for (const rawWindow of provider.windows) {
       const window = object(rawWindow);
