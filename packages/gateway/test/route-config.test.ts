@@ -22,7 +22,7 @@ it('filters tiers independently of quality and preserves order', () => {
   assert.equal(route(units, target, { ...terms, tier: 'flash' }, 20).excluded[0]?.reason, 'tier_mismatch');
   assert.equal(route(units, { ...target, tier: 'decision' }, terms, 20).order.length, 0);
 });
-it('excludes unavailable adapters or destinations with stable order; absent availability is a no-op', () => {
+it('excludes unavailable adapters with stable order; absent availability is a no-op', () => {
   const units = table();
   const baseline = route(units, target, terms, 20);
   assert.deepEqual(route(units, target, terms, 20, {}), baseline);
@@ -31,7 +31,11 @@ it('excludes unavailable adapters or destinations with stable order; absent avai
     assert.deepEqual(result.order.map(u => u.adapter), ['claude-code']);
     assert.deepEqual(result.excluded.map(u => u.reason), ['provider_unavailable', 'provider_unavailable']);
   }
-  assert.equal(route(units, target, terms, 20, { local: 'unavailable' }).order.length, 0);
+  assert.deepEqual(route(units, target, terms, 20, { local: 'unavailable' }), baseline);
+  const collision = units.map((unit, i) => i === 0 ? { ...unit, adapter: 'local', destination: 'remote' } : unit);
+  const result = route(collision, target, { ...terms, destinations: ['local', 'remote'] }, 20, { local: 'unavailable' });
+  assert.deepEqual(result.excluded, [{ routed_unit_id: units[0]!.routed_unit_id, reason: 'provider_unavailable' }]);
+  assert.deepEqual(result.order.map(u => u.adapter), ['codex', 'claude-code']);
   assert.deepEqual(route(units, target, terms, 20, { codex: 'available' }), baseline);
 });
 it('an empty table still blocks without attempting a provider', async () => {
@@ -41,44 +45,44 @@ it('an empty table still blocks without attempting a provider', async () => {
   if (result.status === 'blocked') assert.equal(result.reason, 'no_route');
   assert.deepEqual(result.attempts, []);
 });
-const cases: [string, (config: any) => void][] = [
-  ['duplicate id', c => c.units.push(c.units[0])],
-  ['unknown operation', c => c.units[0].operation = 'other'],
-  ['unknown kind', c => c.units[0].kind = 'other'],
-  ['wrong kind pair', c => c.units[0].kind = 'boolean'],
-  ['unknown tier', c => c.units[0].tier = 'fast'],
-  ['negative output price', c => c.units[0].price.output_per_mtok = -1],
-  ['nonnumeric input price', c => c.units[0].price.input_per_mtok = '0'],
-  ['missing price', c => delete c.units[0].price],
-  ['negative input price', c => c.units[0].price.input_per_mtok = -1],
-  ['nonnumeric output price', c => c.units[0].price.output_per_mtok = '0'],
-  ['nonfinite price', c => c.units[0].price.output_per_mtok = Infinity],
-  ['same fallback', c => c.decision.fallback = c.decision.provider],
-  ['missing primary', c => c.decision.provider = 'absent'],
-  ['missing fallback', c => c.decision.fallback = 'absent'],
-  ['invalid URL scheme', c => c.decision.providers['typesafe-jev'].base_url = 'file:///tmp/x'],
-  ['invalid URL', c => c.decision.providers['typesafe-jev'].base_url = 'https://'],
-  ['missing settings', c => delete c.units[0].settings],
-  ['invalid quality', c => c.units[0].quality = 'strong'],
-  ['missing model', c => delete c.decision.providers['typesafe-jev'].model],
-  ['missing providers', c => delete c.decision.providers],
-  ['invalid provider record', c => c.decision.providers['typesafe-jev'] = null],
-  ['invalid key env', c => c.decision.providers['typesafe-jev'].key_env = 12],
-  ['invalid unit', c => c.units[0] = null],
-  ['missing adapter', c => delete c.units[0].adapter],
-  ['invalid profile version', c => c.units[0].context_profile_version = 0],
-  ['invalid context limit', c => c.units[0].context_limit_tokens = 1.5],
-  ['invalid output bound', c => c.units[0].settings.max_output_tokens = 0],
-  ['invalid temperature', c => c.units[0].settings.temperature = Infinity],
-  ['invalid evidence', c => c.units[0].evidence = { attempts: 2, accepted: 3 }],
-  ['invalid rate limits', c => c.units[0].rate_limits = [{ requests: 0, window_ms: 1 }]],
-  ['invalid auth', c => c.decision.providers['typesafe-jev'].auth = 12],
+const cases: [string, (config: any) => void, string][] = [
+  ['duplicate id', c => c.units.push(c.units[0]), 'units[3].routed_unit_id: duplicate'],
+  ['unknown operation', c => c.units[0].operation = 'other', 'units[0].operation'],
+  ['unknown kind', c => c.units[0].kind = 'other', 'units[0].kind: operation/kind pair'],
+  ['wrong kind pair', c => c.units[0].kind = 'boolean', 'units[0].kind: operation/kind pair'],
+  ['unknown tier', c => c.units[0].tier = 'fast', 'units[0].tier'],
+  ['negative output price', c => c.units[0].price.output_per_mtok = -1, 'units[0].price.output_per_mtok'],
+  ['nonnumeric input price', c => c.units[0].price.input_per_mtok = '0', 'units[0].price.input_per_mtok'],
+  ['missing price', c => delete c.units[0].price, 'units[0].price'],
+  ['negative input price', c => c.units[0].price.input_per_mtok = -1, 'units[0].price.input_per_mtok'],
+  ['nonnumeric output price', c => c.units[0].price.output_per_mtok = '0', 'units[0].price.output_per_mtok'],
+  ['nonfinite price', c => c.units[0].price.output_per_mtok = Infinity, 'units[0].price.output_per_mtok'],
+  ['same fallback', c => c.decision.fallback = c.decision.provider, 'decision.fallback: must differ'],
+  ['missing primary', c => c.decision.provider = 'absent', 'decision.provider: must exist'],
+  ['missing fallback', c => c.decision.fallback = 'absent', 'decision.fallback: must exist'],
+  ['invalid URL scheme', c => c.decision.providers['typesafe-jev'].base_url = 'file:///tmp/x', 'decision.providers.typesafe-jev.base_url'],
+  ['invalid URL', c => c.decision.providers['typesafe-jev'].base_url = 'https://', 'decision.providers.typesafe-jev.base_url'],
+  ['missing settings', c => delete c.units[0].settings, 'units[0].settings'],
+  ['invalid quality', c => c.units[0].quality = 'strong', 'units[0].quality'],
+  ['missing model', c => delete c.decision.providers['typesafe-jev'].model, 'decision.providers.typesafe-jev.model'],
+  ['missing providers', c => delete c.decision.providers, 'decision.providers'],
+  ['invalid provider record', c => c.decision.providers['typesafe-jev'] = null, 'decision.providers.typesafe-jev'],
+  ['invalid key env', c => c.decision.providers['typesafe-jev'].key_env = 12, 'decision.providers.typesafe-jev.key_env'],
+  ['invalid unit', c => c.units[0] = null, 'units[0]'],
+  ['missing adapter', c => delete c.units[0].adapter, 'units[0].adapter'],
+  ['invalid profile version', c => c.units[0].context_profile_version = 0, 'units[0].context_profile_version'],
+  ['invalid context limit', c => c.units[0].context_limit_tokens = 1.5, 'units[0].context_limit_tokens'],
+  ['invalid output bound', c => c.units[0].settings.max_output_tokens = 0, 'units[0].settings.max_output_tokens'],
+  ['invalid temperature', c => c.units[0].settings.temperature = Infinity, 'units[0].settings.temperature'],
+  ['invalid evidence', c => c.units[0].evidence = { attempts: 2, accepted: 3 }, 'units[0].evidence.accepted'],
+  ['invalid rate limits', c => c.units[0].rate_limits = [{ requests: 0, window_ms: 1 }], 'units[0].rate_limits[0]'],
+  ['invalid auth', c => c.decision.providers['typesafe-jev'].auth = 12, 'decision.providers.typesafe-jev.auth'],
 ];
-for (const [name, mutate] of cases) it(`rejects ${name}`, () => {
+for (const [name, mutate, expected] of cases) it(`rejects ${name}`, () => {
   const input = example(); mutate(input);
   const result = parseRouteConfig(input);
   assert.equal(result.ok, false);
-  if (!result.ok) assert.ok(result.errors.length > 0);
+  if (!result.ok) assert.ok(result.errors.some(e => e.includes(expected)), result.errors.join('; '));
 });
 it('rejects malformed roots and permits null fallback, no tier, and an empty table', () => {
   for (const input of [null, [], {}, { units: [], decision: null }]) assert.equal(parseRouteConfig(input).ok, false);
@@ -107,7 +111,7 @@ it('gateway passes availability into generation and evaluation routing', async (
   const evaluateUnit = { ...units[0]!, operation: 'evaluate', kind: 'boolean', adapter: 'decision', routed_unit_id: 'decision', tier: 'decision' } as const;
   let calls = 0;
   const gateway = createInferenceGateway({
-    routes: [...units, evaluateUnit], clock: { now: () => 0 }, availability: { local: 'auth_required' },
+    routes: [...units, evaluateUnit], clock: { now: () => 0 }, availability: { 'grok-build': 'auth_required', codex: 'auth_required', 'claude-code': 'auth_required', decision: 'auth_required' },
     adapters: units.map(unit => ({ id: unit.adapter, async execute() { calls++; throw new Error('must not call'); } })),
     evaluators: [{ id: 'decision', async evaluate() { calls++; throw new Error('must not call'); } }],
   });
@@ -119,4 +123,40 @@ it('gateway passes availability into generation and evaluation routing', async (
     assert.deepEqual(result.attempts, []);
   }
   assert.equal(calls, 0);
+});
+
+for (const [name, mutate, expected] of [
+  ['root', (c: any) => c.extra = true, 'extra'],
+  ['decision', (c: any) => c.decision.extra = true, 'decision.extra'],
+  ['unit', (c: any) => c.units[0].teir = 'flash', 'units[0].teir'],
+  ['settings', (c: any) => c.units[0].settings.extra = true, 'units[0].settings.extra'],
+  ['price', (c: any) => c.units[0].price.extra = true, 'units[0].price.extra'],
+  ['evidence', (c: any) => c.units[0].evidence = { attempts: 1, accepted: 1, extra: true }, 'units[0].evidence.extra'],
+  ['rate limit', (c: any) => c.units[0].rate_limits = [{ requests: 1, window_ms: 1, extra: true }], 'units[0].rate_limits[0].extra'],
+  ['provider', (c: any) => c.decision.providers['typesafe-jev'].extra = true, 'decision.providers.typesafe-jev.extra'],
+  ['literal key', (c: any) => c.decision.providers['typesafe-jev'].key_env = 'sk-example-not-a-real-key', 'decision.providers.typesafe-jev.key_env'],
+] as const) it(`rejects unknown keys or literal credentials: ${name}`, () => {
+  const input = example(); mutate(input);
+  const result = parseRouteConfig(input);
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.ok(result.errors.some(e => e.includes(expected)), result.errors.join('; '));
+});
+it('returns config copies detached from all caller-owned nested data', () => {
+  const input = example();
+  input.units[0].evidence = { attempts: 2, accepted: 1 };
+  input.units[0].rate_limits = [{ requests: 1, window_ms: 100 }];
+  const result = parseRouteConfig(input);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  const snapshot = structuredClone(result);
+  input.units[0].settings.max_output_tokens = 1;
+  input.units[0].price.input_per_mtok = 99;
+  input.units[0].evidence.accepted = 0;
+  input.units[0].rate_limits[0].requests = 9;
+  input.units[0].adapter = 'changed';
+  input.units.push(input.units[0]);
+  input.decision.providers['typesafe-jev'].model = 'changed';
+  assert.deepEqual(result, snapshot);
+  result.decision.providers['typesafe-jev']!.model = 'output-change';
+  assert.equal(input.decision.providers['typesafe-jev'].model, 'changed');
 });

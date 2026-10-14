@@ -152,11 +152,9 @@ function excludeReason(unit: RoutedUnit, target: RouteTarget, terms: InferenceTe
   if (unit.kind !== target.kind) return 'kind_mismatch';
   if ((target.tier !== undefined && unit.tier !== target.tier) ||
       (terms.tier !== undefined && unit.tier !== terms.tier)) return 'tier_mismatch';
-  for (const id of [unit.adapter, unit.destination]) {
-    const entry = availability?.[id];
-    const status = typeof entry === 'string' ? entry : entry?.status;
-    if (status !== undefined && status !== 'available') return 'provider_unavailable';
-  }
+  const entry = availability?.[unit.adapter];
+  const status = typeof entry === 'string' ? entry : entry?.status;
+  if (status !== undefined && status !== 'available') return 'provider_unavailable';
   if (!terms.destinations.includes(unit.destination)) return 'destination_not_permitted';
   if (!qualityClears(unit.quality, terms.quality)) return 'quality_below_bar';
   if (unit.context_limit_tokens < terms.max_context_tokens) return 'context_limit_too_small';

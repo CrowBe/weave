@@ -35,10 +35,10 @@ Start with:
 - [M5 — improve one operating strategy](./docs/m5-improve-an-operating-strategy.md)
   — one profile change, a protocol fixed before results, promotion, and rollback.
 - [M6 — route a reconstructed view](./docs/m6-route-a-reconstructed-view.md)
-- [M7 — decision-model loop (planned)](./docs/m7-decision-loop.md): P1 adds
-  gateway tier/configuration primitives; the decision loop is not implemented.
   — prefix-cache routing, catalogue index and schema slices, read-set
   destinations, and one shared slice assembly.
+- [M7 — decision-model loop (planned)](./docs/m7-decision-loop.md): P1 adds
+  gateway tier/configuration primitives; the decision loop is not implemented.
 - [H1 — bound the log](./docs/h1-bound-the-log.md) — a follow-up hardening step:
   reject oversize and duplicate observations before they are durable.
 - [AGENTS.md](./AGENTS.md) — how coding agents should work in this repository.

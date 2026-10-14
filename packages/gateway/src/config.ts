@@ -49,11 +49,19 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
   const errors: string[] = [];
   const check = (valid: boolean, path: string) => { if (!valid) errors.push(`invalid ${path}`); };
   if (!object(json)) return { ok: false, errors: ['invalid route config: expected object'] };
+  const keys = (value: ObjectValue, allowed: readonly string[], path: string) => {
+    for (const key of Object.keys(value)) check(allowed.includes(key), `${path ? path + '.' : ''}${key}: unknown key`);
+  };
+  keys(json, ['units', 'decision'], '');
   const ids = new Set<string>();
   check(Array.isArray(json.units), 'units: expected array');
   if (Array.isArray(json.units)) json.units.forEach((unit: unknown, i: number) => {
     const path = `units[${i}]`;
     if (!object(unit)) { check(false, path); return; }
+    keys(unit, ['routed_unit_id', 'context_profile', 'context_profile_version',
+      'prompt_template', 'prompt_template_version', 'adapter', 'model', 'destination',
+      'quality', 'context_limit_tokens', 'settings', 'price', 'rate_limits',
+      'evidence', 'tier', 'operation', 'kind'], path);
     for (const key of ['routed_unit_id', 'context_profile', 'prompt_template', 'adapter', 'model', 'destination']) {
       check(text(unit[key]), `${path}.${key}`);
     }
@@ -70,14 +78,19 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
     }
     if (!object(unit.settings)) check(false, `${path}.settings`);
     else {
+      keys(unit.settings, ['max_output_tokens', 'temperature'], `${path}.settings`);
       check(positiveInteger(unit.settings.max_output_tokens), `${path}.settings.max_output_tokens`);
       check(unit.settings.temperature === undefined || number(unit.settings.temperature), `${path}.settings.temperature`);
     }
     if (!object(unit.price)) check(false, `${path}.price`);
-    else for (const key of ['input_per_mtok', 'output_per_mtok']) check(number(unit.price[key]), `${path}.price.${key}`);
+    else {
+      keys(unit.price, ['input_per_mtok', 'output_per_mtok'], `${path}.price`);
+      for (const key of ['input_per_mtok', 'output_per_mtok']) check(number(unit.price[key]), `${path}.price.${key}`);
+    }
     if (unit.evidence !== undefined) {
       if (!object(unit.evidence)) check(false, `${path}.evidence`);
       else {
+        keys(unit.evidence, ['attempts', 'accepted'], `${path}.evidence`);
         const { attempts, accepted } = unit.evidence;
         check(number(attempts) && Number.isInteger(attempts), `${path}.evidence.attempts`);
         check(number(accepted) && Number.isInteger(accepted) && number(attempts) && accepted <= attempts, `${path}.evidence.accepted`);
@@ -86,6 +99,7 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
     if (unit.rate_limits !== undefined) {
       check(Array.isArray(unit.rate_limits), `${path}.rate_limits`);
       if (Array.isArray(unit.rate_limits)) unit.rate_limits.forEach((limit: unknown, j: number) => {
+        if (object(limit)) keys(limit, ['requests', 'window_ms'], `${path}.rate_limits[${j}]`);
         check(object(limit) && positiveInteger(limit.requests) && number(limit.window_ms) && limit.window_ms > 0, `${path}.rate_limits[${j}]`);
       });
     }
@@ -93,6 +107,7 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
   const decision = json.decision;
   if (!object(decision)) check(false, 'decision');
   else {
+    keys(decision, ['provider', 'fallback', 'providers'], 'decision');
     check(text(decision.provider), 'decision.provider');
     check(decision.fallback === null || text(decision.fallback), 'decision.fallback');
     check(decision.fallback === null || decision.fallback !== decision.provider, 'decision.fallback: must differ from provider');
@@ -100,16 +115,19 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
     else {
       check(text(decision.provider) && Object.hasOwn(decision.providers, decision.provider), 'decision.provider: must exist in providers');
       check(decision.fallback === null || (text(decision.fallback) && Object.hasOwn(decision.providers, decision.fallback)), 'decision.fallback: must exist in providers');
-      Object.values(decision.providers).forEach((provider, i) => {
-        const path = `decision.providers[${i}]`;
+      Object.entries(decision.providers).forEach(([id, provider]) => {
+        const path = `decision.providers.${id}`;
         if (!object(provider)) { check(false, path); return; }
+        keys(provider, ['base_url', 'model', 'auth', 'key_env'], path);
         check(httpUrl(provider.base_url), `${path}.base_url: expected http(s) URL without credentials`);
         check(text(provider.model), `${path}.model`);
-        for (const key of ['auth', 'key_env']) check(provider[key] === undefined || text(provider[key]), `${path}.${key}`);
+        check(provider.auth === undefined || text(provider.auth), `${path}.auth`);
+        check(provider.key_env === undefined || (typeof provider.key_env === 'string' &&
+          /^[A-Z_][A-Z0-9_]*$/.test(provider.key_env)), `${path}.key_env: expected environment variable name`);
       });
     }
   }
   if (errors.length > 0) return { ok: false, errors };
   // Every field of the public shapes has been checked above. No ambient data is added.
-  return { ok: true, table: json.units as RoutedUnit[], decision: decision as unknown as DecisionConfig };
+  return { ok: true, table: structuredClone(json.units) as RoutedUnit[], decision: structuredClone(decision) as unknown as DecisionConfig };
 }

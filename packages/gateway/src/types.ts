@@ -83,7 +83,7 @@ export type DataDestination = string;
 export const TIERS = ['decision', 'flash', 'standard', 'strong'] as const;
 export type Tier = (typeof TIERS)[number];
 
-/** Caller-supplied status keyed by adapter or destination id.
+/** Caller-supplied status keyed by adapter/provider id only.
  * Rechecking belongs to the composition root; metadata never implies availability. */
 export type ProviderStatus = 'available' | 'exhausted' | 'auth_required' | 'unavailable';
 export type ProviderAvailability = Readonly<Record<string, ProviderStatus | {

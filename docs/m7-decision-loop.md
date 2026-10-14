@@ -64,7 +64,7 @@ interface AuditState {
   decisions: { site; question_id; choice; probabilities; confidence; fallback_used: boolean; obs_seq }[];
   artifacts: { artifact_id; kind: 'diff'|'file'|'report'; digest; summary; bytes; ref }[]; // ref, not raw body, above a size cap
   checks: { check_id; argv_digest; exit: number; passed: boolean; tail: string }[];  // deterministic evidence
-  evals: { criterion_id; verdict_probability; confidence; passed: boolean }[];       // D5 outputs
+  evals: { criterion_id; verdict_probability; confidence?; passed: boolean }[];       // D5 outputs
   open_issues: { issue_id; source: 'check'|'eval'|'audit'; text; severity }[];
   budget: { spent_micros; ceiling_micros; quota: { provider; window; percent_remaining; resets_at }[] };
   omissions: string[];                       // what the view left out and why (existing view rule)
@@ -92,9 +92,12 @@ protocols without changing the gateway's semantics. P3 will carry both profiles
 through a shared HTTP transport and exercise one contract suite against each.
 P12 will extend that arrangement to compatible endpoints, including local ones.
 
-Refusal, malformed answers, missing required confidence, and unavailable
-providers must lead to recorded fallback or pause. Probability does not replace
-confidence. Switching providers changes the destination and is permitted only
+Refusal, malformed answers, and unavailable providers must lead to recorded
+fallback or pause. Missing confidence triggers fallback only where the site's
+provider-specific rule requires it. OpenAI predicate answers supply probability
+only; D5 uses the probability-only band below. Providers that return confidence
+must also meet D5's confidence floor; probability does not replace that statistic.
+Switching providers changes the destination and is permitted only
 when both destinations are allowed by `terms.destinations`. A local Jev endpoint
 may serve privacy-restricted sites only after earning site-specific evidence.
 
@@ -114,7 +117,7 @@ an authorized API-key route or configure TypeSafe Jev; do not infer entitlement.
 | D2 `loop.route` | choice | Which tier fits this unit of work? | `flash` / `standard` / `strong` | conf ≥ 0.75 | `standard`. A deterministic budget gate can only *downgrade* or pause, never upgrade past the ceiling. |
 | D3 `loop.preselect` | boolean per catalogue entry, top-k | Is capability or skill X relevant to this step? | p(true) per entry | include if p ≥ 0.5; cap k=8 | the full catalogue index (M6 slice), never the schemas |
 | D4 `guard.input` | boolean per rule | Does this input or plan violate rule R (secret exfiltration, scope broadening, destructive effect without grant, injection)? | p(violation) | block if p ≥ 0.3 (deliberately asymmetric) | **block, then approval request** |
-| D5 `eval.output` | boolean per success criterion | Does the artifact satisfy criterion C? | p(true) + conf | pass if p ≥ 0.8 and conf ≥ 0.9 (matches the existing `confidence_floor`). A Noul with no confidence counts as below the floor (existing rule). | treat as fail and retry, up to N=2 per step, then escalate the tier once, then hand to audit with `open_issue` |
+| D5 `eval.output` | boolean per success criterion | Does the artifact satisfy criterion C? | p(true), plus conf when supplied by the provider | OpenAI Decisions predicate: pass if p ≥ 0.85, fail if p ≤ 0.15, otherwise uncertain (treat as fail/retry). TypeSafe Jev and other providers that return confidence: pass if p ≥ 0.8 and conf ≥ 0.9 (existing `confidence_floor`); missing confidence is below the floor. | treat as fail and retry, up to N=2 per step, then escalate the tier once, then hand to audit with `open_issue` |
 | D6 `audit.dispose` | choice per finding | What do we do with audit finding F? | `fix_now` / `defer` / `reject_as_out_of_scope` / `needs_human` | conf ≥ 0.75 | `needs_human` |
 | D7 `guard.output` | boolean | Does the output introduce an effect outside the grant (writes, network, secrets)? | p(violation) | block if p ≥ 0.3 | block. Deterministic effect enforcement (Fabric) stays the real gate. |
 | D8 `loop.continue` | choice | Is progress continuing? | `progressing` / `stalled` / `regressing` | conf ≥ 0.7 | `stalled`, which triggers a stop condition |
@@ -140,9 +143,9 @@ still `baseline` or `high`, independently checked. Prices are nonnegative finite
 micros per million tokens; subscription examples declare zero token prices.
 Quota accounting is a separate P4 gate, not an implication of zero cost.
 
-`ProviderAvailability` is caller-supplied data keyed by adapter or destination
-(provider id). Entries are `available`, `exhausted`, `auth_required`, or
-`unavailable`, or `{ status, recheck_after? }`. Any explicit nonavailable match
+`ProviderAvailability` is caller-supplied data keyed by adapter/provider
+id only. Entries are `available`, `exhausted`, `auth_required`, or
+`unavailable`, or `{ status, recheck_after? }`. Any explicit nonavailable adapter match
 excludes a unit with `provider_unavailable`. Missing entries preserve existing
 behavior. `recheck_after` is an injected timestamp for the root to act on;
 routing never reads time or turns an expired entry into permission to dispatch.
