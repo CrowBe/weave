@@ -32,10 +32,17 @@
     "jev:transfer": "npm run build && node --env-file-if-exists=.env.local benchmarks/inference/jev/transfer-probe.ts",
     "example:chatgpt-signin": "npm run build && node --experimental-strip-types examples/chatgpt-signin.ts",
     "example:chatgpt-probe": "npm run build && node --experimental-strip-types examples/chatgpt-probe.ts",
-    "test:chatgpt-cli": "node --experimental-strip-types --test examples/chatgpt-local.test.ts examples/quota-local.test.ts"
+    "test:chatgpt-cli": "node --experimental-strip-types --test examples/chatgpt-local.test.ts examples/quota-local.test.ts",
+    "lint:report": "vp lint || true",
+    "fmt:report": "vp fmt --check || true",
+    "verify:cached": "vp run verify-cached"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite-plus": "1.2.0"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.2.0"
   }
 }

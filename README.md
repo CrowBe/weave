@@ -82,7 +82,14 @@ Python 3.
 npm install
 npm run verify           # structural checks, build, suites, the web host, examples, and contract tests
 npm run host:workspace   # read-only web workspace at http://127.0.0.1:5173
+npm run lint:report      # vp lint, report only; does not fail or change files
+npm run fmt:report       # vp fmt --check, report only; does not fail or change files
+npm run verify:cached    # same checks as verify, replayed by Vite Task when inputs match
 ```
+
+`lint:report` and `fmt:report` are report-only. They print Oxlint and Oxfmt findings and always exit successfully. They do not rewrite files and they are not part of `npm run verify`. CI runs them after verify with `continue-on-error`. Do not treat a green verify run as a clean lint or format result.
+
+`verify:cached` runs the same `npm run verify` command through `vp run` so a repeat can be replayed from the Vite Task cache. `npm run verify` itself stays uncached, and CI uses that command.
 
 Local inference experiments and their recorded evidence live under
 [`benchmarks/inference`](./benchmarks/inference/README.md). OpenJev evaluates
