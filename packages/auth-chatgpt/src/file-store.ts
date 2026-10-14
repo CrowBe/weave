@@ -20,10 +20,13 @@ export class FileCredentialStore implements CredentialStore {
         const credentials = value.credentials;
         if (!credentials || typeof credentials !== 'object') throw new ChatGPTAuthError('invalid credential store');
         const record = credentials as Record<string, unknown>;
-        for (const field of ['client_id', 'subject', 'id_token', 'access_token', 'refresh_token', 'saved_at']) {
+        for (const field of ['client_id', 'subject', 'id_token', 'access_token', 'saved_at']) {
           if (typeof record[field] !== 'string' || !record[field]) throw new ChatGPTAuthError('invalid credential store');
         }
         if (record.client_id === 'dynamic_agent_client' || record.issuer !== 'https://auth.openai.com' || record.ext_agent_host_id !== value.ext_agent_host_id || record.token_type !== 'Bearer' || typeof record.expires_in !== 'number' || !Number.isFinite(record.expires_in) || record.expires_in <= 0 || !Number.isFinite(Date.parse(record.saved_at as string)) || !Array.isArray(record.scopes) || record.scopes.some(scope => typeof scope !== 'string') || record.plan_usage !== planUsageStatus(record.scopes as string[]) || (record.email !== undefined && typeof record.email !== 'string') || (record.earliest_refresh_at !== undefined && (typeof record.earliest_refresh_at !== 'number' || !Number.isFinite(record.earliest_refresh_at)))) throw new ChatGPTAuthError('invalid credential store');
+        if ((record.scopes as string[]).includes('offline_access') || record.refresh_token !== undefined) {
+          if (typeof record.refresh_token !== 'string' || !record.refresh_token) throw new ChatGPTAuthError('invalid credential store');
+        }
         if (value.registration !== undefined) {
           const registration = value.registration as { client_id: string; subject: string };
           if (registration.client_id !== record.client_id || registration.subject !== record.subject) throw new ChatGPTAuthError('invalid credential store');

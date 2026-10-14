@@ -22,9 +22,9 @@ export async function withCredentialLock<T>(path: string, run: () => Promise<T>)
   finally { await handle.close(); await unlink(lock); }
 }
 
-export function redactTokens(body: string, tokens: readonly string[]): string {
+export function redactTokens(body: string, tokens: readonly (string | undefined)[]): string {
   let result = body;
-  for (const token of tokens.filter(Boolean).sort((a, b) => b.length - a.length)) {
+  for (const token of tokens.filter((token): token is string => typeof token === 'string' && token.length > 0).sort((a, b) => b.length - a.length)) {
     for (const value of [token, JSON.stringify(token).slice(1, -1), encodeURIComponent(token)]) {
       result = result.split(value).join('[REDACTED]');
     }

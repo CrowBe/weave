@@ -14,7 +14,7 @@ export interface AuthorizationAttempt {
 export interface Identity { subject: string; issuer: string; email?: string }
 export type PlanUsageStatus = 'plan usage granted' | 'identity only, plan usage not granted';
 export interface Credentials extends Identity {
-  client_id: string; ext_agent_host_id: string; access_token: string; refresh_token: string;
+  client_id: string; ext_agent_host_id: string; access_token: string; refresh_token?: string;
   id_token: string; token_type: 'Bearer'; expires_in: number; saved_at: string;
   scopes: string[]; plan_usage: PlanUsageStatus; earliest_refresh_at?: number;
 }
@@ -94,12 +94,15 @@ async function requestTokens(form: Record<string, string>, dependencies: AuthDep
   const response = await safeFetch(dependencies.fetch, TOKEN_URL, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(form).toString() });
   const body = await json(response);
   if (!response.ok) throw new ChatGPTAuthError(typeof body.error === 'string' && TOKEN_ERRORS.has(body.error) ? body.error : 'token exchange rejected', response.status);
-  if (typeof body.access_token !== 'string' || !body.access_token || typeof body.refresh_token !== 'string' || !body.refresh_token || body.token_type !== 'Bearer' || typeof body.expires_in !== 'number' || !Number.isFinite(body.expires_in) || body.expires_in <= 0 || typeof body.scope !== 'string') fail('invalid token response');
+  if (typeof body.access_token !== 'string' || !body.access_token || body.token_type !== 'Bearer' || typeof body.expires_in !== 'number' || !Number.isFinite(body.expires_in) || body.expires_in <= 0 || typeof body.scope !== 'string') fail('invalid token response');
+  if ((body.scope as string).split(/\s+/).includes('offline_access') || body.refresh_token !== undefined) {
+    if (typeof body.refresh_token !== 'string' || !body.refresh_token) fail('invalid token response');
+  }
   return body;
 }
 function credentialRecord(body: Record<string, unknown>, identity: Identity, clientId: string, hostId: string, idToken: string, clock: Clock): Credentials {
   const scopes = (body.scope as string).split(/\s+/).filter(Boolean);
-  return { ...identity, client_id: clientId, ext_agent_host_id: hostId, access_token: body.access_token as string, refresh_token: body.refresh_token as string, id_token: idToken, token_type: 'Bearer', expires_in: body.expires_in as number, saved_at: new Date(clock.now()).toISOString(), scopes, plan_usage: planUsageStatus(scopes), ...(typeof body.earliest_refresh_at === 'number' ? { earliest_refresh_at: body.earliest_refresh_at } : {}) };
+  return { ...identity, client_id: clientId, ext_agent_host_id: hostId, access_token: body.access_token as string, ...(typeof body.refresh_token === 'string' ? { refresh_token: body.refresh_token } : {}), id_token: idToken, token_type: 'Bearer', expires_in: body.expires_in as number, saved_at: new Date(clock.now()).toISOString(), scopes, plan_usage: planUsageStatus(scopes), ...(typeof body.earliest_refresh_at === 'number' ? { earliest_refresh_at: body.earliest_refresh_at } : {}) };
 }
 export async function exchangeCode(attempt: AuthorizationAttempt, callback: { code: string; clientId: string }, dependencies: AuthDependencies): Promise<Credentials> {
   if (!callback.clientId || callback.clientId === 'dynamic_agent_client' || (attempt.clientId && callback.clientId !== attempt.clientId)) fail('invalid issued client_id');
@@ -111,6 +114,7 @@ export async function exchangeCode(attempt: AuthorizationAttempt, callback: { co
 }
 /** Caller serializes refresh and saves the complete replacement atomically. */
 export async function refreshCredentials(credentials: Credentials, dependencies: AuthDependencies): Promise<Credentials> {
+  if (!credentials.refresh_token) fail('refresh unavailable');
   const body = await requestTokens({ grant_type: 'refresh_token', client_id: credentials.client_id, refresh_token: credentials.refresh_token, resource: RESOURCE }, dependencies);
   let identity: Identity = { subject: credentials.subject, issuer: credentials.issuer, ...(credentials.email ? { email: credentials.email } : {}) };
   if (body.id_token !== undefined) {

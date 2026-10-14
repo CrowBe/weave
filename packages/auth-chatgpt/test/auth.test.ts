@@ -4,7 +4,7 @@ import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { mkdtemp, stat, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildAuthorizeUrl, createAuthorizationAttempt, handleCallback, exchangeCode, refreshCredentials, validateIdToken, planUsageStatus, ensureHostId } from '../src/index.js';
+import { buildAuthorizeUrl, createAuthorizationAttempt, handleCallback, exchangeCode, refreshCredentials, validateIdToken, planUsageStatus, ensureHostId, ChatGPTAuthError } from '../src/index.js';
 import { FileCredentialStore } from '../src/file-store.js';
 
 const clock = { now: () => 1_000_000 };
@@ -123,5 +123,30 @@ test('file store fails closed on malformed credentials without exposing their co
     }
     await store.save({ ext_agent_host_id: attempt.hostId, registration: state.registration });
     assert.deepEqual((await store.load())?.registration, state.registration);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('identity-only exchange without refresh token survives file store round trip and cannot refresh', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'weave-auth-identity-'));
+  try {
+    const { refresh_token: _refreshToken, ...response } = tokens();
+    const dependencies = { clock, fetch: (async (url, init) => String(url).includes('oauth/token')
+      ? new Response(JSON.stringify({ ...response, scope: 'openid profile email' }))
+      : fetchJwks(url, init)) as typeof fetch };
+    const record = await exchangeCode(attempt, { code: 'code', clientId: 'oaiapp_test' }, dependencies);
+    assert.equal(record.plan_usage, 'identity only, plan usage not granted');
+    assert.equal(record.refresh_token, undefined);
+    const store = new FileCredentialStore(join(directory, 'chatgpt.json'));
+    const state = { ext_agent_host_id: attempt.hostId, credentials: record };
+    await store.save(state);
+    assert.deepEqual(await store.load(), state);
+    await assert.rejects(refreshCredentials(record, { clock, fetch: async () => {
+      assert.fail('refresh must fail before fetching');
+    } }), error => error instanceof ChatGPTAuthError && error.code === 'refresh unavailable');
+    await store.save({ ...state, credentials: { ...record, scopes: [...record.scopes, 'offline_access'] } });
+    await assert.rejects(store.load(), /credential store read failed/);
+    await assert.rejects(exchangeCode(attempt, { code: 'code', clientId: 'oaiapp_test' }, {
+      clock, fetch: async () => new Response(JSON.stringify({ ...response, scope: 'openid offline_access' })),
+    }), /invalid token response/);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
