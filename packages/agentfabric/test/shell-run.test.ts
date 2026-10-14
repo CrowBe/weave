@@ -436,6 +436,47 @@ describe('shell.run@1', () => {
     }
   });
 
+  for (const failure of ['timeout', 'cancelled'] as const) {
+    it(`${failure} returns promptly when a grandchild holds stdout open and releases the lock`, async () => {
+      const world = hostFor(undefined);
+      const pidFile = join(world.dir, 'grandchild.pid');
+      let grandchild: number | undefined;
+      let deadline: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const issued = grant(world.authority, SHELL_RUN.id, world.cwd, 'subprocess', [
+          'process.spawn', `fs.write:${world.cwd}`,
+        ]);
+        const handle = world.host.invoke(issued, SHELL_RUN.id,
+          shellInputs(world.cwd, [process.execPath, STUB, '--subprocess', pidFile], [],
+            failure === 'timeout' ? 1000 : 60_000));
+        assert.equal(handle.kind, 'handle');
+        if (handle.kind !== 'handle') return;
+        world.host.release(issued.action_id);
+        grandchild = await waitForPid(pidFile);
+        if (failure === 'cancelled') handle.requestCancel();
+        const outcome = await Promise.race([
+          handle.result,
+          new Promise<never>((_, reject) => {
+            deadline = setTimeout(() => reject(new Error('post-kill wait exceeded 2500 ms')), 2500);
+          }),
+        ]);
+        assert.equal(outcome.outcome, 'failed');
+        assert.equal(outcome.failure, failure);
+        const next = asOutcome(await invoke(world.host,
+          grant(world.authority, SHELL_RUN.id, world.cwd, 'after-subprocess', [
+            'process.spawn', `fs.write:${world.cwd}`,
+          ]), SHELL_RUN.id, shellInputs(world.cwd, [process.execPath, STUB, '--report'])));
+        assert.equal(next.outcome, 'succeeded');
+      } finally {
+        clearTimeout(deadline);
+        if (grandchild !== undefined) {
+          try { process.kill(grandchild, 'SIGKILL'); } catch { /* Already gone. */ }
+        }
+        rmSync(world.dir, { recursive: true, force: true });
+      }
+    });
+  }
+
   it('returns artifact refs and keeps locators in the host', async () => {
     const world = hostFor(undefined);
     try {

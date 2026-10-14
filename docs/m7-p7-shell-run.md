@@ -34,7 +34,9 @@ Adding a process effect is a vocabulary revision (`PROCESS_EFFECT_VOCABULARY_REV
 Stdout and stderr tails keep the last 4096 characters. New files inside the
 workspace come back as resource references, not locators. `duration_ms` is
 read from the injected clock. Timeout and cancel abort that same injected
-timer and then signal the child (`SIGTERM`, then `SIGKILL`).
+timer and then signal the process group on POSIX (`SIGTERM`, then `SIGKILL`
+after 30 ms). On Windows the direct child is signalled. The post-kill stdio
+drain is bounded to 100 ms, so inherited pipes cannot retain the workspace lock.
 
 `cancelled` is the failure when the invocation is cancelled. It is not a
 timeout. A missing executable is `spawn_failed`. A process that runs and

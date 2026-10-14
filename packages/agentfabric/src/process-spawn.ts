@@ -65,6 +65,7 @@ export async function runProcess(request: ProcessRunRequest): Promise<ProcessRun
       shell: false,
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
+      detached: process.platform !== 'win32',
     });
   } catch {
     return failed('spawn_failed', '', '', started, request.clock);
@@ -140,7 +141,17 @@ export async function runProcess(request: ProcessRunRequest): Promise<ProcessRun
   kill(child, 'SIGTERM');
   await request.timer.sleep(30).catch(() => undefined);
   kill(child, 'SIGKILL');
-  await exited.catch(() => undefined);
+  const drain = new AbortController();
+  try {
+    await Promise.race([exited, request.timer.sleep(100, drain.signal).catch(() => undefined)]);
+  } finally {
+    drain.abort();
+    // A descendant can escape the process group and retain inherited pipes.
+    child.stdin?.destroy();
+    child.stdout?.destroy();
+    child.stderr?.destroy();
+    child.unref();
+  }
   return failed(winner.kind === 'cancelled' ? 'cancelled' : 'timeout', stdout.value(), stderr.value(), started, request.clock);
 }
 
@@ -216,9 +227,13 @@ function elapsed(started: number, clock: ShellClock): number {
 
 function kill(child: ChildProcess, signal: NodeJS.Signals): void {
   try {
-    child.kill(signal);
+    if (process.platform !== 'win32' && child.pid !== undefined) {
+      process.kill(-child.pid, signal);
+    } else {
+      child.kill(signal);
+    }
   } catch {
-    // Already gone. The exit promise still settles.
+    // Already gone; the post-kill stdio wait is bounded.
   }
 }
 

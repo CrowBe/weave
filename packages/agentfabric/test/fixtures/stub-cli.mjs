@@ -2,6 +2,7 @@
  * Stub CLI for shell.run and generate-adapter tests.
  * It never prints environment values except in --leak, which the host must redact.
  */
+import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { argv, env, exit, pid, stderr, stdin, stdout } from 'node:process';
 
@@ -16,7 +17,13 @@ function readStdin() {
   });
 }
 
-if (mode === '--sleep') {
+if (mode === '--subprocess') {
+  const child = spawn(process.execPath, [new URL(import.meta.url).pathname, '--sleep', args[1]], {
+    stdio: ['ignore', 'inherit', 'inherit'], shell: false,
+  });
+  child.on('error', () => exit(3));
+  setInterval(() => {}, 1 << 30);
+} else if (mode === '--sleep') {
   const pidFile = args[1];
   if (typeof pidFile === 'string' && pidFile.length > 0) {
     writeFileSync(pidFile, String(pid));
