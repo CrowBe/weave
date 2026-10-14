@@ -5,7 +5,7 @@ This is the behavioral contract for the planned milestone in
 [M6](m6-route-a-reconstructed-view.md). Terms follow
 [GLOSSARY.md](../GLOSSARY.md). These requirements describe the target, not
 implemented loop behavior. P0 establishes this contract; P1 supplies tier and
-availability routing plus pure configuration validation. P2 supplies local ChatGPT authentication and a Responses adapter; P3–P12 remain planned.
+availability routing plus pure configuration validation. P2 supplies local ChatGPT authentication and a Responses adapter. P3 supplies the TypeSafe decision provider behind one evaluation interface. P4–P12 remain planned.
 Demonstrate red before implementation, prove green with deterministic fixtures,
 and retain M0–M6 checks. Live provider runs are non-gating evidence.
 
@@ -88,23 +88,28 @@ The [OpenAI Decisions guide](https://developers.openai.com/api/docs/guides/decis
 documents `POST /v1/decisions` with `gpt-6-luna`, shared input, named questions,
 and typed answers. Gateway `boolean` maps to its `predicate`; gateway `choice`
 and `score` map to choices and ordered levels. TypeSafe Jev uses
-`/v1/systemone` with `noul`, `choice`, and `score`. Wire profiles translate these
-protocols without changing the gateway's semantics. P3 will carry both profiles
-through a shared HTTP transport and exercise one contract suite against each.
-P12 will extend that arrangement to compatible endpoints, including local ones.
+`/v1/systemone` with `noul`, `choice`, and `score`. A wire profile translates
+one protocol without changing the gateway's semantics. P3 carries the TypeSafe
+profile on a provider-neutral HTTP transport and exercises the contract suite
+against that profile. A second profile can use the same transport later.
+OpenAI Decisions stays deferred after the 14 Oct 2026 probe. P12 will extend
+that arrangement to other compatible endpoints, including local ones.
 
-Refusal, malformed answers, and unavailable providers must lead to recorded
-fallback or pause. Missing confidence triggers fallback only where the site's
+Refusal, malformed answers, and an unavailable provider lead to the site's
+recorded deterministic fallback or to pause. They do not select another
+decision provider. Missing confidence triggers that fallback only where the site's
 provider-specific rule requires it. OpenAI predicate answers supply probability
 only; D5 uses the provisional probability-only band below, to be tuned in P10
 on the tune split. Providers that return confidence
 must also meet D5's confidence floor; probability does not replace that statistic.
-The planned P3 provider-switch policy changes the destination and is permitted only
-when both destinations are allowed by `terms.destinations`. A local Jev endpoint
+Provider switching is deferred with fallback routing. P3 does not change
+destination because a provider failed. A local Jev endpoint
 may serve privacy-restricted sites only after earning site-specific evidence.
+Its base URL is `decision.providers.typesafe-jev.base_url`.
 
-OpenAI Decisions returned **401 under ChatGPT sign-in**. The Decisions guide
-shows API-key authentication; the
+On 14 Oct 2026 the ChatGPT sign-in token worked for Responses calls.
+`POST /v1/decisions` returned HTTP 401 `rejected_by_access_enforcement` /
+`no_matching_rule`. The Decisions guide shows API-key authentication; the
 [Sign in with ChatGPT documentation](https://developers.openai.com/siwc/token-sharing-open-source)
 describes eligible Responses API requests. TypeSafe Jev is the sole default
 decision provider. OpenAI Decisions and Cloudflare Workers AI fallbacks are
@@ -161,17 +166,19 @@ Filtering and existing evidence ordering stay deterministic.
 Validation rejects duplicate routed-unit ids, invalid operation/kind pairs,
 unknown tiers, a `decision` tier on a generate unit, malformed route fields,
 whitespace-padded models, context profiles, and prompt templates, negative or
-nonnumeric prices, missing configured decision providers, identical primary and
-fallback, a `key_env` without `auth: "api-key"`, a non-loopback provider with
+nonnumeric prices, missing configured decision providers, a `decision.provider`
+other than `typesafe-jev`, a `typesafe-jev` provider with no evaluate unit whose
+adapter is `typesafe-ai` and whose model equals that provider's model, identical
+primary and fallback, a `key_env` without `auth: "api-key"`, a non-loopback provider with
 neither `auth` nor `key_env`, a `key_env` on `chatgpt-oauth`, an `api-key`
 provider without a `key_env`, and base URLs other than HTTPS or HTTP on loopback hosts
 (`127.0.0.1`, `::1`, `localhost`) without userinfo, `?`, or `#`. Adapters remain
 credential-injected.
 
-P3 assumption: per-provider destinations will come from each provider's routed
-unit or be added to its provider record in P3. Switching decision providers will
-require both destinations in the request's terms. P1's `DecisionConfig.providers`
-has no destination field and P1 does not enforce provider-switch destinations.
+P3 does not switch decision providers. OpenAI Decisions remains deferred after
+the 14 Oct 2026 probe, and `decision.fallback` is not routed. The configured
+provider's destination is the destination on its evaluate unit. P1's
+`DecisionConfig.providers` has no destination field.
 The example CLI units declare remote vendor destinations even when the CLI
 process runs locally.
 
@@ -197,7 +204,7 @@ Each PR is small. Each must pass `npm run verify`, adds tests to the existing `n
 | P0 | **Glossary + design doc**: add *tier*, *decision provider*, *wire profile*, *tidy state*, *audit tier* to GLOSSARY.md; write `docs/m7-decision-loop.md` | Terms used consistently; ARCH §11 updated | doc-only |
 | P1 | **Tiered route table from config**: `tier` on `RoutedUnit`; pure config validator in gateway; file loading only in the composition root; `ProviderAvailability` port | Gateway still does no env/fs reads; an unavailable provider is excluded with reason `provider_unavailable`; deterministic order preserved | routing tests: exclusion, tie order, empty table gives a blocked outcome |
 | P2 | **Sign in with ChatGPT** (early): `packages/auth-chatgpt` (PKCE, loopback, persisted host id and issued client_id, ID-token/JWKS validation, refresh) plus an `openai-chatgpt-plan` Responses generate adapter; **live probe of `/v1/decisions` with the OAuth token** | No client secret; token file 0600; token never on argv or in logs; unit is `auth_required` until signed in; probe result recorded in the doc | mocked auth server and fetch; nonce, aud and expiry failure cases; Responses stream parse |
-| P3 | **Decision providers behind one interface**: refactor `typesafe-ai.ts` into wire profile plus transport with a configurable base URL; add `openai-decisions.ts` (predicate/choice/score/refusal); `decision.provider` and `fallback` config | Same `EvaluationAdapter` for both; provider chosen by config only; local TypeSafe base URL works; refusal leads to fallback; fallback only when both destinations are permitted | **shared contract suite run against both profiles**: every question type, refusal, missing confidence, 401/429/5xx, malformed body, key never in logs |
+| P3 | **TypeSafe decision provider behind one interface**: split `typesafe-ai.ts` into a wire profile plus HTTP transport; configurable base URL; `decision.provider` is `typesafe-jev` only | One `EvaluationAdapter`; provider and base URL come from config; a provider with no matching evaluate unit is rejected; the credential never appears in errors or logs. OpenAI Decisions, Cloudflare, and Vercel decision fallbacks stay deferred | Contract suite with a fake fetch: noul, choice, score, missing confidence, 400/401/422/429/529/5xx, malformed body, documented request shape, credential redaction. Config tests for provider selection, local base URL, and the missing evaluate unit |
 | P4 | **Budget gate**: `QuotaPort` (a `quota-axi --json` snapshot supplied as data) plus `budget.policy@1` | No dispatch once a provider's week is 80% used; pause until `resetsAt`; pace `ahead` downgrades the tier | fixtures at 79/80/95% used, unknown pace, stale, missing, or unknown snapshot fails closed for every quota-tracked tier |
 | P5 | **Decision sites D1, D2, D8** (triage, route, progress) in `packages/weave/src/sites/` | Below-threshold answers take the recorded fallback; a stale answer is rejected; the scripted layer still passes M0–M6 | fake provider answers; replay determinism |
 | P6 | **D3 preselect plus D4/D7 guardrails** | Preselect only narrows the disclosed catalogue slice; a block becomes an approval request | M6 slice tests; guard asymmetry tests |
@@ -208,7 +215,7 @@ Each PR is small. Each must pass `npm run verify`, adds tests to the existing `n
 | P11 | **MVP test drive** (last MVP phase): Weave runs one real end-to-end task, e.g. a small real PR on weave itself | **Exit:** (a) ChatGPT sign-in works as an inference provider and serves real calls; (b) the configured decision provider makes the D1 triage and D2 routing decisions, recorded with confidence; (c) a light tier and a frontier tier both run inside the loop; (d) checks green, audit run, stop recorded; (e) the week stays under 80% | recorded trace and replay; quota-axi delta logged |
 | P12 | **Post-MVP: generic decision-endpoint adapter.** A config-declared wire profile for any compatible decision endpoint, local providers included | No interface change; adding an endpoint is config plus a profile; the destination is declared | the shared contract suite runs against a local mock server |
 
-Order: P0 → P1 → **P2 ChatGPT sign-in, early, because both the OpenAI decision provider and the test drive depend on it** → P3 decision providers. P4 (budget) and P7 (shell) can run alongside P2 and P3. P5 depends on P3. P6 depends on P5. P8 depends on P6 and P7. P9 depends on P8. **P11 MVP test drive is the last MVP phase** and depends on P2, P3, P5 and P9. P12 comes after the MVP.
+Order: P0 → P1 → P2 ChatGPT sign-in → P3 TypeSafe decision provider. OpenAI Decisions is deferred after the 14 Oct 2026 probe, so P3 does not add it. P4 (budget) and P7 (shell) can run alongside P2 and P3. P5 depends on P3. P6 depends on P5. P8 depends on P6 and P7. P9 depends on P8. **P11 MVP test drive is the last MVP phase** and depends on P2, P3, P5 and P9. P12 comes after the MVP.
 
 ## 8. Budget
 
@@ -289,9 +296,11 @@ server model order and selects the first `visibility: "list"` slug. If models
 cannot be listed it records a skipped Responses call rather than guessing a
 model; the Decisions probe still runs. The Decisions body follows the official
 [choice example](https://developers.openai.com/api/docs/guides/decisions), using
-`gpt-6-luna` and the duplicate-charge input. The `/v1/decisions` probe is **pending
-the captain's sign-in**. No live OAuth entitlement or endpoint support is claimed;
-neither sign-in nor live probes were run during implementation.
+`gpt-6-luna` and the duplicate-charge input. On 14 Oct 2026 the ChatGPT sign-in
+token worked for Responses calls. `POST /v1/decisions` returned HTTP 401
+`rejected_by_access_enforcement` / `no_matching_rule`. OpenAI Decisions is
+therefore deferred, and TypeSafe is the sole decision provider. This record
+does not include the token.
 
 Conservative choices and limits:
 
@@ -321,3 +330,22 @@ acceptance command pass. The exact requested `npm exec --yes --package=node@22
 -- npm run verify` was attempted: its existing task-acceptance command tests
 fail because this sandbox's `spawnSync` returns `EPERM` and empty stdout, which
 those tests attempt to parse as JSON. No tests or permissions were weakened.
+
+## P3 — TypeSafe decision provider
+
+`typesafe-ai` is a wire profile for `POST /v1/systemone`. A boolean question is
+a `noul`. Choice and score keep `criteria` (`choices` and `levels` are not sent).
+The body is `state`, `model`, and a non-empty `questions` map. A provider-neutral
+transport carries that body. It maps 400 and 422 to `invalid_request` (not
+retryable), 401 to `unauthorized`, 429 to `rate_limited`, and 529 and other 5xx
+to retryable `unavailable`. It records `x-typesafe-request-id`. It redacts the
+credential from failure messages and does not log. Missing confidence is left
+missing; policy still treats that as below the floor.
+
+`decision.provider` must be `typesafe-jev`. `parseRouteConfig` rejects any other
+provider id, and rejects a table whose configured provider has no evaluate unit
+with adapter `typesafe-ai` and the provider's model. The composition root passes
+that provider's `base_url` into the adapter. The default is `https://api.typesafe.ai`.
+Loopback HTTP is the local TypeSafe or Jev route. `decision.fallback` stays in
+the configuration and is not routed. OpenAI Decisions, Cloudflare Workers AI,
+and a Vercel decision route are deferred. There is no second decision adapter.
