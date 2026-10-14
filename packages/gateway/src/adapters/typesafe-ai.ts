@@ -1,12 +1,9 @@
 /**
  * Provider adapter: TypeSafe AI's System One API, called directly.
  *
- * This is the fallback path for evaluation. The same model is reachable through
- * the Vercel AI Gateway (`./vercel-ai-gateway.ts`), and normally that is the
- * route to use; this one exists so a judgment site is not stranded when the
- * gateway throttles or is unavailable. Nothing in the gateway branches on which
- * is which — they are two routed units, and escalation picks the second when
- * the first stops working.
+ * TypeSafe direct is the sole default decision provider. The Vercel AI
+ * Gateway route and other fallbacks (OpenAI Decisions, Cloudflare Workers AI)
+ * are deferred.
  *
  * Note the destination. Content sent here crosses a different boundary than
  * content sent to Vercel, so `TYPESAFE_AI_DESTINATION` is its own value and a

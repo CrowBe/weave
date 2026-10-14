@@ -14,6 +14,7 @@
  */
 import {
   createInferenceGateway,
+  resolveTypesafeApiKey,
   type AttemptRecord,
   type Clock,
   type EvaluationKind,
@@ -110,8 +111,7 @@ export function readCredentials(env: NodeJS.ProcessEnv): Credentials | { readonl
   if (vercel === undefined || vercel.trim().length === 0) {
     return { error: 'AI_GATEWAY_API_KEY is not set. Put it in .env.local (git-ignored) and rerun.' };
   }
-  const typesafe = env['TYPESAFE_AI_API_KEY'];
-  return { vercel, typesafe: typesafe !== undefined && typesafe.trim().length > 0 ? typesafe : undefined };
+  return { vercel, typesafe: resolveTypesafeApiKey(env) };
 }
 
 /**

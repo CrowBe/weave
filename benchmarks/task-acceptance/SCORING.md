@@ -84,7 +84,8 @@ npm run task-acceptance:live -- --transcript path/to/transcript.json
 ```
 
 The transcript is JSON: `{ "agent": "name", "tasks": [{ "id", "stop": "done" | "not_done", "write_up"? }] }`.
-`TYPESAFE_AI_API_KEY` must be set or the command skips with
+Set `TYPESAFE_API_KEY` (preferred); `TYPESAFE_AI_API_KEY` is accepted as a legacy
+fallback. Without either key, the command skips with
 `jev route not configured`. Jev is asked at `jev-1.13.0` only. Fixture
 probabilities are not reused. A recorded disagreement is a completed eval.
 The report status is `recorded`. It does not promote either outcome.

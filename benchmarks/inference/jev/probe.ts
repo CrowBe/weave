@@ -160,7 +160,7 @@ async function main(): Promise<void> {
       process.exit(1);
     }
     console.log(
-      `credentials: AI_GATEWAY_API_KEY present; TYPESAFE_AI_API_KEY ${
+      `credentials: AI_GATEWAY_API_KEY present; TYPESAFE_API_KEY (preferred) / TYPESAFE_AI_API_KEY (legacy fallback) ${
         credentials.typesafe === undefined ? 'absent — no fallback route' : 'present — fallback route enabled'
       }`,
     );

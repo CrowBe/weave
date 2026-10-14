@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createInferenceGateway } from '@weave/gateway';
+import { createInferenceGateway, resolveTypesafeApiKey } from '@weave/gateway';
 import { typesafeAiEvaluator, TYPESAFE_AI_ADAPTER, TYPESAFE_AI_DESTINATION } from '@weave/gateway/typesafe-ai';
 import { FIXTURE_CONTRACTS } from '@weave/agentfabric';
 import { FOLD_CONTRACT, NORMALIZE_CONTRACT } from '@weave/weave';
@@ -56,8 +56,8 @@ async function main() {
   } catch (error) {
     if (error?.code !== 'ENOENT') throw error;
   }
-  const key = process.env.TYPESAFE_AI_API_KEY;
-  if (!key) throw Error('TYPESAFE_AI_API_KEY is required; no other destination is used');
+  const key = resolveTypesafeApiKey(process.env);
+  if (!key) throw Error('TYPESAFE_API_KEY (preferred) or TYPESAFE_AI_API_KEY (legacy fallback) is required; no other destination is used');
   const rows = await sourceRows();
   const clock = { now: () => Date.now() };
   const gateway = createInferenceGateway({

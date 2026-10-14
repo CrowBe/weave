@@ -541,7 +541,7 @@ describe('commands', () => {
     const result = spawnSync(
       process.execPath,
       ['--experimental-strip-types', 'benchmarks/task-acceptance/live.ts'],
-      { cwd: ROOT, encoding: 'utf8', env: { ...process.env, TYPESAFE_AI_API_KEY: '' } },
+      { cwd: ROOT, encoding: 'utf8', env: { ...process.env, TYPESAFE_API_KEY: '', TYPESAFE_AI_API_KEY: '' } },
     );
     assert.equal(result.status, 0, result.stderr);
     const report = JSON.parse(result.stdout) as { status: string; live_comparison: string; reason: string };
