@@ -256,3 +256,41 @@ test('pre-cancelled evaluation does not call the port', async () => {
   assert.equal(result.status, 'paused');
   assert.equal(result.observation.reason, 'cancelled');
 });
+
+for (const failure of [
+  { status: 'blocked', reason: 'no_budget' },
+  { status: 'blocked', reason: 'quota_unknown' },
+  { status: 'blocked', reason: 'weekly_budget_cap' },
+  { status: 'blocked', reason: 'deadline_passed' },
+  { status: 'unaccepted', reason: 'budget_exhausted' },
+  { status: 'unaccepted', reason: 'deadline_reached' },
+] as const) {
+  test(`decision ${failure.status} with ${failure.reason} pauses dispatch and preserves read-only fallback`, () => {
+    for (const [site, , , fallback] of cases) {
+      const outcome: EvaluationOutcome<'choice'> = { ...failure, request_id: 'r1', site,
+        attempts: [], spent: 0, uncertainty: [] };
+      const recorded = { state_revision: 1, observed_at: 10, outcome };
+      const readOnly = transitionSite(site, input, recorded, current);
+      assert.equal(readOnly.choice, fallback);
+      assert.equal(readOnly.status, site === 'intake.classify' ? 'needs_human' : 'transition');
+      assert.equal(readOnly.observation.reason, 'decision_unavailable');
+      assert.equal(readOnly.observation.accepted, false);
+      assert.equal(transitionSite(site, { ...input, needs_dispatch: true }, recorded, current).status, 'paused');
+    }
+  });
+}
+
+test('explicit gateway pause makes the decision unavailable independently of outcome reason', () => {
+  for (const [site, , , fallback] of cases) {
+    const outcome: EvaluationOutcome<'choice'> = { status: 'unaccepted', reason: 'attempts_exhausted',
+      request_id: 'r1', site, attempts: [], spent: 0, uncertainty: [],
+      paused: { type: 'loop.paused', policy: 'budget.policy@1', request_id: 'r1', site,
+        reason: 'five_hour_budget_low', until: 1000 } };
+    const recorded = { state_revision: 1, observed_at: 10, outcome };
+    const readOnly = transitionSite(site, input, recorded, current);
+    assert.equal(readOnly.choice, fallback);
+    assert.notEqual(readOnly.status, 'paused');
+    assert.equal(readOnly.observation.reason, 'decision_unavailable');
+    assert.equal(transitionSite(site, { ...input, needs_dispatch: true }, recorded, current).status, 'paused');
+  }
+});

@@ -78,10 +78,11 @@ function validState(state: SiteState): boolean {
 }
 
 function decisionUnavailable(outcome: EvaluationOutcome<'choice'> | null): boolean {
-  if (!outcome) return true;
+  if (!outcome || outcome.paused !== undefined) return true;
   if (outcome.status === 'accepted') return false;
-  if (outcome.status === 'blocked') return outcome.reason === 'provider_unavailable' || outcome.reason === 'no_route';
-  return outcome.reason === 'provider_failed' || outcome.attempts.some(attempt =>
+  if (outcome.status === 'blocked') return ['provider_unavailable', 'no_route', 'no_budget', 'quota_unknown',
+    'weekly_budget_cap', 'deadline_passed'].includes(outcome.reason);
+  return ['provider_failed', 'budget_exhausted', 'deadline_reached'].includes(outcome.reason) || outcome.attempts.some(attempt =>
     attempt.disposition.status === 'failed' &&
     ['unavailable', 'unauthorized', 'quota_exhausted', 'rate_limited', 'timeout'].includes(attempt.disposition.failure.code));
 }
@@ -114,7 +115,7 @@ export function transitionSite(site: DecisionSite, input: SiteInput, recorded: R
   else reason = 'accepted';
   const accepted = reason === 'accepted';
   const choice = accepted ? answer! : policy.fallback;
-  // Provider failure takes no executive authority even when its fallback says implement.
+  // An unavailable decision takes no executive authority even when its fallback says implement.
   const unavailable = decisionUnavailable(outcome);
   const status = recorded.cancelled || (input.needs_dispatch && unavailable) ? 'paused' :
     choice === 'ask_user' || choice === 'needs_human' ? 'needs_human' : 'transition';
