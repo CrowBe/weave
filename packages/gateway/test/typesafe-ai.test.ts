@@ -333,3 +333,150 @@ describe('typesafe-ai adapter: a second implementation of the same contract', ()
     assert.equal(result.status === 'failed' && result.failure.retryable, false);
   });
 });
+
+describe('TypeSafe decision contract', () => {
+  const secret = 'ts-live-secret-key';
+
+  it('posts state, model, and a non-empty questions map using criteria', async () => {
+    const { fetch, calls } = stubFetch(LIVE_BODY);
+    await typesafeAiEvaluator({ apiKey: secret, fetch, baseURL: 'http://127.0.0.1:9/' }).evaluate({
+      model: 'jev-latest',
+      kind: 'choice',
+      state: { ticket: 'payouts failing' },
+      questions: {
+        urgent: { type: 'boolean', instructions: 'Does this convey urgency?', criteria: { true: 'time-sensitive', false: 'no urgency' } },
+        area: { type: 'choice', instructions: 'Which area?', criteria: { billing: 'invoices', technical: null } },
+        frustration: { type: 'score', instructions: { ask: 'how frustrated?' }, criteria: ['Calm', 'Frustrated', 'Very angry'] },
+      },
+      signal: undefined,
+    });
+
+    const first = calls[0];
+    assert.ok(first);
+    assert.equal(first.url, 'http://127.0.0.1:9/v1/systemone');
+    assert.equal(first.init.method, 'POST');
+    assert.equal((first.init.headers as Record<string, string>)['content-type'], 'application/json');
+    assert.equal((first.init.headers as Record<string, string>)['authorization'], `Bearer ${secret}`);
+    const body = sentBody(calls);
+    assert.deepEqual(Object.keys(body).sort(), ['model', 'questions', 'state']);
+    assert.deepEqual(body['state'], { ticket: 'payouts failing' });
+    assert.equal(body['model'], 'jev-latest');
+    const questions = body['questions'];
+    assert.equal(Array.isArray(questions), false);
+    assert.ok(questions && typeof questions === 'object');
+    assert.ok(Object.keys(questions as object).length > 0);
+    assert.deepEqual(questions, {
+      urgent: { type: 'noul', instructions: 'Does this convey urgency?', criteria: { true: 'time-sensitive', false: 'no urgency' } },
+      area: { type: 'choice', instructions: 'Which area?', criteria: { billing: 'invoices', technical: null } },
+      frustration: { type: 'score', instructions: { ask: 'how frustrated?' }, criteria: ['Calm', 'Frustrated', 'Very angry'] },
+    });
+    const encoded = JSON.stringify(questions);
+    assert.equal(encoded.includes('"choices"'), false);
+    assert.equal(encoded.includes('"levels"'), false);
+    assert.equal(encoded.includes('"predicate"'), false);
+  });
+
+  it('reads noul, choice, and score, and does not invent missing confidence', async () => {
+    const { fetch } = stubFetch({
+      model: 'jev-1.13.0',
+      answers: {
+        urgent: { type: 'noul', noul: 0.95 },
+        area: { type: 'choice', choice: 'billing', probabilities: { billing: 0.9, technical: 0.1 } },
+        frustration: {
+          type: 'score',
+          score: 1.05,
+          legend: { '0': 'Calm', '1': 'Frustrated', '2': 'Very angry' },
+          probabilities: { '0': 0, '1': 0.95, '2': 0.05 },
+        },
+      },
+      usage: { input_tokens: 388, output_tokens: 73 },
+    }, { headers: { 'x-typesafe-request-id': REQUEST_ID } });
+    const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
+    assert.equal(result.status, 'completed');
+    if (result.status !== 'completed') return;
+    assert.deepEqual(result.answers['urgent'], { type: 'boolean', probability: 0.95 });
+    assert.deepEqual(result.answers['area'], {
+      type: 'choice',
+      choice: 'billing',
+      probabilities: { billing: 0.9, technical: 0.1 },
+    });
+    assert.deepEqual(result.answers['frustration'], {
+      type: 'score',
+      score: 1.05,
+      probabilities: { '0': 0, '1': 0.95, '2': 0.05 },
+    });
+    assert.equal(result.confidence, undefined);
+    assert.equal(result.provider_response_id, REQUEST_ID);
+  });
+
+  const statuses = [
+    { status: 400, code: 'invalid_request', retryable: false },
+    { status: 401, code: 'unauthorized', retryable: false },
+    { status: 422, code: 'invalid_request', retryable: false },
+    { status: 429, code: 'rate_limited', retryable: true },
+    { status: 500, code: 'unavailable', retryable: true },
+    { status: 529, code: 'unavailable', retryable: true },
+  ] as const;
+
+  for (const expected of statuses) {
+    it(`maps HTTP ${expected.status} to ${expected.code}`, async () => {
+      const { fetch } = stubFetch(undefined, {
+        status: expected.status,
+        raw: JSON.stringify({ error: { code: 'api_usage_error', message: 'Invalid request.' } }),
+        headers: { 'x-typesafe-request-id': REQUEST_ID },
+      });
+      const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
+      assert.equal(result.status, 'failed');
+      if (result.status !== 'failed') return;
+      assert.equal(result.failure.code, expected.code);
+      assert.equal(result.failure.retryable, expected.retryable);
+      assert.match(result.failure.message, new RegExp(REQUEST_ID));
+    });
+  }
+
+  it('reports a malformed body without inventing an answer', async () => {
+    for (const raw of ['not-json', 'null', '[]', JSON.stringify({ model: 'jev-latest' }), JSON.stringify({ answers: { urgent: { type: 'noul' } } })]) {
+      const { fetch } = stubFetch(undefined, { raw, headers: { 'x-typesafe-request-id': REQUEST_ID } });
+      const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
+      assert.equal(result.status, 'failed');
+      if (result.status !== 'failed') return;
+      assert.equal(result.failure.code, 'malformed_response');
+      assert.equal(result.failure.retryable, false);
+      assert.equal(result.failure.message.includes('test-key'), false);
+    }
+  });
+
+  it('keeps the credential out of failures and logs', async () => {
+    const logs: string[] = [];
+    const methods = ['log', 'info', 'warn', 'error', 'debug'] as const;
+    const originals = new Map(methods.map((name) => [name, console[name].bind(console)]));
+    for (const name of methods) {
+      console[name] = ((...args: unknown[]) => {
+        logs.push(args.map((arg) => String(arg)).join(' '));
+      }) as typeof console.log;
+    }
+    try {
+      const echoed = stubFetch(undefined, {
+        status: 400,
+        raw: JSON.stringify({ error: `rejected ${secret}`, authorization: `Bearer ${secret}` }),
+        headers: { 'x-typesafe-request-id': `req_${secret}` },
+      });
+      const failed = await typesafeAiEvaluator({ apiKey: secret, fetch: echoed.fetch }).evaluate(CALL);
+      assert.equal(failed.status, 'failed');
+      if (failed.status !== 'failed') return;
+      assert.equal(JSON.stringify(failed).includes(secret), false);
+      assert.match(failed.failure.message, /\[redacted\]/);
+
+      const thrown = (async () => {
+        throw new Error(`connect ${secret} failed`);
+      }) as unknown as typeof globalThis.fetch;
+      const transport = await typesafeAiEvaluator({ apiKey: secret, fetch: thrown }).evaluate(CALL);
+      assert.equal(transport.status, 'failed');
+      if (transport.status !== 'failed') return;
+      assert.equal(JSON.stringify(transport).includes(secret), false);
+      assert.equal(logs.some((line) => line.includes(secret)), false);
+    } finally {
+      for (const name of methods) console[name] = originals.get(name) as typeof console.log;
+    }
+  });
+});
