@@ -294,3 +294,32 @@ test('explicit gateway pause makes the decision unavailable independently of out
     assert.equal(transitionSite(site, { ...input, needs_dispatch: true }, recorded, current).status, 'paused');
   }
 });
+
+test('Amos unavailable makes intake ask_user without calling TypeSafe', async () => {
+  const { amosEvaluator } = await import('@weave/gateway/amos');
+  const unit: RoutedUnit = {
+    routed_unit_id: 'amos.choice', adapter: 'amos', model: 'amos-1-2b', operation: 'evaluate', kind: 'choice',
+    destination: 'local', quality: 'baseline', context_profile: 'decision', context_profile_version: 1,
+    prompt_template: 'decision.choice', prompt_template_version: 1, settings: { max_output_tokens: 256 },
+    context_limit_tokens: 1000, price: { input_per_mtok: 0, output_per_mtok: 0 },
+  };
+  let typesafeCalls = 0;
+  const gateway = createInferenceGateway({
+    clock: { now: () => 10 }, routes: [unit, { ...unit, routed_unit_id: 'typesafe.choice', adapter: 'typesafe-ai', model: 'jev-latest' }],
+    decision: { provider: 'typesafe-jev', fallback: null, sites: { 'intake.classify': 'amos' }, providers: {
+      amos: { base_url: 'http://127.0.0.1:8766', model: 'amos-1-2b' },
+      'typesafe-jev': { base_url: 'https://api.typesafe.ai', model: 'jev-latest' },
+    } },
+    evaluators: [amosEvaluator({ fetch: async () => new Response('private provider text', { status: 503 }) }),
+      { id: 'typesafe-ai', evaluate: async () => { typesafeCalls++; throw new Error('must not call'); } }],
+  });
+  const outcome = await gateway.evaluate({ request_id: 'availability', site: 'intake.classify', role: 'working', kind: 'choice', state: 'disclosed', questions: { decision: { type: 'choice', instructions: 'classify', criteria: { new_thread: null, queue: null } } }, terms: input.terms });
+  assert.equal(outcome.status, 'blocked');
+  if (outcome.status === 'blocked') assert.equal(outcome.reason, 'provider_unavailable');
+  const result = await evaluateSite('intake.classify', input, gateway, () => ({ ...current, observed_at: 10 }));
+  assert.equal(result.choice, 'ask_user');
+  assert.equal(result.status, 'needs_human');
+  assert.equal(result.observation.reason, 'decision_unavailable');
+  assert.equal(typesafeCalls, 0);
+  assert.ok(!JSON.stringify(result).includes('private provider text'));
+});
