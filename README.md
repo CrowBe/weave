@@ -37,6 +37,8 @@ Start with:
 - [M6 — route a reconstructed view](./docs/m6-route-a-reconstructed-view.md)
   — prefix-cache routing, catalogue index and schema slices, read-set
   destinations, and one shared slice assembly.
+- [M7 — decision-model loop (planned)](./docs/m7-decision-loop.md): P1 adds
+  gateway tier/configuration primitives; the decision loop is not implemented.
 - [H1 — bound the log](./docs/h1-bound-the-log.md) — a follow-up hardening step:
   reject oversize and duplicate observations before they are durable.
 - [AGENTS.md](./AGENTS.md) — how coding agents should work in this repository.

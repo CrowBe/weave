@@ -16,3 +16,5 @@ export {
   type RoutingDecision,
 } from './routing.js';
 export * from './types.js';
+
+export { parseRouteConfig, type DecisionConfig, type RouteConfigResult } from './config.js';

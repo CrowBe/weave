@@ -588,6 +588,12 @@ scheduler, or host projects.
 
 ## 11. What remains open
 
+- **M7 — decision-model loop (planned).** Tiered routing and configured decision
+  providers lead into guarded implementation, criteria evaluation, tidy state,
+  and audit with deterministic budget and stop gates. P1 supplies gateway
+  configuration primitives; the loop remains planned. Contract:
+  [docs/m7-decision-loop.md](docs/m7-decision-loop.md).
+
 - Exact contract and resolver-context interfaces for the in-repo `agentsop` and
   `agentfabric` packages, including how contracts are expressed (JSON Schema,
   native types, or both).

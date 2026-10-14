@@ -146,6 +146,26 @@ The module that performs bounded model work under explicit scope, acceptance, au
 
 A versioned context profile, prompt template, model, and settings selected together for inference. Evaluation evidence attaches to that combination.
 
+### Tier
+
+A configured routed-unit attribute: `decision`, `flash`, `standard`, or `strong`. A tier identifies the role and resource class requested for a step; it is not a quality bar. Routing still enforces quality, destinations, context, and budget independently of tier. It is a routing attribute and is unrelated to execution tier.
+
+### Decision provider
+
+An evaluation adapter serving judgment sites in the decision-model loop, selected by configuration. OpenAI Decisions and TypeSafe Jev are examples. Its typed answers are observations; deterministic policy decides transitions and authority to execute.
+
+### Wire profile
+
+Pure request and response translation for one provider's protocol, carried by a shared transport. A wire profile maps the gateway's typed questions and answers to and from the provider's shapes; it does not own routing, policy, credentials, or runtime state.
+
+### Tidy state
+
+The `view.audit@1` state view handed to the audit tier. It assembles the goal, criteria, plan, recorded decisions, artifacts, checks, evaluations, open issues, and budget from authorized slices, with omissions, source revisions, and a digest. It preserves evidence rather than replacing state with a transcript summary.
+
+### Audit tier
+
+The review stage that requests a `strong` routed unit to examine tidy state for gaps, defects, regressions, and scope creep. It is a stage that requests tier `strong` and is not a member of the tier vocabulary. An audit report is an observation; its claim that the goal is met cannot replace deterministic success evidence or grant execution authority. Budget pressure pauses this stage rather than weakening its requested tier.
+
 ### Routing
 
 The deterministic selection step inside the gateway. It minimizes expected total cost of reaching the declared quality bar — retries and escalation included — using recorded per-site success rates, cost, latency, privacy, and context limits. When a prefix cache is supplied, that cost includes a hit discount or one reload.
@@ -456,6 +476,7 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 - Say **milestone**, not *slice*, for an M-numbered increment of the plan. A slice is a query over state.
 - Say **trusted ingress**, not *authenticated client*, for the in-process handle that may submit privileged observations.
 - Say **execution tier**, not *sandbox*, for where an implementation runs. A label is not containment.
+- Say **tier** for the routed-unit class; say **execution tier** for trusted/untrusted placement.
 - Say **held-out report**, not *test output*, for what protected evaluation returns to an implementer.
 - Never use **deterministic** to describe generated tests; their execution is deterministic, while their authorship and correctness require evidence.
 - Say **operator**, not *user*, for the principal that configures Weave and decides pending requests through an operator surface.

@@ -18,6 +18,7 @@ import { priceAttempt, route, worstCaseCost, type RouteExclusion } from './routi
 import {
   answersMatchQuestions,
   nonEmptyText,
+  TIERS,
   type AttemptRecord,
   type BlockedReason,
   type Clock,
@@ -34,6 +35,7 @@ import {
   type InferenceGateway,
   type InferenceTerms,
   type Micros,
+  type ProviderAvailability,
   type ProviderFailure,
   type ProviderUsage,
   type QuestionId,
@@ -46,6 +48,7 @@ import {
 } from './types.js';
 
 export interface GatewayConfig {
+  readonly availability?: ProviderAvailability;
   readonly routes: RouteTable;
   /** Adapters serving `operation: 'generate'` routes. */
   readonly adapters?: readonly GenerationAdapter[];
@@ -94,6 +97,7 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
         timer: config.timer,
         signal,
         routes: config.routes,
+        availability: config.availability,
         minEvidence,
         target: { operation: 'generate', kind: request.kind },
         terms: request.terms,
@@ -149,6 +153,7 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
         timer: config.timer,
         signal,
         routes: config.routes,
+        availability: config.availability,
         minEvidence,
         target: { operation: 'evaluate', kind: request.kind },
         terms: request.terms,
@@ -249,6 +254,7 @@ interface Bounded<T> {
 }
 
 interface BoundedParams<T> {
+  readonly availability: ProviderAvailability | undefined;
   readonly clock: Clock;
   readonly timer: Timer | undefined;
   readonly signal: AbortSignal | undefined;
@@ -279,7 +285,7 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
     return finish({ status: 'blocked', reason: 'deadline_passed' });
   }
 
-  const decision = route(params.routes, params.target, terms, params.minEvidence);
+  const decision = route(params.routes, params.target, terms, params.minEvidence, params.availability);
   uncertainty.push(...decision.uncertainty);
   if (decision.order.length === 0) {
     return finish({ status: 'blocked', reason: blockedRoutingReason(decision.excluded) });
@@ -452,6 +458,7 @@ function missingAdapter<T>(unit: RoutedUnit): AttemptResult<T> {
 // ---------------------------------------------------------------------------
 
 function invalidTerms(terms: InferenceTerms): string | null {
+  if (terms.tier !== undefined && !TIERS.includes(terms.tier)) return 'terms.tier must be a known tier';
   if (terms.max_attempts < 1) return 'terms.max_attempts must be at least 1';
   if (terms.max_attempts_per_route !== undefined && terms.max_attempts_per_route < 1) {
     return 'terms.max_attempts_per_route must be at least 1';
@@ -559,8 +566,13 @@ function cheapestWorstCase(order: readonly RoutedUnit[], terms: InferenceTerms):
   return Math.min(...order.map((u) => worstCaseCost(u, terms)));
 }
 
-/** Nothing was routable: say whether the money or the policy was the reason. */
+/**
+ * Nothing was routable: say whether the money or the policy was the reason.
+ * Operation, kind, and tier mismatches were never candidates for this request,
+ * so an unaffordable requested tier still reports `no_budget`.
+ */
 function blockedRoutingReason(excluded: readonly RouteExclusion[]): 'no_route' | 'no_budget' {
-  const considered = excluded.filter((e) => e.reason !== 'kind_mismatch' && e.reason !== 'operation_mismatch');
+  const considered = excluded.filter((e) =>
+    e.reason !== 'kind_mismatch' && e.reason !== 'operation_mismatch' && e.reason !== 'tier_mismatch');
   return considered.length > 0 && considered.every((e) => e.reason === 'unaffordable') ? 'no_budget' : 'no_route';
 }

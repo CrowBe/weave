@@ -1,0 +1,87 @@
+{
+  "decision": {
+    "provider": "openai-decisions",
+    "fallback": "typesafe-jev",
+    "providers": {
+      "openai-decisions": {
+        "base_url": "https://api.openai.com",
+        "model": "gpt-6-luna",
+        "auth": "chatgpt-oauth"
+      },
+      "typesafe-jev": {
+        "base_url": "https://api.typesafe.ai",
+        "model": "jev-latest",
+        "auth": "api-key",
+        "key_env": "TYPESAFE_API_KEY"
+      }
+    }
+  },
+  "units": [
+    {
+      "routed_unit_id": "grok-build.flash",
+      "adapter": "grok-build",
+      "model": "grok",
+      "tier": "flash",
+      "operation": "generate",
+      "kind": "transform",
+      "destination": "xai.grok-build",
+      "quality": "baseline",
+      "context_profile": "implementation",
+      "context_profile_version": 1,
+      "prompt_template": "implementation",
+      "prompt_template_version": 1,
+      "settings": {
+        "max_output_tokens": 8192
+      },
+      "context_limit_tokens": 128000,
+      "price": {
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      }
+    },
+    {
+      "routed_unit_id": "codex.flash",
+      "adapter": "codex",
+      "model": "codex",
+      "tier": "flash",
+      "operation": "generate",
+      "kind": "transform",
+      "destination": "openai.codex",
+      "quality": "baseline",
+      "context_profile": "implementation",
+      "context_profile_version": 1,
+      "prompt_template": "implementation",
+      "prompt_template_version": 1,
+      "settings": {
+        "max_output_tokens": 8192
+      },
+      "context_limit_tokens": 128000,
+      "price": {
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      }
+    },
+    {
+      "routed_unit_id": "claude-code.strong",
+      "adapter": "claude-code",
+      "model": "opus",
+      "tier": "strong",
+      "operation": "generate",
+      "kind": "transform",
+      "destination": "anthropic.claude-code",
+      "quality": "high",
+      "context_profile": "implementation",
+      "context_profile_version": 1,
+      "prompt_template": "implementation",
+      "prompt_template_version": 1,
+      "settings": {
+        "max_output_tokens": 8192
+      },
+      "context_limit_tokens": 128000,
+      "price": {
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      }
+    }
+  ]
+}

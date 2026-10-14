@@ -8,3 +8,4 @@ dist/
 __pycache__/
 benchmarks/inference/openjev/__pycache__/
 benchmarks/inference/kev/__pycache__/
+weave.routes.local.json

@@ -11,6 +11,7 @@ import {
   qualityClears,
   type InferenceTerms,
   type Micros,
+  type ProviderAvailability,
   type RoutedUnit,
   type RouteTable,
   type RouteTarget,
@@ -27,6 +28,8 @@ export interface AttemptPrice {
 export type ExclusionReason =
   | 'operation_mismatch'
   | 'kind_mismatch'
+  | 'tier_mismatch'
+  | 'provider_unavailable'
   | 'destination_not_permitted'
   | 'quality_below_bar'
   | 'context_limit_too_small'
@@ -102,12 +105,13 @@ export function route(
   target: RouteTarget,
   terms: InferenceTerms,
   minEvidenceAttempts: number,
+  availability?: ProviderAvailability,
 ): RoutingDecision {
   const excluded: RouteExclusion[] = [];
   const eligible: RoutedUnit[] = [];
 
   for (const unit of table) {
-    const reason = excludeReason(unit, target, terms);
+    const reason = excludeReason(unit, target, terms, availability);
     if (reason !== null) {
       excluded.push({ routed_unit_id: unit.routed_unit_id, reason });
       continue;
@@ -141,11 +145,20 @@ export function route(
   return { order: [...evidenced, ...thin], excluded, uncertainty };
 }
 
-function excludeReason(unit: RoutedUnit, target: RouteTarget, terms: InferenceTerms): ExclusionReason | null {
+function excludeReason(unit: RoutedUnit, target: RouteTarget, terms: InferenceTerms, availability?: ProviderAvailability): ExclusionReason | null {
   if (unit.operation !== target.operation) return 'operation_mismatch';
   // Safe across the union: the kind vocabularies are disjoint, so a route that
   // serves the right operation can still serve the wrong shape.
   if (unit.kind !== target.kind) return 'kind_mismatch';
+  if ((target.tier !== undefined && unit.tier !== target.tier) ||
+      (terms.tier !== undefined && unit.tier !== terms.tier)) return 'tier_mismatch';
+  // Runtime entries may not match the type. An own entry is unavailable
+  // unless status is exactly 'available'.
+  if (availability && Object.hasOwn(availability, unit.adapter)) {
+    const entry = availability[unit.adapter];
+    const status = typeof entry === 'string' ? entry : entry?.status;
+    if (status !== 'available') return 'provider_unavailable';
+  }
   if (!terms.destinations.includes(unit.destination)) return 'destination_not_permitted';
   if (!qualityClears(unit.quality, terms.quality)) return 'quality_below_bar';
   if (unit.context_limit_tokens < terms.max_context_tokens) return 'context_limit_too_small';

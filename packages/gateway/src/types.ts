@@ -80,6 +80,19 @@ export type InferenceKind = GenerationKind | EvaluationKind;
 /** Where request content may be sent. Routing filters on this before quality. */
 export type DataDestination = string;
 
+export const TIERS = ['decision', 'flash', 'standard', 'strong'] as const;
+export type Tier = (typeof TIERS)[number];
+
+export type ProviderStatus = 'available' | 'exhausted' | 'auth_required' | 'unavailable';
+/** Caller-supplied status keyed by exact routed-unit adapter ids, not provider
+ * or destination ids. The composition root must map quota-provider ids to adapters.
+ * Only own entries are consulted; missing or unmatched keys leave routing unchanged.
+ * Rechecking belongs to the composition root; metadata never implies availability. */
+export type ProviderAvailability = Readonly<Record<string, ProviderStatus | {
+  readonly status: ProviderStatus;
+  readonly recheck_after?: Timestamp;
+}>>;
+
 export const QUALITY_BARS = ['baseline', 'high'] as const;
 export type QualityBar = (typeof QUALITY_BARS)[number];
 
@@ -104,6 +117,7 @@ export interface PrefixCacheRecord {
 }
 
 export interface InferenceTerms {
+  readonly tier?: Tier;
   readonly quality: QualityBar;
   readonly destinations: readonly DataDestination[];
   readonly max_context_tokens: number;
@@ -298,7 +312,8 @@ export interface RouteEvidence {
   readonly accepted: number;
 }
 
-interface RoutedUnitBase {
+export interface RoutedUnitBase {
+  readonly tier?: Tier;
   readonly routed_unit_id: RoutedUnitId;
   readonly context_profile: string;
   readonly context_profile_version: number;
@@ -325,8 +340,8 @@ export type RouteTable = readonly RoutedUnit[];
 
 /** What routing is looking for. Same pairing as the unit it must match. */
 export type RouteTarget =
-  | { readonly operation: 'generate'; readonly kind: GenerationKind }
-  | { readonly operation: 'evaluate'; readonly kind: EvaluationKind };
+  | { readonly operation: 'generate'; readonly kind: GenerationKind; readonly tier?: Tier }
+  | { readonly operation: 'evaluate'; readonly kind: EvaluationKind; readonly tier?: Tier };
 
 // ---------------------------------------------------------------------------
 // Provider ports. Adapters implement execution; they decide nothing about
