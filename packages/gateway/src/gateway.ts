@@ -34,6 +34,7 @@ import {
   type InferenceGateway,
   type InferenceTerms,
   type Micros,
+  type ProviderAvailability,
   type ProviderFailure,
   type ProviderUsage,
   type QuestionId,
@@ -46,6 +47,7 @@ import {
 } from './types.js';
 
 export interface GatewayConfig {
+  readonly availability?: ProviderAvailability;
   readonly routes: RouteTable;
   /** Adapters serving `operation: 'generate'` routes. */
   readonly adapters?: readonly GenerationAdapter[];
@@ -94,6 +96,7 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
         timer: config.timer,
         signal,
         routes: config.routes,
+        availability: config.availability,
         minEvidence,
         target: { operation: 'generate', kind: request.kind },
         terms: request.terms,
@@ -149,6 +152,7 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
         timer: config.timer,
         signal,
         routes: config.routes,
+        availability: config.availability,
         minEvidence,
         target: { operation: 'evaluate', kind: request.kind },
         terms: request.terms,
@@ -249,6 +253,7 @@ interface Bounded<T> {
 }
 
 interface BoundedParams<T> {
+  readonly availability: ProviderAvailability | undefined;
   readonly clock: Clock;
   readonly timer: Timer | undefined;
   readonly signal: AbortSignal | undefined;
@@ -279,7 +284,7 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
     return finish({ status: 'blocked', reason: 'deadline_passed' });
   }
 
-  const decision = route(params.routes, params.target, terms, params.minEvidence);
+  const decision = route(params.routes, params.target, terms, params.minEvidence, params.availability);
   uncertainty.push(...decision.uncertainty);
   if (decision.order.length === 0) {
     return finish({ status: 'blocked', reason: blockedRoutingReason(decision.excluded) });
