@@ -1,7 +1,8 @@
-/** Resolve credentials at the composition root without reading ambient state. */
+/**
+ * Resolve trimmed credentials at the composition root without reading ambient state.
+ * TYPESAFE_API_KEY wins; legacy TYPESAFE_AI_API_KEY is the fallback.
+ * Blank or whitespace-only values count as missing.
+ */
 export function resolveTypesafeApiKey(env: Readonly<Record<string, string | undefined>>): string | undefined {
-  const preferred = env['TYPESAFE_API_KEY'];
-  if (preferred !== undefined && preferred.trim().length > 0) return preferred;
-  const legacy = env['TYPESAFE_AI_API_KEY'];
-  return legacy !== undefined && legacy.trim().length > 0 ? legacy : undefined;
+  return env['TYPESAFE_API_KEY']?.trim() || env['TYPESAFE_AI_API_KEY']?.trim() || undefined;
 }

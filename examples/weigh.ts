@@ -1,11 +1,11 @@
 /**
  * Weighing candidates with Jev, through the inference gateway.
  *
- * Jev is reachable two ways: through the Vercel AI Gateway, and directly at
- * api.typesafe.ai. Both are routed units in the table below, the direct one
- * second when both keys are configured. With only a TypeSafe key, it uses
- * direct routes alone. A throttled or unavailable gateway escalates rather than
- * failing the judgment. The attempt list shows which route answered.
+ * Direct TypeSafe at api.typesafe.ai is the default. Setting AI_GATEWAY_API_KEY
+ * adds an optional Vercel AI Gateway route, listed first when both keys are
+ * configured. With only a TypeSafe key, it uses direct routes alone. A throttled
+ * or unavailable gateway escalates to the direct route when configured.
+ * The attempt list shows which route answered.
  *
  * This is the decision layer's shape, not a chat: one shared state, typed
  * questions, typed answers. Nothing here parses prose into a number, because
@@ -45,12 +45,12 @@ if (!apiKey && !typesafeKey) {
 }
 
 /**
- * Up to two routed units per answer shape: the same model reached two ways. The
- * Vercel AI Gateway route is preferred and listed first; the direct TypeSafe
- * route is the fallback the gateway escalates to when the first stops working.
+ * Direct TypeSafe is the default route per answer shape. The Vercel AI Gateway
+ * route is an optional extra only when AI_GATEWAY_API_KEY is set; it is listed
+ * first when enabled, with escalation to direct TypeSafe when configured.
  *
  * They carry different destinations because they cross different boundaries,
- * so the fallback engages only because `terms` below names both.
+ * so escalation engages only because `terms` below names both.
  */
 function jevRoutes(kind: EvaluationKind): RoutedUnit[] {
   const shared = {

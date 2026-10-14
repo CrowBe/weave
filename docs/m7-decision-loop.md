@@ -49,7 +49,7 @@ flowchart TD
   Q -.-> AUD
 ```
 
-Every `{{Dn}}` node is an `evaluate` request through the gateway, served by the configured **decision provider** (§4a): OpenAI Decisions or TypeSafe Jev. Its answer is recorded as an observation, and a deterministic rule then turns it into a transition. The decision model never dispatches anything itself. D7 guards proposed output effects before dispatch or publication; D8 checks progress after each round.
+Every `{{Dn}}` node is an `evaluate` request through the gateway, served by the configured **decision provider** (§4a): TypeSafe Jev is the sole default decision provider. OpenAI Decisions (401 under ChatGPT sign-in) and Cloudflare Workers AI fallbacks are deferred. Its answer is recorded as an observation, and a deterministic rule then turns it into a transition. The decision model never dispatches anything itself. D7 guards proposed output effects before dispatch or publication; D8 checks progress after each round.
 
 ## 3. Tidy-state schema (audit-tier input)
 
@@ -80,8 +80,9 @@ The audit tier returns `AuditReport { findings: {criterion_id|null, kind:'gap'|'
 
 Decision providers serve the existing
 `EvaluationAdapter.evaluate(EvaluationCall)` interface. Configuration selects
-OpenAI Decisions or TypeSafe Jev as primary, with an optional distinct fallback.
-The loop names a judgment site and answer shape. It does not name a vendor.
+TypeSafe Jev as the sole default decision provider, with no provider fallback.
+OpenAI Decisions (401 under ChatGPT sign-in) and Cloudflare Workers AI fallbacks
+are deferred. The loop names a judgment site and answer shape. It does not name a vendor.
 
 The [OpenAI Decisions guide](https://developers.openai.com/api/docs/guides/decisions)
 documents `POST /v1/decisions` with `gpt-6-luna`, shared input, named questions,
@@ -102,13 +103,13 @@ The planned P3 provider-switch policy changes the destination and is permitted o
 when both destinations are allowed by `terms.destinations`. A local Jev endpoint
 may serve privacy-restricted sites only after earning site-specific evidence.
 
-OAuth eligibility for `/v1/decisions` is **undocumented**. The Decisions guide
+OpenAI Decisions returned **401 under ChatGPT sign-in**. The Decisions guide
 shows API-key authentication; the
 [Sign in with ChatGPT documentation](https://developers.openai.com/siwc/token-sharing-open-source)
-describes eligible Responses API requests. The example's `chatgpt-oauth` setting
-is a planned configuration, not evidence of eligibility. P2 must probe the
-endpoint and record status without recording tokens. If OAuth is refused, use
-an authorized API-key route or configure TypeSafe Jev; do not infer entitlement.
+describes eligible Responses API requests. TypeSafe Jev is the sole default
+decision provider. OpenAI Decisions and Cloudflare Workers AI fallbacks are
+deferred; the example's `chatgpt-oauth` provider definition does not establish
+eligibility or enable a fallback. Record probe status without recording tokens.
 
 ### 4b. Sites
 
