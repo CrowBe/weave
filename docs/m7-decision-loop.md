@@ -5,7 +5,7 @@ This is the behavioral contract for the planned milestone in
 [M6](m6-route-a-reconstructed-view.md). Terms follow
 [GLOSSARY.md](../GLOSSARY.md). These requirements describe the target, not
 implemented loop behavior. P0 establishes this contract; P1 supplies tier and
-availability routing plus pure configuration validation. P2 supplies local ChatGPT authentication and a Responses adapter. P3 supplies the TypeSafe decision provider behind one evaluation interface. P4 supplies the budget gate; P5–P12 remain planned.
+availability routing plus pure configuration validation. P2 supplies local ChatGPT authentication and a Responses adapter. P3 supplies the TypeSafe decision provider behind one evaluation interface. P4 supplies the budget gate; P5 supplies D1, D2, D8 and intake choice sites with pure transitions. Full-loop integration and P6–P12 remain planned.
 Demonstrate red before implementation, prove green with deterministic fixtures,
 and retain M0–M6 checks. Live provider runs are non-gating evidence.
 
@@ -37,19 +37,32 @@ flowchart TD
   PRE --> GR{{D4 input guardrail: decision predicate}}
   GR -->|block| ASK
   GR -->|pass| IMPL[Implementation step: configured generate tier]
-  IMPL --> SH[Capability shell-out: tests, lint, build, tools]
+  IMPL --> OUT{{D7 output guardrail: decision predicate}}
+  OUT -->|block| ASK
+  OUT -->|pass| EFFECT[Deterministic Fabric effect / grant enforcement]
+  EFFECT -->|deny| ASK
+  EFFECT -->|allow| SH[Capability shell-out: tests, lint, build, tools]
   SH --> OE{{D5 output eval vs criteria: decision predicate per criterion}}
   OE -->|fail, retries left| IMPL
   OE -->|pass or retries spent| TS[Build tidy state]
   TS --> AUD[Audit tier: strong routed unit]
   AUD --> GAP{{D6 gap disposition: decision choice over audit findings}}
-  GAP -->|gaps| O
-  GAP -->|done + checks green| DONE[Complete: deterministic success evidence]
+  GAP --> CONT{{D8 continue: decision choice over round progress}}
+  CONT --> NEXT{Deterministic round transition}
+  NEXT -->|two stalled / regressing rounds or repeated issue after two fixes| STOP
+  NEXT -->|fix_now + no stop condition| O
+  NEXT -->|needs_human| ASK
+  NEXT -->|done + checks green + no stop condition| DONE[Complete: deterministic success evidence]
   Q[(quota-axi --json<br/>+ gateway spend)] -.budget gate before every dispatch.-> R
   Q -.-> AUD
 ```
 
 Every `{{Dn}}` node is an `evaluate` request through the gateway, served by the configured **decision provider** (§4a): TypeSafe Jev is the sole default decision provider. OpenAI Decisions (401 under ChatGPT sign-in) and Cloudflare Workers AI fallbacks are deferred. Its answer is recorded as an observation, and a deterministic rule then turns it into a transition. The decision model never dispatches anything itself. D7 guards proposed output effects before dispatch or publication; D8 checks progress after each round.
+
+D7's pass cannot override Fabric's deterministic effect and grant enforcement.
+The round transition applies the stop conditions in §6 before another round or
+completion; one `stalled` or `regressing` answer alone does not stop the loop.
+D7 is shown as the target P6 guardrail, not an implementation added by P5.
 
 ## 3. Tidy-state schema (audit-tier input)
 
@@ -127,10 +140,44 @@ eligibility or enable a fallback. Record probe status without recording tokens.
 | D5 `eval.output` | boolean per success criterion | Does the artifact satisfy criterion C? | p(true), plus conf when supplied by the provider | OpenAI Decisions predicate (provisional assumption; P10 tunes on the tune split): pass if p ≥ 0.85, fail if p ≤ 0.15, otherwise uncertain (treat as fail/retry). TypeSafe Jev and other providers that return confidence: pass if p ≥ 0.8 and conf ≥ 0.9 (existing `confidence_floor`); missing confidence is below the floor. | treat as fail and retry, up to N=2 per step, then escalate the tier once, then hand to audit with `open_issue` |
 | D6 `audit.dispose` | choice per finding | What do we do with audit finding F? | `fix_now` / `defer` / `reject_as_out_of_scope` / `needs_human` | conf ≥ 0.75 | `needs_human` |
 | D7 `guard.output` | boolean | Does the output introduce an effect outside the grant (writes, network, secrets)? | p(violation) | block if p ≥ 0.3 | block. Deterministic effect enforcement (Fabric) stays the real gate. |
-| D8 `loop.continue` | choice | Is progress continuing? | `progressing` / `stalled` / `regressing` | conf ≥ 0.7 | `stalled`, which triggers a stop condition |
+| D8 `loop.continue` | choice | Is progress continuing? | `progressing` / `stalled` / `regressing` | conf ≥ 0.7 | `stalled`, counted toward the two-in-a-row stop condition |
+| `intake.classify` | choice | How should this inbound message relate to the running threads? | `new_thread` / `continue_thread` / `queue` / `steer` / `interrupt` / `stop` | conf ≥ 0.80 (provisional until P10) | `ask_user` (`needs_human`), never an inferred classification |
 | (existing) `frontier.weigh` | score | usefulness of each candidate | defer/consider/dispatch | unchanged | `ScriptedDecisionLayer` |
 
 Semantic rule (ARCH §6): each site keeps its own operation. A Jev outage never reroutes D5 to a "compatible boolean" from another semantic operation. It falls back to the listed deterministic fallback. A locally run Jev (`decision.providers.typesafe-jev.base_url` pointed at localhost) is the privacy-only route for D3 and D4 once it has earned evidence on those sites. Thresholds are tuned per provider, because confidence is not calibrated across vendors.
+
+### 4c. P5 transition and observation contract
+
+The sites in `packages/weave/src/sites/` use one injected gateway `evaluate`
+port and pure `transitionSite` replay. Intake accepts disclosed inbound content
+and running-thread summaries; it contains no channel transport. Classification
+is a proposed transition and grants no authority to dispatch, interrupt or stop
+work. `done_check` requests a deterministic completion check, never completion.
+
+Each `decision-site@1` observation records fixed-order keys: schema, site,
+question, request_id, state_revision, answer, confidence, top_p, accepted,
+fallback_used, reason, provider_request_id. The last field names the gateway's
+provider_response_id. Unavailable statistics and unsafe correlation ids are
+null. Raw state, provider diagnostics and unknown answer values are excluded.
+This is the P5 decision payload; the full-loop JSONL tree envelope and transport
+remain later work. Deterministic tests validate the payload and field order.
+
+Requests bind to an injected state revision and update timestamp. A response
+for a different revision, a changed state timestamp, or observed before that
+state's update is stale and takes the fallback. Receipt time and current state
+are injected after the await; no site reads an ambient clock. Replay uses the
+recorded gateway outcome and the same state readings without a provider call.
+D1 also validates a normalized distribution and that its selected option is
+at the top with probability at least 0.6.
+
+Two explicit provisional assumptions need calibration: intake confidence is
+0.80, and D1's safest fallback tier is `strong` for quality, subject to all
+budget and authority gates. D2's accepted/fallback tier is the ceiling for P4;
+the budget gate can downgrade or pause and cannot choose a higher tier.
+An unavailable evaluate port (including a thrown exception) uses deterministic
+fallbacks for read-only work and returns paused for dispatch-dependent work.
+Cancellation always pauses. ScriptedDecisionLayer and the M0–M6 runtime path
+are unchanged; wiring the full M7 loop is outside P5.
 
 ## 5. Tier configuration and availability
 
@@ -193,7 +240,7 @@ Stop:
 3. **Iteration cap**: `max_iterations` (default 4 audit rounds).
 4. **No progress**: D8 says `stalled`/`regressing` twice in a row, or the same `issue_id` reappears after two fix attempts.
 5. **Authority**: D4 or D7 block, or a needed approval, goes to `needs_human`.
-6. **Decision outage**: both configured decision providers are unavailable. The loop drops to `ScriptedDecisionLayer` plus deterministic fallbacks for *read-only* steps, and pauses before any dispatch that needs D4.
+6. **Decision outage**: the configured decision provider is unavailable. The loop drops to `ScriptedDecisionLayer` plus deterministic fallbacks for *read-only* steps, and pauses before any dispatch that needs D4.
 
 ## 7. Phased PR plan
 
