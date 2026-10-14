@@ -34,7 +34,7 @@ review, not an authoritative label. Training an adapter or choosing a route
 remains a separate decision.
 
 To run on the current fixtures after `npm run build`, set
-`TYPESAFE_AI_API_KEY` in ignored `.env.local` and run:
+`TYPESAFE_API_KEY` (preferred; `TYPESAFE_AI_API_KEY` is accepted as a legacy fallback) in ignored `.env.local` and run:
 
 ```sh
 node --env-file-if-exists=.env.local benchmarks/inference/gliner-decide/curate-jev.mjs --output .local/gliner-decide/jev-curation-next

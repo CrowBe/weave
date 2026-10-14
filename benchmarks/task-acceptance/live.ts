@@ -6,7 +6,7 @@
  * This file does not vendor an agent CLI.
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { createInferenceGateway } from '@weave/gateway';
+import { createInferenceGateway, resolveTypesafeApiKey } from '@weave/gateway';
 import {
   TYPESAFE_AI_ADAPTER,
   TYPESAFE_AI_DESTINATION,
@@ -17,7 +17,8 @@ import { loadFrozenSet, loadTranscript, planLiveComparison, runLiveComparison, t
 const flag = process.argv.indexOf('--transcript');
 const transcriptPath = flag >= 0 ? process.argv[flag + 1] : undefined;
 const transcriptProvided = typeof transcriptPath === 'string' && transcriptPath.length > 0 && existsSync(transcriptPath);
-const jevConfigured = (process.env.TYPESAFE_AI_API_KEY ?? '').trim().length > 0;
+const apiKey = resolveTypesafeApiKey(process.env);
+const jevConfigured = apiKey !== undefined;
 const plan = planLiveComparison({ transcript_provided: transcriptProvided, jev_configured: jevConfigured });
 
 if (plan.status === 'skip') {
@@ -25,12 +26,11 @@ if (plan.status === 'skip') {
   process.exit(0);
 }
 
-const apiKey = process.env.TYPESAFE_AI_API_KEY ?? '';
 const tasks = loadFrozenSet(JSON.parse(readFileSync(new URL('./frozen-set.json', import.meta.url), 'utf8')));
 const transcript = loadTranscript(JSON.parse(readFileSync(transcriptPath ?? '', 'utf8')));
 const gateway = createInferenceGateway({
   routes: [taskJevRoute(TYPESAFE_AI_ADAPTER, TYPESAFE_AI_DESTINATION)],
-  evaluators: [typesafeAiEvaluator({ apiKey })],
+  evaluators: [typesafeAiEvaluator({ apiKey: apiKey ?? '' })],
   clock: { now: () => Date.now() },
 });
 const report = await runLiveComparison({

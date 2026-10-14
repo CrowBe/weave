@@ -1,7 +1,7 @@
 {
   "decision": {
-    "provider": "openai-decisions",
-    "fallback": "typesafe-jev",
+    "provider": "typesafe-jev",
+    "fallback": null,
     "providers": {
       "openai-decisions": {
         "base_url": "https://api.openai.com",

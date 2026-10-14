@@ -1,10 +1,11 @@
 /**
  * Weighing candidates with Jev, through the inference gateway.
  *
- * Jev is reachable two ways: through the Vercel AI Gateway, and directly at
- * api.typesafe.ai. Both are routed units in the table below, the direct one
- * second, so a throttled or unavailable gateway escalates rather than failing
- * the judgment. The attempt list printed at the end shows which one answered.
+ * Direct TypeSafe at api.typesafe.ai is the default. Setting AI_GATEWAY_API_KEY
+ * adds an optional Vercel AI Gateway route, listed first when both keys are
+ * configured. With only a TypeSafe key, it uses direct routes alone. A throttled
+ * or unavailable gateway escalates to the direct route when configured.
+ * The attempt list shows which route answered.
  *
  * This is the decision layer's shape, not a chat: one shared state, typed
  * questions, typed answers. Nothing here parses prose into a number, because
@@ -20,6 +21,7 @@
  */
 import {
   createInferenceGateway,
+  resolveTypesafeApiKey,
   type AttemptRecord,
   type EvaluationKind,
   type RoutedUnit,
@@ -35,20 +37,20 @@ import {
   typesafeAiEvaluator,
 } from '@weave/gateway/typesafe-ai';
 
-const apiKey = process.env.AI_GATEWAY_API_KEY;
-if (!apiKey) {
-  console.error('AI_GATEWAY_API_KEY is not set. Put it in .env.local (git-ignored) and rerun.');
+const apiKey = process.env.AI_GATEWAY_API_KEY?.trim() || undefined;
+const typesafeKey = resolveTypesafeApiKey(process.env);
+if (!apiKey && !typesafeKey) {
+  console.error('Set TYPESAFE_API_KEY (preferred; TYPESAFE_AI_API_KEY is the legacy fallback) or AI_GATEWAY_API_KEY in .env.local (git-ignored) and rerun.');
   process.exit(1);
 }
-const typesafeKey = process.env.TYPESAFE_AI_API_KEY;
 
 /**
- * Two routed units per answer shape: the same model reached two ways. The
- * Vercel AI Gateway route is preferred and listed first; the direct TypeSafe
- * route is the fallback the gateway escalates to when the first stops working.
+ * Direct TypeSafe is the default route per answer shape. The Vercel AI Gateway
+ * route is an optional extra only when AI_GATEWAY_API_KEY is set; it is listed
+ * first when enabled, with escalation to direct TypeSafe when configured.
  *
  * They carry different destinations because they cross different boundaries,
- * so the fallback engages only because `terms` below names both.
+ * so escalation engages only because `terms` below names both.
  */
 function jevRoutes(kind: EvaluationKind): RoutedUnit[] {
   const shared = {
@@ -66,7 +68,7 @@ function jevRoutes(kind: EvaluationKind): RoutedUnit[] {
     price: { input_per_mtok: 42_000, output_per_mtok: 0 },
   } as const;
 
-  const routes: RoutedUnit[] = [
+  const routes: RoutedUnit[] = apiKey ? [
     {
       ...shared,
       routed_unit_id: `${kind}.candidate@vercel`,
@@ -74,9 +76,9 @@ function jevRoutes(kind: EvaluationKind): RoutedUnit[] {
       model: 'typesafe-ai/jev',
       destination: VERCEL_AI_GATEWAY_DESTINATION,
     },
-  ];
+  ] : [];
 
-  // The composition root decides whether the fallback exists at all.
+  // The composition root decides whether the direct route exists at all.
   if (typesafeKey) {
     routes.push({
       ...shared,
@@ -93,7 +95,7 @@ function jevRoutes(kind: EvaluationKind): RoutedUnit[] {
 const gateway = createInferenceGateway({
   routes: [...jevRoutes('score'), ...jevRoutes('boolean')],
   evaluators: [
-    vercelAiGatewayEvaluator({ apiKey }),
+    ...(apiKey ? [vercelAiGatewayEvaluator({ apiKey })] : []),
     ...(typesafeKey ? [typesafeAiEvaluator({ apiKey: typesafeKey })] : []),
   ],
   // The runtime injects its own clock; a script may read the wall clock here.
@@ -114,11 +116,11 @@ const state = {
 
 const terms = {
   quality: 'baseline',
-  // Naming both destinations is what permits the fallback. Drop the second and
-  // the direct route is excluded at routing, not silently used anyway.
-  destinations: typesafeKey
-    ? [VERCEL_AI_GATEWAY_DESTINATION, TYPESAFE_AI_DESTINATION]
-    : [VERCEL_AI_GATEWAY_DESTINATION],
+  // Permit only configured destinations; naming both permits the fallback.
+  destinations: [
+    ...(apiKey ? [VERCEL_AI_GATEWAY_DESTINATION] : []),
+    ...(typesafeKey ? [TYPESAFE_AI_DESTINATION] : []),
+  ],
   max_context_tokens: 4_000,
   deadline: Date.now() + 60_000,
   // Worst case is 168 micros an attempt at this context size.

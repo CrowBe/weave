@@ -16,6 +16,14 @@ it('parses the example without changing its units or decision config', () => {
   const result = parseRouteConfig(input);
   assert.deepEqual(result, { ok: true, table: input.units, decision: input.decision });
 });
+it('uses TypeSafe Jev as the sole default decision provider without fallback', () => {
+  const result = parseRouteConfig(example());
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.decision.provider, 'typesafe-jev');
+  assert.equal(result.decision.fallback, null);
+  assert.equal(result.decision.providers['typesafe-jev']?.model, 'jev-latest');
+});
 it('filters tiers independently of quality and preserves order', () => {
   const units = table();
   const flash = route(units, target, { ...terms, tier: 'flash' }, 20);
