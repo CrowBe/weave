@@ -150,3 +150,36 @@ test('identity-only exchange without refresh token survives file store round tri
     }), /invalid token response/);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+test('OIDC audience arrays bind the client and require azp for multiple audiences', async () => {
+  const options = { fetch: fetchJwks, clock, clientId: 'oaiapp_test' };
+  for (const audience of [{ aud: ['oaiapp_test'] }, { aud: ['other', 'oaiapp_test'], azp: 'oaiapp_test' }]) {
+    assert.equal((await validateIdToken(jwt(audience), options)).subject, 'subject');
+  }
+  for (const audience of [{ aud: [] }, { aud: ['other'] }, { aud: ['other', 'oaiapp_test'] }, { aud: ['oaiapp_test', 'other'], azp: 'other' }, { aud: ['oaiapp_test', 123], azp: 'oaiapp_test' }]) {
+    await assert.rejects(validateIdToken(jwt(audience), options), /audience/);
+  }
+});
+
+test('token failures pass through bounded OAuth codes and status without descriptions', async () => {
+  for (const code of ['unauthorized_client', 'registration_required', 'a'.repeat(64), 'a'.repeat(65), 'SECRET_TOKEN', 'invalid-grant', '', null]) {
+    const expected = typeof code === 'string' && /^[a-z_]{1,64}$/.test(code) ? code : 'token exchange rejected';
+    await assert.rejects(exchangeCode(attempt, { code: 'SECRET_CODE', clientId: 'oaiapp_test' }, {
+      clock, fetch: async () => new Response(JSON.stringify({ error: code, error_description: 'SECRET_DESCRIPTION' }), { status: 403 }),
+    }), error => error instanceof ChatGPTAuthError && error.code === expected && error.status === 403 && !error.message.includes('SECRET'));
+  }
+});
+
+test('file store loads registration before subject is known and rejects invalid subjects', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'weave-registration-'));
+  try {
+    const store = new FileCredentialStore(join(directory, 'chatgpt.json'));
+    const state = { ext_agent_host_id: attempt.hostId, registration: { client_id: 'oaiapp_test' } };
+    await store.save(state as Parameters<typeof store.save>[0]);
+    assert.deepEqual(await store.load(), state);
+    for (const registration of [{ client_id: 'dynamic_agent_client' }, { client_id: '' }, { client_id: 'oaiapp_test', subject: '' }, { client_id: 'oaiapp_test', subject: null }, { client_id: 'oaiapp_test', subject: 123 }]) {
+      await store.save({ ...state, registration } as Parameters<typeof store.save>[0]);
+      await assert.rejects(store.load(), /credential store read failed/);
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
