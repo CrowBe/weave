@@ -14,6 +14,7 @@
  * `runBounded` loop below, so neither operation can drift from the other's
  * accounting.
  */
+import { bindDecisionProvider, type DecisionConfig } from './config.js';
 import { budgetRoute } from './budget.js';
 import { priceAttempt, worstCaseCost, type RouteExclusion } from './routing.js';
 import {
@@ -51,6 +52,8 @@ import {
 } from './types.js';
 
 export interface GatewayConfig {
+  /** Provider selection is exclusive: no cross-provider fallback. */
+  readonly decision?: DecisionConfig;
   readonly quota?: QuotaPort;
   /** Awaited persistence; a failed write prevents further dispatch. */
   readonly persist_pause?: (record: LoopPausedRecord) => Promise<void>;
@@ -157,12 +160,13 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
       signal?: AbortSignal,
     ): Promise<EvaluationOutcome<K>> {
       const accept = request.accept;
+      const binding = config.decision ? bindDecisionProvider(config.decision, request.site) : undefined;
 
       const bounded = await runBounded<EvaluationValue>({
         clock: config.clock,
         timer: config.timer,
         signal,
-        routes: config.routes,
+        routes: binding ? config.routes.filter(u => u.operation === 'evaluate' && u.adapter === binding.adapter && u.model === binding.model) : config.routes,
         availability: config.availability,
         quota: config.quota,
         persist_pause: config.persist_pause,
@@ -213,6 +217,12 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
       });
 
       const base = outcomeBase(request.request_id, request.site, bounded);
+      if (binding?.provider === 'amos' && !signal?.aborted &&
+          bounded.settled.status === 'unaccepted' && bounded.settled.reason !== 'deadline_reached' &&
+          bounded.attempts.length > 0 && bounded.attempts.every(a =>
+            a.disposition.status === 'failed' && a.disposition.failure.code === 'unavailable')) {
+        return { ...base, status: 'blocked', reason: 'provider_unavailable' };
+      }
       return bounded.settled.status === 'accepted'
         ? {
             ...base,

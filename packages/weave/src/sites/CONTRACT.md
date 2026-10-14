@@ -65,3 +65,15 @@ The fx permissions documentation describes prompt injection or malicious behavio
 review and holding actions when review fails. The concrete injection checklist
 above is a provisional local interpretation, not a claimed upstream rubric.
 Source: https://fx.sh/docs/configure-fx/permissions.md
+
+## Local intake provider
+
+The gateway composition configures `decision.sites["intake.classify"] = "amos"`.
+Only this site uses the local Amos System One adapter (`amos-1-2b`, also called
+amos-1-small). Every other configured evaluation retains the TypeSafe default
+`typesafe-jev` / `jev-latest`. Provider selection is exclusive; intake never
+silently retries against TypeSafe. Amos readiness uses GET `/v1/models`.
+An unreachable service, non-2xx health response or timeout produces a typed
+unavailable failure and gateway `provider_unavailable` evidence. Intake then
+uses `ask_user` / `needs_human`; dispatch-dependent steps remain paused under
+the existing rule. A model classification remains an observation, not authority.
