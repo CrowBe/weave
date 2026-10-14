@@ -5,8 +5,8 @@
   "type": "module",
   "description": "Web renderer for the Tapestry workspace slice. Owns shadcn/ui source and CSS bindings. Imports the presentation core only.",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "vp dev",
+    "build": "vp build",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -27,6 +27,6 @@
     "@vitejs/plugin-react": "^5.0.3",
     "tailwindcss": "^4.1.13",
     "typescript": "^7.0.2",
-    "vite": "^7.1.7"
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.2.0"
   }
 }
