@@ -17,12 +17,22 @@
  * one shape without earning it at the other. The cost of that split is the
  * state paying input tokens twice; the printout shows exactly what that came to.
  *
+ * The TypeSafe base URL and model come from the route table (`weave.routes.json`
+ * when present, otherwise `weave.routes.example.json`, with `weave.routes.local.json`
+ * overlaid). The credential comes from `resolveTypesafeApiKey`, never from the
+ * file and never from argv.
+ *
  *   npm run example:weigh
  */
+import { existsSync, readFileSync } from 'node:fs';
 import {
+  applyRouteOverlay,
+  bindDecisionProvider,
   createInferenceGateway,
+  parseRouteConfig,
   resolveTypesafeApiKey,
   type AttemptRecord,
+  type DecisionProviderBinding,
   type EvaluationKind,
   type RoutedUnit,
 } from '@weave/gateway';
@@ -37,6 +47,27 @@ import {
   typesafeAiEvaluator,
 } from '@weave/gateway/typesafe-ai';
 
+function repoJson(name: string): unknown {
+  return JSON.parse(readFileSync(new URL(`../${name}`, import.meta.url), 'utf8'));
+}
+
+function loadDecision(): DecisionProviderBinding {
+  const primary = existsSync(new URL('../weave.routes.json', import.meta.url))
+    ? 'weave.routes.json'
+    : 'weave.routes.example.json';
+  let json = repoJson(primary);
+  if (existsSync(new URL('../weave.routes.local.json', import.meta.url))) {
+    json = applyRouteOverlay(json, repoJson('weave.routes.local.json'));
+  }
+  const parsed = parseRouteConfig(json);
+  if (!parsed.ok) {
+    console.error(parsed.errors.join('\n'));
+    process.exit(1);
+  }
+  return bindDecisionProvider(parsed.decision);
+}
+
+const decision = loadDecision();
 const apiKey = process.env.AI_GATEWAY_API_KEY?.trim() || undefined;
 const typesafeKey = resolveTypesafeApiKey(process.env);
 if (!apiKey && !typesafeKey) {
@@ -85,7 +116,7 @@ function jevRoutes(kind: EvaluationKind): RoutedUnit[] {
       routed_unit_id: `${kind}.candidate@typesafe`,
       adapter: TYPESAFE_AI_ADAPTER,
       // The direct API names the model differently than the gateway catalogue.
-      model: 'jev-latest',
+      model: decision.model,
       destination: TYPESAFE_AI_DESTINATION,
     });
   }
@@ -96,7 +127,7 @@ const gateway = createInferenceGateway({
   routes: [...jevRoutes('score'), ...jevRoutes('boolean')],
   evaluators: [
     ...(apiKey ? [vercelAiGatewayEvaluator({ apiKey })] : []),
-    ...(typesafeKey ? [typesafeAiEvaluator({ apiKey: typesafeKey })] : []),
+    ...(typesafeKey ? [typesafeAiEvaluator({ apiKey: typesafeKey, baseURL: decision.baseURL })] : []),
   ],
   // The runtime injects its own clock; a script may read the wall clock here.
   clock: { now: () => Date.now() },

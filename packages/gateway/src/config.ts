@@ -6,6 +6,12 @@ import {
 
 const DECISION_AUTH = ['chatgpt-oauth', 'api-key'] as const;
 
+/** The only decision provider this phase installs. OpenAI Decisions stays deferred. */
+export const DECISION_PROVIDER_ID = 'typesafe-jev';
+
+/** Adapter id that serves {@link DECISION_PROVIDER_ID}. It is not the provider id. */
+export const DECISION_PROVIDER_ADAPTER = 'typesafe-ai';
+
 /** `key_env` requires `auth: 'api-key'`. A non-loopback provider requires `auth` or `key_env`. */
 export interface DecisionConfig {
   readonly provider: string;
@@ -21,6 +27,46 @@ export interface DecisionConfig {
 export type RouteConfigResult =
   | { ok: true; table: RouteTable; decision: DecisionConfig }
   | { ok: false; errors: string[] };
+
+/** What the composition root passes to the TypeSafe evaluator. No credential. */
+export interface DecisionProviderBinding {
+  readonly provider: typeof DECISION_PROVIDER_ID;
+  readonly adapter: typeof DECISION_PROVIDER_ADAPTER;
+  readonly baseURL: string;
+  readonly model: string;
+}
+
+/**
+ * Select the configured decision provider. `parseRouteConfig` already rejects
+ * anything other than `typesafe-jev`; this fails closed if a caller skips it.
+ */
+export function bindDecisionProvider(decision: DecisionConfig): DecisionProviderBinding {
+  if (decision.provider !== DECISION_PROVIDER_ID) {
+    throw new Error(`decision.provider: only ${DECISION_PROVIDER_ID} is supported`);
+  }
+  const provider = decision.providers[DECISION_PROVIDER_ID];
+  if (provider === undefined) throw new Error('decision.provider: must exist in providers');
+  return {
+    provider: DECISION_PROVIDER_ID,
+    adapter: DECISION_PROVIDER_ADAPTER,
+    baseURL: provider.base_url,
+    model: provider.model,
+  };
+}
+
+/**
+ * Deep-merge a route-table overlay onto a base document. Objects merge; arrays
+ * and scalars replace. The composition root uses this for `weave.routes.local.json`.
+ * Neither value is mutated.
+ */
+export function applyRouteOverlay(base: unknown, overlay: unknown): unknown {
+  if (!object(base) || !object(overlay)) return overlay;
+  const out: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(overlay)) {
+    out[key] = Object.hasOwn(base, key) ? applyRouteOverlay(base[key], value) : value;
+  }
+  return out;
+}
 
 type ObjectValue = Record<string, unknown>;
 function object(value: unknown): value is ObjectValue {
@@ -56,6 +102,17 @@ function positiveInteger(value: unknown): boolean {
 }
 function member(value: unknown, values: readonly string[]): boolean {
   return typeof value === 'string' && values.includes(value);
+}
+
+/** An evaluate unit whose adapter and model are the configured TypeSafe provider's. */
+function matchingEvaluateUnit(units: unknown, provider: unknown): boolean {
+  if (!object(provider) || !identifier(provider.model) || !Array.isArray(units)) return false;
+  const model = provider.model;
+  return units.some((unit: unknown) =>
+    object(unit) &&
+    unit.operation === 'evaluate' &&
+    unit.adapter === DECISION_PROVIDER_ADAPTER &&
+    unit.model === model);
 }
 
 /** Errors name fields, never echo field values. */
@@ -130,6 +187,7 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
     else {
       check(identifier(decision.provider) && Object.hasOwn(decision.providers, decision.provider), 'decision.provider: must exist in providers');
       check(decision.fallback === null || (identifier(decision.fallback) && Object.hasOwn(decision.providers, decision.fallback)), 'decision.fallback: must exist in providers');
+      check(decision.provider === DECISION_PROVIDER_ID, `decision.provider: only ${DECISION_PROVIDER_ID} is supported`);
       Object.entries(decision.providers).forEach(([id, provider]) => {
         const path = `decision.providers.${id}`;
         check(identifier(id), 'decision.providers: expected unpadded identifier');
@@ -150,6 +208,12 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
         check(url === null || loopbackHost(url.hostname) || provider.auth !== undefined || provider.key_env !== undefined,
           `${path}: expected auth or key_env`);
       });
+      // Issue #47: the selected provider must have an evaluate unit this phase can call.
+      // Match the adapter and the model. A provider id is not an adapter id.
+      if (decision.provider === DECISION_PROVIDER_ID) {
+        const provider = decision.providers[DECISION_PROVIDER_ID];
+        check(matchingEvaluateUnit(json.units, provider), 'decision.provider: no matching evaluate unit');
+      }
     }
   }
   if (errors.length > 0) return { ok: false, errors };

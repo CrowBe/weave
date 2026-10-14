@@ -82,6 +82,72 @@
         "input_per_mtok": 0,
         "output_per_mtok": 0
       }
+    },
+    {
+      "routed_unit_id": "typesafe-jev.boolean",
+      "adapter": "typesafe-ai",
+      "model": "jev-latest",
+      "tier": "decision",
+      "operation": "evaluate",
+      "kind": "boolean",
+      "destination": "typesafe-ai",
+      "quality": "baseline",
+      "context_profile": "decision",
+      "context_profile_version": 1,
+      "prompt_template": "decision.boolean",
+      "prompt_template_version": 1,
+      "settings": {
+        "max_output_tokens": 256
+      },
+      "context_limit_tokens": 128000,
+      "price": {
+        "input_per_mtok": 42000,
+        "output_per_mtok": 0
+      }
+    },
+    {
+      "routed_unit_id": "typesafe-jev.choice",
+      "adapter": "typesafe-ai",
+      "model": "jev-latest",
+      "tier": "decision",
+      "operation": "evaluate",
+      "kind": "choice",
+      "destination": "typesafe-ai",
+      "quality": "baseline",
+      "context_profile": "decision",
+      "context_profile_version": 1,
+      "prompt_template": "decision.choice",
+      "prompt_template_version": 1,
+      "settings": {
+        "max_output_tokens": 256
+      },
+      "context_limit_tokens": 128000,
+      "price": {
+        "input_per_mtok": 42000,
+        "output_per_mtok": 0
+      }
+    },
+    {
+      "routed_unit_id": "typesafe-jev.score",
+      "adapter": "typesafe-ai",
+      "model": "jev-latest",
+      "tier": "decision",
+      "operation": "evaluate",
+      "kind": "score",
+      "destination": "typesafe-ai",
+      "quality": "baseline",
+      "context_profile": "decision",
+      "context_profile_version": 1,
+      "prompt_template": "decision.score",
+      "prompt_template_version": 1,
+      "settings": {
+        "max_output_tokens": 256
+      },
+      "context_limit_tokens": 128000,
+      "price": {
+        "input_per_mtok": 42000,
+        "output_per_mtok": 0
+      }
     }
   ]
 }

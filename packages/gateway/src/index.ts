@@ -18,4 +18,13 @@ export {
 export * from './types.js';
 export { resolveTypesafeApiKey } from './typesafe-key.js';
 
-export { parseRouteConfig, type DecisionConfig, type RouteConfigResult } from './config.js';
+export {
+  applyRouteOverlay,
+  bindDecisionProvider,
+  parseRouteConfig,
+  DECISION_PROVIDER_ADAPTER,
+  DECISION_PROVIDER_ID,
+  type DecisionConfig,
+  type DecisionProviderBinding,
+  type RouteConfigResult,
+} from './config.js';
