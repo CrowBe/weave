@@ -18,7 +18,7 @@ export interface Credentials extends Identity {
   id_token: string; token_type: 'Bearer'; expires_in: number; saved_at: string;
   scopes: string[]; plan_usage: PlanUsageStatus; earliest_refresh_at?: number;
 }
-export interface CredentialState { ext_agent_host_id: string; credentials?: Credentials; registration?: { client_id: string; subject: string } }
+export interface CredentialState { ext_agent_host_id: string; credentials?: Credentials; registration?: { client_id: string; subject?: string } }
 export interface CredentialStore { load(): Promise<CredentialState | undefined>; save(state: CredentialState): Promise<void> }
 export class ChatGPTAuthError extends Error {
   constructor(readonly code: string, readonly status?: number) { super(`ChatGPT authentication: ${code}`); this.name = 'ChatGPTAuthError'; }
@@ -81,7 +81,9 @@ export async function validateIdToken(token: string, options: AuthDependencies &
     const key = createPublicKey({ key: keys[0]!, format: 'jwk' });
     if (!verify('RSA-SHA256', Buffer.from(`${parts[0]}.${parts[1]}`), key, Buffer.from(parts[2]!, 'base64url'))) fail('invalid ID token signature');
     if (claims.iss !== 'https://auth.openai.com') fail('invalid ID token issuer');
-    if (claims.aud !== options.clientId) fail('invalid ID token audience');
+    if (Array.isArray(claims.aud)) {
+      if (!claims.aud.every(audience => typeof audience === 'string') || !claims.aud.includes(options.clientId) || (claims.aud.length > 1 && claims.azp !== options.clientId)) fail('invalid ID token audience');
+    } else if (claims.aud !== options.clientId) fail('invalid ID token audience');
     if (typeof claims.exp !== 'number' || !Number.isFinite(claims.exp) || claims.exp <= options.clock.now() / 1000) fail('expired ID token');
     if (options.nonce !== undefined && claims.nonce !== options.nonce) fail('invalid ID token nonce');
     if (typeof claims.sub !== 'string' || !claims.sub) fail('invalid ID token subject');
@@ -89,11 +91,10 @@ export async function validateIdToken(token: string, options: AuthDependencies &
   } catch (error) { if (error instanceof ChatGPTAuthError) throw error; return fail('invalid ID token'); }
 }
 export function planUsageStatus(scopes: readonly string[]): PlanUsageStatus { return scopes.includes('chatgpt.tokens.use.direct') ? 'plan usage granted' : 'identity only, plan usage not granted'; }
-const TOKEN_ERRORS = new Set(['invalid_grant', 'invalid_refresh_token', 'token_expired', 'refresh_token_expired', 'refresh_token_invalidated', 'refresh_token_reused', 'invalid_client']);
 async function requestTokens(form: Record<string, string>, dependencies: AuthDependencies): Promise<Record<string, unknown>> {
   const response = await safeFetch(dependencies.fetch, TOKEN_URL, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(form).toString() });
   const body = await json(response);
-  if (!response.ok) throw new ChatGPTAuthError(typeof body.error === 'string' && TOKEN_ERRORS.has(body.error) ? body.error : 'token exchange rejected', response.status);
+  if (!response.ok) throw new ChatGPTAuthError(typeof body.error === 'string' && /^[a-z_]{1,64}$/.test(body.error) ? body.error : 'token exchange rejected', response.status);
   if (typeof body.access_token !== 'string' || !body.access_token || body.token_type !== 'Bearer' || typeof body.expires_in !== 'number' || !Number.isFinite(body.expires_in) || body.expires_in <= 0 || typeof body.scope !== 'string') fail('invalid token response');
   if ((body.scope as string).split(/\s+/).includes('offline_access') || body.refresh_token !== undefined) {
     if (typeof body.refresh_token !== 'string' || !body.refresh_token) fail('invalid token response');

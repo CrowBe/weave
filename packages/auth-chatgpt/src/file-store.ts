@@ -14,7 +14,7 @@ export class FileCredentialStore implements CredentialStore {
       const value = state as Record<string, unknown>;
       if (value.registration !== undefined) {
         const registration = value.registration;
-        if (!registration || typeof registration !== 'object' || !('client_id' in registration) || typeof registration.client_id !== 'string' || !registration.client_id || registration.client_id === 'dynamic_agent_client' || !('subject' in registration) || typeof registration.subject !== 'string' || !registration.subject) throw new ChatGPTAuthError('invalid credential store');
+        if (!registration || typeof registration !== 'object' || !('client_id' in registration) || typeof registration.client_id !== 'string' || !registration.client_id || registration.client_id === 'dynamic_agent_client' || ('subject' in registration && (typeof registration.subject !== 'string' || !registration.subject))) throw new ChatGPTAuthError('invalid credential store');
       }
       if (value.credentials !== undefined) {
         const credentials = value.credentials;
@@ -28,8 +28,8 @@ export class FileCredentialStore implements CredentialStore {
           if (typeof record.refresh_token !== 'string' || !record.refresh_token) throw new ChatGPTAuthError('invalid credential store');
         }
         if (value.registration !== undefined) {
-          const registration = value.registration as { client_id: string; subject: string };
-          if (registration.client_id !== record.client_id || registration.subject !== record.subject) throw new ChatGPTAuthError('invalid credential store');
+          const registration = value.registration as { client_id: string; subject?: string };
+          if (registration.client_id !== record.client_id || (registration.subject !== undefined && registration.subject !== record.subject)) throw new ChatGPTAuthError('invalid credential store');
         }
       }
       return state as CredentialState;
