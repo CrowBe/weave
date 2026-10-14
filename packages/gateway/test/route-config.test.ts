@@ -136,7 +136,7 @@ it('an empty table still blocks without attempting a provider', async () => {
   assert.deepEqual(outcome.attempts, []);
 });
 const cases: [string, (config: any) => void, string][] = [
-  ['duplicate id', c => c.units.push(c.units[0]), 'units[6].routed_unit_id: duplicate'],
+  ['duplicate id', c => c.units.push(c.units[0]), 'units[7].routed_unit_id: duplicate'],
   ['unsupported decision provider', c => c.decision.provider = 'openai-decisions', 'decision.provider: only typesafe-jev is supported'],
   ['unknown operation', c => c.units[0].operation = 'other', 'units[0].operation'],
   ['unknown kind', c => c.units[0].kind = 'other', 'units[0].kind: operation/kind pair'],
@@ -434,4 +434,21 @@ it('chooses the TypeSafe provider from config and honours a local base URL', asy
     () => bindDecisionProvider({ provider: 'openai-decisions', fallback: null, providers: {} }),
     /only typesafe-jev is supported/,
   );
+});
+
+it('binds Amos only for the configured intake site and rejects unknown overrides', () => {
+  const input = example();
+  input.decision.providers.amos = { base_url: 'http://127.0.0.1:8766', model: 'amos-1-2b' };
+  input.decision.sites = { 'intake.classify': 'amos' };
+  input.units = input.units.filter((u: any) => u.adapter !== 'amos');
+  input.units.push({ ...input.units.find((u: any) => u.kind === 'choice'), routed_unit_id: 'amos.choice', adapter: 'amos', model: 'amos-1-2b', destination: 'amos' });
+  const parsed = parseRouteConfig(input);
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  assert.equal(bindDecisionProvider(parsed.decision, 'intake.classify').adapter, 'amos');
+  assert.equal(bindDecisionProvider(parsed.decision, 'loop.triage').model, 'jev-latest');
+  for (const sites of [{ typo: 'amos' }, { 'intake.classify': 'unknown' }, { 'loop.triage': 'amos' }]) {
+    assert.equal(parseRouteConfig({ ...input, decision: { ...input.decision, sites } }).ok, false);
+  }
+  assert.equal(parseRouteConfig({ ...input, decision: { ...input.decision, providers: { ...input.decision.providers, unknown: input.decision.providers.amos } } }).ok, false);
 });

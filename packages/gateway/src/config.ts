@@ -6,7 +6,7 @@ import {
 
 const DECISION_AUTH = ['chatgpt-oauth', 'api-key'] as const;
 
-/** The only decision provider this phase installs. OpenAI Decisions stays deferred. */
+/** Default decision provider; site overrides never change this default. */
 export const DECISION_PROVIDER_ID = 'typesafe-jev';
 
 /** Adapter id that serves {@link DECISION_PROVIDER_ID}. It is not the provider id. */
@@ -16,6 +16,7 @@ export const DECISION_PROVIDER_ADAPTER = 'typesafe-ai';
 export interface DecisionConfig {
   readonly provider: string;
   readonly fallback: string | null;
+  readonly sites?: Readonly<Record<string, string>>;
   readonly providers: Record<string, {
     base_url: string;
     model: string;
@@ -28,27 +29,33 @@ export type RouteConfigResult =
   | { ok: true; table: RouteTable; decision: DecisionConfig }
   | { ok: false; errors: string[] };
 
-/** What the composition root passes to the TypeSafe evaluator. No credential. */
+/** What the composition root passes to the selected evaluator. No credential. */
 export interface DecisionProviderBinding {
-  readonly provider: typeof DECISION_PROVIDER_ID;
-  readonly adapter: typeof DECISION_PROVIDER_ADAPTER;
+  readonly provider: 'typesafe-jev' | 'amos';
+  readonly adapter: 'typesafe-ai' | 'amos';
   readonly baseURL: string;
   readonly model: string;
 }
 
 /**
  * Select the configured decision provider. `parseRouteConfig` already rejects
- * anything other than `typesafe-jev`; this fails closed if a caller skips it.
+ * unsupported defaults and overrides; this fails closed if a caller skips it.
  */
-export function bindDecisionProvider(decision: DecisionConfig): DecisionProviderBinding {
+export function bindDecisionProvider(decision: DecisionConfig, site?: string): DecisionProviderBinding {
   if (decision.provider !== DECISION_PROVIDER_ID) {
     throw new Error(`decision.provider: only ${DECISION_PROVIDER_ID} is supported`);
   }
-  const provider = decision.providers[DECISION_PROVIDER_ID];
+  for (const [key, value] of Object.entries(decision.sites ?? {})) {
+    if (key !== 'intake.classify' || (value !== 'amos' && value !== DECISION_PROVIDER_ID) ||
+        !Object.hasOwn(decision.providers, value)) throw new Error('decision.sites: unsupported provider or site');
+  }
+  const selected = site !== undefined && Object.hasOwn(decision.sites ?? {}, site) ? decision.sites![site]! : decision.provider;
+  if (selected !== DECISION_PROVIDER_ID && !(selected === 'amos' && site === 'intake.classify')) throw new Error('decision.sites: unsupported provider or site');
+  const provider = decision.providers[selected];
   if (provider === undefined) throw new Error('decision.provider: must exist in providers');
   return {
-    provider: DECISION_PROVIDER_ID,
-    adapter: DECISION_PROVIDER_ADAPTER,
+    provider: selected,
+    adapter: selected === 'amos' ? 'amos' : DECISION_PROVIDER_ADAPTER,
     baseURL: provider.base_url,
     model: provider.model,
   };
@@ -180,7 +187,7 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
   const decision = json.decision;
   if (!object(decision)) check(false, 'decision');
   else {
-    keys(decision, ['provider', 'fallback', 'providers'], 'decision');
+    keys(decision, ['provider', 'fallback', 'providers', 'sites'], 'decision');
     check(identifier(decision.provider), 'decision.provider');
     check(decision.fallback === null || identifier(decision.fallback), 'decision.fallback');
     check(decision.fallback === null || decision.fallback !== decision.provider, 'decision.fallback: must differ from provider');
@@ -192,10 +199,15 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
       Object.entries(decision.providers).forEach(([id, provider]) => {
         const path = `decision.providers.${id}`;
         check(identifier(id), 'decision.providers: expected unpadded identifier');
+        check(['typesafe-jev', 'amos', 'openai-decisions'].includes(id), 'decision.providers: unknown provider');
         if (!object(provider)) { check(false, path); return; }
         keys(provider, ['base_url', 'model', 'auth', 'key_env'], path);
         const url = providerUrl(provider.base_url);
         check(url !== null, `${path}.base_url: expected HTTPS or loopback HTTP URL without userinfo, query, or fragment`);
+        if (id === 'amos') {
+          check(url !== null && loopbackHost(url.hostname), `${path}.base_url: Amos requires loopback`);
+          check(provider.auth === undefined && provider.key_env === undefined, `${path}: Amos requires no auth`);
+        }
         check(identifier(provider.model), `${path}.model`);
         check(provider.auth === undefined || member(provider.auth, DECISION_AUTH), `${path}.auth`);
         check(provider.key_env === undefined || (typeof provider.key_env === 'string' &&
@@ -209,6 +221,15 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
         check(url === null || loopbackHost(url.hostname) || provider.auth !== undefined || provider.key_env !== undefined,
           `${path}: expected auth or key_env`);
       });
+      if (decision.sites !== undefined) {
+        check(object(decision.sites), 'decision.sites');
+        if (object(decision.sites)) for (const [site, selected] of Object.entries(decision.sites)) {
+          check(site === 'intake.classify', 'decision.sites: unknown or unsupported site');
+          check(selected === 'amos' || selected === DECISION_PROVIDER_ID, 'decision.sites: unknown provider');
+          check(typeof selected === 'string' && Object.hasOwn(decision.providers, selected), 'decision.sites: provider must exist');
+          if (selected === 'amos') check(Array.isArray(json.units) && json.units.some((u: unknown) => object(u) && u.operation === 'evaluate' && u.kind === 'choice' && u.adapter === 'amos' && object(decision.providers) && object(decision.providers.amos) && u.model === decision.providers.amos.model), 'decision.sites: no matching Amos choice unit');
+        }
+      }
       // Issue #47: the selected provider must have an evaluate unit this phase can call.
       // Match the adapter and the model. A provider id is not an adapter id.
       if (decision.provider === DECISION_PROVIDER_ID) {

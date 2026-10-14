@@ -13,7 +13,14 @@
         "model": "jev-latest",
         "auth": "api-key",
         "key_env": "TYPESAFE_API_KEY"
+      },
+      "amos": {
+        "base_url": "http://127.0.0.1:8766",
+        "model": "amos-1-2b"
       }
+    },
+    "sites": {
+      "intake.classify": "amos"
     }
   },
   "units": [
@@ -149,6 +156,28 @@
       "context_limit_tokens": 128000,
       "price": {
         "input_per_mtok": 42000,
+        "output_per_mtok": 0
+      }
+    },
+    {
+      "routed_unit_id": "amos.choice",
+      "adapter": "amos",
+      "model": "amos-1-2b",
+      "tier": "decision",
+      "operation": "evaluate",
+      "kind": "choice",
+      "destination": "amos",
+      "quality": "baseline",
+      "context_profile": "decision",
+      "context_profile_version": 1,
+      "prompt_template": "decision.choice",
+      "prompt_template_version": 1,
+      "settings": {
+        "max_output_tokens": 256
+      },
+      "context_limit_tokens": 8192,
+      "price": {
+        "input_per_mtok": 0,
         "output_per_mtok": 0
       }
     }

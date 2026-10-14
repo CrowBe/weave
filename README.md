@@ -100,3 +100,23 @@ environment and weights kept outside the checkout. See the
 service registration, privacy-only routing and fallback composition.
 
 Use `npm run example:chatgpt-signin` to continue with ChatGPT, then `npm run example:chatgpt-probe -- --out .local/chatgpt-probe.json` to record live API evidence (create `.local/` first).
+
+The gateway supports TypeSafe System One and a local, no-key Amos decision
+adapter (`@weave/gateway/amos`). `weave.routes.example.json` retains
+`typesafe-jev` / `jev-latest` as the default and overrides only `intake.classify`
+with `decision.sites: { "intake.classify": "amos" }`. Pass the parsed `decision`
+to `createInferenceGateway` and register both evaluators. Override selection is
+exclusive and configuration rejects unknown providers or override sites.
+
+The composition root resolves `AMOS_BASE_URL` with the pure helper
+`resolveAmosBaseURL(process.env)` and passes it as `amosEvaluator({ baseURL })`; the default is
+`http://127.0.0.1:8766`, restricted to loopback with no authentication. Register
+an Amos choice routed unit with model `amos-1-2b` (amos-1-small) and destination
+`amos`; the disclosed intake terms must permit that destination. The adapter
+checks GET `/v1/models` before POST `/v1/systemone` and bounds HTTP calls with a
+timeout. Unreachable, non-2xx health or timeout yields `provider_unavailable`;
+intake falls back to `ask_user`, never TypeSafe. Raw provider text is excluded
+from Amos failure records. See the [intake contract](packages/weave/src/sites/CONTRACT.md).
+
+Run the opt-in local intake probe after building:
+`AMOS_LIVE=1 node --test packages/gateway/dist/test/amos.test.js`.

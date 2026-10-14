@@ -104,3 +104,15 @@ by `id` and `parentId`, appended before the next attempt. A stop is
 `impl.stop@1` and carries the open issue. Replay reads that journal and does
 not call a provider. Generate text is not stored on the attempt; the step keeps
 a `gen_` digest ref. Env values are not inputs to this step.
+
+## Local intake provider
+
+The gateway composition configures `decision.sites["intake.classify"] = "amos"`.
+Only this site uses the local Amos System One adapter (`amos-1-2b`, also called
+amos-1-small). Every other configured evaluation retains the TypeSafe default
+`typesafe-jev` / `jev-latest`. Provider selection is exclusive; intake never
+silently retries against TypeSafe. Amos readiness uses GET `/v1/models`.
+An unreachable service, non-2xx health response or timeout produces a typed
+unavailable failure and gateway `provider_unavailable` evidence. Intake then
+uses `ask_user` / `needs_human`; dispatch-dependent steps remain paused under
+the existing rule. A model classification remains an observation, not authority.
