@@ -122,7 +122,7 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
       observed = structuredClone(checkpoint?.observation ?? await ports.observe(issues));
       const overBudget = observed.state.budget !== null && observed.state.budget.spent_micros >= observed.state.budget.ceiling_micros;
       // An over-budget observation is not pinned, so resume re-observes the budget.
-      if (!checkpoint && !overBudget) journal.checkpoint({ execution_id: input.execution_id, round, observation: observed, report: null });
+      if (!signal?.aborted && !checkpoint && !overBudget) journal.checkpoint({ execution_id: input.execution_id, round, observation: observed, report: null });
       const noProgress = stopForNoProgress(observed.progress ?? [], []);
       if (signal?.aborted) outcome = 'cancelled';
       else if (overBudget) outcome = 'budget';
@@ -140,7 +140,7 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
             accept: text => parseAuditReport(text) ? { status: 'accepted' } : { status: 'rejected', reason: 'invalid_audit_report' } }, signal);
         } catch { generated = null; }
         if (generated?.status === 'accepted' && generated.request_id === request_id && generated.site === 'audit.generate') report = parseAuditReport(generated.text);
-        if (report) journal.checkpoint({ execution_id: input.execution_id, round, observation: observed, report });
+        if (report && !signal?.aborted) journal.checkpoint({ execution_id: input.execution_id, round, observation: observed, report });
         const live = ports.current();
         if (signal?.aborted || (generated?.paused?.reason as string | undefined) === 'cancelled') outcome = 'cancelled';
         else if (live.state_revision !== observed.revision.state_revision || live.state_updated_at !== observed.revision.state_updated_at) outcome = 'needs_human';
@@ -167,6 +167,8 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
     const entry: AuditRound = { schema: 'audit.round@1', id: `${input.execution_id}:r${round}:e${history.length + 1}`,
       parentId: history.at(-1)?.id ?? null, execution_id: input.execution_id, round,
       state_digest: observed?.state.digest ?? '', report, disposal, open_issues: next, outcome, goal_done: outcome === 'done' };
+    // Signal cancellation returns to the caller without any further durable writes.
+    if (signal?.aborted) return structuredClone(entry);
     journal.append(entry); history.push(entry);
     if (outcome !== 'observe') return structuredClone(entry);
     issues = next;

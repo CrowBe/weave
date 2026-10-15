@@ -31,6 +31,33 @@ purpose suffix remains readable. Both ids pass correlation validation before
 dispatch. Shared execution prefixes cannot erase the remaining identity, and
 exact replay derives the same ids.
 
+Request ids are correlation labels, not gateway idempotency or outcome-cache
+keys. Each gateway invocation executes a new bounded attempt loop. Reusing an
+id with a different prefix digest or findings therefore requests a fresh
+outcome. Prefix-cache metadata affects pricing only; it does not cache answers.
+No state digest is added to request ids on this basis.
+
+## Recovery and cancellation
+
+The audit journal keys phase checkpoints by execution and round. A checkpoint
+pins the disclosed observation and, once accepted, its report. Recovery after
+the report checkpoint and before D6 reuses that report without another paid
+generation, and requests a fresh D6 disposition for those recorded findings.
+It never substitutes current findings into an older checkpoint. If the live
+revision has changed, admission stops as `needs_human` before D6. An observation
+paused at its budget ceiling is not checkpointed; resume observes current state
+and requests fresh outcomes. Terminal round replay calls neither gateway port.
+
+An aborted signal returns `cancelled` without further checkpoint or round
+appends. The returned cancellation is not durable; recovery starts from the
+last write completed before abort. A report durably checkpointed before abort
+is reused, while an outcome received after abort is not checkpointed. A
+gateway-reported cancellation without an aborted signal remains a recorded
+pause requiring explicit resume. The composition root owns durable storage and
+one writer per execution. There is no exactly-once provider guarantee for a
+crash between provider completion and the durable report checkpoint; request
+id reuse alone cannot prevent another charge in that window.
+
 ## Context compaction port
 
 `compactContext` uses an explicit token sequence and context capacity supplied by
