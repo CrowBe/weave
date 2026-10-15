@@ -52,6 +52,9 @@ function replayGateway() {
   });
   return { gateway, calls };
 }
+function iterationEval(criterion_id: string, iteration?: number | null, passed = true, confidence = .9, verdict_probability = .8) {
+  return { criterion_id, ...(iteration === undefined ? {} : { iteration }), passed, confidence, verdict_probability };
+}
 function fixture(options: { gaps?: number; red?: boolean; progress?: ('stalled'|'regressing')[]; budget?: boolean; max?: number; ceilings?: number[] } = {}) {
   let generates = 0;
   let observes = 0;
@@ -66,7 +69,7 @@ function fixture(options: { gaps?: number; red?: boolean; progress?: ('stalled'|
         goal: { goal_id: 'goal1', statement: 'goal', revision: 1, authority_scope: [],
           success_criteria: [{ criterion_id: 'c1', statement: 'passes', check_ids: ['repo.test'] }] }, iteration: observes,
         source_revisions: { goal: 1 }, checks: [{ check_id: 'repo.test', argv_digest: 'abc', passed: !options.red, exit: options.red ? 1 : 0, tail: '' }],
-        evals: [{ criterion_id: 'c1', passed: true, verdict_probability: 1, confidence: 1 }],
+        evals: [iterationEval('c1', observes, true, 1, 1)],
         budget: options.ceilings ? { spent_micros: 100, ceiling_micros: options.ceilings[observes - 1] ?? 1000, quota: [] } : null }) };
     },
     generate: async request => {
@@ -704,4 +707,148 @@ test('revision change during generation without a pause still stops as needs_hum
     evaluate: async () => { assert.fail('D6 must not run with stale input'); },
   };
   assert.equal((await runAuditLoop(f.input, ports, f.journal)).outcome, 'needs_human');
+});
+
+function iterationObservation(iteration: number, evals: readonly ReturnType<typeof iterationEval>[]) {
+  return { revision, state: assembleAuditState({ authorized_slices: AUDIT_SLICES, iteration, evals,
+    goal: { goal_id: 'goal1', statement: 'goal', revision: 1, authority_scope: [],
+      success_criteria: ['c1', 'c2'].map(criterion_id => ({ criterion_id, statement: 'passes', check_ids: ['repo.test'] })) },
+    source_revisions: { goal: 1 },
+    checks: [{ check_id: 'repo.test', argv_digest: 'abc', passed: true, exit: 0, tail: '' }],
+  }) };
+}
+const currentC2 = iterationEval('c2', 2);
+for (const [name, evals, expected] of [
+  ['historical failure then current pass completes', [iterationEval('c1', 1, false), iterationEval('c1', 2)], 'done'],
+  ['current pass then current failure vetoes', [iterationEval('c1', 2), iterationEval('c1', 2, false)], 'evidence_missing'],
+  ['current failure then current pass vetoes', [iterationEval('c1', 2, false), iterationEval('c1', 2)], 'evidence_missing'],
+  ['historical pass cannot replace missing current evidence', [iterationEval('c1', 1)], 'evidence_missing'],
+  ['untagged legacy pass cannot complete', [iterationEval('c1')], 'evidence_missing'],
+  ['unknown iteration pass cannot complete', [iterationEval('c1', null)], 'evidence_missing'],
+  ['future iteration pass cannot complete', [iterationEval('c1', 3)], 'evidence_missing'],
+  ['current low confidence cannot complete', [iterationEval('c1', 2, true, .899)], 'evidence_missing'],
+  ['current low probability cannot complete', [iterationEval('c1', 2, true, .9, .799)], 'evidence_missing'],
+  ['historical high confidence cannot replace current low confidence', [iterationEval('c1', 1), iterationEval('c1', 2, true, .899)], 'evidence_missing'],
+  ['current failure vetoes only its criterion', [iterationEval('c1', 2), iterationEval('c2', 2, false)], 'evidence_missing'],
+] as const) {
+  test(`D5 iteration scope: ${name}`, async () => {
+    const f = fixture();
+    const observed = iterationObservation(2, [...evals, currentC2]);
+    const result = await runAuditLoop(f.input, { ...f.ports, observe: async () => observed }, f.journal);
+    assert.equal(result.outcome, expected);
+    assert.equal(result.goal_done, expected === 'done');
+  });
+}
+
+test('D5 iteration scope: one criterion cannot borrow another criterion current pass', async () => {
+  const f = fixture();
+  const observed = iterationObservation(2, [iterationEval('c1', 2), iterationEval('c2', 1)]);
+  assert.equal((await runAuditLoop(f.input, { ...f.ports, observe: async () => observed }, f.journal)).outcome, 'evidence_missing');
+});
+
+test('D5 iteration scope: zero is a valid producing iteration', async () => {
+  const f = fixture();
+  const observed = iterationObservation(0, [iterationEval('c1', 0), iterationEval('c2', 0)]);
+  assert.equal((await runAuditLoop(f.input, { ...f.ports, observe: async () => observed }, f.journal)).outcome, 'done');
+});
+
+for (const phase of ['observe', 'D6'] as const) {
+  test(`D5 iteration scope: abort during later ${phase} writes nothing after abort and recovery keeps current evidence`, async () => {
+    const f = fixture({ gaps: 2 });
+    const controller = new AbortController();
+    const append = f.journal.append.bind(f.journal);
+    const checkpoint = f.journal.checkpoint.bind(f.journal);
+    f.journal.append = entry => { assert.equal(controller.signal.aborted, false, 'no append after abort'); append(entry); };
+    f.journal.checkpoint = entry => { assert.equal(controller.signal.aborted, false, 'no checkpoint after abort'); checkpoint(entry); };
+    let observes = 0;
+    const observe: AuditPorts['observe'] = async () => {
+      const iteration = ++observes === 1 ? 20 : 21;
+      const result = iterationObservation(iteration, [iterationEval('c1', 20, false), iterationEval('c2', iteration),
+        ...(iteration === 21 ? [iterationEval('c1', 21)] : [])]);
+      if (phase === 'observe' && iteration === 21) controller.abort();
+      return result;
+    };
+    const evaluate: AuditPorts['evaluate'] = async (request, signal) => {
+      const result = await f.ports.evaluate(request, signal);
+      if (observes === 1) return result;
+      if (signal) controller.abort();
+      assert.equal(result.status, 'accepted');
+      return { ...result, answers: { finding_0: { type: 'choice', choice: 'defer', probabilities: { defer: 1 } } } } as unknown as typeof result;
+    };
+    const ports = { ...f.ports, observe, evaluate };
+    const cancelled = await runAuditLoop(f.input, ports, f.journal, controller.signal);
+    assert.equal(cancelled.outcome, 'cancelled');
+    assert.equal(cancelled.round, 2);
+    assert.deepEqual(f.journal.load('audit1').map(entry => entry.outcome), ['observe']);
+    f.journal.append = append; f.journal.checkpoint = checkpoint;
+    const recovered = await runAuditLoop({ ...f.input, resume: true }, { ...ports,
+      observe: phase === 'D6' ? async () => { assert.fail('recover whole iteration 21 checkpoint'); } : observe,
+    }, f.journal);
+    assert.equal(recovered.outcome, 'done');
+    assert.equal(recovered.round, 2);
+    assert.equal(f.journal.loadCheckpoint('audit1', 2)?.observation.state.iteration, 21);
+    assert.deepEqual(replayAuditLoop(f.journal.load('audit1')), recovered);
+  });
+}
+
+test('D5 iteration scope: pause refresh and crash recovery use the checkpoint iteration, not the audit round', async () => {
+  const f = fixture();
+  let iteration = 10;
+  let budgetReads = 0;
+  let observes = 0;
+  const ports: AuditPorts = { ...f.ports,
+    budget: () => ++budgetReads === 2 ? 'pause' : 'allow',
+    observe: async () => {
+      observes++;
+      return iterationObservation(iteration, [iterationEval('c1', 10), iterationEval('c2', 11)]);
+    },
+  };
+  const paused = await runAuditLoop(f.input, ports, f.journal);
+  assert.equal(paused.outcome, 'budget');
+  iteration = 11;
+  const append = f.journal.append.bind(f.journal);
+  f.journal.append = () => { throw new Error('crash before refreshed round append'); };
+  await assert.rejects(runAuditLoop({ ...f.input, resume: true }, ports, f.journal), /crash before refreshed round append/);
+  const saved = f.journal.loadCheckpoint('audit1', 1)!;
+  assert.equal(saved.observation.state.iteration, 11);
+  assert.equal(saved.resume_from, paused.id);
+  assert.equal(observes, 2);
+  f.journal.append = append;
+  const recovered = await runAuditLoop({ ...f.input, resume: true }, { ...ports,
+    observe: async () => { assert.fail('crash recovery must retain checkpoint iteration and evals together'); },
+  }, f.journal);
+  assert.equal(recovered.outcome, 'evidence_missing');
+  assert.equal(recovered.state_digest, saved.observation.state.digest);
+  assert.equal(recovered.round, 1);
+  assert.equal(f.generates(), 2);
+});
+
+test('D5 iteration scope: legacy checkpoint with untagged evals replays without completing', async () => {
+  const f = fixture();
+  const observation = JSON.parse(JSON.stringify(iterationObservation(2, [iterationEval('c1'), iterationEval('c2')])));
+  f.journal.checkpoint({ execution_id: 'audit1', round: 1, observation,
+    report: { findings: [], goal_met_claim: true } });
+  const result = await runAuditLoop(f.input, { ...f.ports,
+    observe: async () => { assert.fail('recover legacy observation'); },
+    generate: async () => { assert.fail('recover legacy report'); },
+  }, f.journal);
+  assert.equal(result.outcome, 'evidence_missing');
+  assert.deepEqual(replayAuditLoop(f.journal.load('audit1')), result);
+});
+
+test('D5 iteration scope: changed live revision cannot combine a saved observation with a new iteration', async () => {
+  const f = fixture();
+  const observed = iterationObservation(10, [iterationEval('c1', 10), iterationEval('c2', 10)]);
+  const checkpoint = f.journal.checkpoint.bind(f.journal);
+  f.journal.checkpoint = entry => { checkpoint(entry); throw new Error('crash after iteration 10 checkpoint'); };
+  await assert.rejects(runAuditLoop(f.input, { ...f.ports, observe: async () => observed }, f.journal), /crash after iteration 10 checkpoint/);
+  f.journal.checkpoint = checkpoint;
+  const result = await runAuditLoop(f.input, { ...f.ports,
+    observe: async () => { assert.fail('retain saved observation on crash recovery'); },
+    current: () => ({ state_revision: 2, state_updated_at: 20, observed_at: 20 }),
+    evaluate: async () => { assert.fail('no D6 for stale iteration 10'); },
+  }, f.journal);
+  assert.equal(result.outcome, 'needs_human');
+  assert.equal(result.goal_done, false);
+  assert.equal(result.state_digest, observed.state.digest);
 });

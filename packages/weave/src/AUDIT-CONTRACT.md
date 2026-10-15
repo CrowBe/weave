@@ -33,6 +33,32 @@ with U+FFFD (three UTF-8 bytes) before measuring the retained suffix, so tails
 never contain lone surrogates. Shortened or repaired tails record the existing
 `check:<check_id>:tail_cap` marker. Exact-cap, well-formed tails are unchanged.
 
+## Completion evidence
+
+Each `AuditEval` may carry `iteration?: number | null`, identifying the audit
+iteration that produced the D5 evidence. The observation owner attaches this
+from the producing iteration when projecting implementation results into the
+`evals` slice; implementation retry numbers are not audit iterations. D5 and
+`flatEval` have no audit-loop iteration input. Retained evidence must never be
+relabelled with the current iteration. Assembly preserves all supplied evals,
+including historical and untagged entries; the canonical digest covers their
+iteration fields when present. Missing fields stay absent for legacy states.
+
+Per DEC-005, completion considers only evals whose iteration is a nonnegative
+safe integer equal to the captured `AuditState.iteration`. Each criterion needs
+a current pass with `verdict_probability >= .8` and `confidence >= .9`, and any
+current failure for that criterion vetoes completion even alongside a pass.
+Historical passes and failures, future evals, and unknown (absent, null or
+invalid) iterations cannot supply current evidence. Without a current pass the
+result remains `evidence_missing`, never `done`. Legacy checkpoints remain
+readable without treating untagged evidence as current. Green checks bound to
+each criterion and the audit disposition gates remain required.
+
+The current iteration is the one in the checkpointed observation, not the
+audit round number. Iteration and evals are captured and recovered together;
+explicit pause resumption captures a fresh observation. Existing live-revision
+guards reject stale observations before completion.
+
 ## Inference terms
 
 Audit generation always requests `tier:'strong', audit:true`. D6 requests
