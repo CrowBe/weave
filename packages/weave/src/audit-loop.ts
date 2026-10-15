@@ -67,6 +67,9 @@ export interface AuditRound {
 export interface AuditCheckpoint {
   readonly execution_id: string; readonly round: number; readonly observation: AuditObservation;
   readonly report: AuditReport | null;
+  /** The pause entry whose resumption captured this input; absent on legacy checkpoints. */
+  readonly resume_from?: string;
+  readonly disposal?: AuditDisposal;
 }
 export interface AuditJournal {
   load(execution_id: string): readonly AuditRound[];
@@ -132,11 +135,25 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
     else if (round > (input.max_iterations ?? 4)) outcome = 'iteration_cap';
     else if (ports.budget() === 'pause') outcome = 'budget';
     else {
-      const checkpoint = journal.loadCheckpoint(input.execution_id, round);
-      observed = structuredClone(checkpoint?.observation ?? await ports.observe(issues));
+      let checkpoint = journal.loadCheckpoint(input.execution_id, round);
+      const resume_from = resuming && round === previous.round ? previous.id : undefined;
+      const refresh = resume_from !== undefined && checkpoint?.resume_from !== resume_from;
+      observed = structuredClone(!refresh && checkpoint ? checkpoint.observation : await ports.observe(issues));
+      if (refresh) {
+        const sameInput = checkpoint?.observation.state.digest === observed.state.digest &&
+          checkpoint.observation.revision.state_revision === observed.revision.state_revision &&
+          checkpoint.observation.revision.state_updated_at === observed.revision.state_updated_at;
+        checkpoint = { execution_id: input.execution_id, round, observation: observed,
+          report: sameInput ? checkpoint!.report : null, resume_from };
+      }
+      const persist = (savedReport: AuditReport | null, savedDisposal?: AuditDisposal) => journal.checkpoint({
+        execution_id: input.execution_id, round, observation: observed!, report: savedReport,
+        ...(resume_from === undefined ? {} : { resume_from }), ...(savedDisposal ? { disposal: savedDisposal } : {}),
+      });
       const overBudget = observed.state.budget !== null && observed.state.budget.spent_micros >= observed.state.budget.ceiling_micros;
-      // An over-budget observation is not pinned, so resume re-observes the budget.
-      if (!checkpoint && !overBudget && !(observed.needs_dispatch && observed.decision_unavailable)) journal.checkpoint({ execution_id: input.execution_id, round, observation: observed, report: null });
+      // A new pause is observed live; crash recovery within that resumption reuses its checkpoint.
+      if (!signal?.aborted && (!checkpoint || refresh) && !overBudget &&
+        !(observed.needs_dispatch && observed.decision_unavailable)) persist(checkpoint?.report ?? null);
       const noProgress = stopForNoProgress(observed.progress ?? [], []);
       if (signal?.aborted) outcome = 'cancelled';
       else if (overBudget) outcome = 'budget';
@@ -144,7 +161,8 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
       else if (observed.needs_dispatch && observed.decision_unavailable) outcome = 'decision_unavailable';
       else if (noProgress) outcome = noProgress;
       else {
-        const request_id = `${input.execution_id}:r${round}:audit`;
+        const requestPrefix = `${input.execution_id}:r${round}${resume_from ? `:e${history.length + 1}` : ''}`;
+        const request_id = `${requestPrefix}:audit`;
         let generated;
         if (checkpoint?.report) report = { ...checkpoint.report, findings: uniqueFindings(checkpoint.report.findings) };
         else try {
@@ -154,7 +172,7 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
             accept: text => parseAuditReport(text) ? { status: 'accepted' } : { status: 'rejected', reason: 'invalid_audit_report' } }, signal);
         } catch { generated = null; }
         if (generated?.status === 'accepted' && generated.request_id === request_id && generated.site === 'audit.generate') report = parseAuditReport(generated.text);
-        if (report) journal.checkpoint({ execution_id: input.execution_id, round, observation: observed, report });
+        if (report && !signal?.aborted) persist(report, checkpoint?.disposal);
         const live = ports.current();
         if (signal?.aborted || (generated?.paused?.reason as string | undefined) === 'cancelled') outcome = 'cancelled';
         else if (live.state_revision !== observed.revision.state_revision || live.state_updated_at !== observed.revision.state_updated_at) outcome = 'needs_human';
@@ -162,9 +180,10 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
         else if (!report) outcome = 'audit_unavailable';
         else if (ports.budget() === 'pause') outcome = 'budget';
         else {
-          disposal = await evaluateAuditDispose({ ...observed.revision, request_id: `${input.execution_id}:r${round}:dispose`,
+          disposal = checkpoint?.disposal ?? await evaluateAuditDispose({ ...observed.revision, request_id: `${requestPrefix}:dispose`,
             state: { audit: report }, findings: report.findings, terms: input.terms, needs_dispatch: false },
           { evaluate: ports.evaluate }, ports.current, signal);
+          if (!signal?.aborted && !checkpoint?.disposal) persist(report, disposal);
           next = report.findings.flatMap((finding, i) => disposal!.choices[i] === 'fix_now' ? [{
             schema: 'open_issue@1' as const, issue_id: findingIssueId(finding), execution_id: input.execution_id,
             source: 'audit' as const, criterion_ids: finding.criterion_id === null ? [] : [finding.criterion_id],

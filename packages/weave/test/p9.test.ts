@@ -243,3 +243,105 @@ test('decision outage before guarded dispatch pauses and resumes when decisions 
   assert.deepEqual(await runAuditLoop({ ...f.input, resume: true }, ports, f.journal), resumed);
   assert.equal(f.generates(), 1); assert.equal(f.journal.load('audit1').length, 2);
 });
+
+test('gateway pause resume re-observes changed state instead of stopping as needs_human', async () => {
+  const f = fixture({ ceilings: [1000] });
+  let stateRevision = 1;
+  let calls = 0;
+  const observe = f.ports.observe;
+  const ports: AuditPorts = { ...f.ports,
+    current: () => ({ ...revision, state_revision: stateRevision, observed_at: 10 }),
+    observe: async issues => ({ ...await observe(issues), revision: { ...revision, state_revision: stateRevision } }),
+    generate: async (request, signal) => ++calls === 1 ? { status: 'unaccepted', reason: 'budget_exhausted',
+      request_id: request.request_id, site: request.site, attempts: [], spent: 0, uncertainty: [] } : f.ports.generate(request, signal),
+  };
+  assert.equal((await runAuditLoop(f.input, ports, f.journal)).outcome, 'budget');
+  stateRevision = 2;
+  const resumed = await runAuditLoop({ ...f.input, resume: true }, ports, f.journal);
+  assert.equal(resumed.outcome, 'done'); assert.equal(f.observes(), 2);
+});
+test('post-report budget pause reads the live budget on every resume', async () => {
+  const f = fixture({ ceilings: [1000, 100, 200] });
+  let budgetReads = 0;
+  const ports: AuditPorts = { ...f.ports, budget: () => ++budgetReads === 2 ? 'pause' : 'allow' };
+  assert.equal((await runAuditLoop(f.input, ports, f.journal)).outcome, 'budget');
+  assert.ok(f.journal.loadCheckpoint('audit1', 1)?.report);
+  const stillPaused = await runAuditLoop({ ...f.input, resume: true }, ports, f.journal);
+  assert.equal(stillPaused.outcome, 'budget'); assert.equal(f.observes(), 2); assert.equal(f.generates(), 1);
+  assert.equal((await runAuditLoop({ ...f.input, resume: true }, ports, f.journal)).outcome, 'done');
+  assert.equal(f.observes(), 3); assert.equal(f.generates(), 2);
+});
+test('resume crash reuses its fresh checkpoint and accepted report without another spend', async () => {
+  const f = fixture({ ceilings: [1000] });
+  let budgetReads = 0;
+  const requestIds: string[] = [];
+  const ports: AuditPorts = { ...f.ports, budget: () => ++budgetReads === 2 ? 'pause' : 'allow',
+    generate: async (request, signal) => { requestIds.push(request.request_id); return f.ports.generate(request, signal); } };
+  assert.equal((await runAuditLoop(f.input, ports, f.journal)).outcome, 'budget');
+  const append = f.journal.append.bind(f.journal);
+  f.journal.append = () => { throw new Error('crash before resumed append'); };
+  await assert.rejects(runAuditLoop({ ...f.input, resume: true }, ports, f.journal));
+  assert.equal(f.observes(), 2); assert.equal(f.generates(), 2);
+  assert.equal(new Set(requestIds).size, 2);
+  f.journal.append = append;
+  const resumed = await runAuditLoop({ ...f.input, resume: true }, ports, f.journal);
+  assert.equal(resumed.outcome, 'done'); assert.equal(f.observes(), 2); assert.equal(f.generates(), 2);
+  const entries = f.journal.load('audit1');
+  assert.deepEqual(await runAuditLoop({ ...f.input, resume: true }, ports, f.journal), resumed);
+  assert.deepEqual(f.journal.load('audit1'), entries);
+});
+test('unchanged state on resume can reuse the accepted report after observing live state', async () => {
+  const f = fixture();
+  const observed = await f.ports.observe([]);
+  let reads = 0; let budgetReads = 0;
+  const ports: AuditPorts = { ...f.ports, observe: async () => { reads++; return structuredClone(observed); },
+    budget: () => ++budgetReads === 2 ? 'pause' : 'allow' };
+  assert.equal((await runAuditLoop(f.input, ports, f.journal)).outcome, 'budget');
+  assert.equal((await runAuditLoop({ ...f.input, resume: true }, ports, f.journal)).outcome, 'done');
+  assert.equal(reads, 2); assert.equal(f.generates(), 1);
+});
+test('cancellation during resume observation or generation writes only the cancelled round', async () => {
+  for (const phase of ['observe', 'generate'] as const) {
+    const f = fixture({ ceilings: [1000] });
+    const controller = new AbortController();
+    await runAuditLoop(f.input, { ...f.ports, budget: () => 'pause' }, f.journal);
+    let cancelled = false;
+    const checkpoint = f.journal.checkpoint.bind(f.journal);
+    f.journal.checkpoint = entry => { assert.equal(cancelled, false, 'no checkpoint after cancellation'); checkpoint(entry); };
+    const cancel = () => { cancelled = true; controller.abort(); };
+    const ports: AuditPorts = { ...f.ports,
+      observe: async issues => { const result = await f.ports.observe(issues); if (phase === 'observe') cancel(); return result; },
+      generate: async (request, signal) => { const result = await f.ports.generate(request, signal); cancel(); return result; },
+      evaluate: async () => { assert.fail('D6 after cancellation'); },
+    };
+    const result = await runAuditLoop({ ...f.input, resume: true }, ports, f.journal, controller.signal);
+    assert.equal(result.outcome, 'cancelled'); assert.equal(f.generates(), phase === 'observe' ? 0 : 1);
+    const entries = f.journal.load('audit1');
+    assert.deepEqual(await runAuditLoop(f.input, ports, f.journal), result);
+    assert.deepEqual(f.journal.load('audit1'), entries);
+  }
+});
+test('cancelling a persisted pause appends cancellation without observing or dispatching', async () => {
+  const f = fixture({ budget: true });
+  await runAuditLoop(f.input, f.ports, f.journal);
+  const controller = new AbortController(); controller.abort();
+  const result = await runAuditLoop({ ...f.input, resume: true }, f.ports, f.journal, controller.signal);
+  assert.equal(result.outcome, 'cancelled'); assert.equal(f.observes(), 0); assert.equal(f.generates(), 0);
+  assert.equal(f.journal.load('audit1').length, 2);
+});
+
+test('resume crash after D6 reuses its checkpointed decision instead of spending again', async () => {
+  const f = fixture({ gaps: 1 });
+  await runAuditLoop(f.input, { ...f.ports, budget: () => 'pause' }, f.journal);
+  let evaluations = 0;
+  const ports: AuditPorts = { ...f.ports, evaluate: async (request, signal) => {
+    evaluations++; return f.ports.evaluate(request, signal);
+  } };
+  const append = f.journal.append.bind(f.journal);
+  f.journal.append = () => { throw new Error('crash after D6'); };
+  await assert.rejects(runAuditLoop({ ...f.input, resume: true }, ports, f.journal));
+  assert.equal(evaluations, 1); assert.equal(f.generates(), 1);
+  f.journal.append = append;
+  assert.equal((await runAuditLoop({ ...f.input, resume: true }, ports, f.journal)).outcome, 'done');
+  assert.equal(evaluations, 1); assert.equal(f.generates(), 2);
+});

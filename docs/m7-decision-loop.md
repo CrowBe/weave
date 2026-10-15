@@ -607,17 +607,23 @@ Budget pauses before another audit dispatch; the gateway retains its per-call
 budget enforcement. No fallback can bypass D4 or D7.
 
 Journal append and phase checkpoints must persist before returning, with one
-writer per execution. The loop checkpoints disclosed input before generation
-and the accepted report before D6, so recovery reuses the recorded input and
-report. `MemoryAuditJournal` supports deterministic fixtures; production
+writer per execution. The composition root must serialize racing resumes
+before they enter the loop; there is no journal lock or compare-and-swap port.
+The loop checkpoints disclosed input before generation, the accepted report
+before D6, and D6 disposal before round append, so recovery reuses completed
+inference. In-flight inference interrupted before checkpoint commit requires
+request-id reconciliation by the inference port. Observation owners reconcile
+fix effects without reusing single-use grants; the audit loop holds no grants. `MemoryAuditJournal` supports deterministic fixtures; production
 durability is the composition root's responsibility. Replay returns the recorded
 round without calling a provider. By default an already stopped execution
 remains stopped. An explicit `resume: true` may resume a `budget`, `decision_unavailable` or `cancelled`
 pause; other stops remain terminal. Pauses retain pending open issues, and
-resumption uses the same round checkpoint and rechecks budget and state
-revision. An observation whose budget slice shows spend at or above the ceiling
-is not checkpointed, so resuming that pause observes again and reads the
-current budget. Pause records have unique entry ids and do not consume another audit
+resumption re-observes live state, revision and budget in the same round.
+A checkpoint's optional `resume_from` identifies that resumption's pause entry;
+crash recovery within the resumption reuses its fresh input, accepted report and
+D6 disposal. Reports carry forward only when digest and revision both match.
+Changed input gets a distinct inference request id, stable across recovery.
+Legacy checkpoints refresh on resume. Over-budget observations are not pinned. Pause records have unique entry ids and do not consume another audit
 round from the cap.
 Failed generation does not fabricate D5 observations for evaluations never requested.
 
