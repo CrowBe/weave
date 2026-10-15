@@ -22,10 +22,15 @@ export {
   applyRouteOverlay,
   bindDecisionProvider,
   parseRouteConfig,
+  resolvePreselectPolicy,
   DECISION_PROVIDER_ADAPTER,
   DECISION_PROVIDER_ID,
+  PRESELECT_CAP,
+  PRESELECT_DEFAULT_FLOOR,
+  PRESELECT_DEFAULT_K,
   type DecisionConfig,
   type DecisionProviderBinding,
+  type ResolvedPreselectPolicy,
   type RouteConfigResult,
 } from './config.js';
 

@@ -21,6 +21,10 @@
     },
     "sites": {
       "intake.classify": "amos"
+    },
+    "preselect": {
+      "typesafe-jev": { "k": 3 },
+      "amos": { "k": 3, "floor": 0 }
     }
   },
   "units": [
@@ -171,6 +175,28 @@
       "context_profile": "decision",
       "context_profile_version": 1,
       "prompt_template": "decision.choice",
+      "prompt_template_version": 1,
+      "settings": {
+        "max_output_tokens": 256
+      },
+      "context_limit_tokens": 8192,
+      "price": {
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      }
+    },
+    {
+      "routed_unit_id": "amos.boolean",
+      "adapter": "amos",
+      "model": "amos-1-2b",
+      "tier": "decision",
+      "operation": "evaluate",
+      "kind": "boolean",
+      "destination": "amos",
+      "quality": "baseline",
+      "context_profile": "decision",
+      "context_profile_version": 1,
+      "prompt_template": "decision.boolean",
       "prompt_template_version": 1,
       "settings": {
         "max_output_tokens": 256
