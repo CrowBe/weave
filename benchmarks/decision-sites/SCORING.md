@@ -55,8 +55,9 @@ Holdout is evaluated once with tune-selected and production thresholds. A looser
 guard block threshold (above its production value, currently .3), a lower guard
 confidence floor, or a lower D5 probability/confidence floor is reported as
 `not_applied: needs captain (#142)`. D5's provisional profile also marks a higher
-fail cutoff. D3 uses the same label for lower confidence, margin, floor or k, or
-higher max-excluded. Choice sites mark lower confidence floors (and D1 lower
+fail cutoff. D3 uses the same label for lower confidence, margin or k, or
+higher floor or max-excluded. A higher floor discards more catalogue entries before k.
+Choice sites mark lower confidence floors (and D1 lower
 top-p) as `not_applied: looser than production (report only)`.
 WHC-P10 fix round 4 extends these comparison labels to D3 and all choice sites;
 the objective, grid and selected thresholds are unchanged. All tuning is

@@ -8,6 +8,7 @@ export interface CompetitorsConfig {
   /** Composition root creates an empty temporary directory, outside every repository. */
   cwd: string;
   quotaAllowed: boolean;
+  timeoutMs?: number;
   /** Reconstructed from completed/intended competitor calls in the live journal. */
   callCounts?: Record<string, number>;
 }
@@ -51,12 +52,17 @@ export function buildCompetitors(config: CompetitorsConfig): Provider[] {
     const command = id === 'pi' ? 'pi' : 'fx';
     return { id, model: 'chatgpt-sign-in', price: 0, concurrency: 1, competitor: true,
       serialize: competitorPrompt,
-      async request(request, signal): Promise<Result> {
-        if (signal.aborted) return { status: 'failed', reason: 'cancelled' };
+      async request(request, external): Promise<Result> {
+        if (external.aborted) return { status: 'failed', reason: 'cancelled' };
         if (skipped) return skipped;
         if (!config.quotaAllowed) return { status: 'skipped', reason: 'quota_unavailable_or_weekly_cap' };
         if (count >= 40) return { status: 'skipped', reason: 'call_cap' };
-        const run = (args: readonly string[], stdin = '') => config.run(command, args, { cwd: config.cwd, stdin, signal });
+        const signal = AbortSignal.any([external, AbortSignal.timeout(config.timeoutMs ?? 120_000)]);
+        const run = async (args: readonly string[], stdin = '') => {
+          const result = await config.run(command, args, { cwd: config.cwd, stdin, signal });
+          signal.throwIfAborted();
+          return result;
+        };
         try {
           if (!initialized) {
             if (id === 'fx-ask') {
@@ -78,12 +84,11 @@ export function buildCompetitors(config: CompetitorsConfig): Provider[] {
           }
           count++;
           const result = await run(argv, competitorPrompt(request));
-          if (signal.aborted) return { status: 'failed', reason: 'cancelled' };
           if (/(?:authentication required|not authenticated|no api key|no (?:available )?models|please (?:log|sign) in|login required|not logged in)/i.test(result.stderr + '\n' + result.stdout)) return skipped = { status: 'skipped', reason: 'auth_required' };
           if (result.exitCode !== 0) return { status: 'failed', reason: 'nonzero_exit' };
           const parsed = parseCompetitorOutput(result.stdout, request);
           return parsed ? { status: 'ok', model: 'chatgpt-sign-in', answers: parsed } : { status: 'failed', reason: 'non_json_output', parse_failure: true };
-        } catch { return { status: 'failed', reason: signal.aborted ? 'cancelled' : 'process_unavailable' }; }
+        } catch { return { status: 'failed', reason: external.aborted ? 'cancelled' : signal.aborted ? 'timeout' : 'process_unavailable' }; }
       },
     } satisfies Provider;
   });

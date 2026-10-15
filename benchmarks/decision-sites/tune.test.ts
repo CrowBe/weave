@@ -195,7 +195,7 @@ test('loosening compares every site knob with production and leaves equal or str
  const preselect={...productionThresholds('loop.preselect'),floor:.2};
  const changes:readonly [Partial<Thresholds>,Partial<Thresholds>][]=[
   [{confidence:.7},{confidence:.8}],[{margin:.2},{margin:.4}],
-  [{max_excluded:.5},{max_excluded:.3}],[{floor:.1},{floor:.3}],[{k:2},{k:4}],
+  [{max_excluded:.5},{max_excluded:.3}],[{floor:.3},{floor:.1}],[{k:2},{k:4}],
  ];
  assert.equal(isLooser('loop.preselect',preselect,preselect),false);
  for(const [looser,stricter]of changes){
@@ -207,6 +207,13 @@ test('loosening compares every site knob with production and leaves equal or str
   assert.equal(isLooser(site,production,production),false);
   assert.equal(isLooser(site,{...production,confidence:production.confidence+.01},production),false);
  }
+});
+
+test('D3 floor candidates above production are looser because they discard catalogue entries',()=>{
+ const production=productionThresholds('loop.preselect');
+ assert.equal(production.floor,0);
+ for(const floor of [.2,.5])assert.equal(isLooser('loop.preselect',{...production,floor},production),true);
+ assert.equal(isLooser('loop.preselect',production,production),false);
 });
 
 test('selected loose choice and D3 thresholds carry their distinct report-only labels',()=>{

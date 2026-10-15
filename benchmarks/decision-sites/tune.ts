@@ -216,6 +216,6 @@ export function isLooser(site:string,best:Thresholds,production:Thresholds):bool
     (guard(site) && (best.probability??0)>(production.probability??0)) ||
     (site==='loop.triage' && (best.top_p??0)<(production.top_p??0)) ||
     (site==='loop.preselect' && ((best.margin??0)<(production.margin??0) ||
-      (best.max_excluded??0)>(production.max_excluded??0) || (best.floor??0)<(production.floor??0) || (best.k??0)<(production.k??0))) ||
+      (best.max_excluded??0)>(production.max_excluded??0) || (best.floor??0)>(production.floor??0) || (best.k??0)<(production.k??0))) ||
     (site==='eval.output' && ((best.probability??0)<(production.probability??0) || (best.fail_probability??0)>(production.fail_probability??0)));
 }

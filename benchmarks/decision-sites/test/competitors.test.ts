@@ -1,8 +1,28 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 import { buildCompetitors, quotaAllowsCompetitors } from '../competitors.ts';
 const req={state:'question state CANARY_DATA',questions:{q:{type:'boolean' as const,instructions:'Allowed?'}}};
+test('competitor timeouts are distinct from external cancellation, including CLI preflight',async()=>{
+ const help='--mode --no-session --no-tools --no-extensions --no-skills --no-prompt-templates --no-mcp --no-context-files --offline';
+ for(const id of ['pi','fx-ask'])for(const phase of ['preflight','prompt'])for(const rejects of [false,true]){
+  const external=new AbortController();
+  const timed=buildCompetitors({cwd:'/tmp/empty',quotaAllowed:true,timeoutMs:5,run:async(_command,args,options)=>{
+   if(phase==='preflight'||options.stdin){
+    try{await delay(100,undefined,{signal:options.signal});}catch(error){if(rejects)throw error;}
+    return{exitCode:1,stdout:'',stderr:''};
+   }
+   return{exitCode:0,stdout:args[0]==='status'?'Auth: authenticated with ChatGPT':help,stderr:''};
+  }}).find(p=>p.id===id)!;
+  assert.equal((await timed.request(req,external.signal)).reason,'timeout',`${id} ${phase} rejects=${rejects}`);
+  assert.equal(external.signal.aborted,false);
+  const cancelled=buildCompetitors({cwd:'/tmp/empty',quotaAllowed:true,timeoutMs:1000,run:async()=>{
+   external.abort();if(rejects)throw new Error('aborted');return{exitCode:1,stdout:'',stderr:''};
+  }}).find(p=>p.id===id)!;
+  assert.equal((await cancelled.request(req,external.signal)).reason,'cancelled');
+ }
+});
 test('quota uses nested freshness from the verbatim codex capture and seven_day window shape',()=>{
  const snapshot=JSON.parse(readFileSync(new URL('./fixtures/quota-codex-sample.json',import.meta.url),'utf8'));
  const now=Date.parse(snapshot.generatedAt);

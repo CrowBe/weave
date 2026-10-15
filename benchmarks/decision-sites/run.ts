@@ -75,7 +75,7 @@ export async function main(args=process.argv.slice(2), injected?:{providers:read
     // Re-read plan quota immediately before every competitor call; never reuse a stale pause snapshot.
     const quota=await runProcess('quota-axi',['--provider','codex','--json'],{cwd:temp,stdin:'',signal:AbortSignal.any([signal,AbortSignal.timeout(30000)])});
     let allowed=false;try{allowed=quota.exitCode===0&&quotaAllowsCompetitors(JSON.parse(quota.stdout),Date.now());}catch{/* fail closed */}
-    return allowed?provider.request(request,AbortSignal.any([signal,AbortSignal.timeout(120000)])):{status:'skipped' as const,reason:'quota_unavailable_or_weekly_cap'};
+    return allowed?provider.request(request,signal):{status:'skipped' as const,reason:'quota_unavailable_or_weekly_cap'};
    }
   }));
   const providers=[...(injected?.providers??[...buildProviders(configs),...competitors,fakeProvider()])].filter(p=>options.providers.includes(p.id));
