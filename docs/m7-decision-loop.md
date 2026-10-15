@@ -594,13 +594,15 @@ a disposition computed against changed state before loop-back or completion.
 Each `audit.round@1` records its id/parentId, execution id, round, state digest,
 report, D6 disposal, open issues, outcome and `goal_done`. Outcomes distinguish
 `observe`, `done`, `budget`, `iteration_cap`, `no_progress`, `repeated_issue`,
-`authority`, `needs_human`, `cancelled`, `audit_unavailable` and
+`authority`, `needs_human`, `cancelled`, `decision_unavailable`, `audit_unavailable` and
 `evidence_missing`; only `done` sets `goal_done`. The cap defaults to four audit
 rounds. Two consecutive stalled/regressing D8 observations stop progress; a
 finding recurring after two fix attempts stops as `repeated_issue`. The
 Observe port supplies `issue_fix_attempts` attestations; merely seeing the
 same finding again does not count as a fix attempt. Authority
-blocks and unavailable decisions before guarded dispatch stop for human review.
+blocks stop for human review. Unavailable decisions before guarded dispatch
+record a resumable `decision_unavailable` pause, without pinning the unavailable
+observation. Explicit resumption observes availability again.
 Budget pauses before another audit dispatch; the gateway retains its per-call
 budget enforcement. No fallback can bypass D4 or D7.
 
@@ -610,7 +612,7 @@ and the accepted report before D6, so recovery reuses the recorded input and
 report. `MemoryAuditJournal` supports deterministic fixtures; production
 durability is the composition root's responsibility. Replay returns the recorded
 round without calling a provider. By default an already stopped execution
-remains stopped. An explicit `resume: true` may resume a `budget` or `cancelled`
+remains stopped. An explicit `resume: true` may resume a `budget`, `decision_unavailable` or `cancelled`
 pause; other stops remain terminal. Pauses retain pending open issues, and
 resumption uses the same round checkpoint and rechecks budget and state
 revision. An observation whose budget slice shows spend at or above the ceiling

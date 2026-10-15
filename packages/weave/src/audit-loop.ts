@@ -56,7 +56,7 @@ export interface AuditIssue {
   readonly text: string; readonly severity: 'blocker'; readonly blocked_by: null;
 }
 export type AuditStop = 'done' | 'budget' | 'iteration_cap' | 'no_progress' | 'repeated_issue' | 'authority' |
-  'needs_human' | 'cancelled' | 'audit_unavailable' | 'evidence_missing';
+  'needs_human' | 'cancelled' | 'audit_unavailable' | 'evidence_missing' | 'decision_unavailable';
 export interface AuditRound {
   readonly schema: 'audit.round@1'; readonly id: string; readonly parentId: string | null;
   readonly execution_id: string; readonly round: number; readonly state_digest: string;
@@ -119,7 +119,7 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
     (input.max_iterations ?? 4) < 1 || (input.max_iterations ?? 4) > 100) throw new Error('Invalid audit input');
   const history = [...journal.load(input.execution_id)];
   const previous = history.at(-1);
-  const resuming = input.resume === true && (previous?.outcome === 'budget' || previous?.outcome === 'cancelled');
+  const resuming = input.resume === true && (previous?.outcome === 'budget' || previous?.outcome === 'cancelled' || previous?.outcome === 'decision_unavailable');
   if (previous && previous.outcome !== 'observe' && !resuming) return structuredClone(previous);
   let issues = previous?.open_issues ?? [];
   for (let round = previous ? previous.round + (resuming ? 0 : 1) : 1; ; round++) {
@@ -136,12 +136,12 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
       observed = structuredClone(checkpoint?.observation ?? await ports.observe(issues));
       const overBudget = observed.state.budget !== null && observed.state.budget.spent_micros >= observed.state.budget.ceiling_micros;
       // An over-budget observation is not pinned, so resume re-observes the budget.
-      if (!checkpoint && !overBudget) journal.checkpoint({ execution_id: input.execution_id, round, observation: observed, report: null });
+      if (!checkpoint && !overBudget && !(observed.needs_dispatch && observed.decision_unavailable)) journal.checkpoint({ execution_id: input.execution_id, round, observation: observed, report: null });
       const noProgress = stopForNoProgress(observed.progress ?? [], []);
       if (signal?.aborted) outcome = 'cancelled';
       else if (overBudget) outcome = 'budget';
       else if (observed.authority_blocked) outcome = 'authority';
-      else if (observed.needs_dispatch && observed.decision_unavailable) outcome = 'needs_human';
+      else if (observed.needs_dispatch && observed.decision_unavailable) outcome = 'decision_unavailable';
       else if (noProgress) outcome = noProgress;
       else {
         const request_id = `${input.execution_id}:r${round}:audit`;

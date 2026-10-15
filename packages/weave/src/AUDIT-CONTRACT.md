@@ -35,3 +35,12 @@ reports the same way. Replay preserves historical records and ids unchanged.
 For repeated-fix detection, historical full-finding ids are aliases of the new
 key when the recorded report and open issue establish that link. Attempt counts
 across aliases use the maximum, never the sum; recurrence alone is not an attempt.
+
+## Decision outage pause
+
+Before a dispatch needing D4, `needs_dispatch && decision_unavailable` records
+an audit round with outcome `decision_unavailable`, using the existing decision
+outage reason vocabulary. It is a pause, resumable only with `resume: true` in
+the same round. The blocked observation is not checkpointed; resumption observes
+availability again before proceeding. Authority blocks remain terminal and no
+pause confers a grant or bypasses D4/D7. D6 outage retains its `needs_human` fallback.

@@ -103,7 +103,7 @@ test('authority and unavailable dispatch stop before generation', async () => {
     const ports = { ...f.ports, observe: async (issues: Parameters<typeof observe>[0]) => ({ ...await observe(issues), ...blocked }) };
     const result = await runAuditLoop(f.input, ports, f.journal);
     assert.equal(result.goal_done, false); assert.equal(f.generates(), 0);
-    assert.ok(['authority', 'needs_human'].includes(result.outcome));
+    assert.ok(['authority', 'decision_unavailable'].includes(result.outcome));
   }
 });
 test('budget pause preserves loop issues and explicit resume reuses the audit round', async () => {
@@ -222,4 +222,24 @@ test('legacy audit issue ids replay unchanged and count fix attempts without sum
   const oneAttempt: AuditPorts = { ...ports, observe: async issues => ({ ...await ports.observe(issues),
     issue_fix_attempts: { [oldId]: 1, [newId]: 1 } }) };
   assert.equal((await runAuditLoop({ ...f.input, max_iterations: 2 }, oneAttempt, another)).outcome, 'iteration_cap');
+});
+
+test('decision outage before guarded dispatch pauses and resumes when decisions recover', async () => {
+  const f = fixture({ ceilings: [1000] });
+  let unavailable = true;
+  const observe = f.ports.observe;
+  const ports: AuditPorts = { ...f.ports, observe: async issues => ({ ...await observe(issues),
+    needs_dispatch: true, decision_unavailable: unavailable }) };
+  const paused = await runAuditLoop(f.input, ports, f.journal);
+  assert.equal(paused.outcome, 'decision_unavailable');
+  assert.equal(f.generates(), 0);
+  const entries = f.journal.load('audit1');
+  assert.deepEqual(await runAuditLoop(f.input, ports, f.journal), paused);
+  assert.deepEqual(f.journal.load('audit1'), entries);
+  unavailable = false;
+  const resumed = await runAuditLoop({ ...f.input, resume: true }, ports, f.journal);
+  assert.equal(resumed.outcome, 'done'); assert.equal(resumed.round, 1);
+  assert.equal(f.observes(), 2); assert.equal(f.generates(), 1);
+  assert.deepEqual(await runAuditLoop({ ...f.input, resume: true }, ports, f.journal), resumed);
+  assert.equal(f.generates(), 1); assert.equal(f.journal.load('audit1').length, 2);
 });
