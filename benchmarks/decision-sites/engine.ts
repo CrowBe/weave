@@ -25,9 +25,19 @@ export async function execute(options:{entries:readonly Entry[];providers:readon
   items:for(const entry of scheduled) {
    if(provider.competitor && countCompetitorCalls(journal.read(),provider.id)>=40){journal.append({type:'provider_status',provider:provider.id,result:{status:'skipped',reason:'call_cap'}});break;}
    if(signal?.aborted){journal.append({type:'cancelled'});return;}
+   // A receipt disproving our reservation bound stops the whole run, including resume.
+   const ledger=journal.read();
+   if(ledger.some(r=>r.type==='budget_stop'&&r.reason==='actual_cost_exceeds_projection'))return;
+   const reservations=new Map(ledger.filter(r=>r.type==='intent').map(r=>[r.call_id,r.projected_usd]));
+   const excess=ledger.find(r=>r.type==='call'&&r.cost_usd>reservations.get(r.call_id));
+   if(excess){
+    // Recover a crash between the durable receipt and its budget-stop record.
+    journal.append({type:'budget_stop',call_id:excess.call_id,reason:'actual_cost_exceeds_projection',spent_usd:journal.spent(),cost_usd:excess.cost_usd,projected_usd:reservations.get(excess.call_id),ceiling_usd:options.maxSpend});return;
+   }
    if(provider.competitor && entry.split!=='holdout')continue;
    const request=await buildRequest(entry.item);
-   const binding={provider:provider.id,model:provider.model,site:entry.item.site,item_id:entry.item.id,set_digest:entry.set_digest,question_digest:digest(JSON.stringify(request))};
+   const serialized=provider.serialize(request);
+   const binding={provider:provider.id,model:provider.model,site:entry.item.site,item_id:entry.item.id,set_digest:entry.set_digest,question_digest:digest(JSON.stringify(request)),request_digest:digest(serialized)};
    const key=replayKey(binding);const history=journal.read();
    const prior=history.filter(r=>r.type==='call'&&replayKey(r)===key&&!retryableCancellation(r.result)&&!(r.result.status==='skipped'&&r.result.reason==='quota_unavailable_or_weekly_cap'));
    if(prior.some(r=>r.terminal))continue;
@@ -39,7 +49,7 @@ export async function execute(options:{entries:readonly Entry[];providers:readon
    }
    for(let attempt=prior.length;attempt<3;attempt++) {
     if(signal?.aborted){journal.append({type:'cancelled'});return;}
-    const projected=projectedCost(provider.serialize(request),provider.price);
+    const projected=projectedCost(serialized,provider.price);
     if(journal.spent()+projected>options.maxSpend){journal.append({type:'budget_stop',spent_usd:journal.spent(),projected_usd:projected,ceiling_usd:options.maxSpend});break items;}
     const call_id=digest(JSON.stringify([binding,history.length,attempt,journal.read().length]));
     journal.append({type:'intent',...binding,split:entry.split,call_id,projected_usd:projected});
@@ -55,7 +65,9 @@ export async function execute(options:{entries:readonly Entry[];providers:readon
     const skip=providerSkip(result);
     if(result.status==='skipped'&&!skip)result={...result,status:'failed'};
     journal.append({type:'call',...binding,split:entry.split,call_id,result,terminal:!retry&&!cancelled,latency_ms:Math.max(0,options.now()-started),cost_usd:cost});
+    if(cost>projected)journal.append({type:'budget_stop',...binding,call_id,reason:'actual_cost_exceeds_projection',spent_usd:journal.spent(),cost_usd:cost,projected_usd:projected,ceiling_usd:options.maxSpend});
     if(signal?.aborted){journal.append({type:'cancelled',...binding,call_id});return;}
+    if(cost>projected)return;
     if(skip){journal.append({type:'provider_status',provider:provider.id,persistent:persistentProviderSkip(result),result:{...result,status:'skipped'}});skipped.add(provider.id);break;}
     if(!retry)break;
     try{await options.sleep(Math.min(60000,Math.max(0,result.retry_after_ms??1000*(attempt+1))),signal);}catch{journal.append({type:'cancelled'});return;}

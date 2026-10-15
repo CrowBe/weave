@@ -4,7 +4,7 @@ import { mkdtemp,rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execute, countCompetitorCalls } from './engine.ts';
-import { Journal, digest } from './journal.ts';
+import { Journal, digest, projectedCost } from './journal.ts';
 import { buildRequest } from './questions.ts';
 import { buildProviders } from './providers.ts';
 import { buildCompetitors } from './competitors.ts';
@@ -144,6 +144,61 @@ test('exact replay skips payment; changed model, set or request re-asks and reta
  await run([entry],[{...p,model:'different',request:async()=>{n++;return{status:'ok',model:'different',input_tokens:100,answers:{}};}}]);assert.equal(n,4);
  assert.equal(journal.spent(),spent*4);
 }));
+test('resume binds terminal answers to the serialized body even when the production request is identical',()=>fixture(async journal=>{
+ let n=0;const requests:unknown[]=[];
+ const p=provider(async request=>{n++;requests.push(request);return {status:'ok',input_tokens:1,answers:{}};});
+ const run=(profile:string)=>execute({entries:[entry],providers:[{...p,serialize:request=>profile+JSON.stringify(request)}],journal,maxSpend:2,...clock});
+ await run('v1:');await run('v1:');assert.equal(n,1);
+ await run('v2:');assert.equal(n,2);assert.deepEqual(requests[0],requests[1]);
+ await run('v2:');assert.equal(n,2);
+ const calls=journal.read().filter(r=>r.type==='call');
+ assert.equal(calls[0]!.request_digest,digest('v1:'+JSON.stringify(requests[0])));
+ assert.equal(calls[1]!.request_digest,digest('v2:'+JSON.stringify(requests[1])));
+}));
+test('legacy terminal answers without a serialized request digest never match resume',()=>fixture(async journal=>{
+ const request=await buildRequest(item);
+ journal.append({type:'call',provider:'fake',model:'fake',site:item.site,item_id:item.id,set_digest:entry.set_digest,question_digest:digest(JSON.stringify(request)),call_id:'legacy',result:{status:'ok',answers:{}},terminal:true,cost_usd:0});
+ let n=0;const p=provider(async()=>{n++;return {status:'ok',input_tokens:1,answers:{}};});
+ const run=()=>execute({entries:[entry],providers:[p],journal,maxSpend:2,...clock});
+ await run();await run();assert.equal(n,1);
+}));
+for(const status of ['ok','failed'] as const)for(const maxSpend of [2,.001])test(`actual cost above reservation stops all further dispatch after ${status} at ceiling ${maxSpend}, including retry and resume`,()=>fixture(async journal=>{
+ let n=0;const p=provider(async()=>{n++;return {status,input_tokens:1000000,...(status==='failed'?{http_status:429,retry_after_ms:1}:{answers:{}})};});
+ const free={...p,id:'free',price:0};
+ const run=()=>execute({entries:[entry,{...entry,item:{...item,id:'next'}}],providers:[p,free],journal,maxSpend,...clock});
+ await run();assert.equal(n,1);
+ const records=journal.read(),intent=records.find(r=>r.type==='intent')!,call=records.find(r=>r.type==='call')!,stop=records.find(r=>r.type==='budget_stop');
+ assert.ok(call.cost_usd>intent.projected_usd);assert.ok(stop);
+ assert.equal(stop.reason,'actual_cost_exceeds_projection');assert.equal(stop.call_id,call.call_id);
+ assert.equal(stop.spent_usd,journal.spent());assert.equal(stop.projected_usd,intent.projected_usd);
+ assert.ok(records.indexOf(stop)>records.indexOf(call));
+ await run();assert.equal(n,1);
+}));
+test('every subsequent admission uses actual spend and resume re-reads the ledger',()=>fixture(async journal=>{
+ let n=0;const p=provider(async()=>{n++;return {status:'ok',input_tokens:1,answers:{}};});
+ const projected=projectedCost(p.serialize(await buildRequest(item)),p.price),actual=p.price/1e6;
+ const maxSpend=projected+actual/2;
+ const rows=[entry,{...entry,item:{...item,id:'next'}}];
+ const run=()=>execute({entries:rows,providers:[p],journal,maxSpend,...clock});
+ await run();assert.equal(n,1);assert.ok(journal.spent()<=maxSpend);
+ journal.append({type:'call',call_id:'external-receipt',cost_usd:maxSpend-actual});
+ await run();assert.equal(n,1);assert.equal(journal.spent(),maxSpend);
+}));
+test('resume stops on an excessive receipt even after a crash before budget_stop was journalled',()=>fixture(async journal=>{
+ journal.append({type:'intent',call_id:'crashed',projected_usd:.001});
+ journal.append({type:'call',call_id:'crashed',cost_usd:.01,result:{status:'ok'},terminal:true});
+ let n=0;const p=provider(async()=>{n++;return {status:'ok',input_tokens:1,answers:{}};});
+ await execute({entries:[entry],providers:[p],journal,maxSpend:2,...clock});
+ assert.equal(n,0);assert.equal(journal.read().find(r=>r.type==='budget_stop')?.reason,'actual_cost_exceeds_projection');
+}));
+test('an excessive acknowledged receipt preserves cancellation and prevents later resume dispatch',()=>fixture(async journal=>{
+ const controller=new AbortController();let n=0;
+ const p=provider(async()=>{n++;controller.abort();return {status:'ok',input_tokens:1000000,answers:{}};});
+ await execute({entries:[entry],providers:[p],journal,maxSpend:2,signal:controller.signal,...clock});
+ const records=journal.read();assert.equal(records.find(r=>r.type==='call')?.cost_usd,.1);
+ assert.ok(records.find(r=>r.type==='budget_stop'));assert.equal(records.at(-1)?.type,'cancelled');
+ await execute({entries:[entry],providers:[p],journal,maxSpend:2,...clock});assert.equal(n,1);
+}));
 test('Retry-After honored, over-bound backoff fails without early retry',()=>fixture(async journal=>{
  const waits:number[]=[];let n=0;
  const p=provider(async()=>{n++;return {status:'failed',http_status:429,retry_after_ms:n===1?1234:61000};});
@@ -166,7 +221,7 @@ test('terminal wrong-model results are replayed without repaying or recounting s
 }));
 test('wrong-model retry records retain their attempt count on resume',()=>fixture(async journal=>{
  const request=await buildRequest(item);
- for(let attempt=0;attempt<2;attempt++)journal.append({type:'call',provider:'fake',model:'fake',site:item.site,item_id:item.id,set_digest:entry.set_digest,question_digest:digest(JSON.stringify(request)),call_id:`retry-${attempt}`,result:{status:'failed',reason:'wrong_model',model:'unexpected',http_status:429},terminal:false,cost_usd:0});
+ for(let attempt=0;attempt<2;attempt++)journal.append({type:'call',provider:'fake',model:'fake',site:item.site,item_id:item.id,set_digest:entry.set_digest,question_digest:digest(JSON.stringify(request)),request_digest:digest(JSON.stringify(request)),call_id:`retry-${attempt}`,result:{status:'failed',reason:'wrong_model',model:'unexpected',http_status:429},terminal:false,cost_usd:0});
  let n=0;const p=provider(async()=>{n++;return {status:'failed',reason:'wrong_model',model:'unexpected',http_status:429};});
  await execute({entries:[entry],providers:[p],journal,maxSpend:2,...clock});
  assert.equal(n,1);assert.equal(journal.read().filter(r=>r.type==='call').at(-1)!.terminal,true);

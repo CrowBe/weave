@@ -4,9 +4,11 @@ import { dirname, join } from 'node:path';
 import { createHash } from 'node:crypto';
 export type JournalRecord = Record<string, any>;
 export const digest = (value: string): string => createHash('sha256').update(value).digest('hex');
-export const projectedCost = (serialized: string, price: number): number => Math.ceil(serialized.length / 3) * price / 1e6;
+// Reserve one input token per UTF-8 byte rather than an average chars/token ratio.
+// Output is free in every declared benchmark price profile.
+export const projectedCost = (serialized: string, price: number): number => Buffer.byteLength(serialized, 'utf8') * price / 1e6;
 export function replayKey(r: JournalRecord): string {
- return JSON.stringify([r.provider,r.model,r.site,r.item_id,r.set_digest,r.question_digest]);
+ return JSON.stringify([r.provider,r.model,r.site,r.item_id,r.set_digest,r.question_digest,r.request_digest]);
 }
 function writeAll(fd:number,value:string):void {const bytes=Buffer.from(value);let offset=0;while(offset<bytes.length){const n=writeSync(fd,bytes,offset,bytes.length-offset);if(n<=0)throw new Error('Journal write failed');offset+=n;}}
 export class Journal {

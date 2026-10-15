@@ -85,16 +85,18 @@ export async function main(args=process.argv.slice(2), injected?:{providers:read
   const invocationStart=records.map(r=>r.type).lastIndexOf('run');
   const statuses=records.filter((r,i)=>['provider_status','budget_stop','cancelled','uncertain'].includes(r.type)&&
    (r.type!=='provider_status'||(r.persistent!==false&&persistentProviderSkip(r.result))||i>invocationStart));
-  const terminal=new Set(records.filter(r=>r.type==='call'&&r.terminal).map(replayKey));
   const skipped=new Set(statuses.filter(r=>r.type==='provider_status'&&r.result&&providerSkip(r.result)).map(r=>r.provider));
   let publish=!options.providers.includes('fake')&&options.split==='all'&&options.sites.length===SITES.length;
   for(const provider of providers)for(const entry of entries) {
-   const binding={provider:provider.id,model:provider.model,site:entry.item.site,item_id:entry.item.id,set_digest:entry.set_digest,question_digest:digest(JSON.stringify(await buildRequest(entry.item)))};
-   const matches=records.filter(r=>replayKey(r)===replayKey(binding));
+   const request=await buildRequest(entry.item);
+   const binding={provider:provider.id,model:provider.model,site:entry.item.site,item_id:entry.item.id,set_digest:entry.set_digest,question_digest:digest(JSON.stringify(request)),request_digest:digest(provider.serialize(request))};
+   const matches=records.filter(r=>replayKey(r)===replayKey(binding)||
+    // Legacy records have no wire-body evidence: display them only in a non-executing render.
+    (options.renderOnly&&r.request_digest===undefined&&replayKey(r)===replayKey({...binding,request_digest:undefined})));
    const calls=matches.filter(r=>r.type==='call');const last=calls.at(-1);
    const pending=matches.filter(r=>r.type==='intent'&&!calls.some(c=>c.call_id===r.call_id)).at(-1);
-   if(pending||(!terminal.has(replayKey(binding))&&!skipped.has(provider.id)))publish=false;
-   if(pending)bound.push({...binding,type:'call',call_id:pending.call_id,split:entry.split,item:entry.item,result:{status:'failed',reason:'unacknowledged_call'},terminal:true,latency_ms:0,cost_usd:0});
+   if(pending||(!calls.some(r=>r.terminal)&&!skipped.has(provider.id)))publish=false;
+   if(pending)bound.push({...binding,...pending,request_digest:pending.request_digest,type:'call',call_id:pending.call_id,split:entry.split,item:entry.item,result:{status:'failed',reason:'unacknowledged_call'},terminal:true,latency_ms:0,cost_usd:0});
    else if(last)bound.push({...last,item:entry.item,terminal:true});
   }
   const callCost=records.filter(r=>r.type==='call').reduce((sum,r)=>sum+(r.cost_usd??0),0);

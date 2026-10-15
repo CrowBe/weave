@@ -125,6 +125,30 @@ test('resume re-renders completed results; render-only never dispatches or mutat
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
+test('report binding checks serialized bodies; legacy answers render only without execution',async()=>{
+ const id=`wire-report-${process.pid}`,dir=join(testRoot,'results',id);
+ const args=['--providers','fake','--sites','loop.route','--split','holdout','--run-id',id];
+ let calls=0;
+ const p={id:'fake',model:'wire-fake',price:0,serialize:JSON.stringify,request:async()=>{calls++;return {status:'ok' as const,answers:{decision:{choice:'flash',confidence:.99}}};}};
+ const attempted=()=>JSON.parse(readFileSync(join(dir,'summary.json'),'utf8')).decision_providers[0].holdout.attempted;
+ try{
+  assert.equal(await main(args,{providers:[p]}),0);assert.equal(attempted(),12);
+  const path=join(dir,'journal.jsonl'),bound=readFileSync(path,'utf8');
+  const changed={...p,serialize:(request:Parameters<typeof p.serialize>[0])=>'new instructions:'+JSON.stringify(request)};
+  assert.equal(await main([...args,'--render-only'],{providers:[changed]}),0);
+  assert.equal(attempted(),0);assert.equal(calls,12);assert.equal(readFileSync(path,'utf8'),bound);
+  const legacy=bound.trim().split('\n').map(line=>{const r=JSON.parse(line);delete r.request_digest;return JSON.stringify(r);}).join('\n')+'\n';
+  writeFileSync(path,legacy);
+  assert.equal(await main([...args,'--render-only'],{providers:[changed]}),0);
+  assert.equal(attempted(),12);assert.equal(calls,12);assert.equal(readFileSync(path,'utf8'),legacy);
+  // Resume cannot use the render-only legacy exception, even with no spend available.
+  assert.equal(await main([...args,'--resume','--max-spend-usd','0'],{providers:[{...p,price:.1}]}),0);
+  assert.equal(attempted(),0);assert.equal(calls,12);
+  assert.equal(await main([...args,'--resume'],{providers:[changed]}),0);
+  assert.equal(calls,24);assert.equal(attempted(),12);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
 test('quota and competitor children receive only auth-location environment, never API keys',()=>{
  const dir=mkdtempSync(join(tmpdir(),'p10-child-env-'));const id=`child-env-${process.pid}`;
  const resultDir=join(testRoot,'results',id);

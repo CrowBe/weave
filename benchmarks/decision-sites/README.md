@@ -51,17 +51,19 @@ sites or future resumes. Only provider-level auth, credential, quota, model
 availability or CLI capability failures skip the whole provider.
 
 The default metered decision-spend ceiling is **USD 2.00 per run**. Each HTTP
-attempt reserves `ceil(serialized_request_chars/3) * input_price / 1e6` before
+attempt reserves `serialized_request_utf8_bytes * input_price / 1e6` before
 calling. Actual `usage.input_tokens` replaces the reservation after receipt.
 Missing usage retains that conservative estimate; skips before inference cost
 zero. Prices are TypeSafe $0.042/M input (output free) and OpenAI Decisions
 $0.10/M input with no output or cache charges, per the
 [Decisions guide](https://developers.openai.com/api/docs/guides/decisions).
 The OpenAI price remains unconfirmed until a credentialed run; [code](providers.ts)
-records the same source and input-only assumption. An unexpectedly larger reported
-usage can exceed the preflight estimate and is recorded honestly; subsequent
-calls that cannot fit stop for that provider. Later providers still receive their
-own preflight checks, including zero-price Amos and competitors. No snapshot
+records the same source and input-only assumption. The reservation conservatively
+allows one input token per UTF-8 byte; output is free in these profiles. If actual
+cost still exceeds that bound, the receipt is recorded honestly and a durable
+`budget_stop` halts all further dispatch, including on resume. Ordinary ceiling
+stops still allow later providers their own preflight checks, including zero-price
+Amos and competitors. No snapshot
 authorizes spending on resume: the live journal is read
 again before every call. A ceiling stop records `budget_stop` and renders partial
 results. The first `run` record fixes the run's original ceiling. Resume and
@@ -126,10 +128,13 @@ operator. An empty or malformed PID is `stale-unknown` and is never silently
 stolen. The append-only `journal.jsonl` fsyncs reservations and completed calls;
 a torn final line is truncated before appending, while corrupt earlier records
 refuse replay. Saved answers bind provider, expected and served model, site,
-item, set digest, and exact request digest. Changed bindings are re-asked; older
+item, set digest, production question digest, and serialized wire-body/prompt digest.
+Changed bindings are re-asked; older
 cost remains charged. Every completed attempt is charged once. Resume never
 re-pays a terminal wrong-model failure: it remains recorded against the
 requested binding, with the unexpected served model retained as failure evidence.
+Legacy records without a serialized request digest remain displayable with
+`--render-only`, but never match for reuse or report binding during resume.
 SIGINT/SIGTERM abort in-flight calls, record cancellation, render partial results and exit
 nonzero. Returned results are journalled before stopping: an acknowledged answer and
 its actual usage survive cancellation. Only cancellation before inference dispatch

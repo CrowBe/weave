@@ -29,8 +29,9 @@ test('lock refuses concurrent writer and reports dead pid without stealing', asy
  } finally { await rm(dir,{recursive:true,force:true}); }
 });
 test('budget projection and replay binding include all evidence identities', () => {
- assert.equal(projectedCost('1234567', .1), 3 * .1 / 1e6);
- const base = {provider:'p',model:'m',site:'loop.route',item_id:'i',set_digest:'s',question_digest:'q'};
+ assert.equal(projectedCost('1234567', .1), 7 * .1 / 1e6);
+ assert.equal(projectedCost('漢😀', .1), 7 * .1 / 1e6);
+ const base = {provider:'p',model:'m',site:'loop.route',item_id:'i',set_digest:'s',question_digest:'q',request_digest:'wire'};
  for(const key of Object.keys(base)) assert.notEqual(replayKey(base),replayKey({...base,[key]:'changed'}));
 });
 test('requests reuse production builders, including disclosed D3-only state', async () => {
