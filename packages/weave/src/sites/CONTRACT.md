@@ -126,3 +126,16 @@ An unreachable service, non-2xx health response or timeout produces a typed
 unavailable failure and gateway `provider_unavailable` evidence. Intake then
 uses `ask_user` / `needs_human`; dispatch-dependent steps remain paused under
 the existing rule. A model classification remains an observation, not authority.
+
+## P9 audit loop
+
+`audit.generate` makes one strong-tier generation over `view.audit@1`. The parsed
+`AuditReport` is an observation; its goal_met_claim grants no completion authority.
+D6 `audit.dispose` asks one ordinal choice per finding with confidence >= .75;
+missing, stale, uncertain or unavailable answers fall back to needs_human.
+The deterministic loop requires green criterion-linked checks and passing D5 for
+every criterion, plus no fix_now finding. fix_now creates a stable open_issue and
+returns to Observe. Budget, iteration cap, repeated issues and two consecutive
+stalled/regressing D8 outcomes persist a stop. Authority blocks require a human.
+Round records are appended before loop-back; replay performs no provider calls.
+The journal port requires durable append-before-return and a single writer.
