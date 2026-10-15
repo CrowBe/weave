@@ -435,8 +435,8 @@ null when a fresh observation is needed. This records the pause but adds no
 scheduler or resume consumer. A reset is permission to recheck, never permission
 to dispatch from the old snapshot. Five-hour pressure excludes the provider in
 favor of another eligible provider; when none remains, it records a pause until
-the five-hour reset. The future audit tier must request `tier:'strong', audit:true`
-and use this same gate at every audit-round dispatch; pace pressure pauses audit.
+the five-hour reset. The P9 audit tier requests `tier:'strong', audit:true`
+and uses this same gate at every audit-round dispatch; pace pressure pauses audit.
 
 All providers unavailable has its own blocked reason `provider_unavailable`
 (issue #44); an empty or otherwise incompatible table remains `no_route`.
@@ -521,8 +521,9 @@ Generate text is digested to a `gen_` ref for the step record. The text is discl
 
 ## P9 — Audit round and loop contract
 
-`runAuditLoop` observes tidy state, requests one `strong` generation at
-`audit.generate`, validates the bounded JSON `AuditReport`, and asks D6
+`runAuditLoop` observes tidy state, requests one `tier:'strong', audit:true`
+generation at `audit.generate` (pace pressure ends the round as a resumable
+`budget` pause, never a standard-tier downgrade), validates the bounded JSON `AuditReport`, and asks D6
 `audit.dispose` for one choice per finding. The view digest is the prefix-cache
 identity. The composition root supplies the gateway, observation, revision,
 budget and journal ports; no model or provider owns the loop. D6 reuses
