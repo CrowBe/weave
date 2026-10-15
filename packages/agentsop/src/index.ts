@@ -96,3 +96,5 @@ export type {
   ResolutionStatus,
   ResolverContext,
 } from './host.js';
+
+export { validateTrace, serializeTrace, importTraceLines, type TraceRecord, type TraceKind, type TraceImportPort } from './trace.js';

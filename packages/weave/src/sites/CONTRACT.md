@@ -222,3 +222,31 @@ An unreachable service, non-2xx health response or timeout produces a typed
 unavailable failure and gateway `provider_unavailable` evidence. Intake then
 uses `ask_user` / `needs_human`; dispatch-dependent steps remain paused under
 the existing rule. A model classification remains an observation, not authority.
+
+## P9 audit loop
+
+`audit.generate` makes one strong-tier generation over `view.audit@1`. The parsed
+`AuditReport` is an observation; its goal_met_claim grants no completion authority.
+D6 `audit.dispose` asks one ordinal choice per finding with confidence >= .75;
+missing, stale, uncertain or unavailable answers fall back to needs_human.
+The deterministic loop requires green criterion-linked checks and passing D5 for
+every criterion, plus no fix_now finding. fix_now creates a stable open_issue and
+returns to Observe. Budget, iteration cap, repeated issues and two consecutive
+stalled/regressing D8 outcomes persist a stop. Authority blocks require a human.
+Round records are appended before loop-back; replay performs no provider calls.
+The journal port requires durable append-before-return and a single writer.
+
+The journal also checkpoints the detached tidy-state observation before generation
+and its accepted report before D6. Recovery reuses that report instead of
+repeating the strong call; a crash before the report checkpoint may repeat the
+read-only call. File durability is supplied through the journal port; the included
+memory journal is a fixture. Observe owns normal implementation dispatch under
+existing policy and grants, and supplies completed issue fix-attempt counts;
+an issue's repeated appearance alone is not proof that a fix was attempted.
+
+Budget and cancellation pauses preserve outstanding open issues. Replay remains
+read-only unless `resume: true` explicitly resumes a budget/cancelled outcome;
+resume reuses that round and its checkpoint, so pauses do not consume the audit
+round cap. An over-budget tidy-state observation is never checkpointed, so a
+resumed budget pause observes the current budget again. Journal entry ids remain unique across repeated pauses. Completion
+rechecks the current revision after D6, including the empty-finding path.

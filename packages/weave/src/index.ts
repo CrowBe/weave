@@ -110,3 +110,13 @@ export {
   type ImplementStepInput, type ImplementStepResult, type ImplementTier, type JournalEntry,
   type OpenIssue, type StopRecord,
 } from './implement-step.js';
+
+export * from './audit-view.js';
+export * from './compaction.js';
+export * from './sites/audit-dispose.js';
+export {
+  MemoryAuditJournal, parseAuditReport, replayAuditLoop, runAuditLoop,
+  type AuditFinding, type AuditReport, type AuditStop, type AuditRound,
+  type AuditJournal, type AuditCheckpoint, type AuditLoopInput, type AuditObservation, type AuditPorts,
+  type AuditIssue as AuditOpenIssue,
+} from './audit-loop.js';

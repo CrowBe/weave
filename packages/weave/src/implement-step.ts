@@ -22,7 +22,6 @@ import { PersistError } from './journal.js';
 import {
   OUTPUT_EVAL_SITE,
   evaluateOutputEval,
-  transitionOutputEval,
   type OutputCriterion,
   type OutputEvalInput,
   type OutputEvalObservation,
@@ -486,36 +485,6 @@ function generatePaused(outcome: GenerationOutcome): ImplementPause | null {
   if (outcome.status === 'blocked' && (PAUSE_REASONS as readonly string[]).includes(outcome.reason)) return pauseOf(outcome.reason, null);
   return null;
 }
-function blankEvals(input: Normalized, ports: ImplementPorts, requestId: string): { evals: ImplementEval[]; observations: OutputEvalObservation[]; failing: string[] } {
-  const state = ports.readState();
-  const evalInput: OutputEvalInput = {
-    request_id: requestId,
-    state_revision: state.state_revision,
-    state_updated_at: state.state_updated_at,
-    state: { criteria: input.criteria.map(criterion => criterion.criterion_id) },
-    terms: decisionTerms(input.terms),
-    needs_dispatch: false,
-    criteria: input.criteria,
-  };
-  const transition = transitionOutputEval(evalInput, {
-    state_revision: state.state_revision,
-    observed_at: ports.now(),
-    outcome: {
-      status: 'unaccepted',
-      reason: 'attempts_exhausted',
-      request_id: requestId,
-      site: OUTPUT_EVAL_SITE,
-      attempts: [],
-      spent: 0,
-      uncertainty: [],
-    },
-  }, state);
-  return {
-    evals: flatEval(transition),
-    observations: [...transition.observations],
-    failing: [...transition.failing_criterion_ids],
-  };
-}
 
 function copyGrant(fields: Grant): Grant {
   return {
@@ -670,10 +639,8 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
     let failingCriteria: string[] = [];
     let failingChecks: string[] = [];
     if (outcome.status !== 'accepted') {
-      const blank = blankEvals(normalized, ports, `${normalized.execution_id}:a${action.attempt}:eval`);
-      evals = blank.evals;
-      observations = blank.observations;
-      failingCriteria = blank.failing;
+      // Generation failed before D5: retain the blocker without fabricating an evaluation.
+      failingCriteria = normalized.criteria.map(criterion => criterion.criterion_id);
     } else {
       const digestHex = digest(outcome.text);
       const ref = `gen_${digestHex.slice(0, 32)}`;

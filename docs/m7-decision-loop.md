@@ -5,7 +5,7 @@ This is the behavioral contract for the planned milestone in
 [M6](m6-route-a-reconstructed-view.md). Terms follow
 [GLOSSARY.md](../GLOSSARY.md). These requirements describe the target, not
 implemented loop behavior. P0 establishes this contract; P1 supplies tier and
-availability routing plus pure configuration validation. P2 supplies local ChatGPT authentication and a Responses adapter. P3 supplies the TypeSafe decision provider behind one evaluation interface. P4 supplies the budget gate; P5 supplies D1, D2, D8 and intake choice sites with pure transitions. P6 supplies D3 preselection and D4/D7 boolean guards. P7 supplies `shell.run@1`, the repo checks, and CLI generate backends. P8 supplies the implementation-tier step and D5. Full-loop integration and P9–P12 remain planned.
+availability routing plus pure configuration validation. P2 supplies local ChatGPT authentication and a Responses adapter. P3 supplies the TypeSafe decision provider behind one evaluation interface. P4 supplies the budget gate; P5 supplies D1, D2, D8 and intake choice sites with pure transitions. P6 supplies D3 preselection and D4/D7 boolean guards. P7 supplies `shell.run@1`, the repo checks, and CLI generate backends. P8 supplies the implementation-tier step and D5. P9 supplies the audit view, strong audit call, D6, and the injected audit loop with deterministic stop rules. Live application composition and P10–P12 remain planned.
 Demonstrate red before implementation, prove green with deterministic fixtures,
 and retain M0–M6 checks. Live provider runs are non-gating evidence.
 
@@ -66,24 +66,28 @@ P6 implements D3/D4/D7 as pure site transitions with an injected evaluate port; 
 
 ## 3. Tidy-state schema (audit-tier input)
 
-The planned versioned view is `view.audit@1`, assembled in `views.ts` from authorized slices. It is deterministic and digested so it can be cached by prefix.
+The versioned view is `view.audit@1`, assembled by `assembleAuditState` from explicitly authorized named slices. Its contract is [AUDIT-CONTRACT.md](../packages/weave/src/AUDIT-CONTRACT.md). Assembly performs no inference or IO; policy supplies already disclosed, secret-free slices. Goal and iteration are required. Unauthorized slices record `slice:authority`, use empty values, and exclude their source revisions. Artifact references must also occur in the goal authority scope. Canonical JSON and a SHA-256 digest make the disclosed state suitable for prefix caching.
 
 ```text
 interface AuditState {
   schema: 'audit-state@1';
-  goal: { goal_id; statement; success_criteria: Criterion[]; authority_scope; revision };
+  view: 'view.audit@1';
+  goal: { goal_id; statement; success_criteria: { criterion_id; statement; check_ids: string[] }[]; authority_scope; revision };
   iteration: number;                         // loop-back count
   plan: { step_id; intent; tier; status: 'done'|'failed'|'skipped' }[];
   decisions: { site; question_id; choice; probabilities; confidence; fallback_used: boolean; obs_seq }[];
   artifacts: { artifact_id; kind: 'diff'|'file'|'report'; digest; summary; bytes; ref }[]; // ref, not raw body, above a size cap
-  checks: { check_id; argv_digest; exit: number; passed: boolean; tail: string }[];  // deterministic evidence
-  evals: { criterion_id; verdict_probability; confidence?; passed: boolean }[];       // D5 outputs
+  checks: { check_id; argv_digest; exit: number|null; passed: boolean; tail: string }[];  // deterministic evidence
+  evals: { criterion_id; verdict_probability; confidence: number|null; passed: boolean }[];       // D5 outputs
   open_issues: { issue_id; source: 'check'|'eval'|'audit'; text; severity }[];
   budget: { spent_micros; ceiling_micros; quota: { provider; window; percent_remaining; resets_at }[] };
   omissions: string[];                       // what the view left out and why (existing view rule)
   source_revisions: Record<string, number>;
+  digest: string;
 }
 ```
+
+Artifacts carry ref, digest and size; optional bodies over the configured UTF-8 cap (default 4096 bytes) are excluded with `artifact:<id>:size_cap`. Summaries are bounded to 240 UTF-8 bytes and check tails to 240 characters with recorded omissions. Omitted budget is null.
 
 The audit tier returns `AuditReport { findings: {criterion_id|null, kind:'gap'|'defect'|'regression'|'scope_creep', evidence_ref, proposed_fix}[], goal_met_claim: boolean }`. Its `goal_met_claim` is an observation only. Completion still requires deterministic success evidence (ARCH §3).
 
@@ -159,8 +163,7 @@ question, request_id, state_revision, answer, confidence, top_p, accepted,
 fallback_used, reason, provider_request_id. The last field names the gateway's
 provider_response_id. Unavailable statistics and unsafe correlation ids are
 null. Raw state, provider diagnostics and unknown answer values are excluded.
-This is the P5 decision payload; the full-loop JSONL tree envelope and transport
-remain later work. Deterministic tests validate the payload and field order.
+This is the P5 decision payload. P9 adds a separate versioned JSONL tree ingestion port (§10); migration of every existing record to that envelope remains a follow-up. Deterministic tests validate the payload and field order.
 
 Requests bind to an injected state revision and update timestamp. A response
 for a different revision, a changed state timestamp, or observed before that
@@ -271,7 +274,7 @@ Each PR is small. Each must pass `npm run verify`, adds tests to the existing `n
 | P6 | **D3 preselect plus D4/D7 guardrails** | Preselect only narrows the disclosed catalogue slice; a block becomes an approval request | M6 slice tests; guard asymmetry tests |
 | P7 | **`shell.run@1` plus `repo.test/lint/build`, and CLI backends** (`codex exec`, `claude -p`, `grok`) as generate adapters, prompt on stdin | Effects enforced by grant; env values never on argv or in logs; timeout and cancel honoured | Fabric host tests with the canary-env leak pattern; stub CLIs |
 | P8 | **Implementation-tier step plus D5 output eval** | Retry ≤2, escalate a tier once, then raise an open_issue | toy-goal loop with fake providers |
-| P9 | **`view.audit@1` tidy state, audit tier, D6, loop-back and stop** | An audit claim alone cannot complete a goal; iteration-cap and no-progress stops fire | end-to-end fixture: gap, loop, done; stall, stop |
+| P9 | **`view.audit@1` tidy state, audit tier, D6, loop-back and stop** | Implemented through injected ports; an audit claim alone cannot complete a goal; deterministic evidence, D5, authority, budget and progress gates govern transitions | fake-provider fixtures: gap → loop → done, red check, iteration cap, stalled/repeated issue, budget, D6 fallback, oversized artifact, replay |
 | P10 | **Live benchmarks** (non-gating): per-site sets for each decision provider | Thresholds tuned per provider on the tune split; holdout reported | recorded results |
 | P11 | **MVP test drive** (last MVP phase): Weave runs one real end-to-end task, e.g. a small real PR on weave itself | **Exit:** (a) ChatGPT sign-in works as an inference provider and serves real calls; (b) the configured decision provider makes the D1 triage and D2 routing decisions, recorded with confidence; (c) a light tier and a frontier tier both run inside the loop; (d) checks green, audit run, stop recorded; (e) the week stays under 80% | recorded trace and replay; quota-axi delta logged |
 | P12 | **Post-MVP: generic decision-endpoint adapter.** A config-declared wire profile for any compatible decision endpoint, local providers included | No interface change; adding an endpoint is config plus a profile; the destination is declared | the shared contract suite runs against a local mock server |
@@ -440,8 +443,8 @@ null when a fresh observation is needed. This records the pause but adds no
 scheduler or resume consumer. A reset is permission to recheck, never permission
 to dispatch from the old snapshot. Five-hour pressure excludes the provider in
 favor of another eligible provider; when none remains, it records a pause until
-the five-hour reset. The future audit tier must request `tier:'strong', audit:true`
-and use this same gate at every audit-round dispatch; pace pressure pauses audit.
+the five-hour reset. The P9 audit tier requests `tier:'strong', audit:true`
+and uses this same gate at every audit-round dispatch; pace pressure pauses audit.
 
 All providers unavailable has its own blocked reason `provider_unavailable`
 (issue #44); an empty or otherwise incompatible table remains `no_route`.
@@ -563,3 +566,72 @@ open_issue@1 {
 ```
 
 Generate text is digested to a `gen_` ref for the step record. The text is disclosed only on the in-memory D5 request. Pausing for budget or cancellation does not raise an open issue and does not complete the goal.
+
+
+## P9 — Audit round and loop contract
+
+`runAuditLoop` observes tidy state, requests one `tier:'strong', audit:true`
+generation at `audit.generate` (pace pressure ends the round as a resumable
+`budget` pause, never a standard-tier downgrade), validates the bounded JSON `AuditReport`, and asks D6
+`audit.dispose` for one choice per finding. The view digest is the prefix-cache
+identity. The composition root supplies the gateway, observation, revision,
+budget and journal ports; no model or provider owns the loop. D6 reuses
+`decision-site@1`, ordinal finding questions and stale-answer admission.
+Confidence below .75, malformed/missing answers and outage use the recorded
+`needs_human` fallback. Findings and decisions grant no execution authority.
+
+A `fix_now` finding produces a stable `open_issue@1` identity and returns to
+Observe through the injected port. Completion requires nonempty criteria,
+green deterministic checks bound to every criterion, passing D5 evidence for
+every criterion, and no `fix_now` or `needs_human` disposition. A red check
+vetoes completion even when the audit claims success. The claim itself is
+never a completion predicate. A final state-revision check after D6 rejects
+a disposition computed against changed state before loop-back or completion.
+
+Each `audit.round@1` records its id/parentId, execution id, round, state digest,
+report, D6 disposal, open issues, outcome and `goal_done`. Outcomes distinguish
+`observe`, `done`, `budget`, `iteration_cap`, `no_progress`, `repeated_issue`,
+`authority`, `needs_human`, `cancelled`, `audit_unavailable` and
+`evidence_missing`; only `done` sets `goal_done`. The cap defaults to four audit
+rounds. Two consecutive stalled/regressing D8 observations stop progress; a
+finding recurring after two fix attempts stops as `repeated_issue`. The
+Observe port supplies `issue_fix_attempts` attestations; merely seeing the
+same finding again does not count as a fix attempt. Authority
+blocks and unavailable decisions before guarded dispatch stop for human review.
+Budget pauses before another audit dispatch; the gateway retains its per-call
+budget enforcement. No fallback can bypass D4 or D7.
+
+Journal append and phase checkpoints must persist before returning, with one
+writer per execution. The loop checkpoints disclosed input before generation
+and the accepted report before D6, so recovery reuses the recorded input and
+report. `MemoryAuditJournal` supports deterministic fixtures; production
+durability is the composition root's responsibility. Replay returns the recorded
+round without calling a provider. By default an already stopped execution
+remains stopped. An explicit `resume: true` may resume a `budget` or `cancelled`
+pause; other stops remain terminal. Pauses retain pending open issues, and
+resumption uses the same round checkpoint and rechecks budget and state
+revision. An observation whose budget slice shows spend at or above the ceiling
+is not checkpointed, so resuming that pause observes again and reads the
+current budget. Pause records have unique entry ids and do not consume another audit
+round from the cap.
+Failed generation does not fabricate D5 observations for evaluations never requested.
+
+## 10. P9 ports and labelled follow-ups
+
+The [trace contract](../packages/agentsop/src/TRACE-CONTRACT.md) defines
+`weave.trace@1` with deterministic envelope order, id/parentId, run identity,
+kind, sequence and closed scalar payloads. Serialization requires an injected
+secret redactor and validates the resulting schema. Importers upsert by
+(run_id, id) for idempotence. No provider content, environment values, raw
+operator text or raw errors belong in this port.
+
+**Follow-up before P10 ([#132](https://github.com/CrowBe/weave/issues/132)):** implement the SQLite default adapter and normalized
+run/thread/decision/model/tool/budget tables, migrate existing decision,
+implementation, audit and shell traces into the envelope, and add an OTLP
+receiver. The importer port does not claim a running database or collector.
+
+**Follow-up:** wire `compactContext` into application composition using the
+P9 policy port: trigger at 80% context occupancy, preserve the final 5% word for
+word, and cap the summary at 10%. The policy port does not generate or accept
+an unvalidated summary. P10 live benchmarks, P11 test drive and P12 generic
+endpoint work remain outside P9.
