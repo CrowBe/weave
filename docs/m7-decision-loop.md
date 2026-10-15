@@ -78,7 +78,7 @@ interface AuditState {
   decisions: { site; question_id; choice; probabilities; confidence; fallback_used: boolean; obs_seq }[];
   artifacts: { artifact_id; kind: 'diff'|'file'|'report'; digest; summary; bytes; ref }[]; // ref, not raw body, above a size cap
   checks: { check_id; argv_digest; exit: number|null; passed: boolean; tail: string }[];  // deterministic evidence
-  evals: { criterion_id; verdict_probability; confidence: number|null; passed: boolean }[];       // D5 outputs
+  evals: { criterion_id; iteration?: number|null; verdict_probability; confidence: number|null; passed: boolean }[]; // D5 outputs with producing audit iteration
   open_issues: { issue_id; source: 'check'|'eval'|'audit'; text; severity }[];
   budget: { spent_micros; ceiling_micros; quota: { provider; window; percent_remaining; resets_at }[] };
   omissions: string[];                       // what the view left out and why (existing view rule)
@@ -591,10 +591,29 @@ evidence_ref)`, excluding `proposed_fix`; duplicate keys keep the first finding.
 Historical full-finding ids remain unchanged on replay and serve as attempt
 aliases during recovery (maximum count, never a sum). Completion requires nonempty criteria,
 green deterministic checks bound to every criterion, passing D5 evidence for
-every criterion, and no `fix_now` or `needs_human` disposition. A red check
+every criterion in the captured state's current iteration, and no `fix_now` or `needs_human` disposition. A red check
 vetoes completion even when the audit claims success. The claim itself is
 never a completion predicate. A final state-revision check after D6 rejects
 a disposition computed against changed state before loop-back or completion.
+
+Per DEC-005, `complete()` filters the `evals` slice to nonnegative safe-integer
+iterations equal to `AuditState.iteration`. Each criterion requires a pass with
+`verdict_probability >= .8` and `confidence >= .9`; any failing eval for that
+criterion in the current iteration vetoes completion, even if a pass also
+exists. Historical failures do not veto a current pass, and historical passes
+cannot fill missing current evidence (`evidence_missing`). Absent, null or
+invalid iteration fields never count as current evidence; older states and
+checkpoints remain readable and cannot complete from untagged passes.
+
+The Observe port attaches each eval's producing audit iteration from recorded
+implementation evidence when assembling the slice. P8's `flatEval` does not
+know the audit iteration, and its retry attempt number must not be used as one.
+The observer must retain the original iteration when carrying evals forward.
+Assembly preserves historical and unknown evals and canonically digests the
+optional field. Recovery keeps iteration and evals together in the checkpointed
+observation; explicit pause resumption refreshes both. The audit round number
+does not determine which evals are current, and revision guards still reject
+stale observations.
 
 Each `audit.round@1` records its id/parentId, execution id, round, state digest,
 report, D6 disposal, open issues, outcome and `goal_done`. Outcomes distinguish

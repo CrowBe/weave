@@ -108,7 +108,9 @@ export function replayAuditLoop(entries: readonly AuditRound[]): AuditRound | nu
   return structuredClone(entries.at(-1) ?? null);
 }
 function complete(observed: AuditObservation): boolean {
-  const { checks, evals } = observed.state;
+  const { checks, iteration } = observed.state;
+  const evals = observed.state.evals.filter(item => typeof item.iteration === 'number' &&
+    Number.isSafeInteger(item.iteration) && item.iteration >= 0 && item.iteration === iteration);
   return observed.state.goal.success_criteria.length > 0 && checks.length > 0 && checks.every(check => check.passed && check.exit === 0) &&
     observed.state.goal.success_criteria.every(criterion => criterion.check_ids.length > 0 &&
       criterion.check_ids.every(id => checks.some(check => check.check_id === id && check.passed)) &&

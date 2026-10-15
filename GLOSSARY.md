@@ -174,6 +174,11 @@ Pure request and response translation for one provider's protocol, carried by a 
 
 The `view.audit@1` state view handed to the audit tier. It assembles the goal, criteria, plan, recorded decisions, artifacts, checks, evaluations, open issues, and budget from authorized slices, with omissions, source revisions, and a digest. It preserves evidence rather than replacing state with a transcript summary.
 
+Audit evaluations carry their producing audit iteration when known. Completion
+uses only evaluations matching the tidy state's current iteration; historical
+or unknown iterations cannot supply a current pass. An implementation retry
+attempt is not an audit iteration.
+
 ### Audit tier
 
 The review stage that requests a `strong` routed unit to examine tidy state for gaps, defects, regressions, and scope creep. It is a stage that requests tier `strong` and is not a member of the tier vocabulary. An audit report is an observation; its claim that the goal is met cannot replace deterministic success evidence or grant execution authority. Budget pressure pauses this stage rather than weakening its requested tier.
