@@ -5,7 +5,7 @@ import { admissionReason, correlation, unit, type SiteInput, type SiteState, typ
 export const INPUT_RULES = Object.freeze(['secret_exfiltration', 'scope_broadening',
   'destructive_without_grant', 'prompt_injection'] as const);
 export const BOOLEAN_SITE_POLICY = Object.freeze({
-  'loop.preselect': Object.freeze({ confidence: .75, k: 3, floor: 0, cap: 8 }),
+  'loop.preselect': Object.freeze({ confidence: .75, k: 3, floor: 0, cap: 8, max_excluded: .4, min_margin: .3 }),
   'guard.input': Object.freeze({ confidence: .90, threshold: .3 }),
   'guard.output': Object.freeze({ confidence: .90, threshold: .3 }),
 });
@@ -15,8 +15,11 @@ export interface CatalogueIndexEntry { readonly id: string; readonly purpose: st
 export interface PreselectPolicyInput {
   readonly k: number;
   readonly floor: number;
+  readonly max_excluded: number;
+  readonly min_margin: number;
   readonly provider: 'typesafe-jev' | 'amos' | null;
 }
+export type PreselectFallbackReason = 'weak_margin' | 'low_confidence' | 'admission';
 export interface PreselectScore {
   readonly entry: number;
   readonly p: number | null;
@@ -25,15 +28,30 @@ export interface PreselectScore {
   readonly required: boolean;
 }
 export interface PreselectSelection {
-  readonly schema: 'preselect-selection@1';
+  readonly schema: 'preselect-selection@2';
   readonly k: number;
   readonly floor: number;
   readonly cap: 8;
-  readonly provider: 'typesafe-jev' | 'amos' | null;
+  readonly max_excluded: number;
+  readonly min_margin: number;
+  /** The caller-supplied provider after validation, or null when that policy was replaced. */
+  readonly policy_provider: 'typesafe-jev' | 'amos' | null;
+  /** The accepted outcome's routed unit, when it is a bounded identifier. */
+  readonly routed_unit_id: string | null;
   readonly outcome: 'narrowed' | 'fallback' | 'empty_index';
+  /** Why the full index was returned. Null when the slice narrowed or the index was empty. */
+  readonly reason: PreselectFallbackReason | null;
+  /** Highest p(true) among kept non-required entries of the candidate slice. */
+  readonly top_p: number | null;
+  /** Highest p(true) among entries the candidate slice excluded. Null when nothing was excluded. */
+  readonly best_excluded_p: number | null;
+  /** `top_p - best_excluded_p` at 10 decimal places, or null when either side is absent. */
+  readonly margin: number | null;
   readonly scores: readonly PreselectScore[];
   readonly kept: number;
   readonly required_missing: number;
+  /** True when required_entry_ids was present but not an array of strings. */
+  readonly required_ids_invalid: boolean;
 }
 export interface BooleanSiteInput extends SiteInput {
   /** Disclosed step description for relevance; never includes schemas. */
@@ -84,36 +102,73 @@ function questionSet(site: BooleanSite, entries: readonly CatalogueIndexEntry[])
 function plain(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+interface ResolvedSitePolicy {
+  readonly k: number;
+  readonly floor: number;
+  readonly cap: 8;
+  readonly max_excluded: number;
+  readonly min_margin: number;
+  readonly provider: PreselectSelection['policy_provider'];
+}
+const POLICY_KEYS = ['k', 'floor', 'max_excluded', 'min_margin', 'provider'];
+function closedUnit(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
+}
+function nonNegativeZero(value: number): number {
+  return value === 0 ? 0 : value;
+}
 /** A bad policy becomes the documented defaults and still narrows. It is not an admission fallback. */
-function policyOf(input: BooleanSiteInput): { k: number; floor: number; cap: 8; provider: PreselectSelection['provider'] } {
+function policyOf(input: BooleanSiteInput): ResolvedSitePolicy {
   const defaults = BOOLEAN_SITE_POLICY['loop.preselect'];
-  const fallback: { k: number; floor: number; cap: 8; provider: null } = { k: defaults.k, floor: defaults.floor, cap: 8, provider: null };
+  const fallback: ResolvedSitePolicy = {
+    k: defaults.k, floor: defaults.floor, cap: 8, max_excluded: defaults.max_excluded,
+    min_margin: defaults.min_margin, provider: null,
+  };
   const raw = input.preselect_policy;
   if (!plain(raw)) return fallback;
-  if (Object.keys(raw).some(key => key !== 'k' && key !== 'floor' && key !== 'provider')) return fallback;
+  if (Object.keys(raw).some(key => !POLICY_KEYS.includes(key))) return fallback;
   const k = raw['k'];
   const floor = raw['floor'];
+  const maxExcluded = raw['max_excluded'];
+  const minMargin = raw['min_margin'];
   const provider = raw['provider'];
   if (typeof k !== 'number' || !Number.isInteger(k) || k < 1 || k > defaults.cap) return fallback;
   if (typeof floor !== 'number' || !Number.isFinite(floor) || floor < 0 || floor >= 1) return fallback;
+  if (!closedUnit(maxExcluded) || !closedUnit(minMargin)) return fallback;
   if (provider !== null && provider !== 'typesafe-jev' && provider !== 'amos') return fallback;
-  return { k, floor: floor === 0 ? 0 : floor, cap: 8, provider };
+  return {
+    k, floor: nonNegativeZero(floor), cap: 8, max_excluded: nonNegativeZero(maxExcluded),
+    min_margin: nonNegativeZero(minMargin), provider,
+  };
 }
-function listedRequired(ids: readonly string[] | undefined): readonly string[] {
-  if (!Array.isArray(ids)) return [];
+/** Strings stay required. A non-array, or a non-string item, is not a required id. */
+function requiredIds(ids: unknown): { readonly ids: readonly string[]; readonly invalid: boolean } {
+  if (ids === undefined) return { ids: [], invalid: false };
+  if (!Array.isArray(ids)) return { ids: [], invalid: true };
   const seen = new Set<string>();
   const out: string[] = [];
+  let invalid = false;
   for (const id of ids) {
-    if (typeof id !== 'string' || seen.has(id)) continue;
+    if (typeof id !== 'string') { invalid = true; continue; }
+    if (seen.has(id)) continue;
     seen.add(id);
     out.push(id);
   }
-  return out;
+  return { ids: out, invalid };
+}
+/** Decimal gap, so a margin of exactly .3 is not lost to binary subtraction. */
+function gap(high: number, low: number): number {
+  return Math.round((high - low) * 1e10) / 1e10;
+}
+/** Bounded routed-unit id. Credential-shaped text is omitted, not copied. */
+function routedUnitId(value: unknown): string | null {
+  return typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.:@-]{0,127}$/.test(value) &&
+    !/^(sk[-_]|Bearer|eyJ|gh[pousr]_|github_pat_|AKIA)/i.test(value) ? value : null;
 }
 function preselectSelection(entries: readonly CatalogueIndexEntry[], probabilities: readonly (number | null)[],
-  fallback: boolean, requiredIds: readonly string[],
-  policy: { k: number; floor: number; cap: 8; provider: PreselectSelection['provider'] }):
-  { catalogue: readonly CatalogueIndexEntry[]; kept: ReadonlySet<number>; record: PreselectSelection } {
+  confidences: readonly (number | null)[], admission: boolean, requiredList: readonly string[], requiredInvalid: boolean,
+  policy: ResolvedSitePolicy, routed_unit_id: string | null):
+  { catalogue: readonly CatalogueIndexEntry[]; kept: ReadonlySet<number>; boundary: ReadonlySet<number>; record: PreselectSelection } {
   const required = new Set<number>();
   const byId = new Map<string, number[]>();
   entries.forEach((entry, n) => {
@@ -122,7 +177,7 @@ function preselectSelection(entries: readonly CatalogueIndexEntry[], probabiliti
     else byId.set(entry.id, [n]);
   });
   let required_missing = 0;
-  for (const id of requiredIds) {
+  for (const id of requiredList) {
     const hits = byId.get(id);
     if (hits === undefined) required_missing++;
     else for (const n of hits) required.add(n);
@@ -131,19 +186,42 @@ function preselectSelection(entries: readonly CatalogueIndexEntry[], probabiliti
     .sort((a, b) => b.p - a.p || a.n - b.n);
   const rank = new Map<number, number>();
   ranked.forEach((item, index) => rank.set(item.n, index + 1));
-  const kept = new Set<number>();
-  const outcome: PreselectSelection['outcome'] = entries.length === 0 ? 'empty_index' : fallback ? 'fallback' : 'narrowed';
-  if (outcome === 'fallback') entries.forEach((_, n) => kept.add(n));
-  if (outcome === 'narrowed') {
-    for (const n of required) kept.add(n);
-    let taken = 0;
-    for (const item of ranked) {
-      if (required.has(item.n)) continue;
-      if (taken >= policy.k || item.p < policy.floor) break;
-      kept.add(item.n);
-      taken++;
-    }
+  const candidate = new Set<number>();
+  for (const n of required) candidate.add(n);
+  let taken = 0;
+  for (const item of ranked) {
+    if (required.has(item.n)) continue;
+    if (taken >= policy.k || item.p < policy.floor) break;
+    candidate.add(item.n);
+    taken++;
   }
+  const keptNonRequired = ranked.filter(item => candidate.has(item.n) && !required.has(item.n));
+  const top = keptNonRequired[0]?.p ?? null;
+  const best = ranked.find(item => !candidate.has(item.n)) ?? null;
+  const bestExcluded = best?.p ?? null;
+  const marginValue = top !== null && bestExcluded !== null ? gap(top, bestExcluded) : null;
+  const marginOk = marginValue !== null && bestExcluded !== null && bestExcluded <= policy.max_excluded &&
+    marginValue >= policy.min_margin;
+  const boundary = new Set<number>();
+  // Nothing excluded: the slice is the whole index, so the margin and confidence gates do not apply.
+  if (!admission && entries.length > 0 && best !== null && marginOk) {
+    for (const item of keptNonRequired) boundary.add(item.n);
+    boundary.add(best.n);
+  }
+  const floor = BOOLEAN_SITE_POLICY['loop.preselect'].confidence;
+  const boundaryLow = [...boundary].some(n => {
+    const confidence = confidences[n] ?? null;
+    return confidence !== null && confidence < floor;
+  });
+  let reason: PreselectFallbackReason | null = null;
+  if (entries.length > 0 && admission) reason = 'admission';
+  else if (entries.length > 0 && best !== null && !marginOk) reason = 'weak_margin';
+  else if (boundaryLow) reason = 'low_confidence';
+  const outcome: PreselectSelection['outcome'] = entries.length === 0 ? 'empty_index' : reason === null ? 'narrowed' : 'fallback';
+  const kept = new Set<number>();
+  if (outcome === 'fallback') entries.forEach((_, n) => kept.add(n));
+  if (outcome === 'narrowed') for (const n of candidate) kept.add(n);
+  const gated = entries.length > 0 && !admission;
   const scores = entries.map((_, n): PreselectScore => ({
     entry: n, p: probabilities[n] ?? null, rank: rank.get(n) ?? null, kept: kept.has(n), required: required.has(n),
   }));
@@ -151,9 +229,12 @@ function preselectSelection(entries: readonly CatalogueIndexEntry[], probabiliti
     ? [...kept].sort((a, b) => (probabilities[b] ?? 0) - (probabilities[a] ?? 0) || a - b).map(n => entries[n]!)
     : entries;
   return {
-    catalogue, kept, record: {
-      schema: 'preselect-selection@1', k: policy.k, floor: policy.floor, cap: policy.cap, provider: policy.provider,
-      outcome, scores, kept: kept.size, required_missing,
+    catalogue, kept, boundary, record: {
+      schema: 'preselect-selection@2', k: policy.k, floor: policy.floor, cap: policy.cap,
+      max_excluded: policy.max_excluded, min_margin: policy.min_margin, policy_provider: policy.provider,
+      routed_unit_id, outcome, reason, top_p: gated ? top : null, best_excluded_p: gated ? bestExcluded : null,
+      margin: gated ? marginValue : null, scores, kept: kept.size, required_missing,
+      required_ids_invalid: requiredInvalid,
     },
   };
 }
@@ -165,24 +246,32 @@ export function transitionBooleanSite(site: BooleanSite, input: BooleanSiteInput
   const answered = recorded.outcome?.status === 'accepted' ? recorded.outcome : null;
   const observations: BooleanObservation[] = [];
   const approval_requests: { rule: string; reason: BooleanObservation['reason'] }[] = [];
-  let fallback = metadata !== null;
-  const scanned: { p: number | null; confidence: number | null; reason: BooleanObservation['reason']; accepted: boolean }[] = [];
-  for (const { key } of questions) {
+  const parsed = questions.map(({ key }) => {
     const raw = answered?.answers?.[key];
-    const p = raw?.type === 'boolean' && unit(raw.probability) ? raw.probability : null;
     const statistic = answered?.confidence?.[key];
-    const confidence = unit(statistic) ? statistic : null;
-    const reason: BooleanObservation['reason'] = metadata ?? (!answered ? 'no_answer' :
-      answered.kind !== 'boolean' || p === null ? 'invalid_answer' : confidence === null ? 'missing_confidence' :
-      confidence < BOOLEAN_SITE_POLICY[site].confidence ? 'low_confidence' :
-      site !== 'loop.preselect' && p >= BOOLEAN_SITE_POLICY[site].threshold ? 'violation' : 'accepted');
-    const accepted = reason === 'accepted' || reason === 'violation';
-    if (site === 'loop.preselect' && !accepted) fallback = true;
-    scanned.push({ p, confidence, reason, accepted });
-  }
+    return {
+      p: raw?.type === 'boolean' && unit(raw.probability) ? raw.probability : null,
+      confidence: unit(statistic) ? statistic : null,
+    };
+  });
+  const required = site === 'loop.preselect' ? requiredIds(input.required_entry_ids) : { ids: [], invalid: false };
+  const admission = metadata !== null || (answered !== null && answered.kind !== 'boolean') || parsed.some(item => item.p === null);
   const selection = site === 'loop.preselect'
-    ? preselectSelection(entries, scanned.map(item => item.p), fallback, listedRequired(input.required_entry_ids), policyOf(input))
+    ? preselectSelection(entries, parsed.map(item => item.p), parsed.map(item => item.confidence), admission,
+      required.ids, required.invalid, policyOf(input), answered ? routedUnitId(answered.routed_unit_id) : null)
     : null;
+  const scanned: { p: number | null; confidence: number | null; reason: BooleanObservation['reason']; accepted: boolean }[] = [];
+  for (const [n, item] of parsed.entries()) {
+    const reason: BooleanObservation['reason'] = site === 'loop.preselect'
+      ? (metadata ?? (!answered ? 'no_answer' : answered.kind !== 'boolean' || item.p === null ? 'invalid_answer' :
+        selection !== null && selection.boundary.has(n) && item.confidence !== null &&
+        item.confidence < BOOLEAN_SITE_POLICY['loop.preselect'].confidence ? 'low_confidence' : 'accepted'))
+      : (metadata ?? (!answered ? 'no_answer' : answered.kind !== 'boolean' || item.p === null ? 'invalid_answer' :
+        item.confidence === null ? 'missing_confidence' : item.confidence < BOOLEAN_SITE_POLICY[site].confidence ? 'low_confidence' :
+        item.p >= BOOLEAN_SITE_POLICY[site].threshold ? 'violation' : 'accepted'));
+    const accepted = reason === 'accepted' || reason === 'violation';
+    scanned.push({ p: item.p, confidence: item.confidence, reason, accepted });
+  }
   if (site === 'loop.preselect' && questions.length === 0) observations.push({
     schema: 'decision-site@1', site, question: QUESTIONS.relevance, request_id: correlation(input.request_id),
     state_revision: input.state_revision, answer: null, confidence: null, top_p: null,
@@ -216,13 +305,20 @@ export function transitionBooleanSite(site: BooleanSite, input: BooleanSiteInput
   };
   return selection === null ? transition : { ...transition, preselect: selection.record };
 }
+/** Copy required ids without iterating a non-array. A string is iterable and must not be spread. */
+function copyRequired(ids: unknown): readonly string[] | undefined {
+  if (ids === undefined) return undefined;
+  if (!Array.isArray(ids)) return ids as readonly string[];
+  return Object.freeze([...ids]);
+}
 export async function evaluateBooleanSite(site: BooleanSite, input: BooleanSiteInput,
   port: Pick<InferenceGateway, 'evaluate'>,
   current: () => SiteState & { readonly observed_at: number }, signal?: AbortSignal): Promise<BooleanTransition> {
+  const required_entry_ids = copyRequired(input.required_entry_ids as unknown);
   const captured: BooleanSiteInput = {
     ...input,
     catalogue_index: Object.freeze(index(input).map(entry => Object.freeze(entry))),
-    ...(input.required_entry_ids === undefined ? {} : { required_entry_ids: Object.freeze([...input.required_entry_ids]) }),
+    ...(required_entry_ids === undefined ? {} : { required_entry_ids: required_entry_ids as readonly string[] }),
     ...(input.preselect_policy === undefined ? {} : { preselect_policy: Object.freeze({ ...input.preselect_policy }) }),
   };
   let outcome: EvaluationOutcome<'boolean'> | null = null;

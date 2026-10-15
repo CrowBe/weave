@@ -143,7 +143,7 @@ function toWireQuestion(question: EvaluationQuestion, shuffle: false | (() => nu
 // ---------------------------------------------------------------------------
 // Response translation. An unparseable answer is a malformed response, not a
 // judgment. Confidence is copied only when the provider publishes a number.
-// Absence is not zero: missing confidence stays below the floor.
+// Absence is not zero. The site policy decides what a missing statistic means.
 // ---------------------------------------------------------------------------
 
 const supportedAnswerTypes = new Map<string, EvaluationAnswer['type']>([

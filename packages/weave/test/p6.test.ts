@@ -21,7 +21,11 @@ function recorded(site: string, keys: readonly string[], p = .29, confidence?: n
 }
 const entries = input.catalogue_index.map((_, i) => `entry_${i}`);
 test('D3 narrows only the disclosed index, keeps the default top three on ties, ignores and records unknown answers', () => {
-  const r = recorded('loop.preselect', [...entries, 'CANARY_UNKNOWN'], .5);
+  const r = recorded('loop.preselect', [...entries, 'CANARY_UNKNOWN'], .1);
+  assert.equal(r.outcome.status, 'accepted');
+  const answers = { ...r.outcome.answers, entry_0: { type: 'boolean' as const, probability: .9 },
+    entry_1: { type: 'boolean' as const, probability: .9 }, entry_2: { type: 'boolean' as const, probability: .9 } };
+  r.outcome = { ...r.outcome, answers };
   const result = transitionBooleanSite('loop.preselect', input, r, current);
   assert.deepEqual(result.catalogue_index.map(x => x.id), input.catalogue_index.slice(0, 3).map(x => x.id));
   assert.equal(result.observations.at(-1)?.reason, 'unknown_answer');
@@ -61,12 +65,18 @@ for (const site of ['guard.input', 'guard.output'] as const) {
     assert.deepEqual(result, transitionBooleanSite(site, input, JSON.parse(JSON.stringify(good)), current));
   });
 }
-test('D3 all failure modes return full index without schemas', () => {
-  const good = recorded('loop.preselect', entries, 1);
-  for (const r of [recorded('loop.preselect', entries, 1, .74), recorded('loop.preselect', entries, 1, undefined),
-    { ...good, observed_at: 9 }, { ...good, outcome: null }, { ...good, outcome: { ...good.outcome, answers: {} } }]) {
+test('D3 admission failures return the full index without schemas', () => {
+  const good = recorded('loop.preselect', entries, .1);
+  assert.equal(good.outcome.status, 'accepted');
+  const answers = { ...good.outcome.answers, entry_0: { type: 'boolean' as const, probability: .9 },
+    entry_1: { type: 'boolean' as const, probability: .9 }, entry_2: { type: 'boolean' as const, probability: .9 } };
+  const healthy = { ...good, outcome: { ...good.outcome, answers } };
+  assert.deepEqual(transitionBooleanSite('loop.preselect', input, healthy, current).catalogue_index.map(entry => entry.id), ['op0', 'op1', 'op2']);
+  for (const r of [{ ...healthy, observed_at: 9 }, { ...healthy, outcome: null },
+    { ...healthy, outcome: { ...healthy.outcome, answers: {} } }]) {
     const result = transitionBooleanSite('loop.preselect', input, r, current);
     assert.deepEqual(result.catalogue_index, input.catalogue_index.map(({ id, purpose }) => ({ id, purpose })));
+    assert.equal(result.preselect?.reason, 'admission');
   }
 });
 test('evaluate uses site semantics once, handles thrown secrets and in-flight revision changes', async () => {
@@ -117,10 +127,10 @@ test('D3 consumes the budgeted M6 index rather than the registry or schema slice
 });
 
 test('D3 ranks probabilities descending and keeps a .49 entry that falls inside the default top k', () => {
-  const r = recorded('loop.preselect', entries, .49, .75);
+  const r = recorded('loop.preselect', entries, .1, .75);
   assert.equal(r.outcome.status, 'accepted');
-  const answers = { ...r.outcome.answers, entry_2: { type: 'boolean' as const, probability: .5 },
-    entry_4: { type: 'boolean' as const, probability: .9 } };
+  const answers = { ...r.outcome.answers, entry_0: { type: 'boolean' as const, probability: .49 },
+    entry_2: { type: 'boolean' as const, probability: .5 }, entry_4: { type: 'boolean' as const, probability: .9 } };
   r.outcome = { ...r.outcome, answers };
   // op0 is p .49 and is the third place after the two higher scores. The old .5 rule dropped it.
   assert.deepEqual(transitionBooleanSite('loop.preselect', input, r, current).catalogue_index.map(e => e.id), ['op4', 'op2', 'op0']);
