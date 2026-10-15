@@ -20,10 +20,10 @@ function recorded(site: string, keys: readonly string[], p = .29, confidence?: n
   return { state_revision: 1, observed_at: 10, outcome };
 }
 const entries = input.catalogue_index.map((_, i) => `entry_${i}`);
-test('D3 narrows only the disclosed index, caps eight with stable ties, ignores and records unknown answers', () => {
+test('D3 narrows only the disclosed index, keeps the default top three on ties, ignores and records unknown answers', () => {
   const r = recorded('loop.preselect', [...entries, 'CANARY_UNKNOWN'], .5);
   const result = transitionBooleanSite('loop.preselect', input, r, current);
-  assert.deepEqual(result.catalogue_index.map(x => x.id), input.catalogue_index.slice(0, 8).map(x => x.id));
+  assert.deepEqual(result.catalogue_index.map(x => x.id), input.catalogue_index.slice(0, 3).map(x => x.id));
   assert.equal(result.observations.at(-1)?.reason, 'unknown_answer');
   assert.ok(!JSON.stringify(result).includes('SCHEMA_SECRET'));
   assert.ok(!JSON.stringify(result.observations).includes('CANARY'));
@@ -116,13 +116,14 @@ test('D3 consumes the budgeted M6 index rather than the registry or schema slice
   assert.ok(!JSON.stringify(fallback).includes('SCHEMA_SECRET'));
 });
 
-test('D3 ranks probabilities descending, excludes below .5 and accepts .75 confidence', () => {
+test('D3 ranks probabilities descending and keeps a .49 entry that falls inside the default top k', () => {
   const r = recorded('loop.preselect', entries, .49, .75);
   assert.equal(r.outcome.status, 'accepted');
   const answers = { ...r.outcome.answers, entry_2: { type: 'boolean' as const, probability: .5 },
     entry_4: { type: 'boolean' as const, probability: .9 } };
   r.outcome = { ...r.outcome, answers };
-  assert.deepEqual(transitionBooleanSite('loop.preselect', input, r, current).catalogue_index.map(e => e.id), ['op4', 'op2']);
+  // op0 is p .49 and is the third place after the two higher scores. The old .5 rule dropped it.
+  assert.deepEqual(transitionBooleanSite('loop.preselect', input, r, current).catalogue_index.map(e => e.id), ['op4', 'op2', 'op0']);
 });
 
 test('all boolean sites capture revisions and reject changes in flight; cancellation never passes a guard', async () => {
