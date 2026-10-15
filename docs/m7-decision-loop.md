@@ -226,7 +226,9 @@ provider without a `key_env`, and base URLs other than HTTPS or HTTP on loopback
 credential-injected. `decision.sites` accepts `amos` or `typesafe-jev` for
 `intake.classify` and `loop.preselect` only. Amos on intake requires a matching
 choice unit; Amos on preselect requires a matching boolean unit.
-`decision.preselect`, when present, is keyed by a configured provider id and
+`decision.preselect`, when present, is keyed only by a configured `typesafe-jev`
+or `amos` provider id. Other ids, including `openai-decisions`, are rejected
+even when the entry is empty. Each entry
 may set `k` (an integer from 1 to 8), `floor` (a number in [0, 1)),
 `max_excluded` (a number in [0, 1]), and `min_margin` (a number in [0, 1]).
 Unknown keys, unknown provider ids, and out-of-range values are errors.
@@ -504,7 +506,8 @@ when no outcome was accepted. `p` and `rank` are null when the answer is
 missing. The record uses ordinals, never catalogue ids, purposes, or required
 names. `decision.preselect`'s per-field defaults are `resolvePreselectPolicy`.
 The pure transition replaces an invalid or incomplete policy wholesale.
-`decision.preselect` sets k, floor, max_excluded, and min_margin per provider.
+`decision.preselect` sets k, floor, max_excluded, and min_margin only for
+configured `typesafe-jev` and `amos` providers.
 `loop.preselect` may be served by `typesafe-jev` or `amos`; Amos requires a
 matching boolean evaluate unit. The default provider remains `typesafe-jev`.
 D4 evaluates four fixed rules through the same decision gateway: secret
