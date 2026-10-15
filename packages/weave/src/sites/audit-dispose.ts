@@ -31,8 +31,9 @@ export function transitionAuditDispose(input: AuditDisposeInput, recorded: {
       (!outcome ? 'no_answer' : outcome.kind !== 'choice' || answer === null || !validDistribution ? 'invalid_answer' :
         confidence === null ? 'missing_confidence' : confidence < .75 ? 'low_confidence' : 'accepted');
     return { schema: 'decision-site@1', site: 'audit.dispose', question: 'How should this audit finding be disposed?',
-      request_id: correlation(input.request_id), state_revision: input.state_revision, answer,
-      confidence, top_p: unit(p) ? p : null, accepted: reason === 'accepted', fallback_used: reason !== 'accepted',
+      request_id: correlation(input.request_id), state_revision: input.state_revision, answer: reason === 'accepted' ? answer : null,
+      confidence: ['stale_answer', 'mismatched_answer', 'decision_unavailable', 'cancelled'].includes(reason) ? null : confidence,
+      top_p: reason === 'accepted' && unit(p) ? p : null, accepted: reason === 'accepted', fallback_used: reason !== 'accepted',
       reason, provider_request_id: correlation(outcome?.provider_response_id) };
   });
   return { choices: observations.map(item => item.accepted ? item.answer! : 'needs_human'), observations };
