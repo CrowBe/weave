@@ -147,3 +147,9 @@ read-only call. File durability is supplied through the journal port; the includ
 memory journal is a fixture. Observe owns normal implementation dispatch under
 existing policy and grants, and supplies completed issue fix-attempt counts;
 an issue's repeated appearance alone is not proof that a fix was attempted.
+
+Budget and cancellation pauses preserve outstanding open issues. Replay remains
+read-only unless `resume: true` explicitly resumes a budget/cancelled outcome;
+resume reuses that round and its checkpoint, so pauses do not consume the audit
+round cap. Journal entry ids remain unique across repeated pauses. Completion
+rechecks the current revision after D6, including the empty-finding path.

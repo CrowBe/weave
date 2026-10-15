@@ -61,7 +61,7 @@ export class MemoryAuditJournal implements AuditJournal {
     if (!this.entries.some(item => item.id === entry.id)) this.entries.push(structuredClone(entry));
   }
 }
-export interface AuditLoopInput { readonly execution_id: string; readonly terms: InferenceTerms; readonly max_iterations?: number }
+export interface AuditLoopInput { readonly execution_id: string; readonly terms: InferenceTerms; readonly max_iterations?: number; readonly resume?: boolean }
 export interface AuditObservation {
   readonly state: AuditState;
   readonly revision: SiteState;
@@ -96,13 +96,14 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
     (input.max_iterations ?? 4) < 1 || (input.max_iterations ?? 4) > 100) throw new Error('Invalid audit input');
   const history = [...journal.load(input.execution_id)];
   const previous = history.at(-1);
-  if (previous && previous.outcome !== 'observe') return structuredClone(previous);
+  const resuming = input.resume === true && (previous?.outcome === 'budget' || previous?.outcome === 'cancelled');
+  if (previous && previous.outcome !== 'observe' && !resuming) return structuredClone(previous);
   let issues = previous?.open_issues ?? [];
-  for (let round = history.length + 1; ; round++) {
+  for (let round = previous ? previous.round + (resuming ? 0 : 1) : 1; ; round++) {
     let observed: AuditObservation | null = null;
     let report: AuditReport | null = null;
     let disposal: AuditDisposal | null = null;
-    let next: AuditIssue[] = [];
+    let next: AuditIssue[] = [...issues];
     let outcome: AuditRound['outcome'];
     if (signal?.aborted) outcome = 'cancelled';
     else if (round > (input.max_iterations ?? 4)) outcome = 'iteration_cap';
@@ -130,9 +131,9 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
         if (generated?.status === 'accepted' && generated.request_id === request_id && generated.site === 'audit.generate') report = parseAuditReport(generated.text);
         if (report) journal.checkpoint({ execution_id: input.execution_id, round, observation: observed, report });
         const live = ports.current();
-        if (signal?.aborted) outcome = 'cancelled';
+        if (signal?.aborted || (generated?.paused?.reason as string | undefined) === 'cancelled') outcome = 'cancelled';
         else if (live.state_revision !== observed.revision.state_revision || live.state_updated_at !== observed.revision.state_updated_at) outcome = 'needs_human';
-        else if (generated?.paused || (generated?.status === 'blocked' && ['no_budget', 'quota_unknown', 'weekly_budget_cap'].includes(generated.reason))) outcome = 'budget';
+        else if (generated?.paused || (generated?.status === 'unaccepted' && generated.reason === 'budget_exhausted') || (generated?.status === 'blocked' && ['no_budget', 'quota_unknown', 'weekly_budget_cap', 'budget_pace_ahead', 'five_hour_budget_low'].includes(generated.reason))) outcome = 'budget';
         else if (!report) outcome = 'audit_unavailable';
         else if (ports.budget() === 'pause') outcome = 'budget';
         else {
@@ -144,13 +145,15 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
             source: 'audit' as const, criterion_ids: finding.criterion_id === null ? [] : [finding.criterion_id],
             check_ids: [], text: 'Audit finding requires a fix; refer to the recorded audit finding.', severity: 'blocker' as const, blocked_by: null,
           }] : []);
-          outcome = signal?.aborted ? 'cancelled' : disposal.choices.includes('needs_human') ? 'needs_human' :
+          const afterDispose = ports.current();
+          const stale = afterDispose.state_revision !== observed.revision.state_revision || afterDispose.state_updated_at !== observed.revision.state_updated_at;
+          outcome = signal?.aborted ? 'cancelled' : stale ? 'needs_human' : disposal.choices.includes('needs_human') ? 'needs_human' :
             next.some(issue => (observed!.issue_fix_attempts?.[issue.issue_id] ?? 0) >= 2) ? 'repeated_issue' :
             next.length ? 'observe' : complete(observed) ? 'done' : 'evidence_missing';
         }
       }
     }
-    const entry: AuditRound = { schema: 'audit.round@1', id: `${input.execution_id}:r${round}`,
+    const entry: AuditRound = { schema: 'audit.round@1', id: `${input.execution_id}:r${round}:e${history.length + 1}`,
       parentId: history.at(-1)?.id ?? null, execution_id: input.execution_id, round,
       state_digest: observed?.state.digest ?? '', report, disposal, open_issues: next, outcome, goal_done: outcome === 'done' };
     journal.append(entry); history.push(entry);

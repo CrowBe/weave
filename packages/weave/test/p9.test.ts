@@ -96,3 +96,42 @@ test('authority and unavailable dispatch stop before generation', async () => {
     assert.ok(['authority', 'needs_human'].includes(result.outcome));
   }
 });
+test('budget pause preserves loop issues and explicit resume reuses the audit round', async () => {
+  const f = fixture({ gaps: 1 });
+  let budgets = 0;
+  const ports = { ...f.ports, budget: () => (++budgets === 3 ? 'pause' : 'allow') as 'pause'|'allow' };
+  const paused = await runAuditLoop(f.input, ports, f.journal);
+  assert.equal(paused.outcome, 'budget'); assert.equal(paused.open_issues.length, 1);
+  assert.deepEqual(await runAuditLoop(f.input, ports, f.journal), paused);
+  const done = await runAuditLoop({ ...f.input, resume: true }, ports, f.journal);
+  assert.equal(done.outcome, 'done'); assert.equal(done.round, 2);
+});
+test('revision change during empty D6 prevents completion', async () => {
+  const f = fixture(); let reads = 0;
+  const ports = { ...f.ports, current: () => ({ ...revision, state_revision: ++reads >= 2 ? 2 : 1, observed_at: 10 }) };
+  assert.equal((await runAuditLoop(f.input, ports, f.journal)).outcome, 'needs_human');
+});
+test('generated cancellation remains a cancellation stop', async () => {
+  const f = fixture();
+  const ports: AuditPorts = { ...f.ports, generate: async request => ({ status: 'blocked', reason: 'no_route',
+    request_id: request.request_id, site: request.site, attempts: [], spent: 0, uncertainty: [],
+    paused: { type: 'loop.paused', policy: 'budget.policy@1', request_id: request.request_id, site: request.site, reason: 'cancelled' as 'quota_unknown', until: null } }) };
+  assert.equal((await runAuditLoop(f.input, ports, f.journal)).outcome, 'cancelled');
+});
+test('gateway generation budget exhaustion pauses the audit', async () => {
+  for (const reason of ['budget_exhausted', 'five_hour_budget_low', 'budget_pace_ahead'] as const) {
+    const f = fixture();
+    const ports: AuditPorts = { ...f.ports, generate: async request => reason === 'budget_exhausted' ? {
+      status: 'unaccepted', reason, request_id: request.request_id, site: request.site, attempts: [], spent: 0, uncertainty: [],
+    } : { status: 'blocked', reason, request_id: request.request_id, site: request.site, attempts: [], spent: 0, uncertainty: [] } };
+    assert.equal((await runAuditLoop(f.input, ports, f.journal)).outcome, 'budget');
+  }
+});
+test('cancelled audit requires explicit resume and does not consume a round', async () => {
+  const f = fixture({ max: 1 }); const controller = new AbortController(); controller.abort();
+  const paused = await runAuditLoop(f.input, f.ports, f.journal, controller.signal);
+  assert.equal(paused.outcome, 'cancelled');
+  assert.deepEqual(await runAuditLoop(f.input, f.ports, f.journal), paused);
+  const resumed = await runAuditLoop({ ...f.input, resume: true }, f.ports, f.journal);
+  assert.equal(resumed.outcome, 'done'); assert.equal(resumed.round, 1);
+});
