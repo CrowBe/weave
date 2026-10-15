@@ -62,7 +62,7 @@ test('Amos reuses the adapter with advertised types and never attaches credentia
   paths.push(String(url));assert.ok(!String(JSON.stringify(options?.headers)).includes('CANARY'));
   return String(url).endsWith('/v1/models')?json({models:[{name:'amos-1-2b',description:'1.2B parameters: noul, choice, score'}]}):json({model:'amos-1-2b',answers:{q:{type:'choice',choice:'b',probabilities:{b:.8,a:.2},confidence:.9}},usage:{input_tokens:10,output_tokens:1}});
  }}).find(x=>x.id==='amos-small')!;
- assert.equal((await p.request(request,new AbortController().signal)).status,'ok');assert.equal(paths.at(-1),'http://127.0.0.1:8766/v1/systemone');assert.equal(p.concurrency,1);
+ assert.equal((await p.request(request,new AbortController().signal)).status,'ok');assert.equal(paths.at(-1),'http://127.0.0.1:8766/v1/systemone');
  const unavailable=buildProviders({fetch:async()=>new Response('',{status:503})}).find(x=>x.id==='amos-small')!;
  assert.equal((await unavailable.request(request,new AbortController().signal)).reason,'models_unavailable');
 });

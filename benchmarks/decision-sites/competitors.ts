@@ -50,7 +50,7 @@ export function buildCompetitors(config: CompetitorsConfig): Provider[] {
     let count = config.callCounts?.[id] ?? 0;
     let argv: string[] = [];
     const command = id === 'pi' ? 'pi' : 'fx';
-    return { id, model: 'chatgpt-sign-in', price: 0, concurrency: 1, competitor: true,
+    return { id, model: 'chatgpt-sign-in', price: 0, competitor: true,
       serialize: competitorPrompt,
       async request(request, external): Promise<Result> {
         if (external.aborted) return { status: 'failed', reason: 'cancelled' };

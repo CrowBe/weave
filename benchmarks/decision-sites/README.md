@@ -30,7 +30,7 @@ one request at a time. Run under `nice -n 10` to keep local inference courteous.
 Child processes (quota-axi, pi and fx) inherit only `HOME`, `PATH` and `XDG_*`.
 Neither API-key family nor other ambient environment values reach those CLIs;
 ChatGPT sign-in is discovered through their local authentication configuration.
-All providers currently dispatch sequentially (Jev <=4; Amos/competitors =1).
+All providers dispatch sequentially.
 No grants, guardrail middleware, shuffle, routing tiers, or gateway budget
 downgrades participate. Requests are captured from the actual production site
 builders through a port, then sent directly to adapters. There are no trace
@@ -131,7 +131,10 @@ cost remains charged. Every completed attempt is charged once. Resume never
 re-pays a terminal wrong-model failure: it remains recorded against the
 requested binding, with the unexpected served model retained as failure evidence.
 SIGINT/SIGTERM abort in-flight calls, record cancellation, render partial results and exit
-nonzero. A cancelled item is never recorded as an answer.
+nonzero. Returned results are journalled before stopping: an acknowledged answer and
+its actual usage survive cancellation. A cancelled/not-sent result is recorded as a
+nonterminal failure, costs zero, and can be retried on resume without consuming an
+attempt or the competitor call cap.
 
 A crash or cancellation between dispatch and durable receipt cannot establish
 whether a provider billed the call: no provider here exposes result lookup or an

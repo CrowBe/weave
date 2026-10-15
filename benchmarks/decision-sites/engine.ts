@@ -1,4 +1,4 @@
-/** Sequential dispatch is an intentional bound: Jev <=4, Amos and competitors exactly one. */
+/** Sequential dispatch with durable receipts and reservations for unacknowledged calls. */
 import { Journal, digest, projectedCost, replayKey, type JournalRecord } from './journal.ts';
 import { buildRequest } from './questions.ts';
 import type { Item, Provider, Result } from './types.ts';
@@ -9,9 +9,12 @@ export function providerSkip(result:Result):boolean {
 export function persistentProviderSkip(result:Result):boolean {
  return providerSkip(result)&&result.reason!=='quota_unavailable_or_weekly_cap';
 }
+function retryableCancellation(result:Result):boolean {
+ return result.status!=='ok'&&(result.reason==='cancelled'||result.reason==='not_sent');
+}
 export function countCompetitorCalls(records:readonly JournalRecord[],provider:string):number {
- const quotaOnly=new Set(records.filter(r=>r.type==='call'&&r.result?.status==='skipped'&&r.result.reason==='quota_unavailable_or_weekly_cap').map(r=>r.call_id));
- return records.filter(r=>r.type==='intent'&&r.provider===provider&&!quotaOnly.has(r.call_id)).length;
+ const uncalled=new Set(records.filter(r=>r.type==='call'&&r.result&&(retryableCancellation(r.result)||(r.result.status==='skipped'&&r.result.reason==='quota_unavailable_or_weekly_cap'))).map(r=>r.call_id));
+ return records.filter(r=>r.type==='intent'&&r.provider===provider&&!uncalled.has(r.call_id)).length;
 }
 export async function execute(options:{entries:readonly Entry[];providers:readonly Provider[];journal:Journal;maxSpend:number;now:()=>number;sleep:(ms:number,signal?:AbortSignal)=>Promise<void>;signal?:AbortSignal}):Promise<void> {
  const {entries,providers,journal,signal}=options;
@@ -26,7 +29,7 @@ export async function execute(options:{entries:readonly Entry[];providers:readon
    const request=await buildRequest(entry.item);
    const binding={provider:provider.id,model:provider.model,site:entry.item.site,item_id:entry.item.id,set_digest:entry.set_digest,question_digest:digest(JSON.stringify(request))};
    const key=replayKey(binding);const history=journal.read();
-   const prior=history.filter(r=>r.type==='call'&&replayKey(r)===key&&!(r.result.status==='skipped'&&r.result.reason==='quota_unavailable_or_weekly_cap'));
+   const prior=history.filter(r=>r.type==='call'&&replayKey(r)===key&&!retryableCancellation(r.result)&&!(r.result.status==='skipped'&&r.result.reason==='quota_unavailable_or_weekly_cap'));
    if(prior.some(r=>r.terminal))continue;
    const pending=history.filter(r=>r.type==='intent'&&replayKey(r)===key&&!history.some(c=>c.type==='call'&&c.call_id===r.call_id));
    if(pending.length){
@@ -41,13 +44,18 @@ export async function execute(options:{entries:readonly Entry[];providers:readon
     const call_id=digest(JSON.stringify([binding,history.length,attempt,journal.read().length]));
     journal.append({type:'intent',...binding,split:entry.split,call_id,projected_usd:projected});
     const started=options.now();let result:Result;
-    try{result=await provider.request(request,signal??new AbortController().signal);}catch{result={status:'failed',reason:'provider_exception'};}
-    if(signal?.aborted){journal.append({type:'cancelled',...binding,call_id});return;}
+    try{result=await provider.request(request,signal??new AbortController().signal);}catch{
+     // No receipt: retain the intent and reservation rather than assume dispatch failed.
+     if(signal?.aborted){journal.append({type:'cancelled',...binding,call_id});return;}
+     journal.append({type:'uncertain',...binding,reason:'unacknowledged_call_no_automatic_retry'});break;
+    }
+    const cancelled=retryableCancellation(result);
     const retry=result.http_status===429 && attempt<2 && (result.retry_after_ms??0)<=60000;
-    const cost=result.input_tokens===undefined?(result.status==='skipped'?0:projected):result.input_tokens*provider.price/1e6;
+    const cost=cancelled?0:result.input_tokens===undefined?(result.status==='skipped'?0:projected):result.input_tokens*provider.price/1e6;
     const skip=providerSkip(result);
     if(result.status==='skipped'&&!skip)result={...result,status:'failed'};
-    journal.append({type:'call',...binding,split:entry.split,call_id,result,terminal:!retry,latency_ms:Math.max(0,options.now()-started),cost_usd:cost});
+    journal.append({type:'call',...binding,split:entry.split,call_id,result,terminal:!retry&&!cancelled,latency_ms:Math.max(0,options.now()-started),cost_usd:cost});
+    if(signal?.aborted){journal.append({type:'cancelled',...binding,call_id});return;}
     if(skip){journal.append({type:'provider_status',provider:provider.id,persistent:persistentProviderSkip(result),result:{...result,status:'skipped'}});skipped.add(provider.id);break;}
     if(!retry)break;
     try{await options.sleep(Math.min(60000,Math.max(0,result.retry_after_ms??1000*(attempt+1))),signal);}catch{journal.append({type:'cancelled'});return;}

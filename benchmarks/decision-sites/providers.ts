@@ -42,7 +42,7 @@ function httpProvider(id: string, model: string, price: number, key: string | un
     }
     return output.slice(0, 200);
   };
-  return { id, model, price, concurrency: id === 'typesafe-jev' ? 4 : 1,
+  return { id, model, price,
     serialize: request => JSON.stringify(body(request)),
     async request(request, external): Promise<Result> {
       if (external.aborted) return { status: 'failed', reason: 'cancelled' };
@@ -88,7 +88,7 @@ function httpProvider(id: string, model: string, price: number, key: string | un
 function amosProvider(config: ProvidersConfig): Provider {
   const baseURL = (config.amosBaseURL ?? 'http://127.0.0.1:8766').replace(/\/+$/, '');
   const fetch = config.fetch ?? globalThis.fetch;
-  return { id: 'amos-small', model: 'amos-1-2b', price: 0, concurrency: 1,
+  return { id: 'amos-small', model: 'amos-1-2b', price: 0,
     serialize: request => JSON.stringify({ model: 'amos-1-2b', ...request }),
     async request(request, external) {
       if (external.aborted) return { status: 'failed', reason: 'cancelled' };

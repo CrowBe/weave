@@ -36,7 +36,6 @@ export interface Provider {
   model: string;
   /** USD per million input tokens; output free in the declared profiles. */
   price: number;
-  concurrency: number;
   competitor?: boolean;
   serialize(request: Request): string;
   request(request: Request, signal: AbortSignal): Promise<Result>;

@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import { mkdtemp,rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execute } from './engine.ts';
+import { execute, countCompetitorCalls } from './engine.ts';
 import { Journal, digest } from './journal.ts';
 import { buildRequest } from './questions.ts';
 import type { Provider, Item } from './types.ts';
 const item:Item={id:'i',scenario_id:'s',site:'loop.route',state:{task:'read'},gold:{decision:'flash'}};
 async function fixture(fn:(journal:Journal)=>Promise<void>){const dir=await mkdtemp(join(tmpdir(),'engine-'));try{await fn(new Journal(join(dir,'journal.jsonl')));}finally{await rm(dir,{recursive:true,force:true});}}
 const entry={item,split:'holdout' as const,set_digest:'s'};
-function provider(request:Provider['request']):Provider{return {id:'fake',model:'fake',price:.1,concurrency:1,serialize:JSON.stringify,request};}
+function provider(request:Provider['request']):Provider{return {id:'fake',model:'fake',price:.1,serialize:JSON.stringify,request};}
 const clock={now:()=>100,sleep:async()=>{}};
 test('budget stops before call and resume reads newly appended live ledger',()=>fixture(async journal=>{
  let n=0;const p=provider(async()=>{n++;return {status:'ok',model:'fake',input_tokens:1000000,answers:{}};});
@@ -24,13 +24,54 @@ test('429 max three attempts, auth skips rest, failure remains in denominator',(
  assert.equal(journal.read().filter(r=>r.type==='call').length,3);
  await execute({entries:[entry],providers:[p],journal,maxSpend:2,...clock});assert.equal(n,3);
 }));
-test('cancelled call is never an answer and pending crash is never blindly repaid',()=>fixture(async journal=>{
+test('an acknowledged paid answer survives cancellation with actual cost and is never repaid',()=>fixture(async journal=>{
  const controller=new AbortController();let n=0;
- const p=provider(async()=>{n++;controller.abort();return {status:'ok',model:'fake',answers:{}};});
+ const answer={status:'ok' as const,model:'fake',input_tokens:7,answers:{decision:{choice:'flash',confidence:.9}}};
+ const p=provider(async()=>{n++;controller.abort();return answer;});
  await execute({entries:[entry],providers:[p],journal,maxSpend:2,signal:controller.signal,...clock});
- assert.equal(journal.read().some(r=>r.type==='call'&&r.result.status==='ok'),false);
- assert.equal(journal.read().some(r=>r.type==='cancelled'),true);
+ const records=journal.read(),call=records.find(r=>r.type==='call')!;
+ assert.ok(call);assert.deepEqual(call.result,answer);assert.equal(call.terminal,true);
+ assert.equal(call.cost_usd,7*p.price/1e6);assert.equal(journal.spent(),call.cost_usd);
+ assert.ok(records.findIndex(r=>r.type==='call')<records.findIndex(r=>r.type==='cancelled'));
  await execute({entries:[entry],providers:[p],journal,maxSpend:2,...clock});assert.equal(n,1);
+ assert.equal(journal.spent(),call.cost_usd);assert.equal(journal.read().some(r=>r.type==='uncertain'),false);
+}));
+test('acknowledged cancellation or not-sent results release spend and competitor cap and remain retryable',async()=>{
+ for(const reason of ['cancelled','not_sent'])await fixture(async journal=>{
+  for(let i=0;i<39;i++){
+   journal.append({type:'intent',provider:'fake',call_id:`paid-${i}`,projected_usd:0});
+   journal.append({type:'call',provider:'fake',call_id:`paid-${i}`,result:{status:'ok'},terminal:true,cost_usd:0});
+  }
+  let n=0;
+  for(let i=0;i<4;i++){
+   const controller=new AbortController();
+   const p={...provider(async()=>{n++;controller.abort();return {status:'failed',reason};}),competitor:true};
+   await execute({entries:[entry],providers:[p],journal,maxSpend:2,signal:controller.signal,...clock});
+   const call=journal.read().filter(r=>r.type==='call').at(-1)!;
+   assert.equal(call.result.reason,reason);assert.equal(call.terminal,false);assert.equal(call.cost_usd,0);
+   assert.equal(journal.spent(),0);assert.equal(countCompetitorCalls(journal.read(),'fake'),39);
+  }
+  const p={...provider(async()=>{n++;return {status:'ok' as const,input_tokens:7,answers:{}};}),competitor:true};
+  await execute({entries:[entry],providers:[p],journal,maxSpend:2,...clock});assert.equal(n,5);
+  assert.equal(countCompetitorCalls(journal.read(),'fake'),40);
+  assert.equal(journal.read().some(r=>r.type==='uncertain'),false);
+ });
+});
+test('requests that throw without acknowledgement retain a reservation and are not blindly retried',async()=>{
+ for(const abort of [false,true])await fixture(async journal=>{
+  const controller=new AbortController();let n=0;
+  const p=provider(async()=>{n++;if(abort)controller.abort();throw Error('no receipt');});
+  await execute({entries:[entry],providers:[p],journal,maxSpend:2,signal:controller.signal,...clock});
+  assert.equal(journal.read().some(r=>r.type==='call'),false);const spent=journal.spent();assert.ok(spent>0);
+  await execute({entries:[entry],providers:[p],journal,maxSpend:2,...clock});assert.equal(n,1);
+  assert.equal(journal.spent(),spent);assert.equal(journal.read().some(r=>r.type==='uncertain'),true);
+ });
+});
+test('already cancelled dispatch creates no reservation or competitor call',()=>fixture(async journal=>{
+ const controller=new AbortController();controller.abort();
+ await execute({entries:[entry],providers:[{...provider(async()=>{throw Error('must not dispatch');}),competitor:true}],journal,maxSpend:2,signal:controller.signal,...clock});
+ assert.equal(journal.read().some(r=>r.type==='intent'),false);assert.equal(journal.spent(),0);
+ assert.equal(countCompetitorCalls(journal.read(),'fake'),0);
 }));
 test('auth skips provider once and unrelated providers continue; skipped calls cost zero',()=>fixture(async journal=>{
  let denied=0,healthy=0;

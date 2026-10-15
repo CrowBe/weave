@@ -59,12 +59,13 @@ test('SIGINT and SIGTERM abort in-flight calls, flush cancellation, and return n
   const id=`signal-${event}-${process.pid}`;const dir=join(testRoot,'results',id);
   try {
    const code=await main(['--providers','fake','--sites','loop.route','--run-id',id],{providers:[{
-    id:'fake',model:'signal-fake',price:0,concurrency:1,serialize:JSON.stringify,
-    request:async(_req,signal)=>new Promise(resolve=>{signal.addEventListener('abort',()=>resolve({status:'ok',model:'signal-fake',answers:{}}),{once:true});setImmediate(()=>process.emit(event));}),
+    id:'fake',model:'signal-fake',price:0,serialize:JSON.stringify,
+    request:async(_req,signal)=>new Promise(resolve=>{signal.addEventListener('abort',()=>resolve({status:'failed',reason:'cancelled'}),{once:true});setImmediate(()=>process.emit(event));}),
    }]});
    assert.equal(code,130);
    const records=readFileSync(join(dir,'journal.jsonl'),'utf8').trim().split('\n').map(line=>JSON.parse(line));
-   assert.ok(records.some(r=>r.type==='cancelled'));assert.equal(records.some(r=>r.type==='call'),false);
+   assert.ok(records.some(r=>r.type==='cancelled'));
+   const call=records.find(r=>r.type==='call');assert.ok(call);assert.equal(call.result.reason,'cancelled');assert.equal(call.terminal,false);assert.equal(call.cost_usd,0);
    const summary=JSON.parse(readFileSync(join(dir,'summary.json'),'utf8'));assert.equal(summary.decision_providers[0].holdout.coverage,0);
   }finally{rmSync(dir,{recursive:true,force:true});}
  }
@@ -83,6 +84,19 @@ test('CLI reports concurrent and stale locks without stealing them',()=>{
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
+test('cancellation during quota preflight acknowledges an uncalled competitor item',()=>{
+ const helper=mkdtempSync(join(tmpdir(),'p10-quota-abort-')),id=`quota-abort-${process.pid}`,dir=join(testRoot,'results',id);
+ try{
+  writeFileSync(join(helper,'quota-axi'),`#!${process.execPath}\nprocess.kill(process.ppid,'SIGTERM');setInterval(()=>{},1000);\n`,{mode:0o700});
+  const result=spawnSync(process.execPath,['--experimental-strip-types',cliPath,'--providers','pi','--sites','loop.route','--split','holdout','--run-id',id],{env:{...process.env,PATH:helper+':'+process.env.PATH},encoding:'utf8',timeout:30000});
+  assert.equal(result.status,130,result.stderr);
+  const records=readFileSync(join(dir,'journal.jsonl'),'utf8').trim().split('\n').map(line=>JSON.parse(line));
+  const call=records.find(r=>r.type==='call');assert.ok(call);
+  assert.equal(call.result.reason,'cancelled');assert.equal(call.terminal,false);assert.equal(call.cost_usd,0);
+  assert.equal(records.some(r=>r.type==='provider_status'),false);
+ }finally{rmSync(helper,{recursive:true,force:true});rmSync(dir,{recursive:true,force:true});}
+});
+
 test('resume re-renders completed results; render-only never dispatches or mutates the journal',async()=>{
  const id=`render-${process.pid}`;const dir=join(testRoot,'results',id);
  const reportPath=join(dir,'REPORT.md');
@@ -93,7 +107,7 @@ test('resume re-renders completed results; render-only never dispatches or mutat
   assert.equal(first.status,0,first.stderr);
   const journalPath=join(dir,'journal.jsonl');
   const completed=readFileSync(journalPath,'utf8').trim().split('\n').map(line=>JSON.parse(line)).filter(r=>r.type==='call').length;
-  const noCalls={providers:[{id:'fake',model:'offline-fake',price:0,concurrency:1,serialize:JSON.stringify,request:async()=>{throw Error('unexpected dispatch');}}]};
+  const noCalls={providers:[{id:'fake',model:'offline-fake',price:0,serialize:JSON.stringify,request:async()=>{throw Error('unexpected dispatch');}}]};
   writeFileSync(reportPath,'stale report');rmSync(join(dir,'summary.json'));
   assert.equal(await main([...args,'--resume'],noCalls),0);
   assert.match(readFileSync(reportPath,'utf8'),/Decision-site benchmark/);
@@ -143,7 +157,7 @@ test('fake and partial reports stay in the run directory without overwriting the
  }finally{rmSync(dir,{recursive:true,force:true});writeFileSync(reportPath,original);}
  const partialId=`partial-report-${process.pid}`,partialDir=join(testRoot,'results',partialId);
  try{
-  assert.equal(await main(['--providers','typesafe-jev','--sites','loop.route','--split','holdout','--run-id',partialId],{providers:[{id:'typesafe-jev',model:'fake-live-shape',price:0,concurrency:1,serialize:JSON.stringify,request:async()=>({status:'skipped',reason:'no_credential'})}]}),0);
+  assert.equal(await main(['--providers','typesafe-jev','--sites','loop.route','--split','holdout','--run-id',partialId],{providers:[{id:'typesafe-jev',model:'fake-live-shape',price:0,serialize:JSON.stringify,request:async()=>({status:'skipped',reason:'no_credential'})}]}),0);
   assert.equal(readFileSync(reportPath,'utf8'),original);
   assert.match(readFileSync(join(partialDir,'REPORT.md'),'utf8'),/Decision-site benchmark/);
  }finally{rmSync(partialDir,{recursive:true,force:true});writeFileSync(reportPath,original);}
@@ -154,7 +168,7 @@ test('a budget-stopped all-site run writes its report only in its run directory'
  const reportPath=join(testRoot,'REPORT.md'),original=readFileSync(reportPath,'utf8');
  let calls=0;
  try{
-  assert.equal(await main(['--providers','typesafe-jev','--max-spend-usd','0','--run-id',id],{providers:[{id:'typesafe-jev',model:'fake-live-shape',price:.1,concurrency:1,serialize:JSON.stringify,request:async()=>{calls++;throw Error('budget must block');}}]}),0);
+  assert.equal(await main(['--providers','typesafe-jev','--max-spend-usd','0','--run-id',id],{providers:[{id:'typesafe-jev',model:'fake-live-shape',price:.1,serialize:JSON.stringify,request:async()=>{calls++;throw Error('budget must block');}}]}),0);
   assert.equal(calls,0);assert.equal(readFileSync(reportPath,'utf8'),original);
   assert.match(readFileSync(join(dir,'REPORT.md'),'utf8'),/budget_stop/);
  }finally{rmSync(dir,{recursive:true,force:true});writeFileSync(reportPath,original);}
@@ -164,7 +178,7 @@ test('an all-skipped run keeps its empty report out of the published report',asy
  const id=`skipped-report-${process.pid}`,dir=join(testRoot,'results',id);
  const reportPath=join(testRoot,'REPORT.md'),original=readFileSync(reportPath,'utf8');
  try{
-  assert.equal(await main(['--providers','typesafe-jev','--run-id',id],{providers:[{id:'typesafe-jev',model:'fake-live-shape',price:0,concurrency:1,serialize:JSON.stringify,request:async()=>({status:'skipped',reason:'no_credential'})}]}),0);
+  assert.equal(await main(['--providers','typesafe-jev','--run-id',id],{providers:[{id:'typesafe-jev',model:'fake-live-shape',price:0,serialize:JSON.stringify,request:async()=>({status:'skipped',reason:'no_credential'})}]}),0);
   assert.equal(readFileSync(reportPath,'utf8'),original);
   assert.match(readFileSync(join(dir,'REPORT.md'),'utf8'),/no_credential/);
  }finally{rmSync(dir,{recursive:true,force:true});writeFileSync(reportPath,original);}
@@ -205,7 +219,7 @@ test('a failed temp-directory creation releases the run lock',async()=>{
 test('a recovered quota skip is not reported as a current provider skip after resume',async()=>{
  const id=`quota-recovery-${process.pid}`,dir=join(testRoot,'results',id);
  const args=['--providers','pi','--sites','loop.route','--split','holdout','--run-id',id];let calls=0;
- const injected={providers:[{id:'pi',model:'chatgpt-sign-in',competitor:true,price:0,concurrency:1,serialize:JSON.stringify,request:async()=>{
+ const injected={providers:[{id:'pi',model:'chatgpt-sign-in',competitor:true,price:0,serialize:JSON.stringify,request:async()=>{
   calls++;return calls===1?{status:'skipped' as const,reason:'quota_unavailable_or_weekly_cap'}:{status:'ok' as const,model:'chatgpt-sign-in',answers:{decision:{choice:'flash',confidence:.99}}};
  }}]};
  try{

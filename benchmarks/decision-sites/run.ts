@@ -45,7 +45,7 @@ const runProcess:ProcessRunner = async(command,args,options)=>{
  child.stdin.on('error',()=>{});child.stdin.end(options.stdin);
  });}finally{rmSync(cwd,{recursive:true,force:true});}
 };
-function fakeProvider():Provider {return {id:'fake',model:'offline-fake',price:0,concurrency:1,serialize:JSON.stringify,async request(request){return {status:'ok',model:'offline-fake',input_tokens:0,output_tokens:0,answers:Object.fromEntries(Object.entries(request.questions).map(([id,q])=>[id,q.type==='choice'?{choice:Object.keys(q.criteria)[0]!,confidence:.95,probabilities:Object.fromEntries(Object.keys(q.criteria).map((key,i)=>[key,i===0?1:0]))}:{probability:.1,confidence:.95}]))};}};}
+function fakeProvider():Provider {return {id:'fake',model:'offline-fake',price:0,serialize:JSON.stringify,async request(request){return {status:'ok',model:'offline-fake',input_tokens:0,output_tokens:0,answers:Object.fromEntries(Object.entries(request.questions).map(([id,q])=>[id,q.type==='choice'?{choice:Object.keys(q.criteria)[0]!,confidence:.95,probabilities:Object.fromEntries(Object.keys(q.criteria).map((key,i)=>[key,i===0?1:0]))}:{probability:.1,confidence:.95}]))};}};}
 export async function main(args=process.argv.slice(2), injected?:{providers:readonly Provider[]}):Promise<number> {
  const options=flags(args);if(!process.versions.node.startsWith('22.'))throw new Error('Node 22 required');
  const root=dirname(fileURLToPath(import.meta.url));const dir=join(root,'results',options.runId);
@@ -74,6 +74,7 @@ export async function main(args=process.argv.slice(2), injected?:{providers:read
    ...provider, async request(request:Parameters<Provider['request']>[0],signal:AbortSignal) {
     // Re-read plan quota immediately before every competitor call; never reuse a stale pause snapshot.
     const quota=await runProcess('quota-axi',['--provider','codex','--json'],{cwd:temp,stdin:'',signal:AbortSignal.any([signal,AbortSignal.timeout(30000)])});
+    if(signal.aborted)return {status:'failed' as const,reason:'cancelled'};
     let allowed=false;try{allowed=quota.exitCode===0&&quotaAllowsCompetitors(JSON.parse(quota.stdout),Date.now());}catch{/* fail closed */}
     return allowed?provider.request(request,signal):{status:'skipped' as const,reason:'quota_unavailable_or_weekly_cap'};
    }
