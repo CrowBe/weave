@@ -389,6 +389,7 @@ function decisionTerms(terms: InferenceTerms): InferenceTerms {
   return {
     quality: terms.quality,
     destinations: [...terms.destinations],
+    ...(terms.content_class === undefined ? {} : { content_class: terms.content_class }),
     max_context_tokens: terms.max_context_tokens,
     deadline: terms.deadline,
     cost_ceiling: terms.cost_ceiling,

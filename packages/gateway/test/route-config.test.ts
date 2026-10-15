@@ -20,7 +20,9 @@ const target = { operation: 'generate', kind: 'transform' } as const;
 function table() {
   const result = parseRouteConfig(example());
   if (!result.ok) throw new Error(result.errors.join('; '));
-  return result.table;
+  // These baseline tier/availability fixtures exercise the original providers.
+  // Contributor units and their disclosure rules have a dedicated test below.
+  return result.table.filter(unit => !unit.destination_training_allowed);
 }
 /** Decision evaluate units are not candidates for a generate target. */
 function operationMismatch(units: readonly { routed_unit_id: string; operation: string }[]) {
@@ -634,4 +636,68 @@ it('rejects a bad preselect policy and resolves the effective one', () => {
   assert.equal(bindDecisionProvider(handBuilt, 'loop.preselect').adapter, 'amos');
   assert.equal(bindDecisionProvider(handBuilt, 'intake.classify').adapter, 'amos');
   assert.throws(() => bindDecisionProvider({ ...handBuilt, sites: { 'loop.triage': 'amos' } }), /unsupported provider or site/);
+});
+
+it('accepts a positive integer token budget alongside the declared request limit', () => {
+  const input = example();
+  input.units[0].rate_limits = [{ requests: 150, tokens: 3_000_000, window_ms: 60_000 }];
+  const parsed = parseRouteConfig(input);
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) assert.deepEqual(parsed.table[0]!.rate_limits, input.units[0].rate_limits);
+});
+
+it('rejects invalid token budgets without echoing their values', () => {
+  for (const tokens of [0, -1, 0.5, NaN, Infinity, 'sk-test-SENTINEL-token', null]) {
+    const input = example();
+    input.units[0].rate_limits = [{ requests: 150, tokens, window_ms: 60_000 }];
+    const parsed = parseRouteConfig(input);
+    assert.equal(parsed.ok, false);
+    assert.ok(!JSON.stringify(parsed).includes('sk-test-SENTINEL-token'));
+  }
+});
+
+it('validates the destination training permission as a boolean', () => {
+  for (const destination_training_allowed of [true, false]) {
+    const input = example();
+    input.units[0].destination_training_allowed = destination_training_allowed;
+    assert.equal(parseRouteConfig(input).ok, true);
+  }
+  for (const destination_training_allowed of [null, 1, 'true']) {
+    const input = example();
+    input.units[0].destination_training_allowed = destination_training_allowed;
+    assert.equal(parseRouteConfig(input).ok, false);
+  }
+});
+
+it('rejects reasoning settings including max: the settings contract has no reasoning field', () => {
+  for (const key of ['reasoning', 'reasoning_effort', 'reasoningEffort']) {
+    const input = example();
+    input.units[0].adapter = 'muse-spark';
+    input.units[0].settings[key] = 'max';
+    const parsed = parseRouteConfig(input);
+    assert.equal(parsed.ok, false);
+    if (!parsed.ok) assert.ok(parsed.errors.some(error => error.includes(`settings.${key}: unknown key`)));
+  }
+});
+
+it('declares primary then fallback Muse flash writers with training permission and known limits', () => {
+  const parsed = parseRouteConfig(example());
+  assert.ok(parsed.ok);
+  const units = parsed.table.filter(unit => unit.adapter === 'muse-spark');
+  assert.deepEqual(units.map(unit => unit.model), ['muse-spark-1.3-contributor', 'muse-spark-1.2-contributor']);
+  for (const unit of units) {
+    assert.equal(unit.tier, 'flash');
+    assert.equal(unit.operation, 'generate');
+    assert.equal(unit.kind, 'transform');
+    assert.equal(unit.destination_training_allowed, true);
+    assert.deepEqual(unit.rate_limits, [{ requests: 150, tokens: 3_000_000, window_ms: 60_000 }]);
+    assert.deepEqual(unit.price, { input_per_mtok: 0, output_per_mtok: 0 });
+  }
+  const target = { operation: 'generate', kind: 'transform' } as const;
+  const allowed = { ...terms, tier: 'flash', destinations: ['muse-spark-contributor'], content_class: 'non_sensitive' } as const;
+  assert.deepEqual(route(parsed.table, target, allowed, 20).order.map(unit => unit.model), units.map(unit => unit.model));
+  for (const content_class of [undefined, 'sensitive', 'private'] as const) {
+    const denied = content_class === undefined ? { ...allowed, content_class: undefined } : { ...allowed, content_class };
+    assert.deepEqual(route(parsed.table, target, denied as InferenceTerms, 20).order, []);
+  }
 });

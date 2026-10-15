@@ -298,6 +298,20 @@ test('a passing toy goal records evidence and does not complete the goal', async
   assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), result);
 });
 
+test('implementation requests preserve the caller content class for generation and evaluation', async () => {
+  for (const content_class of ['public', 'non_sensitive', 'sensitive', 'private', undefined] as const) {
+    const world = driver({ input: input({ terms: { ...terms, ...(content_class === undefined ? {} : { content_class }) } }) });
+    const seen: (InferenceTerms['content_class'])[] = [];
+    const result = await runImplementationStep(world.input, {
+      ...world.ports,
+      generate: async request => { seen.push(request.terms.content_class); return world.ports.generate(request); },
+      evaluate: (async request => { seen.push(request.terms.content_class); return world.ports.evaluate(request); }) as ImplementPorts['evaluate'],
+    }, world.journal);
+    assert.equal(result.status, 'passed');
+    assert.deepEqual(seen, [content_class, content_class], 'classification must survive terms reconstruction without being upgraded');
+  }
+});
+
 test('a D5 failure retries with a fresh grant and passes when the checks stay green', async () => {
   const world = driver({ evaluations: [{ c1: { p: .2, conf: .95 } }, { c1: { p: .95, conf: .95 } }] });
   const result = await runImplementationStep(world.input, world.ports, world.journal);

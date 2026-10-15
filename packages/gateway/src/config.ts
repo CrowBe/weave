@@ -218,7 +218,7 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
     if (!object(unit)) { check(false, path); return; }
     keys(unit, ['routed_unit_id', 'context_profile', 'context_profile_version',
       'prompt_template', 'prompt_template_version', 'adapter', 'model', 'destination',
-      'quality', 'context_limit_tokens', 'settings', 'price', 'rate_limits',
+      'quality', 'context_limit_tokens', 'settings', 'price', 'rate_limits', 'destination_training_allowed',
       'evidence', 'tier', 'operation', 'kind', 'quota_provider'], path);
     for (const key of ['routed_unit_id', 'context_profile', 'prompt_template', 'adapter', 'model', 'destination']) {
       check(identifier(unit[key]), `${path}.${key}`);
@@ -230,6 +230,7 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
     check(unit.operation === 'generate' || unit.operation === 'evaluate', `${path}.operation`);
     check(member(unit.kind, unit.operation === 'generate' ? GENERATION_KINDS : unit.operation === 'evaluate' ? EVALUATION_KINDS : []), `${path}.kind: operation/kind pair`);
     check(unit.quota_provider === undefined || identifier(unit.quota_provider), `${path}.quota_provider`);
+    check(unit.destination_training_allowed === undefined || typeof unit.destination_training_allowed === 'boolean', `${path}.destination_training_allowed`);
     check(unit.tier === undefined || member(unit.tier, TIERS), `${path}.tier`);
     check(unit.tier !== 'decision' || unit.operation === 'evaluate', `${path}.tier: decision tier requires evaluate`);
     check(member(unit.quality, QUALITY_BARS), `${path}.quality`);
@@ -259,8 +260,9 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
     if (unit.rate_limits !== undefined) {
       check(Array.isArray(unit.rate_limits), `${path}.rate_limits`);
       if (Array.isArray(unit.rate_limits)) unit.rate_limits.forEach((limit: unknown, j: number) => {
-        if (object(limit)) keys(limit, ['requests', 'window_ms'], `${path}.rate_limits[${j}]`);
-        check(object(limit) && positiveInteger(limit.requests) && number(limit.window_ms) && limit.window_ms > 0, `${path}.rate_limits[${j}]`);
+        if (object(limit)) keys(limit, ['requests', 'tokens', 'window_ms'], `${path}.rate_limits[${j}]`);
+        check(object(limit) && positiveInteger(limit.requests) && number(limit.window_ms) && limit.window_ms > 0 &&
+          (limit.tokens === undefined || positiveInteger(limit.tokens)), `${path}.rate_limits[${j}]`);
       });
     }
   });

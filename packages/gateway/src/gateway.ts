@@ -17,10 +17,12 @@
 import { bindDecisionProvider, type DecisionConfig } from './config.js';
 import { budgetRoute } from './budget.js';
 import { priceAttempt, worstCaseCost, type RouteExclusion } from './routing.js';
+import { redactCredentialContent, redactCredentialText, trainingAllowedDestinations } from './privacy.js';
 import {
   answersMatchQuestions,
   nonEmptyText,
   TIERS,
+  CONTENT_CLASSES,
   type AttemptRecord,
   type BlockedReason,
   type Clock,
@@ -67,6 +69,8 @@ export interface GatewayConfig {
   /**
    * Lets the gateway wait out a throttle instead of escalating past it. Without
    * one it cannot wait, and a refusal that names a delay escalates immediately.
+   * Also enforces in-flight deadlines through the provider's AbortSignal;
+   * without a timer deadlines are checked only between provider attempts.
    */
   readonly timer?: Timer;
   /** Attempts a routed unit needs before its evidence may reorder routing. */
@@ -86,6 +90,10 @@ const DEFAULT_MAX_ATTEMPTS_PER_ROUTE = 2;
 export function createInferenceGateway(config: GatewayConfig): InferenceGateway {
   const generators = new Map((config.adapters ?? []).map((a) => [a.id, a]));
   const evaluators = new Map((config.evaluators ?? []).map((a) => [a.id, a]));
+  const trainingAllowed = trainingAllowedDestinations(config.routes);
+  // Preserve destination-wide privacy when a decision binding narrows the table.
+  const routes: RouteTable = config.routes.map(unit => trainingAllowed.has(unit.destination)
+    ? { ...unit, destination_training_allowed: true } : unit);
 
   for (const unit of config.routes) {
     const pool = unit.operation === 'generate' ? generators : evaluators;
@@ -105,7 +113,7 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
         clock: config.clock,
         timer: config.timer,
         signal,
-        routes: config.routes,
+        routes,
         availability: config.availability,
         quota: config.quota,
         persist_pause: config.persist_pause,
@@ -115,16 +123,16 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
         target: { operation: 'generate', kind: request.kind },
         terms: request.terms,
         invalid: invalidGeneration(request),
-        attempt: async (unit) => {
+        attempt: async (unit, attemptSignal) => {
           const adapter = generators.get(unit.adapter);
           if (adapter === undefined) return missingAdapter(unit);
 
           const result = await adapter.execute({
             model: unit.model,
-            instructions: request.input.instructions,
-            prompt: request.input.prompt,
+            instructions: trainingAllowed.has(unit.destination) ? redactCredentialText(request.input.instructions) : request.input.instructions,
+            prompt: trainingAllowed.has(unit.destination) ? redactCredentialText(request.input.prompt) : request.input.prompt,
             settings: unit.settings,
-            signal,
+            signal: attemptSignal,
           });
           if (result.status === 'failed') return failedAttempt(result.failure);
 
@@ -166,7 +174,7 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
         clock: config.clock,
         timer: config.timer,
         signal,
-        routes: binding ? config.routes.filter(u => u.operation === 'evaluate' && u.adapter === binding.adapter && u.model === binding.model) : config.routes,
+        routes: binding ? routes.filter(u => u.operation === 'evaluate' && u.adapter === binding.adapter && u.model === binding.model) : routes,
         availability: config.availability,
         quota: config.quota,
         persist_pause: config.persist_pause,
@@ -176,16 +184,16 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
         target: { operation: 'evaluate', kind: request.kind },
         terms: request.terms,
         invalid: invalidEvaluation(request),
-        attempt: async (unit) => {
+        attempt: async (unit, attemptSignal) => {
           const adapter = evaluators.get(unit.adapter);
           if (adapter === undefined) return missingAdapter(unit);
 
           const result = await adapter.evaluate({
             model: unit.model,
             kind: request.kind,
-            state: request.state,
-            questions: request.questions,
-            signal,
+            state: trainingAllowed.has(unit.destination) ? redactCredentialContent(request.state) : request.state,
+            questions: trainingAllowed.has(unit.destination) ? redactCredentialContent(request.questions) : request.questions,
+            signal: attemptSignal,
           });
           if (result.status === 'failed') return failedAttempt(result.failure);
 
@@ -293,7 +301,7 @@ interface BoundedParams<T> {
   readonly terms: InferenceTerms;
   /** A description of why the request is unusable, or null. */
   readonly invalid: string | null;
-  readonly attempt: (unit: RoutedUnit) => Promise<AttemptResult<T>>;
+  readonly attempt: (unit: RoutedUnit, signal?: AbortSignal) => Promise<AttemptResult<T>>;
 }
 
 async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
@@ -353,7 +361,7 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
     consumed.set(unit.routed_unit_id, (consumed.get(unit.routed_unit_id) ?? 0) + 1);
 
     const started_at = clock.now();
-    const result = await params.attempt(unit);
+    const result = await attemptBeforeDeadline(params, unit);
     const ended_at = clock.now();
 
     const metered = meteredCost(unit, terms, result.usage);
@@ -387,6 +395,9 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
     if (disposition.status === 'failed') {
       attempts.push({ ...base, disposition: { status: 'failed', failure: disposition.failure } });
       lastFailed = true;
+      if (disposition.failure.code === 'timeout' && clock.now() >= terms.deadline) {
+        return finish({ status: 'unaccepted', reason: 'deadline_reached' });
+      }
       if (disposition.failure.code === 'cancelled') {
         return finish({ status: 'unaccepted', reason: 'provider_failed' });
       }
@@ -452,6 +463,46 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
   return finish({ status: 'unaccepted', reason: lastFailed ? 'provider_failed' : 'attempts_exhausted' });
 }
 
+/** Each attempt owns its cancellation state; no timer or signal crosses calls. */
+async function attemptBeforeDeadline<T>(
+  params: BoundedParams<T>,
+  unit: RoutedUnit,
+): Promise<AttemptResult<T>> {
+  if (params.timer === undefined) return params.attempt(unit, params.signal);
+
+  const provider = new AbortController();
+  const watcher = new AbortController();
+  let interrupt!: (result: AttemptResult<T>) => void;
+  const interrupted = new Promise<AttemptResult<T>>(resolve => { interrupt = resolve; });
+  const cancel = () => {
+    provider.abort();
+    interrupt(failedAttempt({ code: 'cancelled', message: 'provider attempt cancelled', retryable: false }));
+  };
+  params.signal?.addEventListener('abort', cancel, { once: true });
+  if (params.signal?.aborted) cancel();
+
+  const deadline = async () => {
+    try {
+      await params.timer!.sleep(Math.max(0, params.terms.deadline - params.clock.now()), watcher.signal);
+      if (watcher.signal.aborted) return;
+      provider.abort();
+      interrupt(failedAttempt({ code: 'timeout', message: 'provider attempt exceeded the request deadline', retryable: false }));
+    } catch {
+      if (watcher.signal.aborted) return;
+      provider.abort();
+      interrupt(failedAttempt({ code: 'unavailable', message: 'provider deadline timer failed', retryable: false }));
+    }
+  };
+  // The watcher catches its own failures, including cancellation during cleanup.
+  void deadline();
+  try {
+    return await Promise.race([params.attempt(unit, provider.signal), interrupted]);
+  } finally {
+    watcher.abort();
+    params.signal?.removeEventListener('abort', cancel);
+  }
+}
+
 function outcomeBase(
   request_id: string,
   site: string,
@@ -489,6 +540,7 @@ function missingAdapter<T>(unit: RoutedUnit): AttemptResult<T> {
 // ---------------------------------------------------------------------------
 
 function invalidTerms(terms: InferenceTerms): string | null {
+  if (terms.content_class !== undefined && !CONTENT_CLASSES.includes(terms.content_class)) return 'terms.content_class must be a known content class';
   if (terms.audit !== undefined && typeof terms.audit !== 'boolean') return 'terms.audit must be boolean';
   if (terms.audit && terms.tier !== 'strong') return 'audit requires strong tier';
   if (terms.tier !== undefined && !TIERS.includes(terms.tier)) return 'terms.tier must be a known tier';

@@ -154,6 +154,14 @@ The module that performs bounded model work under explicit scope, acceptance, au
 
 A versioned context profile, prompt template, model, and settings selected together for inference. Evaluation evidence attaches to that combination.
 
+### Training-allowed destination
+
+A data destination whose provider may train on disclosed content. A routed unit marks it with `destination_training_allowed: true`; the mark applies to every unit sharing that destination. Routing excludes it unless the caller explicitly classifies the request as `public` or `non_sensitive`, even when the destination is otherwise permitted. Before dispatch the gateway redacts strings containing the repository's credential markers. Redaction is a final safeguard, not permission to send sensitive or private material.
+
+### Content class
+
+The caller's classification of all request content: `public` is publicly shareable, `non_sensitive` contains no confidential material, `sensitive` requires protection, and `private` includes private repository and operator data. Inference terms carry it as `content_class`. An absent class is treated as sensitive for training disclosure; classification does not add a permitted destination. Private repository or captain data must never be classified as public or non-sensitive.
+
 ### Tier
 
 A configured routed-unit attribute: `decision`, `flash`, `standard`, or `strong`. A tier identifies the role and resource class requested for a step; it is not a quality bar. Routing still enforces quality, destinations, context, and budget independently of tier. It is a routing attribute and is unrelated to execution tier.
