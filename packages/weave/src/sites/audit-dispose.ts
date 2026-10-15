@@ -41,13 +41,14 @@ export function transitionAuditDispose(input: AuditDisposeInput, recorded: {
 export async function evaluateAuditDispose(input: AuditDisposeInput, port: Pick<InferenceGateway, 'evaluate'>,
   current: () => SiteState & { observed_at: number }, signal?: AbortSignal): Promise<AuditDisposal> {
   const captured = structuredClone(input);
+  const { audit: _audit, ...terms } = captured.terms;
   let outcome: EvaluationOutcome<'choice'> | null = null;
   if (!signal?.aborted && captured.findings.length) try {
     outcome = await port.evaluate({ request_id: captured.request_id, site: 'audit.dispose', role: 'working', kind: 'choice',
       state: captured.state, questions: Object.fromEntries(captured.findings.map((_, i) => [`finding_${i}`, {
         type: 'choice' as const, instructions: 'How should this audit finding be disposed?',
         criteria: Object.fromEntries(AUDIT_DISPOSITIONS.map(choice => [choice, null])),
-      }])), terms: { ...captured.terms, tier: 'decision' } }, signal);
+      }])), terms: { ...terms, tier: 'decision' } }, signal);
   } catch { /* Failure details may contain credentials. */ }
   const live = current();
   return transitionAuditDispose(captured, { outcome, state_revision: captured.state_revision,

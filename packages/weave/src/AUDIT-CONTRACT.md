@@ -15,6 +15,12 @@ fields except the digest itself. Assembly performs no IO or inference. Inputs
 are already disclosed, secret-free slices supplied by policy, not general runtime
 state; this function is not a secret classifier or grant issuer.
 
+## Inference terms
+
+Audit generation always requests `tier:'strong', audit:true`. D6 requests
+`tier:'decision'` and strips `audit` from caller terms, preserving every other
+term apart from the tier override. The audit purpose applies only to generation.
+
 ## Context compaction port
 
 `compactContext` uses an explicit token sequence and context capacity supplied by

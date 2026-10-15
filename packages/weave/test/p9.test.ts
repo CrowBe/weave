@@ -16,11 +16,15 @@ test('audit report secret screen matches token prefixes, not ordinary words', ()
 });
 import { assembleAuditState, AUDIT_SLICES } from '../src/audit-view.js';
 import { MemoryAuditJournal, runAuditLoop, replayAuditLoop, type AuditPorts, type AuditLoopInput } from '../src/audit-loop.js';
-import { transitionAuditDispose } from '../src/sites/audit-dispose.js';
+import { evaluateAuditDispose, transitionAuditDispose } from '../src/sites/audit-dispose.js';
 import { createInferenceGateway, type EvaluationOutcome, type InferenceTerms, type RoutedUnit } from '@weave/gateway';
 const terms: InferenceTerms = { quality: 'baseline', destinations: ['local'], max_context_tokens: 100,
   deadline: 100, cost_ceiling: 10, max_attempts: 1 };
 const revision = { state_revision: 1, state_updated_at: 10 };
+const decisionUnit: RoutedUnit = { routed_unit_id: 'decision.fake', tier: 'decision', operation: 'evaluate',
+  kind: 'choice', adapter: 'fake', model: 'fake', context_profile: 'none', context_profile_version: 1,
+  prompt_template: 'none', prompt_template_version: 1, settings: { max_output_tokens: 1 }, destination: 'local',
+  quality: 'baseline', context_limit_tokens: 1_000_000, price: { input_per_mtok: 0, output_per_mtok: 0 } };
 function fixture(options: { gaps?: number; red?: boolean; progress?: ('stalled'|'regressing')[]; budget?: boolean; max?: number; ceilings?: number[] } = {}) {
   let generates = 0;
   let observes = 0;
@@ -84,6 +88,28 @@ test('D6 low confidence, stale and outage fall back to needs_human', () => {
     const result = transitionAuditDispose(input, recorded, revision);
     assert.deepEqual(result.choices, ['needs_human']); assert.equal(result.observations[0]?.fallback_used, true);
   }
+});
+test('D6 strips audit purpose while preserving other terms and strong audit generation', async () => {
+  const f = fixture({ gaps: 1, max: 1 });
+  const supplied: InferenceTerms = { ...terms, audit: true, tier: 'strong', max_attempts_per_route: 1,
+    prefix_digest: 'prefix1', prefix_cache: { prefix_digest: 'prefix1', routed_unit_id: 'decision.fake', cached_tokens: 1 } };
+  let received: InferenceTerms | undefined;
+  let calls = 0;
+  const gateway = createInferenceGateway({ routes: [decisionUnit], clock: { now: () => 10 }, evaluators: [{
+    id: 'fake', async evaluate() { calls++; return { status: 'completed',
+      answers: { finding_0: { type: 'choice', choice: 'defer', probabilities: { defer: 1 } } },
+      confidence: { finding_0: 1 }, usage: { input_tokens: 0, output_tokens: 0 }, provider_response_id: undefined }; },
+  }] });
+  const result = await runAuditLoop({ ...f.input, terms: supplied }, { ...f.ports,
+    evaluate: (request, signal) => { received = request.terms; return gateway.evaluate(request, signal); },
+  }, f.journal);
+  assert.equal(result.outcome, 'done');
+  assert.deepEqual(result.disposal?.choices, ['defer']);
+  const { audit: _audit, ...otherTerms } = supplied;
+  assert.deepEqual(received, { ...otherTerms, tier: 'decision' });
+  assert.equal(calls, 1);
+  assert.equal(supplied.audit, true);
+  assert.equal(f.generates(), 1);
 });
 test('accepted audit is checkpointed before D6 and recovery reuses it', async () => {
   const f = fixture({ gaps: 1 });
