@@ -543,7 +543,7 @@ secret redactor and validates the resulting schema. Importers upsert by
 (run_id, id) for idempotence. No provider content, environment values, raw
 operator text or raw errors belong in this port.
 
-**Follow-up before P10:** implement the SQLite default adapter and normalized
+**Follow-up before P10 ([#132](https://github.com/CrowBe/weave/issues/132)):** implement the SQLite default adapter and normalized
 run/thread/decision/model/tool/budget tables, migrate existing decision,
 implementation, audit and shell traces into the envelope, and add an OTLP
 receiver. The importer port does not claim a running database or collector.
