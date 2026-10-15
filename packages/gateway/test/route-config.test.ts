@@ -495,6 +495,28 @@ it('binds Amos for loop.preselect only with a matching boolean unit', () => {
   assert.equal(bindDecisionProvider(typesafe.decision, 'loop.preselect').provider, 'typesafe-jev');
 });
 
+for (const id of ['openai-decisions', 'unknown']) {
+  for (const policy of [{}, { k: 3, floor: 0, max_excluded: 0.4, min_margin: 0.3 }]) {
+    it(`rejects unsupported preselect provider ${id} with ${Object.keys(policy).length === 0 ? 'empty' : 'valid'} fields`, () => {
+      const input = example();
+      // A known, configured provider still cannot serve D3.
+      input.decision.providers['openai-decisions'] = { base_url: 'http://127.0.0.1:8767', model: 'fake-decisions' };
+      input.decision.preselect = { [id]: policy };
+      const result = parseRouteConfig(input);
+      assert.equal(result.ok, false);
+      if (!result.ok) assert.ok(result.errors.includes(`invalid decision.preselect.${id}: only typesafe-jev or amos is supported`));
+    });
+  }
+}
+
+it('accepts empty and populated preselect policies for TypeSafe and Amos', () => {
+  for (const policy of [{}, { k: 3, floor: 0, max_excluded: 0.4, min_margin: 0.3 }]) {
+    const input = example();
+    input.decision.preselect = { 'typesafe-jev': policy, amos: policy };
+    assert.equal(parseRouteConfig(input).ok, true);
+  }
+});
+
 it('rejects a bad preselect policy and resolves the effective one', () => {
   const input = example();
   const valid = parseRouteConfig(input);

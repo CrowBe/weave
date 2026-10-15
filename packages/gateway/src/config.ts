@@ -28,7 +28,6 @@ export const PRESELECT_DEFAULT_MAX_EXCLUDED = 0.4;
 export const PRESELECT_DEFAULT_MIN_MARGIN = 0.3;
 
 const PRESELECT_SITES = ['intake.classify', 'loop.preselect'] as const;
-const KNOWN_DECISION_PROVIDERS = ['typesafe-jev', 'amos', 'openai-decisions'] as const;
 
 /** `key_env` requires `auth: 'api-key'`. A non-loopback provider requires `auth` or `key_env`. */
 export interface DecisionConfig {
@@ -317,7 +316,8 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
         check(object(decision.preselect), 'decision.preselect');
         if (object(decision.preselect)) for (const [id, policy] of Object.entries(decision.preselect)) {
           const path = `decision.preselect.${id}`;
-          check(identifier(id) && member(id, KNOWN_DECISION_PROVIDERS) && Object.hasOwn(decision.providers, id), `${path}: unknown provider`);
+          check(id === DECISION_PROVIDER_ID || id === 'amos', `${path}: only typesafe-jev or amos is supported`);
+          check(Object.hasOwn(decision.providers, id), `${path}: provider must exist`);
           if (!object(policy)) { check(false, path); continue; }
           keys(policy, ['k', 'floor', 'max_excluded', 'min_margin'], path);
           if (policy['k'] !== undefined) check(preselectK(policy['k']), `${path}.k`);
