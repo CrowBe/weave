@@ -21,6 +21,12 @@ export const PRESELECT_DEFAULT_K = 3;
 /** Documented D3 default. Zero leaves the floor off. */
 export const PRESELECT_DEFAULT_FLOOR = 0;
 
+/** Highest p(true) an excluded entry may have when D3 narrows. */
+export const PRESELECT_DEFAULT_MAX_EXCLUDED = 0.4;
+
+/** Minimum gap from the highest kept non-required p(true) to that excluded p. */
+export const PRESELECT_DEFAULT_MIN_MARGIN = 0.3;
+
 const PRESELECT_SITES = ['intake.classify', 'loop.preselect'] as const;
 const KNOWN_DECISION_PROVIDERS = ['typesafe-jev', 'amos', 'openai-decisions'] as const;
 
@@ -29,8 +35,13 @@ export interface DecisionConfig {
   readonly provider: string;
   readonly fallback: string | null;
   readonly sites?: Readonly<Record<string, string>>;
-  /** Per-provider D3 top-k and floor. Absent fields use the documented defaults. */
-  readonly preselect?: Readonly<Record<string, { readonly k?: number; readonly floor?: number }>>;
+  /** Per-provider D3 top-k, floor, and margin gate. Absent fields use the documented defaults. */
+  readonly preselect?: Readonly<Record<string, {
+    readonly k?: number;
+    readonly floor?: number;
+    readonly max_excluded?: number;
+    readonly min_margin?: number;
+  }>>;
   readonly providers: Record<string, {
     base_url: string;
     model: string;
@@ -44,6 +55,8 @@ export interface ResolvedPreselectPolicy {
   readonly k: number;
   readonly floor: number;
   readonly cap: typeof PRESELECT_CAP;
+  readonly max_excluded: number;
+  readonly min_margin: number;
   readonly provider: 'typesafe-jev' | 'amos';
 }
 
@@ -139,6 +152,10 @@ function preselectK(value: unknown): value is number {
 function preselectFloor(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value < 1;
 }
+/** Inclusive unit interval. Distinct from the floor, which excludes 1. */
+function preselectBound(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
+}
 
 /**
  * Effective D3 policy for a provider. Missing and out-of-range fields use the
@@ -153,9 +170,18 @@ export function resolvePreselectPolicy(
   const record = object(raw) ? raw : undefined;
   const kValue = record?.['k'];
   const floorValue = record?.['floor'];
+  const maxExcludedValue = record?.['max_excluded'];
+  const minMarginValue = record?.['min_margin'];
   const k = preselectK(kValue) ? kValue : PRESELECT_DEFAULT_K;
   const floor = preselectFloor(floorValue) ? floorValue : PRESELECT_DEFAULT_FLOOR;
-  return { k, floor: floor === 0 ? 0 : floor, cap: PRESELECT_CAP, provider };
+  const maxExcluded = preselectBound(maxExcludedValue) ? maxExcludedValue : PRESELECT_DEFAULT_MAX_EXCLUDED;
+  const minMargin = preselectBound(minMarginValue) ? minMarginValue : PRESELECT_DEFAULT_MIN_MARGIN;
+  return {
+    k, floor: floor === 0 ? 0 : floor, cap: PRESELECT_CAP,
+    max_excluded: maxExcluded === 0 ? 0 : maxExcluded,
+    min_margin: minMargin === 0 ? 0 : minMargin,
+    provider,
+  };
 }
 
 /** An evaluate unit whose adapter, kind, and model are the configured Amos provider's. */
@@ -293,9 +319,11 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
           const path = `decision.preselect.${id}`;
           check(identifier(id) && member(id, KNOWN_DECISION_PROVIDERS) && Object.hasOwn(decision.providers, id), `${path}: unknown provider`);
           if (!object(policy)) { check(false, path); continue; }
-          keys(policy, ['k', 'floor'], path);
+          keys(policy, ['k', 'floor', 'max_excluded', 'min_margin'], path);
           if (policy['k'] !== undefined) check(preselectK(policy['k']), `${path}.k`);
           if (policy['floor'] !== undefined) check(preselectFloor(policy['floor']), `${path}.floor`);
+          if (policy['max_excluded'] !== undefined) check(preselectBound(policy['max_excluded']), `${path}.max_excluded`);
+          if (policy['min_margin'] !== undefined) check(preselectBound(policy['min_margin']), `${path}.min_margin`);
         }
       }
       // Issue #47: the selected provider must have an evaluate unit this phase can call.

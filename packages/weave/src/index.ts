@@ -96,7 +96,7 @@ export {
 export { BOOLEAN_SITE_POLICY, INPUT_RULES, evaluateBooleanSite, transitionBooleanSite,
   type BooleanSite, type BooleanSiteInput, type CatalogueIndexEntry, type RecordedBooleanAnswer,
   type BooleanObservation, type BooleanTransition, type PreselectPolicyInput, type PreselectScore,
-  type PreselectSelection } from './sites/boolean.js';
+  type PreselectSelection, type PreselectFallbackReason } from './sites/boolean.js';
 export {
   OUTPUT_EVAL_POLICY, OUTPUT_EVAL_QUESTION, OUTPUT_EVAL_SITE, criterionKey, evaluateOutputEval, transitionOutputEval,
   type OutputCriterion, type OutputCriterionEval, type OutputEvalInput, type OutputEvalObservation,

@@ -125,7 +125,10 @@ try {
     preselect_step: STEP,
     catalogue_index: CATALOGUE,
     required_entry_ids: ['cap.grant'],
-    preselect_policy: { k: policy.k, floor: policy.floor, provider: policy.provider },
+    preselect_policy: {
+      k: policy.k, floor: policy.floor, max_excluded: policy.max_excluded, min_margin: policy.min_margin,
+      provider: policy.provider,
+    },
   }, gateway, () => ({ ...state, observed_at: Date.now() }));
   console.log(JSON.stringify({ preselect: result.preselect ?? null, kept: result.catalogue_index.map(entry => entry.id) }));
 } catch {
