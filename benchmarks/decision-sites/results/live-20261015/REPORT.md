@@ -21,21 +21,21 @@ D3 headline accuracy is all-needed recall among covered steps: every needed entr
 | guard.output | amos-small | conf≥0.9; p≥0.3; minimum_coverage_unmet | 18 | — | 0.0% | — | 0.0% | — | — |
 | guard.output | openai-decisions | conf≥0.9; p≥0.3; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
 | guard.output | typesafe-jev | conf≥0.9; p≥0.3; minimum_coverage_unmet | 18 | — | 0.0% | — | 0.0% | — | — |
-| intake.classify | amos-small | conf≥0.5; selected | 60 | 87.9% | 55.0% | 100.0% | 26.7% | — | — |
+| intake.classify | amos-small | conf≥0.5; selected; not_applied: looser than production (report only) | 60 | 87.9% | 55.0% | 100.0% | 26.7% | — | — |
 | intake.classify | openai-decisions | conf≥0.8; minimum_coverage_unmet | 0 | — | 0.0% | — | 0.0% | — | — |
-| intake.classify | typesafe-jev | conf≥0.75; selected | 60 | 94.9% | 65.0% | 97.1% | 56.7% | — | — |
-| loop.continue | amos-small | conf≥0.5; selected | 12 | 100.0% | 75.0% | 100.0% | 66.7% | — | — |
+| intake.classify | typesafe-jev | conf≥0.75; selected; not_applied: looser than production (report only) | 60 | 94.9% | 65.0% | 97.1% | 56.7% | — | — |
+| loop.continue | amos-small | conf≥0.5; selected; not_applied: looser than production (report only) | 12 | 100.0% | 75.0% | 100.0% | 66.7% | — | — |
 | loop.continue | openai-decisions | conf≥0.7; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
 | loop.continue | typesafe-jev | conf≥0.7; selected | 12 | 100.0% | 100.0% | 100.0% | 100.0% | — | — |
 | loop.preselect | amos-small | conf≥0.75; k=3; floor=0; excluded≤0.4; best_kept gap≥0.3; minimum_coverage_unmet | 20 | 100.0% | 65.0% | 100.0% | 65.0% | 0.0% | 0.0% |
 | loop.preselect | openai-decisions | conf≥0.75; k=3; floor=0; excluded≤0.4; best_kept gap≥0.3; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
 | loop.preselect | typesafe-jev | conf≥0.75; k=3; floor=0; excluded≤0.4; best_kept gap≥0.3; minimum_coverage_unmet | 20 | 100.0% | 85.0% | 100.0% | 85.0% | 5.9% | 5.9% |
-| loop.route | amos-small | conf≥0; selected | 12 | 41.7% | 100.0% | 0.0% | 8.3% | — | — |
+| loop.route | amos-small | conf≥0; selected; not_applied: looser than production (report only) | 12 | 41.7% | 100.0% | 0.0% | 8.3% | — | — |
 | loop.route | openai-decisions | conf≥0.75; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
-| loop.route | typesafe-jev | conf≥0.6; selected | 12 | 100.0% | 50.0% | 100.0% | 16.7% | — | — |
-| loop.triage | amos-small | conf≥0; top-p≥0.7; selected | 50 | 72.7% | 44.0% | 71.4% | 28.0% | — | — |
+| loop.route | typesafe-jev | conf≥0.6; selected; not_applied: looser than production (report only) | 12 | 100.0% | 50.0% | 100.0% | 16.7% | — | — |
+| loop.triage | amos-small | conf≥0; top-p≥0.7; selected; not_applied: looser than production (report only) | 50 | 72.7% | 44.0% | 71.4% | 28.0% | — | — |
 | loop.triage | openai-decisions | conf≥0.8; top-p≥0.6; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
-| loop.triage | typesafe-jev | conf≥0; top-p≥0.6; selected | 50 | 97.5% | 80.0% | 100.0% | 56.0% | — | — |
+| loop.triage | typesafe-jev | conf≥0; top-p≥0.6; selected; not_applied: looser than production (report only) | 50 | 97.5% | 80.0% | 100.0% | 56.0% | — | — |
 
 Production thresholds are imported from the site policies (D1 top-p .6 and D6 confidence .75 follow their production transitions). Missing confidence counts below the floor except production D3 (unknown) and the explicitly provisional OpenAI D5 probability band (pass ≥.85, fail ≤.15). The OpenAI band is a benchmark assumption from docs §4b; its deferred adapter has no runtime production policy. Supplied D5 confidence still meets the floor.
 

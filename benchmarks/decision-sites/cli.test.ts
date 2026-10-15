@@ -217,3 +217,35 @@ test('a recovered quota skip is not reported as a current provider skip after re
   assert.equal(summary.competitors[0].skip_reason,null);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test('competitor and quota calls use fresh empty cwd and clean up on success, error and abort',()=>{
+ const helper=mkdtempSync(join(tmpdir(),'p10-cwd-fixtures-'));
+ const help='--mode --no-session --no-tools --no-mcp --no-extensions --no-skills --no-prompt-templates --no-context-files --offline';
+ try{
+  for(const mode of ['success','error','abort']){
+   const id=`cwd-${mode}-${process.pid}`,resultDir=join(testRoot,'results',id),log=join(helper,mode+'.jsonl');
+   const stub=`#!${process.execPath}
+const fs=require('node:fs'),path=require('node:path');
+const name=path.basename(process.argv[1]),help=process.argv.includes('--help'),status=process.argv[2]==='status';
+const prompt=name!=='quota-axi'&&!help&&!status;
+fs.appendFileSync(${JSON.stringify(log)},JSON.stringify({name,prompt,cwd:process.cwd(),entries:fs.readdirSync(process.cwd())})+'\\n');
+fs.writeFileSync('marker','fixture residue');
+if(name==='quota-axi'){const now=Date.now();fs.writeSync(1,JSON.stringify({generatedAt:new Date(now).toISOString(),providers:[{provider:'codex',state:{status:'fresh',stale:false},windows:[{id:'weekly',kind:'weekly',percentRemaining:75,resetsAt:new Date(now+3600000).toISOString()}]}]}));}
+else if(status)fs.writeSync(1,'Auth: authenticated with ChatGPT');
+else if(help)fs.writeSync(1,${JSON.stringify(help)});
+else if(${JSON.stringify(mode)}==='abort'){process.kill(process.ppid,'SIGTERM');setInterval(()=>{},1000);}
+else if(${JSON.stringify(mode)}==='error'){fs.writeSync(2,'fixture error');process.exitCode=1;}
+else fs.writeSync(1,JSON.stringify({answers:{decision:{choice:'flash',confidence:.95}}}));
+`;
+   for(const name of ['quota-axi','pi','fx'])writeFileSync(join(helper,name),stub,{mode:0o700});
+   const result=spawnSync(process.execPath,['--experimental-strip-types',cliPath,'--providers',mode==='abort'?'pi':'pi,fx-ask','--sites','loop.route','--split','holdout','--run-id',id],{env:{...process.env,PATH:helper+':'+process.env.PATH},encoding:'utf8',timeout:30000});
+   assert.equal(result.status,mode==='abort'?130:0,result.stderr);
+   const calls=readFileSync(log,'utf8').trim().split('\n').map(line=>JSON.parse(line) as {name:string;prompt:boolean;cwd:string;entries:string[]});
+   assert.ok(calls.some(call=>call.prompt));
+   assert.equal(new Set(calls.map(call=>call.cwd)).size,calls.length,'each child needs its own cwd');
+   for(const call of calls){assert.deepEqual(call.entries,[]);assert.equal(existsSync(call.cwd),false,call.cwd+' was not removed');}
+   if(mode!=='abort')assert.equal(calls.filter(call=>call.prompt).length,24);
+   rmSync(resultDir,{recursive:true,force:true});
+  }
+ }finally{rmSync(helper,{recursive:true,force:true});}
+});

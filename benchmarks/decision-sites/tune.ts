@@ -26,7 +26,7 @@ export interface Thresholds {
   readonly allow_missing_confidence?: boolean;
   readonly ungated?: boolean;
   readonly tuning_status?: 'selected' | 'no_tune_data' | 'minimum_coverage_unmet';
-  readonly not_applied?: 'needs captain (#142)';
+  readonly not_applied?: 'needs captain (#142)' | 'looser than production (report only)';
 }
 export function productionThresholds(site: string, provider?: string): Thresholds {
   if (site === 'loop.preselect') {
@@ -207,9 +207,15 @@ export function tune(site: string, observations: readonly Observed[], provider?:
     if(better) {best=candidate;score=m;}
   }
   if(!best) return {...production,tuning_status:'minimum_coverage_unmet'};
-  return {...best,tuning_status:'selected',...(isLooser(site,best,production) ? {not_applied:'needs captain (#142)' as const} : {})};
+  const not_applied: Thresholds['not_applied'] = guard(site) || site==='loop.preselect' || site==='eval.output'
+    ? 'needs captain (#142)' : 'looser than production (report only)';
+  return {...best,tuning_status:'selected',...(isLooser(site,best,production) ? {not_applied} : {})};
 }
 export function isLooser(site:string,best:Thresholds,production:Thresholds):boolean {
-  return (guard(site) && ((best.probability??0)>(production.probability??0) || best.confidence<production.confidence)) ||
-    (site==='eval.output' && (best.confidence<production.confidence || (best.probability??0)<(production.probability??0) || (best.fail_probability??0)>(production.fail_probability??0)));
+  return best.confidence<production.confidence ||
+    (guard(site) && (best.probability??0)>(production.probability??0)) ||
+    (site==='loop.triage' && (best.top_p??0)<(production.top_p??0)) ||
+    (site==='loop.preselect' && ((best.margin??0)<(production.margin??0) ||
+      (best.max_excluded??0)>(production.max_excluded??0) || (best.floor??0)<(production.floor??0) || (best.k??0)<(production.k??0))) ||
+    (site==='eval.output' && ((best.probability??0)<(production.probability??0) || (best.fail_probability??0)>(production.fail_probability??0)));
 }

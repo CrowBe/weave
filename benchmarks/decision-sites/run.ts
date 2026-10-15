@@ -32,16 +32,19 @@ export function flags(args:string[]) {
  const split=values['--split']??'all';if(!['all','tune','holdout'].includes(split))throw new Error('Invalid split');
  return {maxSpend,maxSpendExplicit:values['--max-spend-usd']!==undefined,allowSpendIncrease:booleans.has('--allow-spend-increase'),allowSpendAbove5:booleans.has('--allow-spend-above-5'),runId,sites:[...new Set(sites)],providers:[...new Set(providers)],split,resume:booleans.has('--resume'),renderOnly:booleans.has('--render-only')};
 }
-const runProcess:ProcessRunner = (command,args,options)=>new Promise(resolveProcess=>{
+const runProcess:ProcessRunner = async(command,args,options)=>{
+ const cwd=mkdtempSync(join(options.cwd,'call-'));
+ try {return await new Promise<Awaited<ReturnType<ProcessRunner>>>(resolveProcess=>{
  let stdout='',stderr='',done=false;
  const finish=(exitCode:number)=>{if(!done){done=true;resolveProcess({exitCode,stdout,stderr});}};
- const child=spawn(command,[...args],{cwd:options.cwd,stdio:['pipe','pipe','pipe'],signal:options.signal,
+ const child=spawn(command,[...args],{cwd,stdio:['pipe','pipe','pipe'],signal:options.signal,
   env:Object.fromEntries(Object.entries(process.env).filter(([name])=>name==='HOME'||name==='PATH'||name.startsWith('XDG_')))});
  child.stdout.on('data',(data:Buffer)=>{stdout+=data.toString();if(stdout.length>4*1024*1024)child.kill('SIGTERM');});
  child.stderr.on('data',(data:Buffer)=>{stderr+=data.toString();if(stderr.length>1024*1024)child.kill('SIGTERM');});
  child.on('error',()=>finish(127));child.on('close',code=>finish(code??1));
  child.stdin.on('error',()=>{});child.stdin.end(options.stdin);
-});
+ });}finally{rmSync(cwd,{recursive:true,force:true});}
+};
 function fakeProvider():Provider {return {id:'fake',model:'offline-fake',price:0,concurrency:1,serialize:JSON.stringify,async request(request){return {status:'ok',model:'offline-fake',input_tokens:0,output_tokens:0,answers:Object.fromEntries(Object.entries(request.questions).map(([id,q])=>[id,q.type==='choice'?{choice:Object.keys(q.criteria)[0]!,confidence:.95,probabilities:Object.fromEntries(Object.keys(q.criteria).map((key,i)=>[key,i===0?1:0]))}:{probability:.1,confidence:.95}]))};}};}
 export async function main(args=process.argv.slice(2), injected?:{providers:readonly Provider[]}):Promise<number> {
  const options=flags(args);if(!process.versions.node.startsWith('22.'))throw new Error('Node 22 required');

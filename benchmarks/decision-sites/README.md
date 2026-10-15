@@ -72,7 +72,9 @@ the first record. Any spending invocation above $5 additionally requires
 `--allow-spend-above-5`, including an authorized increase on resume.
 
 Competitors receive the same state and questions on stdin, asking for strict
-JSON. They run in an empty temporary cwd with sessions and tools disabled.
+JSON. Each child process, including quota/auth/help checks, runs in its own fresh
+empty temporary cwd with sessions and tools disabled. The directory is removed
+after the call, including failure and cancellation.
 `quota-axi --provider codex --json` runs immediately before each competitor call;
 a missing, stale or >=80%-used weekly window skips the provider for the current
 invocation only. Freshness requires `provider.state.status: "fresh"` and
@@ -142,8 +144,10 @@ execution grants are involved.
 `REPORT.md` and `results/<run_id>/summary.json` derive from the journal in stable
 site/provider order, with statuses, models, digests, Node version, spend, tokens,
 latency and calibration. D3 shows both best-kept and kth-kept gaps (#145), needed
-recall, and multi-entry counts (#140). Any looser guard or D5 setting is marked
-`not_applied: needs captain (#142)`; every candidate remains descriptive.
+recall, and multi-entry counts (#140). Any looser guard, D3 or D5 setting is marked
+`not_applied: needs captain (#142)`. Lower choice-site confidence floors and a
+lower D1 top-p carry `not_applied: looser than production (report only)`.
+Every candidate remains descriptive.
 D3's headline and tune objective are all-needed recall among covered steps;
 extra entries do not reduce it. Exact-set agreement remains a secondary column.
 The score@2 correction and rationale are recorded in SCORING.md. Guards and D5

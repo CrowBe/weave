@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isLooser, metrics, productionThresholds, tune, type Observed } from './tune.ts';
+import { isLooser, metrics, productionThresholds, tune, type Observed, type Thresholds } from './tune.ts';
 import { makeReport } from './report.ts';
 import { transitionBooleanSite } from '@weave/weave';
 
@@ -179,4 +179,64 @@ test('guard loosening compares the candidate with its production threshold',()=>
  assert.equal(isLooser('guard.input',{confidence:.9,probability:.25},{confidence:.9,probability:.2}),true);
  assert.equal(isLooser('guard.output',{confidence:.9,probability:.35},{confidence:.9,probability:.4}),false);
  assert.equal(isLooser('guard.output',{confidence:.89,probability:.2},{confidence:.9,probability:.4}),true);
+});
+
+test('loosening compares every site knob with production and leaves equal or stricter values unmarked',()=>{
+ for(const site of ['intake.classify','loop.triage','loop.route','audit.dispose','loop.continue']){
+  const production=productionThresholds(site);
+  assert.equal(isLooser(site,{...production,confidence:production.confidence-.01},production),true,`${site} confidence`);
+  assert.equal(isLooser(site,production,production),false,`${site} equal`);
+  assert.equal(isLooser(site,{...production,confidence:production.confidence+.01},production),false,`${site} stricter`);
+ }
+ const triage=productionThresholds('loop.triage');
+ assert.equal(isLooser('loop.triage',{...triage,top_p:.5},triage),true);
+ assert.equal(isLooser('loop.triage',{...triage,top_p:.7},triage),false);
+ // Use a non-zero production floor to protect the comparison if policy changes.
+ const preselect={...productionThresholds('loop.preselect'),floor:.2};
+ const changes:readonly [Partial<Thresholds>,Partial<Thresholds>][]=[
+  [{confidence:.7},{confidence:.8}],[{margin:.2},{margin:.4}],
+  [{max_excluded:.5},{max_excluded:.3}],[{floor:.1},{floor:.3}],[{k:2},{k:4}],
+ ];
+ assert.equal(isLooser('loop.preselect',preselect,preselect),false);
+ for(const [looser,stricter]of changes){
+  assert.equal(isLooser('loop.preselect',{...preselect,...looser},preselect),true,JSON.stringify(looser));
+  assert.equal(isLooser('loop.preselect',{...preselect,...stricter},preselect),false,JSON.stringify(stricter));
+ }
+ for(const site of ['guard.input','guard.output','eval.output']){
+  const production=productionThresholds(site);
+  assert.equal(isLooser(site,production,production),false);
+  assert.equal(isLooser(site,{...production,confidence:production.confidence+.01},production),false);
+ }
+});
+
+test('selected loose choice and D3 thresholds carry their distinct report-only labels',()=>{
+ const choiceRows=[
+  ['intake.classify','new_thread'],['loop.triage','capability'],['loop.route','flash'],
+  ['audit.dispose','defer'],['loop.continue','progressing'],
+ ].map(([site,choice])=>row(site!,'tune',{
+  item:{id:site!,scenario_id:site!,site:site!,state:{},gold:{decision:choice!}},
+  result:{status:'ok',answers:{decision:{choice:choice!,confidence:.5,probabilities:{[choice!]:1}}}},
+ }));
+ const triageTop=row('loop.triage','tune',{
+  item:{id:'top-p',scenario_id:'top-p',site:'loop.triage',state:{},gold:{decision:'capability'}},
+  result:{status:'ok',answers:{decision:{choice:'capability',confidence:.95,probabilities:{capability:.5,implement:.5}}}},
+ });
+ for(const observed of [...choiceRows,triageTop]){
+  const selected=tune(observed.item.site,[observed]);
+  assert.equal(selected.tuning_status,'selected');
+  assert.equal(selected.not_applied,'looser than production (report only)',observed.item.id);
+ }
+ const preselect=row('loop.preselect','tune',{
+  item:{id:'preselect',scenario_id:'preselect',site:'loop.preselect',state:{},gold:{entry_0:true,entry_1:false,entry_2:false,entry_3:false}},
+  result:{status:'ok',answers:Object.fromEntries([.9,.8,.7,.6].map((probability,n)=>[`entry_${n}`,{probability,confidence:.95}]))},
+ });
+ assert.equal(tune('loop.preselect',[preselect]).not_applied,'needs captain (#142)');
+ const calls=[...choiceRows,preselect].map((observed,n)=>({...observed,type:'call' as const,provider:'fake',model:'fake',site:observed.item.site,item_id:observed.item.id,set_digest:'s',question_digest:'q',call_id:String(n)}));
+ const report=makeReport({run_id:'labels',node_version:'v22',max_spend_usd:2,set_digests:{}},calls);
+ assert.match(report.markdown,/not_applied: looser than production \(report only\)/);
+ assert.match(report.markdown,/not_applied: needs captain \(#142\)/);
+ for(const observed of [...choiceRows,preselect]){
+  const equal=row(observed.item.site,'tune',{...observed,result:{status:'ok',answers:Object.fromEntries(Object.entries(observed.result.answers!).map(([key,answer])=>[key,{...answer,confidence:1,...(observed.item.site==='loop.preselect'?{probability:key==='entry_0'?1:0}:{})}]))}});
+  assert.equal(tune(equal.item.site,[equal]).not_applied,undefined,`${equal.item.site} production admits`);
+ }
 });

@@ -1011,7 +1011,8 @@
       "tuned_thresholds": {
         "confidence": 0.5,
         "allow_missing_confidence": false,
-        "tuning_status": "selected"
+        "tuning_status": "selected",
+        "not_applied": "looser than production (report only)"
       },
       "production_thresholds": {
         "confidence": 0.8
@@ -1150,7 +1151,8 @@
       "tuned_thresholds": {
         "confidence": 0.75,
         "allow_missing_confidence": false,
-        "tuning_status": "selected"
+        "tuning_status": "selected",
+        "not_applied": "looser than production (report only)"
       },
       "production_thresholds": {
         "confidence": 0.8
@@ -1220,7 +1222,8 @@
       "tuned_thresholds": {
         "confidence": 0.5,
         "allow_missing_confidence": false,
-        "tuning_status": "selected"
+        "tuning_status": "selected",
+        "not_applied": "looser than production (report only)"
       },
       "production_thresholds": {
         "confidence": 0.7
@@ -1672,7 +1675,8 @@
       "tuned_thresholds": {
         "confidence": 0,
         "allow_missing_confidence": false,
-        "tuning_status": "selected"
+        "tuning_status": "selected",
+        "not_applied": "looser than production (report only)"
       },
       "production_thresholds": {
         "confidence": 0.75
@@ -1811,7 +1815,8 @@
       "tuned_thresholds": {
         "confidence": 0.6,
         "allow_missing_confidence": false,
-        "tuning_status": "selected"
+        "tuning_status": "selected",
+        "not_applied": "looser than production (report only)"
       },
       "production_thresholds": {
         "confidence": 0.75
@@ -1882,7 +1887,8 @@
         "confidence": 0,
         "top_p": 0.7,
         "allow_missing_confidence": false,
-        "tuning_status": "selected"
+        "tuning_status": "selected",
+        "not_applied": "looser than production (report only)"
       },
       "production_thresholds": {
         "confidence": 0.8,
@@ -2025,7 +2031,8 @@
         "confidence": 0,
         "top_p": 0.6,
         "allow_missing_confidence": false,
-        "tuning_status": "selected"
+        "tuning_status": "selected",
+        "not_applied": "looser than production (report only)"
       },
       "production_thresholds": {
         "confidence": 0.8,
