@@ -17,7 +17,7 @@ test('audit report secret screen matches token prefixes, not ordinary words', ()
 import { assembleAuditState, AUDIT_SLICES } from '../src/audit-view.js';
 import { MemoryAuditJournal, runAuditLoop, replayAuditLoop, type AuditPorts, type AuditLoopInput } from '../src/audit-loop.js';
 import { transitionAuditDispose } from '../src/sites/audit-dispose.js';
-import type { EvaluationOutcome, InferenceTerms } from '@weave/gateway';
+import { createInferenceGateway, type EvaluationOutcome, type InferenceTerms, type RoutedUnit } from '@weave/gateway';
 const terms: InferenceTerms = { quality: 'baseline', destinations: ['local'], max_context_tokens: 100,
   deadline: 100, cost_ceiling: 10, max_attempts: 1 };
 const revision = { state_revision: 1, state_updated_at: 10 };
@@ -40,7 +40,7 @@ function fixture(options: { gaps?: number; red?: boolean; progress?: ('stalled'|
     },
     generate: async request => {
       generates++;
-      assert.equal(request.terms.tier, 'strong');
+      assert.equal(request.terms.tier, 'strong'); assert.equal(request.terms.audit, true);
       const report = { findings: generates <= (options.gaps ?? 0) ? [{ criterion_id: 'c1', kind: 'gap', evidence_ref: 'ref_test', proposed_fix: 'Fix test' }] : [], goal_met_claim: true };
       return { status: 'accepted', request_id: request.request_id, site: request.site, text: JSON.stringify(report),
         routed_unit_id: 'fake', provider_response_id: 'fake1', attempts: [], spent: 0, uncertainty: [] };
@@ -136,13 +136,39 @@ test('generated cancellation remains a cancellation stop', async () => {
   assert.equal((await runAuditLoop(f.input, ports, f.journal)).outcome, 'cancelled');
 });
 test('gateway generation budget exhaustion pauses the audit', async () => {
-  for (const reason of ['budget_exhausted', 'five_hour_budget_low', 'budget_pace_ahead'] as const) {
+  // budget_pace_ahead is only blocked for audit:true requests, so it is covered
+  // through the real gateway below rather than with a faked blocked result.
+  for (const reason of ['budget_exhausted', 'five_hour_budget_low'] as const) {
     const f = fixture();
     const ports: AuditPorts = { ...f.ports, generate: async request => reason === 'budget_exhausted' ? {
       status: 'unaccepted', reason, request_id: request.request_id, site: request.site, attempts: [], spent: 0, uncertainty: [],
     } : { status: 'blocked', reason, request_id: request.request_id, site: request.site, attempts: [], spent: 0, uncertainty: [] } };
     assert.equal((await runAuditLoop(f.input, ports, f.journal)).outcome, 'budget');
   }
+});
+test('ahead pace through the real gateway pauses the audit instead of a standard-tier downgrade', async () => {
+  const unit: RoutedUnit = { routed_unit_id: 'strong.codex', tier: 'strong', quota_provider: 'codex',
+    operation: 'generate', kind: 'judge', adapter: 'fake', model: 'fake', context_profile: 'none', context_profile_version: 1,
+    prompt_template: 'none', prompt_template_version: 1, settings: { max_output_tokens: 1 }, destination: 'local',
+    quality: 'baseline', context_limit_tokens: 1_000_000, price: { input_per_mtok: 0, output_per_mtok: 0 } };
+  const standard: RoutedUnit = { ...unit, routed_unit_id: 'standard.codex', tier: 'standard' };
+  const pauses: unknown[] = [];
+  let calls = 0;
+  const gateway = createInferenceGateway({ routes: [unit, standard], clock: { now: () => 100 },
+    quota: { async read() { return { observed_at: 100, providers: [{ provider: 'codex', status: 'fresh', windows: [
+      { id: 'seven_day', percentRemaining: 90, resetsAt: 500_000, pace: { status: 'ahead' } }] }] }; } },
+    async persist_pause(record) { pauses.push(record); },
+    adapters: [{ id: 'fake', async execute() { calls++; return { status: 'completed' as const,
+      text: JSON.stringify({ findings: [], goal_met_claim: true }), usage: { input_tokens: 0, output_tokens: 0 },
+      finish_reason: 'stop', provider_response_id: undefined }; } }] });
+  const f = fixture();
+  const ports: AuditPorts = { ...f.ports, generate: (request, signal) => gateway.generate(request, signal) };
+  const input = { ...f.input, terms: { ...terms, max_context_tokens: 1_000_000, deadline: 1_000_000 } };
+  const paused = await runAuditLoop(input, ports, f.journal);
+  assert.equal(paused.outcome, 'budget'); assert.equal(paused.report, null); assert.equal(paused.goal_done, false);
+  assert.equal(calls, 0);
+  assert.deepEqual(pauses, [{ type: 'loop.paused', policy: 'budget.policy@1', request_id: 'audit1:r1:audit',
+    site: 'audit.generate', reason: 'budget_pace_ahead', until: 500_000 }]);
 });
 test('cancelled audit requires explicit resume and does not consume a round', async () => {
   const f = fixture({ max: 1 }); const controller = new AbortController(); controller.abort();
