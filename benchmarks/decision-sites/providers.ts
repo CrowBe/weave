@@ -56,6 +56,7 @@ function httpProvider(id: string, model: string, price: number, key: string | un
         let raw: unknown;
         try { raw = await response.json(); } catch {
           if (external.aborted) throw new Error('unacknowledged_call');
+          if (response.ok && signal.aborted) return { status: 'failed', reason: 'timeout', ...metadata };
           if (response.ok) return { status: 'failed', reason: 'malformed_body', ...metadata }; raw = {};
         }
         const usage = record(raw) && record(raw.usage) ? raw.usage : {};
@@ -100,17 +101,10 @@ function amosProvider(config: ProvidersConfig): Provider {
       if (external.aborted) return { status: 'failed', reason: 'cancelled' };
       try {
         const signal = AbortSignal.any([external, AbortSignal.timeout(config.timeoutMs ?? 30_000)]);
-        const health = await fetch(`${baseURL}/v1/models`, { signal, redirect: 'error' });
-        if (!health.ok) return { status: 'failed', reason: 'models_unavailable', http_status: health.status };
-        const data: unknown = await health.json();
-        if (!record(data) || !Array.isArray(data.models)) return { status: 'failed', reason: 'models_unavailable' };
-        const served = data.models.find((entry: unknown) => record(entry) && entry.name === 'amos-1-2b');
-        const supported = data.question_types ?? data.supported_question_types ?? (record(served) ? served.question_types ?? served.supported_question_types ?? (typeof served.description === 'string' ? served.description.match(/\b(?:noul|choice|score)\b/g) : undefined) : undefined);
-        // No assumptions about local server support: absent declaration fails closed.
-        if (!Array.isArray(supported) || Object.values(request.questions).some(q => !supported.includes(q.type === 'boolean' ? 'noul' : q.type))) return { status: 'skipped', reason: 'unsupported_question_type' };
-        if (!record(served)) return { status: 'skipped', reason: 'model_not_listed' };
         let observed: unknown;
         const observedFetch: typeof globalThis.fetch = async (url, init) => {
+          // Share this item's preflight response with the adapter's health check.
+          if (String(url) === `${baseURL}/v1/models`) return health.clone();
           const response = await fetch(url, init);
           if (String(url).endsWith('/v1/systemone')) {
             // The existing adapter intentionally drops the echoed model. Capture the
@@ -119,7 +113,17 @@ function amosProvider(config: ProvidersConfig): Provider {
           }
           return response;
         };
+        // Construction enforces loopback-only configuration before any traffic.
         const adapter = amosEvaluator({ baseURL, fetch: observedFetch, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) });
+        const health = await fetch(`${baseURL}/v1/models`, { signal, redirect: 'error' });
+        if (!health.ok) return { status: 'failed', reason: 'models_unavailable', http_status: health.status };
+        const data: unknown = await health.clone().json();
+        if (!record(data) || !Array.isArray(data.models)) return { status: 'failed', reason: 'models_unavailable' };
+        const served = data.models.find((entry: unknown) => record(entry) && entry.name === 'amos-1-2b');
+        const supported = data.question_types ?? data.supported_question_types ?? (record(served) ? served.question_types ?? served.supported_question_types ?? (typeof served.description === 'string' ? served.description.match(/\b(?:noul|choice|score)\b/g) : undefined) : undefined);
+        // No assumptions about local server support: absent declaration fails closed.
+        if (!Array.isArray(supported) || Object.values(request.questions).some(q => !supported.includes(q.type === 'boolean' ? 'noul' : q.type))) return { status: 'skipped', reason: 'unsupported_question_type' };
+        if (!record(served)) return { status: 'skipped', reason: 'model_not_listed' };
         const result = await adapter.evaluate({ ...request, model: 'amos-1-2b', signal, kind: Object.values(request.questions)[0]?.type ?? 'boolean' });
         if (external.aborted) return { status: 'failed', reason: 'cancelled' };
         const rawUsage = record(observed) && record(observed.usage) ? observed.usage : {};

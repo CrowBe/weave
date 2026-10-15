@@ -14,6 +14,24 @@ async function fixture(fn:(journal:Journal)=>Promise<void>){const dir=await mkdt
 const entry={item,split:'holdout' as const,set_digest:'s'};
 function provider(request:Provider['request']):Provider{return {id:'fake',model:'fake',price:.1,serialize:JSON.stringify,request};}
 const clock={now:()=>100,sleep:async()=>{}};
+for(const id of ['typesafe-jev','openai-decisions'])test(`${id} body timeout charges the projection and remains terminal on resume`,t=>fixture(async journal=>{
+ const deadline=new AbortController(),external=new AbortController();let calls=0;
+ t.mock.method(AbortSignal,'timeout',()=>deadline.signal);
+ const p=buildProviders({typesafeKey:'fake-key',openaiKey:'fake-key',fetch:async()=>{
+  calls++;
+  return new Response(new ReadableStream({pull(controller){
+   deadline.abort(new DOMException('Body read timed out','TimeoutError'));controller.error(deadline.signal.reason);
+  }},{highWaterMark:0}));
+ }}).find(p=>p.id===id)!;
+ const run=()=>execute({entries:[entry],providers:[p],journal,maxSpend:2,signal:external.signal,...clock});
+ await run();
+ const intent=journal.read().find(r=>r.type==='intent')!,call=journal.read().find(r=>r.type==='call')!;
+ assert.equal(call.result.reason,'timeout');assert.equal(call.result.input_tokens,undefined);assert.equal(call.terminal,true);
+ assert.ok(intent.projected_usd>0);assert.equal(call.cost_usd,intent.projected_usd);assert.equal(journal.spent(),intent.projected_usd);
+ assert.equal(external.signal.aborted,false);
+ await run();assert.equal(calls,1);assert.equal(journal.spent(),intent.projected_usd);
+ assert.equal(journal.read().some(r=>r.type==='uncertain'),false);
+}));
 for(const id of ['typesafe-jev','openai-decisions'])for(const phase of ['before_fetch','mid_fetch','after_response','after_body','body_interrupted']){
  test(`${id} cancellation ${phase} preserves dispatch, usage and replay safety`,()=>fixture(async journal=>{
   const controller=new AbortController();let calls=0;

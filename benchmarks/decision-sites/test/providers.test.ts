@@ -35,6 +35,27 @@ test('Amos requires advertised question types and calls amosEvaluator without sh
  const p=buildProviders({fetch:async(url)=>{const path=String(url);paths.push(path);return path.endsWith('/v1/models')?json({models:[{name:'amos-1-2b'}],question_types:['noul']}):json({});}}).find(x=>x.id==='amos-small')!;
  assert.equal((await p.request(request,new AbortController().signal)).reason,'unsupported_question_type');assert.equal(paths.length,1);
 });
+test('Amos rejects non-loopback configuration with a typed failure before any fetch',async()=>{
+ for(const amosBaseURL of ['https://remote.example','http://192.0.2.1:8766']){
+  let calls=0;
+  const p=buildProviders({amosBaseURL,fetch:async()=>{calls++;return json({});}}).find(x=>x.id==='amos-small')!;
+  assert.deepEqual(await p.request(request,new AbortController().signal),{status:'failed',reason:'models_unavailable'});
+  assert.equal(calls,0);
+ }
+});
+for(const id of ['typesafe-jev','openai-decisions'])test(`${id} reports a timeout during a 2xx body read with response metadata`,async t=>{
+ const deadline=new AbortController(),external=new AbortController();
+ t.mock.method(AbortSignal,'timeout',(ms:number)=>{assert.equal(ms,30_000);return deadline.signal;});
+ const p=buildProviders({typesafeKey:'key',openaiKey:'key',fetch:async(_url,options)=>{
+  const body=new ReadableStream({pull(controller){
+   deadline.abort(new DOMException('Body read timed out','TimeoutError'));
+   assert.equal(options?.signal?.aborted,true);controller.error(deadline.signal.reason);
+  }},{highWaterMark:0});
+  return new Response(body,{headers:{'x-request-id':'openai-request','x-typesafe-request-id':'typesafe-request'}});
+ }}).find(x=>x.id===id)!;
+ assert.deepEqual(await p.request(request,external.signal),{status:'failed',reason:'timeout',http_status:200,request_id:id==='typesafe-jev'?'typesafe-request':'openai-request'});
+ assert.equal(external.signal.aborted,false);
+});
 test('non-JSON 401 still skips provider and non-JSON 429 preserves retry status',async()=>{
  let calls=0;
  const p=buildProviders({openaiKey:'key',fetch:async()=>{calls++;return new Response('denied',{status:401,headers:{'x-request-id':'r'}});}}).find(x=>x.id==='openai-decisions')!;
@@ -62,7 +83,13 @@ test('Amos reuses the adapter with advertised types and never attaches credentia
   paths.push(String(url));assert.ok(!String(JSON.stringify(options?.headers)).includes('CANARY'));
   return String(url).endsWith('/v1/models')?json({models:[{name:'amos-1-2b',description:'1.2B parameters: noul, choice, score'}]}):json({model:'amos-1-2b',answers:{q:{type:'choice',choice:'b',probabilities:{b:.8,a:.2},confidence:.9}},usage:{input_tokens:10,output_tokens:1}});
  }}).find(x=>x.id==='amos-small')!;
- assert.equal((await p.request(request,new AbortController().signal)).status,'ok');assert.equal(paths.at(-1),'http://127.0.0.1:8766/v1/systemone');
+ assert.equal((await p.request(request,new AbortController().signal)).status,'ok');
+ assert.deepEqual(paths,['http://127.0.0.1:8766/v1/models','http://127.0.0.1:8766/v1/systemone']);
+ paths.length=0;
+ const concurrent=await Promise.all([p.request(request,new AbortController().signal),p.request(request,new AbortController().signal)]);
+ assert.deepEqual(concurrent.map(result=>result.status),['ok','ok']);
+ assert.equal(paths.filter(path=>path.endsWith('/v1/models')).length,2);
+ assert.equal(paths.filter(path=>path.endsWith('/v1/systemone')).length,2);
  const unavailable=buildProviders({fetch:async()=>new Response('',{status:503})}).find(x=>x.id==='amos-small')!;
  assert.equal((await unavailable.request(request,new AbortController().signal)).reason,'models_unavailable');
 });
