@@ -4,7 +4,8 @@ import { mkdtemp,rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execute } from './engine.ts';
-import { Journal } from './journal.ts';
+import { Journal, digest } from './journal.ts';
+import { buildRequest } from './questions.ts';
 import type { Provider, Item } from './types.ts';
 const item:Item={id:'i',scenario_id:'s',site:'loop.route',state:{task:'read'},gold:{decision:'flash'}};
 async function fixture(fn:(journal:Journal)=>Promise<void>){const dir=await mkdtemp(join(tmpdir(),'engine-'));try{await fn(new Journal(join(dir,'journal.jsonl')));}finally{await rm(dir,{recursive:true,force:true});}}
@@ -61,4 +62,36 @@ test('competitor cap applies across resume and sites are sampled round-robin',()
  const rows=Array.from({length:30},(_,n)=>['loop.route','loop.continue'].map(site=>({item:{...item,id:`${site}-${n}`,site,state:site},split:'holdout' as const,set_digest:'s'}))).flat();
  await execute({entries:rows,providers:[p],journal,maxSpend:2,...clock});assert.equal(calls.length,40);assert.equal(calls.filter(s=>s==='loop.route').length,20);
  await execute({entries:rows,providers:[p],journal,maxSpend:2,...clock});assert.equal(calls.length,40);
+}));
+test('terminal wrong-model results are replayed without repaying or recounting spend',()=>fixture(async journal=>{
+ let n=0;
+ const p=provider(async()=>{n++;return {status:'failed',reason:'wrong_model',model:'unexpected',input_tokens:100};});
+ const run=()=>execute({entries:[entry],providers:[p],journal,maxSpend:2,...clock});
+ await run();const spent=journal.spent();await run();
+ assert.equal(n,1);assert.equal(journal.spent(),spent);
+}));
+test('wrong-model retry records retain their attempt count on resume',()=>fixture(async journal=>{
+ const request=await buildRequest(item);
+ for(let attempt=0;attempt<2;attempt++)journal.append({type:'call',provider:'fake',model:'fake',site:item.site,item_id:item.id,set_digest:entry.set_digest,question_digest:digest(JSON.stringify(request)),call_id:`retry-${attempt}`,result:{status:'failed',reason:'wrong_model',model:'unexpected',http_status:429},terminal:false,cost_usd:0});
+ let n=0;const p=provider(async()=>{n++;return {status:'failed',reason:'wrong_model',model:'unexpected',http_status:429};});
+ await execute({entries:[entry],providers:[p],journal,maxSpend:2,...clock});
+ assert.equal(n,1);assert.equal(journal.read().filter(r=>r.type==='call').at(-1)!.terminal,true);
+}));
+test('unsupported question types fail only their item, including after legacy provider skips',()=>fixture(async journal=>{
+ journal.append({type:'provider_status',provider:'fake',result:{status:'skipped',reason:'unsupported_question_type'}});
+ let n=0;const p=provider(async()=>{n++;return n===1?{status:'skipped',reason:'unsupported_question_type'}:{status:'ok',model:'fake',answers:{}};});
+ const run=()=>execute({entries:[entry,{...entry,item:{...item,id:'supported'}}],providers:[p],journal,maxSpend:2,...clock});
+ await run();assert.equal(n,2);
+ const calls=journal.read().filter(r=>r.type==='call');
+ assert.equal(calls[0]!.result.status,'failed');assert.equal(calls[0]!.result.reason,'unsupported_question_type');
+ assert.equal(calls[1]!.result.status,'ok');
+ assert.equal(journal.read().filter(r=>r.type==='provider_status').length,1);
+ await run();assert.equal(n,2);
+}));
+test('a metered budget stop still allows later zero-price providers',()=>fixture(async journal=>{
+ let paid=0,free=0;
+ const metered=provider(async()=>{paid++;return {status:'ok',model:'fake',answers:{}};});
+ const unmetered={...provider(async()=>{free++;return {status:'ok' as const,model:'fake',answers:{}};}),id:'free',price:0};
+ await execute({entries:[entry,{...entry,item:{...item,id:'second'}}],providers:[metered,unmetered],journal,maxSpend:0,...clock});
+ assert.equal(paid,0);assert.equal(free,2);assert.equal(journal.read().filter(r=>r.type==='budget_stop').length,1);
 }));

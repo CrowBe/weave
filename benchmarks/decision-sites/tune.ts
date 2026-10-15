@@ -207,7 +207,9 @@ export function tune(site: string, observations: readonly Observed[], provider?:
     if(better) {best=candidate;score=m;}
   }
   if(!best) return {...production,tuning_status:'minimum_coverage_unmet'};
-  const looser=(guard(site) && ((best.probability??0)>.3 || best.confidence<production.confidence)) ||
+  return {...best,tuning_status:'selected',...(isLooser(site,best,production) ? {not_applied:'needs captain (#142)' as const} : {})};
+}
+export function isLooser(site:string,best:Thresholds,production:Thresholds):boolean {
+  return (guard(site) && ((best.probability??0)>(production.probability??0) || best.confidence<production.confidence)) ||
     (site==='eval.output' && (best.confidence<production.confidence || (best.probability??0)<(production.probability??0) || (best.fail_probability??0)>(production.fail_probability??0)));
-  return {...best,tuning_status:'selected',...(looser ? {not_applied:'needs captain (#142)' as const} : {})};
 }

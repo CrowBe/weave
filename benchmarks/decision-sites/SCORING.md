@@ -52,7 +52,8 @@ count are separate. Latency quantiles use sorted nearest-rank positions
 floor(q*(n-1)); tokens and cost sum recorded completed calls.
 
 Holdout is evaluated once with tune-selected and production thresholds. A looser
-guard block threshold (> .3), a lower guard confidence floor, or a lower D5
+guard block threshold (above its production value, currently .3), a lower guard
+confidence floor, or a lower D5
 probability/confidence floor is reported as `not_applied: needs captain (#142)`.
 All tuning is descriptive: even stricter candidates are never applied to runtime.
 

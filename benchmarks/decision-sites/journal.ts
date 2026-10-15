@@ -48,9 +48,9 @@ export class Journal {
 export function acquireLock(dir: string): ()=>void {
  mkdirSync(dir,{recursive:true,mode:0o700});const path=join(dir,'lock');let fd:number;
  try {fd=openSync(path,'wx',0o600);} catch {
-  let alive=true;
-  try {const pid=Number(readFileSync(path,'utf8'));if(!Number.isSafeInteger(pid)||pid<=0)throw new Error();process.kill(pid,0);}catch(e){if((e as NodeJS.ErrnoException).code==='ESRCH')alive=false;}
-  throw new Error(alive?'Run directory locked':'Run directory has stale lock; inspect before removing');
+  let state:'locked'|'stale'|'stale-unknown'='stale-unknown';
+  try {const text=readFileSync(path,'utf8').trim(),pid=Number(text);if(!/^[1-9][0-9]*$/.test(text)||!Number.isSafeInteger(pid))throw new Error();state='locked';process.kill(pid,0);}catch(e){if((e as NodeJS.ErrnoException).code==='ESRCH')state='stale';}
+  throw new Error(state==='locked'?'Run directory locked':`Run directory has ${state} lock; inspect before removing`);
  }
  try{writeSync(fd,String(process.pid));fsyncSync(fd);}finally{closeSync(fd);}
  // Persist directory entry as well as file contents.

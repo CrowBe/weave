@@ -27,6 +27,9 @@ Missing keys produce `skipped: no_credential`. Amos uses `AMOS_BASE_URL` or
 `http://127.0.0.1:8766`; the harness never starts, stops or restarts it. It uses
 `amosEvaluator`, discovers listed question types at `/v1/models`, and dispatches
 one request at a time. Run under `nice -n 10` to keep local inference courteous.
+Child processes (quota-axi, pi and fx) inherit only `HOME`, `PATH` and `XDG_*`.
+Neither API-key family nor other ambient environment values reach those CLIs;
+ChatGPT sign-in is discovered through their local authentication configuration.
 All providers currently dispatch sequentially (Jev <=4; Amos/competitors =1).
 No grants, guardrail middleware, shuffle, routing tiers, or gateway budget
 downgrades participate. Requests are captured from the actual production site
@@ -43,6 +46,9 @@ status, code and request id and skips the remainder of that provider. Other
 providers continue. HTTP 429 retries up to three total attempts, honoring
 Retry-After up to a 60-second bound; a longer wait ends the item without an early
 retry. Network/timeout/5xx/shape/refusal failures remain in item denominators.
+An unsupported Amos question type fails that item; it does not disable other
+sites or future resumes. Only provider-level auth, credential, quota, model
+availability or CLI capability failures skip the whole provider.
 
 The default metered decision-spend ceiling is **USD 2.00 per run**. Each HTTP
 attempt reserves `ceil(serialized_request_chars/3) * input_price / 1e6` before
@@ -51,7 +57,9 @@ Missing usage retains that conservative estimate; skips before inference cost
 zero. Prices are TypeSafe $0.042/M input (output free), OpenAI $0.10/M input;
 [code](providers.ts) includes the source URLs. An unexpectedly larger reported
 usage can exceed the preflight estimate and is recorded honestly; subsequent
-calls stop. No snapshot authorizes spending on resume: the live journal is read
+calls that cannot fit stop for that provider. Later providers still receive their
+own preflight checks, including zero-price Amos and competitors. No snapshot
+authorizes spending on resume: the live journal is read
 again before every call. A ceiling stop records `budget_stop` and renders partial
 results. `--max-spend-usd` sets the ceiling; above $5 additionally requires
 `--allow-spend-above-5`.
@@ -90,18 +98,24 @@ npm run bench:decision-sites:live -- --render-only --run-id live-20261015 \
 
 Render-only reads the existing journal without appending records or repairing a
 torn tail; even an incomplete final line stays byte-for-byte unchanged. It
-regenerates `REPORT.md` and the run's `summary.json`. A temporary exclusive
-lock still prevents concurrent writers. Existing recorded skips are preserved;
+regenerates the run's `REPORT.md` and `summary.json`. The checked-in `REPORT.md`
+is refreshed only for a complete, all-site, both-split run without the fake
+provider and with at least one successful answer. Fake, partial and entirely
+skipped reports stay under `results/<run_id>/`. A temporary exclusive lock still
+prevents concurrent writers. Existing recorded skips are preserved;
 render-only and resume do not turn those skips into new competitor calls.
 
 Each run owns `results/<run_id>/lock` exclusively. A concurrent writer refuses;
 a dead-pid lock is reported as stale and must be inspected and removed by the
-operator. The append-only `journal.jsonl` fsyncs reservations and completed calls;
+operator. An empty or malformed PID is `stale-unknown` and is never silently
+stolen. The append-only `journal.jsonl` fsyncs reservations and completed calls;
 a torn final line is truncated before appending, while corrupt earlier records
 refuse replay. Saved answers bind provider, expected and served model, site,
 item, set digest, and exact request digest. Changed bindings are re-asked; older
-cost remains charged. Every completed attempt is charged once. SIGINT/SIGTERM
-abort in-flight calls, record cancellation, render partial results and exit
+cost remains charged. Every completed attempt is charged once. Resume never
+re-pays a terminal wrong-model failure: it remains recorded against the
+requested binding, with the unexpected served model retained as failure evidence.
+SIGINT/SIGTERM abort in-flight calls, record cancellation, render partial results and exit
 nonzero. A cancelled item is never recorded as an answer.
 
 A crash or cancellation between dispatch and durable receipt cannot establish

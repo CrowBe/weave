@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { metrics, productionThresholds, tune, type Observed } from './tune.ts';
+import { isLooser, metrics, productionThresholds, tune, type Observed } from './tune.ts';
 import { makeReport } from './report.ts';
 import { transitionBooleanSite } from '@weave/weave';
 
@@ -173,4 +173,10 @@ test('competitor provider-level skips count zero attempts and carry their reason
  }
  assert.match(report.markdown,/\| pi \| audit.dispose \| 0 \|/);
  assert.match(report.markdown,/Skip reason/);
+});
+
+test('guard loosening compares the candidate with its production threshold',()=>{
+ assert.equal(isLooser('guard.input',{confidence:.9,probability:.25},{confidence:.9,probability:.2}),true);
+ assert.equal(isLooser('guard.output',{confidence:.9,probability:.35},{confidence:.9,probability:.4}),false);
+ assert.equal(isLooser('guard.output',{confidence:.89,probability:.2},{confidence:.9,probability:.4}),true);
 });

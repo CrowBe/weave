@@ -60,7 +60,7 @@ test('CLI reports concurrent and stale locks without stealing them',()=>{
  try{
   mkdirSync(dir,{recursive:true});
   const args=['--experimental-strip-types','benchmarks/decision-sites/run.ts','--providers','fake','--run-id',id];
-  for(const [pid,expected] of [[process.pid,'locked'],[2147483647,'stale']] as const){
+  for(const [pid,expected] of [[process.pid,'locked'],[2147483647,'stale'],['','stale-unknown']] as const){
    writeFileSync(join(dir,'lock'),String(pid));
    const result=spawnSync(process.execPath,args,{encoding:'utf8'});assert.equal(result.status,1);assert.ok(result.stderr.includes(expected),JSON.stringify({expected,stderr:result.stderr,stdout:result.stdout}));assert.equal(readFileSync(join(dir,'lock'),'utf8'),String(pid));
   }
@@ -69,8 +69,8 @@ test('CLI reports concurrent and stale locks without stealing them',()=>{
 
 test('resume re-renders completed results; render-only never dispatches or mutates the journal',async()=>{
  const id=`render-${process.pid}`;const dir=new URL(`./results/${id}`,import.meta.url).pathname;
- const reportPath=new URL('./REPORT.md',import.meta.url).pathname;
- let oldReport:string|undefined;try{oldReport=readFileSync(reportPath,'utf8');}catch{}
+ const reportPath=join(dir,'REPORT.md');
+ const publishedPath=new URL('./REPORT.md',import.meta.url).pathname;const published=readFileSync(publishedPath,'utf8');
  try{
   const args=['--providers','fake','--sites','loop.route','--run-id',id];
   const first=spawnSync(process.execPath,['--experimental-strip-types','benchmarks/decision-sites/run.ts',...args],{encoding:'utf8'});
@@ -81,6 +81,7 @@ test('resume re-renders completed results; render-only never dispatches or mutat
   writeFileSync(reportPath,'stale report');rmSync(join(dir,'summary.json'));
   assert.equal(await main([...args,'--resume'],noCalls),0);
   assert.match(readFileSync(reportPath,'utf8'),/Decision-site benchmark/);
+  assert.equal(readFileSync(publishedPath,'utf8'),published);
   assert.equal(readFileSync(journalPath,'utf8').trim().split('\n').map(line=>JSON.parse(line)).filter(r=>r.type==='call').length,completed);
   // A journal may end in a torn tail after a crash. Rendering must leave even those bytes alone.
   const before=readFileSync(journalPath,'utf8')+'{"torn":';writeFileSync(journalPath,before);
@@ -89,6 +90,66 @@ test('resume re-renders completed results; render-only never dispatches or mutat
   assert.equal(await main([...args,'--render-only'],uncompleted),0);
   assert.equal(calls,0);assert.equal(readFileSync(journalPath,'utf8'),before);
   assert.match(readFileSync(reportPath,'utf8'),/Decision-site benchmark/);
+  assert.equal(readFileSync(publishedPath,'utf8'),published);
   assert.ok(JSON.parse(readFileSync(join(dir,'summary.json'),'utf8')).non_gating);
- }finally{rmSync(dir,{recursive:true,force:true});if(oldReport!==undefined)writeFileSync(reportPath,oldReport);else rmSync(reportPath,{force:true});}
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('quota and competitor children receive only auth-location environment, never API keys',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'p10-child-env-'));const id=`child-env-${process.pid}`;
+ const resultDir=new URL(`./results/${id}`,import.meta.url).pathname;
+ const reportPath=new URL('./REPORT.md',import.meta.url).pathname;
+ const oldReport=readFileSync(reportPath,'utf8');
+ try{
+  const stub=`#!${process.execPath}\nconst fs=require('node:fs'),path=require('node:path');\nconst name=path.basename(process.argv[1]);\nfs.writeFileSync(path.join(${JSON.stringify(dir)},name+'.env.json'),JSON.stringify(Object.keys(process.env)));\nif(name==='quota-axi'){const now=Date.now();fs.writeSync(1,JSON.stringify({generatedAt:new Date(now).toISOString(),providers:[{provider:'codex',status:'fresh',windows:[{id:'weekly',kind:'weekly',percentRemaining:75,resetsAt:new Date(now+3600000).toISOString()}]}]}));}\nelse if(name==='fx'){fs.writeSync(1,'Auth: not authenticated');}\nelse if(process.argv.includes('--help')){fs.writeSync(1,'--mode --no-session --no-tools --no-mcp --no-extensions --no-skills --no-prompt-templates --no-context-files --offline');}\nelse{fs.writeSync(2,'Authentication required');process.exitCode=1;}\n`;
+  for(const name of ['quota-axi','pi','fx'])writeFileSync(join(dir,name),stub,{mode:0o700});
+  const env={...process.env,PATH:dir+':'+process.env.PATH,XDG_CONFIG_HOME:join(dir,'config'),TYPESAFE_API_KEY:'FAKE_TYPESAFE',TYPESAFE_AI_API_KEY:'FAKE_TYPESAFE_AI',OPENAI_API_KEY:'FAKE_OPENAI',OPENAI_ACCESS_TOKEN:'FAKE_TOKEN',P10_UNRELATED_SECRET:'FAKE_OTHER'};
+  const result=spawnSync(process.execPath,['--experimental-strip-types','benchmarks/decision-sites/run.ts','--providers','pi,fx-ask','--sites','loop.route','--split','holdout','--run-id',id],{env,encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr);
+  for(const name of ['quota-axi','pi','fx']){
+   const names=JSON.parse(readFileSync(join(dir,name+'.env.json'),'utf8')) as string[];
+   assert.ok(names.includes('HOME'));assert.ok(names.includes('PATH'));assert.ok(names.includes('XDG_CONFIG_HOME'));
+   assert.deepEqual(names.filter(key=>key!=='HOME'&&key!=='PATH'&&!key.startsWith('XDG_')),[],name+' received unrelated environment names');
+  }
+ }finally{rmSync(dir,{recursive:true,force:true});rmSync(resultDir,{recursive:true,force:true});writeFileSync(reportPath,oldReport);}
+});
+
+test('fake and partial reports stay in the run directory without overwriting the published report',async()=>{
+ const id=`local-report-${process.pid}`;const dir=new URL(`./results/${id}`,import.meta.url).pathname;
+ const reportPath=new URL('./REPORT.md',import.meta.url).pathname;const original=readFileSync(reportPath,'utf8');
+ try{
+  const args=['--providers','fake','--sites','loop.route','--run-id',id];
+  assert.equal(await main(args),0);
+  assert.equal(readFileSync(reportPath,'utf8'),original);
+  assert.match(readFileSync(join(dir,'REPORT.md'),'utf8'),/Decision-site benchmark/);
+  assert.equal(await main([...args,'--resume','--split','holdout']),0);
+  assert.equal(readFileSync(reportPath,'utf8'),original);
+ }finally{rmSync(dir,{recursive:true,force:true});writeFileSync(reportPath,original);}
+ const partialId=`partial-report-${process.pid}`,partialDir=new URL(`./results/${partialId}`,import.meta.url).pathname;
+ try{
+  assert.equal(await main(['--providers','typesafe-jev','--sites','loop.route','--split','holdout','--run-id',partialId],{providers:[{id:'typesafe-jev',model:'fake-live-shape',price:0,concurrency:1,serialize:JSON.stringify,request:async()=>({status:'skipped',reason:'no_credential'})}]}),0);
+  assert.equal(readFileSync(reportPath,'utf8'),original);
+  assert.match(readFileSync(join(partialDir,'REPORT.md'),'utf8'),/Decision-site benchmark/);
+ }finally{rmSync(partialDir,{recursive:true,force:true});writeFileSync(reportPath,original);}
+});
+
+test('a budget-stopped all-site run writes its report only in its run directory',async()=>{
+ const id=`budget-report-${process.pid}`,dir=new URL(`./results/${id}`,import.meta.url).pathname;
+ const reportPath=new URL('./REPORT.md',import.meta.url).pathname,original=readFileSync(reportPath,'utf8');
+ let calls=0;
+ try{
+  assert.equal(await main(['--providers','typesafe-jev','--max-spend-usd','0','--run-id',id],{providers:[{id:'typesafe-jev',model:'fake-live-shape',price:.1,concurrency:1,serialize:JSON.stringify,request:async()=>{calls++;throw Error('budget must block');}}]}),0);
+  assert.equal(calls,0);assert.equal(readFileSync(reportPath,'utf8'),original);
+  assert.match(readFileSync(join(dir,'REPORT.md'),'utf8'),/budget_stop/);
+ }finally{rmSync(dir,{recursive:true,force:true});writeFileSync(reportPath,original);}
+});
+
+test('an all-skipped run keeps its empty report out of the published report',async()=>{
+ const id=`skipped-report-${process.pid}`,dir=new URL(`./results/${id}`,import.meta.url).pathname;
+ const reportPath=new URL('./REPORT.md',import.meta.url).pathname,original=readFileSync(reportPath,'utf8');
+ try{
+  assert.equal(await main(['--providers','typesafe-jev','--run-id',id],{providers:[{id:'typesafe-jev',model:'fake-live-shape',price:0,concurrency:1,serialize:JSON.stringify,request:async()=>({status:'skipped',reason:'no_credential'})}]}),0);
+  assert.equal(readFileSync(reportPath,'utf8'),original);
+  assert.match(readFileSync(join(dir,'REPORT.md'),'utf8'),/no_credential/);
+ }finally{rmSync(dir,{recursive:true,force:true});writeFileSync(reportPath,original);}
 });

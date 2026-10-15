@@ -38,3 +38,14 @@ test('requests reuse production builders, including disclosed D3-only state', as
  assert.deepEqual(r.state,{step:'read',catalogue_index:[{id:'x',purpose:'Read files'}]});
  assert.deepEqual(r.questions.entry_0?.instructions,{question:'Is this disclosed catalogue entry relevant to this step?',entry:{id:'x',purpose:'Read files'}});
 });
+
+test('empty or malformed lock is stale-unknown and is never stolen',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'decision-unknown-lock-'));
+ try{
+  for(const value of ['', 'not-a-pid', '0']){
+   await writeFile(join(dir,'lock'),value);
+   assert.throws(()=>acquireLock(dir),/stale-unknown/);
+   assert.equal(await readFile(join(dir,'lock'),'utf8'),value);
+  }
+ }finally{await rm(dir,{recursive:true,force:true});}
+});

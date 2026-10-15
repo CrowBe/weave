@@ -10,7 +10,7 @@ import { buildCompetitors, quotaAllowsCompetitors } from './competitors.ts';
 import type { ProcessRunner } from './competitors.ts';
 import { Journal, acquireLock, replayKey, digest } from './journal.ts';
 import { SITES, buildRequest } from './questions.ts';
-import { execute } from './engine.ts';
+import { execute, providerSkip } from './engine.ts';
 import { loadSets } from './sets.ts';
 import { makeReport } from './report.ts';
 import type { Provider } from './types.ts';
@@ -35,7 +35,8 @@ export function flags(args:string[]) {
 const runProcess:ProcessRunner = (command,args,options)=>new Promise(resolveProcess=>{
  let stdout='',stderr='',done=false;
  const finish=(exitCode:number)=>{if(!done){done=true;resolveProcess({exitCode,stdout,stderr});}};
- const child=spawn(command,[...args],{cwd:options.cwd,stdio:['pipe','pipe','pipe'],signal:options.signal,env:process.env});
+ const child=spawn(command,[...args],{cwd:options.cwd,stdio:['pipe','pipe','pipe'],signal:options.signal,
+  env:Object.fromEntries(Object.entries(process.env).filter(([name])=>name==='HOME'||name==='PATH'||name.startsWith('XDG_')))});
  child.stdout.on('data',(data:Buffer)=>{stdout+=data.toString();if(stdout.length>4*1024*1024)child.kill('SIGTERM');});
  child.stderr.on('data',(data:Buffer)=>{stderr+=data.toString();if(stderr.length>1024*1024)child.kill('SIGTERM');});
  child.on('error',()=>finish(127));child.on('close',code=>finish(code??1));
@@ -67,24 +68,31 @@ export async function main(args=process.argv.slice(2), injected?:{providers:read
   const providers=[...(injected?.providers??[...buildProviders(configs),...competitors,fakeProvider()])].filter(p=>options.providers.includes(p.id));
   if(!options.renderOnly)await execute({entries,providers,journal,maxSpend:options.maxSpend,now:Date.now,sleep:async(ms,signal)=>{await delay(ms,undefined,signal?{signal}:{});},signal:controller.signal});
   const records=journal.read();const bound=[];
+  const terminal=new Set(records.filter(r=>r.type==='call'&&r.terminal).map(replayKey));
+  const skipped=new Set(records.filter(r=>r.type==='provider_status'&&r.result&&providerSkip(r.result)).map(r=>r.provider));
+  let publish=!options.providers.includes('fake')&&options.split==='all'&&options.sites.length===SITES.length;
   for(const provider of providers)for(const entry of entries) {
    const binding={provider:provider.id,model:provider.model,site:entry.item.site,item_id:entry.item.id,set_digest:entry.set_digest,question_digest:digest(JSON.stringify(await buildRequest(entry.item)))};
    const matches=records.filter(r=>replayKey(r)===replayKey(binding));
    const calls=matches.filter(r=>r.type==='call');const last=calls.at(-1);
    const pending=matches.filter(r=>r.type==='intent'&&!calls.some(c=>c.call_id===r.call_id)).at(-1);
+   if(pending||(!terminal.has(replayKey(binding))&&!skipped.has(provider.id)))publish=false;
    if(pending)bound.push({...binding,type:'call',call_id:pending.call_id,split:entry.split,item:entry.item,result:{status:'failed',reason:'unacknowledged_call'},terminal:true,latency_ms:0,cost_usd:0});
    else if(last)bound.push({...last,item:entry.item,terminal:true});
   }
   const callCost=records.filter(r=>r.type==='call').reduce((sum,r)=>sum+(r.cost_usd??0),0);
+  const reportRecords=bound as Parameters<typeof makeReport>[1];
   const report=makeReport({run_id:options.runId,node_version:process.version,max_spend_usd:options.maxSpend,set_digests:digests,providers:options.providers,sites:options.sites,
    statuses:records.filter(r=>['provider_status','budget_stop','cancelled','uncertain'].includes(r.type)),spent_usd:journal.spent(),
    input_tokens:records.filter(r=>r.type==='call').reduce((sum,r)=>sum+(r.result.input_tokens??0),0),
-   output_tokens:records.filter(r=>r.type==='call').reduce((sum,r)=>sum+(r.result.output_tokens??0),0)},bound as Parameters<typeof makeReport>[1]);
+   output_tokens:records.filter(r=>r.type==='call').reduce((sum,r)=>sum+(r.result.output_tokens??0),0)},reportRecords);
   Object.assign(report.summary,{metered_call_cost_usd:callCost,reserved_usd:journal.spent()-callCost});
   writeFileSync(join(dir,'summary.json'),JSON.stringify(report.summary,null,2)+'\n',{mode:0o600});
-  writeFileSync(join(root,'REPORT.md'),report.markdown+'\n\nLedger spend (including pending reservations): $'+journal.spent().toFixed(8)+'\n');
+  const markdown=report.markdown+'\n\nLedger spend (including pending reservations): $'+journal.spent().toFixed(8)+'\n';
+  writeFileSync(join(dir,'REPORT.md'),markdown);
+  if(publish&&reportRecords.some(r=>r.result.status==='ok'))writeFileSync(join(root,'REPORT.md'),markdown);
   writeSync(1,`Run ${options.runId}: ${bound.length} items; spend $${journal.spent().toFixed(8)} / $${options.maxSpend.toFixed(2)}\n`);
   return controller.signal.aborted?130:0;
  } finally {process.off('SIGINT',abort);process.off('SIGTERM',abort);rmSync(temp,{recursive:true,force:true});release();}
 }
-if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href)main().then(code=>{process.exitCode=code;}).catch((error:unknown)=>{const message=error instanceof Error?error.message:'';writeSync(2,(['Run directory locked','Run directory has stale lock; inspect before removing','Run already exists; use --resume','Spend ceiling above 5 requires --allow-spend-above-5','Corrupt journal before final line','Frozen set digest mismatch'].includes(message)?message:'Decision benchmark failed; inspect flags, lock, sets and journal.')+'\n');process.exitCode=1;});
+if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href)main().then(code=>{process.exitCode=code;}).catch((error:unknown)=>{const message=error instanceof Error?error.message:'';writeSync(2,(['Run directory locked','Run directory has stale lock; inspect before removing','Run directory has stale-unknown lock; inspect before removing','Run already exists; use --resume','Spend ceiling above 5 requires --allow-spend-above-5','Corrupt journal before final line','Frozen set digest mismatch'].includes(message)?message:'Decision benchmark failed; inspect flags, lock, sets and journal.')+'\n');process.exitCode=1;});
