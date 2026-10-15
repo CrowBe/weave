@@ -162,6 +162,10 @@ A configured routed-unit attribute: `decision`, `flash`, `standard`, or `strong`
 
 An evaluation adapter serving judgment sites in the decision-model loop, selected by configuration. OpenAI Decisions and TypeSafe Jev are examples. Its typed answers are observations; deterministic policy decides transitions and authority to execute.
 
+### Preselect policy
+
+The deterministic rule for D3 `loop.preselect`. It keeps the top k disclosed catalogue entries by p(true), applies an optional probability floor, and always keeps entries the guardrails require. k is an integer from 1 to 8 and defaults to 3. The floor defaults to 0, which leaves it off. The cap of 8 bounds k and does not drop required entries. The selection record is evidence of that rule. A model answer does not choose k, and the record confers no grant.
+
 ### Wire profile
 
 Pure request and response translation for one provider's protocol, carried by a shared transport. A wire profile maps the gateway's typed questions and answers to and from the provider's shapes; it does not own routing, policy, credentials, or runtime state.

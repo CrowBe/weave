@@ -5,8 +5,10 @@ import {
   applyRouteOverlay,
   bindDecisionProvider,
   parseRouteConfig,
+  resolvePreselectPolicy,
   route,
   createInferenceGateway,
+  type DecisionConfig,
   type InferenceTerms,
 } from '@weave/gateway';
 import { typesafeAiEvaluator } from '@weave/gateway/typesafe-ai';
@@ -136,7 +138,7 @@ it('an empty table still blocks without attempting a provider', async () => {
   assert.deepEqual(outcome.attempts, []);
 });
 const cases: [string, (config: any) => void, string][] = [
-  ['duplicate id', c => c.units.push(c.units[0]), 'units[7].routed_unit_id: duplicate'],
+  ['duplicate id', c => c.units.push(c.units[0]), `units[${example().units.length}].routed_unit_id: duplicate`],
   ['unsupported decision provider', c => c.decision.provider = 'openai-decisions', 'decision.provider: only typesafe-jev is supported'],
   ['unknown operation', c => c.units[0].operation = 'other', 'units[0].operation'],
   ['unknown kind', c => c.units[0].kind = 'other', 'units[0].kind: operation/kind pair'],
@@ -451,4 +453,84 @@ it('binds Amos only for the configured intake site and rejects unknown overrides
     assert.equal(parseRouteConfig({ ...input, decision: { ...input.decision, sites } }).ok, false);
   }
   assert.equal(parseRouteConfig({ ...input, decision: { ...input.decision, providers: { ...input.decision.providers, unknown: input.decision.providers.amos } } }).ok, false);
+});
+
+it('binds Amos for loop.preselect only with a matching boolean unit', () => {
+  const input = example();
+  const choice = input.units.find((unit: { adapter: string; kind: string }) => unit.adapter === 'amos' && unit.kind === 'choice');
+  const withoutBoolean = {
+    ...input,
+    units: input.units.filter((unit: { adapter: string; kind: string }) => !(unit.adapter === 'amos' && unit.kind === 'boolean')),
+    decision: { ...input.decision, sites: { ...input.decision.sites, 'loop.preselect': 'amos' } },
+  };
+  assert.equal(parseRouteConfig(withoutBoolean).ok, false);
+  const wrongModel = {
+    ...withoutBoolean,
+    units: [...withoutBoolean.units, { ...choice, routed_unit_id: 'amos.boolean', kind: 'boolean', model: 'other-model', prompt_template: 'decision.boolean' }],
+  };
+  assert.equal(parseRouteConfig(wrongModel).ok, false);
+  const booleanOnly = {
+    ...input,
+    units: input.units.filter((unit: { adapter: string; kind: string }) => !(unit.adapter === 'amos' && unit.kind === 'choice')),
+    decision: { ...input.decision, sites: { 'intake.classify': 'amos' } },
+  };
+  assert.equal(parseRouteConfig(booleanOnly).ok, false);
+  const withBoolean = {
+    ...withoutBoolean,
+    units: [...withoutBoolean.units, { ...choice, routed_unit_id: 'amos.boolean', kind: 'boolean', model: 'amos-1-2b', prompt_template: 'decision.boolean' }],
+  };
+  const parsed = parseRouteConfig(withBoolean);
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  assert.equal(bindDecisionProvider(parsed.decision, 'loop.preselect').provider, 'amos');
+  assert.equal(bindDecisionProvider(parsed.decision, 'loop.preselect').adapter, 'amos');
+  assert.equal(bindDecisionProvider(parsed.decision, 'loop.preselect').model, 'amos-1-2b');
+  assert.equal(bindDecisionProvider(parsed.decision, 'intake.classify').adapter, 'amos');
+  assert.equal(bindDecisionProvider(parsed.decision, 'loop.triage').provider, 'typesafe-jev');
+  assert.equal(bindDecisionProvider(parsed.decision, 'loop.route').adapter, 'typesafe-ai');
+  const typesafeSite = { ...input.decision, sites: { 'loop.preselect': 'typesafe-jev' } };
+  const typesafe = parseRouteConfig({ ...withoutBoolean, decision: typesafeSite });
+  assert.equal(typesafe.ok, true);
+  if (!typesafe.ok) return;
+  assert.equal(bindDecisionProvider(typesafe.decision, 'loop.preselect').provider, 'typesafe-jev');
+});
+
+it('rejects a bad preselect policy and resolves the effective one', () => {
+  const input = example();
+  const valid = parseRouteConfig(input);
+  assert.equal(valid.ok, true);
+  if (!valid.ok) return;
+  assert.deepEqual(resolvePreselectPolicy(valid.decision, 'typesafe-jev'), { k: 3, floor: 0, cap: 8, provider: 'typesafe-jev' });
+  assert.deepEqual(resolvePreselectPolicy(valid.decision, 'amos'), { k: 3, floor: 0, cap: 8, provider: 'amos' });
+  input.decision.preselect = { 'typesafe-jev': { k: 5, floor: 0.05 }, amos: { k: 1 } };
+  const custom = parseRouteConfig(input);
+  assert.equal(custom.ok, true);
+  if (!custom.ok) return;
+  assert.deepEqual(resolvePreselectPolicy(custom.decision, 'typesafe-jev'), { k: 5, floor: 0.05, cap: 8, provider: 'typesafe-jev' });
+  assert.deepEqual(resolvePreselectPolicy(custom.decision, 'amos'), { k: 1, floor: 0, cap: 8, provider: 'amos' });
+  assert.deepEqual(resolvePreselectPolicy({ preselect: { 'typesafe-jev': { k: 9, floor: 1 } } }, 'typesafe-jev'), { k: 3, floor: 0, cap: 8, provider: 'typesafe-jev' });
+  const bad = [
+    { 'typesafe-jev': { k: 0 } },
+    { 'typesafe-jev': { k: 9 } },
+    { 'typesafe-jev': { k: 2.5 } },
+    { 'typesafe-jev': { floor: 1 } },
+    { 'typesafe-jev': { floor: -0.1 } },
+    { 'typesafe-jev': { k: 3, cap: 4 } },
+    { 'not-a-provider': { k: 3 } },
+    { amos: { floor: 0, extra: true } },
+  ];
+  for (const preselect of bad) {
+    assert.equal(parseRouteConfig({ ...example(), decision: { ...example().decision, preselect } }).ok, false);
+  }
+  const handBuilt: DecisionConfig = {
+    provider: 'typesafe-jev', fallback: null,
+    providers: {
+      'typesafe-jev': { base_url: 'https://api.typesafe.ai', model: 'jev-preview' },
+      amos: { base_url: 'http://127.0.0.1:8766', model: 'amos-1-2b' },
+    },
+    sites: { 'loop.preselect': 'amos', 'intake.classify': 'amos' },
+  };
+  assert.equal(bindDecisionProvider(handBuilt, 'loop.preselect').adapter, 'amos');
+  assert.equal(bindDecisionProvider(handBuilt, 'intake.classify').adapter, 'amos');
+  assert.throws(() => bindDecisionProvider({ ...handBuilt, sites: { 'loop.triage': 'amos' } }), /unsupported provider or site/);
 });

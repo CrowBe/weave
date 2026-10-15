@@ -139,7 +139,7 @@ eligibility or enable a fallback. Record probe status without recording tokens.
 |---|---|---|---|---|---|
 | D1 `loop.triage` | choice | What does this request or state need next? | `capability` (an admitted capability covers it) / `implement` / `needs_human` / `out_of_scope` / `done_check` | conf ≥ 0.80 and top-p ≥ 0.6 | `implement` at the safest tier, with the uncertainty recorded. Never `done_check`. |
 | D2 `loop.route` | choice | Which tier fits this unit of work? | `flash` / `standard` / `strong` | conf ≥ 0.75 | `standard`. A deterministic budget gate can only *downgrade* or pause, never upgrade past the ceiling. |
-| D3 `loop.preselect` | boolean per catalogue entry, top-k | Is capability or skill X relevant to this step? | p(true) per entry | include if p ≥ 0.5; cap k=8 | the full catalogue index (M6 slice), never the schemas |
+| D3 `loop.preselect` | boolean per catalogue entry, top-k | Is capability or skill X relevant to this step? | p(true) per entry | keep top-k (default 3), optional floor, guardrail-required always kept; cap 8 | the full catalogue index (M6 slice), never the schemas |
 | D4 `guard.input` | boolean per rule | Does this input or plan violate rule R (secret exfiltration, scope broadening, destructive effect without grant, injection)? | p(violation) | block if p ≥ 0.3 (deliberately asymmetric) | **block, then approval request** |
 | D5 `eval.output` | boolean per success criterion | Does the artifact satisfy criterion C? | p(true), plus conf when supplied by the provider | OpenAI Decisions predicate (provisional assumption; P10 tunes on the tune split): pass if p ≥ 0.85, fail if p ≤ 0.15, otherwise uncertain (treat as fail/retry). TypeSafe Jev and other providers that return confidence: pass if p ≥ 0.8 and conf ≥ 0.9 (existing `confidence_floor`); missing confidence is below the floor. | treat as fail and retry, up to N=2 per step, then escalate the tier once, then hand to audit with `open_issue` |
 | D6 `audit.dispose` | choice per finding | What do we do with audit finding F? | `fix_now` / `defer` / `reject_as_out_of_scope` / `needs_human` | conf ≥ 0.75 | `needs_human` |
@@ -223,7 +223,13 @@ primary and fallback, a `key_env` without `auth: "api-key"`, a non-loopback prov
 neither `auth` nor `key_env`, a `key_env` on `chatgpt-oauth`, an `api-key`
 provider without a `key_env`, and base URLs other than HTTPS or HTTP on loopback hosts
 (`127.0.0.1`, `::1`, `localhost`) without userinfo, `?`, or `#`. Adapters remain
-credential-injected.
+credential-injected. `decision.sites` accepts `amos` or `typesafe-jev` for
+`intake.classify` and `loop.preselect` only. Amos on intake requires a matching
+choice unit; Amos on preselect requires a matching boolean unit.
+`decision.preselect`, when present, is keyed by a configured provider id and
+may set `k` (an integer from 1 to 8) and `floor` (a number in [0, 1)). Unknown
+keys, unknown provider ids, and out-of-range values are errors.
+`resolvePreselectPolicy` fills the defaults k = 3, floor = 0, and cap = 8.
 
 P3 does not switch decision providers. OpenAI Decisions remains deferred after
 the 14 Oct 2026 probe, and `decision.fallback` is not routed. The configured
@@ -440,11 +446,23 @@ cancellation, deadlines, snapshot cache concurrency and durable pause records.
 
 ### P6 site contract
 
-D3 only narrows the disclosed M6 catalogue index, with ordinal question ids,
-p(true) >= .5, a cap of eight, and ties in disclosed order. It evaluates an
-explicitly disclosed step string plus id/purpose entries; schemas and general
-state are excluded. Any required-answer admission failure returns the full
-index. Unknown answers are ignored and recorded with fixed text, without names.
+D3 only narrows the disclosed M6 catalogue index, with ordinal question ids.
+The preselect policy keeps the top k entries by p(true), default k = 3, then
+applies an optional floor (default 0, off). k is an integer from 1 to 8. The
+cap of 8 bounds k and does not drop guardrail-required entries. Ties stay in
+disclosed order. Required entries that are in the index are always kept, in
+addition to the top k of the remaining entries. A required id that is not in
+the index is ignored and counted. It evaluates an explicitly disclosed step
+string plus id/purpose entries; schemas and general state are excluded. Any
+required-answer admission failure returns the full index. Unknown answers are
+ignored and recorded with fixed text, without names. The D3 transition records
+`preselect-selection@1`: k, floor, cap, provider, outcome (`narrowed`,
+`fallback`, or `empty_index`), and one score per disclosed entry (`entry`
+ordinal, `p`, `rank`, `kept`, `required`). `p` and `rank` are null when the
+answer is missing. The record uses ordinals, never catalogue ids, purposes, or
+required names. `decision.preselect` sets k and floor per provider.
+`loop.preselect` may be served by `typesafe-jev` or `amos`; Amos requires a
+matching boolean evaluate unit. The default provider remains `typesafe-jev`.
 D4 evaluates four fixed rules through the same decision gateway: secret
 exfiltration, scope broadening, destructive effect without grant, and prompt
 injection. Injection criteria provisionally interpret fx's injection/malicious
@@ -462,6 +480,8 @@ No outage retries another semantic operation. Boolean observations preserve
 fixed question text identifies guard rules. Raw input and rule payloads are never
 recorded. Full-loop transport/persistence remain outside these pure sites;
 ScriptedDecisionLayer and M0–M6 behavior are unchanged.
+
+Why k = 3. The D3 fine-tune experiment used 24 entries per step, synthetic items, and labels from jev-1.13.0. Recall of needed entries on the Claude test set (72 steps) and the Codex test set (84 steps) for the old rule p ≥ .5, cap 8 was .82 / .73 for the fine-tuned Amos mini and .97 / .98 for TypeSafe 1.13. Top-1 was .87 / .88 and .94 / .93. Top-2 was .94 / .96 and .99 / .98. Top-3 was .98 / .98 for the fine-tuned mini, .92 / .97 for the base mini, and 1.00 / 1.00 for TypeSafe. Top-4 was .98 / .99 for the fine-tuned mini, top-5 was .99 / 1.00, and top-8 was 1.00 / 1.00. A floor of 0.02 changes nothing. A floor of 0.05 costs about one point at k ≥ 5. A floor of 0.10 drops recall to about .95 at every k, because the mini scored some needed entries from .04 to .10. The floor therefore defaults to 0 (off). Most steps have one needed entry (mean 1.04–1.12, maximum 3), so k = 3 is the smallest k where TypeSafe hits 100% and the fine-tuned mini hits 98%. k = 5 is the next jump for the mini, at the cost of a five-entry slice.
 
 ## P8 — Implementation-tier step and D5
 

@@ -36,13 +36,35 @@ outside this contract. ScriptedDecisionLayer remains unchanged.
 
 ## P6 boolean sites
 
-D3 receives only the already-disclosed M6 index (id/purpose) and an explicitly
-disclosed `preselect_step` string, never the general state or schemas.
-Questions use ordinal ids `entry_N`; successful selection sorts descending by
-probability then by original disclosed order, includes p >= .5, and caps at 8.
-Any missing, malformed, uncertain, stale or unavailable required answer returns
-that entire index. Unknown question ids are ignored and recorded as a count of
+D3 receives only the already-disclosed M6 index (id/purpose), an explicitly
+disclosed `preselect_step` string, optional `required_entry_ids`, and an
+optional `preselect_policy` of `{ k, floor, provider }`. It never receives the
+general state or schemas. Questions use ordinal ids `entry_N`. Selection keeps
+the top k entries by p(true) (default 3) and drops a score below the optional
+floor (default 0, which leaves the floor off). k is an integer from 1 to 8.
+The cap of 8 is that upper bound. Ties sort by p(true) descending, then by
+disclosed order. Required ids that are in the index are always kept, in
+addition to the top k of the remaining entries, and are not removed by k,
+floor, or the cap. A required id that is not in the index is ignored and
+counted; D3 only narrows. Any missing, malformed, uncertain (confidence below
+.75), stale or unavailable answer returns that entire index, including on the
+fallback path. Unknown question ids are ignored and recorded as a count of
 fixed-text observations, never their names. Empty indexes need no evaluation.
+
+The D3 transition carries `preselect` with schema `preselect-selection@1`, in
+this key order: `schema`, `k`, `floor`, `cap`, `provider`, `outcome`, `scores`,
+`kept`, `required_missing`. `provider` is `typesafe-jev`, `amos`, or null.
+`outcome` is `narrowed`, `fallback`, or `empty_index`. Each score is
+`{ entry, p, rank, kept, required }` in disclosed order. `entry` is the
+`entry_N` ordinal. `p` and `rank` are null when that answer is missing. Rank
+is 1-based among answers that have a probability, by p(true) descending and
+then disclosed order. The record does not copy catalogue ids, purposes, or
+required names. Guard sites omit it. A policy that is not a plain object with
+only `k`, `floor`, and `provider`, with k in 1..8, floor in [0, 1), and a
+known provider or null, is replaced by k = 3, floor = 0, and a null provider.
+Selection still narrows. That replacement is not an admission fallback.
+Per-entry `answer` is `include` when the entry is in the returned index and
+`exclude` otherwise. `top_p` remains p(true).
 
 D4 asks the four fixed rules in one boolean evaluation: secret exfiltration,
 scope broadening, destructive effect without grant, and prompt injection.
@@ -118,10 +140,13 @@ Each accepted generation run gets a fresh opaque check-run identity, combined wi
 ## Local intake provider
 
 The gateway composition configures `decision.sites["intake.classify"] = "amos"`.
-Only this site uses the local Amos System One adapter (`amos-1-2b`, also called
-amos-1-small). Every other configured evaluation retains the TypeSafe default
-`typesafe-jev` / `jev-preview`. Provider selection is exclusive; intake never
-silently retries against TypeSafe. Amos readiness uses GET `/v1/models`.
+`loop.preselect` may select `amos` or `typesafe-jev` as well. Intake's Amos
+route needs a matching choice evaluate unit. Preselect's Amos route needs a
+matching boolean evaluate unit. Every site left unset keeps the TypeSafe default
+`typesafe-jev` / `jev-preview`. Provider selection is exclusive; a site never
+silently retries against the other provider. `decision.preselect` may set
+`{ k, floor }` per provider id. The defaults are k = 3 and floor = 0, and the
+cap is 8. Amos readiness uses GET `/v1/models`.
 An unreachable service, non-2xx health response or timeout produces a typed
 unavailable failure and gateway `provider_unavailable` evidence. Intake then
 uses `ask_user` / `needs_human`; dispatch-dependent steps remain paused under

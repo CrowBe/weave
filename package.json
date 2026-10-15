@@ -25,6 +25,7 @@
     "example:gateway": "npm run build && node --env-file-if-exists=.env.local examples/holiday.ts",
     "example:free": "npm run build && node --env-file-if-exists=.env.local examples/free.ts",
     "example:weigh": "npm run build && node --env-file-if-exists=.env.local examples/weigh.ts",
+    "example:preselect": "npm run build && node --env-file-if-exists=.env.local examples/preselect.ts",
     "example:crystallize": "npm run build && node --experimental-strip-types examples/crystallize.ts",
     "typecheck:benchmarks": "tsc -p tsconfig.benchmarks.json",
     "test:jev": "node --experimental-strip-types --test \"benchmarks/inference/jev/test/*.test.ts\"",
