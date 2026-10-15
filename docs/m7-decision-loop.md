@@ -523,14 +523,18 @@ report, D6 disposal, open issues, outcome and `goal_done`. Outcomes distinguish
 `authority`, `needs_human`, `cancelled`, `audit_unavailable` and
 `evidence_missing`; only `done` sets `goal_done`. The cap defaults to four audit
 rounds. Two consecutive stalled/regressing D8 observations stop progress; a
-finding recurring after two fix attempts stops as `repeated_issue`. Authority
+finding recurring after two fix attempts stops as `repeated_issue`. The
+Observe port supplies `issue_fix_attempts` attestations; merely seeing the
+same finding again does not count as a fix attempt. Authority
 blocks and unavailable decisions before guarded dispatch stop for human review.
 Budget pauses before another audit dispatch; the gateway retains its per-call
 budget enforcement. No fallback can bypass D4 or D7.
 
-Journal append must persist before returning, with one writer per execution.
-`MemoryAuditJournal` supports deterministic fixtures; production durability is
-the composition root's responsibility. Replay returns the recorded round
+Journal append and phase checkpoints must persist before returning, with one
+writer per execution. The loop checkpoints disclosed input before generation
+and the accepted report before D6, so recovery reuses the recorded input and
+report. `MemoryAuditJournal` supports deterministic fixtures; production
+durability is the composition root's responsibility. Replay returns the recorded round
 without calling a provider, and an already stopped execution remains stopped.
 Failed generation does not fabricate D5 observations for evaluations never requested.
 
