@@ -103,10 +103,16 @@ Use `npm run example:chatgpt-signin` to continue with ChatGPT, then `npm run exa
 
 The gateway supports TypeSafe System One and a local, no-key Amos decision
 adapter (`@weave/gateway/amos`). `weave.routes.example.json` retains
-`typesafe-jev` / `jev-preview` as the default and overrides only `intake.classify`
-with `decision.sites: { "intake.classify": "amos" }`. Pass the parsed `decision`
-to `createInferenceGateway` and register both evaluators. Override selection is
-exclusive and configuration rejects unknown providers or override sites.
+`typesafe-jev` / `jev-preview` as the default and overrides `intake.classify`
+to Amos. `loop.preselect` may be overridden to `amos` or `typesafe-jev` when a
+matching Amos boolean evaluate unit is present; the example does not override
+it. `decision.preselect` sets that site's k and floor per provider (default
+k 3, floor 0). Pass the parsed `decision` to `createInferenceGateway` and
+register both evaluators. Override selection is exclusive and configuration
+rejects unknown providers, unknown override sites, and an out-of-range
+preselect policy. Run `npm run example:preselect` to print one D3 selection.
+Pass `--provider amos` to use the local adapter. The API key stays in the
+environment and is sent only as a Bearer header.
 
 The direct TypeSafe decision model defaults to `jev-preview` (jev-1.14.0);
 set the decision provider's `model` and the matching evaluate `units[].model`
