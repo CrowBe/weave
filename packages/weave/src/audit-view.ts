@@ -107,18 +107,36 @@ export function assembleAuditState(input: AuditStateInput): AuditState {
     } else artifacts.push({ ...metadata, summary: boundedSummary, ...(body === undefined ? {} : { body }) });
   }
   const source_revisions = Object.fromEntries(Object.entries(input.source_revisions).filter(([key]) => allowed.has(key as AuditSliceName) || artifacts.some(artifact => artifact.ref === key)));
+  const boundText = (value: string, cap: number, marker: string): string => {
+    const bounded = boundedUtf8(value, cap);
+    if (bounded !== value) omissions.push(marker);
+    return bounded;
+  };
   const content = {
     schema: 'audit-state@1' as const, view: 'view.audit@1' as const,
-    goal: input.goal, iteration: input.iteration,
-    plan: allowed.has('plan') ? input.plan ?? [] : [],
-    decisions: allowed.has('decisions') ? input.decisions ?? [] : [],
+    goal: { ...input.goal,
+      statement: boundText(input.goal.statement, 4096, 'goal:statement_cap'),
+      success_criteria: input.goal.success_criteria.map(criterion => ({ ...criterion,
+        statement: boundText(criterion.statement, 4096, `criterion:${criterion.criterion_id}:statement_cap`),
+      })),
+    }, iteration: input.iteration,
+    plan: allowed.has('plan') ? (input.plan ?? []).map(step => ({ ...step,
+      intent: boundText(step.intent, 4096, `plan:${step.step_id}:intent_cap`),
+    })) : [],
+    decisions: allowed.has('decisions') ? (input.decisions ?? []).map((decision, index) => ({ ...decision,
+      site: boundText(decision.site, 240, `decision:${index}:site_cap`),
+      question_id: boundText(decision.question_id, 240, `decision:${index}:question_id_cap`),
+      choice: decision.choice === null ? null : boundText(decision.choice, 240, `decision:${index}:choice_cap`),
+    })) : [],
     artifacts,
     checks: allowed.has('checks') ? (input.checks ?? []).map(check => {
       if (check.tail.length > 240) omissions.push(`check:${check.check_id}:tail_cap`);
       return { ...check, tail: check.tail.slice(-240) };
     }) : [],
     evals: allowed.has('evals') ? input.evals ?? [] : [],
-    open_issues: allowed.has('open_issues') ? input.open_issues ?? [] : [],
+    open_issues: allowed.has('open_issues') ? (input.open_issues ?? []).map(issue => ({ ...issue,
+      text: boundText(issue.text, 4096, `issue:${issue.issue_id}:text_cap`),
+    })) : [],
     budget: allowed.has('budget') ? input.budget ?? null : null,
     omissions: [...new Set(omissions)].sort(), source_revisions,
   };

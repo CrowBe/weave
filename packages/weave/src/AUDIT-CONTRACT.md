@@ -15,6 +15,17 @@ fields except the digest itself. Assembly performs no IO or inference. Inputs
 are already disclosed, secret-free slices supplied by policy, not general runtime
 state; this function is not a secret classifier or grant issuer.
 
+Text is bounded by UTF-8 bytes without splitting a code point. Goal and criterion
+statements, plan intents, and open-issue text retain a prefix of at most 4096
+bytes each. Decision `site`, `question_id`, and non-null `choice` fields retain
+at most 240 bytes each, matching the artifact summary cap. Empty strings and
+null choices are preserved. Items and their order are preserved; identifier
+fields and probability-map keys are retained unchanged. Each shortened field
+records `goal:statement_cap`, `criterion:<id>:statement_cap`,
+`plan:<step_id>:intent_cap`, `decision:<zero-based-index>:<field>_cap`, or
+`issue:<id>:text_cap`, respectively. Omission markers are sorted and
+de-duplicated. The digest is computed after all text bounds and omissions.
+
 ## Context compaction port
 
 `compactContext` uses an explicit token sequence and context capacity supplied by
