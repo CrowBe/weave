@@ -139,3 +139,11 @@ returns to Observe. Budget, iteration cap, repeated issues and two consecutive
 stalled/regressing D8 outcomes persist a stop. Authority blocks require a human.
 Round records are appended before loop-back; replay performs no provider calls.
 The journal port requires durable append-before-return and a single writer.
+
+The journal also checkpoints the detached tidy-state observation before generation
+and its accepted report before D6. Recovery reuses that report instead of
+repeating the strong call; a crash before the report checkpoint may repeat the
+read-only call. File durability is supplied through the journal port; the included
+memory journal is a fixture. Observe owns normal implementation dispatch under
+existing policy and grants, and supplies completed issue fix-attempt counts;
+an issue's repeated appearance alone is not proof that a fix was attempted.
