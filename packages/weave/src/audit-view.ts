@@ -82,6 +82,25 @@ function boundedUtf8(value: string, cap: number): string {
   return result;
 }
 
+function boundedUtf8Tail(value: string, cap: number): string {
+  let bytes = 0;
+  let result = '';
+  for (let end = value.length; end > 0;) {
+    let start = end - 1;
+    const unit = value.charCodeAt(start);
+    const previous = value.charCodeAt(start - 1);
+    if (unit >= 0xdc00 && unit <= 0xdfff && previous >= 0xd800 && previous <= 0xdbff) start--;
+    // Repair an existing lone surrogate; never introduce one at the cut.
+    const character = start === end - 1 && unit >= 0xd800 && unit <= 0xdfff ? '\ufffd' : value.slice(start, end);
+    const width = Buffer.byteLength(character, 'utf8');
+    if (bytes + width > cap) break;
+    result = character + result;
+    bytes += width;
+    end = start;
+  }
+  return result;
+}
+
 /** Policy supplies already disclosed, secret-free slices. No inference or IO. */
 export function assembleAuditState(input: AuditStateInput): AuditState {
   const allowed = new Set(input.authorized_slices);
@@ -95,7 +114,7 @@ export function assembleAuditState(input: AuditStateInput): AuditState {
   const artifacts: AuditArtifact[] = [];
   if (allowed.has('artifacts')) for (const artifact of input.artifacts ?? []) {
     if (!refs.has(artifact.ref)) {
-      omissions.push(`artifact:${artifact.artifact_id}:authority`);
+      omissions.push('artifact:authority');
       continue;
     }
     const { body, summary, ...metadata } = artifact;
@@ -107,18 +126,37 @@ export function assembleAuditState(input: AuditStateInput): AuditState {
     } else artifacts.push({ ...metadata, summary: boundedSummary, ...(body === undefined ? {} : { body }) });
   }
   const source_revisions = Object.fromEntries(Object.entries(input.source_revisions).filter(([key]) => allowed.has(key as AuditSliceName) || artifacts.some(artifact => artifact.ref === key)));
+  const boundText = (value: string, cap: number, marker: string): string => {
+    const bounded = boundedUtf8(value, cap);
+    if (bounded !== value) omissions.push(marker);
+    return bounded;
+  };
   const content = {
     schema: 'audit-state@1' as const, view: 'view.audit@1' as const,
-    goal: input.goal, iteration: input.iteration,
-    plan: allowed.has('plan') ? input.plan ?? [] : [],
-    decisions: allowed.has('decisions') ? input.decisions ?? [] : [],
+    goal: { ...input.goal,
+      statement: boundText(input.goal.statement, 4096, 'goal:statement_cap'),
+      success_criteria: input.goal.success_criteria.map(criterion => ({ ...criterion,
+        statement: boundText(criterion.statement, 4096, `criterion:${criterion.criterion_id}:statement_cap`),
+      })),
+    }, iteration: input.iteration,
+    plan: allowed.has('plan') ? (input.plan ?? []).map(step => ({ ...step,
+      intent: boundText(step.intent, 4096, `plan:${step.step_id}:intent_cap`),
+    })) : [],
+    decisions: allowed.has('decisions') ? (input.decisions ?? []).map((decision, index) => ({ ...decision,
+      site: boundText(decision.site, 240, `decision:${index}:site_cap`),
+      question_id: boundText(decision.question_id, 240, `decision:${index}:question_id_cap`),
+      choice: decision.choice === null ? null : boundText(decision.choice, 240, `decision:${index}:choice_cap`),
+    })) : [],
     artifacts,
     checks: allowed.has('checks') ? (input.checks ?? []).map(check => {
-      if (check.tail.length > 240) omissions.push(`check:${check.check_id}:tail_cap`);
-      return { ...check, tail: check.tail.slice(-240) };
+      const tail = boundedUtf8Tail(check.tail, 240);
+      if (tail !== check.tail) omissions.push(`check:${check.check_id}:tail_cap`);
+      return { ...check, tail };
     }) : [],
     evals: allowed.has('evals') ? input.evals ?? [] : [],
-    open_issues: allowed.has('open_issues') ? input.open_issues ?? [] : [],
+    open_issues: allowed.has('open_issues') ? (input.open_issues ?? []).map(issue => ({ ...issue,
+      text: boundText(issue.text, 4096, `issue:${issue.issue_id}:text_cap`),
+    })) : [],
     budget: allowed.has('budget') ? input.budget ?? null : null,
     omissions: [...new Set(omissions)].sort(), source_revisions,
   };

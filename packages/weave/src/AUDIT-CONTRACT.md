@@ -9,11 +9,29 @@ required authorized slices. Criteria bind deterministic evidence by check id.
 Artifacts retain reference, digest, size and a bounded summary; a body is optional
 and disclosed only within the configured UTF-8 byte cap (default 4096).
 Oversized bodies record `artifact:<id>:size_cap`. Unauthorized artifact references
-record an authority omission and disclose no metadata. Source revisions are
+record a single de-duplicated `artifact:authority` marker regardless of their
+number or identities, and disclose no metadata, including ids. Source revisions are
 sorted. JSON keys are canonical and the SHA-256 digest covers all disclosed
 fields except the digest itself. Assembly performs no IO or inference. Inputs
 are already disclosed, secret-free slices supplied by policy, not general runtime
 state; this function is not a secret classifier or grant issuer.
+
+Text is bounded by UTF-8 bytes without splitting a code point. Goal and criterion
+statements, plan intents, and open-issue text retain a prefix of at most 4096
+bytes each. Decision `site`, `question_id`, and non-null `choice` fields retain
+at most 240 bytes each, matching the artifact summary cap. Empty strings and
+null choices are preserved. Items and their order are preserved; other identifier
+fields and probability-map keys are retained unchanged. Each shortened field
+records `goal:statement_cap`, `criterion:<id>:statement_cap`,
+`plan:<step_id>:intent_cap`, `decision:<zero-based-index>:<field>_cap`, or
+`issue:<id>:text_cap`, respectively. Omission markers are sorted and
+de-duplicated. The digest is computed after all text bounds and omissions.
+
+Check tails retain the longest suffix of whole code points within 240 UTF-8
+bytes, preserving the end of the output. Existing lone surrogates are replaced
+with U+FFFD (three UTF-8 bytes) before measuring the retained suffix, so tails
+never contain lone surrogates. Shortened or repaired tails record the existing
+`check:<check_id>:tail_cap` marker. Exact-cap, well-formed tails are unchanged.
 
 ## Context compaction port
 
