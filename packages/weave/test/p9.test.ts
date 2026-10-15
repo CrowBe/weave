@@ -345,3 +345,51 @@ test('resume crash after D6 reuses its checkpointed decision instead of spending
   assert.equal((await runAuditLoop({ ...f.input, resume: true }, ports, f.journal)).outcome, 'done');
   assert.equal(evaluations, 1); assert.equal(f.generates(), 2);
 });
+
+test('gateway budget pause wins over a coincident revision change and resumes fresh', async () => {
+  for (const kind of ['paused', 'exhausted', 'blocked'] as const) {
+    const f = fixture({ ceilings: [1000] });
+    let stateRevision = 1; let calls = 0;
+    const observe = f.ports.observe;
+    const ports: AuditPorts = { ...f.ports,
+      current: () => ({ ...revision, state_revision: stateRevision, observed_at: 10 }),
+      observe: async issues => ({ ...await observe(issues), revision: { ...revision, state_revision: stateRevision } }),
+      generate: async (request, signal) => {
+        if (++calls > 1) return f.ports.generate(request, signal);
+        stateRevision++;
+        const common = { request_id: request.request_id, site: request.site, attempts: [], spent: 0, uncertainty: [] };
+        if (kind === 'exhausted') return { ...common, status: 'unaccepted', reason: 'budget_exhausted' };
+        return { ...common, status: 'blocked', reason: 'weekly_budget_cap', ...(kind === 'paused' ? {
+          paused: { type: 'loop.paused', policy: 'budget.policy@1', request_id: request.request_id,
+            site: request.site, reason: 'weekly_budget_cap', until: null },
+        } : {}) };
+      },
+    };
+    assert.equal((await runAuditLoop(f.input, ports, f.journal)).outcome, 'budget', kind);
+    assert.equal((await runAuditLoop({ ...f.input, resume: true }, ports, f.journal)).outcome, 'done', kind);
+    assert.equal(f.observes(), 2);
+  }
+});
+test('live budget pause wins over a coincident revision change after accepted generation', async () => {
+  const f = fixture({ ceilings: [1000] });
+  let stateRevision = 1; let reads = 0;
+  const observe = f.ports.observe;
+  const ports: AuditPorts = { ...f.ports,
+    current: () => ({ ...revision, state_revision: stateRevision, observed_at: 10 }),
+    observe: async issues => ({ ...await observe(issues), revision: { ...revision, state_revision: stateRevision } }),
+    budget: () => ++reads === 2 ? 'pause' : 'allow',
+    generate: async (request, signal) => { const result = await f.ports.generate(request, signal); stateRevision = 2; return result; },
+  };
+  assert.equal((await runAuditLoop(f.input, ports, f.journal)).outcome, 'budget');
+  assert.equal((await runAuditLoop({ ...f.input, resume: true }, ports, f.journal)).outcome, 'done');
+  assert.equal(f.observes(), 2);
+});
+test('revision change during generation without a pause still stops as needs_human', async () => {
+  const f = fixture(); let stateRevision = 1;
+  const ports: AuditPorts = { ...f.ports,
+    current: () => ({ ...revision, state_revision: stateRevision, observed_at: 10 }),
+    generate: async (request, signal) => { const result = await f.ports.generate(request, signal); stateRevision++; return result; },
+    evaluate: async () => { assert.fail('D6 must not run with stale input'); },
+  };
+  assert.equal((await runAuditLoop(f.input, ports, f.journal)).outcome, 'needs_human');
+});

@@ -71,3 +71,11 @@ reconcile fix effects and never replay a single-use grant. Inference ports must
 reconcile an interrupted request by its stable request id if a crash occurs
 between provider completion and checkpoint commit; this in-flight window cannot
 be made exactly-once by the synchronous journal interface alone.
+
+## Pause precedence
+
+After generation, cancellation takes precedence, followed by gateway or live
+budget pauses, then the live-revision guard. A budget pause coinciding with a
+state change stays resumable; the next resume captures fresh input. Without a
+pause, a revision change still stops as `needs_human` before D6. The final
+revision guard after D6 remains unchanged.

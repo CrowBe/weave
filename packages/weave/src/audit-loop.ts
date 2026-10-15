@@ -175,10 +175,9 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
         if (report && !signal?.aborted) persist(report, checkpoint?.disposal);
         const live = ports.current();
         if (signal?.aborted || (generated?.paused?.reason as string | undefined) === 'cancelled') outcome = 'cancelled';
+        else if (generated?.paused || (generated?.status === 'unaccepted' && generated.reason === 'budget_exhausted') || (generated?.status === 'blocked' && ['no_budget', 'quota_unknown', 'weekly_budget_cap', 'budget_pace_ahead', 'five_hour_budget_low'].includes(generated.reason)) || ports.budget() === 'pause') outcome = 'budget';
         else if (live.state_revision !== observed.revision.state_revision || live.state_updated_at !== observed.revision.state_updated_at) outcome = 'needs_human';
-        else if (generated?.paused || (generated?.status === 'unaccepted' && generated.reason === 'budget_exhausted') || (generated?.status === 'blocked' && ['no_budget', 'quota_unknown', 'weekly_budget_cap', 'budget_pace_ahead', 'five_hour_budget_low'].includes(generated.reason))) outcome = 'budget';
         else if (!report) outcome = 'audit_unavailable';
-        else if (ports.budget() === 'pause') outcome = 'budget';
         else {
           disposal = checkpoint?.disposal ?? await evaluateAuditDispose({ ...observed.revision, request_id: `${requestPrefix}:dispose`,
             state: { audit: report }, findings: report.findings, terms: input.terms, needs_dispatch: false },

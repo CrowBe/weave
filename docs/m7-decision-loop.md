@@ -604,7 +604,10 @@ blocks stop for human review. Unavailable decisions before guarded dispatch
 record a resumable `decision_unavailable` pause, without pinning the unavailable
 observation. Explicit resumption observes availability again.
 Budget pauses before another audit dispatch; the gateway retains its per-call
-budget enforcement. No fallback can bypass D4 or D7.
+budget enforcement. After generation, cancellation wins first, then gateway or
+live budget pause, then the revision guard. Coincident state changes therefore
+preserve a budget pause for fresh observation on resume; changes without a
+pause remain terminal `needs_human`. No fallback can bypass D4 or D7.
 
 Journal append and phase checkpoints must persist before returning, with one
 writer per execution. The composition root must serialize racing resumes
