@@ -72,7 +72,7 @@ export interface RecordedBooleanAnswer {
 export type BooleanObservation = Omit<SiteObservation, 'site' | 'answer' | 'reason'> & {
   readonly site: BooleanSite;
   readonly answer: 'include' | 'exclude' | 'pass' | 'block' | null;
-  readonly reason: SiteReason | 'violation' | 'unknown_answer' | 'empty_index';
+  readonly reason: SiteReason | 'violation' | 'unknown_answer' | 'empty_index' | 'invalid_confidence';
 };
 export interface BooleanTransition {
   readonly status: 'transition' | 'needs_human' | 'paused';
@@ -289,6 +289,7 @@ export function transitionBooleanSite(site: BooleanSite, input: BooleanSiteInput
   for (const [n, item] of parsed.entries()) {
     const reason: BooleanObservation['reason'] = site === 'loop.preselect'
       ? (metadata ?? (!answered ? 'no_answer' : answered.kind !== 'boolean' || item.p === null ? 'invalid_answer' :
+        item.confidenceInvalid ? 'invalid_confidence' :
         selection !== null && selection.boundary.has(n) && item.confidence !== null &&
         item.confidence < BOOLEAN_SITE_POLICY['loop.preselect'].confidence ? 'low_confidence' : 'accepted'))
       : (metadata ?? (!answered ? 'no_answer' : answered.kind !== 'boolean' || item.p === null ? 'invalid_answer' :
