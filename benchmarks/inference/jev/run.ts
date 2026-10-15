@@ -95,7 +95,7 @@ function jevRoutes(kind: EvaluationKind, includeDirect: boolean, options: RouteO
       routed_unit_id: `${kind}@typesafe`,
       adapter: TYPESAFE_AI_ADAPTER,
       // The direct API names the model differently than the gateway catalogue.
-      model: options.model ?? process.env['JEV_MODEL'] ?? 'jev-preview',
+      model: options.model ?? (process.env['JEV_MODEL']?.trim() || 'jev-preview'),
       destination: TYPESAFE_AI_DESTINATION,
     });
   }
@@ -170,7 +170,7 @@ export function createJevGateway(
     routes: EVALUATION_KINDS.flatMap((kind) => jevRoutes(kind, includeDirect, options)),
     evaluators: [
       vercelAiGatewayEvaluator({ apiKey: credentials.vercel }),
-      ...(credentials.typesafe === undefined ? [] : [typesafeAiEvaluator({ apiKey: credentials.typesafe })]),
+      ...(credentials.typesafe === undefined ? [] : [typesafeAiEvaluator({ apiKey: credentials.typesafe, shuffle: false })]),
     ],
     clock,
     timer: realTimer,

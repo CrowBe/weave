@@ -48,22 +48,30 @@ export interface TypesafeAiOptions {
    */
   readonly apiKey: string;
   readonly baseURL?: string;
-  /** Per-call Fisher-Yates choice ordering. Defaults to Math.random; false disables. */
+  /** Per-call Fisher-Yates choice ordering. Defaults to Math.random; false disables. Values are clamped to [0, 1); NaN becomes 0. */
   readonly shuffle?: false | (() => number);
   /** TypeSafe documents no data-sharing field as of jev-1.14; Weave never opts in. Defaults to false. */
   readonly dataSharing?: false;
+  /** Send the long-context danger-zone header on every request. Defaults to false; raises both context limits to 262k. */
+  readonly longContext?: boolean;
+  /** Send the images danger-zone header on every request. Defaults to false; does not add asset or box request support. */
+  readonly images?: boolean;
   /** Injectable for tests. Defaults to the global `fetch`. */
   readonly fetch?: typeof globalThis.fetch;
 }
 
 /** Request and response mapping for `/v1/systemone`. No HTTP and no credentials. */
 export function typesafeWireProfile(
-  options: Pick<TypesafeAiOptions, 'shuffle' | 'dataSharing'> = {},
+  options: Pick<TypesafeAiOptions, 'shuffle' | 'dataSharing' | 'longContext' | 'images'> = {},
 ): DecisionWireProfile {
   const shuffle = options.shuffle ?? Math.random;
   return {
     id: TYPESAFE_AI_ADAPTER,
     path: '/v1/systemone',
+    headers: {
+      ...(options.longContext === true ? { 'TypeSafe-Danger-Zone-Long-Context': 'true' } : {}),
+      ...(options.images === true ? { 'TypeSafe-Danger-Zone-Images': 'true' } : {}),
+    },
     // Present on hosted responses. It is the only handle on a call once it has been made.
     requestIdHeader: 'x-typesafe-request-id',
     toBody(call: EvaluationCall): unknown {
@@ -81,7 +89,7 @@ export function typesafeWireProfile(
   };
 }
 
-export const typesafeWire: DecisionWireProfile = typesafeWireProfile();
+export const typesafeWire: DecisionWireProfile = typesafeWireProfile({ shuffle: false });
 
 export function typesafeAiEvaluator(options: TypesafeAiOptions): EvaluationAdapter {
   if (options.apiKey.trim().length === 0) {
@@ -118,7 +126,9 @@ function toWireQuestion(question: EvaluationQuestion, shuffle: false | (() => nu
       const entries = Object.entries(question.criteria);
       if (shuffle !== false) {
         for (let i = entries.length - 1; i > 0; i--) {
-          const j = Math.floor(shuffle() * (i + 1));
+          const sample = shuffle();
+          const bounded = Number.isNaN(sample) ? 0 : Math.max(0, Math.min(1 - Number.EPSILON, sample));
+          const j = Math.floor(bounded * (i + 1));
           [entries[i], entries[j]] = [entries[j]!, entries[i]!];
         }
       }
@@ -135,6 +145,10 @@ function toWireQuestion(question: EvaluationQuestion, shuffle: false | (() => nu
 // Absence is not zero: missing confidence stays below the floor.
 // ---------------------------------------------------------------------------
 
+const supportedAnswerTypes = new Map<string, EvaluationAnswer['type']>([
+  ['noul', 'boolean'], ['choice', 'choice'], ['score', 'score'],
+]);
+
 function parseBody(body: unknown, call: EvaluationCall): DecisionParse {
   if (!isRecord(body)) return { status: 'malformed', detail: 'response body was not an object' };
 
@@ -147,9 +161,12 @@ function parseBody(body: unknown, call: EvaluationCall): DecisionParse {
   for (const [id, raw] of Object.entries(rawAnswers)) {
     if (!Object.hasOwn(call.questions, id)) continue;
     const question = call.questions[id]!;
-    if (isRecord(raw) && raw['type'] !== 'noul' && raw['type'] !== 'choice' && raw['type'] !== 'score') continue;
+    if (isRecord(raw) && (typeof raw['type'] !== 'string' || !supportedAnswerTypes.has(raw['type']))) continue;
     const answer = toAnswer(raw);
     if (answer === null) return { status: 'malformed', detail: `answer '${id}' was not a recognised shape` };
+    if (answer.type !== question.type) {
+      return { status: 'malformed', detail: `answer '${id}' did not match the asked question type` };
+    }
     if (answer.type === 'choice' && question.type === 'choice') {
       if (!Object.hasOwn(question.criteria, answer.choice)) {
         return { status: 'malformed', detail: `answer '${id}' chose an unknown key` };
@@ -185,8 +202,8 @@ function parseBody(body: unknown, call: EvaluationCall): DecisionParse {
 function toAnswer(raw: unknown): EvaluationAnswer | null {
   if (!isRecord(raw)) return null;
 
-  switch (raw['type']) {
-    case 'noul': {
+  switch (typeof raw['type'] === 'string' ? supportedAnswerTypes.get(raw['type']) : undefined) {
+    case 'boolean': {
       const probability = raw['noul'];
       if (typeof probability !== 'number') return null;
       return { type: 'boolean', probability };

@@ -35,8 +35,8 @@ export const TASK_CRITERIA_SITE = 'task.criteria' as const;
 export const TASK_VALIDATE_SITE = 'task.validate' as const;
 
 /**
- * Pinned model id. `jev-latest` and `typesafe-ai/jev` are floating aliases
- * already used elsewhere in the repo; this slice does not follow them.
+ * Pinned model id. The direct default is now `jev-preview` and the Vercel
+ * route uses `typesafe-ai/jev`; task acceptance retains its fixture pin.
  * `jev-1.13.0` is the concrete id recorded on the System One fixture.
  */
 export const TASK_JEV_MODEL_ID = 'jev-1.13.0' as const;

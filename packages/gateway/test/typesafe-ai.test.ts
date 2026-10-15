@@ -15,9 +15,11 @@ import { describe, it } from 'node:test';
 import {
   TYPESAFE_AI_ADAPTER,
   typesafeAiEvaluator,
+  typesafeWire,
   type TypesafeAiOptions,
 } from '@weave/gateway/typesafe-ai';
 import type { EvaluationCall } from '@weave/gateway';
+import { evaluationTransport, type DecisionWireProfile } from '../src/adapters/decision-transport.js';
 
 const REQUEST_ID = 'req_01a0b95c113778e992a3fa92749b2dbf';
 
@@ -87,6 +89,48 @@ function sentBody(calls: readonly Captured[]): Record<string, unknown> {
   return JSON.parse(String(first.init.body)) as Record<string, unknown>;
 }
 
+describe('TypeSafe danger zone headers', () => {
+  for (const flags of [{}, { longContext: false, images: false },
+    { longContext: true }, { images: true }, { longContext: true, images: true }]) {
+    it(`sends only enabled headers on every request: ${JSON.stringify(flags)}`, async () => {
+      const { fetch, calls } = stubFetch(LIVE_BODY);
+      const adapter = typesafeAiEvaluator({ ...options(fetch), ...flags });
+      for (const model of ['jev-1.13.0', 'jev-1.14.0']) {
+        await adapter.evaluate({ ...CALL, model });
+      }
+      assert.equal(calls.length, 2);
+      for (const call of calls) {
+        const headers = new Headers(call.init.headers);
+        assert.equal(headers.get('TypeSafe-Danger-Zone-Long-Context'), flags.longContext ? 'true' : null);
+        assert.equal(headers.get('TypeSafe-Danger-Zone-Images'), flags.images ? 'true' : null);
+        assert.equal(headers.get('authorization'), 'Bearer test-key');
+        assert.equal(headers.get('content-type'), 'application/json');
+        assert.deepEqual(Object.keys(JSON.parse(String(call.init.body))).sort(), ['model', 'questions', 'state']);
+      }
+    });
+  }
+
+  it('merges profile headers without overriding credentials or JSON content type in any casing', async () => {
+    const { fetch, calls } = stubFetch(LIVE_BODY);
+    const profile: DecisionWireProfile = {
+      ...typesafeWire,
+      headers: {
+        authorization: 'lowercase credential', Authorization: 'uppercase credential',
+        AUTHORIZATION: 'all caps credential', 'content-type': 'text/plain',
+        'Content-Type': 'text/html', 'CONTENT-TYPE': 'application/xml',
+        'X-Profile-Header': 'allowed',
+      },
+    };
+    await evaluationTransport(profile, {
+      credential: 'test-key', defaultBaseURL: 'https://example.test', fetch,
+    }).evaluate(CALL);
+    const headers = new Headers(calls[0]!.init.headers);
+    assert.equal(headers.get('authorization'), 'Bearer test-key');
+    assert.equal(headers.get('content-type'), 'application/json');
+    assert.equal(headers.get('x-profile-header'), 'allowed');
+  });
+});
+
 describe('TypeSafe preview hardening', () => {
   it('drops box and future answer types without losing asked nouls', async () => {
     for (const answers of [
@@ -97,6 +141,7 @@ describe('TypeSafe preview hardening', () => {
       const { fetch } = stubFetch({ answers });
       const result = await typesafeAiEvaluator(options(fetch)).evaluate({ ...CALL, questions: { ...CALL.questions, extra: { type: 'boolean', instructions: 'extra?' } } });
       assert.equal(result.status, 'completed');
+      if (result.status === 'completed') assert.equal(result.confidence, undefined);
       assert.deepEqual(result.status === 'completed' && result.answers,
         'extra' in answers ? { urgent: { type: 'boolean', probability: 0.9 } } : {});
     }
@@ -109,13 +154,13 @@ describe('TypeSafe preview hardening', () => {
     assert.deepEqual(result.status === 'completed' && result.answers, { urgent: { type: 'boolean', probability: 0.9 } });
   });
 
-  let seed = 0;
-  const seededRandom = () => {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-    return seed / 4294967296;
-  };
-  for (const shuffle of [false, seededRandom] as const) {
-    it(`preserves choice keys with shuffle ${shuffle === false ? 'disabled' : 'seeded'}`, async () => {
+  for (const enabled of [false, true]) {
+    it(`preserves choice keys with shuffle ${enabled ? 'seeded' : 'disabled'}`, async () => {
+      let seed = 0;
+      const shuffle = enabled ? () => {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        return seed / 4294967296;
+      } : false;
       const criteria = { auth: 'authentication', payments: 'payments', ui: 'interface' };
       const { fetch, calls } = stubFetch({ answers: { area: {
         type: 'choice', choice: 'payments', probabilities: { ui: 0.1, payments: 0.8, auth: 0.1, unknown: 0.5 },
@@ -133,6 +178,37 @@ describe('TypeSafe preview hardening', () => {
       });
     });
   }
+
+  it('rejects supported answers whose type differs from the asked question', async () => {
+    for (const answer of [{ type: 'noul', noul: 0.9 }, { type: 'score', score: 1 }]) {
+      const { fetch } = stubFetch({ answers: { area: answer } });
+      const result = await typesafeAiEvaluator(options(fetch)).evaluate({
+        ...CALL, kind: 'choice', questions: { area: { type: 'choice', instructions: 'area?', criteria: { auth: 'auth' } } },
+      });
+      assert.equal(result.status === 'failed' && result.failure.code, 'malformed_response');
+    }
+  });
+
+  it('keeps exported wire choice ordering deterministic', () => {
+    const call: EvaluationCall = { ...CALL, questions: {
+      area: { type: 'choice', instructions: 'area?', criteria: { auth: 'auth', payments: 'payments', ui: 'ui' } },
+    } };
+    for (let i = 0; i < 20; i++) {
+      const body = typesafeWire.toBody(call) as { questions: { area: { criteria: object } } };
+      assert.deepEqual(Object.keys(body.questions.area.criteria), ['auth', 'payments', 'ui']);
+    }
+  });
+
+  it('clamps invalid injected RNG values without losing choice keys', async () => {
+    for (const value of [1, 2, -1, NaN, Infinity, -Infinity]) {
+      const { fetch, calls } = stubFetch({ answers: {} });
+      await typesafeAiEvaluator({ ...options(fetch), shuffle: () => value }).evaluate({
+        ...CALL, questions: { area: { type: 'choice', instructions: 'area?', criteria: { a: 'A', b: 'B', c: 'C' } } },
+      });
+      const body = sentBody(calls) as { questions: { area: { criteria: object } } };
+      assert.deepEqual(Object.entries(body.questions.area.criteria).sort(), [['a', 'A'], ['b', 'B'], ['c', 'C']]);
+    }
+  });
 
   it('keeps interleaved calls bound to their own questions', async () => {
     let finishFirst: (() => void) | undefined;
