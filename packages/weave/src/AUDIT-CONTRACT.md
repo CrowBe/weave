@@ -25,3 +25,13 @@ returns `summary_needed` with the retained tail and prefix, so composition can
 persist and schedule summarization. Below the threshold no summarizer runs.
 An oversized summary is rejected instead of truncated through a token boundary.
 The caller owns crash-safe persistence before replacing original context.
+
+## Audit finding identity
+
+Audit issue ids hash only `(criterion_id, kind, evidence_ref)`; rewording
+`proposed_fix` preserves identity. A report keeps the first finding per key
+before D6, preserving first-occurrence order. Recovery normalizes checkpointed
+reports the same way. Replay preserves historical records and ids unchanged.
+For repeated-fix detection, historical full-finding ids are aliases of the new
+key when the recorded report and open issue establish that link. Attempt counts
+across aliases use the maximum, never the sum; recurrence alone is not an attempt.

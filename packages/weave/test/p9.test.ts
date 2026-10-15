@@ -16,6 +16,7 @@ test('audit report secret screen matches token prefixes, not ordinary words', ()
 });
 import { assembleAuditState, AUDIT_SLICES } from '../src/audit-view.js';
 import { MemoryAuditJournal, runAuditLoop, replayAuditLoop, type AuditPorts, type AuditLoopInput } from '../src/audit-loop.js';
+import { digest } from '../src/digest.js';
 import { transitionAuditDispose } from '../src/sites/audit-dispose.js';
 import { createInferenceGateway, type EvaluationOutcome, type InferenceTerms, type RoutedUnit } from '@weave/gateway';
 const terms: InferenceTerms = { quality: 'baseline', destinations: ['local'], max_context_tokens: 100,
@@ -177,4 +178,48 @@ test('cancelled audit requires explicit resume and does not consume a round', as
   assert.deepEqual(await runAuditLoop(f.input, f.ports, f.journal), paused);
   const resumed = await runAuditLoop({ ...f.input, resume: true }, f.ports, f.journal);
   assert.equal(resumed.outcome, 'done'); assert.equal(resumed.round, 1);
+});
+
+test('audit issue identity survives reworded proposed fixes', async () => {
+  const f = fixture({ gaps: 10 });
+  const generate = f.ports.generate;
+  let calls = 0;
+  const ports: AuditPorts = { ...f.ports, generate: async (request, signal) => {
+    const result = await generate(request, signal);
+    if (result.status !== 'accepted') return result;
+    const report = JSON.parse(result.text);
+    report.findings[0].proposed_fix = `Fix wording ${++calls}`;
+    return { ...result, text: JSON.stringify(report) };
+  } };
+  assert.equal((await runAuditLoop(f.input, ports, f.journal)).outcome, 'repeated_issue');
+  const ids = f.journal.load('audit1').flatMap(entry => entry.open_issues.map(issue => issue.issue_id));
+  assert.equal(new Set(ids).size, 1);
+});
+test('audit report keeps the first finding for each criterion, kind and evidence key', () => {
+  const first = { criterion_id: 'c1', kind: 'gap', evidence_ref: 'ref_test', proposed_fix: 'First fix' };
+  const findings = [first, { ...first, proposed_fix: 'Reworded fix' },
+    { ...first, criterion_id: null }, { ...first, kind: 'defect' }, { ...first, evidence_ref: 'ref_other' }];
+  assert.deepEqual(parseAuditReport(JSON.stringify({ findings, goal_met_claim: false }))?.findings,
+    [first, ...findings.slice(2)]);
+});
+test('legacy audit issue ids replay unchanged and count fix attempts without summing aliases', async () => {
+  const f = fixture({ gaps: 10, max: 1 });
+  await runAuditLoop(f.input, f.ports, f.journal);
+  const first = f.journal.load('audit1')[0]!;
+  const finding = first.report!.findings[0]!;
+  const oldId = `audit_${digest(finding).slice(0, 32)}`;
+  const newId = `audit_${digest({ criterion_id: finding.criterion_id, kind: finding.kind, evidence_ref: finding.evidence_ref }).slice(0, 32)}`;
+  const legacy = { ...first, open_issues: first.open_issues.map(issue => ({ ...issue, issue_id: oldId })) };
+  const journal = new MemoryAuditJournal(); journal.append(legacy);
+  assert.deepEqual(replayAuditLoop(journal.load('audit1')), legacy);
+  const observe = f.ports.observe;
+  const ports: AuditPorts = { ...f.ports, observe: async issues => ({ ...await observe(issues),
+    issue_fix_attempts: { [oldId]: 2, [newId]: 1 } }) };
+  const result = await runAuditLoop({ ...f.input, max_iterations: 2 }, ports, journal);
+  assert.equal(result.outcome, 'repeated_issue');
+  assert.equal(result.open_issues[0]?.issue_id, newId);
+  const another = new MemoryAuditJournal(); another.append(legacy);
+  const oneAttempt: AuditPorts = { ...ports, observe: async issues => ({ ...await ports.observe(issues),
+    issue_fix_attempts: { [oldId]: 1, [newId]: 1 } }) };
+  assert.equal((await runAuditLoop({ ...f.input, max_iterations: 2 }, oneAttempt, another)).outcome, 'iteration_cap');
 });

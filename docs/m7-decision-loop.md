@@ -581,7 +581,10 @@ Confidence below .75, malformed/missing answers and outage use the recorded
 `needs_human` fallback. Findings and decisions grant no execution authority.
 
 A `fix_now` finding produces a stable `open_issue@1` identity and returns to
-Observe through the injected port. Completion requires nonempty criteria,
+Observe through the injected port. Identity hashes `(criterion_id, kind,
+evidence_ref)`, excluding `proposed_fix`; duplicate keys keep the first finding.
+Historical full-finding ids remain unchanged on replay and serve as attempt
+aliases during recovery (maximum count, never a sum). Completion requires nonempty criteria,
 green deterministic checks bound to every criterion, passing D5 evidence for
 every criterion, and no `fix_now` or `needs_human` disposition. A red check
 vetoes completion even when the audit claims success. The claim itself is
