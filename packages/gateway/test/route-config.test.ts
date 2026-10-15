@@ -9,6 +9,7 @@ import {
   route,
   createInferenceGateway,
   type DecisionConfig,
+  type EvaluationAdapter,
   type InferenceTerms,
 } from '@weave/gateway';
 import { typesafeAiEvaluator } from '@weave/gateway/typesafe-ai';
@@ -515,6 +516,75 @@ it('accepts empty and populated preselect policies for TypeSafe and Amos', () =>
     input.decision.preselect = { 'typesafe-jev': policy, amos: policy };
     assert.equal(parseRouteConfig(input).ok, true);
   }
+});
+
+it('routes loop.preselect to Amos and guards to TypeSafe, including interleaved concurrent calls', async () => {
+  const input = example();
+  input.decision.sites = { 'loop.preselect': 'amos' };
+  const parsed = parseRouteConfig(input);
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  const calls: { adapter: string; model: string; question: string }[] = [];
+  let pending: (() => void)[] | undefined;
+  let allEntered: (() => void) | undefined;
+  const evaluator = (id: string): EvaluationAdapter => ({
+    id,
+    async evaluate(call) {
+      const question = Object.keys(call.questions)[0]!;
+      calls.push({ adapter: id, model: call.model, question });
+      if (pending) await new Promise<void>(resolve => {
+        pending!.push(resolve);
+        if (pending!.length === 4) allEntered!();
+      });
+      return {
+        status: 'completed', answers: { [question]: { type: 'boolean', probability: 0.1 } },
+        usage: { input_tokens: 1, output_tokens: 1 },
+        provider_response_id: undefined, confidence: undefined,
+      };
+    },
+  });
+  const gateway = createInferenceGateway({
+    decision: parsed.decision,
+    routes: parsed.table.filter(unit => unit.operation === 'evaluate' && unit.kind === 'boolean'),
+    evaluators: [evaluator('amos'), evaluator('typesafe-ai')],
+    clock: { now: () => 10 },
+  });
+  const evaluate = async (site: string, request_id: string) => {
+    const result = await gateway.evaluate({
+      request_id, site, role: 'working', kind: 'boolean', state: 'disclosed fixture',
+      questions: { [request_id]: { type: 'boolean', instructions: 'Relevant or unsafe?' } },
+      terms: { ...terms, destinations: ['amos', 'typesafe-ai'], max_context_tokens: 1000 },
+      accept: () => ({ status: 'accepted' }),
+    });
+    assert.equal(result.status, 'accepted');
+    if (result.status === 'accepted') {
+      const expected = site === 'loop.preselect' ? 'amos.boolean' : 'typesafe-jev.boolean';
+      assert.equal(result.routed_unit_id, expected);
+      assert.deepEqual(result.attempts.map(attempt => attempt.routed_unit_id), [expected]);
+    }
+  };
+  await evaluate('loop.preselect', 'preselect');
+  await evaluate('guard.input', 'input');
+  await evaluate('guard.output', 'output');
+  pending = [];
+  const entered = new Promise<void>(resolve => { allEntered = resolve; });
+  const concurrent = [
+    evaluate('loop.preselect', 'preselect_1'), evaluate('guard.input', 'input_1'),
+    evaluate('loop.preselect', 'preselect_2'), evaluate('guard.input', 'input_2'),
+  ];
+  // Hold all four provider calls in flight, then finish them in reverse order.
+  await entered;
+  for (const resolve of pending.reverse()) resolve();
+  await Promise.all(concurrent);
+  assert.deepEqual(calls, [
+    { adapter: 'amos', model: 'amos-1-2b', question: 'preselect' },
+    { adapter: 'typesafe-ai', model: 'jev-preview', question: 'input' },
+    { adapter: 'typesafe-ai', model: 'jev-preview', question: 'output' },
+    { adapter: 'amos', model: 'amos-1-2b', question: 'preselect_1' },
+    { adapter: 'typesafe-ai', model: 'jev-preview', question: 'input_1' },
+    { adapter: 'amos', model: 'amos-1-2b', question: 'preselect_2' },
+    { adapter: 'typesafe-ai', model: 'jev-preview', question: 'input_2' },
+  ]);
 });
 
 it('rejects a bad preselect policy and resolves the effective one', () => {

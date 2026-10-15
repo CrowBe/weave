@@ -123,7 +123,7 @@ test('a catalogue id that appears twice keeps both positions when required', () 
   assertTrace(result.preselect, probabilities);
 });
 
-test('narrowed catalogue order is required plus top-k by p descending, ties in disclosed order', () => {
+test('kept union ordered by p descending, ties in disclosed order', () => {
   const probabilities = [0.7, 0.7, 0.95, 0.4, 0.1];
   const result = select(probabilities, { preselect_policy: policy(2), required_entry_ids: ['cap_1'] });
   assert.deepEqual(ids(result), ['cap_2', 'cap_0', 'cap_1']);
