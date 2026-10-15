@@ -38,33 +38,65 @@ outside this contract. ScriptedDecisionLayer remains unchanged.
 
 D3 receives only the already-disclosed M6 index (id/purpose), an explicitly
 disclosed `preselect_step` string, optional `required_entry_ids`, and an
-optional `preselect_policy` of `{ k, floor, provider }`. It never receives the
-general state or schemas. Questions use ordinal ids `entry_N`. Selection keeps
-the top k entries by p(true) (default 3) and drops a score below the optional
-floor (default 0, which leaves the floor off). k is an integer from 1 to 8.
-The cap of 8 is that upper bound. Ties sort by p(true) descending, then by
-disclosed order. Required ids that are in the index are always kept, in
-addition to the top k of the remaining entries, and are not removed by k,
-floor, or the cap. A required id that is not in the index is ignored and
-counted; D3 only narrows. Any missing, malformed, uncertain (confidence below
-.75), stale or unavailable answer returns that entire index, including on the
-fallback path. Unknown question ids are ignored and recorded as a count of
-fixed-text observations, never their names. Empty indexes need no evaluation.
+optional `preselect_policy` of `{ k, floor, max_excluded, min_margin, provider }`.
+It never receives the general state or schemas. Questions use ordinal ids
+`entry_N`. Selection keeps the top k entries by p(true) (default 3) and drops
+a score below the optional floor (default 0, which leaves the floor off). k is
+an integer from 1 to 8. The cap of 8 is that upper bound. Ties sort by p(true)
+descending, then by disclosed order. Required ids that are in the index are
+always kept, in addition to the top k of the remaining entries, and are not
+removed by k, floor, the cap, or the margin gate. A required id that is not in
+the index is ignored and counted; D3 only narrows. `required_entry_ids` is
+read with `Array.isArray`. A non-array is no required ids. Non-string items are
+dropped and the valid strings are kept. Either case sets `required_ids_invalid`.
 
-The D3 transition carries `preselect` with schema `preselect-selection@1`, in
-this key order: `schema`, `k`, `floor`, `cap`, `provider`, `outcome`, `scores`,
-`kept`, `required_missing`. `provider` is `typesafe-jev`, `amos`, or null.
-`outcome` is `narrowed`, `fallback`, or `empty_index`. Each score is
-`{ entry, p, rank, kept, required }` in disclosed order. `entry` is the
-`entry_N` ordinal. `p` and `rank` are null when that answer is missing. Rank
-is 1-based among answers that have a probability, by p(true) descending and
-then disclosed order. The record does not copy catalogue ids, purposes, or
+The candidate slice narrows only when every entry has a probability and
+admission succeeds, and then only when the margin gate passes. `top_p` on the
+selection record is the highest p(true) among kept non-required entries.
+`best_excluded_p` is the highest p(true) among excluded entries, ties broken
+by disclosed order, or null when nothing is excluded. Nothing excluded means
+there is nothing to gate: the index is kept even if a confidence is low.
+Otherwise narrow only when `best_excluded_p <= max_excluded` and
+`top_p - best_excluded_p >= min_margin`. The recorded margin is that
+difference at 10 decimal places, so a gap of exactly .3 stays .3. Defaults are
+`max_excluded` .4 and `min_margin` .3. A miss is `weak_margin` and the full
+index. A missing confidence is unknown, not a failure. A published confidence
+below .75 is checked only on the boundary: the kept non-required entries and
+the single best excluded entry, and only after the margin has passed. Any such
+value is `low_confidence` and the full index. Published low confidence
+elsewhere, including on a required entry, does not block. A missing or
+malformed probability, a wrong kind, a stale or changed revision, an outage,
+or cancellation is `admission` and returns the whole index. Admission wins
+over the margin gates, and a weak margin wins over low confidence. Unknown
+question ids are ignored and recorded as a count of fixed-text observations,
+never their names. Empty indexes need no evaluation.
+
+The D3 transition carries `preselect` with schema `preselect-selection@2`, in
+this key order: `schema`, `k`, `floor`, `cap`, `max_excluded`, `min_margin`,
+`policy_provider`, `routed_unit_id`, `outcome`, `reason`, `top_p`,
+`best_excluded_p`, `margin`, `scores`, `kept`, `required_missing`,
+`required_ids_invalid`. `policy_provider` is the caller-supplied provider
+after validation, or null when that policy was replaced. It is not the
+provider that answered. `routed_unit_id` is taken from an accepted outcome
+when the id is a bounded identifier; credential-shaped text is omitted, and
+the field is null when there is no accepted outcome. `outcome` is `narrowed`,
+`fallback`, or `empty_index`. `reason` is null for `narrowed` and
+`empty_index`; on fallback it is `weak_margin`, `low_confidence`, or
+`admission`. Margin statistics are null on admission and on an empty index.
+Each score is `{ entry, p, rank, kept, required }` in disclosed order. `entry`
+is the `entry_N` ordinal. `p` and `rank` are null when that answer is missing.
+Rank is 1-based among answers that have a probability, by p(true) descending
+and then disclosed order. `kept` follows the returned index, so a fallback
+marks every entry kept. The record does not copy catalogue ids, purposes, or
 required names. Guard sites omit it. A policy that is not a plain object with
-only `k`, `floor`, and `provider`, with k in 1..8, floor in [0, 1), and a
-known provider or null, is replaced by k = 3, floor = 0, and a null provider.
-Selection still narrows. That replacement is not an admission fallback.
-Per-entry `answer` is `include` when the entry is in the returned index and
-`exclude` otherwise. `top_p` remains p(true).
+only `k`, `floor`, `max_excluded`, `min_margin`, and `provider`, with k in
+1..8, floor in [0, 1), both margin bounds in [0, 1], and a known provider or
+null, is replaced by k = 3, floor = 0, max_excluded = .4, min_margin = .3,
+and a null provider. Selection still narrows. That replacement is not an
+admission fallback. Per-entry `answer` is `include` when the entry is in the
+returned index and `exclude` otherwise. An entry with a probability and no
+published confidence is `accepted` for `loop.preselect`, not
+`missing_confidence`. Observation `top_p` remains that entry's p(true).
 
 D4 asks the four fixed rules in one boolean evaluation: secret exfiltration,
 scope broadening, destructive effect without grant, and prompt injection.
@@ -75,9 +107,12 @@ output introduces effects outside the grant. Both escalate to needs_human for
 p >= .3 or any admission failure, with per-rule reasons. A clean judgment is
 only evidence and contains no grant or dispatch authority.
 
-Provisional confidence floors: .75 for D3 and .90 for D4/D7, pending P10
-calibration. Shape is the fixed question set, gate is P5 metadata admission plus
-per-answer confidence/shape validation, decide is the deterministic threshold.
+Provisional confidence floors: .75 for a published D3 boundary confidence and
+.90 for D4/D7, pending P10 calibration. A missing D3 confidence is unknown.
+Shape is the fixed question set, gate is P5 metadata admission plus per-answer
+shape validation, and for D3 the margin gate before the boundary confidence
+check. D4/D7 still require a confidence on every rule. Decide is the
+deterministic threshold.
 One round, no refinement or semantic substitution on outage. Unknown answers
 cannot repair missing required answers. Observations retain decision-site@1 key
 order; boolean answer is a fixed pass/block/include/exclude vocabulary, top_p
@@ -145,8 +180,9 @@ route needs a matching choice evaluate unit. Preselect's Amos route needs a
 matching boolean evaluate unit. Every site left unset keeps the TypeSafe default
 `typesafe-jev` / `jev-preview`. Provider selection is exclusive; a site never
 silently retries against the other provider. `decision.preselect` may set
-`{ k, floor }` per provider id. The defaults are k = 3 and floor = 0, and the
-cap is 8. Amos readiness uses GET `/v1/models`.
+`{ k, floor, max_excluded, min_margin }` per provider id. The defaults are
+k = 3, floor = 0, max_excluded = .4, and min_margin = .3, and the cap is 8.
+Amos readiness uses GET `/v1/models`.
 An unreachable service, non-2xx health response or timeout produces a typed
 unavailable failure and gateway `provider_unavailable` evidence. Intake then
 uses `ask_user` / `needs_human`; dispatch-dependent steps remain paused under

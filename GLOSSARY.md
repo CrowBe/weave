@@ -164,7 +164,7 @@ An evaluation adapter serving judgment sites in the decision-model loop, selecte
 
 ### Preselect policy
 
-The deterministic rule for D3 `loop.preselect`. It keeps the top k disclosed catalogue entries by p(true), applies an optional probability floor, and always keeps entries the guardrails require. k is an integer from 1 to 8 and defaults to 3. The floor defaults to 0, which leaves it off. The cap of 8 bounds k and does not drop required entries. The selection record is evidence of that rule. A model answer does not choose k, and the record confers no grant.
+The deterministic rule for D3 `loop.preselect`. It keeps the top k disclosed catalogue entries by p(true), applies an optional probability floor, and always keeps entries the guardrails require. It narrows only when that kept slice clears a margin: the best excluded p(true) is at most `max_excluded` (default .4) and the gap below the highest kept non-required p(true) is at least `min_margin` (default .3). Nothing excluded means there is nothing to gate. A missing confidence is unknown. A published confidence below .75 blocks only on the boundary of that slice. k is an integer from 1 to 8 and defaults to 3. The floor defaults to 0, which leaves it off. The cap of 8 bounds k and does not drop required entries. The selection record (`preselect-selection@2`) is evidence of that rule, including the caller-supplied policy provider and the routed unit that answered. A model answer does not choose k, and the record confers no grant.
 
 ### Wire profile
 
