@@ -180,7 +180,7 @@ One generate call at a routed tier, followed by the configured repo checks and D
 
 ### Open issue
 
-A blocker recorded when an implementation step stops after retries and one escalation, or when that escalation is blocked by the ceiling or the budget gate. It carries the failing criterion ids for the audit tier. Raising an open issue does not dispatch work, mint a grant, or complete the goal.
+A blocker recorded when an implementation step stops after retries and one escalation, when that escalation is blocked by the ceiling or the budget gate, or when an audit finding receives `fix_now`. It carries the affected criterion ids; an audit issue has a stable finding identity for repeated-fix detection. Raising an open issue does not dispatch work, mint a grant, or complete the goal.
 
 ### Routing
 
