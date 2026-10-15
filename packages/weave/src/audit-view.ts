@@ -82,6 +82,25 @@ function boundedUtf8(value: string, cap: number): string {
   return result;
 }
 
+function boundedUtf8Tail(value: string, cap: number): string {
+  let bytes = 0;
+  let result = '';
+  for (let end = value.length; end > 0;) {
+    let start = end - 1;
+    const unit = value.charCodeAt(start);
+    const previous = value.charCodeAt(start - 1);
+    if (unit >= 0xdc00 && unit <= 0xdfff && previous >= 0xd800 && previous <= 0xdbff) start--;
+    // Repair an existing lone surrogate; never introduce one at the cut.
+    const character = start === end - 1 && unit >= 0xd800 && unit <= 0xdfff ? '\ufffd' : value.slice(start, end);
+    const width = Buffer.byteLength(character, 'utf8');
+    if (bytes + width > cap) break;
+    result = character + result;
+    bytes += width;
+    end = start;
+  }
+  return result;
+}
+
 /** Policy supplies already disclosed, secret-free slices. No inference or IO. */
 export function assembleAuditState(input: AuditStateInput): AuditState {
   const allowed = new Set(input.authorized_slices);
@@ -130,8 +149,9 @@ export function assembleAuditState(input: AuditStateInput): AuditState {
     })) : [],
     artifacts,
     checks: allowed.has('checks') ? (input.checks ?? []).map(check => {
-      if (check.tail.length > 240) omissions.push(`check:${check.check_id}:tail_cap`);
-      return { ...check, tail: check.tail.slice(-240) };
+      const tail = boundedUtf8Tail(check.tail, 240);
+      if (tail !== check.tail) omissions.push(`check:${check.check_id}:tail_cap`);
+      return { ...check, tail };
     }) : [],
     evals: allowed.has('evals') ? input.evals ?? [] : [],
     open_issues: allowed.has('open_issues') ? (input.open_issues ?? []).map(issue => ({ ...issue,

@@ -151,3 +151,48 @@ test('audit text caps retain many items and only mark authorized fields', () => 
   assert.deepEqual(restricted.decisions, []);
   assert.deepEqual(restricted.open_issues, []);
 });
+
+function checkFixture(tail: string): AuditStateInput {
+  return { ...fixture(), checks: [{ check_id: 'test', argv_digest: 'abc', exit: 0, passed: true, tail }] };
+}
+
+const isWellFormed = (value: string): boolean => Buffer.from(value, 'utf8').toString('utf8') === value;
+
+test('check tail byte cut preserves the end without splitting an astral character', () => {
+  const state = assembleAuditState(checkFixture('prefix😀' + 'x'.repeat(239)));
+  assert.ok(isWellFormed(state.checks[0]!.tail), 'tail must not contain a lone surrogate');
+  assert.equal(state.checks[0]!.tail, 'x'.repeat(239));
+  assert.deepEqual(state.omissions, ['check:test:tail_cap']);
+});
+
+test('check tails use UTF-8 suffix caps at empty, exact and over-cap boundaries', () => {
+  for (const [tail, expected] of [
+    ['', ''], ['x'.repeat(240), 'x'.repeat(240)], ['😀'.repeat(60), '😀'.repeat(60)],
+    ['界'.repeat(80), '界'.repeat(80)], ['x'.repeat(241), 'x'.repeat(240)],
+    ['😀'.repeat(100), '😀'.repeat(60)], ['界'.repeat(81), '界'.repeat(80)],
+    ['prefix\n' + '界'.repeat(79) + 'end', '界'.repeat(79) + 'end'],
+  ]) {
+    const state = assembleAuditState(checkFixture(tail!));
+    assert.equal(state.checks[0]!.tail, expected);
+    assert.ok(Buffer.byteLength(state.checks[0]!.tail) <= 240);
+    assert.ok(isWellFormed(state.checks[0]!.tail));
+    assert.deepEqual(state.omissions, tail === expected ? [] : ['check:test:tail_cap']);
+    const { digest: stateDigest, ...content } = state;
+    assert.equal(stateDigest, digest(content));
+  }
+});
+
+test('check tails repair existing lone surrogates without crashing or exceeding the cap', () => {
+  for (const [tail, expected] of [
+    ['a\ud800b\udc00😀', 'a\ufffdb\ufffd😀'],
+    ['😀'.repeat(100) + '\ud800', '😀'.repeat(59) + '\ufffd'],
+    ['\udc00' + 'x'.repeat(237), '\ufffd' + 'x'.repeat(237)],
+    ['\ud800' + 'x'.repeat(238), 'x'.repeat(238)],
+  ]) {
+    const state = assembleAuditState(checkFixture(tail!));
+    assert.equal(state.checks[0]!.tail, expected);
+    assert.ok(isWellFormed(state.checks[0]!.tail));
+    assert.ok(Buffer.byteLength(state.checks[0]!.tail) <= 240);
+    assert.deepEqual(state.omissions, ['check:test:tail_cap']);
+  }
+});
