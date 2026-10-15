@@ -28,6 +28,8 @@ export {
   PRESELECT_CAP,
   PRESELECT_DEFAULT_FLOOR,
   PRESELECT_DEFAULT_K,
+  PRESELECT_DEFAULT_MAX_EXCLUDED,
+  PRESELECT_DEFAULT_MIN_MARGIN,
   type DecisionConfig,
   type DecisionProviderBinding,
   type ResolvedPreselectPolicy,
