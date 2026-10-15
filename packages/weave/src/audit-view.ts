@@ -34,6 +34,8 @@ export interface AuditCheck {
 }
 export interface AuditEval {
   readonly criterion_id: string;
+  /** Producing audit iteration, attached by the observer; absent/null is unknown. */
+  readonly iteration?: number | null;
   readonly verdict_probability: number | null;
   readonly confidence: number | null;
   readonly passed: boolean;

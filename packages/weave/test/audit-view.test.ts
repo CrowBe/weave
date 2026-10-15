@@ -196,3 +196,24 @@ test('check tails repair existing lone surrogates without crashing or exceeding 
     assert.deepEqual(state.omissions, ['check:test:tail_cap']);
   }
 });
+
+test('audit eval iteration provenance is preserved, detached and canonically digested', () => {
+  const legacy = { criterion_id: 'c1', passed: true, verdict_probability: .8, confidence: .9 };
+  const evals = [{ ...legacy, iteration: 0, passed: false }, { ...legacy, iteration: 1 },
+    { ...legacy, iteration: null }, legacy];
+  const input = { ...fixture(), iteration: 1, evals };
+  const state = assembleAuditState(input);
+  assert.deepEqual(state.evals, evals, 'assembly preserves historical and unknown evidence without relabeling');
+  const reordered = { ...legacy, iteration: 1 };
+  const canonical = assembleAuditState({ ...input, evals: [evals[0]!,
+    { iteration: 1, confidence: .9, verdict_probability: .8, passed: true, criterion_id: 'c1' }, evals[2]!, legacy] });
+  assert.deepEqual(state, canonical);
+  assert.notEqual(assembleAuditState({ ...input, evals: [evals[0]!, { ...reordered, iteration: 0 }, evals[2]!, legacy] }).digest, state.digest);
+  const { digest: _digest, ...content } = state;
+  assert.equal(state.digest, digest(content));
+  evals[0]!.passed = true;
+  assert.equal(state.evals[0]?.passed, false);
+  const old = assembleAuditState({ ...fixture(), evals: [legacy] });
+  assert.deepEqual(old.evals, [legacy]);
+  assert.equal(Object.hasOwn(old.evals[0]!, 'iteration'), false, 'old states acquire no invented iteration');
+});
