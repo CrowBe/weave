@@ -24,8 +24,28 @@ test('tidy state rejects unauthorized slices and artifact references', () => {
   const state = assembleAuditState({ ...input, authorized_slices: ['goal', 'iteration', 'artifacts'], artifacts: [...input.artifacts!, { artifact_id: 'hidden', kind: 'file', digest: 'secret', summary: 'private', bytes: 1, ref: 'ref_hidden' }], source_revisions: { ...input.source_revisions, checks: 9 } });
   assert.equal(state.artifacts.length, 1);
   assert.ok(state.omissions.includes('checks:authority'));
-  assert.ok(state.omissions.includes('artifact:hidden:authority'));
+  assert.ok(state.omissions.includes('artifact:authority'));
   assert.equal(state.source_revisions.checks, undefined);
+});
+
+test('unauthorized artifacts disclose only one identity-free authority marker', () => {
+  const input = fixture();
+  const baseline = assembleAuditState(input);
+  assert.deepEqual(baseline.omissions, []);
+  const ids = ['hidden', 'hidden:summary_cap', 'sk-FAKE-NOT-A-CREDENTIAL'];
+  for (const count of [1, ids.length]) {
+    const artifacts = ids.slice(0, count).map((artifact_id, index) => ({ ...input.artifacts![0]!,
+      artifact_id, ref: `ref_hidden_${index}`, summary: '界'.repeat(100), body: 'x'.repeat(5000) }));
+    const state = assembleAuditState({ ...input, artifacts: [...input.artifacts!, ...artifacts],
+      source_revisions: { ...input.source_revisions, ...Object.fromEntries(artifacts.map(artifact => [artifact.ref, 99])) } });
+    assert.deepEqual(state.omissions, ['artifact:authority']);
+    assert.deepEqual(state.artifacts, baseline.artifacts);
+    assert.deepEqual(state.source_revisions, baseline.source_revisions);
+    assert.deepEqual(state, assembleAuditState({ ...input, artifacts: [...input.artifacts!, ...artifacts].reverse() }));
+  }
+  const restricted = assembleAuditState({ ...input, authorized_slices: ['goal', 'iteration'] });
+  assert.ok(!restricted.omissions.includes('artifact:authority'));
+  assert.ok(restricted.omissions.includes('artifacts:authority'));
 });
 
 test('tidy state canonical digest and bytes replay independent of object key order', () => {

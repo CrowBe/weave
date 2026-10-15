@@ -95,7 +95,7 @@ export function assembleAuditState(input: AuditStateInput): AuditState {
   const artifacts: AuditArtifact[] = [];
   if (allowed.has('artifacts')) for (const artifact of input.artifacts ?? []) {
     if (!refs.has(artifact.ref)) {
-      omissions.push(`artifact:${artifact.artifact_id}:authority`);
+      omissions.push('artifact:authority');
       continue;
     }
     const { body, summary, ...metadata } = artifact;
