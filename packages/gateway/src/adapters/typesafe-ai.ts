@@ -50,7 +50,7 @@ export interface TypesafeAiOptions {
   readonly baseURL?: string;
   /** Per-call Fisher-Yates choice ordering. Defaults to Math.random; false disables. Values are clamped to [0, 1); NaN becomes 0. */
   readonly shuffle?: false | (() => number);
-  /** TypeSafe documents no data-sharing field as of jev-1.14; Weave never opts in. Defaults to false. */
+  /** Type-level guard only, with no runtime effect. TypeSafe documents no data-sharing field as of jev-1.14; Weave never opts in. */
   readonly dataSharing?: false;
   /** Send the long-context danger-zone header on every request. Defaults to false; raises both context limits to 262k. */
   readonly longContext?: boolean;
@@ -89,6 +89,7 @@ export function typesafeWireProfile(
   };
 }
 
+/** Deterministic mapping (shuffle: false), unlike typesafeAiEvaluator's default choice shuffling. */
 export const typesafeWire: DecisionWireProfile = typesafeWireProfile({ shuffle: false });
 
 export function typesafeAiEvaluator(options: TypesafeAiOptions): EvaluationAdapter {

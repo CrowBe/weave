@@ -27,6 +27,8 @@ export interface KevRuntime {
 export interface KevLocalOptions {
   readonly runtime: KevRuntime;
   readonly baseURL?: string;
+  /** Per-call choice ordering, passed through to typesafeAiEvaluator. Defaults to Math.random; false preserves criteria order. */
+  readonly shuffle?: false | (() => number);
   readonly fetch?: typeof globalThis.fetch;
 }
 
@@ -52,6 +54,7 @@ export function kevLocalEvaluator(options: KevLocalOptions): EvaluationAdapter {
   const delegate = typesafeAiEvaluator({
     apiKey: 'local',
     baseURL: options.baseURL ?? KEV_LOCAL_BASE_URL,
+    ...(options.shuffle === undefined ? {} : { shuffle: options.shuffle }),
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
   });
 

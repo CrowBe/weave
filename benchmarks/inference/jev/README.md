@@ -188,7 +188,7 @@ These bind every number this directory produces.
 # Results — 2026-09-21
 
 Hosted Jev through the Vercel AI Gateway (`typesafe-ai/jev`), with TypeSafe
-direct (`jev-preview`) as the fallback route. Raw records, one JSON object per
+direct (`jev-latest`) as the fallback route. Raw records, one JSON object per
 request, replayable with `--from`:
 
 | file | corpus | model | orderings |

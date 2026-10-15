@@ -340,6 +340,7 @@ export function createKevGateway(clock: Clock, baseURL: string = KEV_LOCAL_BASE_
       kevLocalEvaluator({
         runtime: { ensureReady: async () => ({ status: 'ready' as const }) },
         baseURL,
+        shuffle: false,
       }),
     ],
     clock,
