@@ -14,6 +14,7 @@ import { countCompetitorCalls, execute, persistentProviderSkip, providerSkip } f
 import { loadSets } from './sets.ts';
 import { makeReport } from './report.ts';
 import type { Provider } from './types.ts';
+const DEFAULT_PROVIDERS=['typesafe-jev','amos-small','openai-decisions','pi','fx-ask'];
 export function flags(args:string[]) {
  const values:Record<string,string>={};const booleans=new Set<string>();
  for(let i=0;i<args.length;i++) {
@@ -27,8 +28,8 @@ export function flags(args:string[]) {
  const runId=values['--run-id']??`decision-${new Date().toISOString().replace(/[^0-9]/g,'')}`;
  if(!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$/.test(runId))throw new Error('Invalid run id');
  const sites=(values['--sites']??SITES.join(',')).split(',');if(sites.some(s=>!SITES.includes(s as typeof SITES[number])))throw new Error('Unknown site');
- const providers=(values['--providers']??'typesafe-jev,amos-small,openai-decisions,pi,fx-ask').split(',');
- if(providers.some(p=>!['typesafe-jev','amos-small','openai-decisions','pi','fx-ask','fake'].includes(p)))throw new Error('Unknown provider');
+ const providers=(values['--providers']??DEFAULT_PROVIDERS.join(',')).split(',');
+ if(providers.some(p=>![...DEFAULT_PROVIDERS,'fake'].includes(p)))throw new Error('Unknown provider');
  const split=values['--split']??'all';if(!['all','tune','holdout'].includes(split))throw new Error('Invalid split');
  return {maxSpend,maxSpendExplicit:values['--max-spend-usd']!==undefined,allowSpendIncrease:booleans.has('--allow-spend-increase'),allowSpendAbove5:booleans.has('--allow-spend-above-5'),runId,sites:[...new Set(sites)],providers:[...new Set(providers)],split,resume:booleans.has('--resume'),renderOnly:booleans.has('--render-only')};
 }
@@ -86,7 +87,7 @@ export async function main(args=process.argv.slice(2), injected?:{providers:read
   const statuses=records.filter((r,i)=>['provider_status','budget_stop','cancelled','uncertain'].includes(r.type)&&
    (r.type!=='provider_status'||(r.persistent!==false&&persistentProviderSkip(r.result))||i>invocationStart));
   const skipped=new Set(statuses.filter(r=>r.type==='provider_status'&&r.result&&providerSkip(r.result)).map(r=>r.provider));
-  let publish=!options.providers.includes('fake')&&options.split==='all'&&options.sites.length===SITES.length;
+  let publish=!options.providers.includes('fake')&&DEFAULT_PROVIDERS.every(p=>options.providers.includes(p))&&options.split==='all'&&options.sites.length===SITES.length;
   for(const provider of providers)for(const entry of entries) {
    const request=await buildRequest(entry.item);
    const binding={provider:provider.id,model:provider.model,site:entry.item.site,item_id:entry.item.id,set_digest:entry.set_digest,question_digest:digest(JSON.stringify(request)),request_digest:digest(provider.serialize(request))};

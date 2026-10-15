@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import {syncBuiltinESMExports} from 'node:module';
 import {pathToFileURL} from 'node:url';
 import {loadSets} from './sets.ts';
+import type {Provider} from './types.ts';
 
 // Run the real CLI from an isolated composition root so verification never writes recorded results.
 const testRoot=mkdtempSync(join(tmpdir(),'p10-cli-tests-'));
@@ -187,12 +188,30 @@ test('fake and partial reports stay in the run directory without overwriting the
  }finally{rmSync(partialDir,{recursive:true,force:true});writeFileSync(reportPath,original);}
 });
 
+for(const complete of [false,true])test(`${complete?'full':'partial'} provider list with all sites and splits ${complete?'publishes':'preserves'} the headline report`,async()=>{
+ const id=`provider-coverage-${complete}-${process.pid}`,dir=join(testRoot,'results',id);
+ const reportPath=join(testRoot,'REPORT.md'),original=readFileSync(reportPath,'utf8');
+ // Reverse the default order: coverage depends on membership, including requested providers skipped at runtime.
+ const requested=complete?['fx-ask','pi','openai-decisions','amos-small','typesafe-jev']:['amos-small'];
+ const providers:Provider[]=requested.map(id=>({id,model:'offline-publish-test',competitor:id==='pi'||id==='fx-ask',price:0,serialize:JSON.stringify,
+  request:async request=>id==='amos-small'?{status:'ok',answers:Object.fromEntries(Object.entries(request.questions).map(([id,q])=>[id,q.type==='choice'?{choice:Object.keys(q.criteria)[0]!,confidence:.95}:{probability:.1,confidence:.95}]))}:{status:'skipped',reason:id==='pi'||id==='fx-ask'?'auth_required':'no_credential'},
+ }));
+ try{
+  assert.equal(await main(['--providers',requested.join(','),'--split','all','--run-id',id],{providers}),0);
+  const report=readFileSync(join(dir,'REPORT.md'),'utf8');
+  assert.match(report,/Decision-site benchmark/);
+  assert.ok(readFileSync(reportPath,'utf8')===(complete?report:original),complete?'full provider run must publish the run report':'partial provider run must leave the headline untouched');
+  if(complete){assert.match(report,/no_credential/);assert.match(report,/auth_required/);}
+ }finally{rmSync(dir,{recursive:true,force:true});writeFileSync(reportPath,original);}
+});
+
 test('a budget-stopped all-site run writes its report only in its run directory',async()=>{
  const id=`budget-report-${process.pid}`,dir=join(testRoot,'results',id);
  const reportPath=join(testRoot,'REPORT.md'),original=readFileSync(reportPath,'utf8');
  let calls=0;
  try{
-  assert.equal(await main(['--providers','typesafe-jev','--max-spend-usd','0','--run-id',id],{providers:[{id:'typesafe-jev',model:'fake-live-shape',price:.1,serialize:JSON.stringify,request:async()=>{calls++;throw Error('budget must block');}}]}),0);
+  const providers=flags([]).providers.map(id=>({id,model:'fake-live-shape',price:.1,serialize:JSON.stringify,request:async()=>{calls++;throw Error('budget must block');}}));
+  assert.equal(await main(['--max-spend-usd','0','--run-id',id],{providers}),0);
   assert.equal(calls,0);assert.equal(readFileSync(reportPath,'utf8'),original);
   assert.match(readFileSync(join(dir,'REPORT.md'),'utf8'),/budget_stop/);
  }finally{rmSync(dir,{recursive:true,force:true});writeFileSync(reportPath,original);}
@@ -202,7 +221,8 @@ test('an all-skipped run keeps its empty report out of the published report',asy
  const id=`skipped-report-${process.pid}`,dir=join(testRoot,'results',id);
  const reportPath=join(testRoot,'REPORT.md'),original=readFileSync(reportPath,'utf8');
  try{
-  assert.equal(await main(['--providers','typesafe-jev','--run-id',id],{providers:[{id:'typesafe-jev',model:'fake-live-shape',price:0,serialize:JSON.stringify,request:async()=>({status:'skipped',reason:'no_credential'})}]}),0);
+  const providers:Provider[]=flags([]).providers.map(id=>({id,model:'fake-live-shape',price:0,serialize:JSON.stringify,request:async()=>({status:'skipped',reason:'no_credential'})}));
+  assert.equal(await main(['--run-id',id],{providers}),0);
   assert.equal(readFileSync(reportPath,'utf8'),original);
   assert.match(readFileSync(join(dir,'REPORT.md'),'utf8'),/no_credential/);
  }finally{rmSync(dir,{recursive:true,force:true});writeFileSync(reportPath,original);}

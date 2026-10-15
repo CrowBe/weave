@@ -55,13 +55,15 @@ attempt reserves `serialized_request_utf8_bytes * input_price / 1e6` before
 calling. Actual `usage.input_tokens` replaces the reservation after receipt.
 Missing usage retains that conservative estimate; skips before inference cost
 zero. Prices are TypeSafe $0.042/M input (output free) and OpenAI Decisions
-$0.10/M input with no output or cache charges, per the
+$0.10/M input with output tokens assumed unbilled and no cache charges, based on the
 [Decisions guide](https://developers.openai.com/api/docs/guides/decisions).
 The OpenAI price remains unconfirmed until a credentialed run; [code](providers.ts)
 records the same source and input-only assumption. The reservation conservatively
-allows one input token per UTF-8 byte; output is free in these profiles. If actual
-cost still exceeds that bound, the receipt is recorded honestly and a durable
-`budget_stop` halts all further dispatch, including on resume. Ordinary ceiling
+allows one input token per UTF-8 byte. The USD ceiling is a hard preflight bound
+on this projection, but a soft bound if a provider bills server-side template
+tokens beyond the byte-based projection: at most one call can overrun. Its actual
+cost is journalled, followed by a durable `budget_stop` that halts all further
+dispatch, including on resume. Ordinary ceiling
 stops still allow later providers their own preflight checks, including zero-price
 Amos and competitors. No snapshot
 authorizes spending on resume: the live journal is read
@@ -116,8 +118,11 @@ npm run bench:decision-sites:live -- --render-only --run-id live-20261015 \
 Render-only reads the existing journal without appending records or repairing a
 torn tail; even an incomplete final line stays byte-for-byte unchanged. It
 regenerates the run's `REPORT.md` and `summary.json`. The checked-in `REPORT.md`
-is refreshed only for a complete, all-site, both-split run without the fake
-provider and with at least one successful answer. Fake, partial and entirely
+is refreshed only for a complete, all-site, both-split run requesting the full
+default live provider set (`typesafe-jev,amos-small,openai-decisions,pi,fx-ask`),
+without the fake provider and with at least one successful answer. Requested
+providers skipped at runtime for `no_credential` or `auth_required` still count
+as covered. Fake, partial and entirely
 skipped reports stay under `results/<run_id>/`. A temporary exclusive lock still
 prevents concurrent writers. Render-only makes no calls. Resume preserves
 persistent skips and rechecks invocation-only quota skips.
@@ -135,8 +140,11 @@ re-pays a terminal wrong-model failure: it remains recorded against the
 requested binding, with the unexpected served model retained as failure evidence.
 Legacy records without a serialized request digest remain displayable with
 `--render-only`, but never match for reuse or report binding during resume.
-SIGINT/SIGTERM abort in-flight calls, record cancellation, render partial results and exit
-nonzero. Returned results are journalled before stopping: an acknowledged answer and
+SIGINT/SIGTERM request cancellation and wait for the in-flight call to settle
+(up to 30 seconds for HTTP, 120 seconds for competitors), then record cancellation,
+render partial results and exit nonzero. A second Ctrl-C does not force-exit;
+this is deliberate for journal safety. Returned results are journalled before
+stopping: an acknowledged answer and
 its actual usage survive cancellation. Only cancellation before inference dispatch
 produces a retryable cancelled/not-sent result: a nonterminal failure that costs zero
 and consumes neither an attempt nor the competitor call cap. A competitor prompt
