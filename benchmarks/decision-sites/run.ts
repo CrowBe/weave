@@ -10,7 +10,7 @@ import { buildCompetitors, quotaAllowsCompetitors } from './competitors.ts';
 import type { ProcessRunner } from './competitors.ts';
 import { Journal, acquireLock, replayKey, digest } from './journal.ts';
 import { SITES, buildRequest } from './questions.ts';
-import { execute, providerSkip } from './engine.ts';
+import { countCompetitorCalls, execute, persistentProviderSkip, providerSkip } from './engine.ts';
 import { loadSets } from './sets.ts';
 import { makeReport } from './report.ts';
 import type { Provider } from './types.ts';
@@ -18,7 +18,7 @@ export function flags(args:string[]) {
  const values:Record<string,string>={};const booleans=new Set<string>();
  for(let i=0;i<args.length;i++) {
   const flag=args[i]!;
-  if(['--resume','--render-only','--allow-spend-above-5'].includes(flag)){booleans.add(flag);continue;}
+  if(['--resume','--render-only','--allow-spend-above-5','--allow-spend-increase'].includes(flag)){booleans.add(flag);continue;}
   if(!['--providers','--sites','--split','--max-spend-usd','--run-id'].includes(flag)||!args[i+1]||args[i+1]!.startsWith('--'))throw new Error('Invalid benchmark flags');
   values[flag]=args[++i]!;
  }
@@ -30,7 +30,7 @@ export function flags(args:string[]) {
  const providers=(values['--providers']??'typesafe-jev,amos-small,openai-decisions,pi,fx-ask').split(',');
  if(providers.some(p=>!['typesafe-jev','amos-small','openai-decisions','pi','fx-ask','fake'].includes(p)))throw new Error('Unknown provider');
  const split=values['--split']??'all';if(!['all','tune','holdout'].includes(split))throw new Error('Invalid split');
- return {maxSpend,runId,sites:[...new Set(sites)],providers:[...new Set(providers)],split,resume:booleans.has('--resume'),renderOnly:booleans.has('--render-only')};
+ return {maxSpend,maxSpendExplicit:values['--max-spend-usd']!==undefined,allowSpendIncrease:booleans.has('--allow-spend-increase'),allowSpendAbove5:booleans.has('--allow-spend-above-5'),runId,sites:[...new Set(sites)],providers:[...new Set(providers)],split,resume:booleans.has('--resume'),renderOnly:booleans.has('--render-only')};
 }
 const runProcess:ProcessRunner = (command,args,options)=>new Promise(resolveProcess=>{
  let stdout='',stderr='',done=false;
@@ -47,16 +47,26 @@ export async function main(args=process.argv.slice(2), injected?:{providers:read
  const options=flags(args);if(!process.versions.node.startsWith('22.'))throw new Error('Node 22 required');
  const root=dirname(fileURLToPath(import.meta.url));const dir=join(root,'results',options.runId);
  if(options.renderOnly&&!existsSync(join(dir,'journal.jsonl')))throw new Error('Run journal missing');
- const release=acquireLock(dir);const temp=mkdtempSync(join(tmpdir(),'weave-decision-'));
+ const release=acquireLock(dir);let tempPath:string|undefined;
  const controller=new AbortController();const abort=()=>controller.abort();
  process.on('SIGINT',abort);process.on('SIGTERM',abort);
  try {
+  const temp=mkdtempSync(join(tmpdir(),'weave-decision-'));tempPath=temp;
   const journal=new Journal(join(dir,'journal.jsonl'),options.renderOnly);
-  if(journal.read().length&&!options.resume&&!options.renderOnly)throw new Error('Run already exists; use --resume');
+  const history=journal.read();
+  if(history.length&&!options.resume&&!options.renderOnly)throw new Error('Run already exists; use --resume');
+  const firstRun=history.find(r=>r.type==='run');
+  if(firstRun){
+   const ceiling=firstRun.max_spend_usd;
+   if(typeof ceiling!=='number'||!Number.isFinite(ceiling)||ceiling<0)throw new Error('Invalid original run ceiling');
+   if(!options.maxSpendExplicit)options.maxSpend=ceiling;
+   else if(options.maxSpend>ceiling&&!options.allowSpendIncrease)throw new Error('Run ceiling increase requires --allow-spend-increase');
+  }
+  if(!options.renderOnly&&options.maxSpend>5&&!options.allowSpendAbove5)throw new Error('Spend ceiling above 5 requires --allow-spend-above-5');
   const {entries,digests}=loadSets(join(root,'sets'),options.sites,options.split);
-  if(!options.renderOnly)journal.append({type:'run',run_id:options.runId,node_version:process.version,max_spend_usd:options.maxSpend,set_digests:digests,providers:options.providers,sites:options.sites});
+  if(!options.renderOnly)journal.append({type:'run',run_id:options.runId,node_version:process.version,max_spend_usd:options.maxSpend,allow_spend_increase:options.allowSpendIncrease,set_digests:digests,providers:options.providers,sites:options.sites});
   const configs={...(process.env.TYPESAFE_API_KEY??process.env.TYPESAFE_AI_API_KEY?{typesafeKey:(process.env.TYPESAFE_API_KEY??process.env.TYPESAFE_AI_API_KEY)!}:{}),...(process.env.OPENAI_API_KEY?{openaiKey:process.env.OPENAI_API_KEY}:{}),...(process.env.AMOS_BASE_URL?{amosBaseURL:process.env.AMOS_BASE_URL}:{}),now:Date.now};
-  const counts=Object.fromEntries(['pi','fx-ask'].map(p=>[p,journal.read().filter(r=>r.type==='intent'&&r.provider===p).length]));
+  const counts=Object.fromEntries(['pi','fx-ask'].map(p=>[p,countCompetitorCalls(journal.read(),p)]));
   const competitors=buildCompetitors({run:runProcess,cwd:temp,quotaAllowed:true,callCounts:counts}).map(provider=>({
    ...provider, async request(request:Parameters<Provider['request']>[0],signal:AbortSignal) {
     // Re-read plan quota immediately before every competitor call; never reuse a stale pause snapshot.
@@ -68,8 +78,11 @@ export async function main(args=process.argv.slice(2), injected?:{providers:read
   const providers=[...(injected?.providers??[...buildProviders(configs),...competitors,fakeProvider()])].filter(p=>options.providers.includes(p.id));
   if(!options.renderOnly)await execute({entries,providers,journal,maxSpend:options.maxSpend,now:Date.now,sleep:async(ms,signal)=>{await delay(ms,undefined,signal?{signal}:{});},signal:controller.signal});
   const records=journal.read();const bound=[];
+  const invocationStart=records.map(r=>r.type).lastIndexOf('run');
+  const statuses=records.filter((r,i)=>['provider_status','budget_stop','cancelled','uncertain'].includes(r.type)&&
+   (r.type!=='provider_status'||(r.persistent!==false&&persistentProviderSkip(r.result))||i>invocationStart));
   const terminal=new Set(records.filter(r=>r.type==='call'&&r.terminal).map(replayKey));
-  const skipped=new Set(records.filter(r=>r.type==='provider_status'&&r.result&&providerSkip(r.result)).map(r=>r.provider));
+  const skipped=new Set(statuses.filter(r=>r.type==='provider_status'&&r.result&&providerSkip(r.result)).map(r=>r.provider));
   let publish=!options.providers.includes('fake')&&options.split==='all'&&options.sites.length===SITES.length;
   for(const provider of providers)for(const entry of entries) {
    const binding={provider:provider.id,model:provider.model,site:entry.item.site,item_id:entry.item.id,set_digest:entry.set_digest,question_digest:digest(JSON.stringify(await buildRequest(entry.item)))};
@@ -83,7 +96,7 @@ export async function main(args=process.argv.slice(2), injected?:{providers:read
   const callCost=records.filter(r=>r.type==='call').reduce((sum,r)=>sum+(r.cost_usd??0),0);
   const reportRecords=bound as Parameters<typeof makeReport>[1];
   const report=makeReport({run_id:options.runId,node_version:process.version,max_spend_usd:options.maxSpend,set_digests:digests,providers:options.providers,sites:options.sites,
-   statuses:records.filter(r=>['provider_status','budget_stop','cancelled','uncertain'].includes(r.type)),spent_usd:journal.spent(),
+   statuses,spent_usd:journal.spent(),
    input_tokens:records.filter(r=>r.type==='call').reduce((sum,r)=>sum+(r.result.input_tokens??0),0),
    output_tokens:records.filter(r=>r.type==='call').reduce((sum,r)=>sum+(r.result.output_tokens??0),0)},reportRecords);
   Object.assign(report.summary,{metered_call_cost_usd:callCost,reserved_usd:journal.spent()-callCost});
@@ -93,6 +106,6 @@ export async function main(args=process.argv.slice(2), injected?:{providers:read
   if(publish&&reportRecords.some(r=>r.result.status==='ok'))writeFileSync(join(root,'REPORT.md'),markdown);
   writeSync(1,`Run ${options.runId}: ${bound.length} items; spend $${journal.spent().toFixed(8)} / $${options.maxSpend.toFixed(2)}\n`);
   return controller.signal.aborted?130:0;
- } finally {process.off('SIGINT',abort);process.off('SIGTERM',abort);rmSync(temp,{recursive:true,force:true});release();}
+ } finally {process.off('SIGINT',abort);process.off('SIGTERM',abort);try{if(tempPath)rmSync(tempPath,{recursive:true,force:true});}finally{release();}}
 }
-if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href)main().then(code=>{process.exitCode=code;}).catch((error:unknown)=>{const message=error instanceof Error?error.message:'';writeSync(2,(['Run directory locked','Run directory has stale lock; inspect before removing','Run directory has stale-unknown lock; inspect before removing','Run already exists; use --resume','Spend ceiling above 5 requires --allow-spend-above-5','Corrupt journal before final line','Frozen set digest mismatch'].includes(message)?message:'Decision benchmark failed; inspect flags, lock, sets and journal.')+'\n');process.exitCode=1;});
+if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href)main().then(code=>{process.exitCode=code;}).catch((error:unknown)=>{const message=error instanceof Error?error.message:'';writeSync(2,(['Run directory locked','Run directory has stale lock; inspect before removing','Run directory has stale-unknown lock; inspect before removing','Run already exists; use --resume','Spend ceiling above 5 requires --allow-spend-above-5','Run ceiling increase requires --allow-spend-increase','Invalid original run ceiling','Corrupt journal before final line','Frozen set digest mismatch'].includes(message)?message:'Decision benchmark failed; inspect flags, lock, sets and journal.')+'\n');process.exitCode=1;});

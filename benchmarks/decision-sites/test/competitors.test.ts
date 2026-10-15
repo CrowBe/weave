@@ -1,16 +1,31 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { buildCompetitors, quotaAllowsCompetitors } from '../competitors.ts';
 const req={state:'question state CANARY_DATA',questions:{q:{type:'boolean' as const,instructions:'Allowed?'}}};
+test('quota uses nested freshness from the verbatim codex capture and seven_day window shape',()=>{
+ const snapshot=JSON.parse(readFileSync(new URL('./fixtures/quota-codex-sample.json',import.meta.url),'utf8'));
+ const now=Date.parse(snapshot.generatedAt);
+ assert.equal(quotaAllowsCompetitors(snapshot,now),true);
+ const sevenDay=structuredClone(snapshot);
+ sevenDay.providers[0].windows.find((window:{kind:string})=>window.kind==='weekly').id='seven_day';
+ assert.equal(quotaAllowsCompetitors(sevenDay,now),true);
+ for(const state of [undefined,{}, {status:'fresh'}, {status:'fresh',stale:true}, {status:'stale',stale:false}, {status:'unknown',stale:false}]){
+  const value=structuredClone(snapshot);value.providers[0].status='fresh';value.providers[0].state=state;
+  assert.equal(quotaAllowsCompetitors(value,now),false);
+ }
+ const obsolete=structuredClone(snapshot);obsolete.providers[0].status='stale';
+ assert.equal(quotaAllowsCompetitors(obsolete,now),true);
+});
 test('quota fails closed for missing, stale, ambiguous and 80% weekly usage',()=>{
  const now=Date.parse('2026-10-15T00:00:00Z');
- const value=(remaining:number)=>({generatedAt:new Date(now).toISOString(),providers:[{provider:'codex',status:'fresh',windows:[{id:'seven_day',percentRemaining:remaining,resetsAt:new Date(now+3600000).toISOString()}]}]});
+ const value=(remaining:number)=>({generatedAt:new Date(now).toISOString(),providers:[{provider:'codex',state:{status:'fresh',stale:false},windows:[{id:'seven_day',percentRemaining:remaining,resetsAt:new Date(now+3600000).toISOString()}]}]});
  assert.equal(quotaAllowsCompetitors(value(21),now),true);assert.equal(quotaAllowsCompetitors(value(20),now),false);assert.equal(quotaAllowsCompetitors(value(50),now+60001),false);assert.equal(quotaAllowsCompetitors({},now),false);
 });
 test('quota accepts weekly kind and both weekly ids, using the lowest remaining weekly quota',()=>{
  const now=Date.parse('2026-10-15T00:00:00Z');
  const window=(id:string,percentRemaining:number,kind?:string)=>({id,kind,percentRemaining,resetsAt:new Date(now+3600000).toISOString()});
- const snapshot=(windows:unknown[])=>({generatedAt:new Date(now).toISOString(),providers:[{provider:'codex',status:'fresh',windows}]});
+ const snapshot=(windows:unknown[])=>({generatedAt:new Date(now).toISOString(),providers:[{provider:'codex',state:{status:'fresh',stale:false},windows}]});
  assert.equal(quotaAllowsCompetitors(snapshot([window('weekly',75,'weekly')]),now),true);
  assert.equal(quotaAllowsCompetitors(snapshot([window('seven_day',75,'weekly')]),now),true);
  assert.equal(quotaAllowsCompetitors(snapshot([window('weekly',75)]),now),true);
@@ -53,13 +68,13 @@ test('pi auth failure is sticky, malformed/nonzero responses fail, and missing c
 });
 test('quota-axi fresh schema validates reset, reused source age, duplicates and missing evidence',()=>{
  const now=Date.parse('2026-10-15T00:00:00Z');
- const snapshot=(remaining=21)=>({generatedAt:new Date(now).toISOString(),providers:[{provider:'codex',status:'fresh',windows:[{id:'seven_day',percentRemaining:remaining,resetsAt:new Date(now+3600000).toISOString(),pace:{status:'ahead'}}]}]});
+ const snapshot=(remaining=21)=>({generatedAt:new Date(now).toISOString(),providers:[{provider:'codex',state:{status:'fresh',stale:false},windows:[{id:'seven_day',percentRemaining:remaining,resetsAt:new Date(now+3600000).toISOString(),pace:{status:'ahead'}}]}]});
  assert.equal(quotaAllowsCompetitors(snapshot(21),now),true);assert.equal(quotaAllowsCompetitors(snapshot(20),now),false);
  for(const resetsAt of [undefined,'invalid',new Date(now).toISOString()]){const v:any=snapshot();v.providers[0].windows[0].resetsAt=resetsAt;assert.equal(quotaAllowsCompetitors(v,now),false);}
- for(const refreshedAt of [undefined,'invalid',new Date(now-60000).toISOString(),new Date(now+1).toISOString()]){const v:any=snapshot();v.providers[0].state={reused:true,refreshedAt};assert.equal(quotaAllowsCompetitors(v,now),false);}
- const reused:any=snapshot();reused.providers[0].state={reused:true,refreshedAt:new Date(now-1000).toISOString()};assert.equal(quotaAllowsCompetitors(reused,now),true);
+ for(const refreshedAt of [undefined,'invalid',new Date(now-60000).toISOString(),new Date(now+1).toISOString()]){const v:any=snapshot();Object.assign(v.providers[0].state,{reused:true,refreshedAt});assert.equal(quotaAllowsCompetitors(v,now),false);}
+ const reused:any=snapshot();Object.assign(reused.providers[0].state,{reused:true,refreshedAt:new Date(now-1000).toISOString()});assert.equal(quotaAllowsCompetitors(reused,now),true);
  const duplicate=snapshot();duplicate.providers.push(duplicate.providers[0]!);assert.equal(quotaAllowsCompetitors(duplicate,now),false);
  const windows=snapshot();windows.providers[0]!.windows.push(windows.providers[0]!.windows[0]!);assert.equal(quotaAllowsCompetitors(windows,now),false);
- for(const status of ['stale','unknown','error']){const v=snapshot();v.providers[0]!.status=status;assert.equal(quotaAllowsCompetitors(v,now),false);}
+ for(const status of ['stale','unknown','error']){const v=snapshot();v.providers[0]!.state.status=status;assert.equal(quotaAllowsCompetitors(v,now),false);}
  assert.equal(quotaAllowsCompetitors(snapshot(),now+60000),false);
 });

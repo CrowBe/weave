@@ -1,25 +1,32 @@
 /** Sequential dispatch is an intentional bound: Jev <=4, Amos and competitors exactly one. */
-import { Journal, digest, projectedCost, replayKey } from './journal.ts';
+import { Journal, digest, projectedCost, replayKey, type JournalRecord } from './journal.ts';
 import { buildRequest } from './questions.ts';
 import type { Item, Provider, Result } from './types.ts';
 export interface Entry {item:Item;split:'tune'|'holdout';set_digest:string}
 export function providerSkip(result:Result):boolean {
  return result.http_status===401||result.http_status===403||(result.status==='skipped'&&['auth_required','unauthorized','no_credential','quota_unavailable_or_weekly_cap','call_cap','model_not_listed','tools_cannot_be_disabled','unsupported_cli_flags'].includes(result.reason??''));
 }
+export function persistentProviderSkip(result:Result):boolean {
+ return providerSkip(result)&&result.reason!=='quota_unavailable_or_weekly_cap';
+}
+export function countCompetitorCalls(records:readonly JournalRecord[],provider:string):number {
+ const quotaOnly=new Set(records.filter(r=>r.type==='call'&&r.result?.status==='skipped'&&r.result.reason==='quota_unavailable_or_weekly_cap').map(r=>r.call_id));
+ return records.filter(r=>r.type==='intent'&&r.provider===provider&&!quotaOnly.has(r.call_id)).length;
+}
 export async function execute(options:{entries:readonly Entry[];providers:readonly Provider[];journal:Journal;maxSpend:number;now:()=>number;sleep:(ms:number,signal?:AbortSignal)=>Promise<void>;signal?:AbortSignal}):Promise<void> {
  const {entries,providers,journal,signal}=options;
- const skipped=new Set(journal.read().filter(r=>r.type==='provider_status'&&r.result?.status==='skipped'&&providerSkip(r.result)).map(r=>r.provider));
+ const skipped=new Set(journal.read().filter(r=>r.type==='provider_status'&&r.persistent!==false&&r.result?.status==='skipped'&&persistentProviderSkip(r.result)).map(r=>r.provider));
  for(const provider of providers) {
   if(skipped.has(provider.id))continue;
   const scheduled=provider.competitor?competitorEntries(entries):entries;
   items:for(const entry of scheduled) {
-   if(provider.competitor && journal.read().filter(r=>r.type==='intent'&&r.provider===provider.id).length>=40){journal.append({type:'provider_status',provider:provider.id,result:{status:'skipped',reason:'call_cap'}});break;}
+   if(provider.competitor && countCompetitorCalls(journal.read(),provider.id)>=40){journal.append({type:'provider_status',provider:provider.id,result:{status:'skipped',reason:'call_cap'}});break;}
    if(signal?.aborted){journal.append({type:'cancelled'});return;}
    if(provider.competitor && entry.split!=='holdout')continue;
    const request=await buildRequest(entry.item);
    const binding={provider:provider.id,model:provider.model,site:entry.item.site,item_id:entry.item.id,set_digest:entry.set_digest,question_digest:digest(JSON.stringify(request))};
    const key=replayKey(binding);const history=journal.read();
-   const prior=history.filter(r=>r.type==='call'&&replayKey(r)===key);
+   const prior=history.filter(r=>r.type==='call'&&replayKey(r)===key&&!(r.result.status==='skipped'&&r.result.reason==='quota_unavailable_or_weekly_cap'));
    if(prior.some(r=>r.terminal))continue;
    const pending=history.filter(r=>r.type==='intent'&&replayKey(r)===key&&!history.some(c=>c.type==='call'&&c.call_id===r.call_id));
    if(pending.length){
@@ -41,7 +48,7 @@ export async function execute(options:{entries:readonly Entry[];providers:readon
     const skip=providerSkip(result);
     if(result.status==='skipped'&&!skip)result={...result,status:'failed'};
     journal.append({type:'call',...binding,split:entry.split,call_id,result,terminal:!retry,latency_ms:Math.max(0,options.now()-started),cost_usd:cost});
-    if(skip){journal.append({type:'provider_status',provider:provider.id,result:{...result,status:'skipped'}});skipped.add(provider.id);break;}
+    if(skip){journal.append({type:'provider_status',provider:provider.id,persistent:persistentProviderSkip(result),result:{...result,status:'skipped'}});skipped.add(provider.id);break;}
     if(!retry)break;
     try{await options.sleep(Math.min(60000,Math.max(0,result.retry_after_ms??1000*(attempt+1))),signal);}catch{journal.append({type:'cancelled'});return;}
    }

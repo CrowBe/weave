@@ -18,8 +18,8 @@ export function quotaAllowsCompetitors(raw: unknown, now: number, maxAgeMs = 60_
   const providers = raw.providers.filter((provider: unknown) => record(provider) && provider.provider === 'codex');
   if (providers.length !== 1 || !record(providers[0])) return false;
   const provider = providers[0];
-  if (provider.status !== 'fresh') return false;
-  if (record(provider.state) && provider.state.reused === true) {
+  if (!record(provider.state) || provider.state.status !== 'fresh' || provider.state.stale !== false) return false;
+  if (provider.state.reused === true) {
     const refreshed = typeof provider.state.refreshedAt === 'string' ? Date.parse(provider.state.refreshedAt) : NaN;
     if (!Number.isFinite(refreshed) || refreshed > observed || now - refreshed >= maxAgeMs) return false;
   }

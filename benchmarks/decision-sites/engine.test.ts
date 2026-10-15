@@ -95,3 +95,36 @@ test('a metered budget stop still allows later zero-price providers',()=>fixture
  await execute({entries:[entry,{...entry,item:{...item,id:'second'}}],providers:[metered,unmetered],journal,maxSpend:0,...clock});
  assert.equal(paid,0);assert.equal(free,2);assert.equal(journal.read().filter(r=>r.type==='budget_stop').length,1);
 }));
+
+test('quota skips last for one invocation, retry the uncalled item on resume, and remain journalled',()=>fixture(async journal=>{
+ let n=0;const p={...provider(async()=>{n++;return n===1?{status:'skipped' as const,reason:'quota_unavailable_or_weekly_cap'}:{status:'ok' as const,model:'fake',answers:{}};}),competitor:true};
+ const rows=[entry,{...entry,item:{...item,id:'next'}}];
+ const run=()=>execute({entries:rows,providers:[p],journal,maxSpend:2,...clock});
+ await run();assert.equal(n,1);
+ const status=journal.read().find(r=>r.type==='provider_status')!;assert.equal(status.persistent,false);
+ await run();assert.equal(n,3);
+ assert.equal(journal.read().filter(r=>r.type==='call'&&r.result.status==='ok').length,2);
+ await run();assert.equal(n,3);
+}));
+test('legacy quota skips are recoverable, while credential/auth/tool skips stay persistent',()=>fixture(async journal=>{
+ const request=await buildRequest(item);
+ journal.append({type:'provider_status',provider:'fake',result:{status:'skipped',reason:'quota_unavailable_or_weekly_cap'}});
+ journal.append({type:'call',provider:'fake',model:'fake',site:item.site,item_id:item.id,set_digest:entry.set_digest,question_digest:digest(JSON.stringify(request)),call_id:'legacy-quota',result:{status:'skipped',reason:'quota_unavailable_or_weekly_cap'},terminal:true,cost_usd:0});
+ let n=0;const p=provider(async()=>{n++;return {status:'ok',model:'fake',answers:{}};});
+ await execute({entries:[entry],providers:[p],journal,maxSpend:2,...clock});assert.equal(n,1);
+ for(const reason of ['auth_required','no_credential','tools_cannot_be_disabled']){
+  let attempts=0;const persistent={...provider(async()=>{attempts++;return {status:'skipped' as const,reason};}),id:reason};
+  const run=()=>execute({entries:[entry],providers:[persistent],journal,maxSpend:2,...clock});
+  await run();await run();assert.equal(attempts,1);
+  assert.equal(journal.read().find(r=>r.type==='provider_status'&&r.provider===reason)!.persistent,true);
+ }
+}));
+
+test('quota checks that made no inference call do not exhaust the competitor call cap',()=>fixture(async journal=>{
+ for(let n=0;n<40;n++){
+  journal.append({type:'intent',provider:'fake',call_id:`quota-${n}`,projected_usd:0});
+  journal.append({type:'call',provider:'fake',call_id:`quota-${n}`,result:{status:'skipped',reason:'quota_unavailable_or_weekly_cap'},cost_usd:0,terminal:true});
+ }
+ let calls=0;const p={...provider(async()=>{calls++;return {status:'ok' as const,model:'fake',answers:{}};}),competitor:true};
+ await execute({entries:[entry],providers:[p],journal,maxSpend:2,...clock});assert.equal(calls,1);
+}));

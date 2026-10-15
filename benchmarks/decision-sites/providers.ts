@@ -7,7 +7,8 @@ export type { Answer, Provider, Request, Result } from './types.ts';
 export const PRICES = Object.freeze({
   // https://docs.typesafe.ai/models (pinned Jev 1.14); output free.
   'typesafe-jev': { input_per_million: .042, source: 'https://docs.typesafe.ai/models' },
-  // Benchmark price assumption supplied by WHC-P10; independently confirm before live run.
+  // Decisions guide: $0.10/M input, no output or cache charges (source below).
+  // Unconfirmed until a credentialed benchmark run; metering remains input-only.
   'openai-decisions': { input_per_million: .10, source: 'https://developers.openai.com/api/docs/guides/decisions' },
 });
 export interface ProvidersConfig {

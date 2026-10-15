@@ -54,23 +54,36 @@ The default metered decision-spend ceiling is **USD 2.00 per run**. Each HTTP
 attempt reserves `ceil(serialized_request_chars/3) * input_price / 1e6` before
 calling. Actual `usage.input_tokens` replaces the reservation after receipt.
 Missing usage retains that conservative estimate; skips before inference cost
-zero. Prices are TypeSafe $0.042/M input (output free), OpenAI $0.10/M input;
-[code](providers.ts) includes the source URLs. An unexpectedly larger reported
+zero. Prices are TypeSafe $0.042/M input (output free) and OpenAI Decisions
+$0.10/M input with no output or cache charges, per the
+[Decisions guide](https://developers.openai.com/api/docs/guides/decisions).
+The OpenAI price remains unconfirmed until a credentialed run; [code](providers.ts)
+records the same source and input-only assumption. An unexpectedly larger reported
 usage can exceed the preflight estimate and is recorded honestly; subsequent
 calls that cannot fit stop for that provider. Later providers still receive their
 own preflight checks, including zero-price Amos and competitors. No snapshot
 authorizes spending on resume: the live journal is read
 again before every call. A ceiling stop records `budget_stop` and renders partial
-results. `--max-spend-usd` sets the ceiling; above $5 additionally requires
-`--allow-spend-above-5`.
+results. The first `run` record fixes the run's original ceiling. Resume and
+render-only use it by default; an explicit lower `--max-spend-usd` is allowed.
+Increasing it requires both `--max-spend-usd N` and `--allow-spend-increase`.
+That override is recorded and applies only to the invocation; it does not replace
+the first record. Any spending invocation above $5 additionally requires
+`--allow-spend-above-5`, including an authorized increase on resume.
 
 Competitors receive the same state and questions on stdin, asking for strict
 JSON. They run in an empty temporary cwd with sessions and tools disabled.
 `quota-axi --provider codex --json` runs immediately before each competitor call;
-a missing, stale or >=80%-used weekly window skips the provider. The quota check
+a missing, stale or >=80%-used weekly window skips the provider for the current
+invocation only. Freshness requires `provider.state.status: "fresh"` and
+`provider.state.stale: false`, along with fresh timestamps and a valid reset.
+Quota skips are journalled with `persistent:false` and are rechecked on resume,
+including the item skipped before any inference. Auth, no-credential and CLI
+tool/capability skips stay persistent. The quota check
 accepts windows identified by kind `weekly` or id `weekly` / `seven_day`, using
 the lowest remaining percentage across matching windows. Each competitor
-has a hard cap of 40 intended calls including resume, spread across sites in
+has a hard cap of 40 intended calls including resume and uncertain dispatches;
+known quota-only skips do not count as inference calls. Calls spread across sites in
 round-robin order. Only holdout is sent; there is no competitor threshold tuning.
 Auth failures skip without retry. pi verifies its supported flags with `--help`
 and uses `-p --mode json --no-session`, explicit tool/MCP/extension/context
@@ -102,8 +115,8 @@ regenerates the run's `REPORT.md` and `summary.json`. The checked-in `REPORT.md`
 is refreshed only for a complete, all-site, both-split run without the fake
 provider and with at least one successful answer. Fake, partial and entirely
 skipped reports stay under `results/<run_id>/`. A temporary exclusive lock still
-prevents concurrent writers. Existing recorded skips are preserved;
-render-only and resume do not turn those skips into new competitor calls.
+prevents concurrent writers. Render-only makes no calls. Resume preserves
+persistent skips and rechecks invocation-only quota skips.
 
 Each run owns `results/<run_id>/lock` exclusively. A concurrent writer refuses;
 a dead-pid lock is reported as stale and must be inspected and removed by the
