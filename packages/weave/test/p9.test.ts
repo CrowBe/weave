@@ -13,7 +13,7 @@ import type { EvaluationOutcome, InferenceTerms } from '@weave/gateway';
 const terms: InferenceTerms = { quality: 'baseline', destinations: ['local'], max_context_tokens: 100,
   deadline: 100, cost_ceiling: 10, max_attempts: 1 };
 const revision = { state_revision: 1, state_updated_at: 10 };
-function fixture(options: { gaps?: number; red?: boolean; progress?: ('stalled'|'regressing')[]; budget?: boolean; max?: number } = {}) {
+function fixture(options: { gaps?: number; red?: boolean; progress?: ('stalled'|'regressing')[]; budget?: boolean; max?: number; ceilings?: number[] } = {}) {
   let generates = 0;
   let observes = 0;
   const journal = new MemoryAuditJournal();
@@ -22,12 +22,13 @@ function fixture(options: { gaps?: number; red?: boolean; progress?: ('stalled'|
     current: () => ({ ...revision, observed_at: 10 }), budget: () => options.budget ? 'pause' : 'allow',
     observe: async issues => {
       observes++;
-      if (observes > 1) assert.ok(issues.length);
+      if (observes > 1 && !options.ceilings) assert.ok(issues.length);
       return { revision, issue_fix_attempts: Object.fromEntries(issues.map(issue => [issue.issue_id, observes - 1])), progress: options.progress ?? [], state: assembleAuditState({ authorized_slices: AUDIT_SLICES,
         goal: { goal_id: 'goal1', statement: 'goal', revision: 1, authority_scope: [],
           success_criteria: [{ criterion_id: 'c1', statement: 'passes', check_ids: ['repo.test'] }] }, iteration: observes,
         source_revisions: { goal: 1 }, checks: [{ check_id: 'repo.test', argv_digest: 'abc', passed: !options.red, exit: options.red ? 1 : 0, tail: '' }],
-        evals: [{ criterion_id: 'c1', passed: true, verdict_probability: 1, confidence: 1 }] }) };
+        evals: [{ criterion_id: 'c1', passed: true, verdict_probability: 1, confidence: 1 }],
+        budget: options.ceilings ? { spent_micros: 100, ceiling_micros: options.ceilings[observes - 1] ?? 1000, quota: [] } : null }) };
     },
     generate: async request => {
       generates++;
@@ -40,7 +41,7 @@ function fixture(options: { gaps?: number; red?: boolean; progress?: ('stalled'|
       answers: { finding_0: { type: 'choice', choice: 'fix_now', probabilities: { fix_now: 1 } } }, confidence: { finding_0: 1 },
       routed_unit_id: 'fake', provider_response_id: 'fake1', attempts: [], spent: 0, uncertainty: [] }) as EvaluationOutcome<'choice'>) as AuditPorts['evaluate'],
   };
-  return { input, ports, journal, generates: () => generates };
+  return { input, ports, journal, generates: () => generates, observes: () => observes };
 }
 test('audit gap loops through Observe, then deterministic evidence completes and replay has no calls', async () => {
   const f = fixture({ gaps: 1 });
@@ -105,6 +106,14 @@ test('budget pause preserves loop issues and explicit resume reuses the audit ro
   assert.deepEqual(await runAuditLoop(f.input, ports, f.journal), paused);
   const done = await runAuditLoop({ ...f.input, resume: true }, ports, f.journal);
   assert.equal(done.outcome, 'done'); assert.equal(done.round, 2);
+});
+test('state budget pause re-observes on resume and proceeds once the ceiling is raised', async () => {
+  const f = fixture({ ceilings: [100, 200] });
+  const paused = await runAuditLoop(f.input, f.ports, f.journal);
+  assert.equal(paused.outcome, 'budget'); assert.equal(f.generates(), 0);
+  const resumed = await runAuditLoop({ ...f.input, resume: true }, f.ports, f.journal);
+  assert.equal(resumed.outcome, 'done'); assert.equal(resumed.round, 1);
+  assert.equal(f.observes(), 2); assert.equal(f.generates(), 1);
 });
 test('revision change during empty D6 prevents completion', async () => {
   const f = fixture(); let reads = 0;

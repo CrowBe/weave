@@ -151,5 +151,6 @@ an issue's repeated appearance alone is not proof that a fix was attempted.
 Budget and cancellation pauses preserve outstanding open issues. Replay remains
 read-only unless `resume: true` explicitly resumes a budget/cancelled outcome;
 resume reuses that round and its checkpoint, so pauses do not consume the audit
-round cap. Journal entry ids remain unique across repeated pauses. Completion
+round cap. An over-budget tidy-state observation is never checkpointed, so a
+resumed budget pause observes the current budget again. Journal entry ids remain unique across repeated pauses. Completion
 rechecks the current revision after D6, including the empty-finding path.

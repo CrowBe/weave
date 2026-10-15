@@ -540,7 +540,9 @@ round without calling a provider. By default an already stopped execution
 remains stopped. An explicit `resume: true` may resume a `budget` or `cancelled`
 pause; other stops remain terminal. Pauses retain pending open issues, and
 resumption uses the same round checkpoint and rechecks budget and state
-revision. Pause records have unique entry ids and do not consume another audit
+revision. An observation whose budget slice shows spend at or above the ceiling
+is not checkpointed, so resuming that pause observes again and reads the
+current budget. Pause records have unique entry ids and do not consume another audit
 round from the cap.
 Failed generation does not fabricate D5 observations for evaluations never requested.
 

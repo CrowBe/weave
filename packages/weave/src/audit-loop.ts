@@ -111,10 +111,12 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
     else {
       const checkpoint = journal.loadCheckpoint(input.execution_id, round);
       observed = structuredClone(checkpoint?.observation ?? await ports.observe(issues));
-      if (!checkpoint) journal.checkpoint({ execution_id: input.execution_id, round, observation: observed, report: null });
+      const overBudget = observed.state.budget !== null && observed.state.budget.spent_micros >= observed.state.budget.ceiling_micros;
+      // An over-budget observation is not pinned, so resume re-observes the budget.
+      if (!checkpoint && !overBudget) journal.checkpoint({ execution_id: input.execution_id, round, observation: observed, report: null });
       const noProgress = stopForNoProgress(observed.progress ?? [], []);
       if (signal?.aborted) outcome = 'cancelled';
-      else if (observed.state.budget && observed.state.budget.spent_micros >= observed.state.budget.ceiling_micros) outcome = 'budget';
+      else if (overBudget) outcome = 'budget';
       else if (observed.authority_blocked) outcome = 'authority';
       else if (observed.needs_dispatch && observed.decision_unavailable) outcome = 'needs_human';
       else if (noProgress) outcome = noProgress;
