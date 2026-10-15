@@ -34,3 +34,13 @@ test('tidy state canonical digest and bytes replay independent of object key ord
   assert.equal(first.digest.length, 64);
   assert.notEqual(assembleAuditState({ ...fixture(), iteration: 1 }).digest, first.digest);
 });
+
+test('artifact summaries obey UTF-8 byte cap and assembled state detaches input', () => {
+  const input = fixture();
+  const artifacts = [{ ...input.artifacts![0]!, summary: '😀'.repeat(100) }];
+  const state = assembleAuditState({ ...input, artifacts });
+  assert.ok(Buffer.byteLength(state.artifacts[0]!.summary) <= 240);
+  assert.ok(state.omissions.includes('artifact:a1:summary_cap'));
+  artifacts[0]!.summary = 'changed';
+  assert.notEqual(state.artifacts[0]!.summary, 'changed');
+});

@@ -290,3 +290,7 @@ export function viewHasGammaContent(view: StateView): boolean {
   const encoded = JSON.stringify(view.content);
   return encoded.includes('gamma one') || encoded.includes('"source:gamma"');
 }
+
+/** Versioned audit view lives separately from the frame-profile renderer. */
+export { assembleAuditState, AUDIT_SLICES } from './audit-view.js';
+export type { AuditState, AuditStateInput } from './audit-view.js';

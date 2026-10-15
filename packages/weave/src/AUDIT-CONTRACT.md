@@ -14,3 +14,14 @@ sorted. JSON keys are canonical and the SHA-256 digest covers all disclosed
 fields except the digest itself. Assembly performs no IO or inference. Inputs
 are already disclosed, secret-free slices supplied by policy, not general runtime
 state; this function is not a secret classifier or grant issuer.
+
+## Context compaction port
+
+`compactContext` uses an explicit token sequence and context capacity supplied by
+its caller; it does not tokenize or infer. At 80% capacity it asks an optional
+summarizer port to summarize the prefix, capped at 10% of capacity, retaining
+the last 5% of capacity as exact ordered token strings. Without a summarizer it
+returns `summary_needed` with the retained tail and prefix, so composition can
+persist and schedule summarization. Below the threshold no summarizer runs.
+An oversized summary is rejected instead of truncated through a token boundary.
+The caller owns crash-safe persistence before replacing original context.

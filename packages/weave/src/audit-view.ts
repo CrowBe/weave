@@ -70,6 +70,18 @@ export type AuditStateInput = Pick<AuditState, 'goal' | 'iteration' | 'source_re
   readonly max_body_bytes?: number;
 };
 
+function boundedUtf8(value: string, cap: number): string {
+  let bytes = 0;
+  let result = '';
+  for (const character of value) {
+    const width = Buffer.byteLength(character, 'utf8');
+    if (bytes + width > cap) break;
+    result += character;
+    bytes += width;
+  }
+  return result;
+}
+
 /** Policy supplies already disclosed, secret-free slices. No inference or IO. */
 export function assembleAuditState(input: AuditStateInput): AuditState {
   const allowed = new Set(input.authorized_slices);
@@ -87,7 +99,7 @@ export function assembleAuditState(input: AuditStateInput): AuditState {
       continue;
     }
     const { body, summary, ...metadata } = artifact;
-    const boundedSummary = summary.slice(0, 240);
+    const boundedSummary = boundedUtf8(summary, 240);
     if (boundedSummary !== summary) omissions.push(`artifact:${artifact.artifact_id}:summary_cap`);
     if (body !== undefined && Buffer.byteLength(body, 'utf8') > cap) {
       omissions.push(`artifact:${artifact.artifact_id}:size_cap`);
