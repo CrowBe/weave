@@ -48,35 +48,46 @@ export interface TypesafeAiOptions {
    */
   readonly apiKey: string;
   readonly baseURL?: string;
+  /** Per-call Fisher-Yates choice ordering. Defaults to Math.random; false disables. */
+  readonly shuffle?: false | (() => number);
+  /** TypeSafe documents no data-sharing field as of jev-1.14; Weave never opts in. Defaults to false. */
+  readonly dataSharing?: false;
   /** Injectable for tests. Defaults to the global `fetch`. */
   readonly fetch?: typeof globalThis.fetch;
 }
 
 /** Request and response mapping for `/v1/systemone`. No HTTP and no credentials. */
-export const typesafeWire: DecisionWireProfile = {
-  id: TYPESAFE_AI_ADAPTER,
-  path: '/v1/systemone',
-  // Present on hosted responses. It is the only handle on a call once it has been made.
-  requestIdHeader: 'x-typesafe-request-id',
-  toBody(call: EvaluationCall): unknown {
-    return {
-      state: call.state,
-      model: call.model,
-      questions: Object.fromEntries(
-        Object.entries(call.questions).map(([id, question]) => [id, toWireQuestion(question)]),
-      ),
-    };
-  },
-  parse(body: unknown): DecisionParse {
-    return parseBody(body);
-  },
-};
+export function typesafeWireProfile(
+  options: Pick<TypesafeAiOptions, 'shuffle' | 'dataSharing'> = {},
+): DecisionWireProfile {
+  const shuffle = options.shuffle ?? Math.random;
+  return {
+    id: TYPESAFE_AI_ADAPTER,
+    path: '/v1/systemone',
+    // Present on hosted responses. It is the only handle on a call once it has been made.
+    requestIdHeader: 'x-typesafe-request-id',
+    toBody(call: EvaluationCall): unknown {
+      return {
+        state: call.state,
+        model: call.model,
+        questions: Object.fromEntries(
+          Object.entries(call.questions).map(([id, question]) => [id, toWireQuestion(question, shuffle)]),
+        ),
+      };
+    },
+    parse(body: unknown, call: EvaluationCall): DecisionParse {
+      return parseBody(body, call);
+    },
+  };
+}
+
+export const typesafeWire: DecisionWireProfile = typesafeWireProfile();
 
 export function typesafeAiEvaluator(options: TypesafeAiOptions): EvaluationAdapter {
   if (options.apiKey.trim().length === 0) {
     throw new Error('typesafeAiEvaluator requires an apiKey');
   }
-  return evaluationTransport(typesafeWire, {
+  return evaluationTransport(typesafeWireProfile(options), {
     credential: options.apiKey,
     defaultBaseURL: TYPESAFE_AI_BASE_URL,
     ...(options.baseURL === undefined ? {} : { baseURL: options.baseURL }),
@@ -90,7 +101,7 @@ export function typesafeAiEvaluator(options: TypesafeAiOptions): EvaluationAdapt
 
 type WireQuestion = Readonly<Record<string, unknown>>;
 
-function toWireQuestion(question: EvaluationQuestion): WireQuestion {
+function toWireQuestion(question: EvaluationQuestion, shuffle: false | (() => number)): WireQuestion {
   switch (question.type) {
     case 'boolean': {
       const criteria = question.criteria;
@@ -103,8 +114,16 @@ function toWireQuestion(question: EvaluationQuestion): WireQuestion {
       }
       return wire;
     }
-    case 'choice':
-      return { type: 'choice', instructions: question.instructions, criteria: question.criteria };
+    case 'choice': {
+      const entries = Object.entries(question.criteria);
+      if (shuffle !== false) {
+        for (let i = entries.length - 1; i > 0; i--) {
+          const j = Math.floor(shuffle() * (i + 1));
+          [entries[i], entries[j]] = [entries[j]!, entries[i]!];
+        }
+      }
+      return { type: 'choice', instructions: question.instructions, criteria: Object.fromEntries(entries) };
+    }
     case 'score':
       return { type: 'score', instructions: question.instructions, criteria: question.criteria };
   }
@@ -116,7 +135,7 @@ function toWireQuestion(question: EvaluationQuestion): WireQuestion {
 // Absence is not zero: missing confidence stays below the floor.
 // ---------------------------------------------------------------------------
 
-function parseBody(body: unknown): DecisionParse {
+function parseBody(body: unknown, call: EvaluationCall): DecisionParse {
   if (!isRecord(body)) return { status: 'malformed', detail: 'response body was not an object' };
 
   const rawAnswers = body['answers'];
@@ -126,9 +145,25 @@ function parseBody(body: unknown): DecisionParse {
   const confidence: Record<QuestionId, number> = {};
 
   for (const [id, raw] of Object.entries(rawAnswers)) {
+    if (!Object.hasOwn(call.questions, id)) continue;
+    const question = call.questions[id]!;
+    if (isRecord(raw) && raw['type'] !== 'noul' && raw['type'] !== 'choice' && raw['type'] !== 'score') continue;
     const answer = toAnswer(raw);
     if (answer === null) return { status: 'malformed', detail: `answer '${id}' was not a recognised shape` };
-    answers[id] = answer;
+    if (answer.type === 'choice' && question.type === 'choice') {
+      if (!Object.hasOwn(question.criteria, answer.choice)) {
+        return { status: 'malformed', detail: `answer '${id}' chose an unknown key` };
+      }
+      const probabilities = answer.probabilities === undefined ? undefined : Object.fromEntries(
+        Object.keys(question.criteria)
+          .filter(key => Object.hasOwn(answer.probabilities!, key))
+          .map(key => [key, answer.probabilities![key]!]),
+      );
+      answers[id] = probabilities === undefined ? { type: 'choice', choice: answer.choice }
+        : { type: 'choice', choice: answer.choice, probabilities };
+    } else {
+      answers[id] = answer;
+    }
 
     if (isRecord(raw) && typeof raw['confidence'] === 'number') {
       confidence[id] = raw['confidence'];

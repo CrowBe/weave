@@ -25,7 +25,7 @@ export interface DecisionWireProfile {
   /** Response header that carries the provider request id, when one is sent. */
   readonly requestIdHeader: string;
   toBody(call: EvaluationCall): unknown;
-  parse(body: unknown): DecisionParse;
+  parse(body: unknown, call: EvaluationCall): DecisionParse;
 }
 
 export type DecisionParse =
@@ -95,7 +95,7 @@ export function evaluationTransport(
         return { status: 'failed', failure: malformed(withId('response body was not JSON')) };
       }
 
-      const parsed = profile.parse(body);
+      const parsed = profile.parse(body, call);
       if (parsed.status === 'malformed') {
         return { status: 'failed', failure: malformed(withId(parsed.detail)) };
       }
