@@ -174,6 +174,14 @@ The `view.audit@1` state view handed to the audit tier. It assembles the goal, c
 
 The review stage that requests a `strong` routed unit to examine tidy state for gaps, defects, regressions, and scope creep. It is a stage that requests tier `strong` and is not a member of the tier vocabulary. An audit report is an observation; its claim that the goal is met cannot replace deterministic success evidence or grant execution authority. Budget pressure pauses this stage rather than weakening its requested tier.
 
+### Implementation step
+
+One generate call at a routed tier, followed by the configured repo checks and D5 output evaluation. Retries and a single tier escalation stay inside the step and share one execution id. Each check on each attempt uses a fresh grant of equal scope from the composition root. The step records artifact refs, check outcomes, and criterion verdicts. It cannot mint a grant, pass the D2 ceiling, or complete the goal. A decision answer cannot mint one either.
+
+### Open issue
+
+A blocker recorded when an implementation step stops after retries and one escalation, or when that escalation is blocked by the ceiling or the budget gate. It carries the failing criterion ids for the audit tier. Raising an open issue does not dispatch work, mint a grant, or complete the goal.
+
 ### Routing
 
 The deterministic selection step inside the gateway. It minimizes expected total cost of reaching the declared quality bar — retries and escalation included — using recorded per-site success rates, cost, latency, privacy, and context limits. When a prefix cache is supplied, that cost includes a hit discount or one reload.

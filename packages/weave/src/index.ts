@@ -96,3 +96,16 @@ export {
 export { BOOLEAN_SITE_POLICY, INPUT_RULES, evaluateBooleanSite, transitionBooleanSite,
   type BooleanSite, type BooleanSiteInput, type CatalogueIndexEntry, type RecordedBooleanAnswer,
   type BooleanObservation, type BooleanTransition } from './sites/boolean.js';
+export {
+  OUTPUT_EVAL_POLICY, OUTPUT_EVAL_QUESTION, OUTPUT_EVAL_SITE, criterionKey, evaluateOutputEval, transitionOutputEval,
+  type OutputCriterion, type OutputCriterionEval, type OutputEvalInput, type OutputEvalObservation,
+  type OutputEvalReason, type OutputEvalTransition, type RecordedOutputEval,
+} from './sites/output-eval.js';
+export {
+  DEFAULT_IMPLEMENT_RETRIES, FileAttemptJournal, IMPLEMENT_TIERS, MemoryAttemptJournal,
+  createEqualGrantIssuer, replayImplementationStep, runImplementationStep,
+  type AttemptJournal, type AttemptRecord, type CheckEvidence, type EqualGrantIssuer,
+  type ImplementBudgetDecision, type ImplementCheck, type ImplementEval, type ImplementPorts,
+  type ImplementStepInput, type ImplementStepResult, type ImplementTier, type JournalEntry,
+  type OpenIssue, type StopRecord,
+} from './implement-step.js';
