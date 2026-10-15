@@ -226,7 +226,9 @@ provider without a `key_env`, and base URLs other than HTTPS or HTTP on loopback
 credential-injected. `decision.sites` accepts `amos` or `typesafe-jev` for
 `intake.classify` and `loop.preselect` only. Amos on intake requires a matching
 choice unit; Amos on preselect requires a matching boolean unit.
-`decision.preselect`, when present, is keyed by a configured provider id and
+`decision.preselect`, when present, is keyed only by a configured `typesafe-jev`
+or `amos` provider id. Other ids, including `openai-decisions`, are rejected
+even when the entry is empty. Each entry
 may set `k` (an integer from 1 to 8), `floor` (a number in [0, 1)),
 `max_excluded` (a number in [0, 1]), and `min_margin` (a number in [0, 1]).
 Unknown keys, unknown provider ids, and out-of-range values are errors.
@@ -504,7 +506,8 @@ when no outcome was accepted. `p` and `rank` are null when the answer is
 missing. The record uses ordinals, never catalogue ids, purposes, or required
 names. `decision.preselect`'s per-field defaults are `resolvePreselectPolicy`.
 The pure transition replaces an invalid or incomplete policy wholesale.
-`decision.preselect` sets k, floor, max_excluded, and min_margin per provider.
+`decision.preselect` sets k, floor, max_excluded, and min_margin only for
+configured `typesafe-jev` and `amos` providers.
 `loop.preselect` may be served by `typesafe-jev` or `amos`; Amos requires a
 matching boolean evaluate unit. The default provider remains `typesafe-jev`.
 D4 evaluates four fixed rules through the same decision gateway: secret
@@ -577,11 +580,16 @@ generation at `audit.generate` (pace pressure ends the round as a resumable
 identity. The composition root supplies the gateway, observation, revision,
 budget and journal ports; no model or provider owns the loop. D6 reuses
 `decision-site@1`, ordinal finding questions and stale-answer admission.
+D6 strips the generation-only `audit` purpose flag and overrides the tier to
+`decision`, preserving all other caller terms.
 Confidence below .75, malformed/missing answers and outage use the recorded
 `needs_human` fallback. Findings and decisions grant no execution authority.
 
 A `fix_now` finding produces a stable `open_issue@1` identity and returns to
-Observe through the injected port. Completion requires nonempty criteria,
+Observe through the injected port. Identity hashes `(criterion_id, kind,
+evidence_ref)`, excluding `proposed_fix`; duplicate keys keep the first finding.
+Historical full-finding ids remain unchanged on replay and serve as attempt
+aliases during recovery (maximum count, never a sum). Completion requires nonempty criteria,
 green deterministic checks bound to every criterion, passing D5 evidence for
 every criterion, and no `fix_now` or `needs_human` disposition. A red check
 vetoes completion even when the audit claims success. The claim itself is
@@ -591,30 +599,57 @@ a disposition computed against changed state before loop-back or completion.
 Each `audit.round@1` records its id/parentId, execution id, round, state digest,
 report, D6 disposal, open issues, outcome and `goal_done`. Outcomes distinguish
 `observe`, `done`, `budget`, `iteration_cap`, `no_progress`, `repeated_issue`,
-`authority`, `needs_human`, `cancelled`, `audit_unavailable` and
+`authority`, `needs_human`, `cancelled`, `decision_unavailable`, `audit_unavailable` and
 `evidence_missing`; only `done` sets `goal_done`. The cap defaults to four audit
 rounds. Two consecutive stalled/regressing D8 observations stop progress; a
 finding recurring after two fix attempts stops as `repeated_issue`. The
 Observe port supplies `issue_fix_attempts` attestations; merely seeing the
 same finding again does not count as a fix attempt. Authority
-blocks and unavailable decisions before guarded dispatch stop for human review.
+blocks stop for human review. Unavailable decisions before guarded dispatch
+record a resumable `decision_unavailable` pause, without pinning the unavailable
+observation. Explicit resumption observes availability again.
 Budget pauses before another audit dispatch; the gateway retains its per-call
-budget enforcement. No fallback can bypass D4 or D7.
+budget enforcement. After generation, cancellation wins first, then gateway or
+live budget pause, then the revision guard. Coincident state changes therefore
+preserve a budget pause for fresh observation on resume; changes without a
+pause remain terminal `needs_human`. No fallback can bypass D4 or D7.
 
 Journal append and phase checkpoints must persist before returning, with one
-writer per execution. The loop checkpoints disclosed input before generation
-and the accepted report before D6, so recovery reuses the recorded input and
-report. `MemoryAuditJournal` supports deterministic fixtures; production
+writer per execution. The composition root must serialize racing resumes
+before they enter the loop; there is no journal lock or compare-and-swap port.
+The loop checkpoints disclosed input before generation, the accepted report
+before D6, and D6 disposal before round append, so recovery reuses completed
+inference. In-flight inference interrupted before checkpoint commit requires
+request-id reconciliation by the inference port. Observation owners reconcile
+fix effects without reusing single-use grants; the audit loop holds no grants. `MemoryAuditJournal` supports deterministic fixtures; production
 durability is the composition root's responsibility. Replay returns the recorded
 round without calling a provider. By default an already stopped execution
-remains stopped. An explicit `resume: true` may resume a `budget` or `cancelled`
+remains stopped. An explicit `resume: true` may resume a `budget`, `decision_unavailable` or `cancelled`
 pause; other stops remain terminal. Pauses retain pending open issues, and
-resumption uses the same round checkpoint and rechecks budget and state
-revision. An observation whose budget slice shows spend at or above the ceiling
-is not checkpointed, so resuming that pause observes again and reads the
-current budget. Pause records have unique entry ids and do not consume another audit
+resumption re-observes live state, revision and budget in the same round.
+A checkpoint's optional `resume_from` identifies that resumption's pause entry;
+crash recovery within the resumption reuses its fresh input, accepted report and
+D6 disposal. Reports carry forward only when digest and revision both match.
+Changed input gets a distinct inference request id, stable across recovery.
+Legacy checkpoints refresh on resume. Over-budget observations are not pinned. Pause records have unique entry ids and do not consume another audit
 round from the cap.
 Failed generation does not fabricate D5 observations for evaluations never requested.
+
+Generation and D6 request ids retain the readable execution/round/purpose form
+when it fits the 128-character correlation limit; longer ids use a bounded
+execution prefix and full SHA-256 execution digest with the same round/purpose
+suffix. Both ids are validated before dispatch. They are correlation labels:
+the gateway does not deduplicate or cache outcomes by request id. Repeated ids
+with changed prefix digests or findings execute fresh requests. The checkpoint
+pins the report to its disclosed observation; recovery after its durable write
+does not pay for generation again, and D6 runs afresh against those findings.
+A changed live revision is rejected before D6. A crash after provider completion
+but before its report checkpoint can still repeat a paid generation.
+
+Signal abort returns `cancelled` without any further journal writes, including
+round appends. Recovery uses the last checkpoint committed before abort; the
+returned cancellation itself is not persisted. Gateway-reported cancellation
+without an aborted signal retains the recorded explicit-resume pause behavior.
 
 ## 10. P9 ports and labelled follow-ups
 

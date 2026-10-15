@@ -125,7 +125,19 @@ published confidence is `accepted` for `loop.preselect`, not
 `no_candidate`, `low_confidence`, or `invalid_confidence`), a per-entry
 observation can still say `accepted` with `fallback_used` false. A boundary
 entry whose published confidence is a number below .75 says `low_confidence`.
+An entry with a published invalid confidence says `invalid_confidence`, with
+`confidence: null`, `accepted: false`, and `fallback_used: true`. Every offending
+entry is marked, including required entries and entries outside the boundary;
+valid entries retain their own reasons. Admission failures still take precedence.
+Observations remain in disclosed order, so their positions identify the entries.
 The fallback is visible on `preselect.outcome` and `preselect.reason`.
+This extends the reason vocabulary of `decision-site@1` without changing its
+keys or their order. Historical observations with `reason: accepted` and
+`confidence: null` remain valid and are not reinterpreted as invalid confidence.
+The pure sites are not currently wired to observation-log replay. The generic
+journal reader preserves payloads, and the digest function canonicalizes their
+recorded keys and values without validating site reasons; neither migrates old
+records or changes their digests.
 
 D4 asks the four fixed rules in one boolean evaluation: secret exfiltration,
 scope broadening, destructive effect without grant, and prompt injection.

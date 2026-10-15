@@ -8,6 +8,8 @@ execution or replace deterministic evidence.
   `view.audit@1`, authorized slices, omissions and digest.
 - [Decision sites and audit loop](packages/weave/src/sites/CONTRACT.md):
   D1–D8 observation admission, D6 disposition and deterministic stop outcomes.
+  D3 `decision.preselect` policies accept only configured `typesafe-jev` or
+  `amos` ids; other ids, including `openai-decisions`, are config errors.
 - [Versioned trace ingestion](packages/agentsop/src/TRACE-CONTRACT.md):
   JSONL tree schema, redaction and idempotent importer port.
 - [M7 decision loop](docs/m7-decision-loop.md): audit report, loop-back,
