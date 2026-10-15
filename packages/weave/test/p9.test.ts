@@ -6,6 +6,14 @@ test('audit report is typed observation and rejects malformed findings', () => {
   assert.equal(parseAuditReport('{"findings":[],"goal_met_claim":true}')?.goal_met_claim, true);
   assert.equal(parseAuditReport('{"findings":[{"kind":"grant"}],"goal_met_claim":true}'), null);
 });
+test('audit report secret screen matches token prefixes, not ordinary words', () => {
+  const report = (fix: string) => parseAuditReport(JSON.stringify({ goal_met_claim: false,
+    findings: [{ criterion_id: 'c1', kind: 'gap', evidence_ref: 'ref_test', proposed_fix: fix }] }));
+  for (const fix of ['Check task_id', 'Lower risk-score', 'Free disk-space', 'Apply mask_bits', 'Tasks-list'])
+    assert.equal(report(fix)?.findings[0]?.proposed_fix, fix);
+  for (const fix of ['Use sk-abc123', 'key=sk_live_x', 'x_sk-abc', 'Bearer abc', 'eyJhbGci', 'ghp_abc', 'AKIAABC'])
+    assert.equal(report(fix), null);
+});
 import { assembleAuditState, AUDIT_SLICES } from '../src/audit-view.js';
 import { MemoryAuditJournal, runAuditLoop, replayAuditLoop, type AuditPorts, type AuditLoopInput } from '../src/audit-loop.js';
 import { transitionAuditDispose } from '../src/sites/audit-dispose.js';

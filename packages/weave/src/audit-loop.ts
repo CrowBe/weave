@@ -22,7 +22,7 @@ export function parseAuditReport(text: string): AuditReport | null {
       (item.criterion_id === null || correlation(item.criterion_id) !== null) &&
       ['gap', 'defect', 'regression', 'scope_creep'].includes(item.kind) && correlation(item.evidence_ref) !== null &&
       typeof item.proposed_fix === 'string' && item.proposed_fix.length > 0 && item.proposed_fix.length <= 2048 &&
-      !/sk[-_]|Bearer |eyJ|gh[pousr]_|github_pat_|AKIA/i.test(item.proposed_fix))) return null;
+      !/(?<![A-Za-z0-9])(?:sk[-_]|Bearer |eyJ|gh[pousr]_|github_pat_|AKIA)/i.test(item.proposed_fix))) return null;
     return { findings: report.findings.map(item => ({ criterion_id: item.criterion_id, kind: item.kind,
       evidence_ref: item.evidence_ref, proposed_fix: item.proposed_fix })), goal_met_claim: report.goal_met_claim };
   } catch { return null; }

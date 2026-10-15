@@ -16,7 +16,7 @@ export interface TraceImportPort {
 const keys = ['schema', 'id', 'parentId', 'run_id', 'kind', 'sequence', 'payload'];
 const metrics = ['spent_micros', 'latency_ms', 'input_tokens', 'output_tokens', 'confidence', 'passed'];
 const kinds: readonly string[] = ['decision', 'implement', 'audit', 'shell', 'budget', 'error'];
-const safeId = (x: unknown): x is string => typeof x === 'string' && /^[A-Za-z0-9_.:-]{1,128}$/.test(x) && !/sk[-_]|Bearer|eyJ|gh[pousr]_|github_pat_|AKIA/i.test(x);
+const safeId = (x: unknown): x is string => typeof x === 'string' && /^[A-Za-z0-9_.:-]{1,128}$/.test(x) && !/(?<![A-Za-z0-9])(?:sk[-_]|Bearer|eyJ|gh[pousr]_|github_pat_|AKIA)/i.test(x);
 export function validateTrace(value: unknown): value is TraceRecord {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const r = value as Record<string, unknown>;
