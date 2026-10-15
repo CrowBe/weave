@@ -830,3 +830,15 @@ test('an invalid execution id is rejected without being copied or dispatched', a
   assert.equal(world.generateIds.length, 0);
   assert.equal(JSON.stringify(result).includes('CANARY'), false);
 });
+
+test('failed generation records no D5 observations for an evaluation never asked (#127)', async () => {
+  const d = driver({ input: input({ retries: 0, ceiling: 'flash' }) });
+  const result = await runImplementationStep(d.input, {
+    ...d.ports,
+    generate: async () => ({ status: 'blocked', reason: 'no_route', request_id: 'req-1', site: 'impl.step', uncertainty: [], attempts: [], spent: 0 }),
+  }, d.journal);
+  assert.equal(result.status, 'failed');
+  assert.deepEqual(result.observations, []);
+  assert.deepEqual(result.evals, []);
+  assert.deepEqual(result.open_issue?.criterion_ids, ['c1']);
+});
