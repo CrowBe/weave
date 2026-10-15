@@ -103,10 +103,31 @@ Use `npm run example:chatgpt-signin` to continue with ChatGPT, then `npm run exa
 
 The gateway supports TypeSafe System One and a local, no-key Amos decision
 adapter (`@weave/gateway/amos`). `weave.routes.example.json` retains
-`typesafe-jev` / `jev-latest` as the default and overrides only `intake.classify`
+`typesafe-jev` / `jev-preview` as the default and overrides only `intake.classify`
 with `decision.sites: { "intake.classify": "amos" }`. Pass the parsed `decision`
 to `createInferenceGateway` and register both evaluators. Override selection is
 exclusive and configuration rejects unknown providers or override sites.
+
+The direct TypeSafe decision model defaults to `jev-preview` (jev-1.14.0);
+set the decision provider's `model` and the matching evaluate `units[].model`
+in the route configuration to override it.
+Choice criteria keys are shuffled per call with Fisher-Yates while retaining
+key identities. `TypesafeAiOptions.shuffle` accepts an RNG or `false` to disable
+shuffling. Unsupported answer types are dropped; unasked answers are ignored.
+`TypesafeAiOptions.longContext?: boolean` defaults to false. When true, every
+request sends `TypeSafe-Danger-Zone-Long-Context: true`, raising both context
+limits to 262k tokens on `jev-1.13.0` and `jev-1.14.0`. Without it, the defaults
+remain 64k per request and 32k per question. See [TypeSafe models](https://docs.typesafe.ai/models#long-context).
+`TypesafeAiOptions.images?: boolean` also defaults to false. When true, every
+request sends `TypeSafe-Danger-Zone-Images: true`, required for image assets
+and box questions. This option only adds the header; Weave does not yet support
+asset or box requests. See [TypeSafe images](https://docs.typesafe.ai/images).
+
+The [Jev 1.14 announcement](https://typesafe.ai/blog/jev-1-14) says `jev-latest`
+will move to `jev-1.14.0` about a week after 2026-10-14. TypeSafe intends to give
+60 days' deprecation notice for `jev-1.13.0` and 30 days for `jev-1.14.0`.
+The data-sharing opt-in announced in that blog has no documented request field.
+`dataSharing?: false` defaults to false; Weave sends no data-sharing field.
 
 The composition root resolves `AMOS_BASE_URL` with the pure helper
 `resolveAmosBaseURL(process.env)` and passes it as `amosEvaluator({ baseURL })`; the default is

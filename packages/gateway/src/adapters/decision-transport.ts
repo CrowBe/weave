@@ -24,8 +24,10 @@ export interface DecisionWireProfile {
   readonly path: string;
   /** Response header that carries the provider request id, when one is sent. */
   readonly requestIdHeader: string;
+  /** Additional request headers. Authorization and Content-Type are transport-owned. */
+  readonly headers?: Readonly<Record<string, string>>;
   toBody(call: EvaluationCall): unknown;
-  parse(body: unknown): DecisionParse;
+  parse(body: unknown, call: EvaluationCall): DecisionParse;
 }
 
 export type DecisionParse =
@@ -61,6 +63,9 @@ export function evaluationTransport(
         response = await doFetch(`${baseURL}${profile.path}`, {
           method: 'POST',
           headers: {
+            ...Object.fromEntries(Object.entries(profile.headers ?? {}).filter(([name]) =>
+              !['authorization', 'content-type'].includes(name.trim().toLowerCase()),
+            )),
             authorization: `Bearer ${credential}`,
             'content-type': 'application/json',
           },
@@ -95,7 +100,7 @@ export function evaluationTransport(
         return { status: 'failed', failure: malformed(withId('response body was not JSON')) };
       }
 
-      const parsed = profile.parse(body);
+      const parsed = profile.parse(body, call);
       if (parsed.status === 'malformed') {
         return { status: 'failed', failure: malformed(withId(parsed.detail)) };
       }

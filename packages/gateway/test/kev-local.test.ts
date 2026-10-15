@@ -33,6 +33,34 @@ function failed(message: string): ProviderFailure {
 }
 
 describe('local Kev evaluator', () => {
+  it('preserves criteria order when shuffle is false', async (t) => {
+    t.mock.method(Math, 'random', () => 0);
+    const criteria = { auth: 'authentication', payments: 'payments', ui: 'interface' };
+    const fetch: typeof globalThis.fetch = async (_url, init) => {
+      const body = JSON.parse(String(init?.body)) as {
+        questions: { area: { criteria: Record<string, string> } };
+      };
+      assert.deepEqual(Object.keys(body.questions.area.criteria), ['auth', 'payments', 'ui']);
+      return new Response(JSON.stringify({
+        answers: { area: { type: 'choice', choice: 'auth' } },
+      }));
+    };
+    const evaluator = kevLocalEvaluator({
+      runtime: { ensureReady: async () => ({ status: 'ready' }) },
+      fetch,
+      shuffle: false,
+    });
+
+    const result = await evaluator.evaluate({
+      ...CALL,
+      kind: 'choice',
+      questions: { area: { type: 'choice', instructions: 'Which area?', criteria } },
+    });
+
+    assert.equal(result.status, 'completed');
+    assert.deepEqual(Object.keys(criteria), ['auth', 'payments', 'ui']);
+  });
+
   it('warms the external runtime before crossing the HTTP seam', async () => {
     const events: string[] = [];
     const runtime: KevRuntime = {

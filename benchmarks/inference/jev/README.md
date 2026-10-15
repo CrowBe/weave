@@ -575,3 +575,6 @@ node benchmarks/inference/jev/transfer-probe.ts --from benchmarks/inference/jev/
 ```
 
 Both rescore recorded records and issue no inference.
+
+The direct route defaults to `jev-preview` (jev-1.14.0). Override it with
+`JEV_MODEL` or `RouteOptions.model` when constructing the benchmark gateway.

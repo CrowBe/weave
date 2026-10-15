@@ -59,6 +59,8 @@ const VERCEL_DECLARED_LIMIT = { requests: 60, window_ms: 60_000 } as const;
 export interface RouteOptions {
   /** Wait out a throttle on the free route instead of escalating to the billed one. */
   readonly preferFree: boolean;
+  /** Direct TypeSafe model override; otherwise JEV_MODEL or jev-preview. */
+  readonly model?: string;
   /** Route to the local Kev service instead of the hosted Jev routes. */
   readonly local?: boolean;
 }
@@ -93,7 +95,7 @@ function jevRoutes(kind: EvaluationKind, includeDirect: boolean, options: RouteO
       routed_unit_id: `${kind}@typesafe`,
       adapter: TYPESAFE_AI_ADAPTER,
       // The direct API names the model differently than the gateway catalogue.
-      model: 'jev-latest',
+      model: options.model ?? (process.env['JEV_MODEL']?.trim() || 'jev-preview'),
       destination: TYPESAFE_AI_DESTINATION,
     });
   }
@@ -168,7 +170,7 @@ export function createJevGateway(
     routes: EVALUATION_KINDS.flatMap((kind) => jevRoutes(kind, includeDirect, options)),
     evaluators: [
       vercelAiGatewayEvaluator({ apiKey: credentials.vercel }),
-      ...(credentials.typesafe === undefined ? [] : [typesafeAiEvaluator({ apiKey: credentials.typesafe })]),
+      ...(credentials.typesafe === undefined ? [] : [typesafeAiEvaluator({ apiKey: credentials.typesafe, shuffle: false })]),
     ],
     clock,
     timer: realTimer,
@@ -338,6 +340,7 @@ export function createKevGateway(clock: Clock, baseURL: string = KEV_LOCAL_BASE_
       kevLocalEvaluator({
         runtime: { ensureReady: async () => ({ status: 'ready' as const }) },
         baseURL,
+        shuffle: false,
       }),
     ],
     clock,
