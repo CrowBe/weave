@@ -107,6 +107,7 @@ function decide(site: string, o: Observed, t: Thresholds): Decision {
 }
 export interface Metrics {
   readonly attempted: number; readonly covered: number; readonly coverage: number; readonly accuracy: number|null;
+  readonly exact_set_accuracy: number|null;
   readonly failures: number; readonly missing_confidence: number; readonly confidence_coverage: number;
   readonly mean_confidence: number|null; readonly brier: number|null; readonly ece: number|null; readonly calibration_n: number;
   readonly violation_recall: number|null; readonly needed_recall: number|null; readonly all_needed_recall: number|null;
@@ -140,7 +141,9 @@ export function metrics(site: string, observations: readonly Observed[], thresho
   const bins = Array.from({length:10},()=>({n:0,p:0,y:0}));
   for(const point of points) { const b=bins[Math.min(9,Math.floor(point.p*10))]!; b.n++;b.p+=point.p;b.y+=point.y; }
   const n = observations.length;
-  return { attempted:n,covered,coverage:n ? covered/n : 0,accuracy:covered ? correct/covered : null,
+  return { attempted:n,covered,coverage:n ? covered/n : 0,
+    accuracy:covered ? (site === 'loop.preselect' ? allNeeded : correct)/covered : null,
+    exact_set_accuracy:covered ? correct/covered : null,
     failures:observations.filter(o=>o.result.status!=='ok').length,missing_confidence:missing,
     confidence_coverage:confidenceN+missing ? confidenceN/(confidenceN+missing) : 0,
     mean_confidence:confidenceN ? confidenceSum/confidenceN : null,
@@ -152,6 +155,23 @@ export function metrics(site: string, observations: readonly Observed[], thresho
     latency_ms:{p50:latencies.length ? latencies[Math.floor(.5*(latencies.length-1))]! : null,p90:latencies.length ? latencies[Math.floor(.9*(latencies.length-1))]! : null},
     input_tokens:observations.reduce((s,o)=>s+(o.result.input_tokens??0),0),output_tokens:observations.reduce((s,o)=>s+(o.result.output_tokens??0),0),
     cost_usd:observations.reduce((s,o)=>s+o.cost_usd,0),parse_failure_rate:n ? observations.filter(o=>o.result.parse_failure).length/n : 0 };
+}
+/** Question-level holdout diagnostics, independent of production confidence admission. */
+export function probabilityOnly(site:string, observations:readonly Observed[]) {
+  const points: {p:number;violation:boolean}[]=[];let total=0;
+  for(const o of observations)for(const [key,gold] of Object.entries(o.item.gold)) {
+    if(typeof gold!=='boolean')continue;
+    total++;
+    const p=o.result.status==='ok'?o.result.answers?.[key]?.probability:undefined;
+    if(unit(p))points.push({p:site==='eval.output'?1-p:p,violation:site==='eval.output'?!gold:gold});
+  }
+  const positive=points.filter(p=>p.violation),negative=points.filter(p=>!p.violation);
+  let wins=0;for(const a of positive)for(const b of negative)wins+=a.p>b.p?1:a.p===b.p?.5:0;
+  return {label:'descriptive only, not applied (#142)' as const,block_probability:.3,
+    questions:points.length,probability_coverage:total?points.length/total:0,
+    violation_recall:positive.length?positive.filter(p=>p.p>=.3).length/positive.length:null,
+    false_block_rate:negative.length?negative.filter(p=>p.p>=.3).length/negative.length:null,
+    auc:positive.length&&negative.length?wins/(positive.length*negative.length):null};
 }
 function* grid(site: string, provider?: string): Generator<Thresholds> {
   const production = productionThresholds(site,provider);

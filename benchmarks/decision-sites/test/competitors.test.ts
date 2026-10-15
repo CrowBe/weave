@@ -7,6 +7,19 @@ test('quota fails closed for missing, stale, ambiguous and 80% weekly usage',()=
  const value=(remaining:number)=>({generatedAt:new Date(now).toISOString(),providers:[{provider:'codex',status:'fresh',windows:[{id:'seven_day',percentRemaining:remaining,resetsAt:new Date(now+3600000).toISOString()}]}]});
  assert.equal(quotaAllowsCompetitors(value(21),now),true);assert.equal(quotaAllowsCompetitors(value(20),now),false);assert.equal(quotaAllowsCompetitors(value(50),now+60001),false);assert.equal(quotaAllowsCompetitors({},now),false);
 });
+test('quota accepts weekly kind and both weekly ids, using the lowest remaining weekly quota',()=>{
+ const now=Date.parse('2026-10-15T00:00:00Z');
+ const window=(id:string,percentRemaining:number,kind?:string)=>({id,kind,percentRemaining,resetsAt:new Date(now+3600000).toISOString()});
+ const snapshot=(windows:unknown[])=>({generatedAt:new Date(now).toISOString(),providers:[{provider:'codex',status:'fresh',windows}]});
+ assert.equal(quotaAllowsCompetitors(snapshot([window('weekly',75,'weekly')]),now),true);
+ assert.equal(quotaAllowsCompetitors(snapshot([window('seven_day',75,'weekly')]),now),true);
+ assert.equal(quotaAllowsCompetitors(snapshot([window('weekly',75)]),now),true);
+ assert.equal(quotaAllowsCompetitors(snapshot([window('custom',75,'weekly')]),now),true);
+ assert.equal(quotaAllowsCompetitors(snapshot([window('seven_day',75),window('weekly',21,'weekly')]),now),true);
+ assert.equal(quotaAllowsCompetitors(snapshot([window('seven_day',75),window('weekly',20,'weekly')]),now),false);
+ assert.equal(quotaAllowsCompetitors(snapshot([window('weekly',75),window('custom',NaN,'weekly')]),now),false);
+ assert.equal(quotaAllowsCompetitors(snapshot([window('daily',75,'daily')]),now),false);
+});
 test('fx prompts only on stdin and pi verifies no-tools flags via help; competitors capped at 40',async()=>{
  const calls:Array<{command:string,args:readonly string[],stdin:string}>=[];
  const providers=buildCompetitors({cwd:'/tmp/empty',quotaAllowed:true,run:async(command,args,options)=>{calls.push({command,args,stdin:options.stdin});if(args[0]==='status')return{exitCode:0,stdout:'Auth: authenticated with ChatGPT',stderr:''};if(args.includes('--help'))return{exitCode:0,stdout:'-p --mode --no-session --no-tools --no-extensions --no-skills --no-prompt-templates --no-mcp --no-context-files --offline',stderr:''};return{exitCode:0,stdout:JSON.stringify({answers:{q:{probability:.9,confidence:.8}}}),stderr:''};}});

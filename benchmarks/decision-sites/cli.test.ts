@@ -66,3 +66,29 @@ test('CLI reports concurrent and stale locks without stealing them',()=>{
   }
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test('resume re-renders completed results; render-only never dispatches or mutates the journal',async()=>{
+ const id=`render-${process.pid}`;const dir=new URL(`./results/${id}`,import.meta.url).pathname;
+ const reportPath=new URL('./REPORT.md',import.meta.url).pathname;
+ let oldReport:string|undefined;try{oldReport=readFileSync(reportPath,'utf8');}catch{}
+ try{
+  const args=['--providers','fake','--sites','loop.route','--run-id',id];
+  const first=spawnSync(process.execPath,['--experimental-strip-types','benchmarks/decision-sites/run.ts',...args],{encoding:'utf8'});
+  assert.equal(first.status,0,first.stderr);
+  const journalPath=join(dir,'journal.jsonl');
+  const completed=readFileSync(journalPath,'utf8').trim().split('\n').map(line=>JSON.parse(line)).filter(r=>r.type==='call').length;
+  const noCalls={providers:[{id:'fake',model:'offline-fake',price:0,concurrency:1,serialize:JSON.stringify,request:async()=>{throw Error('unexpected dispatch');}}]};
+  writeFileSync(reportPath,'stale report');rmSync(join(dir,'summary.json'));
+  assert.equal(await main([...args,'--resume'],noCalls),0);
+  assert.match(readFileSync(reportPath,'utf8'),/Decision-site benchmark/);
+  assert.equal(readFileSync(journalPath,'utf8').trim().split('\n').map(line=>JSON.parse(line)).filter(r=>r.type==='call').length,completed);
+  // A journal may end in a torn tail after a crash. Rendering must leave even those bytes alone.
+  const before=readFileSync(journalPath,'utf8')+'{"torn":';writeFileSync(journalPath,before);
+  writeFileSync(reportPath,'stale report');rmSync(join(dir,'summary.json'));
+  let calls=0;const uncompleted={providers:[{...noCalls.providers[0]!,model:'new-model',request:async()=>{calls++;throw Error('unexpected dispatch');}}]};
+  assert.equal(await main([...args,'--render-only'],uncompleted),0);
+  assert.equal(calls,0);assert.equal(readFileSync(journalPath,'utf8'),before);
+  assert.match(readFileSync(reportPath,'utf8'),/Decision-site benchmark/);
+  assert.ok(JSON.parse(readFileSync(join(dir,'summary.json'),'utf8')).non_gating);
+ }finally{rmSync(dir,{recursive:true,force:true});if(oldReport!==undefined)writeFileSync(reportPath,oldReport);else rmSync(reportPath,{force:true});}
+});

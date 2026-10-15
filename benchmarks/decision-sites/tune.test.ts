@@ -123,3 +123,54 @@ test('OpenAI provisional D5 tunes its band without reading holdout and marks loo
   assert.equal(selected.not_applied,'needs captain (#142)');
   assert.equal(metrics('eval.output',[observed],selected).coverage,1);
 });
+
+test('D3 headline and tune objective retain all needed entries without penalising extras', () => {
+  const make=(id:string,gold:Record<string,boolean>):Observed=>row('loop.preselect','tune',{
+    item:{id,scenario_id:id,site:'loop.preselect',state:{},gold},
+    result:{status:'ok',answers:Object.fromEntries([.9,.8,.7,.1].map((probability,n)=>[`entry_${n}`,{probability,confidence:.95}]))},
+  });
+  const rows=[make('one',{entry_0:true,entry_1:false,entry_2:false,entry_3:false}),make('two',{entry_0:true,entry_1:true,entry_2:false,entry_3:false})];
+  const score=metrics('loop.preselect',rows,productionThresholds('loop.preselect'));
+  assert.equal(score.accuracy,1);
+  assert.equal((score as any).exact_set_accuracy,0);
+  assert.equal(tune('loop.preselect',rows).k,3);
+  const call={...rows[0]!,split:'holdout' as const,type:'call' as const,provider:'fake',model:'fake',site:'loop.preselect',item_id:'one',set_digest:'s',question_digest:'q',call_id:'c'};
+  const report=makeReport({run_id:'r',node_version:'v22',max_spend_usd:2,set_digests:{}},[call]);
+  assert.match(report.markdown,/D3 all-needed recall/);
+  assert.match(report.markdown,/Exact-set/);
+});
+
+test('probability-only safety diagnostics ignore confidence, preserve production gates and handle ties', () => {
+  for(const site of ['guard.input','guard.output','eval.output']){
+    const rows=[{p:.9,gold:true},{p:.3,gold:true},{p:.3,gold:false},{p:.1,gold:false}].map(({p,gold},n)=>row(site,'holdout',{
+      item:{id:String(n),scenario_id:String(n),site,state:{},gold:{decision:gold}},
+      // D5 probabilities describe satisfaction; diagnostics use P(violation)=1-p.
+      result:{status:'ok',answers:{decision:{probability:site==='eval.output'?1-p:p}}},
+    }));
+    const score=metrics(site,rows,productionThresholds(site));
+    assert.equal(score.coverage,0);
+    if(site!=='eval.output')assert.equal(score.violation_recall,0);
+    const calls=rows.map((r,n)=>({...r,type:'call' as const,provider:'fake',model:'fake',site,item_id:r.item.id,set_digest:'s',question_digest:'q',call_id:String(n)}));
+    if(site==='eval.output')for(const r of calls)r.item={...r.item,gold:{decision:!r.item.gold.decision}};
+    const report=makeReport({run_id:'r',node_version:'v22',max_spend_usd:2,set_digests:{}},calls);
+    const diagnostic=(report.summary.decision_providers[0] as any).probability_only;
+    assert.equal(diagnostic.violation_recall,1);
+    assert.equal(diagnostic.false_block_rate,.5);
+    assert.equal(diagnostic.auc,.875);
+    assert.equal(diagnostic.label,'descriptive only, not applied (#142)');
+    assert.match(report.markdown,/descriptive only, not applied \(#142\)/);
+  }
+});
+
+test('competitor provider-level skips count zero attempts and carry their reason on every site', () => {
+ const observed=row('audit.dispose','holdout',{result:{status:'skipped',reason:'quota_unavailable_or_weekly_cap'}});
+ const call={...observed,type:'call' as const,provider:'pi',model:'chatgpt-sign-in',site:'audit.dispose',item_id:'x',set_digest:'s',question_digest:'q',call_id:'c'};
+ const status={type:'provider_status',provider:'pi',result:{status:'skipped',reason:'quota_unavailable_or_weekly_cap'}};
+ const report=makeReport({run_id:'r',node_version:'v22',max_spend_usd:2,set_digests:{},sites:['audit.dispose','loop.route'],statuses:[status]},[call]);
+ for(const competitor of report.summary.competitors){
+  assert.equal(competitor.holdout.attempted,0);
+  assert.equal((competitor as any).skip_reason,'quota_unavailable_or_weekly_cap');
+ }
+ assert.match(report.markdown,/\| pi \| audit.dispose \| 0 \|/);
+ assert.match(report.markdown,/Skip reason/);
+});

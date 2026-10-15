@@ -24,12 +24,20 @@ export function quotaAllowsCompetitors(raw: unknown, now: number, maxAgeMs = 60_
     if (!Number.isFinite(refreshed) || refreshed > observed || now - refreshed >= maxAgeMs) return false;
   }
   if (!Array.isArray(provider.windows)) return false;
-  const weeks = provider.windows.filter((window: unknown) => record(window) && window.id === 'seven_day');
-  if (weeks.length !== 1 || !record(weeks[0])) return false;
-  const reset = typeof weeks[0].resetsAt === 'string' ? Date.parse(weeks[0].resetsAt) : NaN;
-  if (!Number.isFinite(reset) || reset <= now) return false;
-  const remaining = weeks[0].percentRemaining;
-  return typeof remaining === 'number' && Number.isFinite(remaining) && remaining > 20 && remaining <= 100;
+  const weeks = provider.windows.filter((window: unknown) => record(window) && (window.kind === 'weekly' || window.id === 'seven_day' || window.id === 'weekly'));
+  if (weeks.length === 0) return false;
+  const ids = new Set<unknown>();
+  let minimumRemaining = 100;
+  for (const week of weeks) {
+    if (!record(week) || ids.has(week.id)) return false;
+    ids.add(week.id);
+    const reset = typeof week.resetsAt === 'string' ? Date.parse(week.resetsAt) : NaN;
+    if (!Number.isFinite(reset) || reset <= now) return false;
+    const remaining = week.percentRemaining;
+    if (typeof remaining !== 'number' || !Number.isFinite(remaining) || remaining < 0 || remaining > 100) return false;
+    minimumRemaining = Math.min(minimumRemaining, remaining);
+  }
+  return minimumRemaining > 20;
 }
 export function competitorPrompt(request: Request): string {
   return 'Answer the supplied production questions using only the supplied state. Do not use tools. Return only strict JSON: {"answers":{"<question id>":{"choice":"<option key>","confidence":0.0}}}. For boolean questions use "probability" instead of "choice"; for score questions use "score". Confidence must be your self-reported number between 0 and 1; omit it when unknown. No prose or Markdown.\n' + JSON.stringify(request);

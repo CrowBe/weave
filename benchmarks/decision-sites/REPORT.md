@@ -1,46 +1,120 @@
-# Decision-site benchmark: offline-dry-run
+# Decision-site benchmark: live-20261015
 
 Non-gating. Thresholds are fitted on tune only; runtime thresholds and guard behavior are unchanged.
-Node: v22.23.3. Spend: $0.000000 / $2.00.
-Models served: offline-fake.
+Scoring rule: decision-sites.score@2 (D3 all-needed objective correction; see SCORING.md).
+Node: v22.23.3. Spend: $0.011831 / $2.00.
+Models served: amos-1-2b, jev-1.14.0.
 
-| Site | Provider | Tuned thresholds | Holdout n | Tuned accuracy | Tuned coverage | Production accuracy | Production coverage |
-| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| audit.dispose | fake | conf≥0.75; selected | 12 | 25.0% | 100.0% | 25.0% | 100.0% |
-| eval.output | fake | conf≥0.9; p≥0.8; selected | 12 | 50.0% | 100.0% | 50.0% | 100.0% |
-| guard.input | fake | conf≥0.9; p≥0.1; selected | 16 | 0.0% | 100.0% | 50.0% | 100.0% |
-| guard.output | fake | conf≥0.9; p≥0.1; selected | 18 | 50.0% | 100.0% | 50.0% | 100.0% |
-| intake.classify | fake | conf≥0.8; selected | 60 | 16.7% | 100.0% | 16.7% | 100.0% |
-| loop.continue | fake | conf≥0.7; selected | 12 | 33.3% | 100.0% | 33.3% | 100.0% |
-| loop.preselect | fake | conf≥0.75; k=1; floor=0; excluded≤0.2; best_kept gap≥0; selected | 20 | 5.0% | 100.0% | — | 0.0% |
-| loop.route | fake | conf≥0.75; selected | 12 | 33.3% | 100.0% | 33.3% | 100.0% |
-| loop.triage | fake | conf≥0.8; top-p≥0.6; selected | 50 | 20.0% | 100.0% | 20.0% | 100.0% |
+D3 headline accuracy is all-needed recall among covered steps: every needed entry is kept, and extra entries are permitted. Exact-set agreement remains secondary. Full-index fallbacks remain uncovered.
+
+| Site | Provider | Tuned thresholds | Holdout n | Tuned accuracy / D3 all-needed recall | Tuned coverage | Production accuracy / D3 all-needed recall | Production coverage | Exact-set tuned | Exact-set production |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| audit.dispose | amos-small | conf≥0.75; selected | 12 | 100.0% | 8.3% | 100.0% | 8.3% | — | — |
+| audit.dispose | openai-decisions | conf≥0.75; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
+| audit.dispose | typesafe-jev | conf≥0.95; selected | 12 | 100.0% | 50.0% | 88.9% | 75.0% | — | — |
+| eval.output | amos-small | conf≥0.9; p≥0.8; minimum_coverage_unmet | 12 | — | 0.0% | — | 0.0% | — | — |
+| eval.output | openai-decisions | conf≥0.9; p≥0.85; fail-p≤0.15; openai-provisional-probability-band; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
+| eval.output | typesafe-jev | conf≥0.9; p≥0.8; minimum_coverage_unmet | 12 | — | 0.0% | — | 0.0% | — | — |
+| guard.input | amos-small | conf≥0.9; p≥0.3; minimum_coverage_unmet | 16 | — | 0.0% | — | 0.0% | — | — |
+| guard.input | openai-decisions | conf≥0.9; p≥0.3; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
+| guard.input | typesafe-jev | conf≥0.9; p≥0.3; minimum_coverage_unmet | 16 | — | 0.0% | — | 0.0% | — | — |
+| guard.output | amos-small | conf≥0.9; p≥0.3; minimum_coverage_unmet | 18 | — | 0.0% | — | 0.0% | — | — |
+| guard.output | openai-decisions | conf≥0.9; p≥0.3; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
+| guard.output | typesafe-jev | conf≥0.9; p≥0.3; minimum_coverage_unmet | 18 | — | 0.0% | — | 0.0% | — | — |
+| intake.classify | amos-small | conf≥0.5; selected | 60 | 87.9% | 55.0% | 100.0% | 26.7% | — | — |
+| intake.classify | openai-decisions | conf≥0.8; minimum_coverage_unmet | 0 | — | 0.0% | — | 0.0% | — | — |
+| intake.classify | typesafe-jev | conf≥0.75; selected | 60 | 94.9% | 65.0% | 97.1% | 56.7% | — | — |
+| loop.continue | amos-small | conf≥0.5; selected | 12 | 100.0% | 75.0% | 100.0% | 66.7% | — | — |
+| loop.continue | openai-decisions | conf≥0.7; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
+| loop.continue | typesafe-jev | conf≥0.7; selected | 12 | 100.0% | 100.0% | 100.0% | 100.0% | — | — |
+| loop.preselect | amos-small | conf≥0.75; k=3; floor=0; excluded≤0.4; best_kept gap≥0.3; minimum_coverage_unmet | 20 | 100.0% | 65.0% | 100.0% | 65.0% | 0.0% | 0.0% |
+| loop.preselect | openai-decisions | conf≥0.75; k=3; floor=0; excluded≤0.4; best_kept gap≥0.3; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
+| loop.preselect | typesafe-jev | conf≥0.75; k=3; floor=0; excluded≤0.4; best_kept gap≥0.3; minimum_coverage_unmet | 20 | 100.0% | 85.0% | 100.0% | 85.0% | 5.9% | 5.9% |
+| loop.route | amos-small | conf≥0; selected | 12 | 41.7% | 100.0% | 0.0% | 8.3% | — | — |
+| loop.route | openai-decisions | conf≥0.75; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
+| loop.route | typesafe-jev | conf≥0.6; selected | 12 | 100.0% | 50.0% | 100.0% | 16.7% | — | — |
+| loop.triage | amos-small | conf≥0; top-p≥0.7; selected | 50 | 72.7% | 44.0% | 71.4% | 28.0% | — | — |
+| loop.triage | openai-decisions | conf≥0.8; top-p≥0.6; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
+| loop.triage | typesafe-jev | conf≥0; top-p≥0.6; selected | 50 | 97.5% | 80.0% | 100.0% | 56.0% | — | — |
 
 Production thresholds are imported from the site policies (D1 top-p .6 and D6 confidence .75 follow their production transitions). Missing confidence counts below the floor except production D3 (unknown) and the explicitly provisional OpenAI D5 probability band (pass ≥.85, fail ≤.15). The OpenAI band is a benchmark assumption from docs §4b; its deferred adapter has no runtime production policy. Supplied D5 confidence still meets the floor.
 
 | Site | Provider | Brier | ECE | Mean confidence | Missing confidence | Violation recall | Needed recall / all needed | Multi-entry steps | Best / kth gap | p50 / p90 ms | Input / output tokens | USD |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | --- | --- | --- | ---: |
-| audit.dispose | fake | 0.750 | 0.750 | 0.950 | 0 | — | — / — | 0 | — / — | 0.000 / 0.000 | 0 / 0 | 0.000000 |
-| eval.output | fake | 0.410 | 0.400 | 0.950 | 0 | — | — / — | 0 | — / — | 0.000 / 0.000 | 0 / 0 | 0.000000 |
-| guard.input | fake | 0.160 | 0.088 | 0.950 | 0 | 100.0% | — / — | 0 | — / — | 0.000 / 0.000 | 0 / 0 | 0.000000 |
-| guard.output | fake | 0.410 | 0.400 | 0.950 | 0 | 100.0% | — / — | 0 | — / — | 0.000 / 0.000 | 0 / 0 | 0.000000 |
-| intake.classify | fake | 0.833 | 0.833 | 0.950 | 0 | — | — / — | 0 | — / — | 0.000 / 0.000 | 0 / 0 | 0.000000 |
-| loop.continue | fake | 0.667 | 0.667 | 0.950 | 0 | — | — / — | 0 | — / — | 0.000 / 0.000 | 0 / 0 | 0.000000 |
-| loop.preselect | fake | 0.053 | 0.046 | 0.950 | 0 | — | 7.7% / 5.0% | 4 | 0.000 / 0.000 | 0.000 / 0.000 | 0 / 0 | 0.000000 |
-| loop.route | fake | 0.667 | 0.667 | 0.950 | 0 | — | — / — | 0 | — / — | 0.000 / 0.000 | 0 / 0 | 0.000000 |
-| loop.triage | fake | 0.800 | 0.800 | 0.950 | 0 | — | — / — | 0 | — / — | 0.000 / 0.000 | 0 / 0 | 0.000000 |
+| audit.dispose | amos-small | 0.156 | 0.306 | 0.541 | 0 | — | — / — | 0 | — / — | 359.000 / 418.000 | 1616 / 0 | 0.000000 |
+| audit.dispose | openai-decisions | — | — | — | 0 | — | — / — | 0 | — / — | — / — | 0 / 0 | 0.000000 |
+| audit.dispose | typesafe-jev | 0.130 | 0.131 | 0.828 | 0 | — | — / — | 0 | — / — | 42.000 / 44.000 | 4440 / 689 | 0.000186 |
+| eval.output | amos-small | 0.083 | 0.096 | — | 12 | — | — / — | 0 | — / — | 367.000 / 435.000 | 1657 / 0 | 0.000000 |
+| eval.output | openai-decisions | — | — | — | 0 | — | — / — | 0 | — / — | — / — | 0 / 0 | 0.000000 |
+| eval.output | typesafe-jev | 0.070 | 0.075 | — | 12 | — | — / — | 0 | — / — | 42.000 / 48.000 | 4374 / 288 | 0.000184 |
+| guard.input | amos-small | 0.182 | 0.183 | — | 64 | 0.0% | — / — | 0 | — / — | 482.000 / 553.000 | 3328 / 0 | 0.000000 |
+| guard.input | openai-decisions | — | — | — | 0 | — | — / — | 0 | — / — | — / — | 0 / 0 | 0.000000 |
+| guard.input | typesafe-jev | 0.148 | 0.231 | — | 64 | 0.0% | — / — | 0 | — / — | 43.000 / 67.000 | 6117 / 1344 | 0.000257 |
+| guard.output | amos-small | 0.070 | 0.233 | — | 18 | 0.0% | — / — | 0 | — / — | 353.000 / 389.000 | 1975 / 0 | 0.000000 |
+| guard.output | openai-decisions | — | — | — | 0 | — | — / — | 0 | — / — | — / — | 0 / 0 | 0.000000 |
+| guard.output | typesafe-jev | 0.014 | 0.097 | — | 18 | 0.0% | — / — | 0 | — / — | 42.000 / 46.000 | 5651 / 360 | 0.000237 |
+| intake.classify | amos-small | 0.171 | 0.075 | 0.579 | 0 | — | — / — | 0 | — / — | 602.000 / 720.000 | 15277 / 0 | 0.000000 |
+| intake.classify | openai-decisions | — | — | — | 0 | — | — / — | 0 | — / — | — / — | 0 / 0 | 0.000000 |
+| intake.classify | typesafe-jev | 0.117 | 0.102 | 0.763 | 0 | — | — / — | 0 | — / — | 44.000 / 58.000 | 30512 / 3755 | 0.001282 |
+| loop.continue | amos-small | 0.081 | 0.217 | 0.704 | 0 | — | — / — | 0 | — / — | 441.000 / 673.000 | 1268 / 0 | 0.000000 |
+| loop.continue | openai-decisions | — | — | — | 0 | — | — / — | 0 | — / — | — / — | 0 / 0 | 0.000000 |
+| loop.continue | typesafe-jev | 0.004 | 0.032 | 0.950 | 0 | — | — / — | 0 | — / — | 44.000 / 86.000 | 4009 / 536 | 0.000168 |
+| loop.preselect | amos-small | 0.047 | 0.120 | — | 480 | — | 100.0% / 100.0% | 4 | 0.611 / 0.088 | 3975.000 / 4759.000 | 40673 / 0 | 0.000000 |
+| loop.preselect | openai-decisions | — | — | — | 0 | — | — / — | 0 | — / — | — / — | 0 / 0 | 0.000000 |
+| loop.preselect | typesafe-jev | 0.026 | 0.104 | — | 480 | — | 100.0% / 100.0% | 4 | 0.726 / 0.118 | 59.000 / 68.000 | 50887 / 9000 | 0.002137 |
+| loop.route | amos-small | 0.314 | 0.269 | 0.506 | 0 | — | — / — | 0 | — / — | 313.000 / 336.000 | 1310 / 0 | 0.000000 |
+| loop.route | openai-decisions | — | — | — | 0 | — | — / — | 0 | — / — | — / — | 0 / 0 | 0.000000 |
+| loop.route | typesafe-jev | 0.084 | 0.268 | 0.594 | 0 | — | — / — | 0 | — / — | 43.000 / 48.000 | 3984 / 456 | 0.000167 |
+| loop.triage | amos-small | 0.228 | 0.145 | 0.581 | 0 | — | — / — | 0 | — / — | 804.000 / 961.000 | 18921 / 0 | 0.000000 |
+| loop.triage | openai-decisions | — | — | — | 0 | — | — / — | 0 | — / — | — / — | 0 / 0 | 0.000000 |
+| loop.triage | typesafe-jev | 0.069 | 0.122 | 0.770 | 0 | — | — / — | 0 | — / — | 46.000 / 54.000 | 29932 / 3023 | 0.001257 |
+
+## Probability-only safety diagnostics
+
+**descriptive only, not applied (#142)**. Holdout questions with valid probabilities only; confidence is ignored. Block at P(violation) ≥ .3. For D5, violation means an unsatisfied criterion: P(violation) = 1 − P(satisfied). AUC gives ties half credit and is undefined without both classes. Production gates above are unchanged.
+
+| Site | Provider | Violation recall | False-block rate | AUC | Probability coverage |
+| --- | --- | ---: | ---: | ---: | ---: |
+| eval.output | amos-small | 83.3% | 0.0% | 0.861 | 100.0% |
+| eval.output | openai-decisions | — | — | — | 0.0% |
+| eval.output | typesafe-jev | 83.3% | 0.0% | 1.000 | 100.0% |
+| guard.input | amos-small | 75.0% | 28.8% | 0.845 | 100.0% |
+| guard.input | openai-decisions | — | — | — | 0.0% |
+| guard.input | typesafe-jev | 100.0% | 34.6% | 0.989 | 100.0% |
+| guard.output | amos-small | 100.0% | 55.6% | 1.000 | 100.0% |
+| guard.output | openai-decisions | — | — | — | 0.0% |
+| guard.output | typesafe-jev | 100.0% | 0.0% | 1.000 | 100.0% |
 
 ## Competitors
 
-Holdout only; no threshold tuning. Self-reported confidence is separate from probability calibration. Competitor served model ids are unobserved; chatgpt-sign-in is an authentication profile, not a served model id.
+Holdout only; no threshold tuning. Provider-level skips are not attempted inference calls. Self-reported confidence is separate from probability calibration. Competitor served model ids are unobserved; chatgpt-sign-in is an authentication profile, not a served model id.
 
-| Competitor | Site | Attempted | Accuracy | Parse-failure rate | Confidence coverage | Answer coverage |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| — | — | 0 | — | — | — | — |
+| Competitor | Site | Attempted | Accuracy | Parse-failure rate | Confidence coverage | Answer coverage | Skip reason |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| fx-ask | audit.dispose | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
+| pi | audit.dispose | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
+| fx-ask | eval.output | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
+| pi | eval.output | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
+| fx-ask | guard.input | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
+| pi | guard.input | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
+| fx-ask | guard.output | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
+| pi | guard.output | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
+| fx-ask | intake.classify | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
+| pi | intake.classify | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
+| fx-ask | loop.continue | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
+| pi | loop.continue | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
+| fx-ask | loop.preselect | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
+| pi | loop.preselect | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
+| fx-ask | loop.route | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
+| pi | loop.route | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
+| fx-ask | loop.triage | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
+| pi | loop.triage | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
 
 ## Provider statuses
 
-No provider-status records. See per-provider attempted counts.
+- `{"type":"provider_status","provider":"fx-ask","result":{"status":"skipped","reason":"quota_unavailable_or_weekly_cap"}}`
+- `{"type":"provider_status","provider":"openai-decisions","result":{"status":"skipped","reason":"no_credential"}}`
+- `{"type":"provider_status","provider":"pi","result":{"status":"skipped","reason":"quota_unavailable_or_weekly_cap"}}`
 
 ## Frozen set digests
 
@@ -77,4 +151,4 @@ No provider-status records. See per-provider attempted counts.
 See [SCORING.md](SCORING.md) for the predeclared objective, denominators and threshold grids.
 
 
-Ledger spend (including pending reservations): $0.00000000
+Ledger spend (including pending reservations): $0.01183098

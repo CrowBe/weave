@@ -11,7 +11,8 @@ export function replayKey(r: JournalRecord): string {
 function writeAll(fd:number,value:string):void {const bytes=Buffer.from(value);let offset=0;while(offset<bytes.length){const n=writeSync(fd,bytes,offset,bytes.length-offset);if(n<=0)throw new Error('Journal write failed');offset+=n;}}
 export class Journal {
  readonly path: string;
- constructor(path: string) { this.path=path; this.read(); }
+ readonly readOnly: boolean;
+ constructor(path: string, readOnly=false) { this.path=path; this.readOnly=readOnly; this.read(); }
  read(): JournalRecord[] {
   if(!existsSync(this.path)) return [];
   const bytes=readFileSync(this.path); const lines=bytes.toString('utf8').split('\n');
@@ -20,15 +21,16 @@ export class Journal {
    const line=lines[i]!;
    if(!line && i===lines.length-1) break;
    try { rows.push(JSON.parse(line) as JournalRecord); }
-   catch { if(i!==lines.length-1) throw new Error('Corrupt journal before final line'); truncateSync(this.path,validBytes); const fd=openSync(this.path,'r+');try{fsyncSync(fd);}finally{closeSync(fd);} return rows; }
+   catch { if(i!==lines.length-1) throw new Error('Corrupt journal before final line'); if(!this.readOnly){truncateSync(this.path,validBytes); const fd=openSync(this.path,'r+');try{fsyncSync(fd);}finally{closeSync(fd);}} return rows; }
    validBytes+=Buffer.byteLength(line)+(i<lines.length-1?1:0);
   }
-  if(bytes.length && bytes[bytes.length-1]!==10) {
+  if(!this.readOnly && bytes.length && bytes[bytes.length-1]!==10) {
    const fd=openSync(this.path,'a',0o600); try {writeSync(fd,'\n');fsyncSync(fd);}finally{closeSync(fd);}
   }
   return rows;
  }
  append(record: JournalRecord): void {
+  if(this.readOnly)throw new Error('Cannot append to a read-only journal');
   this.read(); const fd=openSync(this.path,'a',0o600);
   try { writeAll(fd,JSON.stringify(record)+'\n');fsyncSync(fd); } finally {closeSync(fd);}
   const directory=openSync(dirname(this.path),'r');try{fsyncSync(directory);}finally{closeSync(directory);}

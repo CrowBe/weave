@@ -59,7 +59,9 @@ results. `--max-spend-usd` sets the ceiling; above $5 additionally requires
 Competitors receive the same state and questions on stdin, asking for strict
 JSON. They run in an empty temporary cwd with sessions and tools disabled.
 `quota-axi --provider codex --json` runs immediately before each competitor call;
-a missing, stale or >=80%-used weekly window skips the provider. Each competitor
+a missing, stale or >=80%-used weekly window skips the provider. The quota check
+accepts windows identified by kind `weekly` or id `weekly` / `seven_day`, using
+the lowest remaining percentage across matching windows. Each competitor
 has a hard cap of 40 intended calls including resume, spread across sites in
 round-robin order. Only holdout is sent; there is no competitor threshold tuning.
 Auth failures skip without retry. pi verifies its supported flags with `--help`
@@ -75,6 +77,22 @@ Other flags: `--sites intake.classify,loop.route`, `--split tune|holdout|all`
 (default all), `--providers ...`, `--run-id NAME`, and `--resume`. A holdout-only
 run without tune results reports production thresholds with `no_tune_data`; to
 continue a tune run, reuse its run id with `--split all --resume`.
+
+`--resume` re-renders the report and summary without re-asking completed items
+whose model/set/question bindings still match. It can dispatch unfinished or
+changed items. For guaranteed report regeneration with **no provider or CLI
+calls**, use `--render-only` with the same run id, providers and sites:
+
+```sh
+npm run bench:decision-sites:live -- --render-only --run-id live-20261015 \
+  --providers typesafe-jev,amos-small,openai-decisions,pi,fx-ask
+```
+
+Render-only reads the existing journal without appending records or repairing a
+torn tail; even an incomplete final line stays byte-for-byte unchanged. It
+regenerates `REPORT.md` and the run's `summary.json`. A temporary exclusive
+lock still prevents concurrent writers. Existing recorded skips are preserved;
+render-only and resume do not turn those skips into new competitor calls.
 
 Each run owns `results/<run_id>/lock` exclusively. A concurrent writer refuses;
 a dead-pid lock is reported as stale and must be inspected and removed by the
@@ -99,6 +117,13 @@ site/provider order, with statuses, models, digests, Node version, spend, tokens
 latency and calibration. D3 shows both best-kept and kth-kept gaps (#145), needed
 recall, and multi-entry counts (#140). Any looser guard or D5 setting is marked
 `not_applied: needs captain (#142)`; every candidate remains descriptive.
+D3's headline and tune objective are all-needed recall among covered steps;
+extra entries do not reduce it. Exact-set agreement remains a secondary column.
+The score@2 correction and rationale are recorded in SCORING.md. Guards and D5
+also show probability-only violation recall, false-block rate and ROC AUC,
+labelled **descriptive only, not applied (#142)**. Those diagnostics ignore
+confidence and use P(violation) >= .3 (D5 uses 1 - P(satisfied)); production
+confidence gates and thresholds remain unchanged.
 Generated artifacts from fake runs are explicitly labelled `fake` /
 `offline-fake` and are not live provider evidence. The crewmate records live
 results after the offline implementation is reviewed.

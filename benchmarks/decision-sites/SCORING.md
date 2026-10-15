@@ -1,11 +1,20 @@
-# Decision-site scoring rule `decision-sites.score@1`
+# Decision-site scoring rule `decision-sites.score@2`
 
-Declared before any benchmark run. This benchmark is non-gating and never changes
-runtime policy. Frozen scenario ids are disjoint between tune and holdout.
+The original rule was declared before the first benchmark run. Revision 2
+(WHC-P10 fix round 1) declares the corrected D3 objective before recomputing tune
+selection: retaining all needed entries, rather than exactly matching the gold
+set. Top-k preselection intentionally keeps extra entries; exact-set agreement
+penalised that intended behavior and obscured needed-entry recall. This is a
+metric/objective correction, not a post-hoc change of production thresholds.
+Recorded answers, threshold grids, production policy and frozen scenario splits
+are unchanged. This benchmark remains non-gating.
 
 Tune uses only observations explicitly marked `tune`. For each provider and site,
 select the grid candidate with accuracy on covered items maximised, subject to
-item coverage >= 0.5. Guards first maximise violation recall, then covered
+item coverage >= 0.5. For D3, accuracy means all-needed recall: the proportion of
+covered steps retaining every gold-needed entry, allowing extra entries. D3
+tuning maximises that objective; exact-set agreement is secondary reporting only.
+Guards first maximise violation recall, then covered
 accuracy. Ties prefer coverage, then the production candidate, then stable grid
 order. If no candidate meets minimum coverage, retain production thresholds and
 report `minimum_coverage_unmet`; an empty tune split is `no_tune_data`.
@@ -23,10 +32,14 @@ and boundary-confidence gates pass. A full-index fallback is uncovered.
 
 Item coverage is items with every gold question valid and admitted divided by
 all attempted items. A failed call, refusal, invalid/missing answer, or unknown
-choice remains in the denominator. Item accuracy is exact agreement with all
-gold labels among covered items; empty coverage has null accuracy. D3 additionally
-reports needed-entry recall and the proportion of covered steps retaining every
-needed entry, plus both best-kept and kth-kept gap means. Multi-entry steps are
+choice remains in the denominator. Except for D3, item accuracy is exact agreement
+with all gold labels among covered items; empty coverage has null accuracy.
+D3 headline accuracy/all-needed recall is the proportion of covered steps
+retaining every needed entry. Its separate `exact_set_accuracy` measures exact
+agreement, while `needed_recall` measures the fraction of individual needed
+entries retained. Both tuned and production headline values apply their own
+existing top-k, margin and confidence admission rules; fallbacks remain uncovered.
+D3 also reports both best-kept and kth-kept gap means. Multi-entry steps are
 counted explicitly. Guard violation recall counts each gold-positive rule, and
 uncovered positive rules are misses. Threshold comparisons use >=.
 
@@ -43,10 +56,24 @@ guard block threshold (> .3), a lower guard confidence floor, or a lower D5
 probability/confidence floor is reported as `not_applied: needs captain (#142)`.
 All tuning is descriptive: even stricter candidates are never applied to runtime.
 
+Guards and D5 additionally report **descriptive only, not applied (#142)**
+probability-only holdout diagnostics. Each valid boolean question is one point;
+confidence is ignored. For guards p is P(violation); for D5 it is
+1 - P(criterion satisfied), with gold violation = criterion not satisfied.
+Block at p >= .3 for these diagnostics only. Violation recall is blocked positive
+questions / positive questions; false-block rate is blocked negative questions /
+negative questions. ROC AUC counts positive/negative pairs ordered correctly,
+giving ties half credit; it is null without both classes. Invalid/missing
+probabilities and failed/skipped calls are excluded, with probability coverage
+reported explicitly. Input-guard diagnostics pool rule questions. These metrics
+never replace production confidence gates or affect threshold tuning.
+
 Competitors use holdout only, at most 40 calls each, no tuning or confidence gate.
 Their accuracy is exact item agreement among parseable successful calls, with
 coverage, parse-failure rate and self-reported-confidence coverage reported.
-Provider failures and skipped providers are visible in the report. All tables
+Provider failures and skipped providers are visible in the report. Competitor
+attempted-call counts exclude provider-level skips; their skip reason is shown
+even on sites with no calls. All tables
 are sorted by site then provider; identifiers and set/model bindings come from
 the durable journal, not a new model judgment.
 

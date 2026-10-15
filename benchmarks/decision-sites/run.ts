@@ -1,6 +1,6 @@
 /** Composition root: the only benchmark module that reads env or the ambient clock. */
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync, writeSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -18,7 +18,7 @@ export function flags(args:string[]) {
  const values:Record<string,string>={};const booleans=new Set<string>();
  for(let i=0;i<args.length;i++) {
   const flag=args[i]!;
-  if(['--resume','--allow-spend-above-5'].includes(flag)){booleans.add(flag);continue;}
+  if(['--resume','--render-only','--allow-spend-above-5'].includes(flag)){booleans.add(flag);continue;}
   if(!['--providers','--sites','--split','--max-spend-usd','--run-id'].includes(flag)||!args[i+1]||args[i+1]!.startsWith('--'))throw new Error('Invalid benchmark flags');
   values[flag]=args[++i]!;
  }
@@ -30,7 +30,7 @@ export function flags(args:string[]) {
  const providers=(values['--providers']??'typesafe-jev,amos-small,openai-decisions,pi,fx-ask').split(',');
  if(providers.some(p=>!['typesafe-jev','amos-small','openai-decisions','pi','fx-ask','fake'].includes(p)))throw new Error('Unknown provider');
  const split=values['--split']??'all';if(!['all','tune','holdout'].includes(split))throw new Error('Invalid split');
- return {maxSpend,runId,sites:[...new Set(sites)],providers:[...new Set(providers)],split,resume:booleans.has('--resume')};
+ return {maxSpend,runId,sites:[...new Set(sites)],providers:[...new Set(providers)],split,resume:booleans.has('--resume'),renderOnly:booleans.has('--render-only')};
 }
 const runProcess:ProcessRunner = (command,args,options)=>new Promise(resolveProcess=>{
  let stdout='',stderr='',done=false;
@@ -45,14 +45,15 @@ function fakeProvider():Provider {return {id:'fake',model:'offline-fake',price:0
 export async function main(args=process.argv.slice(2), injected?:{providers:readonly Provider[]}):Promise<number> {
  const options=flags(args);if(!process.versions.node.startsWith('22.'))throw new Error('Node 22 required');
  const root=dirname(fileURLToPath(import.meta.url));const dir=join(root,'results',options.runId);
+ if(options.renderOnly&&!existsSync(join(dir,'journal.jsonl')))throw new Error('Run journal missing');
  const release=acquireLock(dir);const temp=mkdtempSync(join(tmpdir(),'weave-decision-'));
  const controller=new AbortController();const abort=()=>controller.abort();
  process.on('SIGINT',abort);process.on('SIGTERM',abort);
  try {
-  const journal=new Journal(join(dir,'journal.jsonl'));
-  if(journal.read().length&&!options.resume)throw new Error('Run already exists; use --resume');
+  const journal=new Journal(join(dir,'journal.jsonl'),options.renderOnly);
+  if(journal.read().length&&!options.resume&&!options.renderOnly)throw new Error('Run already exists; use --resume');
   const {entries,digests}=loadSets(join(root,'sets'),options.sites,options.split);
-  journal.append({type:'run',run_id:options.runId,node_version:process.version,max_spend_usd:options.maxSpend,set_digests:digests,providers:options.providers,sites:options.sites});
+  if(!options.renderOnly)journal.append({type:'run',run_id:options.runId,node_version:process.version,max_spend_usd:options.maxSpend,set_digests:digests,providers:options.providers,sites:options.sites});
   const configs={...(process.env.TYPESAFE_API_KEY??process.env.TYPESAFE_AI_API_KEY?{typesafeKey:(process.env.TYPESAFE_API_KEY??process.env.TYPESAFE_AI_API_KEY)!}:{}),...(process.env.OPENAI_API_KEY?{openaiKey:process.env.OPENAI_API_KEY}:{}),...(process.env.AMOS_BASE_URL?{amosBaseURL:process.env.AMOS_BASE_URL}:{}),now:Date.now};
   const counts=Object.fromEntries(['pi','fx-ask'].map(p=>[p,journal.read().filter(r=>r.type==='intent'&&r.provider===p).length]));
   const competitors=buildCompetitors({run:runProcess,cwd:temp,quotaAllowed:true,callCounts:counts}).map(provider=>({
@@ -64,7 +65,7 @@ export async function main(args=process.argv.slice(2), injected?:{providers:read
    }
   }));
   const providers=[...(injected?.providers??[...buildProviders(configs),...competitors,fakeProvider()])].filter(p=>options.providers.includes(p.id));
-  await execute({entries,providers,journal,maxSpend:options.maxSpend,now:Date.now,sleep:async(ms,signal)=>{await delay(ms,undefined,signal?{signal}:{});},signal:controller.signal});
+  if(!options.renderOnly)await execute({entries,providers,journal,maxSpend:options.maxSpend,now:Date.now,sleep:async(ms,signal)=>{await delay(ms,undefined,signal?{signal}:{});},signal:controller.signal});
   const records=journal.read();const bound=[];
   for(const provider of providers)for(const entry of entries) {
    const binding={provider:provider.id,model:provider.model,site:entry.item.site,item_id:entry.item.id,set_digest:entry.set_digest,question_digest:digest(JSON.stringify(await buildRequest(entry.item)))};
