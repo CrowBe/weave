@@ -21,6 +21,16 @@ Audit generation always requests `tier:'strong', audit:true`. D6 requests
 `tier:'decision'` and strips `audit` from caller terms, preserving every other
 term apart from the tier override. The audit purpose applies only to generation.
 
+## Request identity
+
+Generation and D6 derive request ids from the execution id, round and purpose
+(`audit` or `dispose`). Short ids remain `<execution>:r<round>:<purpose>`.
+When that would exceed 128 characters, the execution portion becomes a bounded
+readable prefix plus the full SHA-256 digest of the execution id. The round and
+purpose suffix remains readable. Both ids pass correlation validation before
+dispatch. Shared execution prefixes cannot erase the remaining identity, and
+exact replay derives the same ids.
+
 ## Context compaction port
 
 `compactContext` uses an explicit token sequence and context capacity supplied by

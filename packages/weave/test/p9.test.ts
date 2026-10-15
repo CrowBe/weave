@@ -17,6 +17,7 @@ test('audit report secret screen matches token prefixes, not ordinary words', ()
 import { assembleAuditState, AUDIT_SLICES } from '../src/audit-view.js';
 import { MemoryAuditJournal, runAuditLoop, replayAuditLoop, type AuditPorts, type AuditLoopInput } from '../src/audit-loop.js';
 import { evaluateAuditDispose, transitionAuditDispose } from '../src/sites/audit-dispose.js';
+import { correlation } from '../src/sites/index.js';
 import { createInferenceGateway, type EvaluationOutcome, type InferenceTerms, type RoutedUnit } from '@weave/gateway';
 const terms: InferenceTerms = { quality: 'baseline', destinations: ['local'], max_context_tokens: 100,
   deadline: 100, cost_ceiling: 10, max_attempts: 1 };
@@ -62,6 +63,34 @@ test('audit gap loops through Observe, then deterministic evidence completes and
   assert.equal(f.journal.load('audit1')[0]?.outcome, 'observe');
   assert.deepEqual(replayAuditLoop(f.journal.load('audit1')), result);
   assert.deepEqual(await runAuditLoop(f.input, f.ports, f.journal), result); assert.equal(f.generates(), 2);
+});
+test('long execution request ids are bounded, deterministic and distinct across concurrent loops', async () => {
+  const prefix = 'execution'.padEnd(127, 'x');
+  const run = async (execution_id: string) => {
+    const f = fixture({ gaps: 1 });
+    const ids: string[] = [];
+    const result = await runAuditLoop({ ...f.input, execution_id }, { ...f.ports,
+      generate: (request, signal) => {
+        ids.push(request.request_id);
+        assert.equal(correlation(request.request_id), request.request_id, 'generate id must be a valid correlation');
+        return f.ports.generate(request, signal);
+      },
+      evaluate: (request, signal) => {
+        ids.push(request.request_id);
+        assert.equal(correlation(request.request_id), request.request_id, 'D6 id must be a valid correlation');
+        return f.ports.evaluate(request, signal);
+      },
+    }, f.journal);
+    assert.equal(result.outcome, 'done');
+    assert.equal(ids.length, 3); // generate and D6 in round 1, generate in round 2
+    assert.equal(new Set(ids).size, 3);
+    assert.ok(ids.every(id => id.length <= 128));
+    return ids;
+  };
+  const executions = [prefix.slice(0, 120), `${prefix}a`, `${prefix}b`];
+  const ids = await Promise.all(executions.map(run));
+  assert.equal(new Set(ids.flat()).size, 9);
+  assert.deepEqual(await Promise.all(executions.map(run)), ids);
 });
 test('audit claim with red check cannot complete', async () => {
   const f = fixture({ red: true }); const result = await runAuditLoop(f.input, f.ports, f.journal);

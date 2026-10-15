@@ -89,6 +89,15 @@ function complete(observed: AuditObservation): boolean {
       evals.some(item => item.criterion_id === criterion.criterion_id && item.passed && (item.verdict_probability ?? 0) >= .8 && (item.confidence ?? 0) >= .9) &&
       !evals.some(item => item.criterion_id === criterion.criterion_id && !item.passed));
 }
+/** Preserve readable short ids; retain the full execution identity when bounded. */
+function auditRequestId(execution_id: string, round: number, purpose: 'audit' | 'dispose'): string {
+  const suffix = `:r${round}:${purpose}`;
+  const readable = `${execution_id}${suffix}`;
+  const request_id = readable.length <= 128 ? readable :
+    `${execution_id.slice(0, 128 - suffix.length - 65)}:${digest(execution_id)}${suffix}`;
+  if (!correlation(request_id)) throw new Error('Invalid audit request id');
+  return request_id;
+}
 /** One writer owns an execution. append must commit durably before returning. */
 export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, journal: AuditJournal,
   signal?: AbortSignal): Promise<AuditRound> {
@@ -121,7 +130,7 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
       else if (observed.needs_dispatch && observed.decision_unavailable) outcome = 'needs_human';
       else if (noProgress) outcome = noProgress;
       else {
-        const request_id = `${input.execution_id}:r${round}:audit`;
+        const request_id = auditRequestId(input.execution_id, round, 'audit');
         let generated;
         if (checkpoint?.report) report = checkpoint.report;
         else try {
@@ -139,7 +148,7 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
         else if (!report) outcome = 'audit_unavailable';
         else if (ports.budget() === 'pause') outcome = 'budget';
         else {
-          disposal = await evaluateAuditDispose({ ...observed.revision, request_id: `${input.execution_id}:r${round}:dispose`,
+          disposal = await evaluateAuditDispose({ ...observed.revision, request_id: auditRequestId(input.execution_id, round, 'dispose'),
             state: { audit: report }, findings: report.findings, terms: input.terms, needs_dispatch: false },
           { evaluate: ports.evaluate }, ports.current, signal);
           next = report.findings.flatMap((finding, i) => disposal!.choices[i] === 'fix_now' ? [{
