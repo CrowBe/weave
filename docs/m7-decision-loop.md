@@ -135,7 +135,7 @@ eligibility or enable a fallback. Record probe status without recording tokens.
 |---|---|---|---|---|---|
 | D1 `loop.triage` | choice | What does this request or state need next? | `capability` (an admitted capability covers it) / `implement` / `needs_human` / `out_of_scope` / `done_check` | conf ≥ 0.80 and top-p ≥ 0.6 | `implement` at the safest tier, with the uncertainty recorded. Never `done_check`. |
 | D2 `loop.route` | choice | Which tier fits this unit of work? | `flash` / `standard` / `strong` | conf ≥ 0.75 | `standard`. A deterministic budget gate can only *downgrade* or pause, never upgrade past the ceiling. |
-| D3 `loop.preselect` | boolean per catalogue entry, top-k | Is capability or skill X relevant to this step? | p(true) per entry | keep top-k (default 3) when the kept slice clears max_excluded .4 and min_margin .3; optional floor; guardrail-required always kept; cap 8. A missing confidence is unknown. A published confidence below .75 blocks only on that slice's boundary | the full catalogue index (M6 slice), never the schemas |
+| D3 `loop.preselect` | boolean per catalogue entry, top-k | Is capability or skill X relevant to this step? | p(true) per entry | keep top-k (default 3) when the kept slice clears max_excluded .4 and min_margin .3; optional floor; guardrail-required always kept; cap 8. A missing confidence is unknown. A published confidence below .75 blocks only on that slice's boundary. A published confidence outside [0, 1] returns the full index. A floor that keeps no non-required entry is `no_candidate` | the full catalogue index (M6 slice), never the schemas |
 | D4 `guard.input` | boolean per rule | Does this input or plan violate rule R (secret exfiltration, scope broadening, destructive effect without grant, injection)? | p(violation) | block if p ≥ 0.3 (deliberately asymmetric) | **block, then approval request** |
 | D5 `eval.output` | boolean per success criterion | Does the artifact satisfy criterion C? | p(true), plus conf when supplied by the provider | OpenAI Decisions predicate (provisional assumption; P10 tunes on the tune split): pass if p ≥ 0.85, fail if p ≤ 0.15, otherwise uncertain (treat as fail/retry). TypeSafe Jev and other providers that return confidence: pass if p ≥ 0.8 and conf ≥ 0.9 (existing `confidence_floor`); missing confidence is below the floor. | treat as fail and retry, up to N=2 per step, then escalate the tier once, then hand to audit with `open_issue` |
 | D6 `audit.dispose` | choice per finding | What do we do with audit finding F? | `fix_now` / `defer` / `reject_as_out_of_scope` / `needs_human` | conf ≥ 0.75 | `needs_human` |
@@ -227,9 +227,14 @@ choice unit; Amos on preselect requires a matching boolean unit.
 may set `k` (an integer from 1 to 8), `floor` (a number in [0, 1)),
 `max_excluded` (a number in [0, 1]), and `min_margin` (a number in [0, 1]).
 Unknown keys, unknown provider ids, and out-of-range values are errors.
-`resolvePreselectPolicy` fills the defaults k = 3, floor = 0, cap = 8,
-max_excluded = .4, and min_margin = .3. A field that is missing or out of
-range on a caller that skips the parser uses that field's default.
+The per-field defaults describe `resolvePreselectPolicy` only. It fills each
+missing or out-of-range field with its own default and keeps the other fields:
+k = 3, floor = 0, cap = 8, max_excluded = .4, and min_margin = .3. A caller
+that skips the parser still gets a defined policy, one field at a time. The
+pure D3 transition does not fill fields. An invalid or incomplete policy
+(a missing field, an out-of-range field, an unknown key, or a bad provider)
+is replaced wholesale with those same defaults and a null provider, and
+selection still narrows. That replacement is not an admission fallback.
 
 P3 does not switch decision providers. OpenAI Decisions remains deferred after
 the 14 Oct 2026 probe, and `decision.fallback` is not routed. The configured
@@ -464,21 +469,38 @@ When every entry has a probability and admission succeeds, the candidate slice
 narrows only if nothing is excluded, or if `best_excluded_p <= max_excluded`
 and `top_p - best_excluded_p >= min_margin`. `top_p` is the highest p(true)
 among kept non-required entries. `best_excluded_p` is the highest p(true)
-among excluded entries. Nothing excluded means there is nothing to gate. The
-defaults are max_excluded = .4 and min_margin = .3. A miss returns the full
-index with reason `weak_margin`. A missing confidence is unknown. After the
+among excluded entries. Nothing excluded means there is nothing to gate for
+the margin or for a low confidence. The defaults are max_excluded = .4 and
+min_margin = .3. Both bounds are inclusive and accept exactly 0 and exactly 1.
+A computed miss, where `top_p` is present, returns the full index with reason
+`weak_margin`. When the floor removes every non-required entry, `top_p` is
+null and something was excluded. That returns the full index with reason
+`no_candidate`, with or without required entries. `margin` is null.
+`best_excluded_p` is still recorded. `top_p`, `best_excluded_p`, `margin`, and
+each `scores[].p` record `-0` as `0`. A missing confidence is unknown: the map
+is absent or omits that key. A published value that is not a finite number in
+[0, 1] is not unknown. Any such value, on any entry, returns the full index
+with reason `invalid_confidence`, including off the boundary and when nothing
+is excluded. D4 and D7 still treat a non-unit confidence as missing. After the
 margin passes, a published confidence below .75 on a kept non-required entry
 or on the single best excluded entry returns the full index with reason
-`low_confidence`. The same statistic elsewhere does not block. The D3
+`low_confidence`. The same statistic elsewhere does not block. Admission wins
+over an invalid confidence. An invalid confidence wins over `no_candidate`,
+`weak_margin`, and `low_confidence`. `no_candidate` wins over `weak_margin`,
+and a weak margin wins over low confidence. On any of those fallbacks, a
+per-entry observation can still say `accepted` with `fallback_used` false.
+The fallback is visible on `preselect.outcome` and `preselect.reason`. The D3
 transition records `preselect-selection@2`: k, floor, cap, max_excluded,
 min_margin, policy_provider, routed_unit_id, outcome (`narrowed`, `fallback`,
-or `empty_index`), reason (`weak_margin`, `low_confidence`, `admission`, or
-null), the margin statistics, and one score per disclosed entry (`entry`
-ordinal, `p`, `rank`, `kept`, `required`). `policy_provider` is the
-caller-supplied provider. `routed_unit_id` is the accepted outcome's routed
-unit when that id is a bounded identifier, and null when no outcome was
-accepted. `p` and `rank` are null when the answer is missing. The record uses
-ordinals, never catalogue ids, purposes, or required names.
+or `empty_index`), reason (`weak_margin`, `no_candidate`, `low_confidence`,
+`invalid_confidence`, `admission`, or null), the margin statistics, and one
+score per disclosed entry (`entry` ordinal, `p`, `rank`, `kept`, `required`).
+`policy_provider` is the caller-supplied provider. `routed_unit_id` is the
+accepted outcome's routed unit when that id is a bounded identifier, and null
+when no outcome was accepted. `p` and `rank` are null when the answer is
+missing. The record uses ordinals, never catalogue ids, purposes, or required
+names. `decision.preselect`'s per-field defaults are `resolvePreselectPolicy`.
+The pure transition replaces an invalid or incomplete policy wholesale.
 `decision.preselect` sets k, floor, max_excluded, and min_margin per provider.
 `loop.preselect` may be served by `typesafe-jev` or `amos`; Amos requires a
 matching boolean evaluate unit. The default provider remains `typesafe-jev`.

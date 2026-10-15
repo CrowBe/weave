@@ -19,7 +19,7 @@ export interface PreselectPolicyInput {
   readonly min_margin: number;
   readonly provider: 'typesafe-jev' | 'amos' | null;
 }
-export type PreselectFallbackReason = 'weak_margin' | 'low_confidence' | 'admission';
+export type PreselectFallbackReason = 'weak_margin' | 'no_candidate' | 'low_confidence' | 'invalid_confidence' | 'admission';
 export interface PreselectScore {
   readonly entry: number;
   readonly p: number | null;
@@ -117,7 +117,10 @@ function closedUnit(value: unknown): value is number {
 function nonNegativeZero(value: number): number {
   return value === 0 ? 0 : value;
 }
-/** A bad policy becomes the documented defaults and still narrows. It is not an admission fallback. */
+/**
+ * An invalid or incomplete policy is replaced wholesale by the defaults and still narrows.
+ * That is not the per-field fill in `resolvePreselectPolicy`, and it is not an admission fallback.
+ */
 function policyOf(input: BooleanSiteInput): ResolvedSitePolicy {
   const defaults = BOOLEAN_SITE_POLICY['loop.preselect'];
   const fallback: ResolvedSitePolicy = {
@@ -158,7 +161,16 @@ function requiredIds(ids: unknown): { readonly ids: readonly string[]; readonly 
 }
 /** Decimal gap, so a margin of exactly .3 is not lost to binary subtraction. */
 function gap(high: number, low: number): number {
-  return Math.round((high - low) * 1e10) / 1e10;
+  return nonNegativeZero(Math.round((high - low) * 1e10) / 1e10);
+}
+/**
+ * A missing key is unknown. A key that is present and is not a finite number in [0, 1]
+ * is published-invalid. Those two must not collapse: invalid is fail-closed for D3.
+ */
+function readConfidence(map: unknown, key: string): { readonly confidence: number | null; readonly invalid: boolean } {
+  if (!plain(map) || !Object.hasOwn(map, key)) return { confidence: null, invalid: false };
+  const value: unknown = map[key];
+  return unit(value) ? { confidence: value, invalid: false } : { confidence: null, invalid: true };
 }
 /** Bounded routed-unit id. Credential-shaped text is omitted, not copied. */
 function routedUnitId(value: unknown): string | null {
@@ -166,8 +178,8 @@ function routedUnitId(value: unknown): string | null {
     !/^(sk[-_]|Bearer|eyJ|gh[pousr]_|github_pat_|AKIA)/i.test(value) ? value : null;
 }
 function preselectSelection(entries: readonly CatalogueIndexEntry[], probabilities: readonly (number | null)[],
-  confidences: readonly (number | null)[], admission: boolean, requiredList: readonly string[], requiredInvalid: boolean,
-  policy: ResolvedSitePolicy, routed_unit_id: string | null):
+  confidences: readonly (number | null)[], confidenceInvalid: boolean, admission: boolean, requiredList: readonly string[],
+  requiredInvalid: boolean, policy: ResolvedSitePolicy, routed_unit_id: string | null):
   { catalogue: readonly CatalogueIndexEntry[]; kept: ReadonlySet<number>; boundary: ReadonlySet<number>; record: PreselectSelection } {
   const required = new Set<number>();
   const byId = new Map<string, number[]>();
@@ -203,7 +215,8 @@ function preselectSelection(entries: readonly CatalogueIndexEntry[], probabiliti
   const marginOk = marginValue !== null && bestExcluded !== null && bestExcluded <= policy.max_excluded &&
     marginValue >= policy.min_margin;
   const boundary = new Set<number>();
-  // Nothing excluded: the slice is the whole index, so the margin and confidence gates do not apply.
+  // Nothing excluded: the slice is the whole index, so the margin and low-confidence gates do not apply.
+  // A published invalid confidence still fails closed, including in this case.
   if (!admission && entries.length > 0 && best !== null && marginOk) {
     for (const item of keptNonRequired) boundary.add(item.n);
     boundary.add(best.n);
@@ -214,7 +227,11 @@ function preselectSelection(entries: readonly CatalogueIndexEntry[], probabiliti
     return confidence !== null && confidence < floor;
   });
   let reason: PreselectFallbackReason | null = null;
+  // Admission, then a published invalid confidence, then an empty candidate slice,
+  // then a computed weak margin, then a low boundary confidence.
   if (entries.length > 0 && admission) reason = 'admission';
+  else if (entries.length > 0 && confidenceInvalid) reason = 'invalid_confidence';
+  else if (entries.length > 0 && best !== null && top === null) reason = 'no_candidate';
   else if (entries.length > 0 && best !== null && !marginOk) reason = 'weak_margin';
   else if (boundaryLow) reason = 'low_confidence';
   const outcome: PreselectSelection['outcome'] = entries.length === 0 ? 'empty_index' : reason === null ? 'narrowed' : 'fallback';
@@ -222,9 +239,13 @@ function preselectSelection(entries: readonly CatalogueIndexEntry[], probabiliti
   if (outcome === 'fallback') entries.forEach((_, n) => kept.add(n));
   if (outcome === 'narrowed') for (const n of candidate) kept.add(n);
   const gated = entries.length > 0 && !admission;
-  const scores = entries.map((_, n): PreselectScore => ({
-    entry: n, p: probabilities[n] ?? null, rank: rank.get(n) ?? null, kept: kept.has(n), required: required.has(n),
-  }));
+  const scores = entries.map((_, n): PreselectScore => {
+    const p = probabilities[n] ?? null;
+    return {
+      entry: n, p: p === null ? null : nonNegativeZero(p), rank: rank.get(n) ?? null,
+      kept: kept.has(n), required: required.has(n),
+    };
+  });
   const catalogue = outcome === 'narrowed'
     ? [...kept].sort((a, b) => (probabilities[b] ?? 0) - (probabilities[a] ?? 0) || a - b).map(n => entries[n]!)
     : entries;
@@ -232,8 +253,10 @@ function preselectSelection(entries: readonly CatalogueIndexEntry[], probabiliti
     catalogue, kept, boundary, record: {
       schema: 'preselect-selection@2', k: policy.k, floor: policy.floor, cap: policy.cap,
       max_excluded: policy.max_excluded, min_margin: policy.min_margin, policy_provider: policy.provider,
-      routed_unit_id, outcome, reason, top_p: gated ? top : null, best_excluded_p: gated ? bestExcluded : null,
-      margin: gated ? marginValue : null, scores, kept: kept.size, required_missing,
+      routed_unit_id, outcome, reason,
+      top_p: gated && top !== null ? nonNegativeZero(top) : null,
+      best_excluded_p: gated && bestExcluded !== null ? nonNegativeZero(bestExcluded) : null,
+      margin: gated && marginValue !== null ? nonNegativeZero(marginValue) : null, scores, kept: kept.size, required_missing,
       required_ids_invalid: requiredInvalid,
     },
   };
@@ -248,16 +271,18 @@ export function transitionBooleanSite(site: BooleanSite, input: BooleanSiteInput
   const approval_requests: { rule: string; reason: BooleanObservation['reason'] }[] = [];
   const parsed = questions.map(({ key }) => {
     const raw = answered?.answers?.[key];
-    const statistic = answered?.confidence?.[key];
+    const read = readConfidence(answered?.confidence, key);
     return {
-      p: raw?.type === 'boolean' && unit(raw.probability) ? raw.probability : null,
-      confidence: unit(statistic) ? statistic : null,
+      p: raw?.type === 'boolean' && unit(raw.probability) ? nonNegativeZero(raw.probability) : null,
+      confidence: read.confidence,
+      confidenceInvalid: read.invalid,
     };
   });
   const required = site === 'loop.preselect' ? requiredIds(input.required_entry_ids) : { ids: [], invalid: false };
   const admission = metadata !== null || (answered !== null && answered.kind !== 'boolean') || parsed.some(item => item.p === null);
   const selection = site === 'loop.preselect'
-    ? preselectSelection(entries, parsed.map(item => item.p), parsed.map(item => item.confidence), admission,
+    ? preselectSelection(entries, parsed.map(item => item.p), parsed.map(item => item.confidence),
+      parsed.some(item => item.confidenceInvalid), admission,
       required.ids, required.invalid, policyOf(input), answered ? routedUnitId(answered.routed_unit_id) : null)
     : null;
   const scanned: { p: number | null; confidence: number | null; reason: BooleanObservation['reason']; accepted: boolean }[] = [];

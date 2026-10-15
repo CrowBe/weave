@@ -55,21 +55,37 @@ admission succeeds, and then only when the margin gate passes. `top_p` on the
 selection record is the highest p(true) among kept non-required entries.
 `best_excluded_p` is the highest p(true) among excluded entries, ties broken
 by disclosed order, or null when nothing is excluded. Nothing excluded means
-there is nothing to gate: the index is kept even if a confidence is low.
-Otherwise narrow only when `best_excluded_p <= max_excluded` and
+there is nothing to gate: the index is kept even if a confidence is low or
+missing. Otherwise narrow only when `best_excluded_p <= max_excluded` and
 `top_p - best_excluded_p >= min_margin`. The recorded margin is that
-difference at 10 decimal places, so a gap of exactly .3 stays .3. Defaults are
-`max_excluded` .4 and `min_margin` .3. A miss is `weak_margin` and the full
-index. A missing confidence is unknown, not a failure. A published confidence
-below .75 is checked only on the boundary: the kept non-required entries and
-the single best excluded entry, and only after the margin has passed. Any such
-value is `low_confidence` and the full index. Published low confidence
-elsewhere, including on a required entry, does not block. A missing or
-malformed probability, a wrong kind, a stale or changed revision, an outage,
-or cancellation is `admission` and returns the whole index. Admission wins
-over the margin gates, and a weak margin wins over low confidence. Unknown
-question ids are ignored and recorded as a count of fixed-text observations,
-never their names. Empty indexes need no evaluation.
+difference at 10 decimal places, so a gap of exactly .3 stays .3. `top_p`,
+`best_excluded_p`, `margin`, and each `scores[].p` record `-0` as `0`.
+Defaults are `max_excluded` .4 and `min_margin` .3. Both bounds are inclusive
+and accept exactly 0 and exactly 1. A computed miss, where `top_p` is present,
+is `weak_margin` and the full index. When the floor removes every non-required
+entry, `top_p` is null and something was excluded: the reason is `no_candidate`,
+not `weak_margin`, `margin` is null, and `best_excluded_p` is still the highest
+excluded p(true). That holds with required entries and without them. Required
+entries stay marked required, and the full index is returned.
+
+A missing confidence is unknown, not a failure. Absent means the confidence
+map is missing or omits that key. A published confidence below .75 is checked
+only on the boundary: the kept non-required entries and the single best
+excluded entry, and only after the margin has passed. Any such value is
+`low_confidence` and the full index. Published low confidence elsewhere,
+including on a required entry, does not block. A published value that is not a
+finite number in [0, 1], for example 60, -1, NaN, or a non-number, is not
+unknown. Any published invalid confidence, on any entry, is `invalid_confidence`
+and the full index. That includes a boundary entry, a non-boundary entry, a
+required entry, and the case where nothing is excluded. D4 and D7 do not use
+this split: a non-unit confidence there is still `missing_confidence`. A
+missing or malformed probability, a wrong kind, a stale or changed revision,
+an outage, or cancellation is `admission` and returns the whole index.
+Admission wins over an invalid confidence. An invalid confidence wins over
+`no_candidate`, `weak_margin`, and `low_confidence`. `no_candidate` wins over
+`weak_margin`, and a weak margin wins over low confidence. Unknown question
+ids are ignored and recorded as a count of fixed-text observations, never
+their names. Empty indexes need no evaluation.
 
 The D3 transition carries `preselect` with schema `preselect-selection@2`, in
 this key order: `schema`, `k`, `floor`, `cap`, `max_excluded`, `min_margin`,
@@ -81,8 +97,12 @@ provider that answered. `routed_unit_id` is taken from an accepted outcome
 when the id is a bounded identifier; credential-shaped text is omitted, and
 the field is null when there is no accepted outcome. `outcome` is `narrowed`,
 `fallback`, or `empty_index`. `reason` is null for `narrowed` and
-`empty_index`; on fallback it is `weak_margin`, `low_confidence`, or
-`admission`. Margin statistics are null on admission and on an empty index.
+`empty_index`; on fallback it is `weak_margin`, `no_candidate`,
+`low_confidence`, `invalid_confidence`, or `admission`. Margin statistics are
+null on admission and on an empty index. On `no_candidate`, `top_p` and
+`margin` are null and `best_excluded_p` is still recorded when an entry was
+excluded. On `invalid_confidence` the probability statistics stay, because the
+probabilities themselves were admitted.
 Each score is `{ entry, p, rank, kept, required }` in disclosed order. `entry`
 is the `entry_N` ordinal. `p` and `rank` are null when that answer is missing.
 Rank is 1-based among answers that have a probability, by p(true) descending
@@ -91,12 +111,21 @@ marks every entry kept. The record does not copy catalogue ids, purposes, or
 required names. Guard sites omit it. A policy that is not a plain object with
 only `k`, `floor`, `max_excluded`, `min_margin`, and `provider`, with k in
 1..8, floor in [0, 1), both margin bounds in [0, 1], and a known provider or
-null, is replaced by k = 3, floor = 0, max_excluded = .4, min_margin = .3,
-and a null provider. Selection still narrows. That replacement is not an
+null, is replaced wholesale by k = 3, floor = 0, max_excluded = .4,
+min_margin = .3, and a null provider. A missing field is incomplete and
+replaces the whole policy. The pure transition does not keep the valid fields.
+`resolvePreselectPolicy` is the per-field fill: a missing or out-of-range
+field there uses that field's default and the other fields stay. Selection
+still narrows after a wholesale replacement. That replacement is not an
 admission fallback. Per-entry `answer` is `include` when the entry is in the
 returned index and `exclude` otherwise. An entry with a probability and no
 published confidence is `accepted` for `loop.preselect`, not
-`missing_confidence`. Observation `top_p` remains that entry's p(true).
+`missing_confidence`. Observation `top_p` remains that entry's p(true), with
+`-0` recorded as `0`. On a margin or confidence fallback (`weak_margin`,
+`no_candidate`, `low_confidence`, or `invalid_confidence`), a per-entry
+observation can still say `accepted` with `fallback_used` false. A boundary
+entry whose published confidence is a number below .75 says `low_confidence`.
+The fallback is visible on `preselect.outcome` and `preselect.reason`.
 
 D4 asks the four fixed rules in one boolean evaluation: secret exfiltration,
 scope broadening, destructive effect without grant, and prompt injection.
@@ -108,10 +137,13 @@ p >= .3 or any admission failure, with per-rule reasons. A clean judgment is
 only evidence and contains no grant or dispatch authority.
 
 Provisional confidence floors: .75 for a published D3 boundary confidence and
-.90 for D4/D7, pending P10 calibration. A missing D3 confidence is unknown.
-Shape is the fixed question set, gate is P5 metadata admission plus per-answer
-shape validation, and for D3 the margin gate before the boundary confidence
-check. D4/D7 still require a confidence on every rule. Decide is the
+.90 for D4/D7, pending P10 calibration. A missing D3 confidence is unknown. A
+published D3 confidence outside [0, 1] is `invalid_confidence` for the whole
+index. Shape is the fixed question set, gate is P5 metadata admission plus
+per-answer shape validation, and for D3 the margin gate before the boundary
+confidence check. An invalid published confidence is decided with admission,
+before that margin gate. D4/D7 still require a confidence on every rule, and a
+non-unit confidence there remains `missing_confidence`. Decide is the
 deterministic threshold.
 One round, no refinement or semantic substitution on outage. Unknown answers
 cannot repair missing required answers. Observations retain decision-site@1 key
@@ -182,6 +214,9 @@ matching boolean evaluate unit. Every site left unset keeps the TypeSafe default
 silently retries against the other provider. `decision.preselect` may set
 `{ k, floor, max_excluded, min_margin }` per provider id. The defaults are
 k = 3, floor = 0, max_excluded = .4, and min_margin = .3, and the cap is 8.
+`resolvePreselectPolicy` fills each missing or out-of-range field with its own
+default. The pure D3 transition does not: an invalid or incomplete policy is
+replaced wholesale, as specified above.
 Amos readiness uses GET `/v1/models`.
 An unreachable service, non-2xx health response or timeout produces a typed
 unavailable failure and gateway `provider_unavailable` evidence. Intake then

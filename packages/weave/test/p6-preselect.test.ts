@@ -16,20 +16,20 @@ function input(probabilities: readonly number[], extra: Partial<BooleanSiteInput
     ...extra,
   };
 }
-function recorded(probabilities: readonly number[], confidence: number | readonly (number | undefined)[] | 'missing' = 1, routed_unit_id = 'fixture') {
+function recorded(probabilities: readonly number[], confidence: number | readonly unknown[] | 'missing' = 1, routed_unit_id = 'fixture') {
   const keys = probabilities.map((_, n) => `entry_${n}`);
   const confidenceMap = confidence === 'missing' ? undefined
     : typeof confidence === 'number' ? Object.fromEntries(keys.map(key => [key, confidence]))
-    : Object.fromEntries(keys.flatMap((key, n) => confidence[n] === undefined ? [] : [[key, confidence[n]!]]));
+    : Object.fromEntries(keys.flatMap((key, n) => confidence[n] === undefined ? [] : [[key, confidence[n]]]));
   const outcome: EvaluationOutcome<'boolean'> = {
     status: 'accepted', kind: 'boolean', site: 'loop.preselect', request_id: 'r1',
     answers: Object.fromEntries(keys.map((key, n) => [key, { type: 'boolean' as const, probability: probabilities[n]! }])),
-    confidence: confidenceMap,
+    confidence: confidenceMap as Extract<EvaluationOutcome<'boolean'>, { status: 'accepted' }>['confidence'],
     provider_response_id: 'provider-1', routed_unit_id, attempts: [], spent: 0, uncertainty: [],
   };
   return { state_revision: 1, observed_at: 10, outcome };
 }
-function select(probabilities: readonly number[], extra: Partial<BooleanSiteInput> = {}, confidence: number | readonly (number | undefined)[] | 'missing' = 1, routed_unit_id = 'fixture') {
+function select(probabilities: readonly number[], extra: Partial<BooleanSiteInput> = {}, confidence: number | readonly unknown[] | 'missing' = 1, routed_unit_id = 'fixture') {
   return transitionBooleanSite('loop.preselect', input(probabilities, extra), recorded(probabilities, confidence, routed_unit_id), current);
 }
 function ids(result: { catalogue_index: readonly { id: string }[] }) {
@@ -300,9 +300,6 @@ test('a weak margin returns the full index and does not blame a missing confiden
   assert.equal(tight.preselect?.reason, 'weak_margin');
   assert.equal(tight.preselect?.best_excluded_p, 0.4);
   assert.equal(tight.preselect?.margin, 0.29);
-  const dropped = select([0.04, 0.02], { preselect_policy: policy(3, 0.1) });
-  assert.equal(dropped.preselect?.reason, 'weak_margin');
-  assert.deepEqual(ids(dropped), ['cap_0', 'cap_1']);
 });
 
 test('published low confidence blocks only the boundary of the candidate slice', () => {
@@ -401,4 +398,138 @@ test('untyped required_entry_ids do not throw and are not treated as required id
   const direct = transitionBooleanSite('loop.preselect', { ...base, required_entry_ids: 'cap_1' as unknown as readonly string[] }, recorded(probabilities), current);
   assert.equal(direct.preselect?.required_ids_invalid, true);
   assert.deepEqual(ids(direct), ['cap_0']);
+});
+
+test('a published invalid confidence fails closed on any entry; an absent one stays unknown', () => {
+  const probabilities = [0.9, 0.8, 0.7, 0.2, 0.1];
+  const boundary = [0, 3];
+  const offBoundary = 4;
+  for (const bad of [60, -1, Number.NaN, '60', null]) {
+    for (const index of [...boundary, offBoundary]) {
+      const confidence = [1, 1, 1, 1, 1] as unknown[];
+      confidence[index] = bad;
+      const result = select(probabilities, { preselect_policy: policy(3) }, confidence);
+      assert.equal(result.preselect?.reason, 'invalid_confidence');
+      assert.equal(result.preselect?.outcome, 'fallback');
+      assert.deepEqual(ids(result), ['cap_0', 'cap_1', 'cap_2', 'cap_3', 'cap_4']);
+      assert.equal(result.preselect?.top_p, 0.9);
+      assert.equal(result.preselect?.best_excluded_p, 0.2);
+      assert.equal(result.preselect?.margin, 0.7);
+      assert.ok(result.observations.slice(0, 5).every(observation => observation.reason === 'accepted' && observation.accepted && !observation.fallback_used));
+      assert.equal(result.observations[index]?.confidence, null);
+      assert.ok(result.preselect);
+      assertTrace(result.preselect, probabilities);
+    }
+  }
+  const absent = select(probabilities, { preselect_policy: policy(3) }, [1, undefined, 1, 1, 1]);
+  assert.equal(absent.preselect?.outcome, 'narrowed');
+  assert.equal(absent.preselect?.reason, null);
+  assert.deepEqual(ids(absent), ['cap_0', 'cap_1', 'cap_2']);
+  assert.equal(absent.observations[1]?.confidence, null);
+  assert.equal(absent.observations[1]?.reason, 'accepted');
+  const covered = select([0.9, 0.2], { preselect_policy: policy(3) }, [Number.NaN, 1]);
+  assert.equal(covered.preselect?.reason, 'invalid_confidence');
+  assert.equal(covered.preselect?.outcome, 'fallback');
+  assert.equal(covered.preselect?.best_excluded_p, null);
+  assert.deepEqual(ids(covered), ['cap_0', 'cap_1']);
+  const requiredInvalid = select([0.95, 0.9, 0.2], { preselect_policy: policy(1), required_entry_ids: ['cap_0'] }, [60, 1, 1]);
+  assert.equal(requiredInvalid.preselect?.reason, 'invalid_confidence');
+  assert.deepEqual(ids(requiredInvalid), ['cap_0', 'cap_1', 'cap_2']);
+  const weakAndInvalid = select([0.9, 0.5], { preselect_policy: policy(1) }, [60, 1]);
+  assert.equal(weakAndInvalid.preselect?.reason, 'invalid_confidence');
+  const base = recorded(probabilities, [60, 1, 1, 1, 1]);
+  assert.equal(base.outcome.status, 'accepted');
+  const answers = Object.fromEntries(Object.entries(base.outcome.answers).filter(([key]) => key !== 'entry_4'));
+  const partial = transitionBooleanSite('loop.preselect', input(probabilities, { preselect_policy: policy(3) }),
+    { ...base, outcome: { ...base.outcome, answers } }, current);
+  assert.equal(partial.preselect?.reason, 'admission');
+  const again = select(probabilities, { preselect_policy: policy(3) }, [60, 1, 1, 1, 1]);
+  assert.deepEqual(again.preselect, select(probabilities, { preselect_policy: policy(3) }, [60, 1, 1, 1, 1]).preselect);
+  const invalidAndEmpty = select([0.04, 0.02], { preselect_policy: policy(3, 0.1) }, [60, 1]);
+  assert.equal(invalidAndEmpty.preselect?.reason, 'invalid_confidence');
+});
+
+test('a floor that keeps no non-required entry is no_candidate, with or without required entries', () => {
+  const none = select([0.04, 0.02], { preselect_policy: policy(3, 0.1) });
+  assert.equal(none.preselect?.reason, 'no_candidate');
+  assert.equal(none.preselect?.outcome, 'fallback');
+  assert.equal(none.preselect?.top_p, null);
+  assert.equal(none.preselect?.margin, null);
+  assert.equal(none.preselect?.best_excluded_p, 0.04);
+  assert.deepEqual(ids(none), ['cap_0', 'cap_1']);
+  assert.ok(none.preselect?.scores.every(score => score.kept && !score.required));
+  assert.ok(none.observations.every(observation => observation.reason === 'accepted' && observation.accepted && !observation.fallback_used));
+  assert.ok(none.preselect);
+  assertTrace(none.preselect, [0.04, 0.02]);
+  const required = select([0.99, 0.04, 0.02], { preselect_policy: policy(3, 0.1), required_entry_ids: ['cap_0'] });
+  assert.equal(required.preselect?.reason, 'no_candidate');
+  assert.equal(required.preselect?.outcome, 'fallback');
+  assert.equal(required.preselect?.top_p, null);
+  assert.equal(required.preselect?.margin, null);
+  assert.equal(required.preselect?.best_excluded_p, 0.04);
+  assert.equal(required.preselect?.scores[0]?.required, true);
+  assert.equal(required.preselect?.scores[0]?.kept, true);
+  assert.deepEqual(ids(required), ['cap_0', 'cap_1', 'cap_2']);
+  assert.ok(required.observations.every(observation => observation.reason === 'accepted' && observation.accepted && !observation.fallback_used));
+  const kept = select([0.9, 0.04, 0.5], { preselect_policy: policy(3, 0.1) });
+  assert.equal(kept.preselect?.reason, null);
+  assert.equal(kept.preselect?.outcome, 'narrowed');
+  assert.deepEqual(ids(kept), ['cap_0', 'cap_2']);
+  const onlyRequired = select([0.01, 0.02], { preselect_policy: policy(1, 0.5), required_entry_ids: ['cap_0', 'cap_1'] });
+  assert.equal(onlyRequired.preselect?.reason, null);
+  assert.equal(onlyRequired.preselect?.outcome, 'narrowed');
+  assert.equal(onlyRequired.preselect?.top_p, null);
+  assert.equal(onlyRequired.preselect?.best_excluded_p, null);
+  assert.deepEqual(ids(onlyRequired), ['cap_1', 'cap_0']);
+});
+
+test('recorded probabilities use +0 where a score was -0', () => {
+  const result = select([-0, 0], { preselect_policy: policy(1) });
+  assert.equal(result.preselect?.outcome, 'fallback');
+  assert.equal(result.preselect?.reason, 'weak_margin');
+  assert.equal(Object.is(result.preselect?.top_p, 0), true);
+  assert.equal(Object.is(result.preselect?.best_excluded_p, 0), true);
+  assert.equal(Object.is(result.preselect?.margin, 0), true);
+  assert.equal(Object.is(result.preselect?.scores[0]?.p, 0), true);
+  assert.equal(Object.is(result.preselect?.scores[1]?.p, 0), true);
+  assert.equal(Object.is(result.observations[0]?.top_p, 0), true);
+  assert.equal(Object.is(result.observations[1]?.top_p, 0), true);
+  assert.ok(result.preselect);
+  assertTrace(result.preselect, [-0, 0]);
+});
+
+test('max_excluded and min_margin accept exactly 0 and exactly 1', () => {
+  const ceilingZero = select([0.5, 0], { preselect_policy: policy(1, 0, 'amos', 0, 0) });
+  assert.equal(ceilingZero.preselect?.outcome, 'narrowed');
+  assert.equal(ceilingZero.preselect?.max_excluded, 0);
+  assert.equal(ceilingZero.preselect?.min_margin, 0);
+  assert.equal(ceilingZero.preselect?.best_excluded_p, 0);
+  assert.deepEqual(ids(ceilingZero), ['cap_0']);
+  const aboveZero = select([1, 0.01], { preselect_policy: policy(1, 0, 'amos', 0, 0) });
+  assert.equal(aboveZero.preselect?.reason, 'weak_margin');
+  assert.deepEqual(ids(aboveZero), ['cap_0', 'cap_1']);
+  const gapZero = select([0.4, 0.4], { preselect_policy: policy(1, 0, 'amos', 0.4, 0) });
+  assert.equal(gapZero.preselect?.outcome, 'narrowed');
+  assert.equal(gapZero.preselect?.margin, 0);
+  assert.equal(gapZero.preselect?.min_margin, 0);
+  assert.deepEqual(ids(gapZero), ['cap_0']);
+  const bothOne = select([1, 0], { preselect_policy: policy(1, 0, 'amos', 1, 1) });
+  assert.equal(bothOne.preselect?.outcome, 'narrowed');
+  assert.equal(bothOne.preselect?.max_excluded, 1);
+  assert.equal(bothOne.preselect?.min_margin, 1);
+  assert.equal(bothOne.preselect?.margin, 1);
+  assert.equal(bothOne.preselect?.best_excluded_p, 0);
+  assert.deepEqual(ids(bothOne), ['cap_0']);
+  const shortOfOne = select([1, 0.01], { preselect_policy: policy(1, 0, 'amos', 1, 1) });
+  assert.equal(shortOfOne.preselect?.reason, 'weak_margin');
+  assert.equal(shortOfOne.preselect?.max_excluded, 1);
+  assert.equal(shortOfOne.preselect?.margin, 0.99);
+  const ceilingOne = select([1, 0.7], { preselect_policy: policy(1, 0, 'amos', 1, 0.3) });
+  assert.equal(ceilingOne.preselect?.outcome, 'narrowed');
+  assert.equal(ceilingOne.preselect?.max_excluded, 1);
+  assert.equal(ceilingOne.preselect?.best_excluded_p, 0.7);
+  assert.deepEqual(ids(ceilingOne), ['cap_0']);
+  const marginHolds = select([0.9, 0.8], { preselect_policy: policy(1, 0, 'amos', 1, 0.3) });
+  assert.equal(marginHolds.preselect?.reason, 'weak_margin');
+  assert.equal(marginHolds.preselect?.best_excluded_p, 0.8);
 });

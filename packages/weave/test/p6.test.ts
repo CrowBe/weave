@@ -179,7 +179,9 @@ test('guard confidence threshold is inclusive and malformed shapes/statistics ne
       assert.equal(transitionBooleanSite(site, input, bad as typeof r, current).status, 'needs_human');
     }
     for (const conf of [-1, 1.1, NaN, Infinity]) {
-      assert.equal(transitionBooleanSite(site, input, recorded(site, keys, .1, conf), current).status, 'needs_human');
+      const result = transitionBooleanSite(site, input, recorded(site, keys, .1, conf), current);
+      assert.equal(result.status, 'needs_human');
+      assert.ok(result.observations.every(observation => observation.reason === 'missing_confidence' && observation.confidence === null));
     }
   }
 });
