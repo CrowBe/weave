@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { metrics, productionThresholds, tune, type Observed } from './tune.ts';
 import { makeReport } from './report.ts';
+import { transitionBooleanSite } from '@weave/weave';
 
 function row(site: string, split: 'tune'|'holdout' = 'tune', overrides: Partial<Observed> = {}): Observed {
   return { item: { id: 'x', scenario_id: 's', site, state: {}, gold: { decision: true } }, split,
@@ -49,4 +50,76 @@ test('report is deterministic and excludes holdout from tuning', () => {
   const metadata = { run_id: 'offline', node_version: 'v22.0.0', max_spend_usd: 2, set_digests: { 'guard.output': 'abc' } };
   const a = makeReport(metadata, [call]);
   assert.deepEqual(a, makeReport(metadata, [call])); assert.match(a.markdown, /no_tune_data/); assert.match(a.markdown, /0.001000/);
+});
+
+test('D3 tuned policy rejects absent confidence even when every entry fits', () => {
+  const observed = row('loop.preselect', 'tune', {
+    item: { id: 'x', scenario_id: 's', site: 'loop.preselect', state: {}, gold: { entry_0: true } },
+    result: { status: 'ok', answers: { entry_0: { probability: .9 } } },
+  });
+  assert.equal(metrics('loop.preselect', [observed], { ...productionThresholds('loop.preselect'), allow_missing_confidence: false }).coverage, 0);
+});
+test('D6 production validates the selected distribution', () => {
+  const observed = row('audit.dispose', 'holdout', {
+    item: { id: 'x', scenario_id: 's', site: 'audit.dispose', state: {}, gold: { finding_0: 'defer' } },
+    result: { status: 'ok', answers: { finding_0: { choice: 'defer', confidence: .9 } } },
+  });
+  assert.equal(metrics('audit.dispose', [observed], productionThresholds('audit.dispose')).coverage, 0);
+  assert.equal(metrics('audit.dispose', [observed], {confidence:0,ungated:true}).coverage, 1);
+});
+
+test('D5 lower confidence and probability floors require captain', () => {
+  const observed = row('eval.output', 'tune', {result:{status:'ok',answers:{decision:{probability:.7,confidence:.8}}}});
+  const thresholds=tune('eval.output',[observed]);
+  assert.equal(thresholds.not_applied,'needs captain (#142)');
+});
+test('report uses the live ledger including retry spend and pending reservations', () => {
+  const report=makeReport({run_id:'r',node_version:'v22',max_spend_usd:2,set_digests:{},spent_usd:.012,input_tokens:1234,output_tokens:12},[]);
+  assert.equal(report.summary.spent_usd,.012);assert.equal(report.summary.remaining_usd,1.988);
+  assert.equal(report.summary.input_tokens,1234);assert.match(report.markdown,/0.012000/);
+});
+test('D3 production metrics match real transition boundary and required-entry behavior', () => {
+  const current={state_revision:1,state_updated_at:0};
+  const terms={quality:'baseline' as const,destinations:['local'],max_context_tokens:100,deadline:100,cost_ceiling:10,max_attempts:1};
+  const cases=[
+    {p:[.95,.85,.7,.4],c:[.9,.9,.9,.9],required:[]},
+    {p:[.95,.85,.7,.4],c:[.9,.9,.9,.74],required:[]},
+    {p:[.95,.85,.7,.4],c:[],required:[]},
+    {p:[.95,.85,.7,.4,.1],c:[.9,.9,.9,.9,.1],required:['cap_4']},
+    {p:[.7,.6,.5,.4],c:[.9,.9,.9,.9],required:[]},
+    {p:[.9,.1],c:[.1,.1],required:[]},
+  ];
+  for(const fixture of cases){
+    const index=fixture.p.map((_,n)=>({id:`cap_${n}`,purpose:'fixture'}));
+    const answers=Object.fromEntries(fixture.p.map((probability,n)=>[`entry_${n}`,{type:'boolean' as const,probability}]));
+    const confidence=Object.fromEntries(fixture.c.map((c,n)=>[`entry_${n}`,c]));
+    const outcome={status:'accepted' as const,kind:'boolean' as const,site:'loop.preselect',request_id:'r',answers,confidence,provider_response_id:undefined,routed_unit_id:'fake',attempts:[],spent:0,uncertainty:[]};
+    const transition=transitionBooleanSite('loop.preselect',{...current,terms,request_id:'r',needs_dispatch:false,state:{},catalogue_index:index,required_entry_ids:fixture.required},{state_revision:1,observed_at:1,outcome},current);
+    const gold=Object.fromEntries(transition.preselect!.scores.map(s=>[`entry_${s.entry}`,s.kept]));
+    const observed=row('loop.preselect','holdout',{item:{id:'x',scenario_id:'s',site:'loop.preselect',state:{index,required_entry_ids:fixture.required},gold},result:{status:'ok',answers:Object.fromEntries(fixture.p.map((probability,n)=>[`entry_${n}`,{probability,...(fixture.c[n]===undefined?{}:{confidence:fixture.c[n]})}]))}});
+    const scored=metrics('loop.preselect',[observed],productionThresholds('loop.preselect'));
+    assert.equal(scored.coverage,transition.preselect!.outcome==='narrowed'?1:0);
+    if(scored.coverage)assert.equal(scored.accuracy,1);
+    assert.equal(scored.mean_best_gap,transition.preselect!.margin);
+  }
+});
+
+test('OpenAI provisional D5 accepts absent confidence only outside its probability band', () => {
+  const policy=productionThresholds('eval.output','openai-decisions');
+  assert.equal(policy.profile,'openai-provisional-probability-band');
+  for(const [p,covered,gold]of [[.85,1,true],[.15,1,false],[.5,0,true]] as const){
+    const observed=row('eval.output','holdout',{item:{id:'x',scenario_id:'s',site:'eval.output',state:{},gold:{decision:gold}},result:{status:'ok',answers:{decision:{probability:p}}}});
+    const score=metrics('eval.output',[observed],policy);assert.equal(score.coverage,covered);
+    if(covered)assert.equal(score.accuracy,1);
+  }
+  const supplied=row('eval.output','holdout',{result:{status:'ok',answers:{decision:{probability:.95,confidence:.89}}}});
+  assert.equal(metrics('eval.output',[supplied],policy).coverage,0);
+  assert.equal(metrics('eval.output',[row('eval.output','holdout',{result:{status:'ok',answers:{decision:{probability:.95}}}})],productionThresholds('eval.output','typesafe-jev')).coverage,0);
+});
+test('OpenAI provisional D5 tunes its band without reading holdout and marks loosening', () => {
+  const observed=row('eval.output','tune',{result:{status:'ok',answers:{decision:{probability:.8}}}});
+  const held={split:'holdout',get item(){throw Error('holdout leak');},get result(){throw Error('holdout leak');}} as unknown as Observed;
+  const selected=tune('eval.output',[observed,held],'openai-decisions');
+  assert.equal(selected.not_applied,'needs captain (#142)');
+  assert.equal(metrics('eval.output',[observed],selected).coverage,1);
 });

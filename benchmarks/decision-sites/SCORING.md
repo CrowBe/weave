@@ -15,7 +15,7 @@ D1 top-p: 0, .4, .5, .6, .7, .8, .9. Boolean probability cutoffs: .1, .2,
 .3, .4, .5, .6, .7, .8, .9. D3 grids k=1,3,5,8; floor=0,.2,.5;
 max excluded=.2,.4,.6; margin=0,.1,.2,.3,.4; and both
 `best_kept` (production #145) and `kth_kept` minus best-excluded margins.
-Unknown confidence is below every tuned floor. Production D3 uniquely allows
+Unknown confidence is below every tuned floor except the explicitly provisional OpenAI D5 profile below. Production D3 uniquely allows
 absent confidence at its boundary, matching runtime; published invalid confidence
 fails. D3 includes deterministic required entries in addition to k other entries,
 uses the capped top-k slice, and is covered only when its margin, max-excluded,
@@ -49,3 +49,21 @@ coverage, parse-failure rate and self-reported-confidence coverage reported.
 Provider failures and skipped providers are visible in the report. All tables
 are sorted by site then provider; identifiers and set/model bindings come from
 the durable journal, not a new model judgment.
+
+The report's spend uses the live journal ledger when supplied by the CLI,
+including all retry attempts, obsolete bindings and conservative reservations
+for calls whose outcome is uncertain. Holdout metrics score one final observation
+per current binding; retry attempts do not create extra gold items. Token totals
+come from all completed journal calls. An unresolved attempted item is a failed
+observation for coverage, never a reconstructed answer.
+
+
+OpenAI Decisions D5 is an explicit benchmark-only provisional profile from
+`docs/m7-decision-loop.md` §4b, since its generic adapter remains deferred. Its
+baseline accepts p >= .85 as pass or p <= .15 as fail; the middle band is
+uncovered. Absent confidence is permitted only for that probability-only profile.
+When supplied, confidence must meet the .9 baseline floor. This does not change
+runtime D5. Tune pass grid: .7,.8,.85,.9,.95; fail grid: .05,.1,.15,.2,.3;
+confidence uses the declared grid. A lower pass cutoff, higher fail cutoff, or
+lower confidence floor is marked `not_applied: needs captain (#142)`. Reports
+label this profile explicitly, separately from the existing production Jev D5.
