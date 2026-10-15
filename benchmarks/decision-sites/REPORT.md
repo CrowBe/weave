@@ -91,30 +91,30 @@ Holdout only; no threshold tuning. Provider-level skips are not attempted infere
 
 | Competitor | Site | Attempted | Accuracy | Parse-failure rate | Confidence coverage | Answer coverage | Skip reason |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| fx-ask | audit.dispose | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
-| pi | audit.dispose | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
-| fx-ask | eval.output | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
-| pi | eval.output | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
-| fx-ask | guard.input | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
-| pi | guard.input | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
-| fx-ask | guard.output | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
-| pi | guard.output | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
-| fx-ask | intake.classify | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
-| pi | intake.classify | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
-| fx-ask | loop.continue | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
-| pi | loop.continue | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
-| fx-ask | loop.preselect | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
-| pi | loop.preselect | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
-| fx-ask | loop.route | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
-| pi | loop.route | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
-| fx-ask | loop.triage | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
-| pi | loop.triage | 0 | — | 0.0% | 0.0% | 0.0% | quota_unavailable_or_weekly_cap |
+| fx-ask | audit.dispose | 0 | — | 0.0% | 0.0% | 0.0% | auth_required |
+| pi | audit.dispose | 0 | — | 0.0% | 0.0% | 0.0% | auth_required |
+| fx-ask | eval.output | 0 | — | 0.0% | 0.0% | 0.0% | auth_required |
+| pi | eval.output | 0 | — | 0.0% | 0.0% | 0.0% | auth_required |
+| fx-ask | guard.input | 0 | — | 0.0% | 0.0% | 0.0% | auth_required |
+| pi | guard.input | 0 | — | 0.0% | 0.0% | 0.0% | auth_required |
+| fx-ask | guard.output | 0 | — | 0.0% | 0.0% | 0.0% | auth_required |
+| pi | guard.output | 0 | — | 0.0% | 0.0% | 0.0% | auth_required |
+| fx-ask | intake.classify | 0 | — | 0.0% | 0.0% | 0.0% | auth_required |
+| pi | intake.classify | 0 | — | 0.0% | 0.0% | 0.0% | auth_required |
+| fx-ask | loop.continue | 0 | — | 0.0% | 0.0% | 0.0% | auth_required |
+| pi | loop.continue | 0 | — | 0.0% | 0.0% | 0.0% | auth_required |
+| fx-ask | loop.preselect | 0 | — | 0.0% | 0.0% | 0.0% | auth_required |
+| pi | loop.preselect | 0 | — | 0.0% | 0.0% | 0.0% | auth_required |
+| fx-ask | loop.route | 0 | — | 0.0% | 0.0% | 0.0% | auth_required |
+| pi | loop.route | 0 | — | 0.0% | 0.0% | 0.0% | auth_required |
+| fx-ask | loop.triage | 0 | — | 0.0% | 0.0% | 0.0% | auth_required |
+| pi | loop.triage | 0 | — | 0.0% | 0.0% | 0.0% | auth_required |
 
 ## Provider statuses
 
-- `{"type":"provider_status","provider":"fx-ask","result":{"status":"skipped","reason":"quota_unavailable_or_weekly_cap"}}`
+- `{"type":"provider_status","provider":"fx-ask","persistent":true,"result":{"status":"skipped","reason":"auth_required"}}`
 - `{"type":"provider_status","provider":"openai-decisions","result":{"status":"skipped","reason":"no_credential"}}`
-- `{"type":"provider_status","provider":"pi","result":{"status":"skipped","reason":"quota_unavailable_or_weekly_cap"}}`
+- `{"type":"provider_status","provider":"pi","persistent":true,"result":{"status":"skipped","reason":"auth_required"}}`
 
 ## Frozen set digests
 
