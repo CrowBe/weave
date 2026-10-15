@@ -85,7 +85,7 @@ function loadDecision(provider: 'typesafe-jev' | 'amos') {
 try {
   const provider = providerFlag();
   const loaded = loadDecision(provider);
-  const destination = loaded.table.find(unit => unit.operation === 'evaluate' && unit.kind === 'boolean' && unit.adapter === loaded.binding.adapter)?.destination;
+  const destination = loaded.table.find(unit => unit.operation === 'evaluate' && unit.kind === 'boolean' && unit.adapter === loaded.binding.adapter && unit.model === loaded.binding.model)?.destination;
   if (destination === undefined) {
     console.error('no matching boolean evaluate unit');
     process.exit(1);
@@ -103,7 +103,7 @@ try {
   const gateway = createInferenceGateway({
     ...localBudgetGate(),
     decision: loaded.decision,
-    routes: loaded.table,
+    routes: loaded.table.filter(unit => unit.operation === 'evaluate' && unit.adapter === loaded.binding.adapter),
     evaluators,
     clock: { now: () => Date.now() },
   });

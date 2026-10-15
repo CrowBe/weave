@@ -218,51 +218,50 @@ describe("Amos local decision contract", () => {
         },
       );
     });
-});
-
-it("round-trips a multi-entry boolean preselect set as noul", async () => {
-  const questions = {
-    entry_0: { type: "boolean" as const, instructions: "Is this disclosed catalogue entry relevant to this step?" },
-    entry_1: { type: "boolean" as const, instructions: "Is this disclosed catalogue entry relevant to this step?" },
-    entry_2: { type: "boolean" as const, instructions: "Is this disclosed catalogue entry relevant to this step?" },
-  };
-  let posted: { model?: string; questions?: Record<string, { type?: string }> } | undefined;
-  let authorization: string | undefined;
-  const fetch = (async (url: string | URL | Request, init?: RequestInit) => {
-    const target = String(url);
-    if (target.endsWith("/v1/models")) return new Response(JSON.stringify({ models: [{ name: "amos-1-2b" }] }), { status: 200 });
-    const headers = (init?.headers ?? {}) as Record<string, string>;
-    authorization = headers["authorization"];
-    posted = JSON.parse(String(init?.body)) as typeof posted;
-    return new Response(JSON.stringify({
+  it("round-trips a multi-entry boolean preselect set as noul", async () => {
+    const questions = {
+      entry_0: { type: "boolean" as const, instructions: "Is this disclosed catalogue entry relevant to this step?" },
+      entry_1: { type: "boolean" as const, instructions: "Is this disclosed catalogue entry relevant to this step?" },
+      entry_2: { type: "boolean" as const, instructions: "Is this disclosed catalogue entry relevant to this step?" },
+    };
+    let posted: { model?: string; questions?: Record<string, { type?: string }> } | undefined;
+    let authorization: string | undefined;
+    const fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      const target = String(url);
+      if (target.endsWith("/v1/models")) return new Response(JSON.stringify({ models: [{ name: "amos-1-2b" }] }), { status: 200 });
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      authorization = headers["authorization"];
+      posted = JSON.parse(String(init?.body)) as typeof posted;
+      return new Response(JSON.stringify({
+        model: "amos-1-2b",
+        usage: { input_tokens: 30, output_tokens: 12 },
+        answers: {
+          entry_0: { type: "noul", noul: 0.91, confidence: 0.8 },
+          entry_1: { type: "noul", noul: 0.42, confidence: 0.81 },
+          entry_2: { type: "noul", noul: 0.07, confidence: 0.95 },
+        },
+      }), { status: 200 });
+    }) as typeof globalThis.fetch;
+    const result = await amosEvaluator({ baseURL: "http://127.0.0.1:8766", fetch }).evaluate({
       model: "amos-1-2b",
-      usage: { input_tokens: 30, output_tokens: 12 },
-      answers: {
-        entry_0: { type: "noul", noul: 0.91, confidence: 0.8 },
-        entry_1: { type: "noul", noul: 0.42, confidence: 0.81 },
-        entry_2: { type: "noul", noul: 0.07, confidence: 0.95 },
-      },
-    }), { status: 200 });
-  }) as typeof globalThis.fetch;
-  const result = await amosEvaluator({ baseURL: "http://127.0.0.1:8766", fetch }).evaluate({
-    model: "amos-1-2b",
-    kind: "boolean",
-    state: { step: "narrow the disclosed index", catalogue_index: ["entry_0", "entry_1", "entry_2"] },
-    signal: undefined,
-    questions,
+      kind: "boolean",
+      state: { step: "narrow the disclosed index", catalogue_index: ["entry_0", "entry_1", "entry_2"] },
+      signal: undefined,
+      questions,
+    });
+    assert.equal(authorization, undefined);
+    assert.equal(posted?.model, "amos-1-2b");
+    assert.deepEqual(Object.keys(posted?.questions ?? {}), ["entry_0", "entry_1", "entry_2"]);
+    assert.equal(posted?.questions?.["entry_0"]?.type, "noul");
+    assert.equal(posted?.questions?.["entry_1"]?.type, "noul");
+    assert.equal(posted?.questions?.["entry_2"]?.type, "noul");
+    assert.equal(result.status, "completed");
+    if (result.status !== "completed") return;
+    assert.deepEqual(result.answers["entry_0"], { type: "boolean", probability: 0.91 });
+    assert.deepEqual(result.answers["entry_1"], { type: "boolean", probability: 0.42 });
+    assert.deepEqual(result.answers["entry_2"], { type: "boolean", probability: 0.07 });
+    assert.deepEqual(result.confidence, { entry_0: 0.8, entry_1: 0.81, entry_2: 0.95 });
   });
-  assert.equal(authorization, undefined);
-  assert.equal(posted?.model, "amos-1-2b");
-  assert.deepEqual(Object.keys(posted?.questions ?? {}), ["entry_0", "entry_1", "entry_2"]);
-  assert.equal(posted?.questions?.["entry_0"]?.type, "noul");
-  assert.equal(posted?.questions?.["entry_1"]?.type, "noul");
-  assert.equal(posted?.questions?.["entry_2"]?.type, "noul");
-  assert.equal(result.status, "completed");
-  if (result.status !== "completed") return;
-  assert.deepEqual(result.answers["entry_0"], { type: "boolean", probability: 0.91 });
-  assert.deepEqual(result.answers["entry_1"], { type: "boolean", probability: 0.42 });
-  assert.deepEqual(result.answers["entry_2"], { type: "boolean", probability: 0.07 });
-  assert.deepEqual(result.confidence, { entry_0: 0.8, entry_1: 0.81, entry_2: 0.95 });
 });
 
 it("live Amos intake classification", { skip: process.env["AMOS_LIVE"] !== "1" }, async () => {

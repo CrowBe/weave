@@ -73,6 +73,61 @@ test('a probability of .49 inside the top k is kept and the observation follows 
   assert.equal(result.preselect?.outcome, 'narrowed');
 });
 
+test('a score exactly equal to the floor is kept', () => {
+  const result = select([0.9, 0.5, 0.49], { preselect_policy: policy(3, 0.5) });
+  assert.deepEqual(ids(result), ['cap_0', 'cap_1']);
+  assert.equal(result.preselect?.scores[1]?.kept, true);
+  assert.equal(result.preselect?.scores[1]?.p, 0.5);
+  assert.equal(result.preselect?.scores[2]?.kept, false);
+  assert.equal(result.preselect?.outcome, 'narrowed');
+});
+
+test('a catalogue id that appears twice keeps both positions when required', () => {
+  const probabilities = [0.2, 0.9, 0.05];
+  const catalogue_index = [
+    { id: 'cap_dup', purpose: 'FIRST_POSITION' },
+    { id: 'cap_other', purpose: 'OTHER_POSITION' },
+    { id: 'cap_dup', purpose: 'SECOND_POSITION' },
+  ];
+  const result = select(probabilities, {
+    preselect_policy: policy(1, 0.5),
+    required_entry_ids: ['cap_dup'],
+    catalogue_index,
+  });
+  assert.deepEqual(result.catalogue_index.map(entry => [entry.id, entry.purpose]), [
+    ['cap_other', 'OTHER_POSITION'],
+    ['cap_dup', 'FIRST_POSITION'],
+    ['cap_dup', 'SECOND_POSITION'],
+  ]);
+  assert.equal(result.preselect?.scores[0]?.required, true);
+  assert.equal(result.preselect?.scores[0]?.kept, true);
+  assert.equal(result.preselect?.scores[2]?.required, true);
+  assert.equal(result.preselect?.scores[2]?.kept, true);
+  assert.equal(result.preselect?.scores[1]?.required, false);
+  assert.equal(result.preselect?.required_missing, 0);
+  assert.equal(result.preselect?.kept, 3);
+  const text = JSON.stringify(result.preselect);
+  assert.equal(text.includes('FIRST_POSITION'), false);
+  assert.equal(text.includes('SECOND_POSITION'), false);
+  assert.equal(text.includes('cap_dup'), false);
+  assert.ok(result.preselect);
+  assertTrace(result.preselect, probabilities);
+});
+
+test('narrowed catalogue order is required plus top-k by p descending, ties in disclosed order', () => {
+  const probabilities = [0.6, 0.6, 0.9, 0.6, 0.1];
+  const result = select(probabilities, { preselect_policy: policy(2), required_entry_ids: ['cap_1'] });
+  assert.deepEqual(ids(result), ['cap_2', 'cap_0', 'cap_1']);
+  assert.equal(result.preselect?.scores[1]?.required, true);
+  assert.equal(result.preselect?.scores[1]?.kept, true);
+  assert.equal(result.preselect?.scores[0]?.kept, true);
+  assert.equal(result.preselect?.scores[2]?.kept, true);
+  assert.equal(result.preselect?.scores[3]?.kept, false);
+  assert.equal(result.preselect?.scores[4]?.kept, false);
+  assert.equal(result.preselect?.kept, 3);
+  assert.equal(result.preselect?.outcome, 'narrowed');
+});
+
 test('floor drops a score inside k and floor 0 keeps that score', () => {
   const probabilities = [0.9, 0.04, 0.5];
   const floored = select(probabilities, { preselect_policy: policy(3, 0.1) });
