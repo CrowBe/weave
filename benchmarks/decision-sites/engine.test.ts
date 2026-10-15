@@ -6,12 +6,65 @@ import { tmpdir } from 'node:os';
 import { execute, countCompetitorCalls } from './engine.ts';
 import { Journal, digest } from './journal.ts';
 import { buildRequest } from './questions.ts';
+import { buildProviders } from './providers.ts';
+import { buildCompetitors } from './competitors.ts';
 import type { Provider, Item } from './types.ts';
 const item:Item={id:'i',scenario_id:'s',site:'loop.route',state:{task:'read'},gold:{decision:'flash'}};
 async function fixture(fn:(journal:Journal)=>Promise<void>){const dir=await mkdtemp(join(tmpdir(),'engine-'));try{await fn(new Journal(join(dir,'journal.jsonl')));}finally{await rm(dir,{recursive:true,force:true});}}
 const entry={item,split:'holdout' as const,set_digest:'s'};
 function provider(request:Provider['request']):Provider{return {id:'fake',model:'fake',price:.1,serialize:JSON.stringify,request};}
 const clock={now:()=>100,sleep:async()=>{}};
+for(const id of ['typesafe-jev','openai-decisions'])for(const phase of ['before_fetch','mid_fetch','after_response','after_body','body_interrupted']){
+ test(`${id} cancellation ${phase} preserves dispatch, usage and replay safety`,()=>fixture(async journal=>{
+  const controller=new AbortController();let calls=0;
+  const model=id==='typesafe-jev'?'jev-1.14.0':'gpt-6-luna';
+  const answer={type:'choice',choice:'flash',confidence:.95};
+  const body={model,usage:{input_tokens:7,output_tokens:1},answers:id==='typesafe-jev'?{decision:answer}:[{name:'decision',...answer}]};
+  const base=buildProviders({typesafeKey:'fake-key',openaiKey:'fake-key',fetch:async()=>{
+   calls++;
+   if(phase==='mid_fetch'){controller.abort();throw Error('fetch interrupted');}
+   const response=new Response(JSON.stringify(body));
+   if(phase==='after_response')controller.abort();
+   if(phase==='after_body'||phase==='body_interrupted')Object.defineProperty(response,'json',{value:async()=>{
+    controller.abort();if(phase==='body_interrupted')throw Error('body interrupted');return body;
+   }});
+   return response;
+  }}).find(p=>p.id===id)!;
+  const p={...base,request:async(...args:Parameters<Provider['request']>)=>{
+   if(phase==='before_fetch')controller.abort();return base.request(...args);
+  }};
+  const run=(providers=[p],signal?:AbortSignal)=>execute({entries:[entry],providers,journal,maxSpend:2,...clock,...(signal?{signal}:{})});
+  await run([p],controller.signal);
+  const call=journal.read().find(r=>r.type==='call');
+  if(phase==='before_fetch'){
+   assert.equal(calls,0);assert.equal(call?.terminal,false);assert.equal(call?.result.reason,'cancelled');assert.equal(journal.spent(),0);
+  }else if(phase==='mid_fetch'||phase==='body_interrupted'){
+   assert.equal(call,undefined);assert.equal(journal.spent(),journal.read().find(r=>r.type==='intent')!.projected_usd);assert.ok(journal.spent()>0);
+  }else{
+   assert.equal(call?.result.status,'ok');assert.equal(call?.result.input_tokens,7);assert.equal(call?.terminal,true);
+   assert.equal(journal.spent(),7*base.price/1e6);
+  }
+  const spent=journal.spent();await run([base]);
+  assert.equal(calls,1);if(phase!=='before_fetch')assert.equal(journal.spent(),spent);
+  assert.equal(journal.read().some(r=>r.type==='uncertain'),phase==='mid_fetch'||phase==='body_interrupted');
+ }));
+}
+for(const id of ['pi','fx-ask'])for(const phase of ['preflight','prompt']){
+ test(`${id} cancellation in ${phase} only releases the cap before inference dispatch`,()=>fixture(async journal=>{
+  const controller=new AbortController();let prompts=0;
+  const p=buildCompetitors({cwd:'/tmp/empty',quotaAllowed:true,run:async(_cmd,args,options)=>{
+   if((phase==='preflight'&&!options.stdin)||options.stdin){if(options.stdin)prompts++;controller.abort();return{exitCode:1,stdout:'',stderr:''};}
+   return{exitCode:0,stdout:args[0]==='status'?'Auth: authenticated with ChatGPT':'--mode --no-session --no-tools --no-extensions --no-skills --no-prompt-templates --no-mcp --no-context-files --offline',stderr:''};
+  }}).find(p=>p.id===id)!;
+  await execute({entries:[entry],providers:[p],journal,maxSpend:2,signal:controller.signal,...clock});
+  assert.equal(countCompetitorCalls(journal.read(),id),phase==='prompt'?1:0);
+  const call=journal.read().find(r=>r.type==='call')!;assert.equal(call.terminal,phase==='prompt');
+  let resumed=0;
+  const next={...p,request:async()=>{resumed++;return{status:'ok' as const,answers:{}};}};
+  await execute({entries:[entry],providers:[next],journal,maxSpend:2,...clock});
+  assert.equal(prompts,phase==='prompt'?1:0);assert.equal(resumed,phase==='prompt'?0:1);
+ }));
+}
 test('budget stops before call and resume reads newly appended live ledger',()=>fixture(async journal=>{
  let n=0;const p=provider(async()=>{n++;return {status:'ok',model:'fake',input_tokens:1000000,answers:{}};});
  await execute({entries:[entry],providers:[p],journal,maxSpend:0,...clock});assert.equal(n,0);

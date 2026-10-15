@@ -57,8 +57,13 @@ export function buildCompetitors(config: CompetitorsConfig): Provider[] {
         if (skipped) return skipped;
         if (!config.quotaAllowed) return { status: 'skipped', reason: 'quota_unavailable_or_weekly_cap' };
         if (count >= 40) return { status: 'skipped', reason: 'call_cap' };
+        let dispatched = false;
         const signal = AbortSignal.any([external, AbortSignal.timeout(config.timeoutMs ?? 120_000)]);
         const run = async (args: readonly string[], stdin = '') => {
+          signal.throwIfAborted();
+          // Once the prompt is handed to the process runner, cancellation cannot
+          // establish that no plan quota was consumed. Count it conservatively.
+          if (stdin) { count++; dispatched = true; }
           const result = await config.run(command, args, { cwd: config.cwd, stdin, signal });
           signal.throwIfAborted();
           return result;
@@ -82,13 +87,12 @@ export function buildCompetitors(config: CompetitorsConfig): Provider[] {
             }
             initialized = true;
           }
-          count++;
           const result = await run(argv, competitorPrompt(request));
           if (/(?:authentication required|not authenticated|no api key|no (?:available )?models|please (?:log|sign) in|login required|not logged in)/i.test(result.stderr + '\n' + result.stdout)) return skipped = { status: 'skipped', reason: 'auth_required' };
           if (result.exitCode !== 0) return { status: 'failed', reason: 'nonzero_exit' };
           const parsed = parseCompetitorOutput(result.stdout, request);
           return parsed ? { status: 'ok', model: 'chatgpt-sign-in', answers: parsed } : { status: 'failed', reason: 'non_json_output', parse_failure: true };
-        } catch { return { status: 'failed', reason: external.aborted ? 'cancelled' : signal.aborted ? 'timeout' : 'process_unavailable' }; }
+        } catch { return { status: 'failed', reason: external.aborted ? (dispatched ? 'cancelled_after_dispatch' : 'cancelled') : signal.aborted ? 'timeout' : 'process_unavailable' }; }
       },
     } satisfies Provider;
   });

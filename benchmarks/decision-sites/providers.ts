@@ -51,12 +51,13 @@ function httpProvider(id: string, model: string, price: number, key: string | un
       const signal = AbortSignal.any([external, AbortSignal.timeout(config.timeoutMs ?? 30_000)]);
       try {
         const response = await (config.fetch ?? globalThis.fetch)(url, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` }, body: JSON.stringify(body(request)), signal, redirect: 'error' });
-        if (external.aborted) return { status: 'failed', reason: 'cancelled' };
         const requestId = safe(response.headers.get(id === 'typesafe-jev' ? 'x-typesafe-request-id' : 'x-request-id'));
         const metadata = { http_status: response.status, ...(requestId === undefined ? {} : { request_id: requestId }) };
         let raw: unknown;
-        try { raw = await response.json(); } catch { if (response.ok) return { status: 'failed', reason: 'malformed_body', ...metadata }; raw = {}; }
-        if (external.aborted) return { status: 'failed', reason: 'cancelled' };
+        try { raw = await response.json(); } catch {
+          if (external.aborted) throw new Error('unacknowledged_call');
+          if (response.ok) return { status: 'failed', reason: 'malformed_body', ...metadata }; raw = {};
+        }
         const usage = record(raw) && record(raw.usage) ? raw.usage : {};
         const tokens = { ...(token(usage.input_tokens) ? { input_tokens: usage.input_tokens } : {}), ...(token(usage.output_tokens) ? { output_tokens: usage.output_tokens } : {}) };
         if (!response.ok) {
@@ -81,7 +82,12 @@ function httpProvider(id: string, model: string, price: number, key: string | un
         if (!token(usage.input_tokens) || !token(usage.output_tokens)) return { status: 'failed', reason: 'missing_usage', model, ...metadata, ...tokens };
         if (!answers) return { status: 'failed', reason: 'malformed_answers', model, ...metadata, ...tokens };
         return { status: 'ok', model, answers, ...metadata, ...tokens };
-      } catch { return { status: 'failed', reason: external.aborted ? 'cancelled' : signal.aborted ? 'timeout' : 'network_error' }; }
+      } catch {
+        // Fetch was called: cancellation cannot prove that inference was unbilled.
+        // No usable receipt leaves the engine's intent and reservation pending.
+        if (external.aborted) throw new Error('unacknowledged_call');
+        return { status: 'failed', reason: signal.aborted ? 'timeout' : 'network_error' };
+      }
     },
   };
 }

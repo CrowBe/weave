@@ -132,9 +132,11 @@ re-pays a terminal wrong-model failure: it remains recorded against the
 requested binding, with the unexpected served model retained as failure evidence.
 SIGINT/SIGTERM abort in-flight calls, record cancellation, render partial results and exit
 nonzero. Returned results are journalled before stopping: an acknowledged answer and
-its actual usage survive cancellation. A cancelled/not-sent result is recorded as a
-nonterminal failure, costs zero, and can be retried on resume without consuming an
-attempt or the competitor call cap.
+its actual usage survive cancellation. Only cancellation before inference dispatch
+produces a retryable cancelled/not-sent result: a nonterminal failure that costs zero
+and consumes neither an attempt nor the competitor call cap. A competitor prompt
+handed to the process runner counts conservatively toward the cap; cancellation
+after that point is terminal `cancelled_after_dispatch` and is never auto-retried.
 
 A crash or cancellation between dispatch and durable receipt cannot establish
 whether a provider billed the call: no provider here exposes result lookup or an

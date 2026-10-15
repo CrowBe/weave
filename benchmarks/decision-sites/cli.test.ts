@@ -259,6 +259,11 @@ else fs.writeSync(1,JSON.stringify({answers:{decision:{choice:'flash',confidence
    assert.equal(new Set(calls.map(call=>call.cwd)).size,calls.length,'each child needs its own cwd');
    for(const call of calls){assert.deepEqual(call.entries,[]);assert.equal(existsSync(call.cwd),false,call.cwd+' was not removed');}
    if(mode!=='abort')assert.equal(calls.filter(call=>call.prompt).length,24);
+   else{
+    const records=readFileSync(join(resultDir,'journal.jsonl'),'utf8').trim().split('\n').map(line=>JSON.parse(line));
+    const call=records.find(r=>r.type==='call');assert.ok(call);
+    assert.equal(call.result.reason,'cancelled_after_dispatch');assert.equal(call.terminal,true);
+   }
    rmSync(resultDir,{recursive:true,force:true});
   }
  }finally{rmSync(helper,{recursive:true,force:true});}
