@@ -109,7 +109,7 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
     else if (ports.budget() === 'pause') outcome = 'budget';
     else {
       const checkpoint = journal.loadCheckpoint(input.execution_id, round);
-      observed = checkpoint?.observation ?? await ports.observe(issues);
+      observed = structuredClone(checkpoint?.observation ?? await ports.observe(issues));
       if (!checkpoint) journal.checkpoint({ execution_id: input.execution_id, round, observation: observed, report: null });
       const noProgress = stopForNoProgress(observed.progress ?? [], []);
       if (signal?.aborted) outcome = 'cancelled';
