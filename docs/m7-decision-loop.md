@@ -515,7 +515,8 @@ Observe through the injected port. Completion requires nonempty criteria,
 green deterministic checks bound to every criterion, passing D5 evidence for
 every criterion, and no `fix_now` or `needs_human` disposition. A red check
 vetoes completion even when the audit claims success. The claim itself is
-never a completion predicate.
+never a completion predicate. A final state-revision check after D6 rejects
+a disposition computed against changed state before loop-back or completion.
 
 Each `audit.round@1` records its id/parentId, execution id, round, state digest,
 report, D6 disposal, open issues, outcome and `goal_done`. Outcomes distinguish
@@ -534,8 +535,13 @@ Journal append and phase checkpoints must persist before returning, with one
 writer per execution. The loop checkpoints disclosed input before generation
 and the accepted report before D6, so recovery reuses the recorded input and
 report. `MemoryAuditJournal` supports deterministic fixtures; production
-durability is the composition root's responsibility. Replay returns the recorded round
-without calling a provider, and an already stopped execution remains stopped.
+durability is the composition root's responsibility. Replay returns the recorded
+round without calling a provider. By default an already stopped execution
+remains stopped. An explicit `resume: true` may resume a `budget` or `cancelled`
+pause; other stops remain terminal. Pauses retain pending open issues, and
+resumption uses the same round checkpoint and rechecks budget and state
+revision. Pause records have unique entry ids and do not consume another audit
+round from the cap.
 Failed generation does not fabricate D5 observations for evaluations never requested.
 
 ## 10. P9 ports and labelled follow-ups
