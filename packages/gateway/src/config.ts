@@ -12,17 +12,39 @@ export const DECISION_PROVIDER_ID = 'typesafe-jev';
 /** Adapter id that serves {@link DECISION_PROVIDER_ID}. It is not the provider id. */
 export const DECISION_PROVIDER_ADAPTER = 'typesafe-ai';
 
+/** Upper bound on D3 top-k. Required entries are not counted against it. */
+export const PRESELECT_CAP = 8;
+
+/** Documented D3 default when a provider omits k. */
+export const PRESELECT_DEFAULT_K = 3;
+
+/** Documented D3 default. Zero leaves the floor off. */
+export const PRESELECT_DEFAULT_FLOOR = 0;
+
+const PRESELECT_SITES = ['intake.classify', 'loop.preselect'] as const;
+const KNOWN_DECISION_PROVIDERS = ['typesafe-jev', 'amos', 'openai-decisions'] as const;
+
 /** `key_env` requires `auth: 'api-key'`. A non-loopback provider requires `auth` or `key_env`. */
 export interface DecisionConfig {
   readonly provider: string;
   readonly fallback: string | null;
   readonly sites?: Readonly<Record<string, string>>;
+  /** Per-provider D3 top-k and floor. Absent fields use the documented defaults. */
+  readonly preselect?: Readonly<Record<string, { readonly k?: number; readonly floor?: number }>>;
   readonly providers: Record<string, {
     base_url: string;
     model: string;
     auth?: (typeof DECISION_AUTH)[number];
     key_env?: string;
   }>;
+}
+
+/** Effective D3 policy for one decision provider. Cap is fixed. */
+export interface ResolvedPreselectPolicy {
+  readonly k: number;
+  readonly floor: number;
+  readonly cap: typeof PRESELECT_CAP;
+  readonly provider: 'typesafe-jev' | 'amos';
 }
 
 export type RouteConfigResult =
@@ -46,11 +68,12 @@ export function bindDecisionProvider(decision: DecisionConfig, site?: string): D
     throw new Error(`decision.provider: only ${DECISION_PROVIDER_ID} is supported`);
   }
   for (const [key, value] of Object.entries(decision.sites ?? {})) {
-    if (key !== 'intake.classify' || (value !== 'amos' && value !== DECISION_PROVIDER_ID) ||
+    if (!PRESELECT_SITES.includes(key as typeof PRESELECT_SITES[number]) || (value !== 'amos' && value !== DECISION_PROVIDER_ID) ||
         !Object.hasOwn(decision.providers, value)) throw new Error('decision.sites: unsupported provider or site');
   }
   const selected = site !== undefined && Object.hasOwn(decision.sites ?? {}, site) ? decision.sites![site]! : decision.provider;
-  if (selected !== DECISION_PROVIDER_ID && !(selected === 'amos' && site === 'intake.classify')) throw new Error('decision.sites: unsupported provider or site');
+  const siteMayUseAmos = site !== undefined && PRESELECT_SITES.includes(site as typeof PRESELECT_SITES[number]);
+  if (selected !== DECISION_PROVIDER_ID && !(selected === 'amos' && siteMayUseAmos)) throw new Error('decision.sites: unsupported provider or site');
   const provider = decision.providers[selected];
   if (provider === undefined) throw new Error('decision.provider: must exist in providers');
   return {
@@ -109,6 +132,38 @@ function positiveInteger(value: unknown): boolean {
 }
 function member(value: unknown, values: readonly string[]): boolean {
   return typeof value === 'string' && values.includes(value);
+}
+function preselectK(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= PRESELECT_CAP;
+}
+function preselectFloor(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value < 1;
+}
+
+/**
+ * Effective D3 policy for a provider. Missing and out-of-range fields use the
+ * defaults. `parseRouteConfig` already rejects a bad document; this stays
+ * defined when a caller skips it.
+ */
+export function resolvePreselectPolicy(
+  decision: Pick<DecisionConfig, 'preselect'>,
+  provider: 'typesafe-jev' | 'amos',
+): ResolvedPreselectPolicy {
+  const raw = decision.preselect?.[provider];
+  const record = object(raw) ? raw : undefined;
+  const kValue = record?.['k'];
+  const floorValue = record?.['floor'];
+  const k = preselectK(kValue) ? kValue : PRESELECT_DEFAULT_K;
+  const floor = preselectFloor(floorValue) ? floorValue : PRESELECT_DEFAULT_FLOOR;
+  return { k, floor: floor === 0 ? 0 : floor, cap: PRESELECT_CAP, provider };
+}
+
+/** An evaluate unit whose adapter, kind, and model are the configured Amos provider's. */
+function matchingAmosUnit(units: unknown, providers: unknown, kind: 'choice' | 'boolean'): boolean {
+  if (!object(providers) || !object(providers['amos']) || !identifier(providers['amos']['model']) || !Array.isArray(units)) return false;
+  const model = providers['amos']['model'];
+  return units.some((unit: unknown) =>
+    object(unit) && unit['operation'] === 'evaluate' && unit['kind'] === kind && unit['adapter'] === 'amos' && unit['model'] === model);
 }
 
 /** An evaluate unit whose adapter and model are the configured TypeSafe provider's. */
@@ -187,7 +242,7 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
   const decision = json.decision;
   if (!object(decision)) check(false, 'decision');
   else {
-    keys(decision, ['provider', 'fallback', 'providers', 'sites'], 'decision');
+    keys(decision, ['provider', 'fallback', 'providers', 'sites', 'preselect'], 'decision');
     check(identifier(decision.provider), 'decision.provider');
     check(decision.fallback === null || identifier(decision.fallback), 'decision.fallback');
     check(decision.fallback === null || decision.fallback !== decision.provider, 'decision.fallback: must differ from provider');
@@ -224,10 +279,23 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
       if (decision.sites !== undefined) {
         check(object(decision.sites), 'decision.sites');
         if (object(decision.sites)) for (const [site, selected] of Object.entries(decision.sites)) {
-          check(site === 'intake.classify', 'decision.sites: unknown or unsupported site');
+          const amosKind = site === 'intake.classify' ? 'choice' : site === 'loop.preselect' ? 'boolean' : null;
+          check(amosKind !== null, 'decision.sites: unknown or unsupported site');
           check(selected === 'amos' || selected === DECISION_PROVIDER_ID, 'decision.sites: unknown provider');
           check(typeof selected === 'string' && Object.hasOwn(decision.providers, selected), 'decision.sites: provider must exist');
-          if (selected === 'amos') check(Array.isArray(json.units) && json.units.some((u: unknown) => object(u) && u.operation === 'evaluate' && u.kind === 'choice' && u.adapter === 'amos' && object(decision.providers) && object(decision.providers.amos) && u.model === decision.providers.amos.model), 'decision.sites: no matching Amos choice unit');
+          if (selected === 'amos' && amosKind !== null) check(matchingAmosUnit(json.units, decision.providers, amosKind),
+            amosKind === 'choice' ? 'decision.sites: no matching Amos choice unit' : 'decision.sites: no matching Amos boolean unit');
+        }
+      }
+      if (decision.preselect !== undefined) {
+        check(object(decision.preselect), 'decision.preselect');
+        if (object(decision.preselect)) for (const [id, policy] of Object.entries(decision.preselect)) {
+          const path = `decision.preselect.${id}`;
+          check(identifier(id) && member(id, KNOWN_DECISION_PROVIDERS) && Object.hasOwn(decision.providers, id), `${path}: unknown provider`);
+          if (!object(policy)) { check(false, path); continue; }
+          keys(policy, ['k', 'floor'], path);
+          if (policy['k'] !== undefined) check(preselectK(policy['k']), `${path}.k`);
+          if (policy['floor'] !== undefined) check(preselectFloor(policy['floor']), `${path}.floor`);
         }
       }
       // Issue #47: the selected provider must have an evaluate unit this phase can call.
