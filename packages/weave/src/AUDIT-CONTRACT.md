@@ -33,6 +33,30 @@ with U+FFFD (three UTF-8 bytes) before measuring the retained suffix, so tails
 never contain lone surrogates. Shortened or repaired tails record the existing
 `check:<check_id>:tail_cap` marker. Exact-cap, well-formed tails are unchanged.
 
+## Inference terms
+
+Audit generation always requests `tier:'strong', audit:true`. D6 requests
+`tier:'decision'` and strips `audit` from caller terms, preserving every other
+term apart from the tier override. The audit purpose applies only to generation.
+
+## Request identity
+
+Generation and D6 derive request ids from the execution id, round and purpose
+(`audit` or `dispose`), plus the resumption entry number when resuming a pause.
+Short ids are `<execution>:r<round>[:e<entry>]:<purpose>`. A fresh resumption
+gets a distinct entry suffix; crash recovery within it keeps the same suffix.
+When the full id would exceed 128 characters, the execution portion becomes a
+bounded readable prefix plus the full SHA-256 digest of the execution id. The
+round, resumption and purpose suffix remains readable. Both ids pass correlation
+validation before dispatch. Shared execution prefixes cannot erase the remaining
+identity, and exact replay derives the same ids.
+
+Request ids are correlation labels, not gateway idempotency or outcome-cache
+keys. Each gateway invocation executes a new bounded attempt loop. Reusing an
+id with a different prefix digest or findings therefore requests a fresh
+outcome. Prefix-cache metadata affects pricing only; it does not cache answers.
+No state digest is added to request ids on this basis.
+
 ## Context compaction port
 
 `compactContext` uses an explicit token sequence and context capacity supplied by
@@ -59,14 +83,16 @@ across aliases use the maximum, never the sum; recurrence alone is not an attemp
 Before a dispatch needing D4, `needs_dispatch && decision_unavailable` records
 an audit round with outcome `decision_unavailable`, using the existing decision
 outage reason vocabulary. It is a pause, resumable only with `resume: true` in
-the same round. Resumption observes availability again before proceeding. Authority blocks remain terminal and no
-pause confers a grant or bypasses D4/D7. D6 outage retains its `needs_human` fallback.
+the same round. Resumption observes availability again before proceeding.
+Authority blocks remain terminal and no pause confers a grant or bypasses D4/D7.
+D6 outage retains its `needs_human` fallback.
 
 ## Resume and recovery
 
 Every explicit resume of a persisted pause captures live state, revision, and
-budget before proceeding; it replaces the paused observation. A checkpoint's
-optional `resume_from` binds that capture to the pause entry. Recovery of that
+budget before proceeding, unless the live budget port still pauses the loop; it
+replaces the paused observation. A checkpoint's optional `resume_from` binds
+that capture to the pause entry. Recovery of that
 same resumption reuses its durable capture, accepted report, and D6 disposal,
 so a crash before round append does not repeat completed inference. A previous
 report may be retained only when both the disclosed-state digest and revision
@@ -74,9 +100,13 @@ are unchanged. Changed inputs receive a distinct request id; recovery keeps it
 stable. Legacy checkpoints without `resume_from` are refreshed on resume.
 An unpaused mid-round revision change still stops as `needs_human`.
 
-Cancellation writes only the cancelled round once observed, with no subsequent
-checkpoint, inference, or D6 dispatch. Ordinary replay of that outcome writes
-nothing. Resuming a terminal result is also read-only.
+An aborted signal returns `cancelled` without further checkpoint or round
+appends, inference, or D6 dispatch. The returned cancellation is not durable;
+recovery starts from the last write completed before abort. A report or D6 result
+durably checkpointed before abort is reused; an outcome received after abort is
+not checkpointed. A gateway-reported cancellation without an aborted signal
+remains a recorded pause requiring explicit resume. Terminal round replay calls
+neither gateway port and writes nothing, including when `resume: true`.
 
 The composition root must hold exclusive ownership for the whole execution,
 including observation, checkpoints and append: two concurrent resumes must be
@@ -85,10 +115,11 @@ lock or compare-and-swap in `AuditJournal`; `MemoryAuditJournal` is not a
 cross-process lock. Production journals must commit checkpoints and appends
 atomically and durably, deduplicate ids, and recover torn storage before append.
 The audit loop has no grants and dispatches no fixes; the observation owner must
-reconcile fix effects and never replay a single-use grant. Inference ports must
-reconcile an interrupted request by its stable request id if a crash occurs
-between provider completion and checkpoint commit; this in-flight window cannot
-be made exactly-once by the synchronous journal interface alone.
+reconcile fix effects and never replay a single-use grant. There is no exactly-once
+provider guarantee for a crash between provider completion and the durable
+checkpoint: request-id reuse alone cannot prevent another charge. Any external
+reconciliation belongs to the inference port; the current gateway does not
+implement an outcome cache or idempotency protocol.
 
 ## Pause precedence
 

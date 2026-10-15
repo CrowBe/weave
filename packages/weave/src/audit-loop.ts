@@ -115,6 +115,15 @@ function complete(observed: AuditObservation): boolean {
       evals.some(item => item.criterion_id === criterion.criterion_id && item.passed && (item.verdict_probability ?? 0) >= .8 && (item.confidence ?? 0) >= .9) &&
       !evals.some(item => item.criterion_id === criterion.criterion_id && !item.passed));
 }
+/** Preserve readable short ids; retain the full execution identity when bounded. */
+function auditRequestId(execution_id: string, round: number, purpose: 'audit' | 'dispose', resume_entry?: number): string {
+  const suffix = `:r${round}${resume_entry === undefined ? '' : `:e${resume_entry}`}:${purpose}`;
+  const readable = `${execution_id}${suffix}`;
+  const request_id = readable.length <= 128 ? readable :
+    `${execution_id.slice(0, 128 - suffix.length - 65)}:${digest(execution_id)}${suffix}`;
+  if (!correlation(request_id)) throw new Error('Invalid audit request id');
+  return request_id;
+}
 /** One writer owns an execution. append must commit durably before returning. */
 export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, journal: AuditJournal,
   signal?: AbortSignal): Promise<AuditRound> {
@@ -161,8 +170,8 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
       else if (observed.needs_dispatch && observed.decision_unavailable) outcome = 'decision_unavailable';
       else if (noProgress) outcome = noProgress;
       else {
-        const requestPrefix = `${input.execution_id}:r${round}${resume_from ? `:e${history.length + 1}` : ''}`;
-        const request_id = `${requestPrefix}:audit`;
+        const resume_entry = resume_from === undefined ? undefined : history.length + 1;
+        const request_id = auditRequestId(input.execution_id, round, 'audit', resume_entry);
         let generated;
         if (checkpoint?.report) report = { ...checkpoint.report, findings: uniqueFindings(checkpoint.report.findings) };
         else try {
@@ -179,7 +188,7 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
         else if (live.state_revision !== observed.revision.state_revision || live.state_updated_at !== observed.revision.state_updated_at) outcome = 'needs_human';
         else if (!report) outcome = 'audit_unavailable';
         else {
-          disposal = checkpoint?.disposal ?? await evaluateAuditDispose({ ...observed.revision, request_id: `${requestPrefix}:dispose`,
+          disposal = checkpoint?.disposal ?? await evaluateAuditDispose({ ...observed.revision, request_id: auditRequestId(input.execution_id, round, 'dispose', resume_entry),
             state: { audit: report }, findings: report.findings, terms: input.terms, needs_dispatch: false },
           { evaluate: ports.evaluate }, ports.current, signal);
           if (!signal?.aborted && !checkpoint?.disposal) persist(report, disposal);
@@ -199,6 +208,8 @@ export async function runAuditLoop(input: AuditLoopInput, ports: AuditPorts, jou
     const entry: AuditRound = { schema: 'audit.round@1', id: `${input.execution_id}:r${round}:e${history.length + 1}`,
       parentId: history.at(-1)?.id ?? null, execution_id: input.execution_id, round,
       state_digest: observed?.state.digest ?? '', report, disposal, open_issues: next, outcome, goal_done: outcome === 'done' };
+    // Signal cancellation returns to the caller without any further durable writes.
+    if (signal?.aborted) return structuredClone(entry);
     journal.append(entry); history.push(entry);
     if (outcome !== 'observe') return structuredClone(entry);
     issues = next;

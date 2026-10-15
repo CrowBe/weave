@@ -580,6 +580,8 @@ generation at `audit.generate` (pace pressure ends the round as a resumable
 identity. The composition root supplies the gateway, observation, revision,
 budget and journal ports; no model or provider owns the loop. D6 reuses
 `decision-site@1`, ordinal finding questions and stale-answer admission.
+D6 strips the generation-only `audit` purpose flag and overrides the tier to
+`decision`, preserving all other caller terms.
 Confidence below .75, malformed/missing answers and outage use the recorded
 `needs_human` fallback. Findings and decisions grant no execution authority.
 
@@ -632,6 +634,22 @@ Changed input gets a distinct inference request id, stable across recovery.
 Legacy checkpoints refresh on resume. Over-budget observations are not pinned. Pause records have unique entry ids and do not consume another audit
 round from the cap.
 Failed generation does not fabricate D5 observations for evaluations never requested.
+
+Generation and D6 request ids retain the readable execution/round/purpose form
+when it fits the 128-character correlation limit; longer ids use a bounded
+execution prefix and full SHA-256 execution digest with the same round/purpose
+suffix. Both ids are validated before dispatch. They are correlation labels:
+the gateway does not deduplicate or cache outcomes by request id. Repeated ids
+with changed prefix digests or findings execute fresh requests. The checkpoint
+pins the report to its disclosed observation; recovery after its durable write
+does not pay for generation again, and D6 runs afresh against those findings.
+A changed live revision is rejected before D6. A crash after provider completion
+but before its report checkpoint can still repeat a paid generation.
+
+Signal abort returns `cancelled` without any further journal writes, including
+round appends. Recovery uses the last checkpoint committed before abort; the
+returned cancellation itself is not persisted. Gateway-reported cancellation
+without an aborted signal retains the recorded explicit-resume pause behavior.
 
 ## 10. P9 ports and labelled follow-ups
 
