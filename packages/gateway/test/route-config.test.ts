@@ -500,15 +500,18 @@ it('rejects a bad preselect policy and resolves the effective one', () => {
   const valid = parseRouteConfig(input);
   assert.equal(valid.ok, true);
   if (!valid.ok) return;
-  assert.deepEqual(resolvePreselectPolicy(valid.decision, 'typesafe-jev'), { k: 3, floor: 0, cap: 8, provider: 'typesafe-jev' });
-  assert.deepEqual(resolvePreselectPolicy(valid.decision, 'amos'), { k: 3, floor: 0, cap: 8, provider: 'amos' });
-  input.decision.preselect = { 'typesafe-jev': { k: 5, floor: 0.05 }, amos: { k: 1 } };
+  const defaults = { k: 3, floor: 0, cap: 8, max_excluded: 0.4, min_margin: 0.3 };
+  assert.deepEqual(resolvePreselectPolicy(valid.decision, 'typesafe-jev'), { ...defaults, provider: 'typesafe-jev' });
+  assert.deepEqual(resolvePreselectPolicy(valid.decision, 'amos'), { ...defaults, provider: 'amos' });
+  input.decision.preselect = { 'typesafe-jev': { k: 5, floor: 0.05, max_excluded: 0.5, min_margin: 0.2 }, amos: { k: 1 } };
   const custom = parseRouteConfig(input);
   assert.equal(custom.ok, true);
   if (!custom.ok) return;
-  assert.deepEqual(resolvePreselectPolicy(custom.decision, 'typesafe-jev'), { k: 5, floor: 0.05, cap: 8, provider: 'typesafe-jev' });
-  assert.deepEqual(resolvePreselectPolicy(custom.decision, 'amos'), { k: 1, floor: 0, cap: 8, provider: 'amos' });
-  assert.deepEqual(resolvePreselectPolicy({ preselect: { 'typesafe-jev': { k: 9, floor: 1 } } }, 'typesafe-jev'), { k: 3, floor: 0, cap: 8, provider: 'typesafe-jev' });
+  assert.deepEqual(resolvePreselectPolicy(custom.decision, 'typesafe-jev'), { k: 5, floor: 0.05, cap: 8, max_excluded: 0.5, min_margin: 0.2, provider: 'typesafe-jev' });
+  assert.deepEqual(resolvePreselectPolicy(custom.decision, 'amos'), { ...defaults, k: 1, provider: 'amos' });
+  assert.deepEqual(resolvePreselectPolicy({ preselect: { 'typesafe-jev': { k: 9, floor: 1, max_excluded: 2, min_margin: -1 } } }, 'typesafe-jev'), { ...defaults, provider: 'typesafe-jev' });
+  assert.deepEqual(resolvePreselectPolicy({ preselect: { 'typesafe-jev': { k: 4, max_excluded: 0, min_margin: 1 } } }, 'typesafe-jev'), { ...defaults, k: 4, max_excluded: 0, min_margin: 1, provider: 'typesafe-jev' });
+  assert.equal(parseRouteConfig({ ...example(), decision: { ...example().decision, preselect: { 'typesafe-jev': { max_excluded: 1, min_margin: 0 } } } }).ok, true);
   const bad = [
     { 'typesafe-jev': { k: 0 } },
     { 'typesafe-jev': { k: 9 } },
@@ -518,6 +521,12 @@ it('rejects a bad preselect policy and resolves the effective one', () => {
     { 'typesafe-jev': { k: 3, cap: 4 } },
     { 'not-a-provider': { k: 3 } },
     { amos: { floor: 0, extra: true } },
+    { 'typesafe-jev': { max_excluded: 1.01 } },
+    { 'typesafe-jev': { max_excluded: -0.01 } },
+    { 'typesafe-jev': { min_margin: 1.1 } },
+    { 'typesafe-jev': { min_margin: Number.NaN } },
+    { 'typesafe-jev': { max_excluded: '0.4' } },
+    { 'typesafe-jev': { k: 3, margin: 0.3 } },
   ];
   for (const preselect of bad) {
     assert.equal(parseRouteConfig({ ...example(), decision: { ...example().decision, preselect } }).ok, false);

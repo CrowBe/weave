@@ -23,8 +23,8 @@
       "intake.classify": "amos"
     },
     "preselect": {
-      "typesafe-jev": { "k": 3 },
-      "amos": { "k": 3, "floor": 0 }
+      "typesafe-jev": { "k": 3, "max_excluded": 0.4, "min_margin": 0.3 },
+      "amos": { "k": 3, "floor": 0, "max_excluded": 0.4, "min_margin": 0.3 }
     }
   },
   "units": [
