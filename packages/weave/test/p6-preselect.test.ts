@@ -1,8 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { EvaluationOutcome } from '@weave/gateway';
 import { transitionBooleanSite, evaluateBooleanSite, INPUT_RULES, type BooleanSiteInput, type PreselectPolicyInput, type PreselectSelection } from '../src/sites/boolean.js';
 import type { InferenceGateway } from '@weave/gateway';
+import { FileJournal } from '../src/journal.js';
+import { digest } from '../src/digest.js';
+import type { Observation } from '../src/types.js';
 
 const current = { state_revision: 1, state_updated_at: 10 };
 const terms = { quality: 'baseline' as const, destinations: ['local'], max_context_tokens: 100, deadline: 100, cost_ceiling: 10, max_attempts: 1 };
@@ -123,7 +129,7 @@ test('a catalogue id that appears twice keeps both positions when required', () 
   assertTrace(result.preselect, probabilities);
 });
 
-test('narrowed catalogue order is required plus top-k by p descending, ties in disclosed order', () => {
+test('kept union ordered by p descending, ties in disclosed order', () => {
   const probabilities = [0.7, 0.7, 0.95, 0.4, 0.1];
   const result = select(probabilities, { preselect_policy: policy(2), required_entry_ids: ['cap_1'] });
   assert.deepEqual(ids(result), ['cap_2', 'cap_0', 'cap_1']);
@@ -415,7 +421,11 @@ test('a published invalid confidence fails closed on any entry; an absent one st
       assert.equal(result.preselect?.top_p, 0.9);
       assert.equal(result.preselect?.best_excluded_p, 0.2);
       assert.equal(result.preselect?.margin, 0.7);
-      assert.ok(result.observations.slice(0, 5).every(observation => observation.reason === 'accepted' && observation.accepted && !observation.fallback_used));
+      for (const [n, observation] of result.observations.entries()) {
+        assert.equal(observation.reason, n === index ? 'invalid_confidence' : 'accepted');
+        assert.equal(observation.accepted, n !== index);
+        assert.equal(observation.fallback_used, n === index);
+      }
       assert.equal(result.observations[index]?.confidence, null);
       assert.ok(result.preselect);
       assertTrace(result.preselect, probabilities);
@@ -432,9 +442,13 @@ test('a published invalid confidence fails closed on any entry; an absent one st
   assert.equal(covered.preselect?.outcome, 'fallback');
   assert.equal(covered.preselect?.best_excluded_p, null);
   assert.deepEqual(ids(covered), ['cap_0', 'cap_1']);
+  assert.equal(covered.observations[0]?.reason, 'invalid_confidence');
+  assert.equal(covered.observations[1]?.reason, 'accepted');
   const requiredInvalid = select([0.95, 0.9, 0.2], { preselect_policy: policy(1), required_entry_ids: ['cap_0'] }, [60, 1, 1]);
   assert.equal(requiredInvalid.preselect?.reason, 'invalid_confidence');
   assert.deepEqual(ids(requiredInvalid), ['cap_0', 'cap_1', 'cap_2']);
+  assert.equal(requiredInvalid.observations[0]?.reason, 'invalid_confidence');
+  assert.equal(requiredInvalid.observations[1]?.reason, 'accepted');
   const weakAndInvalid = select([0.9, 0.5], { preselect_policy: policy(1) }, [60, 1]);
   assert.equal(weakAndInvalid.preselect?.reason, 'invalid_confidence');
   const base = recorded(probabilities, [60, 1, 1, 1, 1]);
@@ -447,6 +461,53 @@ test('a published invalid confidence fails closed on any entry; an absent one st
   assert.deepEqual(again.preselect, select(probabilities, { preselect_policy: policy(3) }, [60, 1, 1, 1, 1]).preselect);
   const invalidAndEmpty = select([0.04, 0.02], { preselect_policy: policy(3, 0.1) }, [60, 1]);
   assert.equal(invalidAndEmpty.preselect?.reason, 'invalid_confidence');
+});
+
+test('each invalid confidence has its own observation marker while valid entries stay accepted', () => {
+  const result = select([0.9, 0.8, 0.7, 0.2, 0.1], { preselect_policy: policy(3) }, [Number.NaN, 1, -1, 1, 60]);
+  assert.equal(result.preselect?.reason, 'invalid_confidence');
+  assert.deepEqual(ids(result), ['cap_0', 'cap_1', 'cap_2', 'cap_3', 'cap_4']);
+  assert.deepEqual(result.observations.map(observation => observation.reason),
+    ['invalid_confidence', 'accepted', 'invalid_confidence', 'accepted', 'invalid_confidence']);
+  assert.deepEqual(result.observations.map(observation => observation.confidence), [null, 1, null, 1, null]);
+  assert.deepEqual(result.observations.map(observation => observation.accepted), [false, true, false, true, false]);
+  assert.deepEqual(result.observations.map(observation => observation.fallback_used), [true, false, true, false, true]);
+  for (const observation of result.observations) {
+    assert.equal(observation.schema, 'decision-site@1');
+    assert.deepEqual(Object.keys(observation), ['schema', 'site', 'question', 'request_id', 'state_revision',
+      'answer', 'confidence', 'top_p', 'accepted', 'fallback_used', 'reason', 'provider_request_id']);
+  }
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), result);
+});
+
+test('journal and digest readers preserve historical D3 observations alongside invalid confidence markers', () => {
+  // A pre-change observation could not distinguish invalid from absent confidence.
+  const historical = {
+    schema: 'decision-site@1', site: 'loop.preselect', question: 'Is this disclosed catalogue entry relevant to this step?',
+    request_id: 'r1', state_revision: 1, answer: 'include', confidence: null, top_p: 0.9,
+    accepted: true, fallback_used: false, reason: 'accepted', provider_request_id: 'provider-1',
+  };
+  const envelope = (seq: number, payload: unknown): Observation => ({
+    observation_id: `o${seq}`, source: { kind: 'test', id: 'fixture' }, caused_by: null,
+    payload_type: 'decision-site', payload_version: 1, payload, seq, validation: { status: 'unknown_type' },
+  });
+  const legacy = envelope(1, historical);
+  const before = digest(legacy);
+  const directory = mkdtempSync(join(tmpdir(), 'weave-d3-replay-'));
+  try {
+    const path = join(directory, 'observations.jsonl');
+    writeFileSync(path, `${JSON.stringify(legacy)}\n`);
+    const marker = select([0.9, 0.1], { preselect_policy: policy(1) }, [60, 1]).observations[0]!;
+    assert.equal(marker.reason, 'invalid_confidence');
+    const latest = envelope(2, marker);
+    new FileJournal(path).persist(latest);
+    const reloaded = new FileJournal(path).snapshot();
+    assert.deepEqual(reloaded, [legacy, latest]);
+    assert.equal(digest(reloaded[0]), before);
+    assert.equal(digest(reloaded[1]), digest(latest));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('a floor that keeps no non-required entry is no_candidate, with or without required entries', () => {
