@@ -10,7 +10,7 @@
       },
       "typesafe-jev": {
         "base_url": "https://api.typesafe.ai",
-        "model": "jev-latest",
+        "model": "jev-preview",
         "auth": "api-key",
         "key_env": "TYPESAFE_API_KEY"
       },
@@ -96,7 +96,7 @@
     {
       "routed_unit_id": "typesafe-jev.boolean",
       "adapter": "typesafe-ai",
-      "model": "jev-latest",
+      "model": "jev-preview",
       "tier": "decision",
       "operation": "evaluate",
       "kind": "boolean",
@@ -118,7 +118,7 @@
     {
       "routed_unit_id": "typesafe-jev.choice",
       "adapter": "typesafe-ai",
-      "model": "jev-latest",
+      "model": "jev-preview",
       "tier": "decision",
       "operation": "evaluate",
       "kind": "choice",
@@ -140,7 +140,7 @@
     {
       "routed_unit_id": "typesafe-jev.score",
       "adapter": "typesafe-ai",
-      "model": "jev-latest",
+      "model": "jev-preview",
       "tier": "decision",
       "operation": "evaluate",
       "kind": "score",

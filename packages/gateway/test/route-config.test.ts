@@ -36,7 +36,7 @@ it('uses TypeSafe Jev as the sole default decision provider without fallback', (
   if (!result.ok) return;
   assert.equal(result.decision.provider, 'typesafe-jev');
   assert.equal(result.decision.fallback, null);
-  assert.equal(result.decision.providers['typesafe-jev']?.model, 'jev-latest');
+  assert.equal(result.decision.providers['typesafe-jev']?.model, 'jev-preview');
 });
 it('filters tiers independently of quality and preserves order', () => {
   const units = table();
@@ -319,7 +319,7 @@ it('rejects whitespace-padded identifiers', () => {
     [c => { c.units[0].model = ' opus'; }, errors => errors.includes('invalid units[0].model')],
     [c => { c.units[0].context_profile = ' implementation'; }, errors => errors.includes('invalid units[0].context_profile')],
     [c => { c.units[0].prompt_template = ' implementation'; }, errors => errors.includes('invalid units[0].prompt_template')],
-    [c => { c.decision.providers['typesafe-jev'].model = ' jev-latest'; }, errors => errors.includes('invalid decision.providers.typesafe-jev.model')],
+    [c => { c.decision.providers['typesafe-jev'].model = ' jev-preview'; }, errors => errors.includes('invalid decision.providers.typesafe-jev.model')],
   ];
   for (const [mutate, matches] of cases) {
     const input = example();
@@ -403,7 +403,7 @@ it('chooses the TypeSafe provider from config and honours a local base URL', asy
   const binding = bindDecisionProvider(parsed.decision);
   assert.equal(binding.provider, 'typesafe-jev');
   assert.equal(binding.adapter, 'typesafe-ai');
-  assert.equal(binding.model, 'jev-latest');
+  assert.equal(binding.model, 'jev-preview');
   assert.equal(parsed.decision.providers['typesafe-jev']?.auth, 'api-key');
   assert.equal(binding.baseURL, 'http://127.0.0.1:9/');
 
@@ -427,7 +427,7 @@ it('chooses the TypeSafe provider from config and honours a local base URL', asy
   });
   assert.equal(sent?.url, 'http://127.0.0.1:9/v1/systemone');
   assert.equal(sent?.authorization, 'Bearer test-key');
-  assert.equal(sent?.body['model'], 'jev-latest');
+  assert.equal(sent?.body['model'], 'jev-preview');
   assert.equal(result.status, 'completed');
   if (result.status === 'completed') assert.equal(result.provider_response_id, 'req_local');
   assert.throws(
@@ -446,7 +446,7 @@ it('binds Amos only for the configured intake site and rejects unknown overrides
   assert.equal(parsed.ok, true);
   if (!parsed.ok) return;
   assert.equal(bindDecisionProvider(parsed.decision, 'intake.classify').adapter, 'amos');
-  assert.equal(bindDecisionProvider(parsed.decision, 'loop.triage').model, 'jev-latest');
+  assert.equal(bindDecisionProvider(parsed.decision, 'loop.triage').model, 'jev-preview');
   for (const sites of [{ typo: 'amos' }, { 'intake.classify': 'unknown' }, { 'loop.triage': 'amos' }]) {
     assert.equal(parseRouteConfig({ ...input, decision: { ...input.decision, sites } }).ok, false);
   }

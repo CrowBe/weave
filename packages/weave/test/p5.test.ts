@@ -305,10 +305,10 @@ test('Amos unavailable makes intake ask_user without calling TypeSafe', async ()
   };
   let typesafeCalls = 0;
   const gateway = createInferenceGateway({
-    clock: { now: () => 10 }, routes: [unit, { ...unit, routed_unit_id: 'typesafe.choice', adapter: 'typesafe-ai', model: 'jev-latest' }],
+    clock: { now: () => 10 }, routes: [unit, { ...unit, routed_unit_id: 'typesafe.choice', adapter: 'typesafe-ai', model: 'jev-preview' }],
     decision: { provider: 'typesafe-jev', fallback: null, sites: { 'intake.classify': 'amos' }, providers: {
       amos: { base_url: 'http://127.0.0.1:8766', model: 'amos-1-2b' },
-      'typesafe-jev': { base_url: 'https://api.typesafe.ai', model: 'jev-latest' },
+      'typesafe-jev': { base_url: 'https://api.typesafe.ai', model: 'jev-preview' },
     } },
     evaluators: [amosEvaluator({ fetch: async () => new Response('private provider text', { status: 503 }) }),
       { id: 'typesafe-ai', evaluate: async () => { typesafeCalls++; throw new Error('must not call'); } }],

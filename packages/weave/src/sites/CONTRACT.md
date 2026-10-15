@@ -120,7 +120,7 @@ Each accepted generation run gets a fresh opaque check-run identity, combined wi
 The gateway composition configures `decision.sites["intake.classify"] = "amos"`.
 Only this site uses the local Amos System One adapter (`amos-1-2b`, also called
 amos-1-small). Every other configured evaluation retains the TypeSafe default
-`typesafe-jev` / `jev-latest`. Provider selection is exclusive; intake never
+`typesafe-jev` / `jev-preview`. Provider selection is exclusive; intake never
 silently retries against TypeSafe. Amos readiness uses GET `/v1/models`.
 An unreachable service, non-2xx health response or timeout produces a typed
 unavailable failure and gateway `provider_unavailable` evidence. Intake then
