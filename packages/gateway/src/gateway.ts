@@ -515,7 +515,10 @@ async function attemptBeforeDeadline<T>(
   // The watcher catches its own failures, including cancellation during cleanup.
   void deadline();
   try {
-    return await Promise.race([params.attempt(unit, provider.signal), interrupted]);
+    const attempt = params.attempt(unit, provider.signal);
+    // Observe late failures without exposing provider errors or changing the race.
+    void attempt.catch(() => {});
+    return await Promise.race([attempt, interrupted]);
   } finally {
     watcher.abort();
     params.signal?.removeEventListener('abort', cancel);
