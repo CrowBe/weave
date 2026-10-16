@@ -8,7 +8,7 @@
  *
  * Contributor content may be used for training. Mark its destination
  * training-allowed in the route table so privacy routing admits only explicit
- * public/non-sensitive work and redacts credentials before sending it.
+ * public/non-sensitive work and rejects credential-shaped content before sending it.
  *
  * ModelSettings has no reasoning field. This adapter sends no reasoning
  * parameter or provider options, so it never requests the top reasoning level.

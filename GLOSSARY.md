@@ -156,7 +156,7 @@ A versioned context profile, prompt template, model, and settings selected toget
 
 ### Training-allowed destination
 
-A data destination whose provider may train on disclosed content. A routed unit marks it with `destination_training_allowed: true`; the mark applies to every unit sharing that destination. Routing excludes it unless the caller explicitly classifies the request as `public` or `non_sensitive`, even when the destination is otherwise permitted. Before dispatch the gateway redacts strings containing the repository's credential markers. Redaction is a final safeguard, not permission to send sensitive or private material.
+A data destination whose provider may train on disclosed content. A routed unit marks it with `destination_training_allowed: true`; the mark applies to every unit sharing that destination. Routing excludes it unless the caller explicitly classifies the request as `public` or `non_sensitive`, even when the destination is otherwise permitted. Before dispatch the gateway screens content for the repository's credential markers at token starts. A match records a non-retryable `invalid_request` attempt with zero usage and prevents dispatch to every unit at that destination for the request. Escalation may still disclose the original content to a non-training destination permitted by the request's classification and terms. Screening is a final safeguard, not permission to send sensitive or private material.
 
 ### Content class
 

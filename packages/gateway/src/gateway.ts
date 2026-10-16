@@ -17,7 +17,7 @@
 import { bindDecisionProvider, type DecisionConfig } from './config.js';
 import { budgetRoute } from './budget.js';
 import { priceAttempt, worstCaseCost, type RouteExclusion } from './routing.js';
-import { redactCredentialContent, redactCredentialText, trainingAllowedDestinations } from './privacy.js';
+import { containsCredentialContent, trainingAllowedDestinations } from './privacy.js';
 import {
   answersMatchQuestions,
   nonEmptyText,
@@ -123,14 +123,15 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
         target: { operation: 'generate', kind: request.kind },
         terms: request.terms,
         invalid: invalidGeneration(request),
+        containsCredentials: containsCredentialContent(request.input),
         attempt: async (unit, attemptSignal) => {
           const adapter = generators.get(unit.adapter);
           if (adapter === undefined) return missingAdapter(unit);
 
           const result = await adapter.execute({
             model: unit.model,
-            instructions: trainingAllowed.has(unit.destination) ? redactCredentialText(request.input.instructions) : request.input.instructions,
-            prompt: trainingAllowed.has(unit.destination) ? redactCredentialText(request.input.prompt) : request.input.prompt,
+            instructions: request.input.instructions,
+            prompt: request.input.prompt,
             settings: unit.settings,
             signal: attemptSignal,
           });
@@ -184,6 +185,7 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
         target: { operation: 'evaluate', kind: request.kind },
         terms: request.terms,
         invalid: invalidEvaluation(request),
+        containsCredentials: containsCredentialContent([request.state, request.questions]),
         attempt: async (unit, attemptSignal) => {
           const adapter = evaluators.get(unit.adapter);
           if (adapter === undefined) return missingAdapter(unit);
@@ -191,8 +193,8 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
           const result = await adapter.evaluate({
             model: unit.model,
             kind: request.kind,
-            state: trainingAllowed.has(unit.destination) ? redactCredentialContent(request.state) : request.state,
-            questions: trainingAllowed.has(unit.destination) ? redactCredentialContent(request.questions) : request.questions,
+            state: request.state,
+            questions: request.questions,
             signal: attemptSignal,
           });
           if (result.status === 'failed') return failedAttempt(result.failure);
@@ -301,6 +303,8 @@ interface BoundedParams<T> {
   readonly terms: InferenceTerms;
   /** A description of why the request is unusable, or null. */
   readonly invalid: string | null;
+  /** Credential screening is request-wide; training permission is destination-wide. */
+  readonly containsCredentials: boolean;
   readonly attempt: (unit: RoutedUnit, signal?: AbortSignal) => Promise<AttemptResult<T>>;
 }
 
@@ -361,7 +365,15 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
     consumed.set(unit.routed_unit_id, (consumed.get(unit.routed_unit_id) ?? 0) + 1);
 
     const started_at = clock.now();
-    const result = await attemptBeforeDeadline(params, unit);
+    const disclosureBlocked = unit.destination_training_allowed === true && params.containsCredentials;
+    const result: AttemptResult<T> = disclosureBlocked
+      ? {
+          usage: { input_tokens: 0, output_tokens: 0 },
+          disposition: { status: 'failed', failure: {
+            code: 'invalid_request', message: 'credential-shaped content cannot be sent to a training-allowed destination', retryable: false,
+          } },
+        }
+      : await attemptBeforeDeadline(params, unit);
     const ended_at = clock.now();
 
     const metered = meteredCost(unit, terms, result.usage);
@@ -405,6 +417,13 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
       // means this routed unit is the wrong one for these terms.
       if (!disposition.failure.retryable) {
         exhausted.add(unit.routed_unit_id);
+        // The content is unchanged across units at this destination. Skip its
+        // fallbacks too, leaving attempts for a permitted non-training route.
+        if (disclosureBlocked) {
+          for (const candidate of params.routes) {
+            if (candidate.destination === unit.destination) exhausted.add(candidate.routed_unit_id);
+          }
+        }
         continue;
       }
 

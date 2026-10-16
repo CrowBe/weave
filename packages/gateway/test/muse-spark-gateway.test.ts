@@ -188,13 +188,15 @@ describe('Muse Spark routed attempts', () => {
     assert.equal(counts.get('beta'), 1);
   });
 
-  it('redacts credential-shaped content in the body actually sent to the training destination', async () => {
+  it('rejects credential-shaped content before sending to the training destination', async () => {
     const secret = 'sk-' + 'A'.repeat(40);
-    let body = '';
-    const outcome = await gateway(async (_url, init) => { body = String(init?.body); return completion(); })
+    let calls = 0;
+    const outcome = await gateway(async () => { calls += 1; return completion(); })
       .generate(request('redaction', `harmless example with ${secret}`));
-    assert.equal(outcome.status, 'accepted');
-    assert.ok(!body.includes(secret));
-    assert.ok(body.includes('[REDACTED]'));
+    assert.equal(calls, 0);
+    assert.equal(outcome.status, 'unaccepted');
+    assert.equal(outcome.attempts.length, 1);
+    assert.equal(outcome.attempts[0]?.disposition.status === 'failed' ? outcome.attempts[0].disposition.failure.code : '', 'invalid_request');
+    assert.ok(!JSON.stringify(outcome).includes(secret));
   });
 });

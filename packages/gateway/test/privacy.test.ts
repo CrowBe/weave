@@ -74,14 +74,16 @@ describe('training-allowed destination privacy', () => {
     assert.equal(calls.length, 0);
   });
   for (const credential of ['sk-test-secret', 'sk_secret', 'Bearer secret', 'eyJsecret', 'ghp_secret', 'gho_secret', 'ghu_secret', 'ghs_secret', 'ghr_secret', 'github_pat_secret', 'AKIAsecret']) {
-    it(`redacts the existing credential family ${credential.split(/[-_ ]/)[0]} before training disclosure`, async () => {
+    it(`rejects the existing credential family ${credential.split(/[-_ ]/)[0]} before training disclosure`, async () => {
       const calls: GenerationCall[] = [];
       const input = { instructions: `Instruction ${credential}`, prompt: `Public text with ${credential}` };
       const gateway = createInferenceGateway({ routes: [unit()], adapters: [generator(calls)], clock: { now: () => 1 } });
-      await gateway.generate(request(input, 'non_sensitive'));
-      assert.equal(calls.length, 1);
-      assert.ok(!JSON.stringify(calls).includes(credential), 'credential must not cross the provider port');
-      assert.deepEqual(input, { instructions: `Instruction ${credential}`, prompt: `Public text with ${credential}` }, 'caller input is not mutated');
+      const outcome = await gateway.generate(request(input, 'non_sensitive'));
+      assert.equal(calls.length, 0, 'credential must not cross the provider port');
+      assert.equal(outcome.status, 'unaccepted');
+      assert.equal(outcome.attempts[0]?.disposition.status === 'failed' ? outcome.attempts[0].disposition.failure.code : '', 'invalid_request');
+      assert.ok(!JSON.stringify(outcome).includes(credential));
+      assert.ok(input.instructions === `Instruction ${credential}` && input.prompt === `Public text with ${credential}`, 'caller input is not mutated');
     });
   }
   it('preserves content for non-training destinations', async () => {
@@ -92,16 +94,16 @@ describe('training-allowed destination privacy', () => {
     assert.equal(calls[0]?.instructions, input.instructions);
     assert.equal(calls[0]?.prompt, input.prompt);
   });
-  it('redacts an unmarked routed unit sharing a training-allowed destination', async () => {
+  it('rejects an unmarked routed unit sharing a training-allowed destination', async () => {
     const calls: GenerationCall[] = [];
     const gateway = createInferenceGateway({
       routes: [unit(false), unit(true, { routed_unit_id: 'marked' })],
       adapters: [generator(calls)], clock: { now: () => 1 },
     });
     await gateway.generate(request({ instructions: 'Read', prompt: 'sk-test-secret' }, 'public'));
-    assert.ok(!JSON.stringify(calls).includes('sk-test-secret'));
+    assert.equal(calls.length, 0);
   });
-  it('enforces privacy for evaluation and redacts nested state and question content', async () => {
+  it('enforces privacy for evaluation and rejects nested state and question content', async () => {
     const calls: EvaluationCall[] = [];
     const evaluator: EvaluationAdapter = { id: 'fake', async evaluate(call) {
       calls.push(call);
@@ -115,14 +117,36 @@ describe('training-allowed destination privacy', () => {
     const base = { request_id: 'eval', site: 'test', role: 'working' as const, kind: 'boolean' as const, state, questions };
     assert.equal((await gateway.evaluate({ ...base, terms })).status, 'blocked');
     assert.equal(calls.length, 0);
-    assert.equal((await gateway.evaluate({ ...base, terms: classified('public') })).status, 'accepted');
-    assert.equal(calls.length, 1);
+    const outcome = await gateway.evaluate({ ...base, terms: classified('public') });
+    assert.equal(calls.length, 0);
+    assert.equal(outcome.status, 'unaccepted');
+    assert.equal(outcome.attempts[0]?.disposition.status === 'failed' ? outcome.attempts[0].disposition.failure.code : '', 'invalid_request');
     for (const secret of ['sk-test-secret', 'github_pat_key', 'Bearer secret', 'eyJsecret', 'AKIAsecret']) {
-      assert.ok(!JSON.stringify(calls).includes(secret), 'evaluation content must be redacted');
+      assert.ok(!JSON.stringify(outcome).includes(secret), 'evaluation result must not contain credentials');
     }
-    assert.ok(JSON.stringify(calls).includes('public data'));
-    assert.equal(state.nested[0], 'sk-test-secret');
+    assert.ok(state.nested[0] === 'sk-test-secret');
   });
+  for (const location of ['state value', 'state key', 'question instructions', 'question criteria', 'question id']) {
+    it(`rejects a credential in evaluation ${location} without dispatch`, async () => {
+      let calls = 0;
+      const evaluator: EvaluationAdapter = { id: 'fake', async evaluate() {
+        calls++;
+        return { status: 'failed', failure: { code: 'unavailable', message: 'fake', retryable: false } };
+      } };
+      const gateway = createInferenceGateway({ routes: [unit(true, { operation: 'evaluate', kind: 'boolean' })],
+        evaluators: [evaluator], clock: { now: () => 1 } });
+      const secret = 'ghp_' + 'test-SENTINEL';
+      const state = location === 'state value' ? { nested: [secret] } : location === 'state key' ? { [secret]: 'public' } : { safe: 'public' };
+      const questions = { [location === 'question id' ? secret : 'q']: { type: 'boolean' as const,
+        instructions: location === 'question instructions' ? secret : 'Valid?',
+        criteria: { true: location === 'question criteria' ? { nested: [secret] } : 'yes', false: 'no' } } };
+      const outcome = await gateway.evaluate({ request_id: 'eval', site: 'test', role: 'working', kind: 'boolean',
+        state, questions, terms: classified('public') });
+      assert.equal(calls, 0);
+      assert.equal(outcome.status, 'unaccepted');
+      assert.ok(!JSON.stringify(outcome).includes(secret));
+    });
+  }
   it('retains destination training policy when a decision binding filters the marked unit out', async () => {
     let calls = 0;
     const evaluator: EvaluationAdapter = { id: 'typesafe-ai', async evaluate() {
