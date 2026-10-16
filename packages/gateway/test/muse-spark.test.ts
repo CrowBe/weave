@@ -6,6 +6,8 @@ import {
   MUSE_SPARK_BASE_URL,
   MUSE_SPARK_DESTINATION,
   MUSE_SPARK_DOCUMENTED_CONTRIBUTOR_LIMITS,
+  MUSE_SPARK_DEFAULT_SETTINGS,
+  MUSE_SPARK_MIN_OUTPUT_TOKENS,
   MUSE_SPARK_FALLBACK_MODEL,
   MUSE_SPARK_PRIMARY_MODEL,
   museSparkAdapter,
@@ -17,7 +19,7 @@ const CALL: GenerationCall = {
   model: MUSE_SPARK_PRIMARY_MODEL,
   instructions: 'Be brief.',
   prompt: 'Reply with the single word: ok',
-  settings: { max_output_tokens: 20 },
+  settings: MUSE_SPARK_DEFAULT_SETTINGS,
   signal: undefined,
 };
 const BODY = {
@@ -46,6 +48,25 @@ function failureOf(result: GenerationProviderResult) {
 }
 
 describe('muse-spark adapter contract', () => {
+  it('exports a 1024-token minimum and default settings with room for default reasoning', () => {
+    assert.equal(MUSE_SPARK_MIN_OUTPUT_TOKENS, 1024);
+    assert.deepEqual(MUSE_SPARK_DEFAULT_SETTINGS, { max_output_tokens: MUSE_SPARK_MIN_OUTPUT_TOKENS });
+  });
+
+  it('rejects an insufficient or invalid output budget without sending', async () => {
+    for (const max_output_tokens of [16, 1023, 0, -1, 1024.5, NaN, Infinity]) {
+      const mock = mockFetch();
+      const result = await museSparkAdapter({ apiKey: KEY, fetch: mock.fetch }).execute({
+        ...CALL, settings: { max_output_tokens },
+      });
+      const failure = failureOf(result);
+      assert.equal(failure.code, 'invalid_request');
+      assert.equal(failure.retryable, false);
+      assert.equal(failure.message, 'muse-spark: settings.max_output_tokens must be an integer at least 1024 to leave room for default reasoning and text');
+      assert.equal(mock.calls.length, 0);
+    }
+  });
+
   it('posts one SDK chat completion with the key only in its Bearer header and no reasoning parameter', async () => {
     const mock = mockFetch();
     const result = await museSparkAdapter({ apiKey: KEY, fetch: mock.fetch }).execute(CALL);
@@ -59,7 +80,7 @@ describe('muse-spark adapter contract', () => {
     assert.ok(!String(sent.init.body).includes(KEY));
     const body = JSON.parse(String(sent.init.body)) as Record<string, unknown>;
     assert.equal(body['model'], 'muse-spark-1.3-contributor');
-    assert.equal(body['max_tokens'], 20);
+    assert.equal(body['max_tokens'], CALL.settings.max_output_tokens);
     assert.deepEqual(body['messages'], [
       { role: 'system', content: CALL.instructions },
       { role: 'user', content: CALL.prompt },
@@ -76,7 +97,7 @@ describe('muse-spark adapter contract', () => {
   it('honours an injected base URL, temperature, and explicitly selected fallback model', async () => {
     const mock = mockFetch();
     await museSparkAdapter({ apiKey: KEY, fetch: mock.fetch, baseURL: 'http://mock.invalid/v1/' }).execute({
-      ...CALL, model: MUSE_SPARK_FALLBACK_MODEL, settings: { max_output_tokens: 20, temperature: 0.2 },
+      ...CALL, model: MUSE_SPARK_FALLBACK_MODEL, settings: { ...CALL.settings, temperature: 0.2 },
     });
     assert.equal(mock.calls[0]!.url, 'http://mock.invalid/v1/chat/completions');
     const body = JSON.parse(String(mock.calls[0]!.init.body)) as Record<string, unknown>;

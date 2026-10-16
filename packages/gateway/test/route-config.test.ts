@@ -686,6 +686,7 @@ it('declares primary then fallback Muse flash writers with training permission a
   const units = parsed.table.filter(unit => unit.adapter === 'muse-spark');
   assert.deepEqual(units.map(unit => unit.model), ['muse-spark-1.3-contributor', 'muse-spark-1.2-contributor']);
   for (const unit of units) {
+    assert.equal(unit.settings.max_output_tokens, 8192);
     assert.equal(unit.tier, 'flash');
     assert.equal(unit.operation, 'generate');
     assert.equal(unit.kind, 'transform');

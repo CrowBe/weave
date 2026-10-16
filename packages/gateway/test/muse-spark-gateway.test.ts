@@ -4,13 +4,13 @@ import { describe, it } from 'node:test';
 import { createInferenceGateway, type GenerationRequest, type RoutedUnit, type Timer } from '@weave/gateway';
 import { museSparkAdapter, MUSE_SPARK_ADAPTER, MUSE_SPARK_DESTINATION,
   MUSE_SPARK_PRIMARY_MODEL, MUSE_SPARK_FALLBACK_MODEL,
-  MUSE_SPARK_DOCUMENTED_CONTRIBUTOR_LIMITS } from '@weave/gateway/muse-spark';
+  MUSE_SPARK_DOCUMENTED_CONTRIBUTOR_LIMITS, MUSE_SPARK_DEFAULT_SETTINGS } from '@weave/gateway/muse-spark';
 
 const KEY = 'sk-test-SENTINEL-gateway-credential';
 const primary: RoutedUnit = {
   routed_unit_id: 'muse.primary', operation: 'generate', kind: 'transform', tier: 'flash',
   context_profile: 'test', context_profile_version: 1, prompt_template: 'test', prompt_template_version: 1,
-  adapter: MUSE_SPARK_ADAPTER, model: MUSE_SPARK_PRIMARY_MODEL, settings: { max_output_tokens: 10 },
+  adapter: MUSE_SPARK_ADAPTER, model: MUSE_SPARK_PRIMARY_MODEL, settings: MUSE_SPARK_DEFAULT_SETTINGS,
   destination: MUSE_SPARK_DESTINATION, destination_training_allowed: true,
   quality: 'baseline', context_limit_tokens: 100, price: { input_per_mtok: 0, output_per_mtok: 0 },
   rate_limits: MUSE_SPARK_DOCUMENTED_CONTRIBUTOR_LIMITS,
@@ -22,18 +22,19 @@ function request(id = 'test', prompt = 'ok'): GenerationRequest {
       destinations: [MUSE_SPARK_DESTINATION], max_context_tokens: 10, deadline: 100_000,
       cost_ceiling: 0, max_attempts: 2, max_attempts_per_route: 1 } };
 }
-function completion(text = 'ok'): Response {
+function completion(text: string | null = 'ok', outputTokens = 1, finishReason = 'stop', reasoningTokens = 0): Response {
   return new Response(JSON.stringify({ id: 'test', choices: [{ index: 0,
-    message: { role: 'assistant', content: text }, finish_reason: 'stop' }],
-    usage: { prompt_tokens: 2, completion_tokens: 1, total_tokens: 3 } }),
+    message: { role: 'assistant', content: text }, finish_reason: finishReason }],
+    usage: { prompt_tokens: 2, completion_tokens: outputTokens, total_tokens: 2 + outputTokens,
+      completion_tokens_details: { reasoning_tokens: reasoningTokens } } }),
     { headers: { 'content-type': 'application/json' } });
 }
 function refused(status: number): Response {
   return new Response(JSON.stringify({ error: { message: KEY, type: 'provider_error' } }),
     { status, headers: { 'content-type': 'application/json' } });
 }
-function gateway(fetch: typeof globalThis.fetch, options: { timer?: Timer; now?: () => number; key?: string } = {}) {
-  return createInferenceGateway({ routes: [primary, fallback],
+function gateway(fetch: typeof globalThis.fetch, options: { timer?: Timer; now?: () => number; key?: string; routes?: readonly RoutedUnit[] } = {}) {
+  return createInferenceGateway({ routes: options.routes ?? [primary, fallback],
     adapters: [museSparkAdapter({ apiKey: options.key ?? KEY, fetch })],
     clock: { now: options.now ?? (() => 0) }, ...(options.timer ? { timer: options.timer } : {}) });
 }
@@ -45,6 +46,57 @@ function deferred<T = void>() {
 }
 
 describe('Muse Spark routed attempts', () => {
+  it('records a below-minimum routed unit as invalid_request without HTTP dispatch', async () => {
+    let calls = 0;
+    const outcome = await gateway(async () => { calls++; return completion(); }, {
+      routes: [{ ...primary, settings: { max_output_tokens: 16 } }],
+    }).generate(request());
+    assert.equal(outcome.status, 'unaccepted');
+    assert.equal(calls, 0);
+    assert.equal(outcome.attempts.length, 1);
+    assert.deepEqual(outcome.attempts[0]?.disposition, { status: 'failed', failure: {
+      code: 'invalid_request', retryable: false,
+      message: 'muse-spark: settings.max_output_tokens must be an integer at least 1024 to leave room for default reasoning and text',
+    } });
+  });
+
+  it('records reasoning exhausting the output cap with no text as failure, never acceptance', async () => {
+    for (const text of ['', null]) {
+      let calls = 0;
+      const outcome = await gateway(async (): Promise<Response> => {
+        calls++;
+        return completion(text, primary.settings.max_output_tokens, 'length', primary.settings.max_output_tokens);
+      }).generate(request());
+      assert.equal(outcome.status, 'unaccepted');
+      assert.equal(calls, 2);
+      assert.equal(outcome.attempts.length, 2);
+      for (const attempt of outcome.attempts) {
+        assert.deepEqual(attempt.disposition, { status: 'failed', failure: {
+          code: 'malformed_response', retryable: false,
+          message: 'muse-spark: output token cap exhausted before any text content; increase settings.max_output_tokens to leave room for reasoning and text',
+        } });
+      }
+    }
+  });
+
+  it('accepts ok after about 250 reasoning tokens under the default budget and records total output usage', async () => {
+    let calls = 0;
+    const outcome = await gateway(async (_url, init) => {
+      calls++;
+      const body = JSON.parse(String(init?.body));
+      assert.equal(body.max_tokens, primary.settings.max_output_tokens);
+      assert.equal(body.reasoning, undefined);
+      assert.equal(body.reasoning_effort, undefined);
+      return completion('ok', 251, 'stop', 250);
+    }).generate(request());
+    assert.equal(outcome.status, 'accepted');
+    assert.ok(outcome.status === 'accepted');
+    assert.equal(outcome.text, 'ok');
+    assert.equal(calls, 1);
+    assert.equal(outcome.attempts.length, 1);
+    assert.deepEqual(outcome.attempts[0]?.usage, { input_tokens: 2, output_tokens: 251 });
+  });
+
   for (const status of [429, 503, 404]) {
     it(`escalates a ${status} primary refusal to the explicit 1.2 routed unit`, async () => {
       const models: string[] = [];

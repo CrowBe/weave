@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createInferenceGateway } from '../src/gateway.js';
-import { museSparkAdapter, MUSE_SPARK_ADAPTER, MUSE_SPARK_PRIMARY_MODEL, MUSE_SPARK_FALLBACK_MODEL, MUSE_SPARK_DESTINATION } from '../src/adapters/muse-spark.js';
+import { museSparkAdapter, MUSE_SPARK_ADAPTER, MUSE_SPARK_PRIMARY_MODEL, MUSE_SPARK_FALLBACK_MODEL, MUSE_SPARK_DESTINATION, MUSE_SPARK_DEFAULT_SETTINGS } from '../src/adapters/muse-spark.js';
 import type { GenerationAdapter, GenerationCall, GenerationRequest, InferenceTerms, RoutedUnit } from '../src/types.js';
 
 const TERMS: InferenceTerms = {
@@ -12,7 +12,7 @@ const TERMS: InferenceTerms = {
 const ROUTE: RoutedUnit = {
   routed_unit_id: 'muse-writer', context_profile: 'public', context_profile_version: 1,
   prompt_template: 'writer', prompt_template_version: 1, adapter: MUSE_SPARK_ADAPTER,
-  model: MUSE_SPARK_PRIMARY_MODEL, settings: { max_output_tokens: 10 },
+  model: MUSE_SPARK_PRIMARY_MODEL, settings: MUSE_SPARK_DEFAULT_SETTINGS,
   destination: MUSE_SPARK_DESTINATION, destination_training_allowed: true,
   quality: 'baseline', context_limit_tokens: 100,
   price: { input_per_mtok: 0, output_per_mtok: 0 }, operation: 'generate', kind: 'transform',

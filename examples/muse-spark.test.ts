@@ -16,11 +16,16 @@ globalThis.fetch = async (url, init) => {
   assert.equal(new Headers(init.headers).get('authorization'), 'Bearer ' + process.env.MODEL_API_KEY);
   assert.equal(String(url), 'https://api.meta.ai/v1/chat/completions');
   const body = JSON.parse(init.body);
+  assert.equal(body.max_tokens, 1024);
   assert.equal(body.messages.at(-1).content, 'Reply with the single word: ok');
   assert.equal(body.reasoning_effort, undefined);
+  assert.equal(body.reasoning, undefined);
+  const exhausted = body.max_tokens <= 250;
   return new Response(JSON.stringify(process.env.TEST_STATUS === '401'
     ? {error:{message:process.env.MODEL_API_KEY}}
-    : {id:'mock',choices:[{index:0,message:{role:'assistant',content:'ok'},finish_reason:'stop'}],usage:{prompt_tokens:8,completion_tokens:1}}),
+    : {id:'mock',choices:[{index:0,message:{role:'assistant',content:exhausted ? '' : 'ok'},finish_reason:exhausted ? 'length' : 'stop'}],
+      usage:{prompt_tokens:8,completion_tokens:exhausted ? body.max_tokens : 251,
+        completion_tokens_details:{reasoning_tokens:exhausted ? body.max_tokens : 250}}}),
     {status:Number(process.env.TEST_STATUS || 200),headers:{'content-type':'application/json'}});
 };
 process.on('exit', () => assert.equal(calls, Number(process.env.TEST_EXPECT_REQUESTS)));
@@ -81,7 +86,7 @@ test('Muse example performs one public minimal call and prints safe usage and ro
   assert.deepEqual(Object.keys(output), ['outcome', 'routed_unit', 'model', 'usage', 'attempts']);
   assert.equal(output.outcome, 'accepted');
   assert.equal(output.model, 'muse-spark-1.3-contributor');
-  assert.deepEqual(output.usage, { input_tokens: 8, output_tokens: 1 });
+  assert.deepEqual(output.usage, { input_tokens: 8, output_tokens: 251 });
   assert.equal(output.attempts.length, 1);
 });
 

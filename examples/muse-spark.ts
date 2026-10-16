@@ -13,6 +13,7 @@ import {
   MUSE_SPARK_PRIMARY_MODEL,
   MUSE_SPARK_FALLBACK_MODEL,
   MUSE_SPARK_DOCUMENTED_CONTRIBUTOR_LIMITS,
+  MUSE_SPARK_DEFAULT_SETTINGS,
 } from '@weave/gateway/muse-spark';
 
 const apiKey = process.env.MODEL_API_KEY;
@@ -33,7 +34,7 @@ if (!apiKey || apiKey.trim().length === 0) {
       quality: 'baseline',
       context_profile: 'implementation', context_profile_version: 1,
       prompt_template: 'implementation', prompt_template_version: 1,
-      settings: { max_output_tokens: 16 },
+      settings: MUSE_SPARK_DEFAULT_SETTINGS,
       // This example's local bound, not a claimed provider context capacity.
       context_limit_tokens: 1024,
       // Official price unknown: flat zero placeholder, not a claim of free use.

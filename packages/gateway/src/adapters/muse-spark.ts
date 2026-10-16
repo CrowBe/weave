@@ -19,6 +19,7 @@ import type {
   GenerationAdapter,
   GenerationCall,
   GenerationProviderResult,
+  ModelSettings,
   ProviderFailure,
 } from '../types.js';
 import { secondsToMs } from './openai-compatible.js';
@@ -29,6 +30,17 @@ export const MUSE_SPARK_DESTINATION = 'muse-spark-contributor';
 export const MUSE_SPARK_BASE_URL = 'https://api.meta.ai/v1';
 export const MUSE_SPARK_PRIMARY_MODEL = 'muse-spark-1.3-contributor';
 export const MUSE_SPARK_FALLBACK_MODEL = 'muse-spark-1.2-contributor';
+/**
+ * Contributor models reason by default, and reasoning counts against the output
+ * cap. On 16 Oct 2026 a live one-word answer used about 250 reasoning tokens.
+ * This minimum leaves room for that default reasoning plus text; longer answers
+ * or reasoning may need a larger cap. No reasoning-level parameter is requested.
+ */
+export const MUSE_SPARK_MIN_OUTPUT_TOKENS = 1024;
+/** Default output budget for contributor calls, including default reasoning. */
+export const MUSE_SPARK_DEFAULT_SETTINGS = Object.freeze({
+  max_output_tokens: MUSE_SPARK_MIN_OUTPUT_TOKENS,
+}) satisfies ModelSettings;
 /**
  * Declared contributor limits, used by the gateway only to estimate retry
  * delay after a rate-limit refusal without Retry-After. They neither reserve
@@ -64,6 +76,12 @@ export function museSparkAdapter(options: MuseSparkOptions): GenerationAdapter {
   return {
     id: MUSE_SPARK_ADAPTER,
     async execute(call: GenerationCall): Promise<GenerationProviderResult> {
+      // Route settings validation is adapter-agnostic. Enforce this provider's
+      // minimum here, including callers that construct routed units directly.
+      if (!Number.isInteger(call.settings.max_output_tokens) || call.settings.max_output_tokens < MUSE_SPARK_MIN_OUTPUT_TOKENS) {
+        return { status: 'failed', failure: failure('invalid_request',
+          `settings.max_output_tokens must be an integer at least ${MUSE_SPARK_MIN_OUTPUT_TOKENS} to leave room for default reasoning and text`, false) };
+      }
       try {
         const result = await generateText({
           model: provider(call.model),
@@ -75,7 +93,9 @@ export function museSparkAdapter(options: MuseSparkOptions): GenerationAdapter {
           ...(call.signal === undefined ? {} : { abortSignal: call.signal }),
         });
         if (result.text.length === 0) {
-          return { status: 'failed', failure: failure('malformed_response', 'response carried no text content', false) };
+          return { status: 'failed', failure: failure('malformed_response', result.finishReason === 'length'
+            ? 'output token cap exhausted before any text content; increase settings.max_output_tokens to leave room for reasoning and text'
+            : 'response carried no text content', false) };
         }
         return {
           status: 'completed',
