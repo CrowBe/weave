@@ -65,6 +65,7 @@ export function museSparkAdapter(options: MuseSparkOptions): GenerationAdapter {
   // Copy the credential so mutation of a caller's options cannot change either
   // authentication or secrecy protection between concurrent calls.
   const apiKey = options.apiKey;
+  const contentKey = apiKey.trim();
   const provider = createOpenAICompatible({
     name: MUSE_SPARK_ADAPTER,
     apiKey,
@@ -76,6 +77,11 @@ export function museSparkAdapter(options: MuseSparkOptions): GenerationAdapter {
   return {
     id: MUSE_SPARK_ADAPTER,
     async execute(call: GenerationCall): Promise<GenerationProviderResult> {
+      if (call.instructions.includes(contentKey) || call.prompt.includes(contentKey)) {
+        return { status: 'failed', failure: failure('invalid_request',
+          'request content contains the adapter credential', false),
+          usage: { input_tokens: 0, output_tokens: 0 } };
+      }
       // Route settings validation is adapter-agnostic. Enforce this provider's
       // minimum here, including callers that construct routed units directly.
       if (!Number.isInteger(call.settings.max_output_tokens) || call.settings.max_output_tokens < MUSE_SPARK_MIN_OUTPUT_TOKENS) {

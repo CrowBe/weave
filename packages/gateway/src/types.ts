@@ -412,7 +412,12 @@ export type GenerationProviderResult =
       readonly finish_reason: string;
       readonly provider_response_id: string | undefined;
     }
-  | { readonly status: 'failed'; readonly failure: ProviderFailure };
+  | {
+      readonly status: 'failed';
+      readonly failure: ProviderFailure;
+      /** Local refusals can report zero usage; absent usage remains unknown. */
+      readonly usage?: ProviderUsage;
+    };
 
 export interface GenerationAdapter {
   readonly id: AdapterId;

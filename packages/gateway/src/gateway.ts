@@ -135,7 +135,7 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
             settings: unit.settings,
             signal: attemptSignal,
           });
-          if (result.status === 'failed') return failedAttempt(result.failure);
+          if (result.status === 'failed') return failedAttempt(result.failure, result.usage);
 
           const verdict = accept(result.text);
           return {
@@ -494,30 +494,42 @@ async function attemptBeforeDeadline<T>(
   let interrupt!: (result: AttemptResult<T>) => void;
   const interrupted = new Promise<AttemptResult<T>>(resolve => { interrupt = resolve; });
   const cancel = () => {
+    watcher.abort();
     provider.abort();
     interrupt(failedAttempt({ code: 'cancelled', message: 'provider attempt cancelled', retryable: false }));
   };
   params.signal?.addEventListener('abort', cancel, { once: true });
   if (params.signal?.aborted) cancel();
 
-  const deadline = async () => {
+  const deadline = async (attempt: Promise<AttemptResult<T>>) => {
     try {
-      await params.timer!.sleep(Math.max(0, params.terms.deadline - params.clock.now()), watcher.signal);
-      if (watcher.signal.aborted) return;
-      provider.abort();
-      interrupt(failedAttempt({ code: 'timeout', message: 'provider attempt exceeded the request deadline', retryable: false }));
+      // Give an already completing provider a chance to settle before starting
+      // a wait (including injected timers that advance time synchronously).
+      await Promise.race([attempt, Promise.resolve()]);
+      while (!watcher.signal.aborted) {
+        const remaining = params.terms.deadline - params.clock.now();
+        if (remaining <= 0) {
+          provider.abort();
+          interrupt(failedAttempt({ code: 'timeout', message: 'provider attempt exceeded the request deadline', retryable: false }));
+          return;
+        }
+        // Native timer delays are signed 32-bit milliseconds. A wake is only
+        // a hint to recheck the clock, including early wakes from custom timers.
+        await params.timer!.sleep(Math.min(remaining, 2 ** 31 - 1), watcher.signal);
+      }
     } catch {
       if (watcher.signal.aborted) return;
       provider.abort();
       interrupt(failedAttempt({ code: 'unavailable', message: 'provider deadline timer failed', retryable: false }));
     }
   };
-  // The watcher catches its own failures, including cancellation during cleanup.
-  void deadline();
   try {
     const attempt = params.attempt(unit, provider.signal);
     // Observe late failures without exposing provider errors or changing the race.
     void attempt.catch(() => {});
+    void attempt.then(() => watcher.abort(), () => watcher.abort());
+    // The watcher catches its own failures, including cancellation during cleanup.
+    void deadline(attempt);
     return await Promise.race([attempt, interrupted]);
   } finally {
     watcher.abort();
@@ -540,9 +552,9 @@ function outcomeBase(
   };
 }
 
-function failedAttempt<T>(failure: ProviderFailure): AttemptResult<T> {
+function failedAttempt<T>(failure: ProviderFailure, usage: ProviderUsage = { input_tokens: undefined, output_tokens: undefined }): AttemptResult<T> {
   return {
-    usage: { input_tokens: undefined, output_tokens: undefined },
+    usage,
     disposition: { status: 'failed', failure },
   };
 }

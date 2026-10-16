@@ -55,15 +55,7 @@ function fakeTimer(clock: { advance(ms: number): void }): Timer & { waits: numbe
   const waits: number[] = [];
   return {
     waits,
-    async sleep(ms: number, signal?: AbortSignal) {
-      // A cancellable sleep watches an in-flight deadline. It remains pending
-      // while the scripted provider runs, and cleanup cancels it. Backoff
-      // sleeps below advance this fixture's clock immediately.
-      if (signal !== undefined) {
-        if (signal.aborted) return;
-        await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
-        return;
-      }
+    async sleep(ms: number) {
       waits.push(ms);
       clock.advance(ms);
     },

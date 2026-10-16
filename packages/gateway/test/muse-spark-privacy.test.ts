@@ -20,7 +20,7 @@ const ROUTE: RoutedUnit = {
 const FALLBACK: RoutedUnit = { ...ROUTE, routed_unit_id: 'muse-fallback', model: MUSE_SPARK_FALLBACK_MODEL,
   destination_training_allowed: false }; // The destination-wide mark must still apply.
 
-function harness(routes: readonly RoutedUnit[] = [ROUTE, FALLBACK]) {
+function harness(routes: readonly RoutedUnit[] = [ROUTE, FALLBACK], apiKey = 'injected-test-key') {
   const bodies: { model: string; messages: { role: string; content: string }[] }[] = [];
   const ordinaryCalls: GenerationCall[] = [];
   const ordinary: GenerationAdapter = { id: 'ordinary', async execute(call) {
@@ -37,7 +37,7 @@ function harness(routes: readonly RoutedUnit[] = [ROUTE, FALLBACK]) {
       usage: { prompt_tokens: 2, completion_tokens: 1, total_tokens: 3 },
     }), { headers: { 'content-type': 'application/json' } });
   };
-  const adapter = museSparkAdapter({ apiKey: 'injected-test-key', baseURL: 'http://mock.invalid/v1', fetch });
+  const adapter = museSparkAdapter({ apiKey, baseURL: 'http://mock.invalid/v1', fetch });
   return { bodies, ordinaryCalls,
     gateway: createInferenceGateway({ routes, adapters: [adapter, ordinary], clock: { now: () => 1 } }) };
 }
@@ -47,6 +47,34 @@ function request(input: GenerationRequest['input']): GenerationRequest {
 }
 
 for (const field of ['prompt', 'instructions'] as const) {
+  for (const padded of [false, true]) {
+    test(`adapter key in ${field} fails closed before HTTP dispatch (${padded ? 'trimmed' : 'exact'})`, async () => {
+      const credential = 'MUSEKEY0123456789abcdef';
+      const apiKey = padded ? ` ${credential} ` : credential;
+      const priced = [ROUTE, FALLBACK].map(route => ({ ...route,
+        price: { input_per_mtok: 1, output_per_mtok: 1 } }));
+      const { gateway, bodies } = harness(priced, apiKey);
+      const input = { instructions: 'Use public material', prompt: 'Reply ok', [field]: `Example(${credential})` };
+      const outcome = await gateway.generate(request(input));
+      assert.equal(bodies.length, 0, 'primary and 1.2 fallback must receive no HTTP requests');
+      assert.equal(outcome.status, 'unaccepted');
+      assert.equal(outcome.status === 'unaccepted' ? outcome.reason : '', 'attempts_exhausted');
+      assert.deepEqual(outcome.attempts.map(attempt => attempt.routed_unit_id), ['muse-writer', 'muse-fallback']);
+      for (const attempt of outcome.attempts) {
+        assert.equal(attempt.disposition.status, 'failed');
+        if (attempt.disposition.status === 'failed') {
+          assert.equal(attempt.disposition.failure.code, 'invalid_request');
+          assert.equal(attempt.disposition.failure.retryable, false);
+        }
+        assert.deepEqual(attempt.usage, { input_tokens: 0, output_tokens: 0 });
+        assert.equal(attempt.cost_is_upper_bound, false);
+      }
+      assert.equal(outcome.spent, 0);
+      assert.ok(!JSON.stringify(outcome).includes(credential), 'result, error and trace must not contain the key');
+      assert.ok(input[field].includes(credential));
+    });
+  }
+
   test(`ordinary ${field} reaches the training destination unchanged`, async () => {
     const { gateway, bodies } = harness();
     const content = 'task-123 risk-high desk_lamp Slovakia';
