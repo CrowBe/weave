@@ -319,8 +319,12 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
   const consumed = new Map<string, number>();
   const exhausted = new Set<string>();
   let lastOrder: readonly RoutedUnit[] = [];
+  const allUnavailable = () => params.target.operation === 'generate' && attempts.length > 0 &&
+    lastOrder.every(unit => exhausted.has(unit.routed_unit_id)) &&
+    attempts.every(attempt => attempt.disposition.status === 'failed' &&
+      attempt.disposition.failure.code === 'unavailable');
   while (true) {
-    if (attempts.length >= terms.max_attempts) {
+    if (attempts.length >= terms.max_attempts && !allUnavailable()) {
       return finish({ status: 'unaccepted', reason: 'attempts_exhausted' });
     }
     if (params.signal?.aborted) return finish({ status: 'unaccepted', reason: 'provider_failed' });
@@ -346,6 +350,11 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
       return finish({ status: 'blocked', reason: blockedRoutingReason(decision.excluded) });
     }
     lastOrder = decision.order;
+    // A previously excluded unit may have become eligible while the last
+    // attempt ran. Rechecking policy cannot grant another attempt at the cap.
+    if (attempts.length >= terms.max_attempts && !allUnavailable()) {
+      return finish({ status: 'unaccepted', reason: 'attempts_exhausted' });
+    }
     const unit = decision.order.find(u => !exhausted.has(u.routed_unit_id) &&
       (consumed.get(u.routed_unit_id) ?? 0) < perRoute && spent + worstCaseCost(u, terms) <= terms.cost_ceiling);
     if (!unit) break;
@@ -448,6 +457,13 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
   if (attempts.length === 0) return finish({ status: 'blocked', reason: 'no_budget' });
   if (spent + cheapestWorstCase(lastOrder, terms) > terms.cost_ceiling) {
     return finish({ status: 'unaccepted', reason: 'budget_exhausted' });
+  }
+  // Only a completed escalation through unavailable units is an unavailable
+  // provider set, including escalation completed exactly at the attempt cap.
+  // Cancellation, deadline and budget checks still precede this outcome; a
+  // retryable fault that used its route share keeps its existing outcome too.
+  if (allUnavailable()) {
+    return finish({ status: 'blocked', reason: 'provider_unavailable' });
   }
   return finish({ status: 'unaccepted', reason: lastFailed ? 'provider_failed' : 'attempts_exhausted' });
 }
