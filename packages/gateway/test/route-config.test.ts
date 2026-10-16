@@ -33,6 +33,23 @@ it('parses the example without changing its units or decision config', () => {
   const result = parseRouteConfig(input);
   assert.deepEqual(result, { ok: true, table: input.units, decision: input.decision });
 });
+it('declares only the guarded free Zen flash unit and requires explicit destination permission', () => {
+  const units = table();
+  const zen = units.find(unit => unit.adapter === 'opencode-zen');
+  assert.ok(zen, 'the example must declare the free Zen routed unit');
+  assert.equal(zen.routed_unit_id, 'opencode-zen.deepseek-free.flash');
+  assert.equal(zen.model, 'deepseek-v4.1-flash-free');
+  assert.equal(zen.destination, 'opencode-zen.deepseek-free');
+  assert.equal(zen.context_profile, 'implementation');
+  assert.equal(zen.tier, 'flash');
+  assert.deepEqual(zen.price, { input_per_mtok: 0, output_per_mtok: 0 });
+  assert.equal(zen.rate_limits, undefined, 'floating limits must not be invented');
+  assert.equal(units.some(unit => unit.model === 'deepseek-v4.1-flash'), false);
+  assert.deepEqual(route([zen], target, terms, 20).excluded, [
+    { routed_unit_id: zen.routed_unit_id, reason: 'destination_not_permitted' },
+  ]);
+  assert.deepEqual(route([zen], target, { ...terms, destinations: [zen.destination] }, 20).order, [zen]);
+});
 it('uses TypeSafe Jev as the sole default decision provider without fallback', () => {
   const result = parseRouteConfig(example());
   assert.equal(result.ok, true);
@@ -48,6 +65,7 @@ it('filters tiers independently of quality and preserves order', () => {
   assert.deepEqual(flash.order.map(u => u.adapter), ['grok-build', 'codex']);
   assert.deepEqual(flash.excluded, [
     { routed_unit_id: 'claude-code.strong', reason: 'tier_mismatch' },
+    { routed_unit_id: 'opencode-zen.deepseek-free.flash', reason: 'destination_not_permitted' },
     ...operationMismatch(units),
   ]);
   const decisionTier = route(units, { ...target, tier: 'decision' }, terms, 20);
@@ -61,6 +79,7 @@ it('filters tiers independently of quality and preserves order', () => {
   assert.deepEqual(strong.excluded, [
     { routed_unit_id: 'grok-build.flash', reason: 'tier_mismatch' },
     { routed_unit_id: 'codex.flash', reason: 'tier_mismatch' },
+    { routed_unit_id: 'opencode-zen.deepseek-free.flash', reason: 'tier_mismatch' },
     ...operationMismatch(units),
   ]);
   const unclassified = units.map(({ tier, ...unit }) => unit);
@@ -70,14 +89,18 @@ it('filters tiers independently of quality and preserves order', () => {
   ]);
 });
 it('reports no_budget when the requested tier is unaffordable and another tier stays affordable', async () => {
+  // This scenario permits every generate destination so only budget excludes
+  // its flash units; shared terms keep third-party Zen disclosure disallowed.
+  const budgetTerms = { ...terms, destinations: [...terms.destinations, 'opencode-zen.deepseek-free'] };
   const units = table().map(unit => unit.tier === 'flash'
     ? { ...unit, price: { ...unit.price, output_per_mtok: 1_000_000 } }
     : unit);
-  const open = route(units, target, terms, 20);
+  const open = route(units, target, budgetTerms, 20);
   assert.deepEqual(open.order.map(u => u.routed_unit_id), ['claude-code.strong']);
   assert.deepEqual(open.excluded, [
     { routed_unit_id: 'grok-build.flash', reason: 'unaffordable' },
     { routed_unit_id: 'codex.flash', reason: 'unaffordable' },
+    { routed_unit_id: 'opencode-zen.deepseek-free.flash', reason: 'unaffordable' },
     ...operationMismatch(units),
   ]);
   let calls = 0;
@@ -91,7 +114,7 @@ it('reports no_budget when the requested tier is unaffordable and another tier s
   });
   const outcome = await gateway.generate({
     request_id: 'flash-budget', site: 'test', role: 'working', kind: 'transform',
-    input: { instructions: '', prompt: 'work' }, terms: { ...terms, tier: 'flash' },
+    input: { instructions: '', prompt: 'work' }, terms: { ...budgetTerms, tier: 'flash' },
   });
   assert.equal(outcome.status, 'blocked');
   if (outcome.status === 'blocked') assert.equal(outcome.reason, 'no_budget');
@@ -107,6 +130,7 @@ it('excludes unavailable adapters with stable order; absent availability is a no
     assert.deepEqual(result.order.map(u => u.adapter), ['claude-code']);
     assert.deepEqual(result.excluded.map(u => u.reason), [
       'provider_unavailable', 'provider_unavailable',
+      'destination_not_permitted',
       ...operationMismatch(units).map((entry) => entry.reason),
     ]);
   }
@@ -115,6 +139,7 @@ it('excludes unavailable adapters with stable order; absent availability is a no
   const result = route(collision, target, { ...terms, destinations: [...terms.destinations, 'remote'] }, 20, { local: 'unavailable' });
   assert.deepEqual(result.excluded, [
     { routed_unit_id: units[0]!.routed_unit_id, reason: 'provider_unavailable' },
+    { routed_unit_id: 'opencode-zen.deepseek-free.flash', reason: 'destination_not_permitted' },
     ...operationMismatch(units),
   ]);
   assert.deepEqual(result.order.map(u => u.adapter), ['codex', 'claude-code']);
@@ -127,6 +152,7 @@ it('treats a malformed own availability entry as unavailable', () => {
     assert.deepEqual(result.order.map(u => u.adapter), ['grok-build', 'claude-code']);
     assert.deepEqual(result.excluded, [
       { routed_unit_id: 'codex.flash', reason: 'provider_unavailable' },
+      { routed_unit_id: 'opencode-zen.deepseek-free.flash', reason: 'destination_not_permitted' },
       ...operationMismatch(units),
     ]);
   }
@@ -244,6 +270,7 @@ it('availability retains evidence tie order and exclusion declaration order', ()
   assert.deepEqual(result.order.map(u => u.adapter), ['claude-code', 'grok-build']);
   assert.deepEqual(result.excluded, [
     { routed_unit_id: 'codex.flash', reason: 'provider_unavailable' },
+    { routed_unit_id: 'opencode-zen.deepseek-free.flash', reason: 'destination_not_permitted' },
     ...operationMismatch(units),
   ]);
 });
@@ -253,7 +280,7 @@ it('gateway passes availability into generation and evaluation routing', async (
   let calls = 0;
   const evaluatorIds = [...new Set([...units.filter((unit) => unit.operation === 'evaluate').map((unit) => unit.adapter), evaluateUnit.adapter])];
   const gateway = createInferenceGateway({
-    routes: [...units, evaluateUnit], clock: { now: () => 0 }, availability: { 'grok-build': 'auth_required', codex: 'auth_required', 'claude-code': 'auth_required', decision: 'auth_required', ...Object.fromEntries(evaluatorIds.map(id => [id, 'auth_required' as const])) },
+    routes: [...units, evaluateUnit], clock: { now: () => 0 }, availability: { 'grok-build': 'auth_required', codex: 'auth_required', 'claude-code': 'auth_required', 'opencode-zen': 'auth_required', decision: 'auth_required', ...Object.fromEntries(evaluatorIds.map(id => [id, 'auth_required' as const])) },
     adapters: units.filter((unit) => unit.operation === 'generate').map(unit => ({ id: unit.adapter, async execute() { calls++; throw new Error('must not call'); } })),
     evaluators: evaluatorIds.map((id) => ({ id, async evaluate() { calls++; throw new Error('must not call'); } })),
   });
@@ -352,10 +379,10 @@ it('returns config copies detached from all caller-owned nested data', () => {
   assert.equal(input.decision.providers['typesafe-jev'].model, 'changed');
 });
 
-it('excludes remote CLI units from local-only requests', () => {
+it('excludes remote units from local-only requests', () => {
   const units = table();
   const generate = units.filter((unit) => unit.operation === 'generate');
-  assert.deepEqual(generate.map(u => u.destination), ['xai.grok-build', 'openai.codex', 'anthropic.claude-code']);
+  assert.deepEqual(generate.map(u => u.destination), ['xai.grok-build', 'openai.codex', 'anthropic.claude-code', 'opencode-zen.deepseek-free']);
   const result = route(units, target, { ...terms, destinations: ['local'] }, 20);
   assert.deepEqual(result.order, []);
   assert.deepEqual(result.excluded, [

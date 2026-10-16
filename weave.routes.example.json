@@ -98,6 +98,28 @@
       "quota_provider": "claude"
     },
     {
+      "routed_unit_id": "opencode-zen.deepseek-free.flash",
+      "adapter": "opencode-zen",
+      "model": "deepseek-v4.1-flash-free",
+      "tier": "flash",
+      "operation": "generate",
+      "kind": "transform",
+      "destination": "opencode-zen.deepseek-free",
+      "quality": "baseline",
+      "context_profile": "implementation",
+      "context_profile_version": 1,
+      "prompt_template": "implementation",
+      "prompt_template_version": 1,
+      "settings": {
+        "max_output_tokens": 8192
+      },
+      "context_limit_tokens": 128000,
+      "price": {
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      }
+    },
+    {
       "routed_unit_id": "typesafe-jev.boolean",
       "adapter": "typesafe-ai",
       "model": "jev-preview",

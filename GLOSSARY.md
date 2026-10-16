@@ -154,6 +154,10 @@ The module that performs bounded model work under explicit scope, acceptance, au
 
 A versioned context profile, prompt template, model, and settings selected together for inference. Evaluation evidence attaches to that combination.
 
+### Free-model guard
+
+A provider adapter's deterministic check that a requested model is on its fixed free allowlist and is present, by exact id, in the provider's live public models list before generation. A missing or unreadable list makes that routed unit unavailable; the adapter never substitutes a paid model. OpenCode Zen's `opencode-zen.deepseek-free` destination serves only `deepseek-v4.1-flash-free` under this guard and requires explicit permission in the request's destinations. The sample `opencode-zen.deepseek-free.flash` routed unit is priced at zero for the [documented limited-time free tier](https://opencode.ai/docs/zen/); its floating rate limits have no declared numerical bound. This destination has zero retention and no training under the documented policy, and remains separate from Zen destinations that permit training.
+
 ### Tier
 
 A configured routed-unit attribute: `decision`, `flash`, `standard`, or `strong`. A tier identifies the role and resource class requested for a step; it is not a quality bar. Routing still enforces quality, destinations, context, and budget independently of tier. It is a routing attribute and is unrelated to execution tier.
