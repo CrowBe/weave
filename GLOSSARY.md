@@ -545,3 +545,20 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 - Say **acceptance line** for a proposal and **acceptance fact** for a line code has admitted. On the System One wire a boolean question is a Noul. The request kind remains `boolean`.
 - Say **criteria gate** for `task.criteria` and **task validation** for `task.validate`. Jev may answer either site. Neither site is the decision layer, and neither is `frontier.weigh`.
 - Say **confidence** for the provider statistic published beside a typed evaluation answer. It is not a weight and not a quality score.
+
+### Tune split
+
+The frozen, scenario-disjoint portion of a benchmark used to select descriptive
+thresholds. It supplies no runtime authority and cannot read holdout labels.
+
+### Holdout
+
+The frozen portion reserved for reporting after thresholds are selected on the
+tune split. Scenarios cannot cross between those portions.
+
+### Competitor harness
+
+A generic inference application evaluated using the same disclosed state and
+production questions as a judgment site, without becoming a decision provider.
+Competitor benchmarks report self-reported confidence separately from probability
+calibration and do not tune thresholds.

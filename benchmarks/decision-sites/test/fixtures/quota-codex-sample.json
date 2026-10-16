@@ -1,0 +1,84 @@
+{
+  "generatedAt": "2026-10-15T06:14:17.846Z",
+  "schemaVersion": 5,
+  "providers": [
+    {
+      "provider": "codex",
+      "plan": "plus",
+      "windows": [
+        {
+          "id": "five_hour",
+          "label": "session",
+          "kind": "session",
+          "resetsAt": "2026-10-15T11:14:00.000Z",
+          "percentRemaining": 98,
+          "pace": {
+            "status": "ahead",
+            "reservePercentPoints": -1.9009,
+            "burnMultiple": 20.1726
+          }
+        },
+        {
+          "id": "weekly",
+          "label": "week",
+          "kind": "weekly",
+          "resetsAt": "2026-10-22T06:14:00.000Z",
+          "percentRemaining": 100,
+          "pace": {
+            "status": "on_pace",
+            "reservePercentPoints": 0.003,
+            "burnMultiple": 0
+          }
+        }
+      ],
+      "credits": {
+        "remaining": 0,
+        "unlimited": false,
+        "unit": "credits"
+      },
+      "state": {
+        "status": "fresh",
+        "stale": false
+      },
+      "accountKeys": [
+        "codex-home"
+      ],
+      "quotaSemantics": {
+        "status": "known",
+        "effectiveAvailability": [
+          {
+            "scope": "all_models",
+            "status": "known",
+            "effectivePercentRemaining": 98,
+            "boundedBy": [
+              "five_hour",
+              "weekly"
+            ],
+            "limitingWindowIds": [
+              "five_hour"
+            ],
+            "pace": {
+              "status": "ahead",
+              "aheadWindowIds": [
+                "five_hour"
+              ],
+              "worstReservePercentPoints": -1.9009,
+              "worstReserveWindowId": "five_hour"
+            },
+            "runway": {
+              "status": "projected_exhaustion",
+              "usableRunwaySeconds": 874,
+              "projectedExhaustedAt": "2026-10-15T06:28:52.300Z",
+              "limitingWindowId": "five_hour",
+              "projectionConfidence": "early"
+            },
+            "selection": {
+              "status": "known",
+              "spendPriority": 0.4165
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

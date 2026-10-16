@@ -9,6 +9,7 @@
   "include": [
     "benchmarks/inference/jev/**/*.ts",
     "benchmarks/inference/bev-sample/**/*.ts",
-    "benchmarks/task-acceptance/**/*.ts"
+    "benchmarks/task-acceptance/**/*.ts",
+    "benchmarks/decision-sites/**/*.ts"
   ]
 }
