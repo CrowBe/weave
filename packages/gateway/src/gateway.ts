@@ -342,7 +342,7 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
     let snapshot;
     try { snapshot = await params.quota?.read(); } catch { snapshot = undefined; }
     const decision = budgetRoute(params.routes, params.target, terms, params.minEvidence,
-      params.availability, snapshot, clock.now());
+      params.availability, snapshot, clock.now(), params.containsCredentials);
     for (const note of decision.uncertainty) if (!uncertainty.includes(note)) uncertainty.push(note);
     if (params.signal?.aborted) return finish({ status: 'unaccepted', reason: 'provider_failed' });
     if (clock.now() >= terms.deadline) {
@@ -365,15 +365,7 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
     consumed.set(unit.routed_unit_id, (consumed.get(unit.routed_unit_id) ?? 0) + 1);
 
     const started_at = clock.now();
-    const disclosureBlocked = unit.destination_training_allowed === true && params.containsCredentials;
-    const result: AttemptResult<T> = disclosureBlocked
-      ? {
-          usage: { input_tokens: 0, output_tokens: 0 },
-          disposition: { status: 'failed', failure: {
-            code: 'invalid_request', message: 'credential-shaped content cannot be sent to a training-allowed destination', retryable: false,
-          } },
-        }
-      : await attemptBeforeDeadline(params, unit);
+    const result = await attemptBeforeDeadline(params, unit);
     const ended_at = clock.now();
 
     const metered = meteredCost(unit, terms, result.usage);
@@ -417,13 +409,6 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
       // means this routed unit is the wrong one for these terms.
       if (!disposition.failure.retryable) {
         exhausted.add(unit.routed_unit_id);
-        // The content is unchanged across units at this destination. Skip its
-        // fallbacks too, leaving attempts for a permitted non-training route.
-        if (disclosureBlocked) {
-          for (const candidate of params.routes) {
-            if (candidate.destination === unit.destination) exhausted.add(candidate.routed_unit_id);
-          }
-        }
         continue;
       }
 

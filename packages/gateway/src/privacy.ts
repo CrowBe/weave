@@ -1,4 +1,4 @@
-/** Pure disclosure policy and conservative credential screening at provider dispatch. */
+/** Pure disclosure policy and conservative credential screening before routing. */
 import type { DataDestination, RouteTable } from './types.js';
 
 /** A destination's training permission cannot be bypassed through an unmarked unit. */

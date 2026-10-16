@@ -68,16 +68,24 @@ describe('Muse Spark routed attempts', () => {
   });
 
   it('records reasoning exhausting the output cap with no text as failure, never acceptance', async () => {
+    const routes: readonly RoutedUnit[] = [primary, fallback].map(unit => ({ ...unit,
+      price: { input_per_mtok: 1_000_000, output_per_mtok: 1_000_000 },
+    }));
+    const input = request();
     for (const text of ['', null]) {
       let calls = 0;
       const outcome = await gateway(async (): Promise<Response> => {
         calls++;
         return completion(text, primary.settings.max_output_tokens, 'length', primary.settings.max_output_tokens);
-      }).generate(request());
+      }, { routes }).generate({ ...input, terms: { ...input.terms, cost_ceiling: 5000 } });
       assert.equal(outcome.status, 'unaccepted');
       assert.equal(calls, 2);
       assert.equal(outcome.attempts.length, 2);
+      assert.ok(!outcome.uncertainty.some(note => note.includes('usage unreported')));
       for (const attempt of outcome.attempts) {
+        assert.deepEqual(attempt.usage, { input_tokens: 2, output_tokens: primary.settings.max_output_tokens });
+        assert.equal(attempt.cost_is_upper_bound, false);
+        assert.equal(attempt.cost, 2 + primary.settings.max_output_tokens);
         assert.deepEqual(attempt.disposition, { status: 'failed', failure: {
           code: 'malformed_response', retryable: false,
           message: 'muse-spark: output token cap exhausted before any text content; increase settings.max_output_tokens to leave room for reasoning and text',
@@ -253,9 +261,10 @@ describe('Muse Spark routed attempts', () => {
     const outcome = await gateway(async () => { calls += 1; return completion(); })
       .generate(request('credential-refusal', `harmless example with ${secret}`));
     assert.equal(calls, 0);
-    assert.equal(outcome.status, 'unaccepted');
-    assert.equal(outcome.attempts.length, 1);
-    assert.equal(outcome.attempts[0]?.disposition.status === 'failed' ? outcome.attempts[0].disposition.failure.code : '', 'invalid_request');
+    assert.equal(outcome.status === 'blocked' ? outcome.reason : '', 'no_route');
+    assert.deepEqual(outcome.attempts, []);
+    assert.ok(outcome.uncertainty.includes('muse.primary: excluded (credential_content)'));
+    assert.ok(outcome.uncertainty.includes('muse.fallback: excluded (credential_content)'));
     assert.ok(!JSON.stringify(outcome).includes(secret));
   });
 });

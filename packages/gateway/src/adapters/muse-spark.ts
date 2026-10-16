@@ -102,7 +102,10 @@ export function museSparkAdapter(options: MuseSparkOptions): GenerationAdapter {
         if (result.text.length === 0) {
           return { status: 'failed', failure: failure('malformed_response', result.finishReason === 'length'
             ? 'output token cap exhausted before any text content; increase settings.max_output_tokens to leave room for reasoning and text'
-            : 'response carried no text content', false) };
+            : 'response carried no text content', false), usage: {
+              input_tokens: Number.isFinite(result.usage.inputTokens) ? result.usage.inputTokens : undefined,
+              output_tokens: Number.isFinite(result.usage.outputTokens) ? result.usage.outputTokens : undefined,
+            } };
         }
         return {
           status: 'completed',

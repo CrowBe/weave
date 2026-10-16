@@ -94,29 +94,30 @@ for (const field of ['prompt', 'instructions'] as const) {
       const input = { instructions: 'Use public material', prompt: 'Reply ok', [field]: `Example (${credential})` };
       const outcome = await gateway.generate(request(input));
       assert.equal(bodies.length, 0, 'training destination must receive no HTTP requests, including fallback');
-      assert.equal(outcome.status, 'unaccepted');
-      assert.equal(outcome.status === 'unaccepted' ? outcome.reason : '', 'provider_failed');
-      assert.equal(outcome.attempts.length, 1, 'the failed disclosure exhausts the destination, not just the primary unit');
-      assert.deepEqual(outcome.attempts[0]?.disposition.status === 'failed'
-        ? { code: outcome.attempts[0].disposition.failure.code, retryable: outcome.attempts[0].disposition.failure.retryable }
-        : undefined, { code: 'invalid_request', retryable: false });
+      assert.equal(outcome.status === 'blocked' ? outcome.reason : '', 'no_route');
+      assert.deepEqual(outcome.attempts, [], 'routing exclusions must not consume attempts');
       assert.equal(outcome.spent, 0);
-      assert.deepEqual(outcome.attempts[0]?.usage, { input_tokens: 0, output_tokens: 0 });
+      for (const id of ['muse-writer', 'muse-fallback']) {
+        assert.ok(outcome.uncertainty.includes(`${id}: excluded (credential_content)`));
+      }
       assert.ok(!JSON.stringify(outcome).includes(credential), 'result, failure and attempt trace must not contain the credential');
       assert.ok(input[field].includes(credential), 'caller content is not mutated');
     });
   }
 
-  test(`a permitted non-training destination later in escalation receives original ${field}`, async () => {
+  test(`one attempt reaches a permitted non-training destination with original ${field}`, async () => {
     const ordinary: RoutedUnit = { ...ROUTE, routed_unit_id: 'ordinary', adapter: 'ordinary',
       destination: 'ordinary', destination_training_allowed: false };
     const { gateway, bodies, ordinaryCalls } = harness([ROUTE, FALLBACK, ordinary]);
     const credential = 'sk-' + 'test-SENTINEL' + 'A'.repeat(40);
     const input = { instructions: 'Use public material', prompt: 'Reply ok', [field]: credential };
     const req = request(input);
-    const outcome = await gateway.generate({ ...req, terms: { ...req.terms, destinations: [MUSE_SPARK_DESTINATION, 'ordinary'] } });
+    const outcome = await gateway.generate({ ...req, terms: { ...req.terms, destinations: [MUSE_SPARK_DESTINATION, 'ordinary'], max_attempts: 1 } });
     assert.equal(outcome.status === 'accepted' ? outcome.routed_unit_id : '', 'ordinary');
-    assert.deepEqual(outcome.attempts.map(attempt => attempt.routed_unit_id), ['muse-writer', 'ordinary']);
+    assert.deepEqual(outcome.attempts.map(attempt => attempt.routed_unit_id), ['ordinary']);
+    for (const id of ['muse-writer', 'muse-fallback']) {
+      assert.ok(outcome.uncertainty.includes(`${id}: excluded (credential_content)`));
+    }
     assert.equal(bodies.length, 0, 'Muse Spark must receive no HTTP requests even when escalation succeeds elsewhere');
     assert.equal(ordinaryCalls.length, 1);
     assert.equal(ordinaryCalls[0]?.instructions, input.instructions);

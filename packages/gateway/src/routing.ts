@@ -34,6 +34,7 @@ export type ExclusionReason =
   | 'tier_mismatch'
   | 'provider_unavailable'
   | 'destination_not_permitted'
+  | 'credential_content'
   | 'quality_below_bar'
   | 'context_limit_too_small'
   | 'unaffordable';
@@ -109,13 +110,15 @@ export function route(
   terms: InferenceTerms,
   minEvidenceAttempts: number,
   availability?: ProviderAvailability,
+  /** Request-wide credential screen, computed without retaining the content. */
+  containsCredentials = false,
 ): RoutingDecision {
   const excluded: RouteExclusion[] = [];
   const eligible: RoutedUnit[] = [];
   const trainingAllowed = trainingAllowedDestinations(table);
 
   for (const unit of table) {
-    const reason = excludeReason(unit, target, terms, availability, trainingAllowed);
+    const reason = excludeReason(unit, target, terms, availability, trainingAllowed, containsCredentials);
     if (reason !== null) {
       excluded.push({ routed_unit_id: unit.routed_unit_id, reason });
       continue;
@@ -123,7 +126,10 @@ export function route(
     eligible.push(unit);
   }
 
-  const uncertainty: string[] = [];
+  // Keep the disclosure refusal visible in outcomes without recording content
+  // or spending an attempt that a permitted non-training route may need.
+  const uncertainty: string[] = excluded.filter(e => e.reason === 'credential_content')
+    .map(e => `${e.routed_unit_id}: excluded (${e.reason})`);
   for (const unit of eligible) {
     if (priceAttempt(unit, terms).cache_ignored) {
       uncertainty.push(`prefix cache ignored for ${unit.routed_unit_id}: cached tokens exceed the input`);
@@ -149,7 +155,7 @@ export function route(
   return { order: [...evidenced, ...thin], excluded, uncertainty };
 }
 
-function excludeReason(unit: RoutedUnit, target: RouteTarget, terms: InferenceTerms, availability: ProviderAvailability | undefined, trainingAllowed: ReadonlySet<string>): ExclusionReason | null {
+function excludeReason(unit: RoutedUnit, target: RouteTarget, terms: InferenceTerms, availability: ProviderAvailability | undefined, trainingAllowed: ReadonlySet<string>, containsCredentials: boolean): ExclusionReason | null {
   if (unit.operation !== target.operation) return 'operation_mismatch';
   // Safe across the union: the kind vocabularies are disjoint, so a route that
   // serves the right operation can still serve the wrong shape.
@@ -167,6 +173,7 @@ function excludeReason(unit: RoutedUnit, target: RouteTarget, terms: InferenceTe
   if (trainingAllowed.has(unit.destination) && terms.content_class !== 'public' && terms.content_class !== 'non_sensitive') {
     return 'destination_not_permitted';
   }
+  if (trainingAllowed.has(unit.destination) && containsCredentials) return 'credential_content';
   if (!qualityClears(unit.quality, terms.quality)) return 'quality_below_bar';
   if (unit.context_limit_tokens < terms.max_context_tokens) return 'context_limit_too_small';
   if (worstCaseCost(unit, terms) > terms.cost_ceiling) return 'unaffordable';

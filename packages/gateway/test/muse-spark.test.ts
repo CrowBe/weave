@@ -168,6 +168,27 @@ describe('muse-spark adapter contract', () => {
     }
   });
 
+  it('preserves SDK usage on empty completions without inventing omitted usage or exposing non-finite counts', async () => {
+    for (const finish_reason of ['stop', 'length']) {
+      for (const [usage, expected] of [
+        [{ prompt_tokens: 12, completion_tokens: 1024 }, { input_tokens: 12, output_tokens: 1024 }],
+        [undefined, { input_tokens: undefined, output_tokens: undefined }],
+        // The SDK fills a missing count with zero when a usage object exists.
+        [{ prompt_tokens: 12 }, { input_tokens: 12, output_tokens: 0 }],
+        // The SDK rejects non-finite wire counts before returning a completion.
+        [{ prompt_tokens: 'OVERFLOW', completion_tokens: 1024 }, undefined],
+      ] as const) {
+        const raw = JSON.stringify({ ...BODY, usage, choices: [{ index: 0, finish_reason,
+          message: { role: 'assistant', content: '' } }] }).replace('"OVERFLOW"', '1e400');
+        const mock = mockFetch(undefined, { raw });
+        const result = await museSparkAdapter({ apiKey: KEY, fetch: mock.fetch }).execute(CALL);
+        assert.equal(failureOf(result).code, 'malformed_response');
+        assert.deepEqual(result.usage, expected);
+        assert.equal(mock.calls.length, 1);
+      }
+    }
+  });
+
   it('reports network faults without throwing, logging or returning the echoed key', async (t) => {
     const logs: unknown[][] = [];
     for (const method of ['log', 'warn', 'error', 'debug', 'info'] as const) {

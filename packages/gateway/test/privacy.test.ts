@@ -66,6 +66,16 @@ describe('training-allowed destination privacy', () => {
       { operation: 'generate', kind: 'transform' }, classified('private'), 20);
     assert.equal(decision.order.length, 0, 'an unmarked unit cannot bypass destination policy');
   });
+  it('records credential exclusions for marked and unmarked units before ordering permitted routes', () => {
+    const decision = route([unit(), unit(false, { routed_unit_id: 'unmarked' }),
+      unit(false, { routed_unit_id: 'ordinary', destination: 'ordinary' })],
+      { operation: 'generate', kind: 'transform' }, classified('public'), 20, undefined, true);
+    assert.deepEqual(decision.order.map(unit => unit.routed_unit_id), ['ordinary']);
+    assert.deepEqual(decision.excluded, [
+      { routed_unit_id: 'writer', reason: 'credential_content' },
+      { routed_unit_id: 'unmarked', reason: 'credential_content' },
+    ]);
+  });
   it('rejects an unknown content class without sending it to a provider', async () => {
     const calls: GenerationCall[] = [];
     const gateway = createInferenceGateway({ routes: [unit(false)], adapters: [generator(calls)], clock: { now: () => 1 } });
@@ -80,8 +90,9 @@ describe('training-allowed destination privacy', () => {
       const gateway = createInferenceGateway({ routes: [unit()], adapters: [generator(calls)], clock: { now: () => 1 } });
       const outcome = await gateway.generate(request(input, 'non_sensitive'));
       assert.equal(calls.length, 0, 'credential must not cross the provider port');
-      assert.equal(outcome.status, 'unaccepted');
-      assert.equal(outcome.attempts[0]?.disposition.status === 'failed' ? outcome.attempts[0].disposition.failure.code : '', 'invalid_request');
+      assert.equal(outcome.status === 'blocked' ? outcome.reason : '', 'no_route');
+      assert.deepEqual(outcome.attempts, []);
+      assert.ok(outcome.uncertainty.some(note => note.includes('excluded (credential_content)')));
       assert.ok(!JSON.stringify(outcome).includes(credential));
       assert.ok(input.instructions === `Instruction ${credential}` && input.prompt === `Public text with ${credential}`, 'caller input is not mutated');
     });
@@ -119,8 +130,9 @@ describe('training-allowed destination privacy', () => {
     assert.equal(calls.length, 0);
     const outcome = await gateway.evaluate({ ...base, terms: classified('public') });
     assert.equal(calls.length, 0);
-    assert.equal(outcome.status, 'unaccepted');
-    assert.equal(outcome.attempts[0]?.disposition.status === 'failed' ? outcome.attempts[0].disposition.failure.code : '', 'invalid_request');
+    assert.equal(outcome.status === 'blocked' ? outcome.reason : '', 'no_route');
+    assert.deepEqual(outcome.attempts, []);
+    assert.ok(outcome.uncertainty.some(note => note.includes('excluded (credential_content)')));
     for (const secret of ['sk-test-secret', 'github_pat_key', 'Bearer secret', 'eyJsecret', 'AKIAsecret']) {
       assert.ok(!JSON.stringify(outcome).includes(secret), 'evaluation result must not contain credentials');
     }
@@ -143,7 +155,9 @@ describe('training-allowed destination privacy', () => {
       const outcome = await gateway.evaluate({ request_id: 'eval', site: 'test', role: 'working', kind: 'boolean',
         state, questions, terms: classified('public') });
       assert.equal(calls, 0);
-      assert.equal(outcome.status, 'unaccepted');
+      assert.equal(outcome.status === 'blocked' ? outcome.reason : '', 'no_route');
+      assert.deepEqual(outcome.attempts, []);
+      assert.ok(outcome.uncertainty.some(note => note.includes('excluded (credential_content)')));
       assert.ok(!JSON.stringify(outcome).includes(secret));
     });
   }
