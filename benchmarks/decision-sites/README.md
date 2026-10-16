@@ -122,7 +122,8 @@ is refreshed only for a complete, all-site, both-split run requesting the full
 default live provider set (`typesafe-jev,amos-small,openai-decisions,pi,fx-ask`),
 without the fake provider and with at least one successful answer. Requested
 providers skipped at runtime for `no_credential` or `auth_required` still count
-as covered. Fake, partial and entirely
+as covered. A `quota_unavailable_or_weekly_cap` skip does not count as covered
+for headline publishing, including during render-only. Fake, partial and entirely
 skipped reports stay under `results/<run_id>/`. A temporary exclusive lock still
 prevents concurrent writers. Render-only makes no calls. Resume preserves
 persistent skips and rechecks invocation-only quota skips.
@@ -140,6 +141,10 @@ re-pays a terminal wrong-model failure: it remains recorded against the
 requested binding, with the unexpected served model retained as failure evidence.
 Legacy records without a serialized request digest remain displayable with
 `--render-only`, but never match for reuse or report binding during resume.
+The recorded `live-20261015` headline predates wire-body binding and is
+legacy-bound by design: render-only can still regenerate and republish that
+headline from its legacy records. New live runs bind answers to the serialized
+wire body or prompt as well as the other recorded bindings.
 SIGINT/SIGTERM request cancellation and wait for the in-flight call to settle
 (up to 30 seconds for HTTP, 120 seconds for competitors), then record cancellation,
 render partial results and exit nonzero. A second Ctrl-C does not force-exit;

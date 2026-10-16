@@ -205,6 +205,25 @@ for(const complete of [false,true])test(`${complete?'full':'partial'} provider l
  }finally{rmSync(dir,{recursive:true,force:true});writeFileSync(reportPath,original);}
 });
 
+test('a quota-skipped competitor leaves the all-site headline uncovered, including render-only',async()=>{
+ const id=`quota-report-${process.pid}`,dir=join(testRoot,'results',id);
+ const reportPath=join(testRoot,'REPORT.md'),original=readFileSync(reportPath,'utf8');
+ const requested=flags([]).providers;let calls=0;
+ const providers:Provider[]=requested.map(id=>({id,model:'offline-publish-test',competitor:id==='pi'||id==='fx-ask',price:0,serialize:JSON.stringify,
+  request:async request=>{calls++;return id==='amos-small'?{status:'ok',answers:Object.fromEntries(Object.entries(request.questions).map(([id,q])=>[id,q.type==='choice'?{choice:Object.keys(q.criteria)[0]!,confidence:.95}:{probability:.1,confidence:.95}]))}:{status:'skipped',reason:id==='pi'?'quota_unavailable_or_weekly_cap':id==='fx-ask'?'auth_required':'no_credential'};},
+ }));
+ const args=['--providers',requested.join(','),'--split','all','--run-id',id];
+ try{
+  assert.equal(await main(args,{providers}),0);
+  assert.match(readFileSync(join(dir,'REPORT.md'),'utf8'),/quota_unavailable_or_weekly_cap/);
+  assert.equal(readFileSync(reportPath,'utf8'),original,'quota skips must not count as headline coverage');
+  const dispatched=calls,journalPath=join(dir,'journal.jsonl'),journal=readFileSync(journalPath,'utf8');
+  assert.equal(await main([...args,'--render-only'],{providers}),0);
+  assert.equal(calls,dispatched);assert.equal(readFileSync(journalPath,'utf8'),journal);
+  assert.equal(readFileSync(reportPath,'utf8'),original,'render-only must preserve the headline for quota skips');
+ }finally{rmSync(dir,{recursive:true,force:true});writeFileSync(reportPath,original);}
+});
+
 test('a budget-stopped all-site run writes its report only in its run directory',async()=>{
  const id=`budget-report-${process.pid}`,dir=join(testRoot,'results',id);
  const reportPath=join(testRoot,'REPORT.md'),original=readFileSync(reportPath,'utf8');

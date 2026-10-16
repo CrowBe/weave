@@ -68,6 +68,36 @@ test('auth failures are not retried; malformed and nonzero output are failures',
  const fx=buildCompetitors({cwd:'/tmp/empty',quotaAllowed:true,run:async()=>{calls++;return{exitCode:1,stdout:'Auth: not authenticated',stderr:'login required'};}})[1]!;
  assert.equal((await fx.request(req,new AbortController().signal)).reason,'auth_required');assert.equal((await fx.request(req,new AbortController().signal)).reason,'auth_required');assert.equal(calls,1);
 });
+test('pi parses successful answers despite auth text echoed in the JSON stream',async()=>{
+ const help='--mode --no-session --no-tools --no-extensions --no-skills --no-prompt-templates --no-mcp --no-context-files --offline';
+ const answers={q:{probability:.9,confidence:.8}};
+ for(const phrase of ['not logged in','login required','no models'])for(const stderr of ['',phrase]){
+  const request={...req,state:phrase};let calls=0;
+  const p=buildCompetitors({cwd:'/tmp/empty',quotaAllowed:true,run:async(_cmd,args,options)=>{
+   if(args.includes('--help'))return{exitCode:0,stdout:help,stderr:''};
+   calls++;
+   return{exitCode:0,stdout:[{type:'message_end',message:{role:'user',content:options.stdin}},{type:'message_end',message:{role:'assistant',content:[{type:'text',text:JSON.stringify({answers})}]}}].map(value=>JSON.stringify(value)).join('\n'),stderr};
+  }})[0]!;
+  for(let i=0;i<2;i++)assert.deepEqual(await p.request(request,new AbortController().signal),{status:'ok',model:'chatgpt-sign-in',answers});
+  assert.equal(calls,2,'a prompt echo must not disable subsequent calls');
+ }
+});
+test('pi classifies auth only from stderr when the call fails or the answer does not parse',async()=>{
+ const help='--mode --no-session --no-tools --no-extensions --no-skills --no-prompt-templates --no-mcp --no-context-files --offline';
+ for(const exitCode of [0,1])for(const source of ['stdout','stderr'] as const){
+  let calls=0;
+  const p=buildCompetitors({cwd:'/tmp/empty',quotaAllowed:true,run:async(_cmd,args)=>{
+   if(args.includes('--help'))return{exitCode:0,stdout:help,stderr:''};
+   calls++;return{exitCode,stdout:'',stderr:'',[source]:'not logged in'};
+  }})[0]!;
+  for(let i=0;i<2;i++){
+   const result=await p.request(req,new AbortController().signal);
+   assert.equal(result.status,source==='stderr'?'skipped':'failed');
+   assert.equal(result.reason,source==='stderr'?'auth_required':exitCode!==0?'nonzero_exit':'non_json_output');
+  }
+  assert.equal(calls,source==='stderr'?1:2);
+ }
+});
 test('tool-enabled fx fails closed, and quota refusal never invokes a process',async()=>{
  let calls=0;
  const blocked=buildCompetitors({cwd:'/tmp/empty',quotaAllowed:false,run:async()=>{throw Error('must not spawn');}});

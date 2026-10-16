@@ -88,9 +88,11 @@ export function buildCompetitors(config: CompetitorsConfig): Provider[] {
             initialized = true;
           }
           const result = await run(argv, competitorPrompt(request));
-          if (/(?:authentication required|not authenticated|no api key|no (?:available )?models|please (?:log|sign) in|login required|not logged in)/i.test(result.stderr + '\n' + result.stdout)) return skipped = { status: 'skipped', reason: 'auth_required' };
-          if (result.exitCode !== 0) return { status: 'failed', reason: 'nonzero_exit' };
           const parsed = parseCompetitorOutput(result.stdout, request);
+          // JSON streams can echo the supplied state. Only stderr can establish
+          // an auth failure, and a successful parsed answer takes precedence.
+          if ((result.exitCode !== 0 || !parsed) && /(?:authentication required|not authenticated|no api key|no (?:available )?models|please (?:log|sign) in|login required|not logged in)/i.test(result.stderr)) return skipped = { status: 'skipped', reason: 'auth_required' };
+          if (result.exitCode !== 0) return { status: 'failed', reason: 'nonzero_exit' };
           return parsed ? { status: 'ok', model: 'chatgpt-sign-in', answers: parsed } : { status: 'failed', reason: 'non_json_output', parse_failure: true };
         } catch { return { status: 'failed', reason: external.aborted ? (dispatched ? 'cancelled_after_dispatch' : 'cancelled') : signal.aborted ? 'timeout' : 'process_unavailable' }; }
       },

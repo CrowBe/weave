@@ -10,7 +10,7 @@ import { buildCompetitors, quotaAllowsCompetitors } from './competitors.ts';
 import type { ProcessRunner } from './competitors.ts';
 import { Journal, acquireLock, replayKey, digest } from './journal.ts';
 import { SITES, buildRequest } from './questions.ts';
-import { countCompetitorCalls, execute, persistentProviderSkip, providerSkip } from './engine.ts';
+import { countCompetitorCalls, execute, persistentProviderSkip } from './engine.ts';
 import { loadSets } from './sets.ts';
 import { makeReport } from './report.ts';
 import type { Provider } from './types.ts';
@@ -86,7 +86,7 @@ export async function main(args=process.argv.slice(2), injected?:{providers:read
   const invocationStart=records.map(r=>r.type).lastIndexOf('run');
   const statuses=records.filter((r,i)=>['provider_status','budget_stop','cancelled','uncertain'].includes(r.type)&&
    (r.type!=='provider_status'||(r.persistent!==false&&persistentProviderSkip(r.result))||i>invocationStart));
-  const skipped=new Set(statuses.filter(r=>r.type==='provider_status'&&r.result&&providerSkip(r.result)).map(r=>r.provider));
+  const skipped=new Set(statuses.filter(r=>r.type==='provider_status'&&r.result&&persistentProviderSkip(r.result)).map(r=>r.provider));
   let publish=!options.providers.includes('fake')&&DEFAULT_PROVIDERS.every(p=>options.providers.includes(p))&&options.split==='all'&&options.sites.length===SITES.length;
   for(const provider of providers)for(const entry of entries) {
    const request=await buildRequest(entry.item);
