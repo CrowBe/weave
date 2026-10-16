@@ -47,15 +47,17 @@ export class Journal {
   return total;
  }
 }
+const heldLocks=new Set<string>();
 export function acquireLock(dir: string): ()=>void {
  mkdirSync(dir,{recursive:true,mode:0o700});const path=join(dir,'lock');let fd:number;
  try {fd=openSync(path,'wx',0o600);} catch {
   let state:'locked'|'stale'|'stale-unknown'='stale-unknown';
-  try {const text=readFileSync(path,'utf8').trim(),pid=Number(text);if(!/^[1-9][0-9]*$/.test(text)||!Number.isSafeInteger(pid))throw new Error();state='locked';process.kill(pid,0);}catch(e){if((e as NodeJS.ErrnoException).code==='ESRCH')state='stale';}
+  try {const text=readFileSync(path,'utf8').trim(),pid=Number(text);if(!/^[1-9][0-9]*$/.test(text)||!Number.isSafeInteger(pid))throw new Error();if(heldLocks.has(path))state='locked';else if(pid===process.pid)state='stale';else{state='locked';process.kill(pid,0);}}catch(e){if((e as NodeJS.ErrnoException).code==='ESRCH')state='stale';}
   throw new Error(state==='locked'?'Run directory locked':`Run directory has ${state} lock; inspect before removing`);
  }
  try{writeSync(fd,String(process.pid));fsyncSync(fd);}finally{closeSync(fd);}
  // Persist directory entry as well as file contents.
  const directory=openSync(dir,'r');try{fsyncSync(directory);}finally{closeSync(directory);}
- return ()=>unlinkSync(path);
+ heldLocks.add(path);
+ return ()=>{heldLocks.delete(path);unlinkSync(path);};
 }

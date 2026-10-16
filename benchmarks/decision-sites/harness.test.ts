@@ -18,14 +18,26 @@ test('journal repairs torn tail, fsyncs appends, counts each completed attempt o
   assert.equal((await readFile(path,'utf8')).trim().split('\n').length,2);
  } finally { await rm(dir,{recursive:true,force:true}); }
 });
-test('lock refuses concurrent writer and reports dead pid without stealing', async () => {
+test('lock refuses re-entrant own pid and reports dead pid without stealing', async () => {
  const dir = await mkdtemp(join(tmpdir(),'decision-lock-'));
  try {
   const release = acquireLock(dir);
   assert.throws(()=>acquireLock(dir),/locked/);
+  assert.equal(await readFile(join(dir,'lock'),'utf8'),String(process.pid));
   release();
+  await writeFile(join(dir,'lock'), String(process.pid));
+  assert.throws(()=>acquireLock(dir),/stale/);
   await writeFile(join(dir,'lock'), '2147483647');
   assert.throws(()=>acquireLock(dir),/stale/);
+ } finally { await rm(dir,{recursive:true,force:true}); }
+});
+test('own reused PID after a crash reads as stale without stealing the lock', async () => {
+ const dir = await mkdtemp(join(tmpdir(),'decision-own-pid-'));
+ try {
+  const lock = join(dir,'lock');
+  await writeFile(lock,String(process.pid));
+  assert.throws(()=>acquireLock(dir),/stale/);
+  assert.equal(await readFile(lock,'utf8'),String(process.pid));
  } finally { await rm(dir,{recursive:true,force:true}); }
 });
 test('budget projection and replay binding include all evidence identities', () => {
