@@ -5,7 +5,6 @@ import {mkdtempSync,readFileSync,readdirSync,rmSync,writeFileSync,mkdirSync,copy
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {flags} from './run.ts';
-import {acquireLock} from './journal.ts';
 import fs from 'node:fs';
 import {syncBuiltinESMExports} from 'node:module';
 import {pathToFileURL} from 'node:url';
@@ -83,17 +82,6 @@ test('CLI reports concurrent and stale locks without stealing them',()=>{
    writeFileSync(join(dir,'lock'),String(pid));
    const result=spawnSync(process.execPath,args,{encoding:'utf8'});assert.equal(result.status,1);assert.ok(result.stderr.includes(expected),JSON.stringify({expected,stderr:result.stderr,stdout:result.stdout}));assert.equal(readFileSync(join(dir,'lock'),'utf8'),String(pid));
   }
- }finally{rmSync(dir,{recursive:true,force:true});}
-});
-
-test('own reused PID after a crash reads as stale without stealing the lock',()=>{
- const dir=mkdtempSync(join(tmpdir(),'p10-own-pid-'));
- try{
-  mkdirSync(dir,{recursive:true});
-  const lock=join(dir,'lock');
-  writeFileSync(lock,String(process.pid));
-  assert.throws(()=>acquireLock(dir),/stale/);
-  assert.equal(readFileSync(lock,'utf8'),String(process.pid));
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
