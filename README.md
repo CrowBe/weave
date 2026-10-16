@@ -163,9 +163,13 @@ Contributor destinations may train on content. Callers must explicitly set
 `terms.content_class` to `public` or `non_sensitive`; absent classification,
 `sensitive`, and `private` are excluded even when the destination is listed in
 terms. Private repositories and operator/captain data must never be classified
-as public or non-sensitive. Gateway dispatch redacts entire content strings
-containing the existing credential markers. Redaction does not make sensitive
-work eligible. No reasoning parameter is sent. The declared 150 RPM / 3M TPM
+as public or non-sensitive. Before dispatch, the gateway screens content for the
+repository's credential markers at token starts. A match records a non-retryable
+`invalid_request` attempt with zero usage and prevents dispatch to every routed
+unit at that training-allowed destination for the request. Escalation may still
+send the original content to a non-training destination permitted by the request's
+classification and terms. Screening does not make sensitive or private work
+eligible. No reasoning parameter is sent. The declared 150 RPM / 3M TPM
 limits do not proactively throttle requests: after a rate-limit refusal,
 `Retry-After` wins, otherwise the gateway uses 400ms request spacing; the token
 budget is metadata because a refusal does not report token consumption.

@@ -46,11 +46,13 @@ function deferred<T = void>() {
 }
 
 describe('Muse Spark routed attempts', () => {
-  it('records a below-minimum routed unit as invalid_request without HTTP dispatch', async () => {
+  it('records a below-minimum routed unit as invalid_request with zero usage and cost without HTTP dispatch', async () => {
     let calls = 0;
+    const input = request();
     const outcome = await gateway(async () => { calls++; return completion(); }, {
-      routes: [{ ...primary, settings: { max_output_tokens: 16 } }],
-    }).generate(request());
+      routes: [{ ...primary, settings: { max_output_tokens: 16 },
+        price: { input_per_mtok: 1_000_000, output_per_mtok: 1_000_000 } }],
+    }).generate({ ...input, terms: { ...input.terms, cost_ceiling: 100 } });
     assert.equal(outcome.status, 'unaccepted');
     assert.equal(calls, 0);
     assert.equal(outcome.attempts.length, 1);
@@ -58,6 +60,11 @@ describe('Muse Spark routed attempts', () => {
       code: 'invalid_request', retryable: false,
       message: 'muse-spark: settings.max_output_tokens must be an integer at least 1024 to leave room for default reasoning and text',
     } });
+    assert.deepEqual(outcome.attempts[0]?.usage, { input_tokens: 0, output_tokens: 0 });
+    assert.equal(outcome.attempts[0]?.cost, 0);
+    assert.equal(outcome.attempts[0]?.cost_is_upper_bound, false);
+    assert.equal(outcome.spent, 0);
+    assert.ok(!outcome.uncertainty.some(note => note.includes('usage unreported')));
   });
 
   it('records reasoning exhausting the output cap with no text as failure, never acceptance', async () => {
@@ -244,7 +251,7 @@ describe('Muse Spark routed attempts', () => {
     const secret = 'sk-' + 'A'.repeat(40);
     let calls = 0;
     const outcome = await gateway(async () => { calls += 1; return completion(); })
-      .generate(request('redaction', `harmless example with ${secret}`));
+      .generate(request('credential-refusal', `harmless example with ${secret}`));
     assert.equal(calls, 0);
     assert.equal(outcome.status, 'unaccepted');
     assert.equal(outcome.attempts.length, 1);

@@ -86,7 +86,8 @@ export function museSparkAdapter(options: MuseSparkOptions): GenerationAdapter {
       // minimum here, including callers that construct routed units directly.
       if (!Number.isInteger(call.settings.max_output_tokens) || call.settings.max_output_tokens < MUSE_SPARK_MIN_OUTPUT_TOKENS) {
         return { status: 'failed', failure: failure('invalid_request',
-          `settings.max_output_tokens must be an integer at least ${MUSE_SPARK_MIN_OUTPUT_TOKENS} to leave room for default reasoning and text`, false) };
+          `settings.max_output_tokens must be an integer at least ${MUSE_SPARK_MIN_OUTPUT_TOKENS} to leave room for default reasoning and text`, false),
+          usage: { input_tokens: 0, output_tokens: 0 } };
       }
       try {
         const result = await generateText({
