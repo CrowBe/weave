@@ -1,0 +1,270 @@
+/** Provider + gateway composition, with an injected endpoint only. */
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import { createInferenceGateway, type GenerationRequest, type RoutedUnit, type Timer } from '@weave/gateway';
+import { museSparkAdapter, MUSE_SPARK_ADAPTER, MUSE_SPARK_DESTINATION,
+  MUSE_SPARK_PRIMARY_MODEL, MUSE_SPARK_FALLBACK_MODEL,
+  MUSE_SPARK_DOCUMENTED_CONTRIBUTOR_LIMITS, MUSE_SPARK_DEFAULT_SETTINGS } from '@weave/gateway/muse-spark';
+
+const KEY = 'sk-test-SENTINEL-gateway-credential';
+const primary: RoutedUnit = {
+  routed_unit_id: 'muse.primary', operation: 'generate', kind: 'transform', tier: 'flash',
+  context_profile: 'test', context_profile_version: 1, prompt_template: 'test', prompt_template_version: 1,
+  adapter: MUSE_SPARK_ADAPTER, model: MUSE_SPARK_PRIMARY_MODEL, settings: MUSE_SPARK_DEFAULT_SETTINGS,
+  destination: MUSE_SPARK_DESTINATION, destination_training_allowed: true,
+  quality: 'baseline', context_limit_tokens: 100, price: { input_per_mtok: 0, output_per_mtok: 0 },
+  rate_limits: MUSE_SPARK_DOCUMENTED_CONTRIBUTOR_LIMITS,
+};
+const fallback: RoutedUnit = { ...primary, routed_unit_id: 'muse.fallback', model: MUSE_SPARK_FALLBACK_MODEL };
+function request(id = 'test', prompt = 'ok'): GenerationRequest {
+  return { request_id: id, site: 'implement.generate', role: 'working', kind: 'transform',
+    input: { instructions: '', prompt }, terms: { quality: 'baseline', tier: 'flash', content_class: 'non_sensitive',
+      destinations: [MUSE_SPARK_DESTINATION], max_context_tokens: 10, deadline: 100_000,
+      cost_ceiling: 0, max_attempts: 2, max_attempts_per_route: 1 } };
+}
+function completion(text: string | null = 'ok', outputTokens = 1, finishReason = 'stop', reasoningTokens = 0): Response {
+  return new Response(JSON.stringify({ id: 'test', choices: [{ index: 0,
+    message: { role: 'assistant', content: text }, finish_reason: finishReason }],
+    usage: { prompt_tokens: 2, completion_tokens: outputTokens, total_tokens: 2 + outputTokens,
+      completion_tokens_details: { reasoning_tokens: reasoningTokens } } }),
+    { headers: { 'content-type': 'application/json' } });
+}
+function refused(status: number): Response {
+  return new Response(JSON.stringify({ error: { message: KEY, type: 'provider_error' } }),
+    { status, headers: { 'content-type': 'application/json' } });
+}
+function gateway(fetch: typeof globalThis.fetch, options: { timer?: Timer; now?: () => number; key?: string; routes?: readonly RoutedUnit[] } = {}) {
+  return createInferenceGateway({ routes: options.routes ?? [primary, fallback],
+    adapters: [museSparkAdapter({ apiKey: options.key ?? KEY, fetch })],
+    clock: { now: options.now ?? (() => 0) }, ...(options.timer ? { timer: options.timer } : {}) });
+}
+
+function deferred<T = void>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(r => { resolve = r; });
+  return { promise, resolve };
+}
+
+describe('Muse Spark routed attempts', () => {
+  it('records a below-minimum routed unit as invalid_request with zero usage and cost without HTTP dispatch', async () => {
+    let calls = 0;
+    const input = request();
+    const outcome = await gateway(async () => { calls++; return completion(); }, {
+      routes: [{ ...primary, settings: { max_output_tokens: 16 },
+        price: { input_per_mtok: 1_000_000, output_per_mtok: 1_000_000 } }],
+    }).generate({ ...input, terms: { ...input.terms, cost_ceiling: 100 } });
+    assert.equal(outcome.status, 'unaccepted');
+    assert.equal(calls, 0);
+    assert.equal(outcome.attempts.length, 1);
+    assert.deepEqual(outcome.attempts[0]?.disposition, { status: 'failed', failure: {
+      code: 'invalid_request', retryable: false,
+      message: 'muse-spark: settings.max_output_tokens must be an integer at least 1024 to leave room for default reasoning and text',
+    } });
+    assert.deepEqual(outcome.attempts[0]?.usage, { input_tokens: 0, output_tokens: 0 });
+    assert.equal(outcome.attempts[0]?.cost, 0);
+    assert.equal(outcome.attempts[0]?.cost_is_upper_bound, false);
+    assert.equal(outcome.spent, 0);
+    assert.ok(!outcome.uncertainty.some(note => note.includes('usage unreported')));
+  });
+
+  it('records reasoning exhausting the output cap with no text as failure, never acceptance', async () => {
+    const routes: readonly RoutedUnit[] = [primary, fallback].map(unit => ({ ...unit,
+      price: { input_per_mtok: 1_000_000, output_per_mtok: 1_000_000 },
+    }));
+    const input = request();
+    for (const text of ['', null]) {
+      let calls = 0;
+      const outcome = await gateway(async (): Promise<Response> => {
+        calls++;
+        return completion(text, primary.settings.max_output_tokens, 'length', primary.settings.max_output_tokens);
+      }, { routes }).generate({ ...input, terms: { ...input.terms, cost_ceiling: 5000 } });
+      assert.equal(outcome.status, 'unaccepted');
+      assert.equal(calls, 2);
+      assert.equal(outcome.attempts.length, 2);
+      assert.ok(!outcome.uncertainty.some(note => note.includes('usage unreported')));
+      for (const attempt of outcome.attempts) {
+        assert.deepEqual(attempt.usage, { input_tokens: 2, output_tokens: primary.settings.max_output_tokens });
+        assert.equal(attempt.cost_is_upper_bound, false);
+        assert.equal(attempt.cost, 2 + primary.settings.max_output_tokens);
+        assert.deepEqual(attempt.disposition, { status: 'failed', failure: {
+          code: 'malformed_response', retryable: false,
+          message: 'muse-spark: output token cap exhausted before any text content; increase settings.max_output_tokens to leave room for reasoning and text',
+        } });
+      }
+    }
+  });
+
+  it('accepts ok after about 250 reasoning tokens under the default budget and records total output usage', async () => {
+    let calls = 0;
+    const outcome = await gateway(async (_url, init) => {
+      calls++;
+      const body = JSON.parse(String(init?.body));
+      assert.equal(body.max_tokens, primary.settings.max_output_tokens);
+      assert.equal(body.reasoning, undefined);
+      assert.equal(body.reasoning_effort, undefined);
+      return completion('ok', 251, 'stop', 250);
+    }).generate(request());
+    assert.equal(outcome.status, 'accepted');
+    assert.ok(outcome.status === 'accepted');
+    assert.equal(outcome.text, 'ok');
+    assert.equal(calls, 1);
+    assert.equal(outcome.attempts.length, 1);
+    assert.deepEqual(outcome.attempts[0]?.usage, { input_tokens: 2, output_tokens: 251 });
+  });
+
+  for (const status of [429, 503, 404]) {
+    it(`escalates a ${status} primary refusal to the explicit 1.2 routed unit`, async () => {
+      const models: string[] = [];
+      const outcome = await gateway(async (_url, init) => {
+        const model = JSON.parse(String(init?.body)).model as string;
+        models.push(model);
+        return model === MUSE_SPARK_PRIMARY_MODEL ? refused(status) : completion();
+      }).generate(request());
+      assert.equal(outcome.status, 'accepted');
+      assert.equal(outcome.status === 'accepted' ? outcome.routed_unit_id : '', 'muse.fallback');
+      assert.deepEqual(models, [MUSE_SPARK_PRIMARY_MODEL, MUSE_SPARK_FALLBACK_MODEL]);
+      assert.equal(outcome.attempts.length, 2);
+      assert.ok(!JSON.stringify(outcome).includes(KEY));
+    });
+  }
+
+  it('records both refusals and stops at max_attempts without a third HTTP request', async () => {
+    let calls = 0;
+    const outcome = await gateway(async () => { calls += 1; return refused(503); }).generate(request());
+    assert.equal(outcome.status, 'unaccepted');
+    assert.equal(calls, 2);
+    assert.equal(outcome.attempts.length, 2);
+    assert.ok(outcome.attempts.every(attempt => attempt.disposition.status === 'failed'));
+    assert.ok(!JSON.stringify(outcome).includes(KEY));
+  });
+
+  it('cancels a mid-request fetch without retry or fallback and keeps traces credential-free', async () => {
+    const entered = deferred();
+    const controller = new AbortController();
+    let calls = 0;
+    let observed: AbortSignal | null | undefined;
+    let watcherCancelled = false;
+    const timer: Timer = { sleep(_ms, signal) {
+      return new Promise(resolve => signal?.addEventListener('abort', () => {
+        watcherCancelled = true;
+        resolve();
+      }, { once: true }));
+    } };
+    const instance = gateway(async (_url, init) => {
+      calls += 1;
+      observed = init?.signal;
+      entered.resolve();
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error(KEY)), { once: true });
+      });
+    }, { timer });
+    const pending = instance.generate(request(), controller.signal);
+    await entered.promise;
+    controller.abort(KEY);
+    const outcome = await pending;
+    assert.equal(observed?.aborted, true);
+    assert.equal(calls, 1);
+    assert.equal(outcome.attempts.length, 1);
+    assert.equal(watcherCancelled, true);
+    assert.equal(outcome.attempts[0]?.disposition.status === 'failed' ? outcome.attempts[0].disposition.failure.code : '', 'cancelled');
+    assert.ok(!JSON.stringify(outcome).includes(KEY));
+  });
+
+  it('the gateway deadline aborts the actual SDK fetch and records timeout', async () => {
+    const entered = deferred();
+    let now = 0;
+    let fire!: () => void;
+    let observed: AbortSignal | null | undefined;
+    let calls = 0;
+    const timer: Timer = { sleep(ms, signal) {
+      return new Promise(resolve => {
+        fire = () => { now += ms; resolve(); };
+        signal?.addEventListener('abort', () => resolve(), { once: true });
+      });
+    } };
+    const instance = gateway(async (_url, init) => {
+      calls += 1;
+      observed = init?.signal;
+      entered.resolve();
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error(KEY)), { once: true });
+      });
+    }, { timer, now: () => now });
+    const pending = instance.generate(request());
+    await entered.promise;
+    fire();
+    const outcome = await pending;
+    assert.equal(observed?.aborted, true);
+    assert.equal(calls, 1);
+    assert.equal(outcome.attempts[0]?.disposition.status === 'failed' ? outcome.attempts[0].disposition.failure.code : '', 'timeout');
+    assert.equal(outcome.status === 'unaccepted' ? outcome.reason : '', 'deadline_reached');
+    assert.ok(!JSON.stringify(outcome).includes(KEY));
+  });
+
+  it('isolates concurrent keys and request bodies across adapter instances', async () => {
+    const sent: { key: string | null; prompt: string }[] = [];
+    const outcomes = await Promise.all(Array.from({ length: 8 }, async (_, i) => {
+      const key = `${KEY}-${i}`;
+      return gateway(async (_url, init) => {
+        await Promise.resolve();
+        const body = JSON.parse(String(init?.body)) as { messages: { content: string }[] };
+        sent.push({ key: new Headers(init?.headers).get('authorization'), prompt: body.messages[0]!.content });
+        return completion(key);
+      }, { key }).generate(request(`concurrent-${i}`, `public-${i}`));
+    }));
+    assert.equal(sent.length, 8);
+    for (let i = 0; i < 8; i += 1) {
+      assert.ok(sent.some(item => item.key === `Bearer ${KEY}-${i}` && item.prompt === `public-${i}`));
+      assert.equal(outcomes[i]?.status, 'accepted');
+    }
+    assert.ok(!JSON.stringify(outcomes).includes(KEY));
+  });
+
+  it('one concurrent call backs off 400ms without delaying or changing another call', async () => {
+    const waiting = deferred();
+    const release = deferred();
+    const counts = new Map<string, number>();
+    const waits: number[] = [];
+    const timer: Timer = { sleep(ms, signal) {
+      if (signal) return new Promise(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
+      waits.push(ms);
+      waiting.resolve();
+      return release.promise;
+    } };
+    const instance = gateway(async (_url, init) => {
+      const body = JSON.parse(String(init?.body)) as { messages: { content: string }[] };
+      const prompt = body.messages[0]!.content;
+      const count = (counts.get(prompt) ?? 0) + 1;
+      counts.set(prompt, count);
+      return prompt === 'alpha' && count === 1 ? refused(429) : completion(prompt);
+    }, { timer });
+    const alphaRequest = request('alpha', 'alpha');
+    const alpha = instance.generate({ ...alphaRequest, terms: { ...alphaRequest.terms, max_attempts_per_route: 2 } });
+    await waiting.promise;
+    const beta = await instance.generate(request('beta', 'beta'));
+    assert.equal(beta.status, 'accepted');
+    assert.deepEqual(waits, [400]);
+    assert.equal(counts.get('alpha'), 1);
+    release.resolve();
+    const outcome = await alpha;
+    assert.equal(outcome.status, 'accepted');
+    assert.equal(outcome.attempts[1]?.waited_ms, 400);
+    assert.equal(beta.attempts.length, 1);
+    assert.equal(beta.attempts[0]?.waited_ms, undefined);
+    assert.equal(counts.get('alpha'), 2);
+    assert.equal(counts.get('beta'), 1);
+  });
+
+  it('rejects credential-shaped content before sending to the training destination', async () => {
+    const secret = 'sk-' + 'A'.repeat(40);
+    let calls = 0;
+    const outcome = await gateway(async () => { calls += 1; return completion(); })
+      .generate(request('credential-refusal', `harmless example with ${secret}`));
+    assert.equal(calls, 0);
+    assert.equal(outcome.status === 'blocked' ? outcome.reason : '', 'no_route');
+    assert.deepEqual(outcome.attempts, []);
+    assert.ok(outcome.uncertainty.includes('muse.primary: excluded (credential_content)'));
+    assert.ok(outcome.uncertainty.includes('muse.fallback: excluded (credential_content)'));
+    assert.ok(!JSON.stringify(outcome).includes(secret));
+  });
+});

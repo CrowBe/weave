@@ -148,3 +148,29 @@ from Amos failure records. See the [intake contract](packages/weave/src/sites/CO
 
 Run the opt-in local intake probe after building:
 `AMOS_LIVE=1 node --test packages/gateway/dist/test/amos.test.js`.
+
+### Muse Spark contributor example
+
+`npm run example:muse-spark` reads `MODEL_API_KEY` from the environment and
+makes one minimal public generation request. The `flash` implementation writers
+in `weave.routes.example.json` put `muse-spark-1.3-contributor` before
+`muse-spark-1.2-contributor`; callers use `max_attempts_per_route: 1` to escalate
+on the primary's first refusal. The JSON price entries are **unknown, flat zero
+placeholders**, not verified prices or a claim of free use. The 8192-token
+context bound is a conservative local configuration, not a provider specification.
+
+Contributor destinations may train on content. Callers must explicitly set
+`terms.content_class` to `public` or `non_sensitive`; absent classification,
+`sensitive`, and `private` are excluded even when the destination is listed in
+terms. Private repositories and operator/captain data must never be classified
+as public or non-sensitive. Before routing, the gateway screens content for the
+repository's credential markers at token starts. A match excludes every routed
+unit at that training-allowed destination with reason `credential_content`, also
+recorded as a content-free note in outcome `uncertainty`, without consuming attempts.
+A permitted non-training destination may still receive the original content.
+When only excluded training destinations remain, the outcome is blocked with
+`no_route` and nothing is dispatched. Screening does not make sensitive or private work
+eligible. No reasoning parameter is sent. The declared 150 RPM / 3M TPM
+limits do not proactively throttle requests: after a rate-limit refusal,
+`Retry-After` wins, otherwise the gateway uses 400ms request spacing; the token
+budget is metadata because a refusal does not report token consumption.

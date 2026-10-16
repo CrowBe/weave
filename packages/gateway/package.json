@@ -13,12 +13,14 @@
     "./nous-portal": "./dist/src/adapters/nous-portal.js",
     "./openai-chatgpt-plan": "./dist/src/adapters/openai-chatgpt-plan.js",
     "./cli-generate": "./dist/src/adapters/cli-generate.js",
-    "./amos": "./dist/src/adapters/amos.js"
+    "./amos": "./dist/src/adapters/amos.js",
+    "./muse-spark": "./dist/src/adapters/muse-spark.js"
   },
   "files": [
     "dist"
   ],
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.69",
     "ai": "^7.0.107"
   }
 }

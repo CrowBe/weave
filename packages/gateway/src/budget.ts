@@ -59,8 +59,8 @@ function gate(unit: RoutedUnit, snapshot: QuotaSnapshot | undefined, now: number
 /** Hard routing constraints run first. Downgrade changes tier only, never quality or authority. */
 export function budgetRoute(table: RouteTable, target: RouteTarget, terms: InferenceTerms,
   minEvidence: number, availability: ProviderAvailability | undefined,
-  snapshot: QuotaSnapshot | undefined, now: number): BudgetRoutingDecision {
-  const base = route(table, target, terms, minEvidence, availability);
+  snapshot: QuotaSnapshot | undefined, now: number, containsCredentials = false): BudgetRoutingDecision {
+  const base = route(table, target, terms, minEvidence, availability, containsCredentials);
   const excluded: RouteExclusion[] = [...base.excluded];
   const blocked: Gate[] = [];
   const eligible = base.order.filter(unit => {
@@ -73,7 +73,7 @@ export function budgetRoute(table: RouteTable, target: RouteTarget, terms: Infer
   if (eligible.length === 0 && blocked.some(g => g.reason === 'budget_pace_ahead') && !terms.audit &&
       (terms.tier === 'strong' || target.tier === 'strong')) {
     const lower = budgetRoute(table, { ...target, tier: 'standard' }, { ...terms, tier: 'standard' },
-      minEvidence, availability, snapshot, now);
+      minEvidence, availability, snapshot, now, containsCredentials);
     if (lower.order.length === 0 && !lower.pause) {
       const ahead = blocked.find(g => g.reason === 'budget_pace_ahead')!;
       return { ...lower, pause: ahead, downgraded: true };

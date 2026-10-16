@@ -206,6 +206,66 @@
         "input_per_mtok": 0,
         "output_per_mtok": 0
       }
+    },
+    {
+      "routed_unit_id": "muse-spark.flash.1.3",
+      "adapter": "muse-spark",
+      "model": "muse-spark-1.3-contributor",
+      "tier": "flash",
+      "operation": "generate",
+      "kind": "transform",
+      "destination": "muse-spark-contributor",
+      "destination_training_allowed": true,
+      "quality": "baseline",
+      "context_profile": "implementation",
+      "context_profile_version": 1,
+      "prompt_template": "implementation",
+      "prompt_template_version": 1,
+      "settings": {
+        "max_output_tokens": 8192
+      },
+      "context_limit_tokens": 8192,
+      "price": {
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      },
+      "rate_limits": [
+        {
+          "requests": 150,
+          "tokens": 3000000,
+          "window_ms": 60000
+        }
+      ]
+    },
+    {
+      "routed_unit_id": "muse-spark.flash.1.2",
+      "adapter": "muse-spark",
+      "model": "muse-spark-1.2-contributor",
+      "tier": "flash",
+      "operation": "generate",
+      "kind": "transform",
+      "destination": "muse-spark-contributor",
+      "destination_training_allowed": true,
+      "quality": "baseline",
+      "context_profile": "implementation",
+      "context_profile_version": 1,
+      "prompt_template": "implementation",
+      "prompt_template_version": 1,
+      "settings": {
+        "max_output_tokens": 8192
+      },
+      "context_limit_tokens": 8192,
+      "price": {
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      },
+      "rate_limits": [
+        {
+          "requests": 150,
+          "tokens": 3000000,
+          "window_ms": 60000
+        }
+      ]
     }
   ]
 }

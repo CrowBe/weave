@@ -80,6 +80,10 @@ export type InferenceKind = GenerationKind | EvaluationKind;
 /** Where request content may be sent. Routing filters on this before quality. */
 export type DataDestination = string;
 
+/** Caller classification; absence is treated as sensitive for training disclosure. */
+export const CONTENT_CLASSES = ['public', 'non_sensitive', 'sensitive', 'private'] as const;
+export type ContentClass = (typeof CONTENT_CLASSES)[number];
+
 export const TIERS = ['decision', 'flash', 'standard', 'strong'] as const;
 export type Tier = (typeof TIERS)[number];
 
@@ -122,6 +126,8 @@ export interface InferenceTerms {
   readonly tier?: Tier;
   readonly quality: QualityBar;
   readonly destinations: readonly DataDestination[];
+  /** Training-allowed destinations require explicit public or non_sensitive content. */
+  readonly content_class?: ContentClass;
   readonly max_context_tokens: number;
   readonly deadline: Timestamp;
   readonly cost_ceiling: Micros;
@@ -302,9 +308,14 @@ export interface TokenPrice {
  * never suppresses an attempt and is never treated as a quota the gateway can
  * count down. Its one job is to estimate how long to wait once the provider
  * has actually refused and has not said for how long.
+ * Optional token budgets describe the same window. Refusals do not report
+ * consumed tokens, so retry timing uses request spacing only; neither budget
+ * is counted down or used to suppress an attempt.
  */
 export interface RateLimit {
   readonly requests: number;
+  /** Declared token budget in this window; metadata, not a proactive throttle. */
+  readonly tokens?: number;
   readonly window_ms: number;
 }
 
@@ -327,6 +338,8 @@ export interface RoutedUnitBase {
   readonly model: string;
   readonly settings: ModelSettings;
   readonly destination: DataDestination;
+  /** The destination may train on content. Applies to every unit at this destination. */
+  readonly destination_training_allowed?: boolean;
   readonly quality: QualityBar;
   readonly context_limit_tokens: number;
   readonly price: TokenPrice;
@@ -399,7 +412,12 @@ export type GenerationProviderResult =
       readonly finish_reason: string;
       readonly provider_response_id: string | undefined;
     }
-  | { readonly status: 'failed'; readonly failure: ProviderFailure };
+  | {
+      readonly status: 'failed';
+      readonly failure: ProviderFailure;
+      /** Local refusals can report zero usage; absent usage remains unknown. */
+      readonly usage?: ProviderUsage;
+    };
 
 export interface GenerationAdapter {
   readonly id: AdapterId;
