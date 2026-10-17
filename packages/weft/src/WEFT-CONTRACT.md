@@ -142,13 +142,21 @@ policy did with them and which were selected.
   - `candidate_ref` id
   - `operation` code
   - `eligibility` code: `allowed`, `approval_required`, `prohibited`
-  - `weight` metric | null. A `prohibited` candidate has a null weight,
-    because prohibited candidates never reach a judgment site.
-  - `selected` flag
-  - `not_selected` code | null: `dependency`, `conflict`, `stale_read_set`,
-    `budget`, or null. It is null exactly when `selected` is true. A
-    `prohibited` candidate is never selected; its `not_selected` is null and
-    its eligibility explains why.
+  - `weight` metric | null
+  - `disposition` code: what happened to the candidate in this cycle
+
+  Loom weighs and selects only `allowed` candidates (`runtime.ts`
+  `runCycleOnce`); the others are filtered by policy first. The rules follow
+  from that, one disposition per path:
+
+  | `disposition` | Meaning | `eligibility` | `weight` |
+  | --- | --- | --- | --- |
+  | `selected` | Dispatched this cycle | `allowed` | any |
+  | `dependency`, `conflict`, `stale_read_set`, `budget` | Rejected by the scheduler for that reason | `allowed` | any |
+  | `not_reached` | Eligible, but the cycle selected nothing from it: weighing waited, was unaccepted or was blocked | `allowed` | any |
+  | `policy_filtered` | Never weighed or selected. Its eligibility gives the reason, and an `approval_required` candidate waits on an approval request | `approval_required` or `prohibited` | null |
+
+  Any other combination is rejected.
 
 ### `judgment`
 

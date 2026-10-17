@@ -63,6 +63,62 @@
             "role": "protected"
           }
         ]
+      },
+      "decision-sites.exact-hi@1": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.exact-hi@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "method": {
+          "interval": "bootstrap@1",
+          "level": 0.95,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "accuracy",
+            "source": {
+              "weft_kind": "judgment",
+              "field": "accepted"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0
+          }
+        ],
+        "constraints": []
+      },
+      "decision-sites.exact-lo@1": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.exact-lo@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "method": {
+          "interval": "bootstrap@1",
+          "level": 0.95,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "cost",
+            "source": {
+              "weft_kind": "inference.attempt",
+              "field": "spent_micros"
+            },
+            "aggregate": "mean",
+            "better": "lower",
+            "min_effect": 0
+          }
+        ],
+        "constraints": []
       }
     },
     "casesets": {
@@ -521,6 +577,186 @@
             "status": "held"
           }
         ],
+        "verdict": "meets_bar"
+      },
+      "res-hi-a": {
+        "schema": "gauge.result@1",
+        "result": "res-hi-a",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.13.0"
+        },
+        "criteria": "decision-sites.exact-hi@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-hi-a"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.85,
+            "n": 120,
+            "interval": [
+              0.8,
+              0.9
+            ]
+          }
+        ],
+        "constraints": [],
+        "verdict": "meets_bar"
+      },
+      "res-hi-b": {
+        "schema": "gauge.result@1",
+        "result": "res-hi-b",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.14.0"
+        },
+        "criteria": "decision-sites.exact-hi@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-hi-b"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.85,
+            "n": 120,
+            "interval": [
+              0.8,
+              0.9
+            ]
+          }
+        ],
+        "constraints": [],
+        "verdict": "meets_bar"
+      },
+      "res-lo-a": {
+        "schema": "gauge.result@1",
+        "result": "res-lo-a",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.13.0"
+        },
+        "criteria": "decision-sites.exact-lo@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-lo-a"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "cost",
+            "value": 150,
+            "n": 120,
+            "interval": [
+              140,
+              160
+            ]
+          }
+        ],
+        "constraints": [],
+        "verdict": "meets_bar"
+      },
+      "res-lo-b": {
+        "schema": "gauge.result@1",
+        "result": "res-lo-b",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.14.0"
+        },
+        "criteria": "decision-sites.exact-lo@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-lo-b"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "cost",
+            "value": 150,
+            "n": 120,
+            "interval": [
+              140,
+              160
+            ]
+          }
+        ],
+        "constraints": [],
+        "verdict": "meets_bar"
+      },
+      "res-lo-c": {
+        "schema": "gauge.result@1",
+        "result": "res-lo-c",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.16.0"
+        },
+        "criteria": "decision-sites.exact-lo@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-lo-c"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "cost",
+            "value": 147,
+            "n": 120,
+            "interval": [
+              139,
+              156
+            ]
+          }
+        ],
+        "constraints": [],
         "verdict": "meets_bar"
       }
     }
@@ -1225,6 +1461,100 @@
           }
         ],
         "verdict": "no_difference"
+      }
+    },
+    {
+      "name": "a zero-threshold criteria set with no constraints",
+      "record": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.exact-hi@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "method": {
+          "interval": "bootstrap@1",
+          "level": 0.95,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "accuracy",
+            "source": {
+              "weft_kind": "judgment",
+              "field": "accepted"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "name": "an unchanged higher-is-better measure at a zero threshold",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-eq-hi",
+        "experiment": "exp-12",
+        "baseline": "res-hi-a",
+        "candidate": "res-hi-b",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": 0,
+            "interval": [
+              0,
+              0
+            ]
+          }
+        ],
+        "verdict": "no_difference"
+      }
+    },
+    {
+      "name": "an unchanged lower-is-better measure at a zero threshold",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-eq-lo",
+        "experiment": "exp-12",
+        "baseline": "res-lo-a",
+        "candidate": "res-lo-b",
+        "deltas": [
+          {
+            "measure": "cost",
+            "delta": 0,
+            "interval": [
+              0,
+              0
+            ]
+          }
+        ],
+        "verdict": "no_difference"
+      }
+    },
+    {
+      "name": "a strict improvement at a zero threshold",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-move-lo",
+        "experiment": "exp-12",
+        "baseline": "res-lo-a",
+        "candidate": "res-lo-c",
+        "deltas": [
+          {
+            "measure": "cost",
+            "delta": -3,
+            "interval": [
+              -5,
+              -1
+            ]
+          }
+        ],
+        "verdict": "candidate_better"
       }
     },
     {
@@ -2205,6 +2535,73 @@
           {
             "source": "weft_trace",
             "ref": "trace-res-hold"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.9,
+            "n": 40,
+            "interval": [
+              0.82,
+              0.96
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 118,
+            "n": 40,
+            "interval": [
+              104,
+              132
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 40,
+            "interval": [
+              0.55,
+              0.83
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "a holdout result mixing a held-out report with a check",
+      "reason": "holdout",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-hold",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.14.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "holdout",
+        "caseset_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "held_out_report",
+            "ref": "hor-res-hold"
+          },
+          {
+            "source": "check",
+            "ref": "individual-holdout-case-17"
           }
         ],
         "measures": [
@@ -3318,6 +3715,72 @@
             "interval": [
               -0.08,
               0.08
+            ]
+          }
+        ],
+        "verdict": "candidate_better"
+      }
+    },
+    {
+      "name": "an unchanged higher-is-better measure claimed worse",
+      "reason": "verdict",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-eq-hi",
+        "experiment": "exp-12",
+        "baseline": "res-hi-a",
+        "candidate": "res-hi-b",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": 0,
+            "interval": [
+              0,
+              0
+            ]
+          }
+        ],
+        "verdict": "candidate_worse"
+      }
+    },
+    {
+      "name": "an unchanged lower-is-better measure claimed worse",
+      "reason": "verdict",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-eq-lo",
+        "experiment": "exp-12",
+        "baseline": "res-lo-a",
+        "candidate": "res-lo-b",
+        "deltas": [
+          {
+            "measure": "cost",
+            "delta": 0,
+            "interval": [
+              0,
+              0
+            ]
+          }
+        ],
+        "verdict": "candidate_worse"
+      }
+    },
+    {
+      "name": "an unchanged measure claimed better",
+      "reason": "verdict",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-eq-hi",
+        "experiment": "exp-12",
+        "baseline": "res-hi-a",
+        "candidate": "res-hi-b",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": 0,
+            "interval": [
+              0,
+              0
             ]
           }
         ],

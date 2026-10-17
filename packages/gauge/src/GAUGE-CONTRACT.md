@@ -114,9 +114,9 @@ Rules:
   digest.
 - **Governance.** A `policy` subject may not be the policy that governs the
   criteria set or the case set it is evaluated on.
-- **Holdout.** A holdout result cites at least one `held_out_report` and no
-  `weft_trace` or `observation` evidence, so it cannot point at individual
-  cases.
+- **Holdout.** Every evidence entry of a holdout result has source
+  `held_out_report`, so no `check`, `weft_trace` or `observation` reference can
+  point at an individual held-out case.
 - **Replay.** Replay compares decisions on recorded inputs. It cannot
   establish the outcomes of actions that were never taken. In `replay` mode, a
   measure sourced from Weft kinds `outcome`, `capability.invoked` or
@@ -159,13 +159,19 @@ Rules:
 - **Verdict** is recomputed in this order:
   1. `insufficient_evidence` if either result is, or no delta is non-null.
   2. `bar_missed` if the candidate result is `misses_bar`.
-  3. `candidate_worse` if any measure's interval lies wholly on the worse side
-     by at least `min_effect`: for higher-is-better, `hi ≤ −min_effect`; for
-     lower-is-better, `lo ≥ min_effect`.
-  4. `candidate_better` if any measure's interval lies wholly on the better
-     side by at least `min_effect`: for higher-is-better, `lo ≥ min_effect`;
-     for lower-is-better, `hi ≤ −min_effect`.
+  3. `candidate_worse` if any measure's interval lies strictly on the worse
+     side of zero and at least `min_effect` from it: for higher-is-better,
+     `hi < 0` and `hi ≤ −min_effect`; for lower-is-better, `lo > 0` and
+     `lo ≥ min_effect`.
+  4. `candidate_better` if any measure's interval lies strictly on the better
+     side of zero and at least `min_effect` from it: for higher-is-better,
+     `lo > 0` and `lo ≥ min_effect`; for lower-is-better, `hi < 0` and
+     `hi ≤ −min_effect`.
   5. Otherwise `no_difference`.
+
+  The strict comparison with zero matters when `min_effect` is 0: an
+  unchanged measure, `delta: 0` with interval `[0, 0]`, is `no_difference`
+  in either direction, never worse or better.
 
 A `candidate_better` comparison is evidence for a promotion decision. It is not
 one.
@@ -216,7 +222,8 @@ first applicable reason, in this order:
    one-to-one; a comparison across different questions or of a result with
    itself
 4. `governance`: a policy subject evaluated under criteria or cases it governs
-5. `holdout`: holdout evidence rules, or an attribution on a holdout result
+5. `holdout`: a holdout result with any evidence other than held-out reports,
+   or an attribution on a holdout result
 6. `mode`: the replay rule
 7. `measure`: a bad measure definition (unknown Weft kind or field, a
    duplicate measure, `wilson@1` on a non-rate aggregate), or a measure entry

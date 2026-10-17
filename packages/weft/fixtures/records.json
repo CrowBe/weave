@@ -92,7 +92,7 @@
       }
     },
     {
-      "name": "cycle with selected, policy-conflicted and prohibited candidates",
+      "name": "cycle with selected, scheduler-rejected, approval-required and prohibited candidates",
       "record": {
         "schema": "weft.record@1",
         "trace_id": "goal-17",
@@ -124,24 +124,66 @@
               "operation": "repo.read",
               "eligibility": "allowed",
               "weight": 0.7,
-              "selected": true,
-              "not_selected": null
+              "disposition": "selected"
             },
             {
               "candidate_ref": "cand-b",
               "operation": "repo.write",
               "eligibility": "allowed",
               "weight": 0.2,
-              "selected": false,
-              "not_selected": "conflict"
+              "disposition": "conflict"
             },
             {
               "candidate_ref": "cand-c",
+              "operation": "repo.publish",
+              "eligibility": "approval_required",
+              "weight": null,
+              "disposition": "policy_filtered"
+            },
+            {
+              "candidate_ref": "cand-d",
               "operation": "repo.delete",
               "eligibility": "prohibited",
               "weight": null,
-              "selected": false,
-              "not_selected": null
+              "disposition": "policy_filtered"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "cycle whose weighing waited, leaving an eligible candidate unreached",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-cycle-waited",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "cycle.weighed",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "cycle_no": 4,
+          "state_revision": 13,
+          "procedure": "inspect_and_report@1",
+          "weights_ref": null,
+          "candidates": [
+            {
+              "candidate_ref": "cand-a",
+              "operation": "repo.read",
+              "eligibility": "allowed",
+              "weight": null,
+              "disposition": "not_reached"
             }
           ]
         }
@@ -1795,31 +1837,35 @@
               "operation": "repo.read",
               "eligibility": "allowed",
               "weight": 0.7,
-              "selected": true,
-              "not_selected": null
+              "disposition": "selected"
             },
             {
               "candidate_ref": "cand-b",
               "operation": "repo.write",
               "eligibility": "allowed",
               "weight": 0.2,
-              "selected": false,
-              "not_selected": "conflict"
+              "disposition": "conflict"
             },
             {
               "candidate_ref": "cand-c",
-              "operation": "repo.delete",
-              "eligibility": "prohibited",
+              "operation": "repo.publish",
+              "eligibility": "approval_required",
               "weight": 0.1,
-              "selected": false,
-              "not_selected": null
+              "disposition": "policy_filtered"
+            },
+            {
+              "candidate_ref": "cand-d",
+              "operation": "repo.delete",
+              "eligibility": "prohibited",
+              "weight": null,
+              "disposition": "policy_filtered"
             }
           ]
         }
       }
     },
     {
-      "name": "a selected candidate with a not-selected reason",
+      "name": "a weighted approval-required candidate",
       "reason": "field",
       "record": {
         "schema": "weft.record@1",
@@ -1852,31 +1898,35 @@
               "operation": "repo.read",
               "eligibility": "allowed",
               "weight": 0.7,
-              "selected": true,
-              "not_selected": "budget"
+              "disposition": "selected"
             },
             {
               "candidate_ref": "cand-b",
               "operation": "repo.write",
               "eligibility": "allowed",
               "weight": 0.2,
-              "selected": false,
-              "not_selected": "conflict"
+              "disposition": "conflict"
             },
             {
               "candidate_ref": "cand-c",
+              "operation": "repo.publish",
+              "eligibility": "approval_required",
+              "weight": 0.4,
+              "disposition": "policy_filtered"
+            },
+            {
+              "candidate_ref": "cand-d",
               "operation": "repo.delete",
               "eligibility": "prohibited",
               "weight": null,
-              "selected": false,
-              "not_selected": null
+              "disposition": "policy_filtered"
             }
           ]
         }
       }
     },
     {
-      "name": "an unselected allowed candidate with no reason",
+      "name": "a selected approval-required candidate",
       "reason": "field",
       "record": {
         "schema": "weft.record@1",
@@ -1909,24 +1959,273 @@
               "operation": "repo.read",
               "eligibility": "allowed",
               "weight": 0.7,
-              "selected": true,
-              "not_selected": null
+              "disposition": "selected"
             },
             {
               "candidate_ref": "cand-b",
               "operation": "repo.write",
               "eligibility": "allowed",
               "weight": 0.2,
-              "selected": false,
-              "not_selected": null
+              "disposition": "conflict"
             },
             {
               "candidate_ref": "cand-c",
+              "operation": "repo.publish",
+              "eligibility": "approval_required",
+              "weight": null,
+              "disposition": "selected"
+            },
+            {
+              "candidate_ref": "cand-d",
               "operation": "repo.delete",
               "eligibility": "prohibited",
               "weight": null,
-              "selected": false,
-              "not_selected": null
+              "disposition": "policy_filtered"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a scheduler reason on a prohibited candidate",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-cycle.weighed",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "cycle.weighed",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "cycle_no": 3,
+          "state_revision": 12,
+          "procedure": "inspect_and_report@1",
+          "weights_ref": "obs:11",
+          "cost_micros": 40,
+          "candidates": [
+            {
+              "candidate_ref": "cand-a",
+              "operation": "repo.read",
+              "eligibility": "allowed",
+              "weight": 0.7,
+              "disposition": "selected"
+            },
+            {
+              "candidate_ref": "cand-b",
+              "operation": "repo.write",
+              "eligibility": "allowed",
+              "weight": 0.2,
+              "disposition": "conflict"
+            },
+            {
+              "candidate_ref": "cand-c",
+              "operation": "repo.publish",
+              "eligibility": "approval_required",
+              "weight": null,
+              "disposition": "policy_filtered"
+            },
+            {
+              "candidate_ref": "cand-d",
+              "operation": "repo.delete",
+              "eligibility": "prohibited",
+              "weight": null,
+              "disposition": "conflict"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an allowed candidate marked policy-filtered",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-cycle.weighed",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "cycle.weighed",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "cycle_no": 3,
+          "state_revision": 12,
+          "procedure": "inspect_and_report@1",
+          "weights_ref": "obs:11",
+          "cost_micros": 40,
+          "candidates": [
+            {
+              "candidate_ref": "cand-a",
+              "operation": "repo.read",
+              "eligibility": "allowed",
+              "weight": 0.7,
+              "disposition": "policy_filtered"
+            },
+            {
+              "candidate_ref": "cand-b",
+              "operation": "repo.write",
+              "eligibility": "allowed",
+              "weight": 0.2,
+              "disposition": "conflict"
+            },
+            {
+              "candidate_ref": "cand-c",
+              "operation": "repo.publish",
+              "eligibility": "approval_required",
+              "weight": null,
+              "disposition": "policy_filtered"
+            },
+            {
+              "candidate_ref": "cand-d",
+              "operation": "repo.delete",
+              "eligibility": "prohibited",
+              "weight": null,
+              "disposition": "policy_filtered"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an unknown disposition",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-cycle.weighed",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "cycle.weighed",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "cycle_no": 3,
+          "state_revision": 12,
+          "procedure": "inspect_and_report@1",
+          "weights_ref": "obs:11",
+          "cost_micros": 40,
+          "candidates": [
+            {
+              "candidate_ref": "cand-a",
+              "operation": "repo.read",
+              "eligibility": "allowed",
+              "weight": 0.7,
+              "disposition": "selected"
+            },
+            {
+              "candidate_ref": "cand-b",
+              "operation": "repo.write",
+              "eligibility": "allowed",
+              "weight": 0.2,
+              "disposition": "skipped"
+            },
+            {
+              "candidate_ref": "cand-c",
+              "operation": "repo.publish",
+              "eligibility": "approval_required",
+              "weight": null,
+              "disposition": "policy_filtered"
+            },
+            {
+              "candidate_ref": "cand-d",
+              "operation": "repo.delete",
+              "eligibility": "prohibited",
+              "weight": null,
+              "disposition": "policy_filtered"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "the retired selected flag",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-cycle.weighed",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "cycle.weighed",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "cycle_no": 3,
+          "state_revision": 12,
+          "procedure": "inspect_and_report@1",
+          "weights_ref": "obs:11",
+          "cost_micros": 40,
+          "candidates": [
+            {
+              "candidate_ref": "cand-a",
+              "operation": "repo.read",
+              "eligibility": "allowed",
+              "weight": 0.7,
+              "disposition": "selected",
+              "selected": true
+            },
+            {
+              "candidate_ref": "cand-b",
+              "operation": "repo.write",
+              "eligibility": "allowed",
+              "weight": 0.2,
+              "disposition": "conflict"
+            },
+            {
+              "candidate_ref": "cand-c",
+              "operation": "repo.publish",
+              "eligibility": "approval_required",
+              "weight": null,
+              "disposition": "policy_filtered"
+            },
+            {
+              "candidate_ref": "cand-d",
+              "operation": "repo.delete",
+              "eligibility": "prohibited",
+              "weight": null,
+              "disposition": "policy_filtered"
             }
           ]
         }
