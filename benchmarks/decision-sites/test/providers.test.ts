@@ -3,6 +3,21 @@ import test from 'node:test';
 import { buildProviders } from '../providers.ts';
 const request = { state: { text: 'test' }, questions: { q: { type: 'choice' as const, instructions: 'Select.', criteria: { b: 'Bee', a: 'Aye' } } } };
 const json = (body: unknown, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers });
+test('Amos replay serialization is exactly the adapter wire body for every question type',async()=>{
+ const input={state:{text:'disclosed state'},questions:{
+  p:{type:'boolean' as const,instructions:{ask:'Ready?'},criteria:{true:{meaning:'yes'},false:null}},
+  c:request.questions.q,
+  s:{type:'score' as const,instructions:'Score?',criteria:[null,{meaning:'high'}]},
+ }};
+ let sent:string|undefined;
+ const p=buildProviders({fetch:async(url,options)=>{
+  if(String(url).endsWith('/v1/models'))return json({models:[{name:'amos-1-2b'}],question_types:['noul','choice','score']});
+  sent=String(options?.body);return json({});
+ }}).find(x=>x.id==='amos-small')!;
+ const serialized=p.serialize(input);
+ await p.request(input,new AbortController().signal);
+ assert.equal(serialized,sent,'replay must hash the serialized body actually dispatched by amosEvaluator');
+});
 test('TypeSafe pins model, batches and preserves question order; missing confidence remains absent', async () => {
   const seen: unknown[] = [];
   const providers = buildProviders({ typesafeKey: 'secret', fetch: async (_url, init) => { seen.push(JSON.parse(String(init?.body))); return json({ model: 'jev-1.14.0', answers: { q: { type: 'choice', choice: 'b', probabilities: { b: .8, a: .2 } } }, usage: { input_tokens: 100, output_tokens: 2 } }); } });

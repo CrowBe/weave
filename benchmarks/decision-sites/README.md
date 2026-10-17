@@ -130,10 +130,20 @@ persistent skips and rechecks invocation-only quota skips.
 
 Each run owns `results/<run_id>/lock` exclusively. A concurrent writer refuses;
 a dead-pid lock is reported as stale and must be inspected and removed by the
-operator. An empty or malformed PID is `stale-unknown` and is never silently
-stolen. The append-only `journal.jsonl` fsyncs reservations and completed calls;
+operator. New locks record a nonce, boot id and PID namespace; only a matching
+boot and namespace permit a local liveness probe. Foreign or unidentifiable
+owners are `stale-unknown`, including a container using the same PID. Legacy
+PID-only locks retain their inspection behavior. In both formats, a same-host
+lock carrying our unheld PID is a crashed predecessor and reads as stale.
+Lock keys resolve relative spellings to the same absolute path. Empty or
+malformed locks are `stale-unknown`. No lock is silently stolen.
+The append-only `journal.jsonl` fsyncs reservations and completed calls;
 a torn final line is truncated before appending, while corrupt earlier records
-refuse replay. Saved answers bind provider, expected and served model, site,
+refuse replay. Writable journals cache parsed rows only during a locally held
+lock tenure, updating the cache after durable writes. A new tenure reloads disk;
+read-only and unlocked journals continue reading disk. The lock assumes that
+all writers cooperate and use the same run-directory spelling after resolution;
+symlink aliases are not canonicalized. Saved answers bind provider, expected and served model, site,
 item, set digest, production question digest, and serialized wire-body/prompt digest.
 Changed bindings are re-asked; older
 cost remains charged. Every completed attempt is charged once. Resume never

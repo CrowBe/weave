@@ -1,6 +1,6 @@
 /** Direct benchmark routes: no gateway policy, shuffles, tier downgrades or ambient credentials. */
 import { typesafeWireProfile } from '@weave/gateway/typesafe-ai';
-import { amosEvaluator } from '@weave/gateway/amos';
+import { amosBody, amosEvaluator } from '@weave/gateway/amos';
 import type { EvaluationAnswer, EvaluationCall, EvaluationQuestion } from '@weave/gateway';
 import type { Answer, Provider, Request, Result } from './types.ts';
 export type { Answer, Provider, Request, Result } from './types.ts';
@@ -34,14 +34,7 @@ export function buildProviders(config: ProvidersConfig): Provider[] {
 function httpProvider(id: string, model: string, price: number, key: string | undefined, url: string,
   body: (request: Request) => unknown, config: ProvidersConfig): Provider {
   let skipped: Result | undefined;
-  const safe = (value: unknown): string | undefined => {
-    if (typeof value !== 'string') return undefined;
-    let output = value;
-    for (const secret of [config.typesafeKey, config.openaiKey].filter((s): s is string => !!s)) {
-      for (const variant of [secret, JSON.stringify(secret).slice(1, -1), encodeURIComponent(secret)]) output = output.split(variant).join('[redacted]');
-    }
-    return output.slice(0, 200);
-  };
+  const safe = (value: unknown) => safeMetadata(value,config);
   return { id, model, price,
     serialize: request => JSON.stringify(body(request)),
     async request(request, external): Promise<Result> {
@@ -96,7 +89,7 @@ function amosProvider(config: ProvidersConfig): Provider {
   const baseURL = (config.amosBaseURL ?? 'http://127.0.0.1:8766').replace(/\/+$/, '');
   const fetch = config.fetch ?? globalThis.fetch;
   return { id: 'amos-small', model: 'amos-1-2b', price: 0,
-    serialize: request => JSON.stringify({ model: 'amos-1-2b', ...request }),
+    serialize: request => JSON.stringify(amosBody({model:'amos-1-2b',...request})),
     async request(request, external) {
       if (external.aborted) return { status: 'failed', reason: 'cancelled' };
       try {
@@ -129,11 +122,8 @@ function amosProvider(config: ProvidersConfig): Provider {
         const rawUsage = record(observed) && record(observed.usage) ? observed.usage : {};
         const usage = { ...(token(rawUsage.input_tokens) ? { input_tokens: rawUsage.input_tokens } : {}), ...(token(rawUsage.output_tokens) ? { output_tokens: rawUsage.output_tokens } : {}) };
         const rawModel = record(observed) ? observed.model : undefined;
-        let safeModel = typeof rawModel === 'string' ? rawModel : undefined;
-        if (safeModel !== undefined) for (const secret of [config.typesafeKey, config.openaiKey].filter((entry): entry is string => !!entry)) {
-          for (const variant of [secret, JSON.stringify(secret).slice(1, -1), encodeURIComponent(secret)]) safeModel = safeModel.split(variant).join('[redacted]');
-        }
-        const modelEvidence = safeModel === undefined ? {} : { model: safeModel.slice(0, 200) };
+        const safeModel = safeMetadata(rawModel,config);
+        const modelEvidence = safeModel === undefined ? {} : { model: safeModel };
         if (rawModel !== undefined && rawModel !== 'amos-1-2b') return { status: 'failed', reason: 'wrong_model', ...modelEvidence, ...usage };
         if (result.status !== 'completed') return { status: 'failed', reason: result.failure.code, ...modelEvidence, ...usage };
         if (rawModel !== 'amos-1-2b') return { status: 'failed', reason: 'wrong_model', ...modelEvidence, ...usage };
@@ -143,6 +133,14 @@ function amosProvider(config: ProvidersConfig): Provider {
       } catch { return { status: 'failed', reason: external.aborted ? 'cancelled' : 'models_unavailable' }; }
     },
   };
+}
+function safeMetadata(value:unknown,config:ProvidersConfig):string|undefined {
+  if(typeof value!=='string')return undefined;
+  let output=value;
+  for(const secret of [config.typesafeKey,config.openaiKey].filter((entry):entry is string=>!!entry)) {
+    for(const variant of [secret,JSON.stringify(secret).slice(1,-1),encodeURIComponent(secret)])output=output.split(variant).join('[redacted]');
+  }
+  return output.slice(0,200);
 }
 export function openaiBody(request: Request): unknown {
   return { model: 'gpt-6-luna', input: typeof request.state === 'string' ? request.state : JSON.stringify(request.state), questions: Object.entries(request.questions).map(([name, q]) => {

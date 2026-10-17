@@ -155,7 +155,9 @@ Run the opt-in local intake probe after building:
 makes one minimal public generation request. The `flash` implementation writers
 in `weave.routes.example.json` put `muse-spark-1.3-contributor` before
 `muse-spark-1.2-contributor`; callers use `max_attempts_per_route: 1` to escalate
-on the primary's first refusal. The JSON price entries are **unknown, flat zero
+on the primary's first refusal. In the example, an authentication refusal
+(401/402/403) marks the shared adapter `auth_required`, so the fallback does not
+send the same rejected credential again. The JSON price entries are **unknown, flat zero
 placeholders**, not verified prices or a claim of free use. The 8192-token
 context bound is a conservative local configuration, not a provider specification.
 
@@ -164,7 +166,9 @@ Contributor destinations may train on content. Callers must explicitly set
 `sensitive`, and `private` are excluded even when the destination is listed in
 terms. Private repositories and operator/captain data must never be classified
 as public or non-sensitive. Before routing, the gateway screens content for the
-repository's credential markers at token starts. A match excludes every routed
+repository's credential markers at token starts, including PEM private-key
+headers, Google `AIza` keys, Slack `xoxa-`/`xoxb-`/`xoxp-` tokens, and Bearer
+credentials separated by whitespace. A match excludes every routed
 unit at that training-allowed destination with reason `credential_content`, also
 recorded as a content-free note in outcome `uncertainty`, without consuming attempts.
 A permitted non-training destination may still receive the original content.

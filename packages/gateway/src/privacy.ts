@@ -8,7 +8,7 @@ export function trainingAllowedDestinations(table: RouteTable): ReadonlySet<Data
 
 // Match token starts, as in the repository's trace and audit screens. Keep
 // every credential family and keep this package independent of Loom.
-const CREDENTIAL = /(?<![A-Za-z0-9])(?:sk[-_]|Bearer |eyJ|gh[pousr]_|github_pat_|AKIA)/i;
+const CREDENTIAL = /(?<![A-Za-z0-9])(?:sk[-_]|Bearer\s+|eyJ|gh[pousr]_|github_pat_|AKIA|AIza|xox[abp]-|-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----)/i;
 
 /**
  * Screen all JSON content, including keys, without changing caller-owned state.

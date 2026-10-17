@@ -49,8 +49,18 @@ if (!apiKey || apiKey.trim().length === 0) {
         else signal?.addEventListener('abort', done, { once: true });
       }),
     };
+    const adapter = museSparkAdapter({ apiKey });
+    const availability: Record<string, 'available' | 'auth_required'> = { [adapter.id]: 'available' };
     const gateway = createInferenceGateway({
-      routes, adapters: [museSparkAdapter({ apiKey })],
+      routes, availability, adapters: [{ ...adapter, async execute(call) {
+        const result = await adapter.execute(call);
+        // Both models use this one credential. A refusal excludes the adapter
+        // before routing the fallback; a different model cannot repair sign-in.
+        if (result.status === 'failed' && result.failure.code === 'unauthorized') {
+          availability[adapter.id] = 'auth_required';
+        }
+        return result;
+      } }],
       clock: { now: () => Date.now() }, timer,
     });
     const result = await gateway.generate({
