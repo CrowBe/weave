@@ -51,6 +51,16 @@ test('relative and absolute spellings identify the same held lock', async () => 
  try { assert.throws(()=>acquireLock(relative(process.cwd(),dir)),/^Error: Run directory locked$/); }
  finally { release();await rm(dir,{recursive:true,force:true}); }
 });
+test('a crashed same-host lock with our PID reads as stale without stealing',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'decision-own-host-lock-'));
+ const release=acquireLock(dir),value=await readFile(join(dir,'lock'),'utf8');
+ release();
+ try{
+  await writeFile(join(dir,'lock'),value);
+  assert.throws(()=>acquireLock(dir),/has stale lock/);
+  assert.equal(await readFile(join(dir,'lock'),'utf8'),value);
+ }finally{await rm(dir,{recursive:true,force:true});}
+});
 test('a foreign nonce with our PID is unknown rather than falsely stale, and is never stolen',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'decision-foreign-lock-'));
  try{

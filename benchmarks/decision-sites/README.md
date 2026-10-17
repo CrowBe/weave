@@ -133,7 +133,8 @@ a dead-pid lock is reported as stale and must be inspected and removed by the
 operator. New locks record a nonce, boot id and PID namespace; only a matching
 boot and namespace permit a local liveness probe. Foreign or unidentifiable
 owners are `stale-unknown`, including a container using the same PID. Legacy
-PID-only locks retain their inspection behavior (our unheld PID is stale).
+PID-only locks retain their inspection behavior. In both formats, a same-host
+lock carrying our unheld PID is a crashed predecessor and reads as stale.
 Lock keys resolve relative spellings to the same absolute path. Empty or
 malformed locks are `stale-unknown`. No lock is silently stolen.
 The append-only `journal.jsonl` fsyncs reservations and completed calls;

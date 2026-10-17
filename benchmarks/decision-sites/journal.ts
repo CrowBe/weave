@@ -87,7 +87,10 @@ export function acquireLock(dir: string): ()=>void {
      const pid=Number(text);state=pid===process.pid?'stale':'locked';if(pid!==process.pid)process.kill(pid,0);
     }else{
      const owner=JSON.parse(text) as {pid?:unknown;nonce?:unknown;host?:unknown};
-     if(owner&&Number.isSafeInteger(owner.pid)&&Number(owner.pid)>0&&typeof owner.nonce==='string'&&owner.nonce.length>0&&host!==undefined&&owner.host===host){state='locked';process.kill(Number(owner.pid),0);}
+     if(owner&&Number.isSafeInteger(owner.pid)&&Number(owner.pid)>0&&typeof owner.nonce==='string'&&owner.nonce.length>0&&host!==undefined&&owner.host===host){
+      // heldLocks was checked above, so a same-host lock with our PID is a crashed predecessor.
+      const pid=Number(owner.pid);state=pid===process.pid?'stale':'locked';if(pid!==process.pid)process.kill(pid,0);
+     }
     }
    }
   }catch(e){if((e as NodeJS.ErrnoException).code==='ESRCH')state='stale';}
