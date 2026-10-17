@@ -40,6 +40,8 @@
     "example:muse-spark": "npm run build && node --experimental-strip-types examples/muse-spark.ts",
     "test:muse-spark-example": "node --experimental-strip-types --test examples/muse-spark.test.ts",
     "bench:decision-sites:live": "npm run build && node --env-file-if-exists=.env.local --experimental-strip-types benchmarks/decision-sites/run.ts",
+    "test:weft-contract": "node --experimental-strip-types --test packages/weft/test/contract.test.ts",
+    "test:gauge-contract": "node --experimental-strip-types --test packages/gauge/test/contract.test.ts",
     "test:decision-sites": "npm run build && node --experimental-strip-types --test \"benchmarks/decision-sites/*.test.ts\" \"benchmarks/decision-sites/test/*.test.ts\""
   },
   "devDependencies": {

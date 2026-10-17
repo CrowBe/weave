@@ -1,0 +1,2098 @@
+{
+  "valid": [
+    {
+      "name": "goal intent with a private statement reference",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-goal.intent",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "goal.intent",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "goal_ref": "goal-17",
+          "statement": {
+            "content_class": "private",
+            "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "criteria": [
+            "c1",
+            "c2"
+          ]
+        }
+      }
+    },
+    {
+      "name": "thread opened",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-thread.transition",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "thread.transition",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "transition": "opened"
+        }
+      }
+    },
+    {
+      "name": "thread joined with its joins link",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-join",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "thread.transition",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [
+          {
+            "rel": "joins",
+            "record_id": "r-t2-closed"
+          }
+        ],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "transition": "joined"
+        }
+      }
+    },
+    {
+      "name": "cycle with selected, policy-conflicted and prohibited candidates",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-cycle.weighed",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "cycle.weighed",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "cycle_no": 3,
+          "state_revision": 12,
+          "procedure": "inspect_and_report@1",
+          "weights_ref": "obs:11",
+          "cost_micros": 40,
+          "candidates": [
+            {
+              "candidate_ref": "cand-a",
+              "operation": "repo.read",
+              "eligibility": "allowed",
+              "weight": 0.7,
+              "selected": true,
+              "not_selected": null
+            },
+            {
+              "candidate_ref": "cand-b",
+              "operation": "repo.write",
+              "eligibility": "allowed",
+              "weight": 0.2,
+              "selected": false,
+              "not_selected": "conflict"
+            },
+            {
+              "candidate_ref": "cand-c",
+              "operation": "repo.delete",
+              "eligibility": "prohibited",
+              "weight": null,
+              "selected": false,
+              "not_selected": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "judgment answer",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-judgment",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "judgment",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "site": "frontier.weigh",
+          "request_ref": "req-9",
+          "accepted": true,
+          "confidence": 0.92,
+          "routed_unit": "jev-1.14.0"
+        }
+      }
+    },
+    {
+      "name": "gateway route with an exclusion",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-route",
+        "emitter": {
+          "kind": "gateway",
+          "id": "gateway.local"
+        },
+        "sequence": 4,
+        "kind": "route.selected",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "inference_request",
+            "ref": "req-9"
+          }
+        ],
+        "fields": {
+          "request_ref": "req-9",
+          "routed_unit": "jev-1.14.0",
+          "tier": "decision",
+          "excluded": [
+            {
+              "routed_unit": "muse-spark-1.3",
+              "reason": "credential_content"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "inference attempt inside a route",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-attempt-1",
+        "emitter": {
+          "kind": "gateway",
+          "id": "gateway.local"
+        },
+        "sequence": 5,
+        "kind": "inference.attempt",
+        "thread_id": "t1",
+        "parent_id": "r-route",
+        "links": [],
+        "evidence": [
+          {
+            "source": "inference_request",
+            "ref": "req-9"
+          }
+        ],
+        "fields": {
+          "request_ref": "req-9",
+          "routed_unit": "jev-1.14.0",
+          "attempt_no": 1,
+          "disposition": "accepted",
+          "input_tokens": 812,
+          "output_tokens": 40,
+          "spent_micros": 90,
+          "cost_is_upper_bound": false,
+          "latency_ms": 310.5
+        }
+      }
+    },
+    {
+      "name": "retry attempt linked to the attempt it repeats",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-attempt-2",
+        "emitter": {
+          "kind": "gateway",
+          "id": "gateway.local"
+        },
+        "sequence": 6,
+        "kind": "inference.attempt",
+        "thread_id": "t1",
+        "parent_id": "r-route",
+        "links": [
+          {
+            "rel": "retry_of",
+            "record_id": "r-attempt-1"
+          }
+        ],
+        "evidence": [
+          {
+            "source": "inference_request",
+            "ref": "req-9"
+          }
+        ],
+        "fields": {
+          "request_ref": "req-9",
+          "routed_unit": "jev-1.14.0",
+          "attempt_no": 2,
+          "disposition": "unaccepted"
+        }
+      }
+    },
+    {
+      "name": "failed capability invocation from Fabric",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-capability.invoked",
+        "emitter": {
+          "kind": "fabric",
+          "id": "fabric.host"
+        },
+        "sequence": 4,
+        "kind": "capability.invoked",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "invocation",
+            "ref": "inv-3"
+          }
+        ],
+        "fields": {
+          "contract_rev": "repo.read@2",
+          "implementation": "impl-7",
+          "status": "failed",
+          "invocation_ref": "inv-3",
+          "execution_tier": "trusted",
+          "failure": "not_found",
+          "latency_ms": 12
+        }
+      }
+    },
+    {
+      "name": "action transition with a null contract revision",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-action.transition",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "action.transition",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "action_ref": "act-1",
+          "operation": "repo.read",
+          "state": "running",
+          "contract_rev": null
+        }
+      }
+    },
+    {
+      "name": "context assembly without disclosed text",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-context.assembled",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "context.assembled",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "assembly_ref": "asm-4",
+          "view_ref": "view-4",
+          "consumer": "frontier.weigh",
+          "slices": [
+            "goal",
+            "catalogue"
+          ],
+          "source_revision": 12,
+          "omissions": 1,
+          "disclosed_bytes": 2048,
+          "cost_micros": 5
+        }
+      }
+    },
+    {
+      "name": "budget line",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-budget",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "budget",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "line": "cost",
+          "limit": 2000000,
+          "reserved": 90,
+          "spent": 40
+        }
+      }
+    },
+    {
+      "name": "goal outcome",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-outcome",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "outcome",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "subject": "goal",
+          "subject_ref": "goal-17",
+          "status": "complete",
+          "criteria_met": 2,
+          "criteria_total": 2
+        }
+      }
+    },
+    {
+      "name": "external error with no observation evidence",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-error",
+        "emitter": {
+          "kind": "external",
+          "id": "bench.decision-sites"
+        },
+        "sequence": 4,
+        "kind": "error",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [],
+        "fields": {
+          "code": "rate_limited",
+          "retryable": true
+        }
+      }
+    },
+    {
+      "name": "handoff to another thread with a causal link",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-handoff",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "action.transition",
+        "thread_id": "t2",
+        "parent_id": null,
+        "links": [
+          {
+            "rel": "handoff",
+            "record_id": "r-action.transition"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "r-judgment"
+          }
+        ],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "action_ref": "act-2",
+          "operation": "text.classify",
+          "state": "pending",
+          "contract_rev": "text.classify@1"
+        }
+      }
+    },
+    {
+      "name": "content value with an optional ref",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-intent-ref",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "goal.intent",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "goal_ref": "goal-18",
+          "statement": {
+            "content_class": "public",
+            "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "ref": "artifact-2"
+          }
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "a non-object",
+      "reason": "envelope",
+      "record": []
+    },
+    {
+      "name": "an unknown schema",
+      "reason": "envelope",
+      "record": {
+        "schema": "weft.record@2",
+        "trace_id": "goal-17",
+        "record_id": "r-judgment",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "judgment",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "site": "frontier.weigh",
+          "request_ref": "req-9",
+          "accepted": true,
+          "confidence": 0.92,
+          "routed_unit": "jev-1.14.0"
+        }
+      }
+    },
+    {
+      "name": "a missing envelope key",
+      "reason": "envelope",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-judgment",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "judgment",
+        "thread_id": "t1",
+        "parent_id": null,
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "site": "frontier.weigh",
+          "request_ref": "req-9",
+          "accepted": true,
+          "confidence": 0.92,
+          "routed_unit": "jev-1.14.0"
+        }
+      }
+    },
+    {
+      "name": "an extra envelope key",
+      "reason": "envelope",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-judgment",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "judgment",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "site": "frontier.weigh",
+          "request_ref": "req-9",
+          "accepted": true,
+          "confidence": 0.92,
+          "routed_unit": "jev-1.14.0"
+        },
+        "timestamp": 1700000000
+      }
+    },
+    {
+      "name": "an unknown emitter kind",
+      "reason": "envelope",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-judgment",
+        "emitter": {
+          "kind": "model",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "judgment",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "site": "frontier.weigh",
+          "request_ref": "req-9",
+          "accepted": true,
+          "confidence": 0.92,
+          "routed_unit": "jev-1.14.0"
+        }
+      }
+    },
+    {
+      "name": "a record over 16 KiB",
+      "reason": "envelope",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "context.assembled",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [
+          {
+            "rel": "caused_by",
+            "record_id": "l0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l2000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l3000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l4000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l6000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l7000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l8000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l9000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l1100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l1200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l1300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l1400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l1500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l1600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l1700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l1800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l1900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l2000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l2100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l2200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l2300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l2400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l2500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l2600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l2700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l2800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l2900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l3000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "l3100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:2000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:3000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:4000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:6000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:7000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:8000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:9000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:1100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:1200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:1300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:1400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:1500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:1600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:1700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:1800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:1900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:2000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:2100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:2200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:2300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:2400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:2500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:2600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:2700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:2800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:2900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:3000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:3100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:3200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:3300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:3400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:3500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:3600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:3700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:3800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:3900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:4000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:4100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:4200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:4300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:4400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:4500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:4600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:4700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:4800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:4900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:5100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:5200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:5300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:5400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:5500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:5600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:5700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:5800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:5900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:6000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:6100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:6200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "source": "observation",
+            "ref": "obs:6300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "fields": {
+          "assembly_ref": "asm-4",
+          "view_ref": "view-4",
+          "consumer": "frontier.weigh",
+          "slices": [
+            "s0",
+            "s1",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s6",
+            "s7",
+            "s8",
+            "s9",
+            "s10",
+            "s11",
+            "s12",
+            "s13",
+            "s14",
+            "s15",
+            "s16",
+            "s17",
+            "s18",
+            "s19",
+            "s20",
+            "s21",
+            "s22",
+            "s23",
+            "s24",
+            "s25",
+            "s26",
+            "s27",
+            "s28",
+            "s29",
+            "s30",
+            "s31",
+            "s32",
+            "s33",
+            "s34",
+            "s35",
+            "s36",
+            "s37",
+            "s38",
+            "s39",
+            "s40",
+            "s41",
+            "s42",
+            "s43",
+            "s44",
+            "s45",
+            "s46",
+            "s47",
+            "s48",
+            "s49",
+            "s50",
+            "s51",
+            "s52",
+            "s53",
+            "s54",
+            "s55",
+            "s56",
+            "s57",
+            "s58",
+            "s59",
+            "s60",
+            "s61",
+            "s62",
+            "s63"
+          ],
+          "source_revision": 12,
+          "omissions": 1,
+          "disclosed_bytes": 2048,
+          "cost_micros": 5
+        }
+      }
+    },
+    {
+      "name": "an id with a space",
+      "reason": "id",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r judgment",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "judgment",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "site": "frontier.weigh",
+          "request_ref": "req-9",
+          "accepted": true,
+          "confidence": 0.92,
+          "routed_unit": "jev-1.14.0"
+        }
+      }
+    },
+    {
+      "name": "an id that starts with a credential marker",
+      "reason": "id",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "sk-live1234567890",
+        "record_id": "r-judgment",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "judgment",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "site": "frontier.weigh",
+          "request_ref": "req-9",
+          "accepted": true,
+          "confidence": 0.92,
+          "routed_unit": "jev-1.14.0"
+        }
+      }
+    },
+    {
+      "name": "a negative sequence",
+      "reason": "sequence",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-judgment",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": -1,
+        "kind": "judgment",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "site": "frontier.weigh",
+          "request_ref": "req-9",
+          "accepted": true,
+          "confidence": 0.92,
+          "routed_unit": "jev-1.14.0"
+        }
+      }
+    },
+    {
+      "name": "a fractional sequence",
+      "reason": "sequence",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-judgment",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 1.5,
+        "kind": "judgment",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "site": "frontier.weigh",
+          "request_ref": "req-9",
+          "accepted": true,
+          "confidence": 0.92,
+          "routed_unit": "jev-1.14.0"
+        }
+      }
+    },
+    {
+      "name": "an unknown kind",
+      "reason": "kind",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-judgment",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "handoff",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "site": "frontier.weigh",
+          "request_ref": "req-9",
+          "accepted": true,
+          "confidence": 0.92,
+          "routed_unit": "jev-1.14.0"
+        }
+      }
+    },
+    {
+      "name": "a thread transition with no thread",
+      "reason": "kind",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-thread.transition",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "thread.transition",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "transition": "opened"
+        }
+      }
+    },
+    {
+      "name": "an unknown link rel",
+      "reason": "link",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-handoff",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "action.transition",
+        "thread_id": "t2",
+        "parent_id": null,
+        "links": [
+          {
+            "rel": "follows",
+            "record_id": "r-action.transition"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "r-judgment"
+          }
+        ],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "action_ref": "act-2",
+          "operation": "text.classify",
+          "state": "pending",
+          "contract_rev": "text.classify@1"
+        }
+      }
+    },
+    {
+      "name": "a self link",
+      "reason": "link",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-judgment",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "judgment",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [
+          {
+            "rel": "caused_by",
+            "record_id": "r-judgment"
+          }
+        ],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "site": "frontier.weigh",
+          "request_ref": "req-9",
+          "accepted": true,
+          "confidence": 0.92,
+          "routed_unit": "jev-1.14.0"
+        }
+      }
+    },
+    {
+      "name": "a duplicate link",
+      "reason": "link",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-handoff",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "action.transition",
+        "thread_id": "t2",
+        "parent_id": null,
+        "links": [
+          {
+            "rel": "handoff",
+            "record_id": "r-action.transition"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "r-judgment"
+          },
+          {
+            "rel": "handoff",
+            "record_id": "r-action.transition"
+          }
+        ],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "action_ref": "act-2",
+          "operation": "text.classify",
+          "state": "pending",
+          "contract_rev": "text.classify@1"
+        }
+      }
+    },
+    {
+      "name": "a join without a joins link",
+      "reason": "link",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-join",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "thread.transition",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "transition": "joined"
+        }
+      }
+    },
+    {
+      "name": "an unknown evidence source",
+      "reason": "evidence",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-judgment",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "judgment",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "model",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "site": "frontier.weigh",
+          "request_ref": "req-9",
+          "accepted": true,
+          "confidence": 0.92,
+          "routed_unit": "jev-1.14.0"
+        }
+      }
+    },
+    {
+      "name": "a Loom record with no observation evidence",
+      "reason": "evidence",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-judgment",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "judgment",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "inference_request",
+            "ref": "req-9"
+          }
+        ],
+        "fields": {
+          "site": "frontier.weigh",
+          "request_ref": "req-9",
+          "accepted": true,
+          "confidence": 0.92,
+          "routed_unit": "jev-1.14.0"
+        }
+      }
+    },
+    {
+      "name": "inline statement text",
+      "reason": "content",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-goal.intent",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "goal.intent",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "goal_ref": "goal-17",
+          "statement": "Publish the quarterly report",
+          "criteria": [
+            "c1",
+            "c2"
+          ]
+        }
+      }
+    },
+    {
+      "name": "a content value carrying text",
+      "reason": "content",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-goal.intent",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "goal.intent",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "goal_ref": "goal-17",
+          "statement": {
+            "content_class": "private",
+            "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "text": "Publish the quarterly report"
+          },
+          "criteria": [
+            "c1",
+            "c2"
+          ]
+        }
+      }
+    },
+    {
+      "name": "an unknown field",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-judgment",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "judgment",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "site": "frontier.weigh",
+          "request_ref": "req-9",
+          "accepted": true,
+          "confidence": 0.92,
+          "routed_unit": "jev-1.14.0",
+          "prompt": "x"
+        }
+      }
+    },
+    {
+      "name": "a missing required field",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-attempt-1",
+        "emitter": {
+          "kind": "gateway",
+          "id": "gateway.local"
+        },
+        "sequence": 5,
+        "kind": "inference.attempt",
+        "thread_id": "t1",
+        "parent_id": "r-route",
+        "links": [],
+        "evidence": [
+          {
+            "source": "inference_request",
+            "ref": "req-9"
+          }
+        ],
+        "fields": {
+          "request_ref": "req-9",
+          "routed_unit": "jev-1.14.0",
+          "attempt_no": 1,
+          "input_tokens": 812,
+          "output_tokens": 40,
+          "spent_micros": 90,
+          "cost_is_upper_bound": false,
+          "latency_ms": 310.5
+        }
+      }
+    },
+    {
+      "name": "an out-of-vocabulary code",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-attempt-1",
+        "emitter": {
+          "kind": "gateway",
+          "id": "gateway.local"
+        },
+        "sequence": 5,
+        "kind": "inference.attempt",
+        "thread_id": "t1",
+        "parent_id": "r-route",
+        "links": [],
+        "evidence": [
+          {
+            "source": "inference_request",
+            "ref": "req-9"
+          }
+        ],
+        "fields": {
+          "request_ref": "req-9",
+          "routed_unit": "jev-1.14.0",
+          "attempt_no": 1,
+          "disposition": "maybe",
+          "input_tokens": 812,
+          "output_tokens": 40,
+          "spent_micros": 90,
+          "cost_is_upper_bound": false,
+          "latency_ms": 310.5
+        }
+      }
+    },
+    {
+      "name": "confidence above one",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-judgment",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "judgment",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "site": "frontier.weigh",
+          "request_ref": "req-9",
+          "accepted": true,
+          "confidence": 1.2,
+          "routed_unit": "jev-1.14.0"
+        }
+      }
+    },
+    {
+      "name": "a null where none is allowed",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-attempt-1",
+        "emitter": {
+          "kind": "gateway",
+          "id": "gateway.local"
+        },
+        "sequence": 5,
+        "kind": "inference.attempt",
+        "thread_id": "t1",
+        "parent_id": "r-route",
+        "links": [],
+        "evidence": [
+          {
+            "source": "inference_request",
+            "ref": "req-9"
+          }
+        ],
+        "fields": {
+          "request_ref": "req-9",
+          "routed_unit": "jev-1.14.0",
+          "attempt_no": 1,
+          "disposition": "accepted",
+          "input_tokens": 812,
+          "output_tokens": 40,
+          "spent_micros": 90,
+          "cost_is_upper_bound": false,
+          "latency_ms": null
+        }
+      }
+    },
+    {
+      "name": "a weighted prohibited candidate",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-cycle.weighed",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "cycle.weighed",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "cycle_no": 3,
+          "state_revision": 12,
+          "procedure": "inspect_and_report@1",
+          "weights_ref": "obs:11",
+          "cost_micros": 40,
+          "candidates": [
+            {
+              "candidate_ref": "cand-a",
+              "operation": "repo.read",
+              "eligibility": "allowed",
+              "weight": 0.7,
+              "selected": true,
+              "not_selected": null
+            },
+            {
+              "candidate_ref": "cand-b",
+              "operation": "repo.write",
+              "eligibility": "allowed",
+              "weight": 0.2,
+              "selected": false,
+              "not_selected": "conflict"
+            },
+            {
+              "candidate_ref": "cand-c",
+              "operation": "repo.delete",
+              "eligibility": "prohibited",
+              "weight": 0.1,
+              "selected": false,
+              "not_selected": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a selected candidate with a not-selected reason",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-cycle.weighed",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "cycle.weighed",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "cycle_no": 3,
+          "state_revision": 12,
+          "procedure": "inspect_and_report@1",
+          "weights_ref": "obs:11",
+          "cost_micros": 40,
+          "candidates": [
+            {
+              "candidate_ref": "cand-a",
+              "operation": "repo.read",
+              "eligibility": "allowed",
+              "weight": 0.7,
+              "selected": true,
+              "not_selected": "budget"
+            },
+            {
+              "candidate_ref": "cand-b",
+              "operation": "repo.write",
+              "eligibility": "allowed",
+              "weight": 0.2,
+              "selected": false,
+              "not_selected": "conflict"
+            },
+            {
+              "candidate_ref": "cand-c",
+              "operation": "repo.delete",
+              "eligibility": "prohibited",
+              "weight": null,
+              "selected": false,
+              "not_selected": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an unselected allowed candidate with no reason",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-cycle.weighed",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "cycle.weighed",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "cycle_no": 3,
+          "state_revision": 12,
+          "procedure": "inspect_and_report@1",
+          "weights_ref": "obs:11",
+          "cost_micros": 40,
+          "candidates": [
+            {
+              "candidate_ref": "cand-a",
+              "operation": "repo.read",
+              "eligibility": "allowed",
+              "weight": 0.7,
+              "selected": true,
+              "not_selected": null
+            },
+            {
+              "candidate_ref": "cand-b",
+              "operation": "repo.write",
+              "eligibility": "allowed",
+              "weight": 0.2,
+              "selected": false,
+              "not_selected": null
+            },
+            {
+              "candidate_ref": "cand-c",
+              "operation": "repo.delete",
+              "eligibility": "prohibited",
+              "weight": null,
+              "selected": false,
+              "not_selected": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a failure code on a successful invocation",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-capability.invoked",
+        "emitter": {
+          "kind": "fabric",
+          "id": "fabric.host"
+        },
+        "sequence": 4,
+        "kind": "capability.invoked",
+        "thread_id": "t1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "invocation",
+            "ref": "inv-3"
+          }
+        ],
+        "fields": {
+          "contract_rev": "repo.read@2",
+          "implementation": "impl-7",
+          "status": "succeeded",
+          "invocation_ref": "inv-3",
+          "execution_tier": "trusted",
+          "failure": "not_found",
+          "latency_ms": 12
+        }
+      }
+    },
+    {
+      "name": "more criteria met than exist",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-outcome",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "outcome",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "subject": "goal",
+          "subject_ref": "goal-17",
+          "status": "complete",
+          "criteria_met": 3,
+          "criteria_total": 2
+        }
+      }
+    },
+    {
+      "name": "a list over its bound",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-goal.intent",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.main"
+        },
+        "sequence": 4,
+        "kind": "goal.intent",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs:12"
+          }
+        ],
+        "fields": {
+          "goal_ref": "goal-17",
+          "statement": {
+            "content_class": "private",
+            "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "criteria": [
+            "c0",
+            "c1",
+            "c2",
+            "c3",
+            "c4",
+            "c5",
+            "c6",
+            "c7",
+            "c8",
+            "c9",
+            "c10",
+            "c11",
+            "c12",
+            "c13",
+            "c14",
+            "c15",
+            "c16",
+            "c17",
+            "c18",
+            "c19",
+            "c20",
+            "c21",
+            "c22",
+            "c23",
+            "c24",
+            "c25",
+            "c26",
+            "c27",
+            "c28",
+            "c29",
+            "c30",
+            "c31",
+            "c32",
+            "c33",
+            "c34",
+            "c35",
+            "c36",
+            "c37",
+            "c38",
+            "c39",
+            "c40",
+            "c41",
+            "c42",
+            "c43",
+            "c44",
+            "c45",
+            "c46",
+            "c47",
+            "c48",
+            "c49",
+            "c50",
+            "c51",
+            "c52",
+            "c53",
+            "c54",
+            "c55",
+            "c56",
+            "c57",
+            "c58",
+            "c59",
+            "c60",
+            "c61",
+            "c62",
+            "c63",
+            "c64"
+          ]
+        }
+      }
+    }
+  ]
+}
