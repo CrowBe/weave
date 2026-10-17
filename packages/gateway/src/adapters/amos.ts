@@ -25,6 +25,17 @@ export interface AmosOptions {
   readonly timeoutMs?: number;
 }
 
+/** The exact decision wire body, also used to bind non-executing benchmark replay. */
+export function amosBody(call: Pick<EvaluationCall, "model" | "state" | "questions">): unknown {
+  return {
+    model: call.model,
+    state: content(call.state),
+    questions: Object.fromEntries(
+      Object.entries(call.questions).map(([id, question]) => [id, wireQuestion(question)]),
+    ),
+  };
+}
+
 export function amosEvaluator(options: AmosOptions = {}): EvaluationAdapter {
   const baseURL = (options.baseURL ?? AMOS_BASE_URL).replace(/\/+$/, "");
   const url = new URL(baseURL);
@@ -74,13 +85,7 @@ export function amosEvaluator(options: AmosOptions = {}): EvaluationAdapter {
           headers: { "content-type": "application/json" },
           signal,
           redirect: "error",
-          body: JSON.stringify({
-            model: call.model,
-            state: content(call.state),
-            questions: Object.fromEntries(
-              Object.entries(call.questions).map(([id, question]) => [id, wireQuestion(question)]),
-            ),
-          }),
+          body: JSON.stringify(amosBody(call)),
         });
         if (!response.ok)
           return failure(response.status >= 500 ? "unavailable" : "invalid_request");

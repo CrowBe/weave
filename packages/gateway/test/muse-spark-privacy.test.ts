@@ -86,7 +86,10 @@ for (const field of ['prompt', 'instructions'] as const) {
     assert.ok(bodies[0]?.messages.some(message => message.role === (field === 'prompt' ? 'user' : 'system') && message.content === content));
   });
 
-  const markers = ['sk-', 'sk_', 'Bearer ', 'eyJ', 'ghp_', 'gho_', 'ghu_', 'ghs_', 'ghr_', 'github_pat_', 'AKIA'];
+  const markers = ['sk-', 'sk_', 'Bearer ', 'eyJ', 'ghp_', 'gho_', 'ghu_', 'ghs_', 'ghr_', 'github_pat_', 'AKIA',
+    'Bearer\t', 'Bearer\n', 'AIza', 'xoxa-', 'xoxb-', 'xoxp-',
+    '-----BEGIN PRIVATE KEY-----', '-----BEGIN RSA PRIVATE KEY-----', '-----BEGIN EC PRIVATE KEY-----',
+    '-----BEGIN OPENSSH PRIVATE KEY-----'];
   for (const [index, marker] of markers.entries()) {
     test(`credential family ${index + 1} in ${field} fails closed before primary or 1.2 HTTP dispatch`, async () => {
       const { gateway, bodies } = harness();

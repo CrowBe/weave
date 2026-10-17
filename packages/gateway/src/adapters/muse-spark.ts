@@ -72,7 +72,7 @@ export function museSparkAdapter(options: MuseSparkOptions): GenerationAdapter {
     baseURL: options.baseURL ?? MUSE_SPARK_BASE_URL,
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
   });
-  const redactKey = (value: string) => value.replaceAll(apiKey, '[REDACTED]');
+  const redactKey = (value: string) => value.replaceAll(contentKey, '[REDACTED]');
 
   return {
     id: MUSE_SPARK_ADAPTER,

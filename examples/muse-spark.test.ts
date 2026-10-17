@@ -21,7 +21,7 @@ globalThis.fetch = async (url, init) => {
   assert.equal(body.reasoning_effort, undefined);
   assert.equal(body.reasoning, undefined);
   const exhausted = body.max_tokens <= 250;
-  return new Response(JSON.stringify(process.env.TEST_STATUS === '401'
+  return new Response(JSON.stringify(['401','402','403'].includes(process.env.TEST_STATUS)
     ? {error:{message:process.env.MODEL_API_KEY}}
     : {id:'mock',choices:[{index:0,message:{role:'assistant',content:exhausted ? '' : 'ok'},finish_reason:exhausted ? 'length' : 'stop'}],
       usage:{prompt_tokens:8,completion_tokens:exhausted ? body.max_tokens : 251,
@@ -64,15 +64,15 @@ test('Muse example missing or blank key exits with one safe line and no request'
   }
 });
 
-test('Muse example invalid key prints only bounded outcome fields and never the key', () => {
+for (const status of [401,402,403]) test(`Muse example ${status} exhausts the shared credential before fallback`, () => {
   const key = 'sk-test-SENTINEL-example-invalid';
-  const result = run(key, 401, 2);
+  const result = run(key, status, 1);
   assert.equal(result.status, 1);
   assert.equal(result.stderr, '');
   assert.ok(!result.stdout.includes(key));
   const output = JSON.parse(result.stdout);
-  assert.equal(output.outcome, 'unaccepted');
-  assert.equal(output.attempts.length, 2);
+  assert.equal(output.outcome, 'blocked');
+  assert.equal(output.attempts.length, 1);
   assert.equal(output.attempts[0].failure, 'unauthorized');
 });
 

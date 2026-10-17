@@ -48,6 +48,16 @@ function failureOf(result: GenerationProviderResult) {
 }
 
 describe('muse-spark adapter contract', () => {
+  it('redacts the trimmed credential from completion text and response identity', async () => {
+    const mock = mockFetch({ ...BODY, id: `id-${KEY}`, choices: [{ index: 0,
+      finish_reason: 'stop', message: { role: 'assistant', content: `echo(${KEY})` } }] });
+    const result = await museSparkAdapter({ apiKey: `  ${KEY}  `, fetch: mock.fetch }).execute(CALL);
+    assert.equal(result.status, 'completed');
+    assert.ok(!JSON.stringify(result).includes(KEY));
+    assert.ok(result.status === 'completed');
+    assert.equal(result.text, 'echo([REDACTED])');
+    assert.equal(result.provider_response_id, 'id-[REDACTED]');
+  });
   it('exports a 1024-token minimum and default settings with room for default reasoning', () => {
     assert.equal(MUSE_SPARK_MIN_OUTPUT_TOKENS, 1024);
     assert.deepEqual(MUSE_SPARK_DEFAULT_SETTINGS, { max_output_tokens: MUSE_SPARK_MIN_OUTPUT_TOKENS });

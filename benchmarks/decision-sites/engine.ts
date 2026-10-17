@@ -1,6 +1,7 @@
 /** Sequential dispatch with durable receipts and reservations for unacknowledged calls. */
 import { Journal, digest, projectedCost, replayKey, type JournalRecord } from './journal.ts';
 import { buildRequest } from './questions.ts';
+import { bindingFor } from './binding.ts';
 import type { Item, Provider, Result } from './types.ts';
 export interface Entry {item:Item;split:'tune'|'holdout';set_digest:string}
 export function providerSkip(result:Result):boolean {
@@ -37,7 +38,7 @@ export async function execute(options:{entries:readonly Entry[];providers:readon
    if(provider.competitor && entry.split!=='holdout')continue;
    const request=await buildRequest(entry.item);
    const serialized=provider.serialize(request);
-   const binding={provider:provider.id,model:provider.model,site:entry.item.site,item_id:entry.item.id,set_digest:entry.set_digest,question_digest:digest(JSON.stringify(request)),request_digest:digest(serialized)};
+   const binding=bindingFor(provider,entry,request,serialized);
    const key=replayKey(binding);const history=journal.read();
    const prior=history.filter(r=>r.type==='call'&&replayKey(r)===key&&!retryableCancellation(r.result)&&!(r.result.status==='skipped'&&r.result.reason==='quota_unavailable_or_weekly_cap'));
    if(prior.some(r=>r.terminal))continue;

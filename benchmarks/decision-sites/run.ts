@@ -8,7 +8,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { buildProviders } from './providers.ts';
 import { buildCompetitors, quotaAllowsCompetitors } from './competitors.ts';
 import type { ProcessRunner } from './competitors.ts';
-import { Journal, acquireLock, replayKey, digest } from './journal.ts';
+import { Journal, acquireLock, replayKey } from './journal.ts';
+import { bindingFor } from './binding.ts';
 import { SITES, buildRequest } from './questions.ts';
 import { countCompetitorCalls, execute, persistentProviderSkip } from './engine.ts';
 import { loadSets } from './sets.ts';
@@ -90,7 +91,7 @@ export async function main(args=process.argv.slice(2), injected?:{providers:read
   let publish=!options.providers.includes('fake')&&DEFAULT_PROVIDERS.every(p=>options.providers.includes(p))&&options.split==='all'&&options.sites.length===SITES.length;
   for(const provider of providers)for(const entry of entries) {
    const request=await buildRequest(entry.item);
-   const binding={provider:provider.id,model:provider.model,site:entry.item.site,item_id:entry.item.id,set_digest:entry.set_digest,question_digest:digest(JSON.stringify(request)),request_digest:digest(provider.serialize(request))};
+   const binding=bindingFor(provider,entry,request);
    const matches=records.filter(r=>replayKey(r)===replayKey(binding)||
     // Legacy records have no wire-body evidence: display them only in a non-executing render.
     (options.renderOnly&&r.request_digest===undefined&&replayKey(r)===replayKey({...binding,request_digest:undefined})));
