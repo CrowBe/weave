@@ -353,6 +353,44 @@ The governed decision to make an evaluated change active within a specified scop
 
 One vertical increment of the build plan (M0, M1, …): a demonstrable goal outcome with checks across every module it touches. A milestone is a unit of delivery; it is not a *slice*, which is a query over state.
 
+## Tracing and evaluation
+
+### Weft
+
+The tracing package, namespaced Weave Weft. It validates and stores Weft records emitted by Loom, Fabric, the inference gateway or an outside composition through a port, and imports none of them. The package is `packages/weft`; its contract is `packages/weft/src/WEFT-CONTRACT.md`.
+
+### Weft trace
+
+The Weft records sharing one `trace_id`, a correlation scope chosen by the composition root (in Loom, one goal). It is a projection for inspection, attribution, debugging and evaluation. It is not the observation log and not Loom's cycle trace, replay and recovery never read it, and no transition, grant or completion may be derived from it. Emitting to it never changes state or scheduling.
+
+### Weft record
+
+One closed, versioned entry in a Weft trace: an envelope, a kind, links to other records, evidence references and kind-specific fields. Content appears only as a content class and digest, never as text. A record that fails validation is not stored.
+
+### Gauge
+
+The evaluation package, namespaced Weave Gauge. It turns Weft traces and other recorded evidence into evaluation results, comparisons and failure attributions. It produces evidence; promotion, admission and authority to execute remain separate decisions. It depends on the Weft contract only. The package is `packages/gauge`; its contract is `packages/gauge/src/GAUGE-CONTRACT.md`.
+
+### Criteria set
+
+A governed, versioned record of what counts as success for a workload: measures, quality-bar and protected constraints, and a deterministic statistical method. Its revision cites the authority that issued it. The subject under evaluation cannot author or govern it.
+
+### Case set
+
+A governed, versioned record naming a workload's cases by digest, split into a tune split and a holdout.
+
+### Evaluation result
+
+Gauge's record of one subject on one split of a case set under one criteria set, bound to their revisions and its evidence. Its constraint statuses and verdict are recomputed from its measures, never asserted. A holdout result discloses only held-out reports. A replay result does not measure outcomes of actions that were not taken.
+
+### Comparison
+
+Gauge's recomputed verdict on a baseline and a candidate evaluation result for the same criteria set, case set, split and mode. A candidate that misses its bar is never better. A comparison is evidence an experiment may cite; it is not a promotion.
+
+### Failure attribution
+
+A claim about why one case failed: capability gap, implementation, routing or orchestration, with a deterministic signal or a recorded judgment and its confidence. *Unattributed* is a valid result. An attribution never names a holdout case.
+
 ## Real-time TDD
 
 ### Contract establishment
@@ -553,6 +591,10 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 - Say **acceptance line** for a proposal and **acceptance fact** for a line code has admitted. On the System One wire a boolean question is a Noul. The request kind remains `boolean`.
 - Say **criteria gate** for `task.criteria` and **task validation** for `task.validate`. Jev may answer either site. Neither site is the decision layer, and neither is `frontier.weigh`.
 - Say **confidence** for the provider statistic published beside a typed evaluation answer. It is not a weight and not a quality score.
+- Say **Weft trace**, not *trace*, when the observation log or Loom's cycle trace could be meant. Neither is a Weft trace.
+- Say **experiment**, not *swatch*, for a comparison of a baseline with a candidate.
+- Say **constraint** in a criteria set or **test corpus** case, not *pattern*, for an expected behaviour.
+- Say **evaluation result**, not *score*, for what Gauge records about a subject. A measure is one value within it.
 
 ### Tune split
 

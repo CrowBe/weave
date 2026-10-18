@@ -1,0 +1,3954 @@
+{
+  "context": {
+    "criteria": {
+      "decision-sites.criteria@1": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.criteria@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "method": {
+          "interval": "bootstrap@1",
+          "level": 0.95,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "accuracy",
+            "source": {
+              "weft_kind": "judgment",
+              "field": "accepted"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.02
+          },
+          {
+            "measure": "cost",
+            "source": {
+              "weft_kind": "inference.attempt",
+              "field": "spent_micros"
+            },
+            "aggregate": "mean",
+            "better": "lower",
+            "min_effect": 5
+          },
+          {
+            "measure": "completion",
+            "source": {
+              "weft_kind": "outcome",
+              "field": "status"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.05
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "measure": "accuracy",
+            "op": "ge",
+            "bound": 0.8,
+            "role": "quality_bar"
+          },
+          {
+            "constraint": "cost_cap",
+            "measure": "cost",
+            "op": "le",
+            "bound": 200,
+            "role": "protected"
+          }
+        ]
+      },
+      "decision-sites.exact-hi@1": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.exact-hi@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "method": {
+          "interval": "bootstrap@1",
+          "level": 0.95,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "accuracy",
+            "source": {
+              "weft_kind": "judgment",
+              "field": "accepted"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0
+          }
+        ],
+        "constraints": []
+      },
+      "decision-sites.exact-lo@1": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.exact-lo@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "method": {
+          "interval": "bootstrap@1",
+          "level": 0.95,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "cost",
+            "source": {
+              "weft_kind": "inference.attempt",
+              "field": "spent_micros"
+            },
+            "aggregate": "mean",
+            "better": "lower",
+            "min_effect": 0
+          }
+        ],
+        "constraints": []
+      }
+    },
+    "casesets": {
+      "decision-sites.cases@1": {
+        "schema": "gauge.caseset@1",
+        "caseset": "decision-sites.cases@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "approval",
+          "ref": "appr-41"
+        },
+        "splits": [
+          {
+            "split": "tune",
+            "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 120
+          },
+          {
+            "split": "holdout",
+            "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "size": 40
+          }
+        ]
+      }
+    },
+    "results": {
+      "res-base": {
+        "schema": "gauge.result@1",
+        "result": "res-base",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.13.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-base"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.85,
+            "n": 120,
+            "interval": [
+              0.8,
+              0.9
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 150,
+            "n": 120,
+            "interval": [
+              140,
+              160
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 120,
+            "interval": [
+              0.62,
+              0.78
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      },
+      "res-cand": {
+        "schema": "gauge.result@1",
+        "result": "res-cand",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.14.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-cand"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.91,
+            "n": 120,
+            "interval": [
+              0.87,
+              0.95
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 120,
+            "n": 120,
+            "interval": [
+              110,
+              130
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.72,
+            "n": 120,
+            "interval": [
+              0.64,
+              0.8
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      },
+      "res-cheap": {
+        "schema": "gauge.result@1",
+        "result": "res-cheap",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@amos-small"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-cheap"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.7,
+            "n": 120,
+            "interval": [
+              0.62,
+              0.76
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 60,
+            "n": 120,
+            "interval": [
+              50,
+              70
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.6,
+            "n": 120,
+            "interval": [
+              0.51,
+              0.69
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "violated"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "misses_bar"
+      },
+      "res-worse": {
+        "schema": "gauge.result@1",
+        "result": "res-worse",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.14.1"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-worse"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.85,
+            "n": 120,
+            "interval": [
+              0.81,
+              0.89
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 190,
+            "n": 120,
+            "interval": [
+              180,
+              198
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 120,
+            "interval": [
+              0.62,
+              0.78
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      },
+      "res-small": {
+        "schema": "gauge.result@1",
+        "result": "res-small",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.15.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-small"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.9,
+            "n": 12,
+            "interval": [
+              0.6,
+              1
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 100,
+            "n": 12,
+            "interval": [
+              70,
+              130
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.75,
+            "n": 12,
+            "interval": [
+              0.45,
+              0.95
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "unknown"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "unknown"
+          }
+        ],
+        "verdict": "insufficient_evidence"
+      },
+      "res-replay": {
+        "schema": "gauge.result@1",
+        "result": "res-replay",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.14.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "replay",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-replay"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.88,
+            "n": 120,
+            "interval": [
+              0.83,
+              0.93
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 125,
+            "n": 120,
+            "interval": [
+              115,
+              135
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": null,
+            "n": 0,
+            "interval": null
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      },
+      "res-hold": {
+        "schema": "gauge.result@1",
+        "result": "res-hold",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.14.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "holdout",
+        "caseset_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "held_out_report",
+            "ref": "hor-res-hold"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.9,
+            "n": 40,
+            "interval": [
+              0.82,
+              0.96
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 118,
+            "n": 40,
+            "interval": [
+              104,
+              132
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 40,
+            "interval": [
+              0.55,
+              0.83
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      },
+      "res-hi-a": {
+        "schema": "gauge.result@1",
+        "result": "res-hi-a",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.13.0"
+        },
+        "criteria": "decision-sites.exact-hi@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-hi-a"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.85,
+            "n": 120,
+            "interval": [
+              0.8,
+              0.9
+            ]
+          }
+        ],
+        "constraints": [],
+        "verdict": "meets_bar"
+      },
+      "res-hi-b": {
+        "schema": "gauge.result@1",
+        "result": "res-hi-b",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.14.0"
+        },
+        "criteria": "decision-sites.exact-hi@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-hi-b"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.85,
+            "n": 120,
+            "interval": [
+              0.8,
+              0.9
+            ]
+          }
+        ],
+        "constraints": [],
+        "verdict": "meets_bar"
+      },
+      "res-lo-a": {
+        "schema": "gauge.result@1",
+        "result": "res-lo-a",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.13.0"
+        },
+        "criteria": "decision-sites.exact-lo@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-lo-a"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "cost",
+            "value": 150,
+            "n": 120,
+            "interval": [
+              140,
+              160
+            ]
+          }
+        ],
+        "constraints": [],
+        "verdict": "meets_bar"
+      },
+      "res-lo-b": {
+        "schema": "gauge.result@1",
+        "result": "res-lo-b",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.14.0"
+        },
+        "criteria": "decision-sites.exact-lo@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-lo-b"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "cost",
+            "value": 150,
+            "n": 120,
+            "interval": [
+              140,
+              160
+            ]
+          }
+        ],
+        "constraints": [],
+        "verdict": "meets_bar"
+      },
+      "res-lo-c": {
+        "schema": "gauge.result@1",
+        "result": "res-lo-c",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.16.0"
+        },
+        "criteria": "decision-sites.exact-lo@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-lo-c"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "cost",
+            "value": 147,
+            "n": 120,
+            "interval": [
+              139,
+              156
+            ]
+          }
+        ],
+        "constraints": [],
+        "verdict": "meets_bar"
+      }
+    }
+  },
+  "valid": [
+    {
+      "name": "a criteria set with a quality bar and a protected constraint",
+      "record": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.criteria@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "method": {
+          "interval": "bootstrap@1",
+          "level": 0.95,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "accuracy",
+            "source": {
+              "weft_kind": "judgment",
+              "field": "accepted"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.02
+          },
+          {
+            "measure": "cost",
+            "source": {
+              "weft_kind": "inference.attempt",
+              "field": "spent_micros"
+            },
+            "aggregate": "mean",
+            "better": "lower",
+            "min_effect": 5
+          },
+          {
+            "measure": "completion",
+            "source": {
+              "weft_kind": "outcome",
+              "field": "status"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.05
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "measure": "accuracy",
+            "op": "ge",
+            "bound": 0.8,
+            "role": "quality_bar"
+          },
+          {
+            "constraint": "cost_cap",
+            "measure": "cost",
+            "op": "le",
+            "bound": 200,
+            "role": "protected"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a case set with tune and holdout splits",
+      "record": {
+        "schema": "gauge.caseset@1",
+        "caseset": "decision-sites.cases@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "approval",
+          "ref": "appr-41"
+        },
+        "splits": [
+          {
+            "split": "tune",
+            "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 120
+          },
+          {
+            "split": "holdout",
+            "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "size": 40
+          }
+        ]
+      }
+    },
+    {
+      "name": "a baseline that meets its bar",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-base",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.13.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-base"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.85,
+            "n": 120,
+            "interval": [
+              0.8,
+              0.9
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 150,
+            "n": 120,
+            "interval": [
+              140,
+              160
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 120,
+            "interval": [
+              0.62,
+              0.78
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "a candidate that meets its bar",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-cand",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.14.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-cand"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.91,
+            "n": 120,
+            "interval": [
+              0.87,
+              0.95
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 120,
+            "n": 120,
+            "interval": [
+              110,
+              130
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.72,
+            "n": 120,
+            "interval": [
+              0.64,
+              0.8
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "a cheaper candidate that misses its bar",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-cheap",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@amos-small"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-cheap"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.7,
+            "n": 120,
+            "interval": [
+              0.62,
+              0.76
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 60,
+            "n": 120,
+            "interval": [
+              50,
+              70
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.6,
+            "n": 120,
+            "interval": [
+              0.51,
+              0.69
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "violated"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "misses_bar"
+      }
+    },
+    {
+      "name": "a result with too few samples",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-small",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.15.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-small"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.9,
+            "n": 12,
+            "interval": [
+              0.6,
+              1
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 100,
+            "n": 12,
+            "interval": [
+              70,
+              130
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.75,
+            "n": 12,
+            "interval": [
+              0.45,
+              0.95
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "unknown"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "unknown"
+          }
+        ],
+        "verdict": "insufficient_evidence"
+      }
+    },
+    {
+      "name": "a replay result that leaves outcomes unmeasured",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-replay",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.14.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "replay",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-replay"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.88,
+            "n": 120,
+            "interval": [
+              0.83,
+              0.93
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 125,
+            "n": 120,
+            "interval": [
+              115,
+              135
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": null,
+            "n": 0,
+            "interval": null
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "a holdout result citing only a held-out report",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-hold",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.14.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "holdout",
+        "caseset_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "held_out_report",
+            "ref": "hor-res-hold"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.9,
+            "n": 40,
+            "interval": [
+              0.82,
+              0.96
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 118,
+            "n": 40,
+            "interval": [
+              104,
+              132
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 40,
+            "interval": [
+              0.55,
+              0.83
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "a comparison where the candidate is better",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-better",
+        "experiment": "exp-12",
+        "baseline": "res-base",
+        "candidate": "res-cand",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": 0.06,
+            "interval": [
+              0.03,
+              0.09
+            ]
+          },
+          {
+            "measure": "cost",
+            "delta": -30,
+            "interval": [
+              -42,
+              -18
+            ]
+          },
+          {
+            "measure": "completion",
+            "delta": 0.02,
+            "interval": [
+              -0.06,
+              0.1
+            ]
+          }
+        ],
+        "verdict": "candidate_better"
+      }
+    },
+    {
+      "name": "a comparison where a cheaper candidate misses the bar",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-missed",
+        "experiment": "exp-12",
+        "baseline": "res-base",
+        "candidate": "res-cheap",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": -0.15,
+            "interval": [
+              -0.22,
+              -0.08
+            ]
+          },
+          {
+            "measure": "cost",
+            "delta": -90,
+            "interval": [
+              -102,
+              -78
+            ]
+          },
+          {
+            "measure": "completion",
+            "delta": -0.1,
+            "interval": [
+              -0.2,
+              0
+            ]
+          }
+        ],
+        "verdict": "bar_missed"
+      }
+    },
+    {
+      "name": "a comparison where the candidate costs more",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-worse",
+        "experiment": "exp-12",
+        "baseline": "res-base",
+        "candidate": "res-worse",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": 0,
+            "interval": [
+              -0.05,
+              0.05
+            ]
+          },
+          {
+            "measure": "cost",
+            "delta": 40,
+            "interval": [
+              30,
+              50
+            ]
+          },
+          {
+            "measure": "completion",
+            "delta": 0,
+            "interval": [
+              -0.08,
+              0.08
+            ]
+          }
+        ],
+        "verdict": "candidate_worse"
+      }
+    },
+    {
+      "name": "a comparison with an under-sampled candidate",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-small",
+        "experiment": "exp-12",
+        "baseline": "res-base",
+        "candidate": "res-small",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": 0.05,
+            "interval": [
+              -0.2,
+              0.2
+            ]
+          },
+          {
+            "measure": "cost",
+            "delta": -50,
+            "interval": [
+              -80,
+              -20
+            ]
+          },
+          {
+            "measure": "completion",
+            "delta": 0.05,
+            "interval": [
+              -0.25,
+              0.25
+            ]
+          }
+        ],
+        "verdict": "insufficient_evidence"
+      }
+    },
+    {
+      "name": "a comparison where one measure is worse and none better",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-same",
+        "experiment": "exp-12",
+        "baseline": "res-cand",
+        "candidate": "res-worse",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": -0.06,
+            "interval": [
+              -0.1,
+              -0.01
+            ]
+          },
+          {
+            "measure": "cost",
+            "delta": 70,
+            "interval": [
+              55,
+              85
+            ]
+          },
+          {
+            "measure": "completion",
+            "delta": -0.02,
+            "interval": [
+              -0.1,
+              0.06
+            ]
+          }
+        ],
+        "verdict": "candidate_worse"
+      }
+    },
+    {
+      "name": "a comparison whose gain is not clear of min_effect",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-flat",
+        "experiment": "exp-12",
+        "baseline": "res-worse",
+        "candidate": "res-base",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": 0,
+            "interval": [
+              -0.05,
+              0.05
+            ]
+          },
+          {
+            "measure": "cost",
+            "delta": -40,
+            "interval": [
+              -50,
+              -2
+            ]
+          },
+          {
+            "measure": "completion",
+            "delta": 0,
+            "interval": [
+              -0.08,
+              0.08
+            ]
+          }
+        ],
+        "verdict": "no_difference"
+      }
+    },
+    {
+      "name": "a zero-threshold criteria set with no constraints",
+      "record": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.exact-hi@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "method": {
+          "interval": "bootstrap@1",
+          "level": 0.95,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "accuracy",
+            "source": {
+              "weft_kind": "judgment",
+              "field": "accepted"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0
+          }
+        ],
+        "constraints": []
+      }
+    },
+    {
+      "name": "an unchanged higher-is-better measure at a zero threshold",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-eq-hi",
+        "experiment": "exp-12",
+        "baseline": "res-hi-a",
+        "candidate": "res-hi-b",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": 0,
+            "interval": [
+              0,
+              0
+            ]
+          }
+        ],
+        "verdict": "no_difference"
+      }
+    },
+    {
+      "name": "an unchanged lower-is-better measure at a zero threshold",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-eq-lo",
+        "experiment": "exp-12",
+        "baseline": "res-lo-a",
+        "candidate": "res-lo-b",
+        "deltas": [
+          {
+            "measure": "cost",
+            "delta": 0,
+            "interval": [
+              0,
+              0
+            ]
+          }
+        ],
+        "verdict": "no_difference"
+      }
+    },
+    {
+      "name": "a strict improvement at a zero threshold",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-move-lo",
+        "experiment": "exp-12",
+        "baseline": "res-lo-a",
+        "candidate": "res-lo-c",
+        "deltas": [
+          {
+            "measure": "cost",
+            "delta": -3,
+            "interval": [
+              -5,
+              -1
+            ]
+          }
+        ],
+        "verdict": "candidate_better"
+      }
+    },
+    {
+      "name": "a deterministic routing attribution",
+      "record": {
+        "schema": "gauge.attribution@1",
+        "attribution": "att-1",
+        "result": "res-cheap",
+        "case": "case-17",
+        "category": "routing",
+        "basis": "deterministic",
+        "signal": "better_route_excluded",
+        "confidence": null,
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-cheap"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a judged implementation attribution",
+      "record": {
+        "schema": "gauge.attribution@1",
+        "attribution": "att-2",
+        "result": "res-cheap",
+        "case": "case-17",
+        "category": "implementation",
+        "basis": "judgment",
+        "signal": null,
+        "confidence": 0.7,
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-cheap"
+          }
+        ]
+      }
+    },
+    {
+      "name": "an unattributed failure",
+      "record": {
+        "schema": "gauge.attribution@1",
+        "attribution": "att-3",
+        "result": "res-cheap",
+        "case": "case-17",
+        "category": "unattributed",
+        "basis": "none",
+        "signal": null,
+        "confidence": null,
+        "evidence": []
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "an unknown schema",
+      "reason": "envelope",
+      "record": {
+        "schema": "gauge.result@2",
+        "result": "res-base",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.13.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-base"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.85,
+            "n": 120,
+            "interval": [
+              0.8,
+              0.9
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 150,
+            "n": 120,
+            "interval": [
+              140,
+              160
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 120,
+            "interval": [
+              0.62,
+              0.78
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "an extra result key",
+      "reason": "envelope",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-base",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.13.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-base"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.85,
+            "n": 120,
+            "interval": [
+              0.8,
+              0.9
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 150,
+            "n": 120,
+            "interval": [
+              140,
+              160
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 120,
+            "interval": [
+              0.62,
+              0.78
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar",
+        "promote": true
+      }
+    },
+    {
+      "name": "criteria without governance",
+      "reason": "envelope",
+      "record": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.criteria@1",
+        "workload": "decision-sites",
+        "method": {
+          "interval": "bootstrap@1",
+          "level": 0.95,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "accuracy",
+            "source": {
+              "weft_kind": "judgment",
+              "field": "accepted"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.02
+          },
+          {
+            "measure": "cost",
+            "source": {
+              "weft_kind": "inference.attempt",
+              "field": "spent_micros"
+            },
+            "aggregate": "mean",
+            "better": "lower",
+            "min_effect": 5
+          },
+          {
+            "measure": "completion",
+            "source": {
+              "weft_kind": "outcome",
+              "field": "status"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.05
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "measure": "accuracy",
+            "op": "ge",
+            "bound": 0.8,
+            "role": "quality_bar"
+          },
+          {
+            "constraint": "cost_cap",
+            "measure": "cost",
+            "op": "le",
+            "bound": 200,
+            "role": "protected"
+          }
+        ]
+      }
+    },
+    {
+      "name": "an interval level of one",
+      "reason": "envelope",
+      "record": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.criteria@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "method": {
+          "interval": "bootstrap@1",
+          "level": 1,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "accuracy",
+            "source": {
+              "weft_kind": "judgment",
+              "field": "accepted"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.02
+          },
+          {
+            "measure": "cost",
+            "source": {
+              "weft_kind": "inference.attempt",
+              "field": "spent_micros"
+            },
+            "aggregate": "mean",
+            "better": "lower",
+            "min_effect": 5
+          },
+          {
+            "measure": "completion",
+            "source": {
+              "weft_kind": "outcome",
+              "field": "status"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.05
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "measure": "accuracy",
+            "op": "ge",
+            "bound": 0.8,
+            "role": "quality_bar"
+          },
+          {
+            "constraint": "cost_cap",
+            "measure": "cost",
+            "op": "le",
+            "bound": 200,
+            "role": "protected"
+          }
+        ]
+      }
+    },
+    {
+      "name": "an empty split",
+      "reason": "envelope",
+      "record": {
+        "schema": "gauge.caseset@1",
+        "caseset": "decision-sites.cases@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "approval",
+          "ref": "appr-41"
+        },
+        "splits": [
+          {
+            "split": "tune",
+            "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 120
+          },
+          {
+            "split": "holdout",
+            "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "size": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "an unrevisioned criteria name",
+      "reason": "ref",
+      "record": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.criteria",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "method": {
+          "interval": "bootstrap@1",
+          "level": 0.95,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "accuracy",
+            "source": {
+              "weft_kind": "judgment",
+              "field": "accepted"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.02
+          },
+          {
+            "measure": "cost",
+            "source": {
+              "weft_kind": "inference.attempt",
+              "field": "spent_micros"
+            },
+            "aggregate": "mean",
+            "better": "lower",
+            "min_effect": 5
+          },
+          {
+            "measure": "completion",
+            "source": {
+              "weft_kind": "outcome",
+              "field": "status"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.05
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "measure": "accuracy",
+            "op": "ge",
+            "bound": 0.8,
+            "role": "quality_bar"
+          },
+          {
+            "constraint": "cost_cap",
+            "measure": "cost",
+            "op": "le",
+            "bound": 200,
+            "role": "protected"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a malformed split digest",
+      "reason": "ref",
+      "record": {
+        "schema": "gauge.caseset@1",
+        "caseset": "decision-sites.cases@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "approval",
+          "ref": "appr-41"
+        },
+        "splits": [
+          {
+            "split": "tune",
+            "digest": "sha1:abc",
+            "size": 120
+          },
+          {
+            "split": "holdout",
+            "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "size": 40
+          }
+        ]
+      }
+    },
+    {
+      "name": "unknown criteria",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-base",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.13.0"
+        },
+        "criteria": "decision-sites.criteria@2",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-base"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.85,
+            "n": 120,
+            "interval": [
+              0.8,
+              0.9
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 150,
+            "n": 120,
+            "interval": [
+              140,
+              160
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 120,
+            "interval": [
+              0.62,
+              0.78
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "a digest from another split",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-base",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.13.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-base"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.85,
+            "n": 120,
+            "interval": [
+              0.8,
+              0.9
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 150,
+            "n": 120,
+            "interval": [
+              140,
+              160
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 120,
+            "interval": [
+              0.62,
+              0.78
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "a missing measure entry",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-base",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.13.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-base"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.85,
+            "n": 120,
+            "interval": [
+              0.8,
+              0.9
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 150,
+            "n": 120,
+            "interval": [
+              140,
+              160
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "a missing constraint entry",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-base",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.13.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-base"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.85,
+            "n": 120,
+            "interval": [
+              0.8,
+              0.9
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 150,
+            "n": 120,
+            "interval": [
+              140,
+              160
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 120,
+            "interval": [
+              0.62,
+              0.78
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "a comparison across splits",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-better",
+        "experiment": "exp-12",
+        "baseline": "res-base",
+        "candidate": "res-hold",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": 0.06,
+            "interval": [
+              0.03,
+              0.09
+            ]
+          },
+          {
+            "measure": "cost",
+            "delta": -30,
+            "interval": [
+              -42,
+              -18
+            ]
+          },
+          {
+            "measure": "completion",
+            "delta": 0.02,
+            "interval": [
+              -0.06,
+              0.1
+            ]
+          }
+        ],
+        "verdict": "candidate_better"
+      }
+    },
+    {
+      "name": "a comparison across modes",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-better",
+        "experiment": "exp-12",
+        "baseline": "res-base",
+        "candidate": "res-replay",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": 0.06,
+            "interval": [
+              0.03,
+              0.09
+            ]
+          },
+          {
+            "measure": "cost",
+            "delta": -30,
+            "interval": [
+              -42,
+              -18
+            ]
+          },
+          {
+            "measure": "completion",
+            "delta": 0.02,
+            "interval": [
+              -0.06,
+              0.1
+            ]
+          }
+        ],
+        "verdict": "candidate_better"
+      }
+    },
+    {
+      "name": "a result compared with itself",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-better",
+        "experiment": "exp-12",
+        "baseline": "res-base",
+        "candidate": "res-base",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": 0.06,
+            "interval": [
+              0.03,
+              0.09
+            ]
+          },
+          {
+            "measure": "cost",
+            "delta": -30,
+            "interval": [
+              -42,
+              -18
+            ]
+          },
+          {
+            "measure": "completion",
+            "delta": 0.02,
+            "interval": [
+              -0.06,
+              0.1
+            ]
+          }
+        ],
+        "verdict": "candidate_better"
+      }
+    },
+    {
+      "name": "an attribution on an unknown result",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.attribution@1",
+        "attribution": "att-1",
+        "result": "res-none",
+        "case": "case-17",
+        "category": "routing",
+        "basis": "deterministic",
+        "signal": "better_route_excluded",
+        "confidence": null,
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-cheap"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a policy evaluated under criteria it governs",
+      "reason": "governance",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-base",
+        "subject": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-base"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.85,
+            "n": 120,
+            "interval": [
+              0.8,
+              0.9
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 150,
+            "n": 120,
+            "interval": [
+              140,
+              160
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 120,
+            "interval": [
+              0.62,
+              0.78
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "a holdout result without a held-out report",
+      "reason": "holdout",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-hold",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.14.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "holdout",
+        "caseset_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.9,
+            "n": 40,
+            "interval": [
+              0.82,
+              0.96
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 118,
+            "n": 40,
+            "interval": [
+              104,
+              132
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 40,
+            "interval": [
+              0.55,
+              0.83
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "a holdout result citing a Weft trace",
+      "reason": "holdout",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-hold",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.14.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "holdout",
+        "caseset_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "held_out_report",
+            "ref": "hor-res-hold"
+          },
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-hold"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.9,
+            "n": 40,
+            "interval": [
+              0.82,
+              0.96
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 118,
+            "n": 40,
+            "interval": [
+              104,
+              132
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 40,
+            "interval": [
+              0.55,
+              0.83
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "a holdout result mixing a held-out report with a check",
+      "reason": "holdout",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-hold",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.14.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "holdout",
+        "caseset_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "held_out_report",
+            "ref": "hor-res-hold"
+          },
+          {
+            "source": "check",
+            "ref": "individual-holdout-case-17"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.9,
+            "n": 40,
+            "interval": [
+              0.82,
+              0.96
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 118,
+            "n": 40,
+            "interval": [
+              104,
+              132
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 40,
+            "interval": [
+              0.55,
+              0.83
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "an attribution on a holdout case",
+      "reason": "holdout",
+      "record": {
+        "schema": "gauge.attribution@1",
+        "attribution": "att-1",
+        "result": "res-hold",
+        "case": "case-17",
+        "category": "routing",
+        "basis": "deterministic",
+        "signal": "better_route_excluded",
+        "confidence": null,
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-cheap"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a replay result that measures outcomes",
+      "reason": "mode",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-replay",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.14.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "replay",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-replay"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.88,
+            "n": 120,
+            "interval": [
+              0.83,
+              0.93
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 125,
+            "n": 120,
+            "interval": [
+              115,
+              135
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 120,
+            "interval": [
+              0.62,
+              0.78
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "a measure from an unknown Weft kind",
+      "reason": "measure",
+      "record": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.criteria@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "method": {
+          "interval": "bootstrap@1",
+          "level": 0.95,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "accuracy",
+            "source": {
+              "weft_kind": "judgement",
+              "field": "accepted"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.02
+          },
+          {
+            "measure": "cost",
+            "source": {
+              "weft_kind": "inference.attempt",
+              "field": "spent_micros"
+            },
+            "aggregate": "mean",
+            "better": "lower",
+            "min_effect": 5
+          },
+          {
+            "measure": "completion",
+            "source": {
+              "weft_kind": "outcome",
+              "field": "status"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.05
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "measure": "accuracy",
+            "op": "ge",
+            "bound": 0.8,
+            "role": "quality_bar"
+          },
+          {
+            "constraint": "cost_cap",
+            "measure": "cost",
+            "op": "le",
+            "bound": 200,
+            "role": "protected"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a measure from a field the kind lacks",
+      "reason": "measure",
+      "record": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.criteria@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "method": {
+          "interval": "bootstrap@1",
+          "level": 0.95,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "accuracy",
+            "source": {
+              "weft_kind": "judgment",
+              "field": "accepted"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.02
+          },
+          {
+            "measure": "cost",
+            "source": {
+              "weft_kind": "inference.attempt",
+              "field": "price"
+            },
+            "aggregate": "mean",
+            "better": "lower",
+            "min_effect": 5
+          },
+          {
+            "measure": "completion",
+            "source": {
+              "weft_kind": "outcome",
+              "field": "status"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.05
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "measure": "accuracy",
+            "op": "ge",
+            "bound": 0.8,
+            "role": "quality_bar"
+          },
+          {
+            "constraint": "cost_cap",
+            "measure": "cost",
+            "op": "le",
+            "bound": 200,
+            "role": "protected"
+          }
+        ]
+      }
+    },
+    {
+      "name": "wilson intervals on a mean",
+      "reason": "measure",
+      "record": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.criteria@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "method": {
+          "interval": "wilson@1",
+          "level": 0.95,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "accuracy",
+            "source": {
+              "weft_kind": "judgment",
+              "field": "accepted"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.02
+          },
+          {
+            "measure": "cost",
+            "source": {
+              "weft_kind": "inference.attempt",
+              "field": "spent_micros"
+            },
+            "aggregate": "mean",
+            "better": "lower",
+            "min_effect": 5
+          },
+          {
+            "measure": "completion",
+            "source": {
+              "weft_kind": "outcome",
+              "field": "status"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.05
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "measure": "accuracy",
+            "op": "ge",
+            "bound": 0.8,
+            "role": "quality_bar"
+          },
+          {
+            "constraint": "cost_cap",
+            "measure": "cost",
+            "op": "le",
+            "bound": 200,
+            "role": "protected"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a duplicate measure",
+      "reason": "measure",
+      "record": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.criteria@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "method": {
+          "interval": "bootstrap@1",
+          "level": 0.95,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "accuracy",
+            "source": {
+              "weft_kind": "judgment",
+              "field": "accepted"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.02
+          },
+          {
+            "measure": "cost",
+            "source": {
+              "weft_kind": "inference.attempt",
+              "field": "spent_micros"
+            },
+            "aggregate": "mean",
+            "better": "lower",
+            "min_effect": 5
+          },
+          {
+            "measure": "accuracy",
+            "source": {
+              "weft_kind": "outcome",
+              "field": "status"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.05
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "measure": "accuracy",
+            "op": "ge",
+            "bound": 0.8,
+            "role": "quality_bar"
+          },
+          {
+            "constraint": "cost_cap",
+            "measure": "cost",
+            "op": "le",
+            "bound": 200,
+            "role": "protected"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a value with no samples",
+      "reason": "measure",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-replay",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.14.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "replay",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-replay"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.88,
+            "n": 120,
+            "interval": [
+              0.83,
+              0.93
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 125,
+            "n": 120,
+            "interval": [
+              115,
+              135
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 0,
+            "interval": null
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "a value outside its interval",
+      "reason": "measure",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-base",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.13.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-base"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.85,
+            "n": 120,
+            "interval": [
+              0.8,
+              0.9
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 170,
+            "n": 120,
+            "interval": [
+              140,
+              160
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 120,
+            "interval": [
+              0.62,
+              0.78
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "a rate above one",
+      "reason": "measure",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-small",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.15.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-small"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.9,
+            "n": 12,
+            "interval": [
+              0.6,
+              1.1
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 100,
+            "n": 12,
+            "interval": [
+              70,
+              130
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.75,
+            "n": 12,
+            "interval": [
+              0.45,
+              0.95
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "unknown"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "unknown"
+          }
+        ],
+        "verdict": "insufficient_evidence"
+      }
+    },
+    {
+      "name": "a delta that is not candidate minus baseline",
+      "reason": "measure",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-better",
+        "experiment": "exp-12",
+        "baseline": "res-base",
+        "candidate": "res-cand",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": 0.06,
+            "interval": [
+              0.03,
+              0.09
+            ]
+          },
+          {
+            "measure": "cost",
+            "delta": -20,
+            "interval": [
+              -42,
+              -18
+            ]
+          },
+          {
+            "measure": "completion",
+            "delta": 0.02,
+            "interval": [
+              -0.06,
+              0.1
+            ]
+          }
+        ],
+        "verdict": "candidate_better"
+      }
+    },
+    {
+      "name": "a delta without an interval",
+      "reason": "measure",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-better",
+        "experiment": "exp-12",
+        "baseline": "res-base",
+        "candidate": "res-cand",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": 0.06,
+            "interval": null
+          },
+          {
+            "measure": "cost",
+            "delta": -30,
+            "interval": [
+              -42,
+              -18
+            ]
+          },
+          {
+            "measure": "completion",
+            "delta": 0.02,
+            "interval": [
+              -0.06,
+              0.1
+            ]
+          }
+        ],
+        "verdict": "candidate_better"
+      }
+    },
+    {
+      "name": "a constraint on an unknown measure",
+      "reason": "constraint",
+      "record": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.criteria@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "method": {
+          "interval": "bootstrap@1",
+          "level": 0.95,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "accuracy",
+            "source": {
+              "weft_kind": "judgment",
+              "field": "accepted"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.02
+          },
+          {
+            "measure": "cost",
+            "source": {
+              "weft_kind": "inference.attempt",
+              "field": "spent_micros"
+            },
+            "aggregate": "mean",
+            "better": "lower",
+            "min_effect": 5
+          },
+          {
+            "measure": "completion",
+            "source": {
+              "weft_kind": "outcome",
+              "field": "status"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.05
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "measure": "accuracy",
+            "op": "ge",
+            "bound": 0.8,
+            "role": "quality_bar"
+          },
+          {
+            "constraint": "cost_cap",
+            "measure": "latency",
+            "op": "le",
+            "bound": 200,
+            "role": "protected"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a constraint held although its interval crosses the bound",
+      "reason": "constraint",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-cheap",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@amos-small"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-cheap"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.8,
+            "n": 120,
+            "interval": [
+              0.74,
+              0.86
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 60,
+            "n": 120,
+            "interval": [
+              50,
+              70
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.6,
+            "n": 120,
+            "interval": [
+              0.51,
+              0.69
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "a constraint judged on too few samples",
+      "reason": "constraint",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-small",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.15.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-small"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.9,
+            "n": 12,
+            "interval": [
+              0.6,
+              1
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 100,
+            "n": 12,
+            "interval": [
+              70,
+              130
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.75,
+            "n": 12,
+            "interval": [
+              0.45,
+              0.95
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "unknown"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "insufficient_evidence"
+      }
+    },
+    {
+      "name": "a result claiming its bar despite a violation",
+      "reason": "verdict",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-cheap",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@amos-small"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-cheap"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.7,
+            "n": 120,
+            "interval": [
+              0.62,
+              0.76
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 60,
+            "n": 120,
+            "interval": [
+              50,
+              70
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.6,
+            "n": 120,
+            "interval": [
+              0.51,
+              0.69
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "violated"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "an under-sampled result claiming its bar",
+      "reason": "verdict",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-small",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.15.0"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-small"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.9,
+            "n": 12,
+            "interval": [
+              0.6,
+              1
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 100,
+            "n": 12,
+            "interval": [
+              70,
+              130
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.75,
+            "n": 12,
+            "interval": [
+              0.45,
+              0.95
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "unknown"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "unknown"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "a bar-missing candidate claimed better",
+      "reason": "verdict",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-missed",
+        "experiment": "exp-12",
+        "baseline": "res-base",
+        "candidate": "res-cheap",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": -0.15,
+            "interval": [
+              -0.22,
+              -0.08
+            ]
+          },
+          {
+            "measure": "cost",
+            "delta": -90,
+            "interval": [
+              -102,
+              -78
+            ]
+          },
+          {
+            "measure": "completion",
+            "delta": -0.1,
+            "interval": [
+              -0.2,
+              0
+            ]
+          }
+        ],
+        "verdict": "candidate_better"
+      }
+    },
+    {
+      "name": "an under-sampled comparison claimed better",
+      "reason": "verdict",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-small",
+        "experiment": "exp-12",
+        "baseline": "res-base",
+        "candidate": "res-small",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": 0.05,
+            "interval": [
+              -0.2,
+              0.2
+            ]
+          },
+          {
+            "measure": "cost",
+            "delta": -50,
+            "interval": [
+              -80,
+              -20
+            ]
+          },
+          {
+            "measure": "completion",
+            "delta": 0.05,
+            "interval": [
+              -0.25,
+              0.25
+            ]
+          }
+        ],
+        "verdict": "candidate_better"
+      }
+    },
+    {
+      "name": "a gain not clear of min_effect claimed better",
+      "reason": "verdict",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-flat",
+        "experiment": "exp-12",
+        "baseline": "res-worse",
+        "candidate": "res-base",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": 0,
+            "interval": [
+              -0.05,
+              0.05
+            ]
+          },
+          {
+            "measure": "cost",
+            "delta": -40,
+            "interval": [
+              -50,
+              -2
+            ]
+          },
+          {
+            "measure": "completion",
+            "delta": 0,
+            "interval": [
+              -0.08,
+              0.08
+            ]
+          }
+        ],
+        "verdict": "candidate_better"
+      }
+    },
+    {
+      "name": "an unchanged higher-is-better measure claimed worse",
+      "reason": "verdict",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-eq-hi",
+        "experiment": "exp-12",
+        "baseline": "res-hi-a",
+        "candidate": "res-hi-b",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": 0,
+            "interval": [
+              0,
+              0
+            ]
+          }
+        ],
+        "verdict": "candidate_worse"
+      }
+    },
+    {
+      "name": "an unchanged lower-is-better measure claimed worse",
+      "reason": "verdict",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-eq-lo",
+        "experiment": "exp-12",
+        "baseline": "res-lo-a",
+        "candidate": "res-lo-b",
+        "deltas": [
+          {
+            "measure": "cost",
+            "delta": 0,
+            "interval": [
+              0,
+              0
+            ]
+          }
+        ],
+        "verdict": "candidate_worse"
+      }
+    },
+    {
+      "name": "an unchanged measure claimed better",
+      "reason": "verdict",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-eq-hi",
+        "experiment": "exp-12",
+        "baseline": "res-hi-a",
+        "candidate": "res-hi-b",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": 0,
+            "interval": [
+              0,
+              0
+            ]
+          }
+        ],
+        "verdict": "candidate_better"
+      }
+    },
+    {
+      "name": "a worse candidate claimed no different",
+      "reason": "verdict",
+      "record": {
+        "schema": "gauge.comparison@1",
+        "comparison": "cmp-worse",
+        "experiment": "exp-12",
+        "baseline": "res-base",
+        "candidate": "res-worse",
+        "deltas": [
+          {
+            "measure": "accuracy",
+            "delta": 0,
+            "interval": [
+              -0.05,
+              0.05
+            ]
+          },
+          {
+            "measure": "cost",
+            "delta": 40,
+            "interval": [
+              30,
+              50
+            ]
+          },
+          {
+            "measure": "completion",
+            "delta": 0,
+            "interval": [
+              -0.08,
+              0.08
+            ]
+          }
+        ],
+        "verdict": "no_difference"
+      }
+    },
+    {
+      "name": "a deterministic attribution with confidence",
+      "reason": "attribution",
+      "record": {
+        "schema": "gauge.attribution@1",
+        "attribution": "att-1",
+        "result": "res-cheap",
+        "case": "case-17",
+        "category": "routing",
+        "basis": "deterministic",
+        "signal": "better_route_excluded",
+        "confidence": 0.9,
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-cheap"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a deterministic attribution without evidence",
+      "reason": "attribution",
+      "record": {
+        "schema": "gauge.attribution@1",
+        "attribution": "att-1",
+        "result": "res-cheap",
+        "case": "case-17",
+        "category": "routing",
+        "basis": "deterministic",
+        "signal": "better_route_excluded",
+        "confidence": null,
+        "evidence": []
+      }
+    },
+    {
+      "name": "a signal from another category",
+      "reason": "attribution",
+      "record": {
+        "schema": "gauge.attribution@1",
+        "attribution": "att-1",
+        "result": "res-cheap",
+        "case": "case-17",
+        "category": "implementation",
+        "basis": "deterministic",
+        "signal": "better_route_excluded",
+        "confidence": null,
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-cheap"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a judged attribution without confidence",
+      "reason": "attribution",
+      "record": {
+        "schema": "gauge.attribution@1",
+        "attribution": "att-2",
+        "result": "res-cheap",
+        "case": "case-17",
+        "category": "implementation",
+        "basis": "judgment",
+        "signal": null,
+        "confidence": null,
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-cheap"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a judged attribution with a signal",
+      "reason": "attribution",
+      "record": {
+        "schema": "gauge.attribution@1",
+        "attribution": "att-2",
+        "result": "res-cheap",
+        "case": "case-17",
+        "category": "implementation",
+        "basis": "judgment",
+        "signal": "contract_tests_failed",
+        "confidence": 0.7,
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-cheap"
+          }
+        ]
+      }
+    },
+    {
+      "name": "an unattributed failure with a basis",
+      "reason": "attribution",
+      "record": {
+        "schema": "gauge.attribution@1",
+        "attribution": "att-3",
+        "result": "res-cheap",
+        "case": "case-17",
+        "category": "unattributed",
+        "basis": "deterministic",
+        "signal": null,
+        "confidence": null,
+        "evidence": []
+      }
+    },
+    {
+      "name": "a category with no basis",
+      "reason": "attribution",
+      "record": {
+        "schema": "gauge.attribution@1",
+        "attribution": "att-3",
+        "result": "res-cheap",
+        "case": "case-17",
+        "category": "routing",
+        "basis": "none",
+        "signal": null,
+        "confidence": null,
+        "evidence": []
+      }
+    }
+  ]
+}
