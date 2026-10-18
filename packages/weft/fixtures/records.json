@@ -1850,14 +1850,14 @@
               "candidate_ref": "cand-c",
               "operation": "repo.publish",
               "eligibility": "approval_required",
-              "weight": 0.1,
+              "weight": null,
               "disposition": "policy_filtered"
             },
             {
               "candidate_ref": "cand-d",
               "operation": "repo.delete",
               "eligibility": "prohibited",
-              "weight": null,
+              "weight": 0.1,
               "disposition": "policy_filtered"
             }
           ]
