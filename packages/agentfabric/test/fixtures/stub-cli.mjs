@@ -1,6 +1,6 @@
 /**
  * Stub CLI for shell.run and generate-adapter tests.
- * It never prints environment values except in --leak, which the host must redact.
+ * It never prints environment values except in --leak and --partial, which the host must redact.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -43,6 +43,15 @@ if (mode === '--subprocess') {
     writeFileSync(pidFile, String(pid));
   }
   setInterval(() => {}, 1 << 30);
+} else if (mode === '--partial') {
+  // Output first (pipe writes are synchronous), then the pid file, then wait to be stopped.
+  stdout.write(`partial-out:${env['CANARY'] ?? ''}\n`);
+  stderr.write('partial-err\n');
+  writeFileSync(args[1], String(pid));
+  setInterval(() => {}, 1 << 30);
+} else if (mode === '--signal') {
+  stderr.write('stub-signalled\n');
+  process.kill(pid, 'SIGKILL');
 } else if (mode === '--exit') {
   stderr.write('stub-failed\n');
   exit(Number(args[1] ?? '1'));

@@ -103,6 +103,11 @@ failures:
 | exit 0, stdout truncated | `unavailable` (`cli generate stdout was truncated`), non-retryable |
 | exit 0, stdout intact | completed text is the full stdout body, with `stop` |
 
+A failed spawn result carries the redacted tails and `duration_ms` from that
+invocation's `shell.trace@1` record, because a failed invocation outcome
+carries only its failure. A grant rejection before any spawn carries empty
+tails and `duration_ms: 0`.
+
 Tests drive stub scripts. They do not execute the real `codex`, `claude`,
 or `grok` binaries and they do not use the network.
 
