@@ -75,9 +75,12 @@ excluded entry, and only after the margin has passed. Any such value is
 `low_confidence` and the full index. Published low confidence elsewhere,
 including on a required entry, does not block. A published value that is not a
 finite number in [0, 1], for example 60, -1, NaN, or a non-number, is not
-unknown. Any published invalid confidence, on any entry, is `invalid_confidence`
-and the full index. That includes a boundary entry, a non-boundary entry, a
-required entry, and the case where nothing is excluded. D4 and D7 do not use
+unknown. The TypeSafe and Vercel AI Gateway adapters forward a published
+non-number, `null` included, as NaN rather than dropping it; Amos rejects any
+published confidence outside [0, 1] as `malformed_response`. Any published
+invalid confidence, on any entry, is `invalid_confidence` and the full index.
+That includes a boundary entry, a non-boundary entry, a required entry, and
+the case where nothing is excluded. D4 and D7 do not use
 this split: a non-unit confidence there is still `missing_confidence`. A
 missing or malformed probability, a wrong kind, a stale or changed revision,
 an outage, or cancellation is `admission` and returns the whole index.

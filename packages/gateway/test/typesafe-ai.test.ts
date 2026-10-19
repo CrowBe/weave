@@ -362,6 +362,21 @@ describe('typesafe-ai adapter: response', () => {
     assert.deepEqual(result.confidence, { severity: 0.85, area: 1.0 });
   });
 
+  it('forwards a published non-number confidence as NaN so a site reads it as invalid, not absent', async () => {
+    const { fetch } = stubFetch({ ...LIVE_BODY, answers: {
+      ...LIVE_BODY.answers,
+      severity: { ...LIVE_BODY.answers.severity, confidence: 'high' },
+      area: { ...LIVE_BODY.answers.area, confidence: null },
+    } });
+    const result = await typesafeAiEvaluator(options(fetch)).evaluate(ALL_CALL);
+
+    assert.equal(result.status, 'completed');
+    if (result.status !== 'completed') return;
+    // `urgent` publishes no confidence and stays absent; the published values are kept as invalid.
+    assert.deepEqual(result.confidence, { severity: NaN, area: NaN });
+    assert.equal(JSON.stringify(result).includes('high'), false);
+  });
+
   it('reports a malformed response rather than inventing an answer', async () => {
     const { fetch } = stubFetch({ answers: { urgent: { type: 'noul' } }, usage: {} });
     const result = await typesafeAiEvaluator(options(fetch)).evaluate(ALL_CALL);

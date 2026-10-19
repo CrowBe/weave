@@ -130,7 +130,9 @@ export function vercelAiGatewayEvaluator(options: VercelAiGatewayOptions): Evalu
 /**
  * TypeSafe's evaluation models publish a per-question confidence under their
  * own metadata key. Read defensively: absent metadata is not an error, and a
- * provider without the statistic simply reports none.
+ * provider without the statistic simply reports none. A published value that
+ * is not a number becomes NaN rather than being dropped, so a site reads it as
+ * invalid, not absent; NaN carries no provider text and fails every range check.
  */
 function confidenceOf(metadata: unknown): Readonly<Record<QuestionId, number>> | undefined {
   if (typeof metadata !== 'object' || metadata === null) return undefined;
@@ -141,7 +143,7 @@ function confidenceOf(metadata: unknown): Readonly<Record<QuestionId, number>> |
 
   const out: Record<QuestionId, number> = {};
   for (const [id, value] of Object.entries(confidence as Record<string, unknown>)) {
-    if (typeof value === 'number') out[id] = value;
+    if (value !== undefined) out[id] = typeof value === 'number' ? value : Number.NaN;
   }
   return Object.keys(out).length > 0 ? out : undefined;
 }
