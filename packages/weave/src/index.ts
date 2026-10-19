@@ -89,7 +89,7 @@ export {
 } from './task-acceptance-eval.js';
 export {
   SITE_POLICY, evaluateSite, transitionSite, stopForNoProgress,
-  type DecisionSite, type SiteChoice, type SiteState, type SiteInput, type IntakeState,
+  type DecisionSite, type SiteChoice, type SiteState, type SiteInput, type IntakeState, type IntakeSiteInput, type SiteInputFor,
   type RecordedSiteAnswer, type SiteReason, type SiteObservation, type SiteTransition, type ProgressChoice,
 } from './sites/index.js';
 

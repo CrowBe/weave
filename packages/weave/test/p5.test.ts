@@ -79,6 +79,19 @@ test('D1 requires selected top probability at least .6 and a valid distribution'
   }
 });
 
+test('intake state is typed as a disclosed message plus running-thread summaries', async () => {
+  const typed = transitionSite('intake.classify', input, answer('intake.classify', 'queue', 1), current);
+  assert.equal(typed.choice, 'queue');
+  const untyped = { ...input, state: 'raw channel text' };
+  // @ts-expect-error intake requires IntakeState, not arbitrary evaluation content (#90)
+  transitionSite('intake.classify', untyped, answer('intake.classify', 'queue', 1), current);
+  // @ts-expect-error the evaluate entry point applies the same input type
+  await evaluateSite('intake.classify', untyped, port(async () => answer('intake.classify', 'queue', 1).outcome),
+    () => ({ ...current, observed_at: 10 }));
+  // Other sites keep accepting any disclosed evaluation content.
+  assert.equal(transitionSite('loop.route', untyped, answer('loop.route', 'strong', 1), current).choice, 'strong');
+});
+
 test('all intake choices are available without channel-specific input', () => {
   for (const choice of ['new_thread', 'continue_thread', 'queue', 'steer', 'interrupt', 'stop']) {
     assert.equal(transitionSite('intake.classify', input, answer('intake.classify', choice, 1), current).choice, choice);

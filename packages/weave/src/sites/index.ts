@@ -26,13 +26,19 @@ export interface SiteInput extends SiteState {
   /** True for a step that needs dispatch: an outage must pause it. */
   readonly needs_dispatch: boolean;
 }
-export interface IntakeState {
+/** Intake discloses one inbound message and running-thread summaries; nothing channel-specific. */
+export type IntakeState = {
   readonly message: string;
   readonly running_threads: readonly {
     readonly thread_id: string;
     readonly summary: string;
   }[];
+};
+export interface IntakeSiteInput extends SiteInput {
+  readonly state: IntakeState;
 }
+/** Intake takes IntakeState (#90); every other choice site takes any disclosed evaluation content. */
+export type SiteInputFor<S extends DecisionSite> = S extends 'intake.classify' ? IntakeSiteInput : SiteInput;
 export interface RecordedSiteAnswer {
   readonly state_revision: number;
   /** Injected reading at response receipt, never a provider's clock. */
@@ -94,7 +100,7 @@ export function decisionUnavailable(outcome: EvaluationOutcome | null): boolean 
 }
 
 /** Deterministic admission and record construction, usable without a gateway for replay. */
-export function transitionSite(site: DecisionSite, input: SiteInput, recorded: RecordedSiteAnswer,
+export function transitionSite<S extends DecisionSite>(site: S, input: SiteInputFor<S>, recorded: RecordedSiteAnswer,
   current: SiteState): SiteTransition {
   const policy = SITE_POLICY[site];
   const outcome = recorded.outcome;
@@ -150,7 +156,7 @@ function validTopProbability(probabilities: Readonly<Record<string, number>> | u
 }
 
 /** The only effect is the injected evaluate port; current is read after the await. */
-export async function evaluateSite(site: DecisionSite, input: SiteInput, port: Pick<InferenceGateway, 'evaluate'>,
+export async function evaluateSite<S extends DecisionSite>(site: S, input: SiteInputFor<S>, port: Pick<InferenceGateway, 'evaluate'>,
   current: () => SiteState & { readonly observed_at: number }, signal?: AbortSignal): Promise<SiteTransition> {
   // Capture request metadata before await: caller mutation cannot rebind an in-flight answer.
   const captured = { ...input };

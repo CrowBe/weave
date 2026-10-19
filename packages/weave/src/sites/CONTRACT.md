@@ -14,6 +14,11 @@ budget/authority). D2 requires .75, fallback standard. D8 requires .70, fallback
 stalled. Intake requires .80 (provisional, until P10 calibration), fallback
 ask_user / needs_human. Intake state contains a disclosed message and running
 thread summaries; classification grants no authority to interrupt or dispatch.
+The type enforces that shape: for `intake.classify`, `transitionSite` and
+`evaluateSite` take `IntakeSiteInput`, whose state is `IntakeState`. Other choice
+sites take any disclosed evaluation content. A caller that holds a union of
+sites gets the wider input type. The check is compile-time only; there is still
+no channel transport.
 
 An answer from a different revision, or observed before the current state's
 update, is stale. Request id/site must match. Nonaccepted outcomes and exceptions

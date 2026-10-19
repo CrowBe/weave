@@ -153,8 +153,9 @@ Semantic rule (ARCH §6): each site keeps its own operation. A Jev outage never 
 ### 4c. P5 transition and observation contract
 
 The sites in `packages/weave/src/sites/` use one injected gateway `evaluate`
-port and pure `transitionSite` replay. Intake accepts disclosed inbound content
-and running-thread summaries; it contains no channel transport. Classification
+port and pure `transitionSite` replay. Intake's input type is `IntakeState`: one
+disclosed inbound message and running-thread summaries (#90); it contains no
+channel transport. Classification
 is a proposed transition and grants no authority to dispatch, interrupt or stop
 work. `done_check` requests a deterministic completion check, never completion.
 
