@@ -146,8 +146,10 @@ The composition root resolves `AMOS_BASE_URL` with the pure helper
 `http://127.0.0.1:8766`, restricted to loopback with no authentication. Register
 an Amos choice routed unit with model `amos-1-2b` (amos-1-small) and destination
 `amos`; the disclosed intake terms must permit that destination. The adapter
-checks GET `/v1/models` before POST `/v1/systemone` and bounds HTTP calls with a
-timeout. Unreachable, non-2xx health or timeout yields `provider_unavailable`;
+checks that GET `/v1/models` lists the configured model before POST
+`/v1/systemone`, rejects a response naming another model as malformed, and
+bounds HTTP calls with a timeout. Unreachable, non-2xx health, an unlisted
+model or timeout yields `provider_unavailable`;
 intake falls back to `ask_user`, never TypeSafe. Raw provider text is excluded
 from Amos failure records. See the [intake contract](packages/weave/src/sites/CONTRACT.md).
 

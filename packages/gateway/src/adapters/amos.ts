@@ -61,6 +61,11 @@ export function amosEvaluator(options: AmosOptions = {}): EvaluationAdapter {
               record(model) && typeof model['name'] === 'string' && model['name'].length > 0)) {
           return failure('unavailable');
         }
+        // The server answers an unknown model with its own, so check the configured one is served.
+        // Retrying cannot change that, so the failure is not retryable.
+        if (!models['models'].some((model: unknown) => record(model) && model['name'] === call.model)) {
+          return failure('unavailable', false);
+        }
         const response = await doFetch(`${baseURL}/v1/systemone`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -110,7 +115,7 @@ function wireQuestion(question: EvaluationQuestion): unknown {
 }
 
 function parse(body: unknown, call: EvaluationCall): EvaluationProviderResult {
-  if (!record(body) || typeof body['model'] !== 'string' || !record(body['answers']) || !record(body['usage'])) {
+  if (!record(body) || body['model'] !== call.model || !record(body['answers']) || !record(body['usage'])) {
     return failure('malformed_response');
   }
   const rawAnswers = body['answers'];
@@ -192,6 +197,6 @@ function sameKeys(value: Record<string, unknown>, keys: readonly string[]): bool
   return Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 }
 
-function failure(code: ProviderFailureCode): EvaluationProviderResult {
-  return { status: 'failed', failure: { code, message: `amos ${code}`, retryable: code === 'unavailable' } };
+function failure(code: ProviderFailureCode, retryable = code === 'unavailable'): EvaluationProviderResult {
+  return { status: 'failed', failure: { code, message: `amos ${code}`, retryable } };
 }

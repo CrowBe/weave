@@ -232,9 +232,10 @@ k = 3, floor = 0, max_excluded = .4, and min_margin = .3, and the cap is 8.
 `resolvePreselectPolicy` fills each missing or out-of-range field with its own
 default. The pure D3 transition does not: an invalid or incomplete policy is
 replaced wholesale, as specified above.
-Amos readiness uses GET `/v1/models`.
-An unreachable service, non-2xx health response or timeout produces a typed
-unavailable failure and gateway `provider_unavailable` evidence. Intake then
+Amos readiness uses GET `/v1/models`, which must list the configured model.
+An unreachable service, non-2xx health response, unlisted model or timeout
+produces a typed unavailable failure and gateway `provider_unavailable`
+evidence. A response naming another model is `malformed_response`. Intake then
 uses `ask_user` / `needs_human`; dispatch-dependent steps remain paused under
 the existing rule. A model classification remains an observation, not authority.
 

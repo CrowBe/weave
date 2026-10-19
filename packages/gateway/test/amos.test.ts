@@ -218,6 +218,29 @@ describe('Amos local decision contract', () => {
         },
       );
     });
+  it('refuses a model the server does not list, without a decision call', async () => {
+    const paths: string[] = [];
+    const fetch = (async (url: string | URL | Request) => {
+      paths.push(new URL(String(url)).pathname);
+      return String(url).endsWith('/v1/models')
+        ? new Response(JSON.stringify({ models: [{ name: 'amos-1-2b' }] }))
+        : new Response(JSON.stringify(body));
+    }) as typeof globalThis.fetch;
+    const result = await amosEvaluator({ fetch }).evaluate({ ...call, model: 'nope' });
+    assert.equal(result.status, 'failed');
+    if (result.status !== 'failed') return;
+    assert.equal(result.failure.code, 'unavailable');
+    // Retrying cannot make the server serve a model it does not list.
+    assert.equal(result.failure.retryable, false);
+    assert.deepEqual(paths, ['/v1/models']);
+  });
+  it('rejects a response that names a different model than the call', async () => {
+    const fetch = (async (url: string | URL | Request) => String(url).endsWith('/v1/models')
+      ? new Response(JSON.stringify({ models: [{ name: 'amos-1-2b' }, { name: 'amos-1-8b' }] }))
+      : new Response(JSON.stringify(body))) as typeof globalThis.fetch;
+    const result = await amosEvaluator({ fetch }).evaluate({ ...call, model: 'amos-1-8b' });
+    assert.equal(result.status === 'failed' && result.failure.code, 'malformed_response');
+  });
   it('reads a score legend that echoes a null level as null or as the string null', async () => {
     const nullLevel: EvaluationCall = {
       ...call,
