@@ -618,7 +618,7 @@ test('two retries then one tier escalation can pass, and a failed escalation rai
   assert.deepEqual(replayImplementationStep(fail.journal.load('exec-1'), fail.input), failed);
 });
 
-test('escalation blocked by the ceiling or the budget gate raises an open issue without another generate', async () => {
+test('escalation blocked by the ceiling or a budget downgrade raises an open issue without another generate', async () => {
   const ceiling = driver({ input: input({ ceiling: 'flash' }), evaluations: [{ c1: { p: .1, conf: 1 } }, { c1: { p: .1, conf: 1 } }, { c1: { p: .1, conf: 1 } }] });
   const capped = await runImplementationStep(ceiling.input, ceiling.ports, ceiling.journal);
   assert.equal(capped.status, 'failed');
@@ -626,8 +626,8 @@ test('escalation blocked by the ceiling or the budget gate raises an open issue 
   assert.equal(capped.open_issue?.blocked_by, 'ceiling');
   assert.deepEqual(capped.open_issue?.criterion_ids, ['c1']);
   assert.equal(capped.goal_done, false);
+  // A pause at escalation is resumable instead (#128); a downgrade cannot be that tier.
   for (const budget of [
-    () => ({ status: 'pause', reason: 'weekly_budget_cap', until: 80 } as ImplementBudgetDecision),
     () => ({ status: 'allow', tier: 'flash' } as ImplementBudgetDecision),
   ]) {
     let escalations = 0;
@@ -1110,6 +1110,41 @@ test('cancelling the step requests cancellation of the in-flight check and pause
   assert.equal(result.attempts[0]?.checks[0]?.exit, null);
   assert.deepEqual(world.evalSites, [], 'no D5 after cancellation');
   assert.equal(result.goal_done, false);
+});
+
+// #128: a budget pause is temporary at escalation too.
+test('a budget pause at escalation pauses the step and resumes into the escalation (#128)', async () => {
+  const fail = { c1: { p: .1, conf: 1 } };
+  let pausing = true;
+  const world = driver({
+    evaluations: [fail, fail, fail, { c1: { p: 1, conf: 1 } }],
+    budget: request => request.escalation && pausing
+      ? { status: 'pause', reason: 'weekly_budget_cap', until: 80 }
+      : { status: 'allow', tier: request.requested },
+  });
+  const paused = await runImplementationStep(world.input, world.ports, world.journal);
+  assert.equal(paused.status, 'paused');
+  assert.equal(paused.open_issue, null, 'a pause raises no open issue');
+  assert.equal(paused.goal_done, false);
+  assert.equal(paused.escalated, false);
+  assert.deepEqual(world.tiers, ['flash', 'flash', 'flash']);
+  const held = paused.attempts.at(-1);
+  assert.equal(held?.status, 'paused');
+  assert.equal(held?.escalated, true);
+  assert.equal(held?.requested_tier, 'standard');
+  assert.equal(held?.effective_tier, null);
+  assert.deepEqual(held?.pause, { reason: 'weekly_budget_cap', until: 80 });
+  assert.equal(world.journal.load('exec-1').some(entry => entry.schema === 'impl.stop@1'), false);
+  assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), paused);
+  assert.deepEqual(await runImplementationStep(world.input, world.ports, world.journal).then(again => again.status), 'paused');
+  pausing = false;
+  const resumed = await runImplementationStep(world.input, world.ports, world.journal);
+  assert.equal(resumed.status, 'passed');
+  assert.equal(resumed.escalated, true);
+  assert.deepEqual(world.tiers, ['flash', 'flash', 'flash', 'standard'], 'the paused escalation runs once, at one tier up');
+  assert.equal(resumed.attempts.at(-1)?.escalated, true);
+  assert.equal(resumed.attempts.at(-1)?.effective_tier, 'standard');
+  assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), resumed);
 });
 
 // #126: a journal the step has not finished does not read as a terminal failure.

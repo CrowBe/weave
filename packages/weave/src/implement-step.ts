@@ -681,9 +681,10 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
     const decision = ports.budget?.({ requested: action.requested, escalation: action.escalation, attempt: action.attempt })
       ?? { status: 'allow' as const, tier: action.requested };
     const allowed = decision.status === 'allow' && isTier(decision.tier) ? decision.tier : null;
-    // Escalation is exactly one tier. A downgrade or pause there is not that tier.
+    // Escalation is exactly one tier, so a downgrade there stops the step. A pause
+    // is temporary at either tier: it is recorded and a later run resumes (#128).
     if (allowed === null || (action.escalation && allowed !== action.requested)) {
-      if (action.escalation) {
+      if (action.escalation && allowed !== null) {
         history.push(remember(journal, stopRecord(normalized, attempts, 'budget')));
         return finish();
       }
@@ -695,7 +696,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
         attempt: action.attempt,
         requested_tier: action.requested,
         effective_tier: null,
-        escalated: false,
+        escalated: action.escalation,
         status: 'paused',
         generate_request_id: null,
         artifact_refs: [],

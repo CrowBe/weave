@@ -198,7 +198,9 @@ evidence is `{ check_id, argv_digest, exit, passed, tail, artifacts, invocation_
 evidence is `{ criterion_id, verdict_probability, confidence, passed }`. A red
 check fails the attempt even when D5 passes. The step retries the same tier up
 to N times (default 2), then escalates one tier once, never past the D2 ceiling.
-A budget downgrade stays at or below the requested tier. A budget pause or a
+A budget downgrade stays at or below the requested tier. A downgrade of the
+escalated tier stops the step with an open issue; a budget pause, at escalation
+or not, is a resumable paused attempt. A budget pause or a
 blocked escalation does not mint a grant and does not complete the goal.
 `goal_done` is false. The terminal blocker is `open_issue@1`:
 
