@@ -150,7 +150,9 @@ checks that GET `/v1/models` lists the configured model before POST
 `/v1/systemone`, rejects a response naming another model as malformed, and
 bounds HTTP calls with a timeout. Unreachable, non-2xx health, an unlisted
 model or timeout yields `provider_unavailable`;
-intake falls back to `ask_user`, never TypeSafe. Raw provider text is excluded
+intake falls back to `ask_user`, never TypeSafe. A timeout is not retried, so a
+hung Amos delays that fallback by at most one adapter timeout (`timeoutMs`,
+default 30 s), not one per attempt. Raw provider text is excluded
 from Amos failure records. See the [intake contract](packages/weave/src/sites/CONTRACT.md).
 
 Run the opt-in local intake probe after building:

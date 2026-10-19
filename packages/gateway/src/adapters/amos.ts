@@ -21,7 +21,7 @@ export function resolveAmosBaseURL(env: Readonly<Record<string, string | undefin
 export interface AmosOptions {
   readonly baseURL?: string;
   readonly fetch?: typeof globalThis.fetch;
-  /** Total bound covering health, decision, and response body reads. */
+  /** Total bound covering health, decision, and response body reads. Hitting it is not retryable. */
   readonly timeoutMs?: number;
 }
 
@@ -53,6 +53,10 @@ export function amosEvaluator(options: AmosOptions = {}): EvaluationAdapter {
     async evaluate(call): Promise<EvaluationProviderResult> {
       const deadline = AbortSignal.timeout(timeoutMs);
       const signal = call.signal === undefined ? deadline : AbortSignal.any([deadline, call.signal]);
+      // A hung Amos has already cost the whole timeout, so it is unavailable but not
+      // retryable: a retry would multiply the wait before intake can fall back.
+      const interrupted = (): EvaluationProviderResult | undefined =>
+        call.signal?.aborted ? failure('cancelled') : deadline.aborted ? failure('unavailable', false) : undefined;
       try {
         const health = await doFetch(`${baseURL}/v1/models`, { method: 'GET', signal, redirect: 'error' });
         if (!health.ok) return failure('unavailable');
@@ -79,14 +83,12 @@ export function amosEvaluator(options: AmosOptions = {}): EvaluationAdapter {
         try {
           body = await response.json();
         } catch {
-          return signal.aborted
-            ? failure(call.signal?.aborted ? 'cancelled' : 'unavailable')
-            : failure('malformed_response');
+          return interrupted() ?? failure('malformed_response');
         }
         return parse(body, call);
       } catch {
         // Provider exceptions, response text, and request ids are never evidence.
-        return failure(call.signal?.aborted ? 'cancelled' : 'unavailable');
+        return interrupted() ?? failure('unavailable');
       }
     },
   };

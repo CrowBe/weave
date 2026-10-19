@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { describe, it } from 'node:test';
 import { amosEvaluator, resolveAmosBaseURL, AMOS_BASE_URL } from '@weave/gateway/amos';
-import type { EvaluationCall } from '@weave/gateway';
+import { createInferenceGateway, type EvaluationCall, type RoutedUnit } from '@weave/gateway';
 
 const call: EvaluationCall = {
   model: 'amos-1-2b',
@@ -166,19 +166,68 @@ describe('Amos local decision contract', () => {
     const result = await amosEvaluator({ baseURL: closedURL }).evaluate(call);
     assert.equal(result.status === 'failed' && result.failure.code, 'unavailable');
   });
-  for (const stage of ['health', 'decision'])
-    it(`bounds ${stage} timeout as unavailable`, async () => {
+  for (const stage of ['health', 'decision', 'body'])
+    it(`bounds ${stage} timeout as unavailable and not retryable`, async () => {
       await stub(
         (request, response) => {
-          if (stage === 'decision' && request.url === '/v1/models')
+          if (stage !== 'health' && request.url === '/v1/models')
             serve(response, { models: [{ name: 'amos-1-2b' }] });
+          else if (stage === 'body') {
+            response.writeHead(200, { 'content-type': 'application/json' });
+            response.write('{"model":');
+          }
         },
         async (baseURL) => {
           const result = await amosEvaluator({ baseURL, timeoutMs: 30 }).evaluate(call);
-          assert.equal(result.status === 'failed' && result.failure.code, 'unavailable');
+          assert.equal(result.status, 'failed');
+          if (result.status !== 'failed') return;
+          assert.equal(result.failure.code, 'unavailable');
+          // A hung Amos already cost one full timeout; retrying would multiply it.
+          assert.equal(result.failure.retryable, false);
         },
       );
     });
+  it('keeps a fast connection failure retryable', async () => {
+    const fetch = (async () => { throw new TypeError('fetch failed'); }) as typeof globalThis.fetch;
+    const result = await amosEvaluator({ fetch }).evaluate(call);
+    assert.equal(result.status === 'failed' && result.failure.retryable, true);
+  });
+  it('bounds a hung Amos to one adapter timeout before intake falls back', async () => {
+    let calls = 0;
+    const hung = (async (_url: string | URL | Request, init?: RequestInit) => {
+      calls++;
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal!.reason), { once: true });
+      });
+    }) as typeof globalThis.fetch;
+    const unit: RoutedUnit = {
+      routed_unit_id: 'amos.choice', adapter: 'amos', model: 'amos-1-2b', operation: 'evaluate', kind: 'choice',
+      destination: 'local', quality: 'baseline', context_profile: 'decision', context_profile_version: 1,
+      prompt_template: 'decision.choice', prompt_template_version: 1, settings: { max_output_tokens: 256 },
+      context_limit_tokens: 1000, price: { input_per_mtok: 0, output_per_mtok: 0 },
+    };
+    const gateway = createInferenceGateway({
+      clock: { now: () => 10 },
+      routes: [unit],
+      decision: { provider: 'typesafe-jev', fallback: null, sites: { 'intake.classify': 'amos' }, providers: {
+        amos: { base_url: 'http://127.0.0.1:8766', model: 'amos-1-2b' },
+        'typesafe-jev': { base_url: 'https://api.typesafe.ai', model: 'jev-preview' },
+      } },
+      evaluators: [amosEvaluator({ fetch: hung, timeoutMs: 30 })],
+    });
+    // The stub holds no socket and AbortSignal.timeout is unref'd, so keep the loop alive.
+    const keepAlive = setInterval(() => {}, 1_000);
+    const outcome = await gateway.evaluate({
+      request_id: 'hung', site: 'intake.classify', role: 'working', kind: 'choice', state: 'disclosed',
+      questions: { decision: { type: 'choice', instructions: 'classify', criteria: { new_thread: null, queue: null } } },
+      terms: { quality: 'baseline', destinations: ['local'], max_context_tokens: 100, deadline: 1_000_000,
+        cost_ceiling: 10, max_attempts: 3 },
+    }).finally(() => clearInterval(keepAlive));
+    assert.equal(calls, 1);
+    assert.equal(outcome.attempts.length, 1);
+    assert.equal(outcome.status, 'blocked');
+    if (outcome.status === 'blocked') assert.equal(outcome.reason, 'provider_unavailable');
+  });
   it('preserves caller cancellation', async () => {
     const controller = new AbortController();
     controller.abort();
