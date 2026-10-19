@@ -61,7 +61,39 @@ function envPort(throwOn?: string): ShellHostOptions['env'] {
   };
 }
 
-function hostFor(repo: ShellHostOptions['repo'], port: ShellHostOptions['env'] = envPort()): {
+/**
+ * Real sleeps, except a sleep of exactly `timeout_ms`: that one resolves only
+ * when the test calls `expire()`, so a timeout fires after an observed event.
+ */
+function expiringTime(timeout_ms: number): ReturnType<typeof testTime> & { expire(): void } {
+  const base = testTime();
+  const pending: (() => void)[] = [];
+  return {
+    clock: base.clock,
+    timer: {
+      sleep(ms: number, signal?: AbortSignal) {
+        if (ms !== timeout_ms) {
+          return base.timer.sleep(ms, signal);
+        }
+        return new Promise<void>((resolve, reject) => {
+          if (signal?.aborted) {
+            reject(new Error('aborted'));
+            return;
+          }
+          pending.push(resolve);
+          signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+        });
+      },
+    },
+    expire() {
+      for (const resolve of pending.splice(0)) {
+        resolve();
+      }
+    },
+  };
+}
+
+function hostFor(repo: ShellHostOptions['repo'], port: ShellHostOptions['env'] = envPort(), time = testTime()): {
   authority: GrantAuthority;
   host: AgentFabricHost;
   dir: string;
@@ -69,7 +101,6 @@ function hostFor(repo: ShellHostOptions['repo'], port: ShellHostOptions['env'] =
 } {
   const dir = mkdtempSync(join(tmpdir(), 'weave-p7-shell-'));
   const authority = createGrantAuthority();
-  const time = testTime();
   const host = new AgentFabricHost({
     authority,
     shell: {
@@ -169,18 +200,46 @@ async function waitForPid(file: string): Promise<number> {
   }
 }
 
+/**
+ * True once the process is gone or is a zombie. A killed orphan stays a zombie
+ * until init reaps it, which the host cannot do (and some container inits never do).
+ */
+function terminated(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+  } catch {
+    return true;
+  }
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+    return stat.slice(stat.lastIndexOf(') ') + 2).startsWith('Z');
+  } catch {
+    return false;
+  }
+}
+
 async function waitDead(pid: number): Promise<void> {
   const started = Date.now();
-  for (;;) {
-    try {
-      process.kill(pid, 0);
-    } catch {
-      return;
-    }
+  while (!terminated(pid)) {
     if (Date.now() - started > 2_000) {
       throw new Error('child still alive');
     }
     await delay(20);
+  }
+}
+
+/** Settles with the invocation outcome, or fails if it takes longer than `ms` of real time. */
+async function within<T>(ms: number, pending: Promise<T>, label: string): Promise<T> {
+  let deadline: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      pending,
+      new Promise<never>((_, reject) => {
+        deadline = setTimeout(() => reject(new Error(`${label} exceeded ${ms} ms`)), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(deadline);
   }
 }
 
@@ -479,40 +538,81 @@ describe('shell.run@1', () => {
     }
   });
 
-  for (const failure of ['timeout', 'cancelled'] as const) {
-    it(`${failure} returns promptly when a grandchild holds stdout open and releases the lock`, async () => {
+  // A grandchild inherits stdout and stderr. In the process group the host terminates it.
+  // One that left the group (its own session) is only detached from the pipes; it is not signalled.
+  for (const escape of [false, true]) {
+    const holder = escape ? 'a grandchild outside the process group' : 'a grandchild';
+    const subprocess = (pidFile: string, ...extra: string[]) =>
+      [process.execPath, STUB, '--subprocess', pidFile, ...(escape ? ['--escape'] : []), ...extra];
+
+    for (const failure of ['timeout', 'cancelled'] as const) {
+      it(`${failure} returns promptly when ${holder} holds stdout open, and releases the lock`, async () => {
+        const TIMEOUT_MS = 60_000;
+        const time = expiringTime(TIMEOUT_MS);
+        const world = hostFor(undefined, envPort(), time);
+        const pidFile = join(world.dir, 'grandchild.pid');
+        let grandchild: number | undefined;
+        try {
+          const effects = ['process.spawn', `fs.write:${world.cwd}`];
+          const issued = grant(world.authority, SHELL_RUN.id, world.cwd, 'subprocess', effects);
+          const handle = world.host.invoke(issued, SHELL_RUN.id, shellInputs(world.cwd, subprocess(pidFile), [], TIMEOUT_MS));
+          assert.equal(handle.kind, 'handle');
+          if (handle.kind !== 'handle') return;
+          world.host.release(issued.action_id);
+          grandchild = await waitForPid(pidFile);
+          if (failure === 'timeout') time.expire();
+          else handle.requestCancel();
+          const outcome = await within(2500, handle.result, 'post-kill wait');
+          assert.equal(outcome.outcome, 'failed');
+          assert.equal(outcome.failure, failure);
+          if (escape) {
+            assert.equal(terminated(grandchild), false, 'the grandchild left the group, so the group signal did not reach it');
+          } else {
+            await waitDead(grandchild);
+          }
+          const next = asOutcome(await invoke(world.host, grant(world.authority, SHELL_RUN.id, world.cwd, 'after-subprocess', effects),
+            SHELL_RUN.id, shellInputs(world.cwd, [process.execPath, STUB, '--report'])));
+          assert.equal(next.outcome, 'succeeded');
+        } finally {
+          // Cleanup of the test's own grandchild; every assertion above has already run.
+          if (grandchild !== undefined && !terminated(grandchild)) {
+            try { process.kill(grandchild, 'SIGKILL'); } catch { /* Already gone. */ }
+          }
+          rmSync(world.dir, { recursive: true, force: true });
+        }
+      });
+    }
+
+    it(`reports the exit status when the child exits while ${holder} holds stdout open`, async () => {
       const world = hostFor(undefined);
       const pidFile = join(world.dir, 'grandchild.pid');
       let grandchild: number | undefined;
-      let deadline: ReturnType<typeof setTimeout> | undefined;
       try {
-        const issued = grant(world.authority, SHELL_RUN.id, world.cwd, 'subprocess', [
-          'process.spawn', `fs.write:${world.cwd}`,
-        ]);
-        const handle = world.host.invoke(issued, SHELL_RUN.id,
-          shellInputs(world.cwd, [process.execPath, STUB, '--subprocess', pidFile], [],
-            failure === 'timeout' ? 1000 : 60_000));
+        const effects = ['process.spawn', `fs.write:${world.cwd}`];
+        const issued = grant(world.authority, SHELL_RUN.id, world.cwd, 'exits-early', effects);
+        const handle = world.host.invoke(issued, SHELL_RUN.id, shellInputs(world.cwd, subprocess(pidFile, '--exit=5'), [], 60_000));
         assert.equal(handle.kind, 'handle');
         if (handle.kind !== 'handle') return;
         world.host.release(issued.action_id);
         grandchild = await waitForPid(pidFile);
-        if (failure === 'cancelled') handle.requestCancel();
-        const outcome = await Promise.race([
-          handle.result,
-          new Promise<never>((_, reject) => {
-            deadline = setTimeout(() => reject(new Error('post-kill wait exceeded 2500 ms')), 2500);
-          }),
-        ]);
-        assert.equal(outcome.outcome, 'failed');
-        assert.equal(outcome.failure, failure);
-        const next = asOutcome(await invoke(world.host,
-          grant(world.authority, SHELL_RUN.id, world.cwd, 'after-subprocess', [
-            'process.spawn', `fs.write:${world.cwd}`,
-          ]), SHELL_RUN.id, shellInputs(world.cwd, [process.execPath, STUB, '--report'])));
+        const output = succeeded(await within(2500, handle.result, 'exit with a lingering grandchild'));
+        assert.equal(output.exit, 5);
+        assert.match(output.stdout_tail, /parent-done/);
+        // Detaching before end-of-file means stdout may be incomplete, so it is reported as truncated.
+        assert.equal(output.stdout_truncated, escape);
+        if (escape) {
+          assert.equal(terminated(grandchild), false, 'the grandchild left the group, so the group signal did not reach it');
+        } else {
+          await waitDead(grandchild);
+        }
+        const trace = world.host.shellTraces()[0];
+        assert.equal(trace?.exit, 5);
+        assert.equal(trace?.failure, null);
+        const next = asOutcome(await invoke(world.host, grant(world.authority, SHELL_RUN.id, world.cwd, 'after-exit', effects),
+          SHELL_RUN.id, shellInputs(world.cwd, [process.execPath, STUB, '--report'])));
         assert.equal(next.outcome, 'succeeded');
       } finally {
-        clearTimeout(deadline);
-        if (grandchild !== undefined) {
+        if (grandchild !== undefined && !terminated(grandchild)) {
           try { process.kill(grandchild, 'SIGKILL'); } catch { /* Already gone. */ }
         }
         rmSync(world.dir, { recursive: true, force: true });

@@ -3,7 +3,7 @@
  * It never prints environment values except in --leak, which the host must redact.
  */
 import { spawn } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { argv, env, exit, pid, stderr, stdin, stdout } from 'node:process';
 
 const args = argv.slice(2);
@@ -18,11 +18,25 @@ function readStdin() {
 }
 
 if (mode === '--subprocess') {
-  const child = spawn(process.execPath, [new URL(import.meta.url).pathname, '--sleep', args[1]], {
-    stdio: ['ignore', 'inherit', 'inherit'], shell: false,
+  // --subprocess <pidFile> [--escape] [--exit=N]: start a grandchild that inherits stdout and stderr.
+  // --escape puts it in its own session and process group. --exit=N exits once the grandchild is up.
+  const pidFile = args[1];
+  const exitArg = args.find((arg) => arg.startsWith('--exit='));
+  const child = spawn(process.execPath, [new URL(import.meta.url).pathname, '--sleep', pidFile], {
+    stdio: ['ignore', 'inherit', 'inherit'], shell: false, detached: args.includes('--escape'),
   });
   child.on('error', () => exit(3));
-  setInterval(() => {}, 1 << 30);
+  if (exitArg === undefined) {
+    setInterval(() => {}, 1 << 30);
+  } else {
+    const poll = setInterval(() => {
+      if (existsSync(pidFile) && readFileSync(pidFile, 'utf8').trim() !== '') {
+        clearInterval(poll);
+        stdout.write('parent-done\n');
+        exit(Number(exitArg.slice('--exit='.length)));
+      }
+    }, 10);
+  }
 } else if (mode === '--sleep') {
   const pidFile = args[1];
   if (typeof pidFile === 'string' && pidFile.length > 0) {

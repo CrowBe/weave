@@ -36,12 +36,31 @@ workspace. Process-effect tokens are an additional exact set on the grant:
 Adding a process effect is a vocabulary revision (`PROCESS_EFFECT_VOCABULARY_REVISION`).
 
 Stdout and stderr tails keep the last 4096 characters (configurable up to 65,536).
-`stdout_truncated` records whether stdout was discarded before redaction. New files inside the
+`stdout_truncated` records whether stdout was discarded before redaction or
+was not read to end-of-file. New files inside the
 workspace come back as resource references, not locators. `duration_ms` is
 read from the injected clock. Timeout and cancel abort that same injected
 timer and then signal the process group on POSIX (`SIGTERM`, then `SIGKILL`
 after 30 ms). On Windows the direct child is signalled. The post-kill stdio
 drain is bounded to 100 ms, so inherited pipes cannot retain the workspace lock.
+
+The direct child's exit decides the outcome, not the end of its pipes. After
+it exits, the host waits up to 100 ms for stdio to end. If a descendant still
+holds the pipes, the host signals the process group as on timeout, drains for
+up to 100 ms again, and detaches. The run still reports the child's exit status.
+`stdout_truncated` is true if stdout did not reach end-of-file. Without this, a
+lingering descendant turned a finished run into `timeout`.
+
+Descendant limits:
+
+- A descendant in the process group is terminated. The host cannot reap an
+  orphan; it stays a zombie until init reaps it.
+- A descendant that left the group (its own session or process group) is not
+  signalled. The host only detaches from the pipes it holds.
+- A descendant in the group that holds no pipe outlives a successful run.
+- After the direct child exits, the group is signalled only while a pipe is
+  still held, which narrows the window in which an emptied group's id could be
+  reused.
 
 `cancelled` is the failure when the invocation is cancelled. It is not a
 timeout. A missing executable is `spawn_failed`. A process that runs and
