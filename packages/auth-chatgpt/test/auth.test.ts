@@ -16,7 +16,13 @@ function jwt(overrides: Record<string, unknown> = {}, key = privateKey) {
   const data = [ { alg: 'RS256', kid: 'key' }, { ...claims, ...overrides } ].map(v => Buffer.from(JSON.stringify(v)).toString('base64url')).join('.');
   return `${data}.${sign('RSA-SHA256', Buffer.from(data), key).toString('base64url')}`;
 }
-const fetchJwks: typeof fetch = async url => new Response(JSON.stringify(String(url).endsWith('openid-configuration') ? { jwks_uri: 'https://auth.openai.com/jwks' } : { keys: [jwk] }));
+const jwksRequests: string[] = [];
+/** Serves the key set only at the pinned JWKS URL; any other URL is a 404. */
+const fetchJwks: typeof fetch = async (url, init) => {
+  jwksRequests.push(`${init?.method ?? 'GET'} ${String(url)}`);
+  return String(url) === 'https://auth.openai.com/.well-known/jwks.json' ? new Response(JSON.stringify({ keys: [jwk] })) : new Response('{}', { status: 404 });
+};
+const rejectsWith = (code: string) => (error: unknown) => error instanceof ChatGPTAuthError && error.code === code;
 const tokens = () => ({ access_token: 'SECRET_ACCESS', refresh_token: 'SECRET_REFRESH', id_token: jwt(), token_type: 'Bearer', expires_in: 3600, scope: 'openid chatgpt.tokens.use.direct', earliest_refresh_at: 1200 });
 test('authorize URL contains exactly documented initial params and PKCE S256', () => {
   const url = new URL(buildAuthorizeUrl(attempt));
@@ -41,12 +47,25 @@ test('callback rejects state, OAuth denial, missing issued client and wrong call
   assert.throws(() => handleCallback(`http://127.0.0.1:1455/other?state=${attempt.state}`, attempt), /callback/);
 });
 test('validates signature and claims with locally generated RSA JWKS', async () => {
+  jwksRequests.length = 0;
   assert.equal((await validateIdToken(jwt(), { fetch: fetchJwks, clock, clientId: 'oaiapp_test', nonce: attempt.nonce })).subject, 'subject');
-  for (const overrides of [{ iss: 'bad' }, { aud: 'bad' }, { exp: 999 }, { nonce: 'bad' }]) {
-    await assert.rejects(validateIdToken(jwt(overrides), { fetch: fetchJwks, clock, clientId: 'oaiapp_test', nonce: attempt.nonce }));
+  assert.deepEqual(jwksRequests, ['GET https://auth.openai.com/.well-known/jwks.json']);
+  const cases: [Record<string, unknown>, string][] = [
+    [{ iss: 'bad' }, 'invalid ID token issuer'],
+    [{ aud: 'bad' }, 'invalid ID token audience'],
+    [{ exp: 999 }, 'expired ID token'],
+    [{ exp: 1000 }, 'expired ID token'],
+    [{ exp: '2000' }, 'expired ID token'],
+    [{ nonce: 'bad' }, 'invalid ID token nonce'],
+    [{ nonce: undefined }, 'invalid ID token nonce'],
+    [{ sub: undefined }, 'invalid ID token subject'],
+    [{ sub: '' }, 'invalid ID token subject'],
+  ];
+  for (const [overrides, code] of cases) {
+    await assert.rejects(validateIdToken(jwt(overrides), { fetch: fetchJwks, clock, clientId: 'oaiapp_test', nonce: attempt.nonce }), rejectsWith(code), code);
   }
   const other = generateKeyPairSync('rsa', { modulusLength: 2048 });
-  await assert.rejects(validateIdToken(jwt({}, other.privateKey), { fetch: fetchJwks, clock, clientId: 'oaiapp_test', nonce: attempt.nonce }), /signature/);
+  await assert.rejects(validateIdToken(jwt({}, other.privateKey), { fetch: fetchJwks, clock, clientId: 'oaiapp_test', nonce: attempt.nonce }), rejectsWith('invalid ID token signature'));
 });
 test('scope check distinguishes identity-only from plan grant', () => {
   assert.equal(planUsageStatus(['openid']), 'identity only, plan usage not granted');
