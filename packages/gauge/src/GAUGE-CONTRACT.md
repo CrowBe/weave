@@ -1,6 +1,7 @@
 # Gauge evaluation contract v1
 
-Status: contract (G1, #189) and validator (G2, #190). `validate` in
+Status: contract (G1, #189), validator (G2, #190) and governed revisions
+(G3, #191). `validate` in
 `src/validate.ts` implements this contract; `test/contract.test.ts` runs the
 fixtures in `fixtures/records.json` against the compiled package as part of
 `npm test` (`npm run test:gauge-contract` alone). `@weave/gauge` imports
@@ -25,7 +26,9 @@ Gauge produces evidence. It does not decide:
   assert that it won.
 - It does not define success. Criteria sets and case sets are governed records
   with their own authority, and they are not authored by the subject under
-  evaluation (G3, #191, makes this structural beyond the rules below).
+  evaluation. A result binds only to a revision that a governed revision
+  (`gauge.revision@1`) records, so a change to what counts as success is a
+  separate, recorded change with its own authority and justification.
 
 Gauge depends on the Weft contract only: its kinds and field names. It imports
 nothing from Loom, Fabric, AgentSOP or the gateway. Agent University and other
@@ -86,7 +89,51 @@ What counts as success for a workload, and how it is measured.
   `{ "split": "tune" | "holdout", "digest": digest, "size": count }`, size ≥ 1.
 
 The record names cases by digest only. Holdout content is never readable by
-the producer of a candidate.
+the producer of a candidate. The holdout digest differs from the tune digest:
+a holdout identical to the tune split would be visible to whoever tunes.
+
+## `gauge.revision@1`: governed revision
+
+The recorded change that makes one revision of a criteria set or case set
+usable. Results, comparisons and attributions bind only to recorded revisions,
+so a criteria set or case set that no revision records is unknown.
+
+- `schema`: `"gauge.revision@1"`
+- `revision`: rev, the criteria set or case set this records
+- `record`: `"criteria"` | `"caseset"`
+- `digest`: digest of that set
+- `supersedes`: rev | null
+- `issued_by`: governance
+- `justification`: code
+- `evidence`: 0–16, unique by `(source, ref)`, same shape as result evidence
+
+A set's digest is `sha256:` and the lowercase hex SHA-256 of its canonical
+JSON: object keys sorted recursively, no whitespace (`recordDigest`).
+
+Rules:
+
+- **Binding.** The set named by `revision` is known as a `record` set and its
+  digest equals `digest`. A recorded revision number is a positive integer
+  without leading zeros. Revision `@1` supersedes nothing. Revision `@n`, for
+  n > 1, supersedes `@n-1` of the same name, and that revision is itself
+  recorded as the same kind of set. A revision is recorded only when its whole
+  chain back to `@1` validates.
+- **Governance.** `issued_by` equals the `governed_by` of the set it
+  supersedes, or for `@1` the set's own `governed_by`: only the authority
+  that governs a set can change it, and only the old governor can hand it to a
+  new one. A revision that supersedes another cites at least one evidence
+  entry, its justification for changing what counts as success.
+- **Immutability.** Editing a recorded set in place changes its digest, so the
+  set is no longer recorded and nothing binds to it. A change is a new
+  revision. A result keeps binding to the revision it cites, and a comparison
+  across revisions is a `binding` failure.
+
+A subject under evaluation cannot change its own criteria or held-out cases:
+it is not the governor that must issue the change, and a policy subject cannot
+be evaluated under a set it governs. Gauge checks that the issuer is the
+governor; it cannot authenticate an issuer. Whoever supplies `context` vouches
+that each revision in it was issued by the authority it names, and an
+Experiment fixes the criteria and case set revisions before results are read.
 
 ## `gauge.result@1`: evaluation result
 
@@ -209,23 +256,28 @@ Rules:
 
 `validate(value, context)` returns `{ "ok": true }` or
 `{ "ok": false, "reason": reason }`. `context` supplies the known criteria
-sets, case sets and results, keyed by `criteria`, `caseset` and `result`. A
-context entry is known only if it validates itself and its key equals its own
-name; anything else in `context` is unknown, so a record bound to it fails with
-`binding`. The
+sets, case sets, results and revisions, keyed by `criteria`, `caseset`,
+`result` and `revision`. A context entry is known only if it validates itself
+and its key equals its own name, and a criteria set or case set only if a
+revision in `context` also records it; anything else in `context` is unknown,
+so a record bound to it fails with `binding`. The
 first applicable reason, in this order:
 
 1. `envelope`: not an object, unknown `schema`, missing, extra or mistyped
    keys, an out-of-range scalar (`level`, `min_samples`, `size`), an exceeded
    list bound, or a duplicate split or evidence entry
 2. `ref`: an id, rev or digest that fails its pattern
-3. `binding`: an unknown or mismatched criteria set, case set, split, digest or
-   result; measure or constraint entries that do not match the criteria set
-   one-to-one; a comparison across different questions or of a result with
-   itself
-4. `governance`: a policy subject evaluated under criteria or cases it governs
+3. `binding`: an unknown, unrecorded or mismatched criteria set, case set,
+   split, digest or result; measure or constraint entries that do not match
+   the criteria set one-to-one; a comparison across different questions or of
+   a result with itself; a revision whose set is unknown or has another
+   digest, or whose chain is broken
+4. `governance`: a policy subject evaluated under criteria or cases it
+   governs; a revision issued by anyone but the governor of the set it
+   supersedes, or a superseding revision without evidence
 5. `holdout`: a holdout result with any evidence other than held-out reports,
-   or an attribution on a holdout result
+   an attribution on a holdout result, or a case set whose holdout digest
+   equals its tune digest
 6. `mode`: the replay rule
 7. `measure`: a bad measure definition (unknown Weft kind or field, a
    duplicate measure, `wilson@1` on a non-rate aggregate), or a measure entry
