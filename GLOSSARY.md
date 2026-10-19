@@ -203,7 +203,7 @@ One generate call at a routed tier, followed by the configured repo checks and D
 
 ### Criterion proof
 
-How a success criterion is proven: `check` or `judgment`. Decomposition proposes it. Code admits `check` only when every bound check takes its verdict from an oracle that the check's grant may read and that the implementation step's generation cannot write, compared by the host's canonical resource identity. Anything else is `judgment`. A `check` criterion is settled by its green bound checks and needs no D5 pass; a `judgment` criterion keeps D5. A criterion proof grants nothing and leaves every other completion gate in place.
+How a success criterion is proven: `check` or `judgment`. Decomposition proposes it. Code admits `check` only when every bound check takes its verdict from an oracle that the check's grant may read and that the implementation step's generation cannot write, compared by the host's canonical resource identity. Anything else is `judgment`. A `check` criterion is settled by green runs of its bound checks in the current audit iteration and needs no D5 pass; a `judgment` criterion keeps D5. A criterion proof grants nothing and leaves every other completion gate in place.
 
 ### Open issue
 

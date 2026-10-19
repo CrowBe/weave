@@ -33,6 +33,8 @@ export interface AuditArtifact {
 }
 export interface AuditCheck {
   readonly check_id: string;
+  /** Producing audit iteration, attached by the observer; absent/null is unknown. */
+  readonly iteration?: number | null;
   readonly argv_digest: string;
   readonly exit: number | null;
   readonly passed: boolean;

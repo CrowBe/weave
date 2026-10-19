@@ -77,7 +77,7 @@ interface AuditState {
   plan: { step_id; intent; tier; status: 'done'|'failed'|'skipped' }[];
   decisions: { site; question_id; choice; probabilities; confidence; fallback_used: boolean; obs_seq }[];
   artifacts: { artifact_id; kind: 'diff'|'file'|'report'; digest; summary; bytes; ref }[]; // ref, not raw body, above a size cap
-  checks: { check_id; argv_digest; exit: number|null; passed: boolean; tail: string }[];  // deterministic evidence
+  checks: { check_id; iteration?: number|null; argv_digest; exit: number|null; passed: boolean; tail: string }[];  // deterministic evidence with producing audit iteration
   evals: { criterion_id; iteration?: number|null; verdict_probability; confidence: number|null; passed: boolean }[]; // D5 outputs with producing audit iteration
   open_issues: { issue_id; source: 'check'|'eval'|'audit'; text; severity }[];
   budget: { spent_micros; ceiling_micros; quota: { provider; window; percent_remaining; resets_at }[] };
@@ -601,8 +601,12 @@ vetoes completion even when the audit claims success. The claim itself is
 never a completion predicate. A final state-revision check after D6 rejects
 a disposition computed against changed state before loop-back or completion.
 
-A criterion whose goal-slice `proof` is `check` completes on its green bound
-checks without a D5 pass; a current failing D5 eval for it still vetoes.
+A criterion whose goal-slice `proof` is `check` completes without a D5 pass
+when every bound check has a run in the current iteration and every such run is
+green. Each check record carries its producing audit iteration, attached by the
+observer exactly as for evals. Checks retained from an earlier iteration did not
+see the implementation now under audit, so they cannot settle the criterion. A
+current failing D5 eval for it still vetoes.
 Absent or `judgment` keeps the D5 requirement. The audit trusts the goal
 slice's `proof` as it trusts `check_ids`: the observation owner copies the
 implementation step's admitted `proofs`, never a proposal. The audit view still

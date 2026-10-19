@@ -109,13 +109,19 @@ export function replayAuditLoop(entries: readonly AuditRound[]): AuditRound | nu
 }
 function complete(observed: AuditObservation): boolean {
   const { checks, iteration } = observed.state;
-  const evals = observed.state.evals.filter(item => typeof item.iteration === 'number' &&
-    Number.isSafeInteger(item.iteration) && item.iteration >= 0 && item.iteration === iteration);
+  const current = (item: { readonly iteration?: number | null }): boolean => typeof item.iteration === 'number' &&
+    Number.isSafeInteger(item.iteration) && item.iteration >= 0 && item.iteration === iteration;
+  const evals = observed.state.evals.filter(current);
+  // A check-proven criterion (#199) replaces the current D5 pass with current green runs of every bound
+  // check. Retained checks from an earlier iteration did not see the implementation now under audit.
+  const freshlyGreen = (id: string): boolean => {
+    const ran = checks.filter(check => check.check_id === id && current(check));
+    return ran.length > 0 && ran.every(check => check.passed && check.exit === 0);
+  };
   return observed.state.goal.success_criteria.length > 0 && checks.length > 0 && checks.every(check => check.passed && check.exit === 0) &&
     observed.state.goal.success_criteria.every(criterion => criterion.check_ids.length > 0 &&
       criterion.check_ids.every(id => checks.some(check => check.check_id === id && check.passed)) &&
-      // A check-proven criterion (#199) is settled by its green bound checks; judgment still needs a current D5 pass.
-      (criterion.proof === 'check' ||
+      (criterion.proof === 'check' ? criterion.check_ids.every(freshlyGreen) :
         evals.some(item => item.criterion_id === criterion.criterion_id && item.passed && (item.verdict_probability ?? 0) >= .8 && (item.confidence ?? 0) >= .9)) &&
       !evals.some(item => item.criterion_id === criterion.criterion_id && !item.passed));
 }
