@@ -1083,3 +1083,29 @@ test('step-built ids stay within the 128-character correlation limit and stay di
   assert.deepEqual(short.generateIds, ['exec-1:a1:gen'], 'short ids keep their readable form');
   assert.match(short.invokes[0]?.invocation_id ?? '', /^exec-1:a1:[a-f0-9]{32}:repo\.test$/);
 });
+
+// #123: cancelling the step cancels the check in flight instead of leaving it running.
+test('cancelling the step requests cancellation of the in-flight check and pauses (#123)', async () => {
+  type Outcome = { outcome: 'failed'; failure: string } | { outcome: 'succeeded'; output: unknown };
+  const world = driver({});
+  const controller = new AbortController();
+  let cancels = 0;
+  const ports: ImplementPorts = { ...world.ports, invoke: (token, operation, inputs, options) => {
+    const handle = world.ports.invoke(token, operation, inputs, options);
+    if (handle.kind !== 'handle') return handle;
+    let settle: (outcome: Outcome) => void = () => {};
+    const result = new Promise<Outcome>(resolve => { settle = resolve; });
+    // A host that ends a long check only when asked to cancel; the fallback keeps a red run finite.
+    const fallback = setTimeout(() => settle({ outcome: 'succeeded', output: { exit: 0, stdout_tail: '', artifacts: [] } }), 500);
+    queueMicrotask(() => controller.abort());
+    return { ...handle, result, requestCancel() { cancels += 1; clearTimeout(fallback); settle({ outcome: 'failed', failure: 'cancelled' }); } };
+  } };
+  const result = await runImplementationStep(world.input, ports, world.journal, controller.signal);
+  assert.equal(cancels, 1, 'the in-flight check is asked to cancel');
+  assert.equal(result.status, 'paused');
+  assert.equal(result.attempts[0]?.pause?.reason, 'cancelled');
+  assert.equal(result.attempts[0]?.checks[0]?.passed, false);
+  assert.equal(result.attempts[0]?.checks[0]?.exit, null);
+  assert.deepEqual(world.evalSites, [], 'no D5 after cancellation');
+  assert.equal(result.goal_done, false);
+});

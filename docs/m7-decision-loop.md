@@ -574,7 +574,7 @@ open_issue@1 {
 }
 ```
 
-Generate text is digested to a `gen_` ref for the step record. The text is disclosed only on the in-memory D5 request. Pausing for budget or cancellation does not raise an open issue and does not complete the goal.
+Generate text is digested to a `gen_` ref for the step record. The text is disclosed only on the in-memory D5 request. Pausing for budget or cancellation does not raise an open issue and does not complete the goal. Cancelling the step while a check runs calls that check's `requestCancel` ([#123](https://github.com/CrowBe/weave/issues/123)); the step still waits for the host to settle the result, records the check's evidence, and pauses the attempt as `cancelled` without asking D5.
 
 
 ## P9 — Audit round and loop contract

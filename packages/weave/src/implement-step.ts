@@ -545,7 +545,15 @@ async function runChecks(input: Normalized, ports: ImplementPorts, attempt: numb
         continue;
       }
       invocation_id = correlation(invoked.invocation_id);
-      const outcome = await invoked.result;
+      // Cancelling the step cancels the check in flight; the host still settles its result.
+      const cancel = (): void => invoked.requestCancel();
+      signal?.addEventListener('abort', cancel, { once: true });
+      let outcome: Awaited<typeof invoked.result>;
+      try {
+        outcome = await invoked.result;
+      } finally {
+        signal?.removeEventListener('abort', cancel);
+      }
       if (outcome.outcome === 'succeeded' && outcome.output !== null && typeof outcome.output === 'object') {
         const output = outcome.output as Record<string, unknown>;
         if (Number.isInteger(output['exit'])) {
