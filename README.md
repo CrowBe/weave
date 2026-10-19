@@ -124,7 +124,10 @@ set the decision provider's `model` and the matching evaluate `units[].model`
 in the route configuration to override it.
 Choice criteria keys are shuffled per call with Fisher-Yates while retaining
 key identities. `TypesafeAiOptions.shuffle` accepts an RNG or `false` to disable
-shuffling. Unsupported answer types are dropped; unasked answers are ignored.
+shuffling. `kevLocalEvaluator` shuffles by default too, because local Kev's
+choice answers measured order-sensitive; benchmarks pass `shuffle: false`.
+Answers for unasked ids are ignored, whatever their type. An asked id answered
+with an unsupported type (for example `box`) is a `malformed_response`.
 `TypesafeAiOptions.longContext?: boolean` defaults to false. When true, every
 request sends `TypeSafe-Danger-Zone-Long-Context: true`, raising both context
 limits to 262k tokens on `jev-1.13.0` and `jev-1.14.0`. Without it, the defaults
@@ -140,14 +143,19 @@ will move to `jev-1.14.0` about a week after 2026-10-14. TypeSafe intends to giv
 The data-sharing opt-in announced in that blog has no documented request field.
 `dataSharing?: false` defaults to false; Weave sends no data-sharing field.
 
-The composition root resolves `AMOS_BASE_URL` with the pure helper
-`resolveAmosBaseURL(process.env)` and passes it as `amosEvaluator({ baseURL })`; the default is
-`http://127.0.0.1:8766`, restricted to loopback with no authentication. Register
-an Amos choice routed unit with model `amos-1-2b` (amos-1-small) and destination
-`amos`; the disclosed intake terms must permit that destination. The adapter
-checks GET `/v1/models` before POST `/v1/systemone` and bounds HTTP calls with a
-timeout. Unreachable, non-2xx health or timeout yields `provider_unavailable`;
-intake falls back to `ask_user`, never TypeSafe. Raw provider text is excluded
+The composition root passes the configured `decision.providers.amos.base_url`,
+as bound by `bindDecisionProvider`, to `amosEvaluator({ baseURL })`; that is the
+single source, and the example is `http://127.0.0.1:8766`. It is restricted to
+loopback with no authentication. Register an Amos choice routed unit with model
+`amos-1-2b` (amos-1-small) and destination `local` (`AMOS_DESTINATION`): content
+stays on this machine, and intake terms permit `local`. The adapter
+checks that GET `/v1/models` lists the configured model before POST
+`/v1/systemone`, rejects a response naming another model as malformed, and
+bounds HTTP calls with a timeout. Unreachable, non-2xx health, an unlisted
+model or timeout yields `provider_unavailable`;
+intake falls back to `ask_user`, never TypeSafe. A timeout is not retried, so a
+hung Amos delays that fallback by at most one adapter timeout (`timeoutMs`,
+default 30 s), not one per attempt. Raw provider text is excluded
 from Amos failure records. See the [intake contract](packages/weave/src/sites/CONTRACT.md).
 
 Run the opt-in local intake probe after building:

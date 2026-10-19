@@ -132,18 +132,32 @@ describe('TypeSafe danger zone headers', () => {
 });
 
 describe('TypeSafe preview hardening', () => {
-  it('drops box and future answer types without losing asked nouls', async () => {
-    for (const answers of [
-      { urgent: { type: 'noul', noul: 0.9 }, extra: { type: 'box', box: { top: 0, bottom: 1, left: 0, right: 1 }, confidence: 0.8 } },
-      { urgent: { type: 'future' } },
-      { urgent: { type: { toString: null } } },
-    ]) {
+  it('ignores box and future answer types on unasked ids', async () => {
+    const { fetch } = stubFetch({ answers: {
+      urgent: { type: 'noul', noul: 0.9 },
+      extra: { type: 'box', box: { top: 0, bottom: 1, left: 0, right: 1 }, confidence: 0.8 },
+      later: { type: 'future', confidence: 0.7 },
+    } });
+    const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
+    assert.equal(result.status, 'completed');
+    if (result.status !== 'completed') return;
+    assert.deepEqual(result.answers, { urgent: { type: 'boolean', probability: 0.9 } });
+    assert.equal(result.confidence, undefined);
+  });
+
+  it('reports an unsupported answer type on an asked id as malformed, not unanswered', async () => {
+    for (const [id, answers] of [
+      ['extra', { urgent: { type: 'noul', noul: 0.9 }, extra: { type: 'box', box: { top: 0, bottom: 1, left: 0, right: 1 }, confidence: 0.8 } }],
+      ['urgent', { urgent: { type: 'future' } }],
+      ['urgent', { urgent: { type: { toString: null } } }],
+    ] as const) {
       const { fetch } = stubFetch({ answers });
       const result = await typesafeAiEvaluator(options(fetch)).evaluate({ ...CALL, questions: { ...CALL.questions, extra: { type: 'boolean', instructions: 'extra?' } } });
-      assert.equal(result.status, 'completed');
-      if (result.status === 'completed') assert.equal(result.confidence, undefined);
-      assert.deepEqual(result.status === 'completed' && result.answers,
-        'extra' in answers ? { urgent: { type: 'boolean', probability: 0.9 } } : {});
+      assert.equal(result.status, 'failed');
+      if (result.status !== 'failed') continue;
+      assert.equal(result.failure.code, 'malformed_response');
+      assert.equal(result.failure.retryable, false);
+      assert.equal(result.failure.message, `answer '${id}' had an unsupported answer type`);
     }
   });
 
@@ -348,6 +362,21 @@ describe('typesafe-ai adapter: response', () => {
     assert.deepEqual(result.confidence, { severity: 0.85, area: 1.0 });
   });
 
+  it('forwards a published non-number confidence as NaN so a site reads it as invalid, not absent', async () => {
+    const { fetch } = stubFetch({ ...LIVE_BODY, answers: {
+      ...LIVE_BODY.answers,
+      severity: { ...LIVE_BODY.answers.severity, confidence: 'high' },
+      area: { ...LIVE_BODY.answers.area, confidence: null },
+    } });
+    const result = await typesafeAiEvaluator(options(fetch)).evaluate(ALL_CALL);
+
+    assert.equal(result.status, 'completed');
+    if (result.status !== 'completed') return;
+    // `urgent` publishes no confidence and stays absent; the published values are kept as invalid.
+    assert.deepEqual(result.confidence, { severity: NaN, area: NaN });
+    assert.equal(JSON.stringify(result).includes('high'), false);
+  });
+
   it('reports a malformed response rather than inventing an answer', async () => {
     const { fetch } = stubFetch({ answers: { urgent: { type: 'noul' } }, usage: {} });
     const result = await typesafeAiEvaluator(options(fetch)).evaluate(ALL_CALL);
@@ -414,6 +443,19 @@ describe('typesafe-ai adapter: failures', () => {
 
     const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
     assert.equal(result.status === 'failed' && result.failure.code, 'cancelled');
+  });
+
+  it('classifies a 200 body that cannot be read as retryable unavailable, not malformed', async () => {
+    const fetch = (async () => new Response(new ReadableStream({
+      start(controller) { controller.error(new TypeError('terminated')); },
+    }), { status: 200, headers: { 'x-typesafe-request-id': REQUEST_ID } })) as unknown as typeof globalThis.fetch;
+
+    const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
+    assert.equal(result.status, 'failed');
+    if (result.status !== 'failed') return;
+    assert.equal(result.failure.code, 'unavailable');
+    assert.equal(result.failure.retryable, true);
+    assert.match(result.failure.message, new RegExp(REQUEST_ID));
   });
 
   it('refuses to construct without a credential', () => {
@@ -640,6 +682,15 @@ describe('TypeSafe decision contract', () => {
       assert.equal(transport.status, 'failed');
       if (transport.status !== 'failed') return;
       assert.equal(JSON.stringify(transport).includes(secret), false);
+
+      const succeeded = await typesafeAiEvaluator({
+        apiKey: secret,
+        fetch: stubFetch(LIVE_BODY, { headers: { 'x-typesafe-request-id': `req_${secret}` } }).fetch,
+      }).evaluate(CALL);
+      assert.equal(succeeded.status, 'completed');
+      if (succeeded.status !== 'completed') return;
+      assert.equal(succeeded.provider_response_id, 'req_[redacted]');
+      assert.equal(JSON.stringify(succeeded).includes(secret), false);
       assert.equal(logs.some((line) => line.includes(secret)), false);
     } finally {
       for (const name of methods) console[name] = originals.get(name) as typeof console.log;

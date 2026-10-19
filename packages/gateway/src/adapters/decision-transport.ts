@@ -3,7 +3,8 @@
  *
  * The profile translates typed questions and answers. This transport only
  * carries that body: it does not choose a route, read the environment, or log.
- * Credentials arrive as options and are redacted from every failure message.
+ * Credentials arrive as options and are redacted from every failure message
+ * and from the provider request id.
  * A second profile can plug in here; this phase ships TypeSafe only.
  */
 import type {
@@ -40,7 +41,13 @@ export type DecisionParse =
   | { readonly status: 'malformed'; readonly detail: string };
 
 export interface EvaluationTransportOptions {
+  /** Sent as the Bearer token and redacted from failure messages and request ids. */
   readonly credential: string;
+  /**
+   * The credential is a fixed public placeholder, such as local Kev's `local`.
+   * It is still sent but never redacted, so text like `localhost` survives.
+   */
+  readonly placeholder?: boolean;
   readonly baseURL?: string;
   readonly defaultBaseURL: string;
   readonly fetch?: typeof globalThis.fetch;
@@ -53,11 +60,12 @@ export function evaluationTransport(
   const baseURL = (options.baseURL ?? options.defaultBaseURL).replace(/\/+$/, '');
   const doFetch = options.fetch ?? globalThis.fetch;
   const credential = options.credential;
+  const secret = options.placeholder === true ? '' : credential;
 
   return {
     id: profile.id,
     async evaluate(call: EvaluationCall): Promise<EvaluationProviderResult> {
-      const safe = (text: string) => redact(text, credential);
+      const safe = (text: string) => redact(text, secret);
       let response: Response;
       try {
         response = await doFetch(`${baseURL}${profile.path}`, {
@@ -89,8 +97,9 @@ export function evaluationTransport(
       let raw: string;
       try {
         raw = await response.text();
-      } catch {
-        return { status: 'failed', failure: malformed(withId('response body was not JSON')) };
+      } catch (error: unknown) {
+        // The body never arrived whole: a transport fault or cancellation, not a provider answer.
+        return { status: 'failed', failure: classifyTransport(error, withId) };
       }
 
       let body: unknown;
@@ -109,7 +118,7 @@ export function evaluationTransport(
         status: 'completed',
         answers: parsed.answers,
         usage: parsed.usage,
-        provider_response_id: requestId,
+        provider_response_id: requestId === undefined ? undefined : safe(requestId),
         confidence: parsed.confidence,
       };
     },

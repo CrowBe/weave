@@ -555,7 +555,7 @@ it('routes loop.preselect to Amos and guards to TypeSafe, including interleaved 
     const result = await gateway.evaluate({
       request_id, site, role: 'working', kind: 'boolean', state: 'disclosed fixture',
       questions: { [request_id]: { type: 'boolean', instructions: 'Relevant or unsafe?' } },
-      terms: { ...terms, destinations: ['amos', 'typesafe-ai'], max_context_tokens: 1000 },
+      terms: { ...terms, destinations: ['local', 'typesafe-ai'], max_context_tokens: 1000 },
       accept: () => ({ status: 'accepted' }),
     });
     assert.equal(result.status, 'accepted');
