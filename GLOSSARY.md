@@ -94,6 +94,10 @@ A named place where bounded judgment is requested for a specific purpose, with t
 
 The judgment site that evaluates state against possible actions and returns weights. Jev is the initial model type behind it. The decision layer proposes weights; it does not select models and it does not override policy.
 
+### Frontier weighing contract
+
+`frontier.weigh@1`: the versioned contract of the `frontier.weigh` judgment site when a routed unit answers it. One `score` question per eligible candidate over the `profile.frontier-weigh@2` state view, three levels (`defer`, `consider`, `dispatch`), and a weight equal to the answer's position in [0, 2], ordinal within the site. Weave defers a candidate whose weight is below 0.5 and selects the rest with the ordinary scheduler. A frontier deferred by every weight is an explicit blocked outcome until new evidence arrives. The contract grants nothing and promotes nothing.
+
 ### Acceptance line
 
 A proposed statement that a task is done. It names one fact, the artifact or command output that can show it, and an escape for when that state cannot show the fact. A proposal is an observation. It does not change the goal and it does not grant execution.

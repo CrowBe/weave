@@ -98,6 +98,8 @@ export interface WeightsRecordedPayload {
   readonly candidate_set: string;
   readonly weights: readonly WeightEntry[];
   readonly request_id?: string;
+  /** Site contract that produced these weights. `frontier.weigh@1` weights are ordinal in [0, 2] and carry a defer floor. */
+  readonly contract?: 'frontier.weigh@1';
 }
 
 export interface Reservation {
@@ -654,7 +656,8 @@ export interface ApprovalRecord {
   readonly authority_revision: number | null;
 }
 
-export type NotSelectedReason = 'dependency' | 'conflict' | 'stale_read_set' | 'budget';
+/** `deferred`: a `frontier.weigh@1` weight below the defer floor. Weave did not offer it to the scheduler. */
+export type NotSelectedReason = 'dependency' | 'conflict' | 'stale_read_set' | 'budget' | 'deferred';
 
 export type CycleOutcome =
   | { readonly status: 'dispatched' }
@@ -706,6 +709,8 @@ export interface WeighResult {
   readonly status?: 'accepted' | 'unaccepted' | 'blocked';
   readonly reason?: string;
   readonly implementation?: string;
+  /** Site contract the weights satisfy. Recorded on `weights.recorded`. */
+  readonly contract?: 'frontier.weigh@1';
 }
 
 export interface DecisionLayer {

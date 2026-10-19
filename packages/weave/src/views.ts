@@ -7,7 +7,9 @@
 import type { Candidate, Seq, State, StateView, ViewOmission, ViewSliceManifest } from './types.js';
 
 export const FRAME_PROFILE = 'profile.frame@1' as const;
-export const WEIGH_PROFILE = 'profile.frontier-weigh@1' as const;
+/** The weighing view `frontier.weigh@1` reads. @1 disclosed purpose and full candidate inputs only. */
+export const WEIGH_PROFILE = 'profile.frontier-weigh@2' as const;
+export const WEIGH_PROFILE_VERSION = 2;
 
 /**
  * A context profile is a versioned record the runtime selects. The renderer
@@ -257,33 +259,126 @@ export function renderReviewView(state: State): StateView {
   };
 }
 
-/** Weighing view: eligible candidates only. */
-export function renderWeighView(state: State, eligible: readonly Candidate[]): StateView {
+/**
+ * Weighing view for `frontier.weigh@1` (FRONTIER-WEIGH-CONTRACT.md §2):
+ * goal, actions remaining, progress toward the success evidence, and the
+ * eligible candidates. Only scalar inputs are disclosed. Everything left out
+ * is named in the manifest; source bodies never enter this profile.
+ */
+export function renderWeighView(state: State, eligible: readonly Candidate[], formed: readonly Candidate[] = eligible): StateView {
   const goal = state.goal;
+  const readable = new Set(goal?.authority.read ?? []);
+  const goalSources = (goal?.sources ?? []).filter((source) => readable.has(source));
+  const goalSlice = slice(
+    'goal',
+    goal ? [goal.evidence] : [],
+    (goal?.sources ?? []).filter((source) => !readable.has(source)).map((name) => ({ name, reason: 'authority' })),
+  );
+
+  const actions = Object.values(state.actions);
+  const budget = state.budget.actions;
+  const budgetSlice = slice(
+    'budget',
+    [
+      ...(goal ? [goal.evidence] : []),
+      ...actions.flatMap((action) => [action.started_at, action.finished_at].filter((seq): seq is Seq => seq !== null)),
+    ],
+    [],
+  );
+
+  const progressOmitted: ViewOmission[] = Object.keys(state.sources)
+    .sort()
+    .filter((resource) => !goalSources.includes(resource) && !(goal?.sources ?? []).includes(resource))
+    .map((name) => ({ name, reason: readable.has(name) ? 'profile' : 'authority' }));
+  const inFlight = actions.filter(
+    (action) => action.state === 'pending' || action.state === 'running' || (action.state === 'uncertain' && !action.reconciled),
+  );
+  const report = state.report;
+  const progressRevisions: Seq[] = [];
+  for (const source of goalSources) {
+    const current = state.sources[source];
+    const inspection = state.inspections[source];
+    if (current) {
+      progressRevisions.push(current.evidence);
+    }
+    if (inspection) {
+      progressRevisions.push(inspection.evidence);
+    }
+  }
+  progressRevisions.push(...inFlight.flatMap((action) => (action.started_at === null ? [] : [action.started_at])));
+  if (report) {
+    progressRevisions.push(...report.evidence);
+  }
+  const covered = new Set(report?.report.entries.map((entry) => entry.source) ?? []);
+
+  const candidateOmitted: ViewOmission[] = formed
+    .filter((candidate) => candidate.eligibility.status !== 'allowed')
+    .map((candidate) => ({ name: candidate.candidate_id, reason: candidate.eligibility.status }));
+  const disclosedCandidates = eligible.map((candidate) => {
+    const summary = scalarInputs(candidate.inputs);
+    candidateOmitted.push(...summary.omitted.map((key) => ({ name: `${candidate.candidate_id}.inputs.${key}`, reason: 'profile' })));
+    return { candidate_id: candidate.candidate_id, operation: candidate.operation, inputs: summary.inputs };
+  });
+
   const content = {
-    purpose: goal?.purpose ?? '',
-    candidates: eligible.map((c) => ({
-      candidate_id: c.candidate_id,
-      operation: c.operation,
-      inputs: c.inputs,
-    })),
+    goal: {
+      purpose: goal?.purpose ?? '',
+      success_evidence: goal?.success_evidence ?? '',
+      sources: [...goalSources],
+      review_requested: goal?.review === true,
+    },
+    budget: { actions_remaining: budget.limit - budget.reserved - budget.spent },
+    progress: {
+      sources: goalSources.map((source) => ({
+        source,
+        revision: state.sources[source]?.revision ?? null,
+        inspected_revision: state.inspections[source]?.result.revision ?? null,
+      })),
+      in_flight: inFlight.map((action) => ({ operation: action.operation, inputs: scalarInputs(action.inputs).inputs })),
+      report: report
+        ? {
+            covers_sources: goalSources.every((source) => covered.has(source)),
+            current: report.report.read_set.every((entry) => state.sources[entry.resource]?.revision === entry.revision),
+          }
+        : null,
+    },
+    candidates: disclosedCandidates,
   };
   return {
     profile: WEIGH_PROFILE,
-    profile_version: 1,
+    profile_version: WEIGH_PROFILE_VERSION,
     state_revision: state.state_revision,
     content,
     manifest: {
       slices: [
-        slice('goal', goal ? [goal.evidence] : [], []),
+        goalSlice,
+        budgetSlice,
+        slice('progress', progressRevisions, progressOmitted),
         slice(
           'candidates',
           eligible.flatMap((c) => [...c.evidence]),
-          [],
+          candidateOmitted,
         ),
       ],
     },
   };
+}
+
+/** Top-level string, number and boolean inputs. Other keys are named, not disclosed. */
+function scalarInputs(inputs: unknown): { inputs: Record<string, string | number | boolean>; omitted: string[] } {
+  const out: Record<string, string | number | boolean> = {};
+  const omitted: string[] = [];
+  if (typeof inputs !== 'object' || inputs === null || Array.isArray(inputs)) {
+    return { inputs: out, omitted };
+  }
+  for (const [key, value] of Object.entries(inputs as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      out[key] = value;
+    } else {
+      omitted.push(key);
+    }
+  }
+  return { inputs: out, omitted };
 }
 
 export function viewHasGammaContent(view: StateView): boolean {

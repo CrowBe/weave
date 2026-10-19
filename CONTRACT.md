@@ -6,6 +6,9 @@ execution or replace deterministic evidence.
 
 - [Audit state and bounded compaction policy](packages/weave/src/AUDIT-CONTRACT.md):
   `view.audit@1`, authorized slices, omissions and digest.
+- [Frontier weighing site](packages/weave/src/FRONTIER-WEIGH-CONTRACT.md):
+  `frontier.weigh@1` state view `profile.frontier-weigh@2`, score question,
+  valid weights, defer floor, recorded revisions and the control boundary.
 - [Decision sites and audit loop](packages/weave/src/sites/CONTRACT.md):
   D1–D8 observation admission, D6 disposition and deterministic stop outcomes.
   D3 `decision.preselect` policies accept only configured `typesafe-jev` or

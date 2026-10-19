@@ -38,6 +38,21 @@ export {
 } from './normalize-author.js';
 export type { ExtensionAuthor } from './crystallize-actions.js';
 export { PROCEDURE_IDS } from './candidates.js';
+export { formCandidates, type Describe } from './candidates.js';
+export { candidateSetDigest } from './digest.js';
+export {
+  FRONTIER_WEIGH_CONTRACT,
+  FRONTIER_WEIGH_CRITERIA,
+  FRONTIER_WEIGH_DEFER_BELOW,
+  FRONTIER_WEIGH_LEVELS,
+  FRONTIER_WEIGH_MAX,
+  defersEverything,
+  frontierWeighInstructions,
+  frontierWeighQuestions,
+  frontierWeights,
+  selectFrontier,
+  type FrontierWeighContract,
+} from './frontier-weigh.js';
 export { HOST_INVOCATION_MICROS, reuseVerdict } from './reuse.js';
 export {
   CACHE_MISS_DELTA_MICROS,
