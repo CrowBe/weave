@@ -65,6 +65,11 @@ removed by k, floor, the cap, or the margin gate. A required id that is not in
 the index is ignored and counted; D3 only narrows. `required_entry_ids` is
 read with `Array.isArray`. A non-array is no required ids. Non-string items are
 dropped and the valid strings are kept. Either case sets `required_ids_invalid`.
+There is no include-if-p >= .5 rule, so a low p(true) alone never drops an
+entry. A nonempty index never yields an empty slice, even when every confident
+answer is below .5 (#96). The result is the kept top-k slice, or the full index
+on any fallback, including `no_candidate` when the floor removes every
+non-required entry. Only an empty disclosed index yields an empty result.
 
 The candidate slice narrows only when every entry has a probability and
 admission succeeds, and then only when the margin gate passes. `top_p` on the

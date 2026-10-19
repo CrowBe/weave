@@ -468,7 +468,9 @@ disclosed order. Required entries that are in the index are always kept, in
 addition to the top k of the remaining entries. A required id that is not in
 the index is ignored and counted. A `required_entry_ids` value that is not an
 array, and any non-string item, is not a required id; valid strings in a mixed
-array are kept, and the record flags the invalid value. It evaluates an
+array are kept, and the record flags the invalid value. A low p(true) alone
+never drops an entry: a nonempty index never yields an empty slice, even when
+every confident answer is below .5 (#96). It evaluates an
 explicitly disclosed step string plus id/purpose entries; schemas and general
 state are excluded. Any missing or malformed probability, a wrong kind, a
 stale revision, an outage, or cancellation returns the full index. Unknown
