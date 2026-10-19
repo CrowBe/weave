@@ -126,8 +126,15 @@ function text(value: unknown): value is string {
 function identifier(value: unknown): value is string {
   return text(value) && value === value.trim();
 }
+/**
+ * Takes a parsed `URL.hostname`. The URL parser canonicalizes every IPv4 form
+ * (`127.1`, `2130706433`) to dotted decimal and rejects invalid octets, so only
+ * a real 127.0.0.0/8 address matches; a domain such as `127.0.0.1.evil.com`
+ * never does.
+ */
 function loopbackHost(hostname: string): boolean {
-  return ['127.0.0.1', '[::1]', 'localhost'].includes(hostname);
+  return ['[::1]', 'localhost'].includes(hostname) ||
+    /^127(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(hostname);
 }
 /** A usable provider URL, or null when the transport rules reject it. */
 function providerUrl(value: unknown): URL | null {

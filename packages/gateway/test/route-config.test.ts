@@ -398,6 +398,17 @@ for (const [url, ok] of [
   ['http://192.168.1.1', false],
   ['http://localhost.example.com', false],
   ['http://[::2]', false],
+  // #46: the whole 127.0.0.0/8 loopback range, in any form the URL parser
+  // canonicalizes to dotted decimal; never a domain that merely starts with it.
+  ['http://127.0.0.2:8080', true],
+  ['http://127.255.255.254', true],
+  ['http://127.1:8080', true],
+  ['http://2130706434', true],
+  ['http://127.0.0.1.evil.com', false],
+  ['http://127.0.0.1.nip.io', false],
+  ['http://127.evil.com', false],
+  ['http://128.0.0.1', false],
+  ['http://[::ffff:127.0.0.1]', false],
   ['http://user:password@localhost', false],
   ['https://api.typesafe.ai/?api_key=sk-example', false],
   ['https://api.typesafe.ai/#fragment', false],

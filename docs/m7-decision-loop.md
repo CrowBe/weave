@@ -226,7 +226,11 @@ adapter is `typesafe-ai` and whose model equals that provider's model, identical
 primary and fallback, a `key_env` without `auth: "api-key"`, a non-loopback provider with
 neither `auth` nor `key_env`, a `key_env` on `chatgpt-oauth`, an `api-key`
 provider without a `key_env`, and base URLs other than HTTPS or HTTP on loopback hosts
-(`127.0.0.1`, `::1`, `localhost`) without userinfo, `?`, or `#`. Adapters remain
+(any `127.0.0.0/8` address, `::1`, `localhost`) without userinfo, `?`, or `#`.
+The loopback test runs on the parsed URL host, which canonicalizes IPv4 forms,
+so a domain such as `127.0.0.1.evil.com` is not loopback (#46). The Amos adapter
+still applies its own narrower host check (`127.0.0.1`, `::1`, `localhost`) when
+it is constructed. Adapters remain
 credential-injected. `decision.sites` accepts `amos` or `typesafe-jev` for
 `intake.classify` and `loop.preselect` only. Amos on intake requires a matching
 choice unit; Amos on preselect requires a matching boolean unit.
