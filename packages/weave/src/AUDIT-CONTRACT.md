@@ -26,6 +26,17 @@ records `goal:statement_cap`, `criterion:<id>:statement_cap`,
 `plan:<step_id>:intent_cap`, `decision:<zero-based-index>:<field>_cap`, or
 `issue:<id>:text_cap`, respectively. Omission markers are sorted and
 de-duplicated. The digest is computed after all text bounds and omissions.
+As for check tails, an existing lone surrogate in any of these prefixes (and in
+artifact summaries) is replaced with U+FFFD before measuring, so bounded text
+is well-formed; a repaired field records its cap marker.
+
+A marker names an item by its id (criterion, plan step, issue, check or
+disclosed artifact) only when that id is a bounded identifier: 1 to 128
+characters of `[A-Za-z0-9_.:-]`, starting alphanumeric, without a credential
+prefix. Any other id is named `@<zero-based index>` within its list (disclosed
+artifacts, for artifact markers), for example `criterion:@2:statement_cap`.
+Markers therefore stay bounded and never copy a long or credential-shaped id;
+the item keeps its id unchanged.
 
 Check tails retain the longest suffix of whole code points within 240 UTF-8
 bytes, preserving the end of the output. Existing lone surrogates are replaced
