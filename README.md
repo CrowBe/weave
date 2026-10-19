@@ -77,21 +77,23 @@ paints that tree. `packages/loom-binding` discloses a workspace view from record
 Loom state and does not hand the renderer a locator or the runtime's internal
 state. `packages/weft` validates `weft.record@1` trace records and imports
 nothing in-repo; `packages/gauge` validates evaluation records, recomputes their
-verdicts and depends on Weft only. Requires Node 22 or later; offline entailment contract tests also require
+verdicts and depends on Weft only. Requires Node 22.18 or later and npm 10 or later; offline entailment contract tests also require
 Python 3.
 
 ```bash
 npm install
 npm run verify           # structural checks, build, suites, the web host, examples, and contract tests
 npm run host:workspace   # read-only web workspace at http://127.0.0.1:5173
-npm run lint:report      # vp lint, report only; does not fail or change files
-npm run fmt:report       # vp fmt --check, report only; does not fail or change files
+npm run lint:report      # vp lint; exits non-zero on lint errors, changes no files
+npm run fmt:report       # vp fmt --check; exits non-zero on unformatted files, changes no files
 npm run verify:cached    # same checks as verify, replayed by Vite Task when inputs match
 ```
 
-`lint:report` and `fmt:report` are report-only. They print Oxlint and Oxfmt findings and always exit successfully. They do not rewrite files and they are not part of `npm run verify`. CI runs them after verify with `continue-on-error`. Do not treat a green verify run as a clean lint or format result.
+`lint:report` and `fmt:report` print Oxlint and Oxfmt findings and exit non-zero when they find a problem. They do not rewrite files and they are not part of `npm run verify`. CI runs them after verify with `continue-on-error`, so a finding, or a crashed or missing `vp`, shows as a soft failure rather than green. Do not treat a green verify run as a clean lint or format result.
 
-`verify:cached` runs the same `npm run verify` command through `vp run` so a repeat can be replayed from the Vite Task cache. `npm run verify` itself stays uncached, and CI uses that command.
+`verify:cached` runs the same `npm run verify` command through `vp run` so a repeat can be replayed from the Vite Task cache. `npm run verify` itself stays uncached, and CI uses that command. The cache key covers the files verify reads, the node, npm and python3 versions and paths (passed as `WEAVE_TOOLCHAIN` by `scripts/verify-cached.mjs`), `PATH`, and the variables that gate optional suites (`WEAVE_KEV_*`, `HF_HUB_OFFLINE`, `TRANSFORMERS_OFFLINE`). Vite Task runs tasks in a clean environment, so any other variable, including provider credentials, is not visible to a cached run; use plain `npm run verify` when a suite needs one. The Python suites run with `PYTHONDONTWRITEBYTECODE=1`, so they leave no `__pycache__` in the tree to invalidate the cache.
+
+Vite+ needs Node 22.18 or newer and npm 10 or newer (npm 9 rejects the `npm:` override for `vite`).
 
 Local inference experiments and their recorded evidence live under
 [`benchmarks/inference`](./benchmarks/inference/README.md). OpenJev evaluates
