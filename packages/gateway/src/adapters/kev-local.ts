@@ -6,7 +6,8 @@
  * configured service ready, then speaks the same System One wire contract as
  * the hosted TypeSafe adapter.
  */
-import { typesafeAiEvaluator } from './typesafe-ai.js';
+import { typesafeWireProfile } from './typesafe-ai.js';
+import { evaluationTransport } from './decision-transport.js';
 import { execFile } from 'node:child_process';
 
 import type { Clock, EvaluationAdapter, ProviderFailure, Timer } from '../types.js';
@@ -51,12 +52,18 @@ export interface SystemdKevRuntimeOptions {
 }
 
 export function kevLocalEvaluator(options: KevLocalOptions): EvaluationAdapter {
-  const delegate = typesafeAiEvaluator({
-    apiKey: 'local',
-    baseURL: options.baseURL ?? KEV_LOCAL_BASE_URL,
-    ...(options.shuffle === undefined ? {} : { shuffle: options.shuffle }),
-    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-  });
+  // Kev does not authenticate. `Bearer local` is the header the recorded fixture
+  // was captured with; it is a public placeholder, so it is sent but not redacted.
+  const delegate = evaluationTransport(
+    typesafeWireProfile(options.shuffle === undefined ? {} : { shuffle: options.shuffle }),
+    {
+      credential: 'local',
+      placeholder: true,
+      defaultBaseURL: KEV_LOCAL_BASE_URL,
+      ...(options.baseURL === undefined ? {} : { baseURL: options.baseURL }),
+      ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+    },
+  );
 
   return {
     id: KEV_LOCAL_ADAPTER,

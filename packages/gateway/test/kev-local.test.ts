@@ -89,6 +89,31 @@ describe('local Kev evaluator', () => {
     assert.equal(result.status, 'completed');
   });
 
+  it('keeps failure messages intact: the placeholder bearer value is not a secret', async () => {
+    const runtime: KevRuntime = { ensureReady: async () => ({ status: 'ready' }) };
+    const thrown: typeof globalThis.fetch = async () => {
+      throw new TypeError('getaddrinfo ENOTFOUND localhost');
+    };
+    const transport = await kevLocalEvaluator({ runtime, fetch: thrown }).evaluate(CALL);
+    assert.equal(transport.status, 'failed');
+    if (transport.status !== 'failed') return;
+    assert.equal(transport.failure.message, 'getaddrinfo ENOTFOUND localhost');
+
+    let authorization: string | null = null;
+    const status: typeof globalThis.fetch = async (_url, init) => {
+      authorization = new Headers(init?.headers).get('authorization');
+      return new Response('local model not loaded', { status: 503, headers: { 'x-typesafe-request-id': 'local-1' } });
+    };
+    const failed = await kevLocalEvaluator({ runtime, fetch: status }).evaluate(CALL);
+    assert.equal(failed.status, 'failed');
+    if (failed.status !== 'failed') return;
+    assert.equal(failed.failure.code, 'unavailable');
+    assert.match(failed.failure.message, /local model not loaded \(request local-1\)$/);
+    assert.doesNotMatch(failed.failure.message, /\[redacted\]/);
+    // The wire is unchanged: Kev still receives the placeholder it was recorded with.
+    assert.equal(authorization, 'Bearer local');
+  });
+
   it('returns the runtime failure without attempting HTTP', async () => {
     let fetched = false;
     const runtime: KevRuntime = {

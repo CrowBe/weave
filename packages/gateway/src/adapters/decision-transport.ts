@@ -41,7 +41,13 @@ export type DecisionParse =
   | { readonly status: 'malformed'; readonly detail: string };
 
 export interface EvaluationTransportOptions {
+  /** Sent as the Bearer token and redacted from failure messages and request ids. */
   readonly credential: string;
+  /**
+   * The credential is a fixed public placeholder, such as local Kev's `local`.
+   * It is still sent but never redacted, so text like `localhost` survives.
+   */
+  readonly placeholder?: boolean;
   readonly baseURL?: string;
   readonly defaultBaseURL: string;
   readonly fetch?: typeof globalThis.fetch;
@@ -54,11 +60,12 @@ export function evaluationTransport(
   const baseURL = (options.baseURL ?? options.defaultBaseURL).replace(/\/+$/, '');
   const doFetch = options.fetch ?? globalThis.fetch;
   const credential = options.credential;
+  const secret = options.placeholder === true ? '' : credential;
 
   return {
     id: profile.id,
     async evaluate(call: EvaluationCall): Promise<EvaluationProviderResult> {
-      const safe = (text: string) => redact(text, credential);
+      const safe = (text: string) => redact(text, secret);
       let response: Response;
       try {
         response = await doFetch(`${baseURL}${profile.path}`, {
