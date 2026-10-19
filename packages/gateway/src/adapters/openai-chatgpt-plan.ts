@@ -29,6 +29,8 @@ function classify(status: number, body: unknown, detail: string): GenerationProv
   if (status === 408) return failed('timeout', detail);
   if (status === 429) return failed('rate_limited', detail, true);
   if (status >= 500) return failed('unavailable', detail, true);
+  // Status 0 is a failure inside an accepted stream: the request was valid, so an unlisted code is a provider fault.
+  if (status === 0) return failed('unavailable', detail, true);
   return failed('invalid_request', detail);
 }
 function transport(error: unknown, signal: AbortSignal | undefined): GenerationProviderResult {
