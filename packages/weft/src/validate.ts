@@ -4,6 +4,7 @@
  * record at a time: per-emitter sequence order and `(trace_id, record_id)`
  * idempotency are store rules.
  */
+import { hasCredential } from './credential.js';
 import { SCHEMA, type Kind, type Rejection, type Verdict } from './types.js';
 
 const ENVELOPE_KEYS = [
@@ -21,12 +22,10 @@ const EVIDENCE_SOURCES = new Set(['observation', 'inference_request', 'invocatio
 const CONTENT_CLASSES = new Set(['public', 'non_sensitive', 'sensitive', 'private']);
 
 const ID = /^[A-Za-z0-9_.:@-]{1,128}$/;
-// The repository credential screen at token starts (weave.trace@1 safeId; #158 stays open until W3).
-const CREDENTIAL = /(?<![A-Za-z0-9])(?:sk[-_]|Bearer|eyJ|gh[pousr]_|github_pat_|AKIA)/i;
 const CODE = /^[a-z][a-z0-9_.@:-]{0,63}$/;
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 
-export const isId = (x: unknown): x is string => typeof x === 'string' && ID.test(x) && !CREDENTIAL.test(x);
+export const isId = (x: unknown): x is string => typeof x === 'string' && ID.test(x) && !hasCredential(x);
 export const isCode = (x: unknown): x is string => typeof x === 'string' && CODE.test(x);
 export const isCount = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 0;
 export const isMetric = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0;

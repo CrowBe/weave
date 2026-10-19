@@ -4,8 +4,9 @@ Status: contract (W1, #183) and validator (W2, #184). `validateRecord` in
 `src/validate.ts` implements this contract; `test/contract.test.ts` runs the
 fixtures in `fixtures/records.json` against the compiled package as part of
 `npm test` (`npm run test:weft-contract` alone). `@weave/weft` imports nothing
-in-repo (`checks/import-direction.mjs`). W3 (#185) maps `weave.trace@1` onto
-these records; W4 (#186) decides whether any content may be recorded inline.
+in-repo (`checks/import-direction.mjs`). W3 (#185) moved `weave.trace@1` here
+as a supported version (see `weave.trace@1` below); W4 (#186) decides whether
+any content may be recorded inline.
 
 ## What a Weft trace is
 
@@ -85,7 +86,7 @@ field.
 
 | Type | Rule |
 | --- | --- |
-| id | `^[A-Za-z0-9_.:@-]{1,128}$`, and it fails the repository credential screen at token starts (`weave.trace@1`'s `safeId` until W3 resolves #158). `@` is allowed because contract revisions and routed units use it (`boolean.task@jev-1.13.0`); `weave.trace@1` ids remain a subset |
+| id | `^[A-Za-z0-9_.:@-]{1,128}$`, and it fails the credential screen at token starts (`src/credential.ts`, shared with `weave.trace@1`). `Bearer` counts only when whitespace follows it, so `bearer_x` is an id (#158). `@` is allowed because contract revisions and routed units use it (`boolean.task@jev-1.13.0`); `weave.trace@1` ids remain a subset |
 | code | `^[a-z][a-z0-9_.@:-]{0,63}$`; a closed vocabulary where one is listed |
 | count | Non-negative safe integer |
 | metric | Finite number ≥ 0 |
@@ -270,14 +271,44 @@ with the first applicable reason, checked in this order:
 
 ## `weave.trace@1`
 
-`weave.trace@1` (`packages/agentsop/src/TRACE-CONTRACT.md`) is the predecessor.
-W3 moves it into Weft and defines the mapping: `run_id` → `trace_id`, `id` →
-`record_id`, `parentId` → `parent_id`, `sequence` → `sequence`, and its kinds
-onto the kinds above (`decision` and `audit` → `judgment`, `shell` →
-`capability.invoked`, `budget` → `budget`, `error` → `error`; `implement` is
-settled in W3). A value with no home in v1, such as `passed`, needs a contract
-revision, not an untyped field. Its guarantees carry over: fail-closed
-validation, a redactor required before serialization, and idempotent import.
+`weave.trace@1` is the P9 trace envelope. W3 (#185) moved it here from
+AgentSOP: tracing does not belong in the contract layer, and AgentSOP exports
+no trace API. Weft supports it as its own version beside `weft.record@1`
+(`validateTrace`, `serializeTrace`, `importTraceLines` and `TraceImportPort`
+in `src/weave-trace.ts`) and does not convert it.
+
+**Envelope.** One JSON object per JSONL line with exactly these keys, written
+in this order: `schema` (`"weave.trace@1"`), `id`, `parentId` (id or null),
+`run_id`, `kind`, `sequence` (count), `payload`. Ids match
+`^[A-Za-z0-9_.:-]{1,128}$` and fail the credential screen above. `kind` is one
+of `decision`, `implement`, `audit`, `shell`, `budget`, `error`. `payload` is
+closed: `spent_micros`, `latency_ms`, `input_tokens` and `output_tokens` are
+finite numbers ≥ 0, `confidence` is a ratio and `passed` a flag. No raw
+provider content, operator text, environment values or errors cross it.
+Unknown fields and malformed envelopes fail closed.
+
+**Redaction.** The composition root must supply a redactor, even for opaque
+ids. `serializeTrace` validates the redacted record and throws rather than
+write an invalid one. It writes payload keys in the order listed above.
+
+**Import.** `importTraceLines` validates every line of a batch before the port
+sees any of them; one invalid or unparseable line rejects the whole batch. The
+port upserts by `(run_id, id)`, so importing the same JSONL again is
+idempotent. A changed record under the same identity replaces the stored one.
+That is P9's behaviour, kept; the `weft.record@1` conflict rule does not apply
+to this version. A database adapter is not part of this package (#132).
+
+**Why it is not converted.** The W1 sketch mapped `run_id` → `trace_id`, `id`
+→ `record_id`, `parentId` → `parent_id`, `sequence` → `sequence`, and each kind
+onto a v1 kind. The envelope corresponds, but no kind does: each target kind
+requires fields `weave.trace@1` never recorded. `judgment` needs `site`,
+`request_ref` and `accepted`. `capability.invoked` needs `contract_rev`,
+`implementation` and `status`. `budget` needs `line`, `error` needs `code`, and
+every `weft.record@1` needs an `emitter`. `implement`, an implementation step's
+totals, and `passed` have no v1 home at all. A conversion would have to invent
+those values. Carrying these records as `weft.record@1` needs a contract
+revision and emitters that record the missing fields at the source, not values
+filled in on import.
 
 ## OpenTelemetry
 

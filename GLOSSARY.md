@@ -361,7 +361,7 @@ One vertical increment of the build plan (M0, M1, …): a demonstrable goal outc
 
 ### Weft
 
-The tracing package, namespaced Weave Weft. It validates and stores Weft records emitted by Loom, Fabric, the inference gateway or an outside composition through a port, and imports none of them. The package is `packages/weft`; its contract is `packages/weft/src/WEFT-CONTRACT.md`.
+The tracing package, namespaced Weave Weft. It validates and stores Weft records emitted by Loom, Fabric, the inference gateway or an outside composition through a port, and imports none of them. It also reads the P9 `weave.trace@1` envelope as a supported version, without converting it into Weft records. The package is `packages/weft`; its contract is `packages/weft/src/WEFT-CONTRACT.md`.
 
 ### Weft trace
 

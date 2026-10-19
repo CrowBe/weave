@@ -1,0 +1,7 @@
+{"schema":"weave.trace@1","id":"implement-1","parentId":null,"run_id":"run-7","kind":"implement","sequence":0,"payload":{"spent_micros":1200,"latency_ms":840.5,"input_tokens":2048,"output_tokens":512}}
+{"schema":"weave.trace@1","id":"decision-1","parentId":"implement-1","run_id":"run-7","kind":"decision","sequence":1,"payload":{"spent_micros":40,"latency_ms":120,"confidence":0.82}}
+{"schema":"weave.trace@1","id":"shell-1","parentId":"implement-1","run_id":"run-7","kind":"shell","sequence":2,"payload":{"latency_ms":3100,"passed":false}}
+{"schema":"weave.trace@1","id":"shell-2","parentId":"implement-1","run_id":"run-7","kind":"shell","sequence":3,"payload":{"latency_ms":2950,"passed":true}}
+{"schema":"weave.trace@1","id":"audit-1","parentId":"implement-1","run_id":"run-7","kind":"audit","sequence":4,"payload":{"spent_micros":300,"input_tokens":4096,"output_tokens":256,"confidence":0.7}}
+{"schema":"weave.trace@1","id":"budget-1","parentId":null,"run_id":"run-7","kind":"budget","sequence":5,"payload":{"spent_micros":1540}}
+{"schema":"weave.trace@1","id":"error-1","parentId":"audit-1","run_id":"run-7","kind":"error","sequence":6,"payload":{}}
