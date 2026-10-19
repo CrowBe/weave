@@ -193,13 +193,14 @@ test('identity-only exchange without refresh token survives file store round tri
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test('OIDC audience arrays bind the client and require azp for multiple audiences', async () => {
+test('OIDC audience arrays bind the client, multiple audiences require azp, and azp is checked whenever present', async () => {
   const options = { fetch: fetchJwks, clock, clientId: 'oaiapp_test' };
-  for (const audience of [{ aud: ['oaiapp_test'] }, { aud: ['other', 'oaiapp_test'], azp: 'oaiapp_test' }]) {
+  for (const audience of [{ aud: ['oaiapp_test'] }, { aud: ['other', 'oaiapp_test'], azp: 'oaiapp_test' }, { aud: 'oaiapp_test', azp: 'oaiapp_test' }, { aud: ['oaiapp_test'], azp: 'oaiapp_test' }]) {
     assert.equal((await validateIdToken(jwt(audience), options)).subject, 'subject');
   }
-  for (const audience of [{ aud: [] }, { aud: ['other'] }, { aud: ['other', 'oaiapp_test'] }, { aud: ['oaiapp_test', 'other'], azp: 'other' }, { aud: ['oaiapp_test', 123], azp: 'oaiapp_test' }]) {
-    await assert.rejects(validateIdToken(jwt(audience), options), /audience/);
+  for (const audience of [{ aud: [] }, { aud: ['other'] }, { aud: ['other', 'oaiapp_test'] }, { aud: ['oaiapp_test', 'other'], azp: 'other' }, { aud: ['oaiapp_test', 123], azp: 'oaiapp_test' },
+    { aud: 'oaiapp_test', azp: 'other' }, { aud: ['oaiapp_test'], azp: 'other' }, { aud: 'oaiapp_test', azp: 123 }, { aud: 'oaiapp_test', azp: '' }, { aud: 'oaiapp_test', azp: null }]) {
+    await assert.rejects(validateIdToken(jwt(audience), options), rejectsWith('invalid ID token audience'), JSON.stringify(audience));
   }
 });
 

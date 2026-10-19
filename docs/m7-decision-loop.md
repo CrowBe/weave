@@ -323,7 +323,8 @@ configuration alone.
 Landed `@weave/auth-chatgpt`, an independent stdlib-only package with injected
 fetch, clock readings, and a credential-store port. It persists a UUID URI host
 ID before authorization, uses PKCE S256, state and nonce, validates RS256 ID
-signatures and issuer/audience/expiry/nonce, and checks the token response's
+signatures and issuer/audience/expiry/nonce, requires a present `azp` to name
+the client (and requires `azp` for multiple audiences), and checks the token response's
 plan-usage scope. Returning sign-in reuses the selected issued client ID and
 checks the validated subject before replacing credentials. The filesystem
 implementation writes atomically with file mode 0600. It creates a missing
@@ -357,7 +358,13 @@ tokens. A lock file excludes concurrent sign-in/refresh commands; a stale lock
 fails closed and requires operator removal after confirming the old process
 stopped. Temporary refresh failures preserve the saved credentials; documented
 terminal refresh errors discard unusable tokens while retaining host and issued
-registration identity for reauthorization. Until credentials exist and plan
+registration identity for reauthorization. During sign-in, a token-endpoint
+`invalid_client` or `registration_required` means the issued registration is
+unusable: sign-in clears it and the credentials bound to it, keeps the host ID,
+and tells the operator to sign in again, which registers a new client without
+the previous subject binding. Other token errors keep the registration. A
+rejected callback reports its fixed code (`state mismatch`, `access_denied`,
+`authorization rejected`, ...), never callback text. Until credentials exist and plan
 usage is granted, the composition must supply `auth_required` availability for
 the `openai-chatgpt-plan` adapter; configuration alone establishes no entitlement.
 
