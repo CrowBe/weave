@@ -49,6 +49,13 @@ export interface RoutingDecision {
   readonly order: readonly RoutedUnit[];
   readonly excluded: readonly RouteExclusion[];
   readonly uncertainty: readonly string[];
+  /**
+   * Set when target and terms contradict each other, so nothing was routed:
+   * an invalid request, not a table without a matching unit. A target tier
+   * that differs from the terms tier is such a contradiction. Gateway requests
+   * carry a tier only in their terms, so their own routing cannot conflict.
+   */
+  readonly invalid?: string;
 }
 
 /**
@@ -113,6 +120,9 @@ export function route(
   /** Request-wide credential screen, computed without retaining the content. */
   containsCredentials = false,
 ): RoutingDecision {
+  if (target.tier !== undefined && terms.tier !== undefined && target.tier !== terms.tier) {
+    return { order: [], excluded: [], uncertainty: [], invalid: 'target.tier conflicts with terms.tier' };
+  }
   const excluded: RouteExclusion[] = [];
   const eligible: RoutedUnit[] = [];
   const trainingAllowed = trainingAllowedDestinations(table);

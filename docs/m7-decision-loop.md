@@ -199,8 +199,10 @@ names, never embedded credentials. The example declares
 future adapters; parsing it does not install or execute them.
 
 `tier` is optional on a routed unit. A requested tier in `InferenceTerms` or
-`RouteTarget` filters mismatches with `tier_mismatch`; if both specify a tier,
-a unit must satisfy both. Omitting tier preserves existing routing. Quality is
+`RouteTarget` filters mismatches with `tier_mismatch`. If both specify a tier,
+they must agree: a conflict is an invalid request, so `route` and `budgetRoute`
+return no order with `invalid` set rather than excluding every unit (#43).
+Gateway requests carry a tier only in their terms. Omitting tier preserves existing routing. Quality is
 still `baseline` or `high`, independently checked. Prices are nonnegative finite
 micros per million tokens; subscription examples declare zero token prices.
 Quota accounting is a separate P4 gate, not an implication of zero cost.

@@ -61,6 +61,7 @@ export function budgetRoute(table: RouteTable, target: RouteTarget, terms: Infer
   minEvidence: number, availability: ProviderAvailability | undefined,
   snapshot: QuotaSnapshot | undefined, now: number, containsCredentials = false): BudgetRoutingDecision {
   const base = route(table, target, terms, minEvidence, availability, containsCredentials);
+  if (base.invalid !== undefined) return { ...base, downgraded: false };
   const excluded: RouteExclusion[] = [...base.excluded];
   const blocked: Gate[] = [];
   const eligible = base.order.filter(unit => {

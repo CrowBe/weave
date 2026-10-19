@@ -4,6 +4,7 @@ import { it } from 'node:test';
 import {
   applyRouteOverlay,
   bindDecisionProvider,
+  budgetRoute,
   parseRouteConfig,
   resolvePreselectPolicy,
   route,
@@ -239,6 +240,23 @@ it('tier never relaxes quality', () => {
   assert.deepEqual(result.order, []);
   assert.equal(result.excluded[0]?.reason, 'quality_below_bar');
   assert.equal(route(units, { ...target, tier: 'strong' }, { ...terms, tier: 'flash' }, 20).order.length, 0);
+});
+it('a target tier that conflicts with the terms tier is invalid, not a routing miss (#43)', () => {
+  const units = table();
+  const invalid = 'target.tier conflicts with terms.tier';
+  assert.deepEqual(route(units, { ...target, tier: 'strong' }, { ...terms, tier: 'flash' }, 20),
+    { order: [], excluded: [], uncertainty: [], invalid });
+  // The budget gate neither gates nor pauses an invalid request.
+  const gated = budgetRoute(units, { ...target, tier: 'strong' }, { ...terms, tier: 'flash' }, 20,
+    undefined, undefined, 0);
+  assert.deepEqual(gated, { order: [], excluded: [], uncertainty: [], invalid, downgraded: false });
+  // Agreeing or one-sided tiers route as before.
+  for (const [targetTier, termsTier] of [['flash', 'flash'], ['strong', undefined], [undefined, 'flash']] as const) {
+    const decision = route(units, { ...target, ...(targetTier ? { tier: targetTier } : {}) },
+      { ...terms, ...(termsTier ? { tier: termsTier } : {}) }, 20);
+    assert.equal(decision.invalid, undefined);
+    assert.equal(decision.order.length > 0, true);
+  }
 });
 it('availability retains evidence tie order and exclusion declaration order', () => {
   const units = table().map(unit => ({ ...unit, evidence: { attempts: 20, accepted: 20 } }));
