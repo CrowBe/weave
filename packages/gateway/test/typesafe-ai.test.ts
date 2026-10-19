@@ -132,18 +132,32 @@ describe('TypeSafe danger zone headers', () => {
 });
 
 describe('TypeSafe preview hardening', () => {
-  it('drops box and future answer types without losing asked nouls', async () => {
-    for (const answers of [
-      { urgent: { type: 'noul', noul: 0.9 }, extra: { type: 'box', box: { top: 0, bottom: 1, left: 0, right: 1 }, confidence: 0.8 } },
-      { urgent: { type: 'future' } },
-      { urgent: { type: { toString: null } } },
-    ]) {
+  it('ignores box and future answer types on unasked ids', async () => {
+    const { fetch } = stubFetch({ answers: {
+      urgent: { type: 'noul', noul: 0.9 },
+      extra: { type: 'box', box: { top: 0, bottom: 1, left: 0, right: 1 }, confidence: 0.8 },
+      later: { type: 'future', confidence: 0.7 },
+    } });
+    const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
+    assert.equal(result.status, 'completed');
+    if (result.status !== 'completed') return;
+    assert.deepEqual(result.answers, { urgent: { type: 'boolean', probability: 0.9 } });
+    assert.equal(result.confidence, undefined);
+  });
+
+  it('reports an unsupported answer type on an asked id as malformed, not unanswered', async () => {
+    for (const [id, answers] of [
+      ['extra', { urgent: { type: 'noul', noul: 0.9 }, extra: { type: 'box', box: { top: 0, bottom: 1, left: 0, right: 1 }, confidence: 0.8 } }],
+      ['urgent', { urgent: { type: 'future' } }],
+      ['urgent', { urgent: { type: { toString: null } } }],
+    ] as const) {
       const { fetch } = stubFetch({ answers });
       const result = await typesafeAiEvaluator(options(fetch)).evaluate({ ...CALL, questions: { ...CALL.questions, extra: { type: 'boolean', instructions: 'extra?' } } });
-      assert.equal(result.status, 'completed');
-      if (result.status === 'completed') assert.equal(result.confidence, undefined);
-      assert.deepEqual(result.status === 'completed' && result.answers,
-        'extra' in answers ? { urgent: { type: 'boolean', probability: 0.9 } } : {});
+      assert.equal(result.status, 'failed');
+      if (result.status !== 'failed') continue;
+      assert.equal(result.failure.code, 'malformed_response');
+      assert.equal(result.failure.retryable, false);
+      assert.equal(result.failure.message, `answer '${id}' had an unsupported answer type`);
     }
   });
 

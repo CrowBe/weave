@@ -123,7 +123,9 @@ in the route configuration to override it.
 Choice criteria keys are shuffled per call with Fisher-Yates while retaining
 key identities. `TypesafeAiOptions.shuffle` accepts an RNG or `false` to disable
 shuffling. `kevLocalEvaluator` shuffles by default too, because local Kev's
-choice answers measured order-sensitive; benchmarks pass `shuffle: false`. Unsupported answer types are dropped; unasked answers are ignored.
+choice answers measured order-sensitive; benchmarks pass `shuffle: false`.
+Answers for unasked ids are ignored, whatever their type. An asked id answered
+with an unsupported type (for example `box`) is a `malformed_response`.
 `TypesafeAiOptions.longContext?: boolean` defaults to false. When true, every
 request sends `TypeSafe-Danger-Zone-Long-Context: true`, raising both context
 limits to 262k tokens on `jev-1.13.0` and `jev-1.14.0`. Without it, the defaults

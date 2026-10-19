@@ -164,7 +164,11 @@ function parseBody(body: unknown, call: EvaluationCall): DecisionParse {
   for (const [id, raw] of Object.entries(rawAnswers)) {
     if (!Object.hasOwn(call.questions, id)) continue;
     const question = call.questions[id]!;
-    if (isRecord(raw) && (typeof raw['type'] !== 'string' || !supportedAnswerTypes.has(raw['type']))) continue;
+    // An asked id answered with a type this profile cannot read (a box, or a type
+    // added later) is a visible provider change, not a silently missing answer.
+    if (isRecord(raw) && (typeof raw['type'] !== 'string' || !supportedAnswerTypes.has(raw['type']))) {
+      return { status: 'malformed', detail: `answer '${id}' had an unsupported answer type` };
+    }
     const answer = toAnswer(raw);
     if (answer === null) return { status: 'malformed', detail: `answer '${id}' was not a recognised shape` };
     if (answer.type !== question.type) {
