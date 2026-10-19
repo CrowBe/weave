@@ -13,7 +13,7 @@ import { correlation } from '../src/sites/index.js';
 import {
   DEFAULT_IMPLEMENT_RETRIES, FileAttemptJournal, MemoryAttemptJournal, createEqualGrantIssuer,
   replayImplementationStep, runImplementationStep,
-  type AttemptJournal, type ImplementBudgetDecision, type ImplementCheck, type ImplementPorts, type ImplementStepInput,
+  type AttemptJournal, type ImplementBudgetDecision, type ImplementBudgetRequest, type ImplementCheck, type ImplementPorts, type ImplementStepInput,
   type ImplementTier,
 } from '../src/implement-step.js';
 
@@ -1145,6 +1145,34 @@ test('a budget pause at escalation pauses the step and resumes into the escalati
   assert.equal(resumed.attempts.at(-1)?.escalated, true);
   assert.equal(resumed.attempts.at(-1)?.effective_tier, 'standard');
   assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), resumed);
+});
+
+// #130: escalation is relative to the D2-routed tier; the budget gate re-checks it.
+test('escalation steps up from the routed tier, not from a budget-lowered tier (#130)', async () => {
+  const fail = { c1: { p: .1, conf: 1 } };
+  const requests: [ImplementBudgetRequest['requested'], boolean][] = [];
+  const world = driver({
+    input: input({ tier: 'standard', ceiling: 'strong' }),
+    evaluations: [fail, fail, fail, { c1: { p: 1, conf: 1 } }],
+    budget: request => {
+      requests.push([request.requested, request.escalation]);
+      return { status: 'allow', tier: request.escalation ? request.requested : 'flash' };
+    },
+  });
+  const result = await runImplementationStep(world.input, world.ports, world.journal);
+  assert.equal(result.status, 'passed');
+  assert.deepEqual(requests, [['standard', false], ['standard', false], ['standard', false], ['strong', true]]);
+  assert.deepEqual(world.tiers, ['flash', 'flash', 'flash', 'strong']);
+  assert.deepEqual(result.attempts.map(attempt => attempt.requested_tier), ['standard', 'standard', 'standard', 'strong']);
+  const lowered = driver({
+    input: input({ tier: 'standard', ceiling: 'strong' }),
+    evaluations: [fail, fail, fail],
+    budget: () => ({ status: 'allow', tier: 'flash' }),
+  });
+  const stopped = await runImplementationStep(lowered.input, lowered.ports, lowered.journal);
+  assert.equal(stopped.status, 'failed');
+  assert.equal(stopped.open_issue?.blocked_by, 'budget', 'a budget that still lowers the escalated tier stops the step');
+  assert.deepEqual(lowered.tiers, ['flash', 'flash', 'flash']);
 });
 
 // #126: a journal the step has not finished does not read as a terminal failure.
