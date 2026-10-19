@@ -117,6 +117,11 @@ export {
 } from './implement-step.js';
 
 export * from './audit-view.js';
+export {
+  CHECK_COVERAGE_SCHEMA, CHECK_GAP_SCHEMA, DECLARED_RECURRENCE_POLICY, RECURRENCE_KEY_SCHEMA,
+  auditJudgmentFindings, checkCoverage, outputEvalJudgmentFindings, recordCheckGaps, recurrenceKey,
+  type CheckCoverage, type CheckGapRecord, type JudgmentFinding, type JudgmentFindingKind, type RecurrencePolicy,
+} from './recurring-findings.js';
 export * from './criterion-proof.js';
 export * from './compaction.js';
 export * from './sites/audit-dispose.js';

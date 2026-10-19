@@ -255,6 +255,8 @@ A typed, invocable unit of software that satisfies a capability contract. The co
 
 A semantic operation required to advance the goal that the current capability set cannot adequately perform through execution or composition.
 
+A capability gap may also be recorded for a check capability when D5 or the audit catches the same finding in a declared number of executions. Its recurrence key is the finding kind, criterion and check-relevant evidence, never free text or the execution id. The record cites those executions and names a desired operation. It grants nothing: it reaches crystallization only as the `gap` of an operator goal, through the gap search and every later gate, and the audit keeps running however many checks are admitted.
+
 ### Capability contract
 
 The standardized statement of a capability's purpose, inputs, outputs, invariants, failures, effects, permissions, success evidence, and execution constraints.
