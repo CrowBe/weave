@@ -106,12 +106,13 @@ export {
   DEFAULT_IMPLEMENT_RETRIES, FileAttemptJournal, IMPLEMENT_TIERS, MemoryAttemptJournal,
   createEqualGrantIssuer, replayImplementationStep, runImplementationStep,
   type AttemptJournal, type AttemptRecord, type CheckEvidence, type EqualGrantIssuer,
-  type ImplementBudgetDecision, type ImplementCheck, type ImplementEval, type ImplementPorts,
+  type ImplementBudgetDecision, type ImplementCheck, type ImplementCriterion, type ImplementEval, type ImplementPorts,
   type ImplementStepInput, type ImplementStepResult, type ImplementTier, type JournalEntry,
   type OpenIssue, type StopRecord,
 } from './implement-step.js';
 
 export * from './audit-view.js';
+export * from './criterion-proof.js';
 export * from './compaction.js';
 export * from './sites/audit-dispose.js';
 export {

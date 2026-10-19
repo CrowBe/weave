@@ -267,11 +267,11 @@ test('a passing toy goal records evidence and does not complete the goal', async
   assert.equal(result.open_issue, null);
   assert.equal(result.execution_id, 'exec-1');
   assert.deepEqual(Object.keys(result), ['schema', 'execution_id', 'status', 'goal_done', 'reason', 'tier', 'ceiling',
-    'effective_tier', 'escalated', 'attempts', 'artifact_refs', 'checks', 'evals', 'observations', 'open_issue']);
+    'effective_tier', 'escalated', 'attempts', 'artifact_refs', 'checks', 'evals', 'observations', 'open_issue', 'proofs']);
   assert.equal(result.attempts.length, 1);
   assert.deepEqual(Object.keys(result.attempts[0]!), ['schema', 'id', 'parentId', 'execution_id', 'attempt',
     'requested_tier', 'effective_tier', 'escalated', 'status', 'generate_request_id', 'artifact_refs', 'checks',
-    'evals', 'observations', 'failing_criterion_ids', 'failing_check_ids', 'pause']);
+    'evals', 'observations', 'failing_criterion_ids', 'failing_check_ids', 'pause', 'proofs']);
   assert.deepEqual(world.invokes.map(call => call.operation), ['repo.test', 'repo.lint', 'repo.build']);
   assert.equal(result.attempts[0]?.execution_id, 'exec-1');
   assert.equal(result.checks[0]?.passed, true);
@@ -855,4 +855,114 @@ test('failed generation records no D5 observations for an evaluation never asked
   assert.deepEqual(result.observations, []);
   assert.deepEqual(result.evals, []);
   assert.deepEqual(result.open_issue?.criterion_ids, ['c1']);
+});
+
+// Criterion proof (#199): D5 is asked only about criteria that need judgment.
+const heldOutGrant = {
+  ...grant, permissions: [...grant.permissions, { resource: 'heldout-1', mode: 'read' }],
+} as Grant;
+const heldOutCheck: ImplementCheck = {
+  operation: 'repo.test', grant: heldOutGrant, cwd_ref: 'workspace-1', env_allow: ['PUBLIC_NAME'], timeout_ms: 1000,
+  argv: ['node', 'heldout'], oracle_refs: ['heldout-1'],
+};
+const checkProven = { criterion_id: 'c1', statement: 'the held-out suite passes', proof: 'check' as const, check_ids: ['repo.test'] };
+function proofInput(overrides: Partial<ImplementStepInput> = {}): ImplementStepInput {
+  return input({ criteria: [checkProven], checks: [heldOutCheck], generation_writes: ['workspace-1'], ...overrides });
+}
+const identity = (ref: string): string => ref;
+
+test('criterion proof: a step whose criteria are all check-proven sends no D5 request', async () => {
+  const world = driver({ input: proofInput() });
+  const result = await runImplementationStep(world.input, { ...world.ports, canonical: identity }, world.journal);
+  assert.equal(result.status, 'passed');
+  assert.equal(result.goal_done, false);
+  assert.deepEqual(world.evalSites, []);
+  assert.deepEqual(result.evals, []);
+  assert.deepEqual(result.observations, []);
+  assert.deepEqual(result.proofs, [{ criterion_id: 'c1', proposed: 'check', proof: 'check', reason: null }]);
+  assert.deepEqual(result.attempts[0]?.proofs, result.proofs);
+  assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), result);
+});
+
+test('criterion proof: a mixed step asks D5 only about the judgment criterion and discloses only it', async () => {
+  const world = driver({ input: proofInput({ criteria: [checkProven, { criterion_id: 'c2', statement: 'CANARY_JUDGED' }] }) });
+  const result = await runImplementationStep(world.input, { ...world.ports, canonical: identity }, world.journal);
+  assert.equal(result.status, 'passed');
+  assert.deepEqual(world.evalSites, ['eval.output']);
+  const disclosed = world.evalStates[0] as { criteria: { criterion_id: string; statement: string }[] };
+  assert.deepEqual(disclosed.criteria, [{ criterion_id: 'c2', statement: 'CANARY_JUDGED' }]);
+  assert.deepEqual(result.evals.map(item => item.criterion_id), ['c2']);
+  assert.deepEqual(result.proofs.map(item => item.proof), ['check', 'judgment']);
+});
+
+test('criterion proof: tests in the workspace generation writes cannot prove a criterion, so D5 is asked', async () => {
+  const workspaceOracle: ImplementCheck = {
+    ...heldOutCheck, oracle_refs: ['workspace-1'],
+    grant: { ...grant, permissions: [...grant.permissions, { resource: 'workspace-1', mode: 'read' }] } as Grant,
+  };
+  const world = driver({ input: proofInput({ checks: [workspaceOracle] }) });
+  const result = await runImplementationStep(world.input, { ...world.ports, canonical: identity }, world.journal);
+  assert.deepEqual(world.evalSites, ['eval.output']);
+  assert.deepEqual(result.proofs, [{ criterion_id: 'c1', proposed: 'check', proof: 'judgment', reason: 'oracle_writable' }]);
+  assert.deepEqual(result.evals.map(item => item.criterion_id), ['c1']);
+});
+
+test('criterion proof: without host canonical identity or declared generation writes the criterion keeps D5', async () => {
+  const noPort = driver({ input: proofInput() });
+  const unported = await runImplementationStep(noPort.input, noPort.ports, noPort.journal);
+  assert.deepEqual(noPort.evalSites, ['eval.output']);
+  assert.equal(unported.proofs[0]?.reason, 'write_scope_unknown');
+  const { generation_writes: _omitted, ...undeclared } = proofInput();
+  const noWrites = driver({ input: undeclared });
+  const unscoped = await runImplementationStep(noWrites.input, { ...noWrites.ports, canonical: identity }, noWrites.journal);
+  assert.deepEqual(noWrites.evalSites, ['eval.output']);
+  assert.equal(unscoped.proofs[0]?.reason, 'write_scope_unknown');
+});
+
+test('criterion proof: a red bound check fails the check-proven criterion from check evidence, not a D5 eval', async () => {
+  const world = driver({ input: proofInput({ retries: 0, ceiling: 'flash' }), exits: [1] });
+  const result = await runImplementationStep(world.input, { ...world.ports, canonical: identity }, world.journal);
+  assert.equal(result.status, 'failed');
+  assert.deepEqual(world.evalSites, []);
+  assert.deepEqual(result.evals, []);
+  assert.deepEqual(result.attempts[0]?.failing_criterion_ids, ['c1']);
+  assert.deepEqual(result.attempts[0]?.failing_check_ids, ['repo.test']);
+  assert.equal(result.open_issue?.source, 'check');
+  assert.deepEqual(result.open_issue?.criterion_ids, ['c1']);
+});
+
+test('criterion proof: malformed proof fields are invalid input', async () => {
+  for (const bad of [
+    { criteria: [{ ...checkProven, proof: 'maybe' as never }] },
+    { criteria: [{ ...checkProven, check_ids: 'repo.test' as never }] },
+    { checks: [{ ...heldOutCheck, oracle_refs: ['/abs/path'] }] },
+    { generation_writes: ['workspace-1', 7 as never] },
+  ] satisfies Partial<ImplementStepInput>[]) {
+    const world = driver({ input: proofInput(bad) });
+    const result = await runImplementationStep(world.input, { ...world.ports, canonical: identity }, world.journal);
+    assert.equal(result.reason, 'invalid_input');
+    assert.equal(world.generateIds.length, 0);
+  }
+});
+
+test('criterion proof: a journal written before #199 replays with no proofs and the same outcome', async () => {
+  const world = driver({});
+  const result = await runImplementationStep(world.input, world.ports, world.journal);
+  const legacy = world.journal.load('exec-1').map(entry => {
+    if (entry.schema !== 'impl.attempt@1') return entry;
+    const { proofs: _dropped, ...rest } = entry;
+    return rest;
+  });
+  const replayed = replayImplementationStep(legacy, world.input);
+  assert.deepEqual(replayed.proofs, []);
+  assert.deepEqual({ ...replayed, proofs: result.proofs, attempts: result.attempts }, result);
+});
+
+test('criterion proof: a bound check id is green only when every run of it passed', async () => {
+  const second: ImplementCheck = { ...heldOutCheck, grant: { ...heldOutGrant, action_id: 'act-2' } as Grant };
+  const world = driver({ input: proofInput({ checks: [heldOutCheck, second], retries: 0, ceiling: 'flash' }), exits: [0, 1] });
+  const result = await runImplementationStep(world.input, { ...world.ports, canonical: identity }, world.journal);
+  assert.equal(result.status, 'failed');
+  assert.deepEqual(world.evalSites, []);
+  assert.deepEqual(result.attempts[0]?.failing_criterion_ids, ['c1']);
 });

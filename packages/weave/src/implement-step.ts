@@ -1,5 +1,6 @@
 /**
- * One implementation-tier step: generate, configured repo checks, then D5.
+ * One implementation-tier step: generate, configured repo checks, then D5 for
+ * the criteria whose criterion proof is `judgment`.
  *
  * The same execution id covers retries and the single escalation. Each finished
  * attempt is appended before the next one starts. Each check on each attempt
@@ -17,6 +18,7 @@ import type {
   InferenceTerms,
 } from '@weave/gateway';
 import { nonEmptyText } from '@weave/gateway';
+import { admitCriterionProof, isCriterionProof, type CriterionProof, type ProofAdmission } from './criterion-proof.js';
 import { digest } from './digest.js';
 import { PersistError } from './journal.js';
 import {
@@ -25,6 +27,7 @@ import {
   type OutputCriterion,
   type OutputEvalInput,
   type OutputEvalObservation,
+  type OutputEvalTransition,
 } from './sites/output-eval.js';
 import { correlation, type SiteState } from './sites/index.js';
 
@@ -60,6 +63,17 @@ export interface ImplementCheck {
   readonly timeout_ms: number;
   /** Configured argv, digested for evidence. It is not passed to the host. */
   readonly argv?: readonly string[];
+  /**
+   * Resources the check's verdict comes from (held-out tests, fixtures). The
+   * held grant must permit `read` on each. Required for a `check` criterion proof.
+   */
+  readonly oracle_refs?: readonly string[];
+}
+/** A success criterion with its proposed criterion proof (#199). Absent proof is `judgment`. */
+export interface ImplementCriterion extends OutputCriterion {
+  readonly proof?: CriterionProof;
+  /** Configured check ids that settle a `check` criterion. */
+  readonly check_ids?: readonly string[];
 }
 export interface ImplementStepInput {
   readonly execution_id: string;
@@ -70,12 +84,17 @@ export interface ImplementStepInput {
   readonly ceiling: ImplementTier;
   /** Same-tier retries after the first attempt. Default 2. */
   readonly retries?: number;
-  readonly criteria: readonly OutputCriterion[];
+  readonly criteria: readonly ImplementCriterion[];
   readonly instructions: string;
   readonly prompt: string;
   readonly kind: GenerationKind;
   readonly terms: InferenceTerms;
   readonly checks: readonly ImplementCheck[];
+  /**
+   * Resources the generate backend may write, from that backend's grant.
+   * Undefined is unknown, and no criterion can then be `check`-proven.
+   */
+  readonly generation_writes?: readonly string[];
 }
 export interface ImplementBudgetRequest {
   readonly requested: ImplementTier;
@@ -104,6 +123,8 @@ export interface ImplementPorts {
   readonly now: () => number;
   readonly readState: () => SiteState;
   readonly budget?: (request: ImplementBudgetRequest) => ImplementBudgetDecision;
+  /** Host canonical resource identity; aliases share one id. Absent admits no `check` proof. */
+  readonly canonical?: (ref: string) => string;
 }
 export interface ImplementPause {
   readonly reason: ImplementPauseReason;
@@ -152,6 +173,8 @@ export interface AttemptRecord {
   readonly failing_criterion_ids: readonly string[];
   readonly failing_check_ids: readonly string[];
   readonly pause: ImplementPause | null;
+  /** Criterion proof admissions for this step. Absent on records written before #199. */
+  readonly proofs?: readonly ProofAdmission[];
 }
 export interface StopRecord {
   readonly schema: typeof IMPLEMENT_STOP_SCHEMA;
@@ -178,6 +201,7 @@ export interface ImplementStepResult {
   readonly evals: readonly ImplementEval[];
   readonly observations: readonly OutputEvalObservation[];
   readonly open_issue: OpenIssue | null;
+  readonly proofs: readonly ProofAdmission[];
 }
 export interface AttemptJournal {
   load(execution_id: string): JournalEntry[];
@@ -187,7 +211,7 @@ export interface AttemptJournal {
 interface Normalized extends ImplementStepInput {
   readonly execution_id: string;
   readonly retries: number;
-  readonly criteria: readonly OutputCriterion[];
+  readonly criteria: readonly ImplementCriterion[];
   readonly checks: readonly ImplementCheck[];
 }
 type Action =
@@ -238,12 +262,20 @@ function normalize(input: ImplementStepInput): Normalized | null {
   if (!GENERATION_KINDS.includes(input.kind) || typeof input.instructions !== 'string' || typeof input.prompt !== 'string') return null;
   if (!input.terms || !Array.isArray(input.criteria) || input.criteria.length === 0 || !Array.isArray(input.checks)) return null;
   const seen = new Set<string>();
-  const criteria: OutputCriterion[] = [];
+  const criteria: ImplementCriterion[] = [];
   for (const criterion of input.criteria) {
     const criterion_id = correlation(criterion?.criterion_id);
     if (!criterion_id || seen.has(criterion_id) || typeof criterion.statement !== 'string') return null;
+    if (criterion.proof !== undefined && !isCriterionProof(criterion.proof)) return null;
+    const check_ids = criterion.check_ids;
+    if (check_ids !== undefined && (!Array.isArray(check_ids) || check_ids.length > CHECKS.length ||
+      !check_ids.every(id => typeof id === 'string' && id.length > 0 && id.length <= 128))) return null;
     seen.add(criterion_id);
-    criteria.push({ criterion_id, statement: criterion.statement });
+    criteria.push({
+      criterion_id, statement: criterion.statement,
+      ...(criterion.proof === undefined ? {} : { proof: criterion.proof }),
+      ...(check_ids === undefined ? {} : { check_ids: [...check_ids] }),
+    });
   }
   const checks: ImplementCheck[] = [];
   for (const check of input.checks) {
@@ -261,6 +293,7 @@ function normalize(input: ImplementStepInput): Normalized | null {
         if (typeof arg !== 'string' || arg.length === 0 || arg.length > 4096 || arg.includes('\0')) return null;
       }
     }
+    if (check.oracle_refs !== undefined && !isRefList(check.oracle_refs)) return null;
     checks.push({
       operation: check.operation,
       grant: check.grant,
@@ -268,9 +301,27 @@ function normalize(input: ImplementStepInput): Normalized | null {
       env_allow,
       timeout_ms: check.timeout_ms,
       ...(check.argv === undefined ? {} : { argv: [...check.argv] }),
+      ...(check.oracle_refs === undefined ? {} : { oracle_refs: [...check.oracle_refs] }),
     });
   }
-  return { ...input, execution_id, request_id, retries, criteria, checks };
+  if (input.generation_writes !== undefined && !isRefList(input.generation_writes)) return null;
+  return {
+    ...input, execution_id, request_id, retries, criteria, checks,
+    ...(input.generation_writes === undefined ? {} : { generation_writes: [...input.generation_writes] }),
+  };
+}
+function isRefList(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.length <= 32 && value.every(ref => isWellFormedRef(ref) && ref.length <= 128);
+}
+/** Pure; recorded on every attempt so replay never needs the canonical port. */
+function admitProofs(input: Normalized, canonical: ImplementPorts['canonical']): ProofAdmission[] {
+  const checks = input.checks.map(check => ({
+    check_id: check.operation,
+    ...(check.oracle_refs === undefined ? {} : { oracle_refs: check.oracle_refs }),
+    permissions: check.grant?.permissions ?? null,
+  }));
+  return input.criteria.map(criterion => admitCriterionProof(criterion, checks,
+    { generation_writes: input.generation_writes, canonical }));
 }
 function invalidResult(): ImplementStepResult {
   return {
@@ -289,6 +340,7 @@ function invalidResult(): ImplementStepResult {
     evals: [],
     observations: [],
     open_issue: null,
+    proofs: [],
   };
 }
 function lastFailure(attempts: readonly AttemptRecord[]): AttemptRecord | null {
@@ -372,6 +424,7 @@ function project(entries: readonly JournalEntry[], input: Normalized, cancelled:
     evals: focus?.evals.map(item => structuredClone(item)) ?? [],
     observations: focus?.observations.map(item => structuredClone(item)) ?? [],
     open_issue: open_issue === null ? null : structuredClone(open_issue),
+    proofs: (focus?.proofs ?? []).map(item => structuredClone(item)),
   };
 }
 function stopRecord(input: Normalized, attempts: readonly AttemptRecord[], blocked_by: OpenIssue['blocked_by']): StopRecord {
@@ -440,6 +493,7 @@ function attemptRecord(fields: AttemptRecord): AttemptRecord {
     failing_criterion_ids: fields.failing_criterion_ids,
     failing_check_ids: fields.failing_check_ids,
     pause: fields.pause,
+    ...(fields.proofs === undefined ? {} : { proofs: fields.proofs }),
   };
 }
 async function runChecks(input: Normalized, ports: ImplementPorts, attempt: number, generationIdentity: string, signal: AbortSignal | undefined): Promise<CheckEvidence[]> {
@@ -556,6 +610,8 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
   if (!normalized) return invalidResult();
   const history = journal.load(normalized.execution_id);
   const finish = (): ImplementStepResult => project(history, normalized, false);
+  const proofs = admitProofs(normalized, ports.canonical);
+  const judged = normalized.criteria.filter((_, index) => proofs[index]?.proof !== 'check');
   // One iteration per attempt, plus the stop that follows the last failure.
   // Earlier pauses do not consume this bound.
   for (let guard = 0; guard <= normalized.retries + 2; guard += 1) {
@@ -595,6 +651,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
         failing_criterion_ids: [],
         failing_check_ids: [],
         pause: pauseOf(decision.status === 'pause' ? decision.reason : 'quota_unknown', decision.status === 'pause' ? decision.until : null),
+        proofs,
       })));
       return finish();
     }
@@ -630,6 +687,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
         failing_criterion_ids: [],
         failing_check_ids: [],
         pause: held ?? pauseOf('cancelled', null),
+        proofs,
       })));
       return finish();
     }
@@ -669,27 +727,42 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
           failing_criterion_ids: [],
           failing_check_ids: checks.filter(check => !check.passed).map(check => check.check_id),
           pause: pauseOf('cancelled', null),
+          proofs,
         })));
         return finish();
       }
-      const live = ports.readState();
-      const evalRequest = `${normalized.execution_id}:a${action.attempt}:eval`;
-      const disclosed = {
-        criteria: normalized.criteria.map(criterion => ({ criterion_id: criterion.criterion_id, statement: criterion.statement })),
-        artifact: { ref, digest: digestHex },
-        artifact_text: outcome.text,
-        checks: checks.map(check => ({ check_id: check.check_id, exit: check.exit, passed: check.passed })),
-      };
-      const transition = await evaluateOutputEval({
-        request_id: evalRequest,
-        state_revision: live.state_revision,
-        state_updated_at: live.state_updated_at,
-        state: disclosed,
-        terms: decisionTerms(normalized.terms),
-        needs_dispatch: false,
-        criteria: normalized.criteria,
-      }, { evaluate: ports.evaluate }, () => ({ ...ports.readState(), observed_at: ports.now() }), signal);
       failingChecks = checks.filter(check => !check.passed).map(check => check.check_id);
+      // A check-proven criterion is settled by its bound checks; D5 is not asked about it.
+      const green = (id: string): boolean => {
+        const ran = checks.filter(check => check.check_id === id);
+        return ran.length > 0 && ran.every(check => check.passed);
+      };
+      const checkFailed = new Set(normalized.criteria
+        .filter((criterion, index) => proofs[index]?.proof === 'check' && !(criterion.check_ids ?? []).every(green))
+        .map(criterion => criterion.criterion_id));
+      let transition: OutputEvalTransition = { status: 'pass', evals: [], observations: [], failing_criterion_ids: [] };
+      if (judged.length > 0) {
+        const live = ports.readState();
+        const evalRequest = `${normalized.execution_id}:a${action.attempt}:eval`;
+        const disclosed = {
+          criteria: judged.map(criterion => ({ criterion_id: criterion.criterion_id, statement: criterion.statement })),
+          artifact: { ref, digest: digestHex },
+          artifact_text: outcome.text,
+          checks: checks.map(check => ({ check_id: check.check_id, exit: check.exit, passed: check.passed })),
+        };
+        transition = await evaluateOutputEval({
+          request_id: evalRequest,
+          state_revision: live.state_revision,
+          state_updated_at: live.state_updated_at,
+          state: disclosed,
+          terms: decisionTerms(normalized.terms),
+          needs_dispatch: false,
+          criteria: judged.map(criterion => ({ criterion_id: criterion.criterion_id, statement: criterion.statement })),
+        }, { evaluate: ports.evaluate }, () => ({ ...ports.readState(), observed_at: ports.now() }), signal);
+      }
+      const evalFailed = new Set(transition.failing_criterion_ids);
+      const failingOf = (): string[] => normalized.criteria.map(criterion => criterion.criterion_id)
+        .filter(id => checkFailed.has(id) || evalFailed.has(id));
       if (transition.status === 'paused') {
         history.push(remember(journal, attemptRecord({
           schema: IMPLEMENT_ATTEMPT_SCHEMA,
@@ -706,15 +779,16 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
           checks,
           evals: flatEval(transition),
           observations: [...transition.observations],
-          failing_criterion_ids: [...transition.failing_criterion_ids],
+          failing_criterion_ids: failingOf(),
           failing_check_ids: failingChecks,
           pause: pauseOf('cancelled', null),
+          proofs,
         })));
         return finish();
       }
       evals = flatEval(transition);
       observations = [...transition.observations];
-      failingCriteria = [...transition.failing_criterion_ids];
+      failingCriteria = failingOf();
       artifactRefs = [...artifactRefs, ...checks.flatMap(check => check.artifacts)];
     }
     const failed = outcome.status !== 'accepted' || failingChecks.length > 0 || failingCriteria.length > 0;
@@ -736,6 +810,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
       failing_criterion_ids: failingCriteria,
       failing_check_ids: failingChecks,
       pause: null,
+      proofs,
     })));
     if (!failed) return finish();
   }
