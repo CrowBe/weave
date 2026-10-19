@@ -6,6 +6,7 @@ import { AgentFabricHost, SOURCE_INSPECT } from '@weave/agentfabric';
 import { renderFrameView } from '../src/views.js';
 import { scenario } from './fixture.js';
 import { transitionBooleanSite, evaluateBooleanSite, INPUT_RULES, type BooleanTransition } from '../src/sites/boolean.js';
+import { transitionSite } from '../src/sites/index.js';
 const current = { state_revision: 1, state_updated_at: 10 };
 const input = { ...current, request_id: 'r1', state: { text: 'CANARY_SECRET' }, needs_dispatch: true,
   terms: { quality: 'baseline' as const, destinations: ['local'], max_context_tokens: 100,
@@ -70,6 +71,32 @@ for (const site of ['guard.input', 'guard.output'] as const) {
     assert.deepEqual(result, transitionBooleanSite(site, input, JSON.parse(JSON.stringify(good)), current));
   });
 }
+// #100: P5 choice sites pause dispatch-dependent work on an outage; D4/D7 request approval. Intentional:
+// a P5 outage is a missing observation with a deterministic fallback, a guard outage is an open authority question.
+test('one decision outage: P5 pauses dispatch, guards request approval, D3 widens', () => {
+  const outage = { status: 'blocked' as const, request_id: 'r1', reason: 'provider_unavailable' as const, attempts: [], spent: 0, uncertainty: [] };
+  for (const needs_dispatch of [true, false]) {
+    for (const [site, fallback] of [['loop.triage', 'implement'], ['loop.route', 'standard'], ['loop.continue', 'stalled'], ['intake.classify', 'ask_user']] as const) {
+      const choice = transitionSite(site, { ...input, needs_dispatch, state: { message: 'm', running_threads: [] } },
+        { state_revision: 1, observed_at: 10, outcome: { ...outage, site } }, current);
+      assert.equal(choice.choice, fallback);
+      assert.equal(choice.observation.reason, 'decision_unavailable');
+      assert.equal(choice.status, needs_dispatch ? 'paused' : site === 'intake.classify' ? 'needs_human' : 'transition');
+    }
+    for (const site of ['guard.input', 'guard.output'] as const) {
+      const guard = transitionBooleanSite(site, { ...input, needs_dispatch }, { state_revision: 1, observed_at: 10, outcome: { ...outage, site } }, current);
+      assert.equal(guard.status, 'needs_human');
+      assert.deepEqual(guard.approval_requests.map(request => request.reason),
+        (site === 'guard.input' ? INPUT_RULES : ['out_of_grant_effect']).map(() => 'decision_unavailable'));
+    }
+    const preselect = transitionBooleanSite('loop.preselect', { ...input, needs_dispatch },
+      { state_revision: 1, observed_at: 10, outcome: { ...outage, site: 'loop.preselect' } }, current);
+    assert.equal(preselect.status, 'transition');
+    assert.equal(preselect.preselect?.reason, 'admission');
+    assert.equal(preselect.catalogue_index.length, input.catalogue_index.length);
+  }
+});
+
 test('D3 admission failures return the full index without schemas', () => {
   const good = recorded('loop.preselect', entries, .1);
   assert.equal(good.outcome.status, 'accepted');

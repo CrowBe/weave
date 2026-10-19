@@ -183,6 +183,23 @@ and `observations`. Fabric checks the grant it is given against the authority
 that issued it. A test feeds a clean D7 into a Fabric invocation to show this.
 Wiring the guards must keep both properties and must supply the disclosure.
 
+Outage outcomes differ by what a site decides, and the split is intentional
+(#100). A P5 choice site proposes a transition and has a deterministic
+fallback, so its outage is a missing observation, not an authority question.
+Read-only work takes the fallback. Dispatch-dependent work pauses, so a
+fallback such as D1's `implement` at the strong tier never dispatches on a
+guess. The pause is resumable without a human, and resumption observes
+availability again. A D4 or D7 guard decides whether a dispatch may proceed.
+An outage leaves that question open, so the guard takes the same outcome as any
+other unestablished judgment: approval requests with reason
+`decision_unavailable` and status `needs_human`, whatever `needs_dispatch`
+says. A guard never returns `transition` or `paused` for an outage. The audit
+loop composes the two. With `needs_dispatch` and `decision_unavailable` it
+records a resumable `decision_unavailable` pause, and resumption asks the guard
+again. The dispatch proceeds only after a clean guard judgment or a human
+approval. On an outage D3 returns the full disclosed index and D5 fails every
+criterion. Neither pauses except on cancellation.
+
 Provisional confidence floors: .75 for a published D3 boundary confidence and
 .90 for D4/D7, pending P10 calibration. A missing D3 confidence is unknown. A
 published D3 confidence outside [0, 1] is `invalid_confidence` for the whole

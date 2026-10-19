@@ -263,7 +263,7 @@ Stop:
 3. **Iteration cap**: `max_iterations` (default 4 audit rounds).
 4. **No progress**: D8 says `stalled`/`regressing` twice in a row, or the same `issue_id` reappears after two fix attempts.
 5. **Authority**: D4 or D7 block, or a needed approval, goes to `needs_human`.
-6. **Decision outage**: the configured decision provider is unavailable. The loop drops to `ScriptedDecisionLayer` plus deterministic fallbacks for *read-only* steps, and requests approval before any dispatch that needs D4 or D7.
+6. **Decision outage**: the configured decision provider is unavailable. The loop drops to `ScriptedDecisionLayer` plus deterministic fallbacks for *read-only* steps, and requests approval before any dispatch that needs D4 or D7. The outcomes differ by site on purpose ([#100](https://github.com/CrowBe/weave/issues/100)). D1, D2, D8 and intake pause dispatch-dependent steps, because their outage is a missing observation and the pause is resumable. D4 and D7 return approval requests with reason `decision_unavailable` (`needs_human`), because their outage leaves an authority question open. The [sites contract](../packages/weave/src/sites/CONTRACT.md) records the rationale.
 
 ## 7. Phased PR plan
 
