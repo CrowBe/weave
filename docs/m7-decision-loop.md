@@ -463,7 +463,11 @@ The gate reads quota before every attempt, and the gateway checks the deadline
 again after each read. A deadline that passes before the first attempt,
 including during that read, gives `blocked: deadline_passed` with no attempts,
 the same outcome as a deadline already past on arrival. Once an attempt has
-been made it gives `unaccepted: deadline_reached` (#79).
+been made it gives `unaccepted: deadline_reached` (#79). The gateway does not
+wait out a slow `QuotaPort.read()`: cancellation, or the deadline when a timer
+is configured, ends the wait, and the pending read counts as no observation.
+The same rechecks then decide the outcome, so nothing dispatches (#75). Without
+a timer the deadline is checked only once the read settles.
 
 Offline fixtures cover 79/80/95% usage, stale/missing quota, unknown pace,
 downgrade constraints, audit pause, five-hour preference, retry rechecks,

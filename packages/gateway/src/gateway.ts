@@ -41,6 +41,7 @@ import {
   type Micros,
   type ProviderAvailability,
   type QuotaPort,
+  type QuotaSnapshot,
   type LoopPausedRecord,
   type ProviderFailure,
   type ProviderUsage,
@@ -56,6 +57,10 @@ import {
 export interface GatewayConfig {
   /** Provider selection is exclusive: no cross-provider fallback. */
   readonly decision?: DecisionConfig;
+  /**
+   * Read before every attempt. A read still pending when the caller cancels,
+   * or at the deadline when a timer is configured, counts as no observation.
+   */
   readonly quota?: QuotaPort;
   /** Awaited persistence; a failed write prevents further dispatch. */
   readonly persist_pause?: (record: LoopPausedRecord) => Promise<void>;
@@ -339,8 +344,7 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
     if (clock.now() >= terms.deadline) {
       return finish(attempts.length ? { status: 'unaccepted', reason: 'deadline_reached' } : { status: 'blocked', reason: 'deadline_passed' });
     }
-    let snapshot;
-    try { snapshot = await params.quota?.read(); } catch { snapshot = undefined; }
+    const snapshot = await readQuota(params);
     const decision = budgetRoute(params.routes, params.target, terms, params.minEvidence,
       params.availability, snapshot, clock.now(), params.containsCredentials);
     for (const note of decision.uncertainty) if (!uncertainty.includes(note)) uncertainty.push(note);
@@ -465,6 +469,43 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
     return finish({ status: 'unaccepted', reason: 'budget_exhausted' });
   }
   return finish({ status: 'unaccepted', reason: lastFailed ? 'provider_failed' : 'attempts_exhausted' });
+}
+
+/**
+ * A quota read that has not settled by the time the caller cancels, or by the
+ * request deadline when a timer is configured, counts as no observation. The
+ * loop rechecks the signal and the deadline afterwards, so nothing dispatches
+ * on it. A failed read is likewise no observation.
+ */
+async function readQuota<T>(params: BoundedParams<T>): Promise<QuotaSnapshot | undefined> {
+  const quota = params.quota;
+  if (quota === undefined) return undefined;
+  const read = Promise.resolve().then(() => quota.read()).catch(() => undefined);
+  const watcher = new AbortController();
+  let stop!: () => void;
+  const stopped = new Promise<undefined>(resolve => { stop = () => resolve(undefined); });
+  params.signal?.addEventListener('abort', stop, { once: true });
+  if (params.signal?.aborted) stop();
+  const deadline = async (timer: Timer) => {
+    try {
+      // A read that is already settling wins before any wait starts.
+      await Promise.race([read, Promise.resolve()]);
+      while (!watcher.signal.aborted) {
+        const remaining = params.terms.deadline - params.clock.now();
+        if (remaining <= 0) { stop(); return; }
+        await timer.sleep(Math.min(remaining, 2 ** 31 - 1), watcher.signal);
+      }
+    } catch {
+      // A failed timer cannot bound the read; the loop still rechecks after it.
+    }
+  };
+  if (params.timer !== undefined) void deadline(params.timer);
+  try {
+    return await Promise.race([read, stopped]);
+  } finally {
+    watcher.abort();
+    params.signal?.removeEventListener('abort', stop);
+  }
 }
 
 /** Each attempt owns its cancellation state; no timer or signal crosses calls. */

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
+import { setTimeout as delay } from 'node:timers/promises';
 import { it } from 'node:test';
-import { createInferenceGateway, type GatewayConfig, type GenerationRequest, type QuotaSnapshot, type RoutedUnit } from '@weave/gateway';
+import { createInferenceGateway, type GatewayConfig, type GenerationRequest, type QuotaSnapshot, type RoutedUnit, type Timer } from '@weave/gateway';
 
 const unit: RoutedUnit = {
   routed_unit_id: 'strong.codex', tier: 'strong', quota_provider: 'codex',
@@ -217,4 +218,52 @@ it('a deadline passing during the quota recheck after an attempt is deadline_rea
   assert.equal(outcome.attempts.length, 1);
   assert.equal(calls, 1);
   assert.equal(reads, 2);
+});
+
+/** Settles with the outcome, or 'hung' when the gateway is still waiting. */
+async function settles<T>(pending: Promise<T>): Promise<T | 'hung'> {
+  return Promise.race([pending, delay(1_000).then(() => 'hung' as const)]);
+}
+const hangingRead = { read: () => new Promise<QuotaSnapshot | undefined>(() => {}) };
+it('cancellation during a slow quota read ends the request without waiting for the read (#75)', async () => {
+  for (const prior of [false, true]) {
+    let reads = 0, calls = 0;
+    const controller = new AbortController();
+    const gateway = createInferenceGateway({ routes: [unit], clock: { now: () => 100 },
+      quota: { read() { if (++reads === 1 && prior) return Promise.resolve(snapshot(90)); queueMicrotask(() => controller.abort()); return hangingRead.read(); } },
+      adapters: [{ id: 'fake', async execute() { calls++; return { status: 'failed',
+        failure: { code: 'unavailable', message: 'unavailable', retryable: true } }; } }],
+    });
+    const outcome = await settles(gateway.generate(request, controller.signal));
+    assert.notEqual(outcome, 'hung');
+    if (outcome === 'hung') return;
+    assert.equal(outcome.status, 'unaccepted');
+    if (outcome.status === 'unaccepted') assert.equal(outcome.reason, 'provider_failed');
+    assert.equal(outcome.attempts.length, prior ? 1 : 0);
+    assert.equal(calls, prior ? 1 : 0);
+  }
+});
+it('the request deadline bounds a slow quota read when a timer is configured (#75)', async () => {
+  for (const prior of [false, true]) {
+    let now = 100, reads = 0, calls = 0, armed = false;
+    // Sleeps advance the clock only once the slow read has started, so the
+    // first attempt's own deadline watcher stays parked until it settles.
+    const timer: Timer = { sleep(ms, signal) {
+      if (armed) { now += ms; return Promise.resolve(); }
+      return new Promise(resolve => signal?.addEventListener('abort', () => resolve(), { once: true }));
+    } };
+    const gateway = createInferenceGateway({ routes: [unit], clock: { now: () => now }, timer,
+      quota: { read() { if (++reads === 1 && prior) return Promise.resolve(snapshot(90)); armed = true; return hangingRead.read(); } },
+      adapters: [{ id: 'fake', async execute() { calls++; return { status: 'failed',
+        failure: { code: 'unavailable', message: 'unavailable', retryable: true } }; } }],
+    });
+    const outcome = await settles(gateway.generate(request));
+    assert.notEqual(outcome, 'hung');
+    if (outcome === 'hung') return;
+    assert.deepEqual([outcome.status, 'reason' in outcome ? outcome.reason : null],
+      prior ? ['unaccepted', 'deadline_reached'] : ['blocked', 'deadline_passed']);
+    assert.equal(outcome.attempts.length, prior ? 1 : 0);
+    assert.equal(calls, prior ? 1 : 0);
+    assert.equal(now, request.terms.deadline);
+  }
 });
