@@ -75,6 +75,10 @@ describe('Amos local decision contract', () => {
       'http://localhost?',
       'http://localhost#',
       'file:///tmp/amos',
+      '',
+      ' ',
+      'not a url',
+      '127.0.0.1:8766',
     ]) {
       assert.throws(() => amosEvaluator({ baseURL }), /loopback HTTP URL/);
     }
