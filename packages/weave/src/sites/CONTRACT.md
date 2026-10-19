@@ -314,3 +314,51 @@ resume reuses that round and its checkpoint, so pauses do not consume the audit
 round cap. An over-budget tidy-state observation is never checkpointed, so a
 resumed budget pause observes the current budget again. Journal entry ids remain unique across repeated pauses. Completion
 rechecks the current revision after D6, including the empty-finding path.
+
+## Live confidence decision (#198, #142)
+
+Recorded from the non-gating P10 run `live-20261015`. No configured provider
+publishes a per-question confidence. jev-1.14.0 and amos-1-2b return only a
+probability for each boolean answer: on the holdout, 12 of 12 `eval.output`,
+64 of 64 `guard.input`, and 18 of 18 `guard.output` confidences were missing
+for each provider. D5 passes a criterion only at p >= .8 with a published
+confidence >= .9, and D4/D7 need a confidence >= .90 on every rule. Live, every
+judgment criterion therefore fails D5 as `missing_confidence`, and every guard
+evaluation, clean or not, is an approval request with that reason. Both fail
+safe. No threshold changes; thresholds change only on tune-split evidence and
+the holdout stays untouched.
+
+D5 (#198) options and the evidence each rests on:
+
+1. Settle check-provable criteria without D5 (#199). Applies; it landed as
+   criterion proof. It rests on structure, not a statistic: a check whose
+   oracle generation cannot write establishes the property, so D5 is not asked.
+   It removes the dependency for those criteria only.
+2. A probability-only D5 rule with a stricter band. Does not apply. The only
+   evidence is the report's descriptive holdout diagnostic: 83.3% violation
+   recall at P(violation) >= .3 for both providers, on 12 holdout items each.
+   About one unsatisfied criterion in six would pass, which is not enough for a
+   completion gate. A holdout figure cannot fit a threshold, and no tune-split
+   fit exists: the 12 tune items per provider ended `minimum_coverage_unmet`.
+3. Per-provider calibration from P10 before any rule change. Deferred; it is a
+   prerequisite of option 2 and needs a tune split with enough judgment
+   criteria per provider. The recorded Brier .070 / .083 and ECE .075 / .096
+   (jev / amos, 12 items) are descriptive only.
+
+Under this rule a live-shaped D5 answer fails its criterion with
+`missing_confidence` and keeps its probability as `verdict_probability`. The
+implementation step retries, escalates once and raises an `open_issue@1` with
+source `eval`. A goal with any judgment criterion ends a clean audit round as
+`evidence_missing`. Check-proven criteria complete on current green checks.
+
+D4/D7 (#142) follow the same record. Every live guard evaluation requests
+approval with reason `missing_confidence`, for clean judgments and violations
+alike. The descriptive holdout diagnostic is mixed. For `guard.input`,
+violation recall is 100% / 75.0% with false-block rates of 34.6% / 28.8%
+(jev / amos). For `guard.output` it is 100% / 100% with 0% / 55.6%. A
+probability-only guard rule would need a tune-split fit per provider, one
+holdout scoring, and the captain's approval before any guard could pass
+without a confidence. Deterministic D4/D7 pre-checks remain an open question
+under #197. `packages/weave/test/live-confidence.test.ts` pins the D5,
+completion and guard outcomes with answers shaped like tune-split rows of that
+run.
