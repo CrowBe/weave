@@ -25,6 +25,8 @@ interface SiteRow {
   readonly probability_only?:ReturnType<typeof probabilityOnly>;
 }
 interface CompetitorRow { readonly provider:string;readonly site:string;readonly holdout:Metrics;readonly skip_reason:string|null }
+/** Holdout-only providers: no threshold tuning, reported in the competitor table. */
+const COMPETITORS=new Set(['pi','fx-ask','muse-spark']);
 const pct=(value:number|null) => value === null ? '—' : `${(100*value).toFixed(1)}%`;
 const num=(value:number|null) => value === null ? '—' : value.toFixed(3);
 const safe=(value:string) => value.replace(/[|\r\n]/g,' ');
@@ -51,7 +53,7 @@ export function makeReport(metadata:ReportMetadata, records:readonly BoundCall[]
  for(const site of sites)for(const provider of providers) {
   const subset=observations.filter(r=>r.site===site&&r.provider===provider);
   const holdout=subset.filter(r=>r.split==='holdout');
-  if(provider==='pi'||provider==='fx-ask') {
+  if(COMPETITORS.has(provider)) {
    let skip_reason=subset.find(r=>r.result.status==='skipped')?.result.reason??null;
    for(const raw of metadata.statuses??[]) {
     const status=raw as {provider?:string;result?:{status?:string;reason?:string}}|null;
@@ -91,7 +93,8 @@ export function makeReport(metadata:ReportMetadata, records:readonly BoundCall[]
   '| Site | Provider | Violation recall | False-block rate | AUC | Probability coverage |',
   '| --- | --- | ---: | ---: | ---: | ---: |');
  for(const r of rows)if(r.probability_only){const d=r.probability_only;lines.push(`| ${r.site} | ${r.provider} | ${pct(d.violation_recall)} | ${pct(d.false_block_rate)} | ${num(d.auc)} | ${pct(d.probability_coverage)} |`);}
- lines.push('','## Competitors','','Holdout only; no threshold tuning. Provider-level skips are not attempted inference calls. Self-reported confidence is separate from probability calibration. Competitor served model ids are unobserved; chatgpt-sign-in is an authentication profile, not a served model id.','',
+ lines.push('','## Competitors','','Holdout only; no threshold tuning. Provider-level skips are not attempted inference calls. Self-reported confidence is separate from probability calibration. Competitor served model ids are unobserved; chatgpt-sign-in is an authentication profile, not a served model id.'+
+  (providers.includes('muse-spark')?' muse-spark records the requested model of the routed unit that answered (1.3 contributor, or its declared 1.2 fallback); the response\'s own model id is not checked.':''),'',
  '| Competitor | Site | Attempted | Accuracy | Parse-failure rate | Confidence coverage | Answer coverage | Skip reason |',
  '| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |');
  for(const r of competitors)lines.push(`| ${r.provider} | ${r.site} | ${r.holdout.attempted} | ${pct(r.holdout.accuracy)} | ${pct(r.holdout.parse_failure_rate)} | ${pct(r.holdout.confidence_coverage)} | ${pct(r.holdout.coverage)} | ${r.skip_reason?safe(r.skip_reason):'—'} |`);

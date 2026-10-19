@@ -354,3 +354,26 @@ test('summary and report separate observed spend from reserved spend; the ledger
   assert.match(report,/Reserved spend \(no usage receipt\): \$/);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test('muse-spark is an opt-in holdout competitor that records the operator content class',async()=>{
+ const id=`muse-spark-${process.pid}`,dir=join(testRoot,'results',id);
+ const args=['--providers','muse-spark','--sites','loop.route','--split','all','--run-id',id];
+ await assert.rejects(main(args),/content-class/);
+ assert.equal(existsSync(join(dir,'journal.jsonl')),false,'a refused classification writes nothing');
+ const splits:string[]=[];
+ const p:Provider={id:'muse-spark',model:'muse-spark-1.3-contributor',competitor:true,price:0,serialize:JSON.stringify,request:async request=>{
+  splits.push(JSON.stringify(request.state));
+  return {status:'ok',model:'muse-spark-1.3-contributor',input_tokens:5,output_tokens:300,answers:{decision:{choice:'flash',confidence:.9}}};
+ }};
+ try{
+  assert.equal(await main([...args,'--content-class','non_sensitive'],{providers:[p]}),0);
+  assert.equal(splits.length,12,'holdout only');
+  const run=readFileSync(join(dir,'journal.jsonl'),'utf8').trim().split('\n').map(line=>JSON.parse(line)).find(r=>r.type==='run');
+  assert.equal(run.content_class,'non_sensitive');
+  const summary=JSON.parse(readFileSync(join(dir,'summary.json'),'utf8'));
+  assert.deepEqual(summary.decision_providers,[]);
+  assert.equal(summary.competitors[0].provider,'muse-spark');assert.equal(summary.competitors[0].holdout.attempted,12);
+  assert.deepEqual(summary.models_served,['muse-spark-1.3-contributor']);
+  assert.match(readFileSync(join(dir,'REPORT.md'),'utf8'),/muse-spark records the requested model of the routed unit that answered/);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});

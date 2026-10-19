@@ -1,4 +1,4 @@
-/** Direct benchmark routes: no gateway policy, shuffles, tier downgrades or ambient credentials. */
+/** Direct benchmark routes: no gateway policy, shuffles, tier downgrades or ambient credentials. The Muse Spark competitor (competitors.ts) is the one gateway-routed exception. */
 import { typesafeWireProfile } from '@weave/gateway/typesafe-ai';
 import { amosBody, amosEvaluator } from '@weave/gateway/amos';
 import type { EvaluationAnswer, EvaluationCall, EvaluationQuestion } from '@weave/gateway';
