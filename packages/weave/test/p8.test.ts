@@ -535,7 +535,8 @@ test(`restart cannot replay green durable checks against a new generation (same 
     assert.equal(result.status, 'failed');
     assert.equal(result.checks[0]?.exit, 1);
     assert.equal(result.checks[0]?.passed, false);
-    assert.equal(result.evals[0]?.passed, true);
+    assert.deepEqual(result.evals, []);
+    assert.equal(result.attempts[0]?.eval_skipped, 'check_failed');
     assert.equal(result.execution_id, work.execution_id);
     assert.equal(result.attempts[0]?.attempt, 1);
     assert.equal(readFileSync(join(dir, 'runs'), 'utf8'), 'check\ncheck\n');
@@ -643,7 +644,7 @@ test('escalation blocked by the ceiling or the budget gate raises an open issue 
   }
 });
 
-test('D5 uncertainty fails the step, and red checks fail it even when D5 passes', async () => {
+test('D5 uncertainty fails the step, and red checks fail it without asking D5', async () => {
   const cases = [
     { name: 'low confidence', evaluation: { c1: { p: .95, conf: .89 } } as const, reason: 'low_confidence' },
     { name: 'missing confidence', evaluation: { c1: { p: .95 } } as const, reason: 'missing_confidence' },
@@ -671,13 +672,13 @@ test('D5 uncertainty fails the step, and red checks fail it even when D5 passes'
   const failed = await runImplementationStep(red.input, red.ports, red.journal);
   assert.equal(failed.status, 'failed');
   assert.equal(failed.goal_done, false);
-  assert.equal(failed.evals[0]?.passed, true);
+  assert.deepEqual(failed.evals, []);
   assert.equal(failed.checks[0]?.passed, false);
   assert.equal(failed.checks[0]?.exit, 1);
   assert.equal(failed.open_issue?.source, 'check');
   assert.deepEqual(failed.open_issue?.check_ids, ['repo.test']);
   assert.deepEqual(failed.open_issue?.criterion_ids, []);
-  assert.equal(red.evalSites.length, 1);
+  assert.equal(red.evalSites.length, 0);
 });
 
 test('a budget downgrade cannot raise the tier, and a missing grant is a failed check', async () => {
@@ -965,4 +966,41 @@ test('criterion proof: a bound check id is green only when every run of it passe
   assert.equal(result.status, 'failed');
   assert.deepEqual(world.evalSites, []);
   assert.deepEqual(result.attempts[0]?.failing_criterion_ids, ['c1']);
+});
+
+// #200: a red check already fails the attempt, so D5 is not asked about it.
+test('a red check skips D5 for that attempt and records why; a green attempt asks D5 as before', async () => {
+  const world = driver({ input: input({ retries: 1, ceiling: 'flash' }), exits: [1, 0] });
+  const result = await runImplementationStep(world.input, world.ports, world.journal);
+  assert.equal(result.status, 'passed');
+  assert.deepEqual(world.evalSites, ['eval.output']);
+  const [red, green] = result.attempts;
+  assert.equal(red?.status, 'failed');
+  assert.equal(red?.eval_skipped, 'check_failed');
+  assert.deepEqual(red?.evals, []);
+  assert.deepEqual(red?.observations, []);
+  assert.deepEqual(red?.failing_criterion_ids, []);
+  assert.deepEqual(red?.failing_check_ids, ['repo.test']);
+  assert.match(world.prompts[1] ?? '', /check_id=repo\.test passed=false exit=1/);
+  assert.equal(world.prompts[1]?.includes('criterion_id='), false);
+  // A skipped D5 is not an outage: the retry stays on the same tier.
+  assert.equal(green?.escalated, false);
+  assert.equal(green?.eval_skipped, undefined);
+  assert.equal(Object.hasOwn(green ?? {}, 'eval_skipped'), false);
+  assert.equal(green?.evals[0]?.passed, true);
+  assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), result);
+});
+
+test('a red check on the last attempt raises a check-sourced open issue with no D5 evaluation', async () => {
+  const world = driver({ input: input({ retries: 0, ceiling: 'flash' }), exits: [1] });
+  const result = await runImplementationStep(world.input, world.ports, world.journal);
+  assert.equal(result.status, 'failed');
+  assert.deepEqual(world.evalSites, []);
+  assert.deepEqual(result.evals, []);
+  assert.deepEqual(result.observations, []);
+  assert.equal(result.attempts[0]?.eval_skipped, 'check_failed');
+  assert.equal(result.open_issue?.source, 'check');
+  assert.deepEqual(result.open_issue?.check_ids, ['repo.test']);
+  assert.deepEqual(result.open_issue?.criterion_ids, []);
+  assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), result);
 });
