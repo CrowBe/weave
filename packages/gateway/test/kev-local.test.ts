@@ -61,6 +61,26 @@ describe('local Kev evaluator', () => {
     assert.deepEqual(Object.keys(criteria), ['auth', 'payments', 'ui']);
   });
 
+  it('shuffles choice criteria per call by default, keeping every key', async (t) => {
+    t.mock.method(Math, 'random', () => 0);
+    const criteria = { auth: 'authentication', payments: 'payments', ui: 'interface' };
+    let sent: string[] = [];
+    const fetch: typeof globalThis.fetch = async (_url, init) => {
+      const body = JSON.parse(String(init?.body)) as {
+        questions: { area: { criteria: Record<string, string> } };
+      };
+      sent = Object.keys(body.questions.area.criteria);
+      return new Response(JSON.stringify({ answers: { area: { type: 'choice', choice: 'ui' } } }));
+    };
+
+    const result = await kevLocalEvaluator({ runtime: { ensureReady: async () => ({ status: 'ready' }) }, fetch })
+      .evaluate({ ...CALL, kind: 'choice', questions: { area: { type: 'choice', instructions: 'Which area?', criteria } } });
+
+    // Fisher-Yates with a constant 0 draw moves the last key to the front, then swaps the first two.
+    assert.deepEqual(sent, ['payments', 'ui', 'auth']);
+    assert.deepEqual(result.status === 'completed' && result.answers['area'], { type: 'choice', choice: 'ui' });
+  });
+
   it('warms the external runtime before crossing the HTTP seam', async () => {
     const events: string[] = [];
     const runtime: KevRuntime = {
