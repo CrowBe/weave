@@ -13,11 +13,11 @@ execution or replace deterministic evidence.
 - [Versioned trace ingestion](packages/agentsop/src/TRACE-CONTRACT.md):
   JSONL tree schema, redaction and idempotent importer port.
 - [Weft records](packages/weft/src/WEFT-CONTRACT.md): `weft.record@1`
-  envelope, kinds, links, evidence and fail-closed validation. Contract only;
-  its fixtures are red until W2 (#184).
+  envelope, kinds, links, evidence and fail-closed validation
+  (`@weave/weft`, `validateRecord`).
 - [Gauge evaluation](packages/gauge/src/GAUGE-CONTRACT.md): criteria sets,
   case sets, evaluation results, comparisons and failure attributions with
-  recomputed verdicts. Contract only; its fixtures are red until G2 (#190).
+  recomputed verdicts (`@weave/gauge`, `validate`).
 - [M7 decision loop](docs/m7-decision-loop.md): audit report, loop-back,
   deterministic completion evidence, budget and authority boundaries.
 

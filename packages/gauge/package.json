@@ -1,0 +1,16 @@
+{
+  "name": "@weave/gauge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Gauge: evaluation records (criteria sets, case sets, results, comparisons, failure attributions) and a validator that recomputes every verdict. Depends on Weft's public contract only; produces evidence and never promotes.",
+  "exports": {
+    ".": "./dist/src/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@weave/weft": "*"
+  }
+}
