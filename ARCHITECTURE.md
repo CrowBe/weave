@@ -67,7 +67,9 @@ implementation must both be able to call it and neither may reach the other
 through it. It imports nothing in-repo, and provider adapters sit behind their
 own entry points so the request interface carries no provider dependency.
 Weft (`packages/weft`) owns the `weft.record@1` trace contract and its
-fail-closed validator. A Weft trace is a non-authoritative projection for
+fail-closed validator, and the P9 `weave.trace@1` envelope and importer port,
+which moved out of AgentSOP because tracing is not contract-layer meaning.
+A Weft trace is a non-authoritative projection for
 inspection and evaluation; Loom, Fabric and the gateway will emit to it through
 a port each receives at composition (W5), so Weft imports nothing in-repo and
 never reaches back into runtime, scheduling or capability-host concerns. Gauge
