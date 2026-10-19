@@ -1935,6 +1935,34 @@
         "confidence": null,
         "evidence": []
       }
+    },
+    {
+      "name": "an evaluation cost counting failed trials, evaluation and review",
+      "record": {
+        "schema": "gauge.cost@1",
+        "cost": "cost-res-cand",
+        "result": "res-cand",
+        "trials": 130,
+        "failed_trials": 10,
+        "trial_micros": 15600,
+        "evaluation_micros": 2400,
+        "review_micros": 9000,
+        "total_micros": 27000
+      }
+    },
+    {
+      "name": "an evaluation cost with no review",
+      "record": {
+        "schema": "gauge.cost@1",
+        "cost": "cost-res-base",
+        "result": "res-base",
+        "trials": 130,
+        "failed_trials": 0,
+        "trial_micros": 15600,
+        "evaluation_micros": 2400,
+        "review_micros": 0,
+        "total_micros": 18000
+      }
     }
   ],
   "invalid": [
@@ -4630,6 +4658,95 @@
           }
         ],
         "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "an evaluation cost that leaves out review",
+      "reason": "envelope",
+      "record": {
+        "schema": "gauge.cost@1",
+        "cost": "cost-res-cand",
+        "result": "res-cand",
+        "trials": 130,
+        "failed_trials": 10,
+        "trial_micros": 15600,
+        "evaluation_micros": 2400,
+        "total_micros": 27000
+      }
+    },
+    {
+      "name": "an evaluation cost with a negative line",
+      "reason": "envelope",
+      "record": {
+        "schema": "gauge.cost@1",
+        "cost": "cost-res-cand",
+        "result": "res-cand",
+        "trials": 130,
+        "failed_trials": 10,
+        "trial_micros": 15600,
+        "evaluation_micros": -1,
+        "review_micros": 9000,
+        "total_micros": 24599
+      }
+    },
+    {
+      "name": "an evaluation cost with a malformed id",
+      "reason": "ref",
+      "record": {
+        "schema": "gauge.cost@1",
+        "cost": "cost res-cand",
+        "result": "res-cand",
+        "trials": 130,
+        "failed_trials": 10,
+        "trial_micros": 15600,
+        "evaluation_micros": 2400,
+        "review_micros": 9000,
+        "total_micros": 27000
+      }
+    },
+    {
+      "name": "an evaluation cost for an unknown result",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.cost@1",
+        "cost": "cost-res-cand",
+        "result": "res-nowhere",
+        "trials": 130,
+        "failed_trials": 10,
+        "trial_micros": 15600,
+        "evaluation_micros": 2400,
+        "review_micros": 9000,
+        "total_micros": 27000
+      }
+    },
+    {
+      "name": "more failed trials than trials",
+      "reason": "cost",
+      "record": {
+        "schema": "gauge.cost@1",
+        "cost": "cost-res-cand",
+        "result": "res-cand",
+        "trials": 130,
+        "failed_trials": 131,
+        "trial_micros": 15600,
+        "evaluation_micros": 2400,
+        "review_micros": 9000,
+        "total_micros": 27000
+      }
+    },
+    {
+      "name": "a total that leaves out failed trials",
+      "reason": "cost",
+      "record": {
+        "schema": "gauge.cost@1",
+        "cost": "cost-res-cand",
+        "result": "res-cand",
+        "trials": 130,
+        "failed_trials": 10,
+        "trial_micros": 15600,
+        "evaluation_micros": 2400,
+        "review_micros": 9000,
+        "total_micros": 25800
       }
     }
   ]

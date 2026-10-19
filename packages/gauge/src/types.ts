@@ -139,7 +139,27 @@ export interface FailureAttribution {
   readonly evidence: readonly EvidenceRef[];
 }
 
-export type GaugeRecord = CriteriaSet | CaseSet | Revision | EvaluationResult | Comparison | FailureAttribution;
+/** What producing one result cost, failed trials, evaluation and review included. */
+export interface EvaluationCost {
+  readonly schema: 'gauge.cost@1';
+  readonly cost: string;
+  readonly result: string;
+  readonly trials: number;
+  readonly failed_trials: number;
+  readonly trial_micros: number;
+  readonly evaluation_micros: number;
+  readonly review_micros: number;
+  readonly total_micros: number;
+}
+
+export type GaugeRecord =
+  | CriteriaSet
+  | CaseSet
+  | Revision
+  | EvaluationResult
+  | Comparison
+  | FailureAttribution
+  | EvaluationCost;
 
 /** First applicable rejection reason, in the contract's order. */
 export type Rejection =
@@ -152,9 +172,46 @@ export type Rejection =
   | 'measure'
   | 'constraint'
   | 'verdict'
-  | 'attribution';
+  | 'attribution'
+  | 'cost';
 
 export type Verdict = { readonly ok: true } | { readonly ok: false; readonly reason: Rejection };
+
+/** A producer's outcome: a record that has passed `validate`, or the first rejection. */
+export type Produced<T> = { readonly ok: true; readonly record: T } | { readonly ok: false; readonly reason: Rejection };
+
+/** Samples for one evaluation result, one list per criteria measure. */
+export interface Run {
+  readonly result: string;
+  readonly subject: EvaluationResult['subject'];
+  /** The workload the samples came from. It must be the criteria set's and case set's. */
+  readonly workload: string;
+  readonly criteria: string;
+  readonly caseset: string;
+  readonly split: Split;
+  readonly mode: EvaluationResult['mode'];
+  readonly evidence: readonly EvidenceRef[];
+  /** Keyed by measure. A rate sample is 0 or 1; an empty list is no evidence. */
+  readonly samples: Readonly<Record<string, readonly number[]>>;
+}
+
+export interface ComparisonRequest {
+  readonly comparison: string;
+  readonly experiment: string | null;
+  readonly baseline: string;
+  readonly candidate: string;
+}
+
+/** One step of a track: a result compared with the one recorded before it. */
+export interface TrackStep {
+  readonly previous: string;
+  readonly next: string;
+  readonly deltas: Comparison['deltas'];
+  readonly verdict: ComparisonVerdict;
+  readonly regression: boolean;
+}
+
+export type Track = { readonly ok: true; readonly steps: readonly TrackStep[] } | { readonly ok: false; readonly reason: Rejection };
 
 /**
  * Known criteria sets, case sets, results and revisions, keyed by `criteria`,

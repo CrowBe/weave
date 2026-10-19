@@ -16,8 +16,10 @@ execution or replace deterministic evidence.
   envelope, kinds, links, evidence and fail-closed validation
   (`@weave/weft`, `validateRecord`).
 - [Gauge evaluation](packages/gauge/src/GAUGE-CONTRACT.md): criteria sets,
-  case sets and their governed revisions, evaluation results, comparisons and
-  failure attributions with recomputed verdicts (`@weave/gauge`, `validate`).
+  case sets and their governed revisions, evaluation results, comparisons,
+  evaluation costs and failure attributions with recomputed verdicts, plus
+  seeded statistics (`@weave/gauge`: `validate`, `evaluate`, `compare`,
+  `track`).
 - [M7 decision loop](docs/m7-decision-loop.md): audit report, loop-back,
   deterministic completion evidence, budget and authority boundaries.
 
