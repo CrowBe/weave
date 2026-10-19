@@ -395,6 +395,26 @@ for (const [url, ok] of [
   if (!result.ok) assert.ok(result.errors.some(e => e.includes('decision.providers.typesafe-jev.base_url')));
 });
 
+it('an overlay __proto__ key stays data: it sets no prototype and validation rejects it (#68)', () => {
+  // JSON.parse keeps `__proto__` as an own key, as when reading weave.routes.local.json.
+  const overlay = JSON.parse('{"__proto__":{"units":[]},"decision":{"__proto__":{"sites":{"loop.preselect":"amos"}}}}');
+  const merged = applyRouteOverlay(example(), overlay) as Record<string, Record<string, unknown>>;
+  assert.equal(Object.getPrototypeOf(merged), Object.prototype);
+  assert.equal(Object.getPrototypeOf(merged['decision']), Object.prototype);
+  assert.equal(Object.hasOwn(merged, '__proto__'), true);
+  const parsed = parseRouteConfig(merged);
+  assert.equal(parsed.ok, false);
+  if (!parsed.ok) {
+    assert.ok(parsed.errors.includes('invalid __proto__: unknown key'));
+    assert.ok(parsed.errors.includes('invalid decision.__proto__: unknown key'));
+  }
+  // No inherited field reaches validation from the overlay's __proto__ value.
+  const sparse = applyRouteOverlay({ decision: {} }, overlay) as Record<string, Record<string, unknown>>;
+  assert.equal(sparse['units'], undefined);
+  assert.equal(sparse['decision']!['sites'], undefined);
+  assert.equal(Object.hasOwn(sparse, '__proto__'), true);
+});
+
 it('chooses the TypeSafe provider from config and honours a local base URL', async () => {
   const input = example();
   const snapshot = structuredClone(input);

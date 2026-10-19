@@ -186,7 +186,9 @@ are unchanged; wiring the full M7 loop is outside P5.
 
 The composition root supplies parsed JSON to `parseRouteConfig`; the gateway
 reads no files, environment, or clock. The root may load `weave.routes.json` and
-an ignored `weave.routes.local.json` overlay. See
+an ignored `weave.routes.local.json` overlay. `applyRouteOverlay` keeps an
+overlay `__proto__` key as an ordinary key, which validation rejects as unknown;
+it never sets the merged object's prototype. See
 [weave.routes.example.json](../weave.routes.example.json) for the P1 shape:
 `units` is a route table and `decision` declares `provider`, nullable `fallback`,
 and named `providers` with `base_url`, `model`, optional `auth`, and optional

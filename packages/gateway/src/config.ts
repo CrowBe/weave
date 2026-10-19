@@ -99,13 +99,18 @@ export function bindDecisionProvider(decision: DecisionConfig, site?: string): D
 /**
  * Deep-merge a route-table overlay onto a base document. Objects merge; arrays
  * and scalars replace. The composition root uses this for `weave.routes.local.json`.
- * Neither value is mutated.
+ * Neither value is mutated. Keys are defined, not assigned, so a parsed
+ * `__proto__` key stays an own data key that `parseRouteConfig` rejects as
+ * unknown; it cannot replace the merged object's prototype.
  */
 export function applyRouteOverlay(base: unknown, overlay: unknown): unknown {
   if (!object(base) || !object(overlay)) return overlay;
   const out: Record<string, unknown> = { ...base };
   for (const [key, value] of Object.entries(overlay)) {
-    out[key] = Object.hasOwn(base, key) ? applyRouteOverlay(base[key], value) : value;
+    Object.defineProperty(out, key, {
+      value: Object.hasOwn(base, key) ? applyRouteOverlay(base[key], value) : value,
+      enumerable: true, writable: true, configurable: true,
+    });
   }
   return out;
 }
