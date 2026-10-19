@@ -5,6 +5,10 @@
  *   agentsop     imports neither weave nor agentfabric
  *   gateway      imports nothing in-repo: both runtimes may call it, and the
  *                inference request interface must not drag either in
+ *   weft         imports nothing in-repo: Loom, Fabric and the gateway emit to
+ *                it through a port, and it never reaches back into them
+ *   gauge        imports weft only: Agent University consumes it without Loom,
+ *                Fabric, AgentSOP or the gateway
  *   agentfabric  imports agentsop and gateway only
  *   weave        imports agentsop, agentfabric and gateway only
  *   tapestry     imports nothing in-repo and no renderer toolkit
@@ -20,6 +24,9 @@
  * its internals. Both directions were unchecked before: a relative specifier
  * that escaped packages/ resolved to no package and was read as third-party.
  *
+ * Every directory under packages/ must appear in ALLOWED. A package the check
+ * does not know about is a failure, not an unchecked package.
+ *
  * Runs on source text alone; it does not load Weave or its tests.
  */
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
@@ -32,6 +39,8 @@ const ALLOWED = {
   agentsop: new Set(),
   'auth-chatgpt': new Set(),
   gateway: new Set(),
+  weft: new Set(),
+  gauge: new Set(['weft']),
   agentfabric: new Set(['agentsop', 'gateway']),
   weave: new Set(['agentsop', 'agentfabric', 'gateway']),
   tapestry: new Set(),
@@ -92,6 +101,12 @@ function consumerOf(specifier, fromFile) {
 
 const violations = [];
 let filesChecked = 0;
+
+for (const entry of readdirSync(packagesDir)) {
+  if (statSync(join(packagesDir, entry)).isDirectory() && !Object.hasOwn(ALLOWED, entry)) {
+    violations.push(`packages/${entry}: no import direction declared — add it to ALLOWED in checks/import-direction.mjs`);
+  }
+}
 
 for (const pkg of Object.keys(ALLOWED)) {
   const pkgDir = join(packagesDir, pkg);

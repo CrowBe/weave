@@ -66,8 +66,19 @@ the same reason AgentSOP is, since Loom and a Fabric generative
 implementation must both be able to call it and neither may reach the other
 through it. It imports nothing in-repo, and provider adapters sit behind their
 own entry points so the request interface carries no provider dependency.
+Weft (`packages/weft`) owns the `weft.record@1` trace contract and its
+fail-closed validator. A Weft trace is a non-authoritative projection for
+inspection and evaluation; Loom, Fabric and the gateway will emit to it through
+a port each receives at composition (W5), so Weft imports nothing in-repo and
+never reaches back into runtime, scheduling or capability-host concerns. Gauge
+(`packages/gauge`) owns evaluation records and recomputes their verdicts. It
+depends on Weft's public contract only, never on Loom, Fabric, AgentSOP or the
+gateway, so an external consumer such as Agent University can use both without
+the reference stack. Gauge produces evidence; promotion stays a separate
+governed decision.
 Package-direction and no-ambient-clock checks live under `checks/` and run
-without Loom's tests. The external AgentFabric repository
+without Loom's tests. The direction check fails on a package directory it has
+no rule for, so a new package cannot go unchecked. The external AgentFabric repository
 is a conceptual reference, not a dependency or a code source: the contract
 invariants it established (durable contracts, opaque references separated from
 locators and from authority, a closed effect vocabulary, grant matching, failure

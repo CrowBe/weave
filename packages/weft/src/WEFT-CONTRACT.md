@@ -1,12 +1,11 @@
 # Weft record contract v1
 
-Status: contract only (W1, #183). The validator in `src/validate.ts` is a
-placeholder that accepts everything; `test/contract.test.ts` runs the
-fixtures in `fixtures/records.json` against it and is red by design
-(`npm run test:weft-contract`). W2 (#184) implements the validator to this
-contract, makes the test green, moves it onto the compiled package build and
-adds it to `npm run verify`. W3 (#185) maps `weave.trace@1` onto these records; W4 (#186)
-decides whether any content may be recorded inline.
+Status: contract (W1, #183) and validator (W2, #184). `validateRecord` in
+`src/validate.ts` implements this contract; `test/contract.test.ts` runs the
+fixtures in `fixtures/records.json` against the compiled package as part of
+`npm test` (`npm run test:weft-contract` alone). `@weave/weft` imports nothing
+in-repo (`checks/import-direction.mjs`). W3 (#185) maps `weave.trace@1` onto
+these records; W4 (#186) decides whether any content may be recorded inline.
 
 ## What a Weft trace is
 

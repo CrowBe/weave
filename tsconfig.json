@@ -2,6 +2,8 @@
   "files": [],
   "references": [
     { "path": "packages/agentsop" },
+    { "path": "packages/weft" },
+    { "path": "packages/gauge" },
     { "path": "packages/agentfabric" },
     { "path": "packages/gateway" },
     { "path": "packages/weave" },

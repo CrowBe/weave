@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { validate, type Context } from '../src/validate.ts';
+import { validate, type Context } from '@weave/gauge';
 
 interface Fixtures {
   readonly context: Context;
@@ -9,7 +9,8 @@ interface Fixtures {
   readonly invalid: readonly { readonly name: string; readonly reason: string; readonly record: unknown }[];
 }
 
-const fixtures = JSON.parse(readFileSync(new URL('../fixtures/records.json', import.meta.url), 'utf8')) as Fixtures;
+// Compiled to dist/test; the fixtures stay at the package root.
+const fixtures = JSON.parse(readFileSync(new URL('../../fixtures/records.json', import.meta.url), 'utf8')) as Fixtures;
 
 for (const { name, record } of fixtures.valid) {
   test(`accepts ${name}`, () => {

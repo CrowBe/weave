@@ -1,11 +1,10 @@
 # Gauge evaluation contract v1
 
-Status: contract only (G1, #189). The validator in `src/validate.ts` is a
-placeholder that accepts everything; `test/contract.test.ts` runs the
-fixtures in `fixtures/records.json` against it and is red by design
-(`npm run test:gauge-contract`). G2 (#190) implements the validator to this
-contract, makes the test green, moves it onto the compiled package build and
-adds it to `npm run verify`.
+Status: contract (G1, #189) and validator (G2, #190). `validate` in
+`src/validate.ts` implements this contract; `test/contract.test.ts` runs the
+fixtures in `fixtures/records.json` against the compiled package as part of
+`npm test` (`npm run test:gauge-contract` alone). `@weave/gauge` imports
+`@weave/weft` and nothing else in-repo (`checks/import-direction.mjs`).
 
 ## What Gauge is for
 
@@ -154,7 +153,7 @@ Rules:
   one workload or split say nothing about another.
 - **Deltas.** `delta` is candidate value minus baseline value, null when
   either is null. A non-null delta must carry an interval that contains it;
-  uncertainty is part of the result. Recomputation tolerates an absolute error
+  uncertainty is part of the result. A null delta carries a null interval. Recomputation tolerates an absolute error
   of 1e-9.
 - **Verdict** is recomputed in this order:
   1. `insufficient_evidence` if either result is, or no delta is non-null.
@@ -210,7 +209,10 @@ Rules:
 
 `validate(value, context)` returns `{ "ok": true }` or
 `{ "ok": false, "reason": reason }`. `context` supplies the known criteria
-sets, case sets and results, keyed by `criteria`, `caseset` and `result`. The
+sets, case sets and results, keyed by `criteria`, `caseset` and `result`. A
+context entry is known only if it validates itself and its key equals its own
+name; anything else in `context` is unknown, so a record bound to it fails with
+`binding`. The
 first applicable reason, in this order:
 
 1. `envelope`: not an object, unknown `schema`, missing, extra or mistyped

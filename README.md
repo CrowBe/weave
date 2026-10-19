@@ -75,7 +75,9 @@ holds the presentation core for the first workspace slice: project navigation,
 the conversational surface, and a pending authority request. `packages/tapestry-web`
 paints that tree. `packages/loom-binding` discloses a workspace view from recorded
 Loom state and does not hand the renderer a locator or the runtime's internal
-state. Requires Node 22 or later; offline entailment contract tests also require
+state. `packages/weft` validates `weft.record@1` trace records and imports
+nothing in-repo; `packages/gauge` validates evaluation records, recomputes their
+verdicts and depends on Weft only. Requires Node 22 or later; offline entailment contract tests also require
 Python 3.
 
 ```bash

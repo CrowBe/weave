@@ -1,0 +1,13 @@
+{
+  "name": "@weave/weft",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Weft: the weft.record@1 trace contract and its fail-closed validator. Imports nothing in-repo; a Weft trace is a non-authoritative projection.",
+  "exports": {
+    ".": "./dist/src/index.js"
+  },
+  "files": [
+    "dist"
+  ]
+}

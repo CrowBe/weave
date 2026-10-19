@@ -1,6 +1,7 @@
 /**
  * One implementation-tier step: generate, configured repo checks, then D5 for
- * the criteria whose criterion proof is `judgment`.
+ * the criteria whose criterion proof is `judgment`. A red check already fails
+ * the attempt, so D5 is not asked on that attempt (#200).
  *
  * The same execution id covers retries and the single escalation. Each finished
  * attempt is appended before the next one starts. Each check on each attempt
@@ -173,6 +174,8 @@ export interface AttemptRecord {
   readonly failing_criterion_ids: readonly string[];
   readonly failing_check_ids: readonly string[];
   readonly pause: ImplementPause | null;
+  /** Why D5 was not asked on this finished attempt. Absent when it was asked or had nothing to judge. */
+  readonly eval_skipped?: 'check_failed';
   /** Criterion proof admissions for this step. Absent on records written before #199. */
   readonly proofs?: readonly ProofAdmission[];
 }
@@ -493,6 +496,7 @@ function attemptRecord(fields: AttemptRecord): AttemptRecord {
     failing_criterion_ids: fields.failing_criterion_ids,
     failing_check_ids: fields.failing_check_ids,
     pause: fields.pause,
+    ...(fields.eval_skipped === undefined ? {} : { eval_skipped: fields.eval_skipped }),
     ...(fields.proofs === undefined ? {} : { proofs: fields.proofs }),
   };
 }
@@ -697,6 +701,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
     let observations: OutputEvalObservation[] = [];
     let failingCriteria: string[] = [];
     let failingChecks: string[] = [];
+    let evalSkipped: AttemptRecord['eval_skipped'];
     if (outcome.status !== 'accepted') {
       // Generation failed before D5: retain the blocker without fabricating an evaluation.
       failingCriteria = normalized.criteria.map(criterion => criterion.criterion_id);
@@ -741,7 +746,9 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
         .filter((criterion, index) => proofs[index]?.proof === 'check' && !(criterion.check_ids ?? []).every(green))
         .map(criterion => criterion.criterion_id));
       let transition: OutputEvalTransition = { status: 'pass', evals: [], observations: [], failing_criterion_ids: [] };
-      if (judged.length > 0) {
+      // A red check fails this attempt whatever D5 answers, so D5 is not asked and no eval is recorded.
+      if (judged.length > 0 && failingChecks.length > 0) evalSkipped = 'check_failed';
+      else if (judged.length > 0) {
         const live = ports.readState();
         const evalRequest = `${normalized.execution_id}:a${action.attempt}:eval`;
         const disclosed = {
@@ -810,6 +817,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
       failing_criterion_ids: failingCriteria,
       failing_check_ids: failingChecks,
       pause: null,
+      ...(evalSkipped === undefined ? {} : { eval_skipped: evalSkipped }),
       proofs,
     })));
     if (!failed) return finish();
