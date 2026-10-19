@@ -1112,6 +1112,24 @@ test('cancelling the step requests cancellation of the in-flight check and pause
   assert.equal(result.goal_done, false);
 });
 
+// #126: a journal the step has not finished does not read as a terminal failure.
+test('replay of an unfinished journal reports unfinished, not failed (#126)', async () => {
+  const world = driver({ evaluations: [{ c1: { p: .2, conf: 1 } }, { c1: { p: 1, conf: 1 } }] });
+  world.crashesAt = 2;
+  await assert.rejects(runImplementationStep(world.input, world.ports, world.journal), /simulated-crash/);
+  const midway = replayImplementationStep(world.journal.load('exec-1'), world.input);
+  assert.equal(midway.status, 'unfinished');
+  assert.equal(midway.open_issue, null);
+  assert.equal(midway.goal_done, false);
+  assert.equal(midway.attempts.length, 1);
+  assert.equal(midway.attempts[0]?.status, 'failed');
+  assert.equal(replayImplementationStep([], world.input).status, 'unfinished', 'nothing has run yet');
+  world.crashesAt = 0;
+  const finished = await runImplementationStep(world.input, world.ports, world.journal);
+  assert.equal(finished.status, 'passed');
+  assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), finished);
+});
+
 // #124, #125: the issuer bounds fresh grants per held grant and names each one.
 test('the equal issuer gives each fresh grant its own action id and stops at its limit (#124, #125)', () => {
   const authority = createGrantAuthority();

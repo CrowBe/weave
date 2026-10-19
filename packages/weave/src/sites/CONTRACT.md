@@ -212,7 +212,8 @@ by `id` and `parentId`, appended before the next attempt. A stop is
 `impl.stop@1` and carries the open issue. A torn final line is repaired on
 load and append: an unparseable tail is truncated, and a complete record
 missing its newline is terminated, so a finished attempt is not lost and the
-journal stays loadable. Replay reads that journal and does not call a provider.
+journal stays loadable. Replay reads that journal and does not call a provider. Replay of an unfinished
+journal reports `unfinished` with no open issue, not `failed`.
 Generate text is not stored on the attempt; the step keeps a `gen_` digest ref.
 Env values are not inputs to this step.
 

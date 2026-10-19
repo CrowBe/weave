@@ -202,7 +202,11 @@ export type JournalEntry = AttemptRecord | StopRecord;
 export interface ImplementStepResult {
   readonly schema: typeof IMPLEMENT_STEP_SCHEMA;
   readonly execution_id: string | null;
-  readonly status: 'passed' | 'failed' | 'paused';
+  /**
+   * `unfinished` only from replay of a journal the step has not finished (a
+   * crash between attempts, or nothing yet): running the step continues it.
+   */
+  readonly status: 'passed' | 'failed' | 'paused' | 'unfinished';
   readonly goal_done: false;
   readonly reason: 'invalid_input' | null;
   readonly tier: ImplementTier | null;
@@ -433,7 +437,8 @@ function project(entries: readonly JournalEntry[], input: Normalized, cancelled:
     status = 'failed';
     open_issue = openIssue(input, lastFailure(attempts), action.blocked_by);
   } else if (last?.status === 'paused') status = 'paused';
-  else status = 'failed';
+  // Another attempt is due: not terminal, and no open issue is raised yet.
+  else status = 'unfinished';
   return {
     schema: IMPLEMENT_STEP_SCHEMA,
     execution_id: input.execution_id,
