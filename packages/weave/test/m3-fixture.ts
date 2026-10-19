@@ -50,11 +50,13 @@ export function foldGoal(world: M3World, overrides: Partial<Goal> = {}): Goal {
   return { ...goal, ...overrides, gap, budget: overrides.budget ?? goal.budget };
 }
 
-export function m3World(options: { isolation?: 'enforcing' | 'unsupported'; variants?: readonly string[] } = {}): M3World {
+export function m3World(
+  options: { isolation?: 'enforcing' | 'unsupported'; variants?: readonly string[]; author?: ScriptedFoldAuthor } = {},
+): M3World {
   const authority = createGrantAuthority();
   const host = new AgentFabricHost({ authority });
   const lifecycle = new FabricLifecycle(host, options.isolation ?? 'enforcing');
-  const author = new ScriptedFoldAuthor(options.variants ?? ['direct', 'aliased']);
+  const author = options.author ?? new ScriptedFoldAuthor(options.variants ?? ['direct', 'aliased']);
   const alpha = host.registerSource('mem:alpha', CONTENT['source:alpha'] as string);
   const beta = host.registerSource('mem:beta', CONTENT['source:beta'] as string);
   const gamma = host.registerSource('mem:gamma', CONTENT['source:gamma'] as string);

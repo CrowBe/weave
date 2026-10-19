@@ -50,6 +50,8 @@ export {
 export {
   ACCEPTANCE_LINE_CONTRACT,
   ACCEPTANCE_LINE_CONTRACT_RECORD,
+  ACCEPTANCE_LINE_CONTRACT_V1,
+  ACCEPTANCE_PREDICATES,
   DECLARED_TASK_POLICY,
   TASK_CRITERIA_SITE,
   TASK_JEV_MODEL_ID,
@@ -65,11 +67,14 @@ export {
   replayValidation,
   taskJevRoute,
   validationFromFixture,
+  type AcceptanceContract,
   type AcceptanceLine,
+  type AcceptancePredicate,
   type ArtifactBody,
   type CommandRecord,
   type CriteriaDecision,
   type CriteriaRecord,
+  type ProposedLine,
   type TaskConstraintDeclaration,
   type TaskJudgmentPolicy,
   type ValidationDecision,
@@ -112,6 +117,11 @@ export {
 } from './implement-step.js';
 
 export * from './audit-view.js';
+export {
+  CHECK_COVERAGE_SCHEMA, CHECK_GAP_SCHEMA, DECLARED_RECURRENCE_POLICY, RECURRENCE_KEY_SCHEMA,
+  auditJudgmentFindings, checkCoverage, outputEvalJudgmentFindings, recordCheckGaps, recurrenceKey,
+  type CheckCoverage, type CheckGapRecord, type JudgmentFinding, type JudgmentFindingKind, type RecurrencePolicy,
+} from './recurring-findings.js';
 export * from './criterion-proof.js';
 export * from './compaction.js';
 export * from './sites/audit-dispose.js';
