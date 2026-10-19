@@ -1,0 +1,818 @@
+{
+  "contract": "acceptance.line@1",
+  "note": "Records and decisions written by the acceptance.line@1 code before #201. Replay must reproduce each decision exactly.",
+  "criteria": {
+    "mixed": {
+      "record": {
+        "contract": "acceptance.line@1",
+        "site": "task.criteria",
+        "model": "jev-1.13.0",
+        "probability_threshold": 0.8,
+        "confidence_floor": 0.9,
+        "lines": [
+          {
+            "line_id": "taste",
+            "lexical": {
+              "status": "rejected",
+              "reason": "judgment"
+            }
+          },
+          {
+            "line_id": "readme",
+            "lexical": {
+              "status": "admitted",
+              "line": {
+                "line_id": "readme",
+                "fact": "README.md contains the heading \"Installation\"",
+                "evidence": {
+                  "kind": "artifact",
+                  "artifact_id": "readme"
+                },
+                "escape": "README.md is absent"
+              }
+            }
+          },
+          {
+            "line_id": "export",
+            "lexical": {
+              "status": "admitted",
+              "line": {
+                "line_id": "export",
+                "fact": "src/app.ts exports createServer",
+                "evidence": {
+                  "kind": "artifact",
+                  "artifact_id": "app"
+                },
+                "escape": "src/app.ts is absent"
+              }
+            }
+          },
+          {
+            "line_id": "ok",
+            "lexical": {
+              "status": "admitted",
+              "line": {
+                "line_id": "ok",
+                "fact": "the command output includes the line \"ok\"",
+                "evidence": {
+                  "kind": "command",
+                  "command_id": "tests"
+                },
+                "escape": "the test command did not run"
+              }
+            }
+          }
+        ],
+        "state": {
+          "contract": "acceptance.line@1",
+          "lines": {
+            "readme": {
+              "fact": "README.md contains the heading \"Installation\"",
+              "evidence": {
+                "kind": "artifact",
+                "id": "readme"
+              },
+              "escape": "README.md is absent"
+            },
+            "export": {
+              "fact": "src/app.ts exports createServer",
+              "evidence": {
+                "kind": "artifact",
+                "id": "app"
+              },
+              "escape": "src/app.ts is absent"
+            },
+            "ok": {
+              "fact": "the command output includes the line \"ok\"",
+              "evidence": {
+                "kind": "command",
+                "id": "tests"
+              },
+              "escape": "the test command did not run"
+            }
+          }
+        },
+        "requested": true,
+        "malformed": null,
+        "answers": {
+          "readme": {
+            "probability": 0.96,
+            "confidence": 0.97
+          },
+          "export": {
+            "probability": 0.2,
+            "confidence": 0.97
+          },
+          "ok": {
+            "probability": 0.95,
+            "confidence": 0.4
+          }
+        }
+      },
+      "decision": {
+        "entered": [
+          {
+            "line_id": "readme",
+            "fact": "README.md contains the heading \"Installation\"",
+            "evidence": {
+              "kind": "artifact",
+              "artifact_id": "readme"
+            },
+            "escape": "README.md is absent"
+          }
+        ],
+        "lines": [
+          {
+            "line_id": "taste",
+            "status": "rejected",
+            "reason": "judgment"
+          },
+          {
+            "line_id": "readme",
+            "status": "admitted",
+            "reason": null
+          },
+          {
+            "line_id": "export",
+            "status": "rejected",
+            "reason": "not_one_observable_fact"
+          },
+          {
+            "line_id": "ok",
+            "status": "revise",
+            "reason": "low_confidence"
+          }
+        ],
+        "malformed": null
+      }
+    },
+    "none": {
+      "record": {
+        "contract": "acceptance.line@1",
+        "site": "task.criteria",
+        "model": "jev-1.13.0",
+        "probability_threshold": 0.8,
+        "confidence_floor": 0.9,
+        "lines": [
+          {
+            "line_id": "taste",
+            "lexical": {
+              "status": "rejected",
+              "reason": "judgment"
+            }
+          }
+        ],
+        "state": null,
+        "requested": false,
+        "malformed": null,
+        "answers": {}
+      },
+      "decision": {
+        "entered": [],
+        "lines": [
+          {
+            "line_id": "taste",
+            "status": "rejected",
+            "reason": "judgment"
+          }
+        ],
+        "malformed": null
+      }
+    },
+    "malformed": {
+      "record": {
+        "contract": "acceptance.line@1",
+        "site": "task.criteria",
+        "model": "jev-1.13.0",
+        "probability_threshold": 0.8,
+        "confidence_floor": 0.9,
+        "lines": [
+          {
+            "line_id": "readme",
+            "lexical": {
+              "status": "admitted",
+              "line": {
+                "line_id": "readme",
+                "fact": "README.md contains the heading \"Installation\"",
+                "evidence": {
+                  "kind": "artifact",
+                  "artifact_id": "readme"
+                },
+                "escape": "README.md is absent"
+              }
+            }
+          }
+        ],
+        "state": {
+          "contract": "acceptance.line@1",
+          "lines": {
+            "readme": {
+              "fact": "README.md contains the heading \"Installation\"",
+              "evidence": {
+                "kind": "artifact",
+                "id": "readme"
+              },
+              "escape": "README.md is absent"
+            }
+          }
+        },
+        "requested": true,
+        "malformed": "provider_failed",
+        "answers": {}
+      },
+      "decision": {
+        "entered": [],
+        "lines": [
+          {
+            "line_id": "readme",
+            "status": "escalate",
+            "reason": "provider_failed"
+          }
+        ],
+        "malformed": "provider_failed"
+      }
+    },
+    "unpinned": {
+      "record": {
+        "contract": "acceptance.line@1",
+        "site": "task.criteria",
+        "model": "jev-1.13.0",
+        "probability_threshold": 0.8,
+        "confidence_floor": 0.9,
+        "lines": [
+          {
+            "line_id": "readme",
+            "lexical": {
+              "status": "admitted",
+              "line": {
+                "line_id": "readme",
+                "fact": "README.md contains the heading \"Installation\"",
+                "evidence": {
+                  "kind": "artifact",
+                  "artifact_id": "readme"
+                },
+                "escape": "README.md is absent"
+              }
+            }
+          }
+        ],
+        "state": {
+          "contract": "acceptance.line@1",
+          "lines": {
+            "readme": {
+              "fact": "README.md contains the heading \"Installation\"",
+              "evidence": {
+                "kind": "artifact",
+                "id": "readme"
+              },
+              "escape": "README.md is absent"
+            }
+          }
+        },
+        "requested": true,
+        "malformed": "unpinned_model",
+        "answers": {}
+      },
+      "decision": {
+        "entered": [],
+        "lines": [
+          {
+            "line_id": "readme",
+            "status": "escalate",
+            "reason": "unpinned_model"
+          }
+        ],
+        "malformed": "unpinned_model"
+      }
+    }
+  },
+  "validation": {
+    "done": {
+      "record": {
+        "contract": "acceptance.line@1",
+        "site": "task.validate",
+        "model": "jev-1.13.0",
+        "probability_threshold": 0.8,
+        "confidence_floor": 0.9,
+        "facts": [
+          {
+            "line_id": "readme",
+            "fact": "README.md contains the heading \"Installation\"",
+            "evidence": {
+              "kind": "artifact",
+              "id": "readme",
+              "body": "# Installation\n"
+            }
+          },
+          {
+            "line_id": "ok",
+            "fact": "the command output includes the line \"ok\"",
+            "evidence": {
+              "kind": "command",
+              "id": "tests",
+              "body": "ok\n"
+            }
+          }
+        ],
+        "state": {
+          "contract": "acceptance.line@1",
+          "facts": {
+            "readme": {
+              "fact": "README.md contains the heading \"Installation\"",
+              "evidence": {
+                "kind": "artifact",
+                "id": "readme",
+                "body": "# Installation\n"
+              }
+            },
+            "ok": {
+              "fact": "the command output includes the line \"ok\"",
+              "evidence": {
+                "kind": "command",
+                "id": "tests",
+                "body": "ok\n"
+              }
+            }
+          }
+        },
+        "requested": true,
+        "malformed": null,
+        "answers": {
+          "readme": {
+            "probability": 0.95,
+            "confidence": 0.95
+          },
+          "ok": {
+            "probability": 0.95,
+            "confidence": 0.95
+          }
+        },
+        "commands": [
+          {
+            "command_id": "tests",
+            "argv": [
+              "npm",
+              "test"
+            ],
+            "output": "ok\n",
+            "asked": false
+          }
+        ],
+        "declaration": {
+          "constraints": [],
+          "authority": []
+        },
+        "write_up_ignored": true
+      },
+      "decision": {
+        "done": true,
+        "disposition": "done",
+        "reasons": [],
+        "lines": [
+          {
+            "line_id": "readme",
+            "status": "pass"
+          },
+          {
+            "line_id": "ok",
+            "status": "pass"
+          }
+        ],
+        "hard_constraints": [],
+        "write_up_ignored": true
+      }
+    },
+    "fail": {
+      "record": {
+        "contract": "acceptance.line@1",
+        "site": "task.validate",
+        "model": "jev-1.13.0",
+        "probability_threshold": 0.8,
+        "confidence_floor": 0.9,
+        "facts": [
+          {
+            "line_id": "readme",
+            "fact": "README.md contains the heading \"Installation\"",
+            "evidence": {
+              "kind": "artifact",
+              "id": "readme",
+              "body": "# Installation\n"
+            }
+          },
+          {
+            "line_id": "export",
+            "fact": "src/app.ts exports createServer",
+            "evidence": {
+              "kind": "artifact",
+              "id": "app",
+              "body": "export function createServer() {}\n"
+            }
+          }
+        ],
+        "state": {
+          "contract": "acceptance.line@1",
+          "facts": {
+            "readme": {
+              "fact": "README.md contains the heading \"Installation\"",
+              "evidence": {
+                "kind": "artifact",
+                "id": "readme",
+                "body": "# Installation\n"
+              }
+            },
+            "export": {
+              "fact": "src/app.ts exports createServer",
+              "evidence": {
+                "kind": "artifact",
+                "id": "app",
+                "body": "export function createServer() {}\n"
+              }
+            }
+          }
+        },
+        "requested": true,
+        "malformed": null,
+        "answers": {
+          "readme": {
+            "probability": 0.1,
+            "confidence": 0.96
+          },
+          "export": {
+            "probability": 0.95,
+            "confidence": 0.2
+          }
+        },
+        "commands": [],
+        "declaration": {
+          "constraints": [],
+          "authority": []
+        },
+        "write_up_ignored": true
+      },
+      "decision": {
+        "done": false,
+        "disposition": "fail",
+        "reasons": [
+          "fact_failed"
+        ],
+        "lines": [
+          {
+            "line_id": "readme",
+            "status": "fail"
+          },
+          {
+            "line_id": "export",
+            "status": "escalate"
+          }
+        ],
+        "hard_constraints": [],
+        "write_up_ignored": true
+      }
+    },
+    "escalate": {
+      "record": {
+        "contract": "acceptance.line@1",
+        "site": "task.validate",
+        "model": "jev-1.13.0",
+        "probability_threshold": 0.8,
+        "confidence_floor": 0.9,
+        "facts": [
+          {
+            "line_id": "readme",
+            "fact": "README.md contains the heading \"Installation\"",
+            "evidence": {
+              "kind": "artifact",
+              "id": "readme",
+              "body": "# Installation\n"
+            }
+          }
+        ],
+        "state": {
+          "contract": "acceptance.line@1",
+          "facts": {
+            "readme": {
+              "fact": "README.md contains the heading \"Installation\"",
+              "evidence": {
+                "kind": "artifact",
+                "id": "readme",
+                "body": "# Installation\n"
+              }
+            }
+          }
+        },
+        "requested": true,
+        "malformed": null,
+        "answers": {
+          "readme": {
+            "probability": 0.95,
+            "confidence": null
+          }
+        },
+        "commands": [],
+        "declaration": {
+          "constraints": [],
+          "authority": []
+        },
+        "write_up_ignored": true
+      },
+      "decision": {
+        "done": false,
+        "disposition": "escalate",
+        "reasons": [
+          "low_confidence"
+        ],
+        "lines": [
+          {
+            "line_id": "readme",
+            "status": "escalate"
+          }
+        ],
+        "hard_constraints": [],
+        "write_up_ignored": true
+      }
+    },
+    "escape": {
+      "record": {
+        "contract": "acceptance.line@1",
+        "site": "task.validate",
+        "model": "jev-1.13.0",
+        "probability_threshold": 0.8,
+        "confidence_floor": 0.9,
+        "facts": [
+          {
+            "line_id": "readme",
+            "fact": "README.md contains the heading \"Installation\"",
+            "evidence": {
+              "kind": "artifact",
+              "id": "readme",
+              "body": "# Installation\n"
+            }
+          },
+          {
+            "line_id": "export",
+            "fact": "src/app.ts exports createServer",
+            "evidence": null
+          }
+        ],
+        "state": {
+          "contract": "acceptance.line@1",
+          "facts": {
+            "readme": {
+              "fact": "README.md contains the heading \"Installation\"",
+              "evidence": {
+                "kind": "artifact",
+                "id": "readme",
+                "body": "# Installation\n"
+              }
+            }
+          }
+        },
+        "requested": true,
+        "malformed": null,
+        "answers": {
+          "readme": {
+            "probability": 0.95,
+            "confidence": 0.95
+          }
+        },
+        "commands": [],
+        "declaration": {
+          "constraints": [],
+          "authority": []
+        },
+        "write_up_ignored": true
+      },
+      "decision": {
+        "done": false,
+        "disposition": "escape",
+        "reasons": [
+          "evidence_missing"
+        ],
+        "lines": [
+          {
+            "line_id": "readme",
+            "status": "pass"
+          },
+          {
+            "line_id": "export",
+            "status": "escape"
+          }
+        ],
+        "hard_constraints": [],
+        "write_up_ignored": true
+      }
+    },
+    "hard": {
+      "record": {
+        "contract": "acceptance.line@1",
+        "site": "task.validate",
+        "model": "jev-1.13.0",
+        "probability_threshold": 0.8,
+        "confidence_floor": 0.9,
+        "facts": [
+          {
+            "line_id": "readme",
+            "fact": "README.md contains the heading \"Installation\"",
+            "evidence": {
+              "kind": "artifact",
+              "id": "readme",
+              "body": "# Installation\n"
+            }
+          }
+        ],
+        "state": {
+          "contract": "acceptance.line@1",
+          "facts": {
+            "readme": {
+              "fact": "README.md contains the heading \"Installation\"",
+              "evidence": {
+                "kind": "artifact",
+                "id": "readme",
+                "body": "# Installation\n"
+              }
+            }
+          }
+        },
+        "requested": true,
+        "malformed": null,
+        "answers": {
+          "readme": {
+            "probability": 0.95,
+            "confidence": 0.95
+          }
+        },
+        "commands": [
+          {
+            "command_id": "ship",
+            "argv": [
+              "git",
+              "push",
+              "origin",
+              "main"
+            ],
+            "output": "",
+            "asked": true
+          }
+        ],
+        "declaration": {
+          "constraints": [
+            "do_not_send",
+            "do_not_delete",
+            "ask_before_effect"
+          ],
+          "authority": []
+        },
+        "write_up_ignored": true
+      },
+      "decision": {
+        "done": false,
+        "disposition": "fail",
+        "reasons": [
+          "do_not_send"
+        ],
+        "lines": [],
+        "hard_constraints": [
+          {
+            "code": "do_not_send",
+            "command_id": "ship"
+          }
+        ],
+        "write_up_ignored": true
+      }
+    },
+    "malformed": {
+      "record": {
+        "contract": "acceptance.line@1",
+        "site": "task.validate",
+        "model": "jev-1.13.0",
+        "probability_threshold": 0.8,
+        "confidence_floor": 0.9,
+        "facts": [
+          {
+            "line_id": "readme",
+            "fact": "README.md contains the heading \"Installation\"",
+            "evidence": {
+              "kind": "artifact",
+              "id": "readme",
+              "body": "# Installation\n"
+            }
+          }
+        ],
+        "state": {
+          "contract": "acceptance.line@1",
+          "facts": {
+            "readme": {
+              "fact": "README.md contains the heading \"Installation\"",
+              "evidence": {
+                "kind": "artifact",
+                "id": "readme",
+                "body": "# Installation\n"
+              }
+            }
+          }
+        },
+        "requested": true,
+        "malformed": "provider_failed",
+        "answers": {},
+        "commands": [],
+        "declaration": {
+          "constraints": [],
+          "authority": []
+        },
+        "write_up_ignored": true
+      },
+      "decision": {
+        "done": false,
+        "disposition": "malformed",
+        "reasons": [
+          "provider_failed"
+        ],
+        "lines": [],
+        "hard_constraints": [],
+        "write_up_ignored": true
+      }
+    },
+    "unpinned": {
+      "record": {
+        "contract": "acceptance.line@1",
+        "site": "task.validate",
+        "model": "jev-1.13.0",
+        "probability_threshold": 0.8,
+        "confidence_floor": 0.9,
+        "facts": [
+          {
+            "line_id": "readme",
+            "fact": "README.md contains the heading \"Installation\"",
+            "evidence": {
+              "kind": "artifact",
+              "id": "readme",
+              "body": "# Installation\n"
+            }
+          }
+        ],
+        "state": {
+          "contract": "acceptance.line@1",
+          "facts": {
+            "readme": {
+              "fact": "README.md contains the heading \"Installation\"",
+              "evidence": {
+                "kind": "artifact",
+                "id": "readme",
+                "body": "# Installation\n"
+              }
+            }
+          }
+        },
+        "requested": true,
+        "malformed": "unpinned_model",
+        "answers": {},
+        "commands": [],
+        "declaration": {
+          "constraints": [],
+          "authority": []
+        },
+        "write_up_ignored": true
+      },
+      "decision": {
+        "done": false,
+        "disposition": "malformed",
+        "reasons": [
+          "unpinned_model"
+        ],
+        "lines": [],
+        "hard_constraints": [],
+        "write_up_ignored": true
+      }
+    },
+    "empty": {
+      "record": {
+        "contract": "acceptance.line@1",
+        "site": "task.validate",
+        "model": "jev-1.13.0",
+        "probability_threshold": 0.8,
+        "confidence_floor": 0.9,
+        "facts": [],
+        "state": null,
+        "requested": false,
+        "malformed": null,
+        "answers": {},
+        "commands": [],
+        "declaration": {
+          "constraints": [],
+          "authority": []
+        },
+        "write_up_ignored": true
+      },
+      "decision": {
+        "done": false,
+        "disposition": "fail",
+        "reasons": [
+          "no_admitted_facts"
+        ],
+        "lines": [],
+        "hard_constraints": [],
+        "write_up_ignored": true
+      }
+    }
+  }
+}

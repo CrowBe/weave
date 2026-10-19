@@ -2,10 +2,18 @@
  * Acceptance facts and task validation.
  *
  * An LLM may propose acceptance lines. Code admits only a single observable
- * fact. Admitted facts become one boolean question each — a Noul on the System
- * One wire. The criteria gate (`task.criteria`) runs before the work. Task
- * validation (`task.validate`) asks every remaining Noul in one evaluation
- * request. Code decides done.
+ * fact. Admitted free-text facts become one boolean question each — a Noul on
+ * the System One wire. The criteria gate (`task.criteria`) runs before the
+ * work. Task validation (`task.validate`) asks every remaining Noul in one
+ * evaluation request. Code decides done.
+ *
+ * `acceptance.line@2` adds a closed predicate. A predicate line establishes
+ * only its literal property: an exact exit status, or an exact literal in an
+ * artifact body or command output. Code renders its fact text, checks that the
+ * predicate fits the evidence kind instead of asking the criteria gate, and
+ * decides it from the recorded evidence instead of asking task validation.
+ * There is no regex and no arithmetic. Records written under
+ * `acceptance.line@1` replay under the rules they were written with.
  *
  * This is not the decision layer. It does not weigh `frontier.weigh`, select
  * an action, do arithmetic, or grant execution. A write-up is not part of the
@@ -30,7 +38,12 @@ import type {
   RoutedUnit,
 } from '@weave/gateway';
 
-export const ACCEPTANCE_LINE_CONTRACT = 'acceptance.line@1' as const;
+export const ACCEPTANCE_LINE_CONTRACT = 'acceptance.line@2' as const;
+/** The contract before predicates. Its records still replay; nothing new is written under it. */
+export const ACCEPTANCE_LINE_CONTRACT_V1 = 'acceptance.line@1' as const;
+export type AcceptanceContract = typeof ACCEPTANCE_LINE_CONTRACT | typeof ACCEPTANCE_LINE_CONTRACT_V1;
+/** Closed. Adding a predicate is a contract revision. */
+export const ACCEPTANCE_PREDICATES = ['exit_status', 'contains_literal'] as const;
 export const TASK_CRITERIA_SITE = 'task.criteria' as const;
 export const TASK_VALIDATE_SITE = 'task.validate' as const;
 
@@ -59,9 +72,18 @@ export const ACCEPTANCE_LINE_CONTRACT_RECORD = {
   wire_primitive: 'noul',
   criteria_site: TASK_CRITERIA_SITE,
   validation_site: TASK_VALIDATE_SITE,
-  criteria_state: 'the proposed line only: fact, evidence identity, and escape',
-  validation_state: 'the admitted fact plus the body of its named artifact or the output of its named command',
-  omitted_from_state: ['write_up', 'task prose', 'unreferenced artifacts', 'unreferenced commands'],
+  criteria_state: 'the proposed free-text line only: fact, evidence identity, and escape',
+  validation_state: 'the admitted free-text fact plus the body of its named artifact or the output of its named command',
+  omitted_from_state: [
+    'write_up',
+    'task prose',
+    'unreferenced artifacts',
+    'unreferenced commands',
+    'exit status',
+    'predicate lines',
+  ],
+  predicates: ACCEPTANCE_PREDICATES,
+  predicate_rule: 'code renders the fact, admits the predicate only on a fitting evidence kind, and decides it from the recorded evidence; no Noul is asked',
   model: TASK_JEV_MODEL_ID,
 } as const;
 
@@ -147,12 +169,29 @@ export type EvidenceRef =
   | { readonly kind: 'artifact'; readonly artifact_id: string }
   | { readonly kind: 'command'; readonly command_id: string };
 
+/**
+ * A closed property code can decide from named evidence. `exit_status` needs
+ * command evidence. `contains_literal` is an exact substring of an artifact
+ * body or a command output: case, whitespace and quotes all count.
+ */
+export type AcceptancePredicate =
+  | { readonly kind: 'exit_status'; readonly equals: number }
+  | { readonly kind: 'contains_literal'; readonly literal: string };
+
 export interface AcceptanceLine {
   readonly line_id: string;
+  /** Free text, or for a predicate line the text code rendered from the predicate. */
   readonly fact: string;
   readonly evidence: EvidenceRef;
   readonly escape: string;
+  /** `acceptance.line@2`. Code decides this line and no Noul is asked. */
+  readonly predicate?: AcceptancePredicate;
 }
+
+/** A line as proposed: a free-text fact or a predicate, never both. */
+export type ProposedLine =
+  | Omit<AcceptanceLine, 'predicate'>
+  | (Omit<AcceptanceLine, 'fact' | 'predicate'> & { readonly predicate: AcceptancePredicate });
 
 export interface ArtifactBody {
   readonly artifact_id: string;
@@ -164,6 +203,12 @@ export interface CommandRecord {
   readonly argv: readonly string[];
   readonly output: string;
   readonly asked: boolean;
+  /**
+   * Exit status. Null when the process ended without one. Absent when it was
+   * not recorded, as on every `acceptance.line@1` record. Either way an
+   * `exit_status` predicate cannot be shown and escapes.
+   */
+  readonly exit?: number | null;
 }
 
 export type LineAdmission =
@@ -183,7 +228,7 @@ interface LexicalEntry {
 }
 
 export interface CriteriaRecord {
-  readonly contract: typeof ACCEPTANCE_LINE_CONTRACT;
+  readonly contract: AcceptanceContract;
   readonly site: typeof TASK_CRITERIA_SITE;
   readonly model: typeof TASK_JEV_MODEL_ID;
   readonly probability_threshold: number;
@@ -207,14 +252,22 @@ export interface CriteriaDecision {
   readonly malformed: string | null;
 }
 
+type FactEvidence =
+  | { readonly kind: 'artifact'; readonly id: string; readonly body: string }
+  | { readonly kind: 'command'; readonly id: string; readonly body: string; readonly exit?: number | null };
+
 interface ValidationFact {
   readonly line_id: string;
   readonly fact: string;
-  readonly evidence: { readonly kind: 'artifact' | 'command'; readonly id: string; readonly body: string } | null;
+  readonly evidence: FactEvidence | null;
+  /** `acceptance.line@2`. Absent on an `@1` record, where every fact was a Noul. */
+  readonly decided_by?: 'code' | 'noul';
+  /** Present when code decides the fact. */
+  readonly predicate?: AcceptancePredicate;
 }
 
 export interface ValidationRecord {
-  readonly contract: typeof ACCEPTANCE_LINE_CONTRACT;
+  readonly contract: AcceptanceContract;
   readonly site: typeof TASK_VALIDATE_SITE;
   readonly model: typeof TASK_JEV_MODEL_ID;
   readonly probability_threshold: number;
@@ -281,6 +334,9 @@ export interface JudgmentCall {
 export function admitProposedLine(raw: unknown): LineAdmission {
   const parsed = parseLine(raw);
   if (parsed.status === 'rejected') return parsed;
+  // The predicate is closed and its kind was checked against the evidence.
+  // Its rendered text carries the literal, so it is not read for vague words.
+  if (parsed.line.predicate !== undefined) return parsed;
   const reason = vagueReason(parsed.line.fact);
   if (reason !== null) {
     return { status: 'rejected', reason, line_id: parsed.line.line_id };
@@ -313,14 +369,57 @@ function parseLine(raw: unknown): { readonly status: 'admitted'; readonly line: 
   if (typeof line_id !== 'string' || line_id.trim().length === 0) {
     return { status: 'rejected', reason: 'missing_line_id', line_id: null };
   }
-  if (typeof fact !== 'string' || fact.trim().length === 0) {
+  if ('predicate' in raw) {
+    if (fact !== undefined) return { status: 'rejected', reason: 'fact_with_predicate', line_id };
+  } else if (typeof fact !== 'string' || fact.trim().length === 0) {
     return { status: 'rejected', reason: 'empty_fact', line_id };
   }
   if (typeof escape !== 'string' || escape.trim().length === 0) {
     return { status: 'rejected', reason: 'missing_escape', line_id };
   }
   if (evidence === null) return { status: 'rejected', reason: 'missing_evidence', line_id };
-  return { status: 'admitted', line: { line_id, fact: fact.trim(), evidence, escape: escape.trim() } };
+  if (!('predicate' in raw)) {
+    return { status: 'admitted', line: { line_id, fact: (fact as string).trim(), evidence, escape: escape.trim() } };
+  }
+  const predicate = parsePredicate(raw['predicate']);
+  if (typeof predicate === 'string') return { status: 'rejected', reason: predicate, line_id };
+  if (!predicateFits(evidence, predicate)) return { status: 'rejected', reason: 'predicate_evidence_mismatch', line_id };
+  return {
+    status: 'admitted',
+    line: { line_id, fact: renderFact(evidence, predicate), evidence, escape: escape.trim(), predicate },
+  };
+}
+
+/** Closed shapes only. Returns the rejection reason for anything else. */
+function parsePredicate(raw: unknown): AcceptancePredicate | 'unknown_predicate' | 'invalid_predicate' {
+  if (!isRecord(raw) || typeof raw['kind'] !== 'string') return 'invalid_predicate';
+  const keys = Object.keys(raw).sort().join(',');
+  if (raw['kind'] === 'exit_status') {
+    const equals = raw['equals'];
+    if (keys !== 'equals,kind' || typeof equals !== 'number' || !Number.isSafeInteger(equals)) return 'invalid_predicate';
+    return { kind: 'exit_status', equals };
+  }
+  if (raw['kind'] === 'contains_literal') {
+    const literal = raw['literal'];
+    if (keys !== 'kind,literal' || typeof literal !== 'string' || literal.length === 0) return 'invalid_predicate';
+    return { kind: 'contains_literal', literal };
+  }
+  return 'unknown_predicate';
+}
+
+function predicateFits(evidence: EvidenceRef | FactEvidence, predicate: AcceptancePredicate): boolean {
+  return predicate.kind === 'contains_literal' || evidence.kind === 'command';
+}
+
+/** Code writes the fact text, so the text and the predicate cannot disagree. */
+function renderFact(evidence: EvidenceRef, predicate: AcceptancePredicate): string {
+  if (predicate.kind === 'exit_status') {
+    const id = evidence.kind === 'command' ? evidence.command_id : evidence.artifact_id;
+    return `the exit status of command ${JSON.stringify(id)} is ${predicate.equals}`;
+  }
+  const literal = JSON.stringify(predicate.literal);
+  if (evidence.kind === 'artifact') return `artifact ${JSON.stringify(evidence.artifact_id)} contains the literal ${literal}`;
+  return `the output of command ${JSON.stringify(evidence.command_id)} contains the literal ${literal}`;
 }
 
 function parseEvidence(raw: unknown): EvidenceRef | null {
@@ -406,7 +505,9 @@ function validationState(facts: readonly ValidationFact[]): Readonly<Record<stri
   const body: Record<string, unknown> = {};
   for (const fact of facts) {
     if (fact.evidence === null) continue;
-    body[fact.line_id] = { fact: fact.fact, evidence: fact.evidence };
+    // The exit status stays out: a free-text fact is asked as it was under @1.
+    const { kind, id, body: shown } = fact.evidence;
+    body[fact.line_id] = { fact: fact.fact, evidence: { kind, id, body: shown } };
   }
   return { contract: ACCEPTANCE_LINE_CONTRACT, facts: body };
 }
@@ -451,6 +552,25 @@ function admittedOf(lines: readonly LexicalEntry[]): AcceptanceLine[] {
   return admitted;
 }
 
+/** Free-text lines. Only these reach the criteria gate. */
+function askedOf(admitted: readonly AcceptanceLine[]): AcceptanceLine[] {
+  return admitted.filter((line) => line.predicate === undefined);
+}
+
+/** Free-text facts with evidence. Only these reach task validation. */
+function shownOf(facts: readonly ValidationFact[]): ValidationFact[] {
+  return facts.filter((fact) => fact.decided_by === 'noul' && fact.evidence !== null);
+}
+
+function knownContract(contract: unknown): contract is AcceptanceContract {
+  return contract === ACCEPTANCE_LINE_CONTRACT || contract === ACCEPTANCE_LINE_CONTRACT_V1;
+}
+
+/** Only an `@2` record has predicate lines. An `@1` record replays as it was written. */
+function inCode(contract: AcceptanceContract, item: { readonly predicate?: AcceptancePredicate }): boolean {
+  return contract === ACCEPTANCE_LINE_CONTRACT && item.predicate !== undefined;
+}
+
 export function criteriaFromFixture(
   proposed: readonly unknown[],
   fixture: NoulFixture,
@@ -458,10 +578,10 @@ export function criteriaFromFixture(
 ): CriteriaRecord {
   const resolved = policyOf(policy);
   const lines = lexicalEntries(proposed);
-  const admitted = admittedOf(lines);
-  if (admitted.length === 0) return criteriaRecord(resolved, lines, null, null);
+  const asked = askedOf(admittedOf(lines));
+  if (asked.length === 0) return criteriaRecord(resolved, lines, null, null);
   const answers: Record<string, NoulAnswerRecord> = {};
-  for (const line of admitted) {
+  for (const line of asked) {
     const answer = fixture[line.line_id];
     if (answer === undefined) throw new Error(`fixture missing criteria for ${line.line_id}`);
     answers[line.line_id] = answer;
@@ -480,7 +600,7 @@ export function validationFromFixture(
 ): ValidationRecord {
   const resolved = policyOf(policy);
   const facts = factsFor(admitted, artifacts, commands);
-  const shown = facts.filter((fact) => fact.evidence !== null);
+  const shown = shownOf(facts);
   if (shown.length === 0) return validationRecord(resolved, facts, commands, declaration, null, null, writeUp);
   const answers: Record<string, NoulAnswerRecord> = {};
   for (const fact of shown) {
@@ -492,6 +612,9 @@ export function validationFromFixture(
 }
 
 export function decideCriteria(record: CriteriaRecord): CriteriaDecision {
+  if (!knownContract(record.contract)) {
+    return { entered: [], lines: escalateAsked(record, 'unknown_contract'), malformed: 'unknown_contract' };
+  }
   if (record.model !== TASK_JEV_MODEL_ID) {
     return { entered: [], lines: escalateAsked(record, 'unpinned_model'), malformed: 'unpinned_model' };
   }
@@ -499,7 +622,7 @@ export function decideCriteria(record: CriteriaRecord): CriteriaDecision {
     return { entered: [], lines: escalateAsked(record, record.malformed), malformed: record.malformed };
   }
   for (const entry of record.lines) {
-    if (entry.lexical.status !== 'admitted') continue;
+    if (entry.lexical.status !== 'admitted' || inCode(record.contract, entry.lexical.line)) continue;
     const answer = record.answers[entry.lexical.line.line_id];
     if (
       !record.requested ||
@@ -519,6 +642,16 @@ export function decideCriteria(record: CriteriaRecord): CriteriaDecision {
       continue;
     }
     const line = entry.lexical.line;
+    if (line.predicate !== undefined && inCode(record.contract, line)) {
+      // Code checked the fit at admission. Replay checks it again rather than trust the record.
+      if (predicateFits(line.evidence, line.predicate)) {
+        decisions.push({ line_id: line.line_id, status: 'admitted', reason: 'predicate' });
+        entered.push(line);
+      } else {
+        decisions.push({ line_id: line.line_id, status: 'rejected', reason: 'predicate_evidence_mismatch' });
+      }
+      continue;
+    }
     const answer = record.answers[line.line_id];
     if (answer === undefined) {
       return { entered: [], lines: escalateAsked(record, 'malformed'), malformed: 'malformed' };
@@ -543,6 +676,9 @@ export function replayCriteria(record: CriteriaRecord): CriteriaDecision {
 
 export function decideValidation(record: ValidationRecord): ValidationDecision {
   const constraints = hardConstraints(record.commands, record.declaration);
+  if (!knownContract(record.contract)) {
+    return validationDecision('malformed', ['unknown_contract'], [], constraints);
+  }
   if (record.model !== TASK_JEV_MODEL_ID) {
     return validationDecision('malformed', ['unpinned_model'], [], constraints);
   }
@@ -571,6 +707,14 @@ export function decideValidation(record: ValidationRecord): ValidationDecision {
       lines.push({ line_id: fact.line_id, status: 'escape' });
       continue;
     }
+    if (fact.decided_by === 'code' && record.contract === ACCEPTANCE_LINE_CONTRACT) {
+      const verdict = predicateVerdict(fact.predicate, fact.evidence);
+      if (verdict === null) return validationDecision('malformed', [`predicate:${fact.line_id}`], lines, constraints);
+      if (verdict === 'fail') failed = true;
+      if (verdict === 'escape') escaped = true;
+      lines.push({ line_id: fact.line_id, status: verdict });
+      continue;
+    }
     const answer = record.answers[fact.line_id];
     if (answer === undefined || !inUnit(answer.probability) || (answer.confidence !== null && !inUnit(answer.confidence))) {
       return validationDecision('malformed', [`unanswered:${fact.line_id}`], lines, constraints);
@@ -597,16 +741,31 @@ export function replayValidation(record: ValidationRecord): ValidationDecision {
   return decideValidation(record);
 }
 
+/**
+ * Exact comparison on recorded evidence. A missing exit status escapes. A
+ * predicate that is absent or does not fit its evidence is malformed (null).
+ */
+function predicateVerdict(
+  predicate: AcceptancePredicate | undefined,
+  evidence: FactEvidence,
+): 'pass' | 'fail' | 'escape' | null {
+  if (predicate === undefined || !predicateFits(evidence, predicate)) return null;
+  if (predicate.kind === 'contains_literal') return evidence.body.includes(predicate.literal) ? 'pass' : 'fail';
+  const exit = evidence.kind === 'command' ? evidence.exit : undefined;
+  if (typeof exit !== 'number' || !Number.isSafeInteger(exit)) return 'escape';
+  return exit === predicate.equals ? 'pass' : 'fail';
+}
+
 export async function judgeCriteria(
   proposed: readonly unknown[],
   call: JudgmentCall,
 ): Promise<CriteriaRecord> {
   const policy = policyOf(call.policy);
   const lines = lexicalEntries(proposed);
-  const admitted = admittedOf(lines);
-  if (admitted.length === 0) return criteriaRecord(policy, lines, null, null);
-  const state = criteriaState(admitted);
-  const questions = criteriaQuestions(admitted);
+  const asked = askedOf(admittedOf(lines));
+  if (asked.length === 0) return criteriaRecord(policy, lines, null, null);
+  const state = criteriaState(asked);
+  const questions = criteriaQuestions(asked);
   const outcome = await call.gateway.evaluate({
     request_id: call.request_id,
     site: TASK_CRITERIA_SITE,
@@ -630,7 +789,7 @@ export async function judgeValidation(
 ): Promise<ValidationRecord> {
   const policy = policyOf(call.policy);
   const facts = factsFor(admitted, artifacts, commands);
-  const shown = facts.filter((fact) => fact.evidence !== null);
+  const shown = shownOf(facts);
   if (shown.length === 0) return validationRecord(policy, facts, commands, declaration, null, null, writeUp);
   const state = validationState(shown);
   const questions = validationQuestions(shown);
@@ -700,8 +859,8 @@ function criteriaRecord(
   answers: Readonly<Record<string, NoulAnswerRecord>> | null,
   malformed: string | null,
 ): CriteriaRecord {
-  const admitted = admittedOf(lines);
-  const requested = admitted.length > 0 && answers !== null;
+  const asked = askedOf(admittedOf(lines));
+  const requested = asked.length > 0 && answers !== null;
   return {
     contract: ACCEPTANCE_LINE_CONTRACT,
     site: TASK_CRITERIA_SITE,
@@ -709,7 +868,7 @@ function criteriaRecord(
     probability_threshold: policy.probability_threshold,
     confidence_floor: policy.confidence_floor,
     lines,
-    state: requested ? criteriaState(admitted) : null,
+    state: requested ? criteriaState(asked) : null,
     requested,
     malformed,
     answers: answers ?? {},
@@ -726,7 +885,7 @@ function validationRecord(
   writeUp: string | undefined,
 ): ValidationRecord {
   void writeUp;
-  const shown = facts.filter((fact) => fact.evidence !== null);
+  const shown = shownOf(facts);
   const requested = shown.length > 0 && answers !== null;
   return {
     contract: ACCEPTANCE_LINE_CONTRACT,
@@ -750,11 +909,15 @@ function factsFor(
   artifacts: readonly ArtifactBody[],
   commands: readonly CommandRecord[],
 ): readonly ValidationFact[] {
-  return admitted.map((line) => ({
-    line_id: line.line_id,
-    fact: line.fact,
-    evidence: lookupBody(line, artifacts, commands),
-  }));
+  return admitted.map((line) => {
+    const evidence = lookupBody(line, artifacts, commands);
+    const predicate = line.predicate;
+    if (predicate === undefined) return { line_id: line.line_id, fact: line.fact, evidence, decided_by: 'noul' };
+    if (!predicateFits(line.evidence, predicate)) {
+      throw new Error(`predicate does not fit the evidence kind of ${line.line_id}`);
+    }
+    return { line_id: line.line_id, fact: renderFact(line.evidence, predicate), evidence, decided_by: 'code', predicate };
+  });
 }
 
 function lookupBody(
@@ -772,7 +935,7 @@ function lookupBody(
   const commandId = evidence.command_id;
   const found = commands.find((item) => item.command_id === commandId);
   if (found === undefined) return null;
-  return { kind: 'command', id: found.command_id, body: found.output };
+  return { kind: 'command', id: found.command_id, body: found.output, exit: found.exit ?? null };
 }
 
 function reduceOutcome(

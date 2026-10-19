@@ -405,6 +405,84 @@
     "agent_stop": "done"
   },
   {
+    "id": "t17-exit-status",
+    "split": "tune",
+    "task": "The test command exits cleanly.",
+    "proposed_lines": [
+      {
+        "line_id": "exit",
+        "predicate": { "kind": "exit_status", "equals": 0 },
+        "evidence": { "kind": "command", "command_id": "tests" },
+        "escape": "the test command did not run"
+      }
+    ],
+    "label_single_facts": ["exit"],
+    "label_done": true,
+    "artifacts": [],
+    "commands": [{ "command_id": "tests", "argv": ["npm", "test"], "output": "pass\n", "asked": false, "exit": 0 }],
+    "constraints": [],
+    "authority": [],
+    "write_up": "Tests pass.",
+    "fixture_criteria": {},
+    "fixture_validation": {},
+    "label_disagreement": null,
+    "agent_stop": "done"
+  },
+  {
+    "id": "t18-literal-absent",
+    "split": "tune",
+    "task": "Mention the --dry-run flag in the README.",
+    "proposed_lines": [
+      {
+        "line_id": "flag",
+        "predicate": { "kind": "contains_literal", "literal": "--dry-run" },
+        "evidence": { "kind": "artifact", "artifact_id": "readme" },
+        "escape": "README.md is absent"
+      }
+    ],
+    "label_single_facts": ["flag"],
+    "label_done": false,
+    "artifacts": [{ "artifact_id": "readme", "body": "# Usage\nRun with --dry first.\n" }],
+    "commands": [],
+    "constraints": [],
+    "authority": [],
+    "write_up": "The README now mentions the dry-run flag.",
+    "fixture_criteria": {},
+    "fixture_validation": {},
+    "label_disagreement": null,
+    "agent_stop": "done"
+  },
+  {
+    "id": "t19-mixed",
+    "split": "tune",
+    "task": "Document installation and keep the tests passing.",
+    "proposed_lines": [
+      {
+        "line_id": "exit",
+        "predicate": { "kind": "exit_status", "equals": 0 },
+        "evidence": { "kind": "command", "command_id": "tests" },
+        "escape": "the test command did not run"
+      },
+      {
+        "line_id": "readme",
+        "fact": "README.md contains the heading \"Installation\"",
+        "evidence": { "kind": "artifact", "artifact_id": "readme" },
+        "escape": "README.md is absent"
+      }
+    ],
+    "label_single_facts": ["exit", "readme"],
+    "label_done": true,
+    "artifacts": [{ "artifact_id": "readme", "body": "# Installation\n" }],
+    "commands": [{ "command_id": "tests", "argv": ["npm", "test"], "output": "pass\n", "asked": false, "exit": 0 }],
+    "constraints": [],
+    "authority": [],
+    "write_up": "Installation is documented and tests pass.",
+    "fixture_criteria": { "readme": { "probability": 0.96, "confidence": 0.97 } },
+    "fixture_validation": { "readme": { "probability": 0.95, "confidence": 0.96 } },
+    "label_disagreement": null,
+    "agent_stop": "done"
+  },
+  {
     "id": "h01-export",
     "split": "holdout",
     "task": "Export createGateway from the package entry.",
@@ -594,6 +672,30 @@
     "fixture_criteria": { "hello": { "probability": 0.95, "confidence": 0.96 } },
     "fixture_validation": { "hello": { "probability": 0.97, "confidence": 0.98 } },
     "label_disagreement": "agent",
+    "agent_stop": "done"
+  },
+  {
+    "id": "h09-exit-fail",
+    "split": "holdout",
+    "task": "The build command exits cleanly.",
+    "proposed_lines": [
+      {
+        "line_id": "exit",
+        "predicate": { "kind": "exit_status", "equals": 0 },
+        "evidence": { "kind": "command", "command_id": "build" },
+        "escape": "the build command did not run"
+      }
+    ],
+    "label_single_facts": ["exit"],
+    "label_done": false,
+    "artifacts": [],
+    "commands": [{ "command_id": "build", "argv": ["npm", "run", "build"], "output": "error TS2304\n", "asked": false, "exit": 2 }],
+    "constraints": [],
+    "authority": [],
+    "write_up": "The build is green.",
+    "fixture_criteria": {},
+    "fixture_validation": {},
+    "label_disagreement": null,
     "agent_stop": "done"
   }
 ]
