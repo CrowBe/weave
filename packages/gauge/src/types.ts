@@ -58,6 +58,21 @@ export interface CaseSet {
   readonly splits: readonly { readonly split: Split; readonly digest: string; readonly size: number }[];
 }
 
+/**
+ * The recorded change that makes one revision of a criteria set or case set
+ * usable. Only the governor of the set it supersedes may issue it.
+ */
+export interface Revision {
+  readonly schema: 'gauge.revision@1';
+  readonly revision: string;
+  readonly record: 'criteria' | 'caseset';
+  readonly digest: string;
+  readonly supersedes: string | null;
+  readonly issued_by: Governance;
+  readonly justification: string;
+  readonly evidence: readonly EvidenceRef[];
+}
+
 export interface EvidenceRef {
   readonly source: 'weft_trace' | 'check' | 'held_out_report' | 'observation';
   readonly ref: string;
@@ -124,7 +139,7 @@ export interface FailureAttribution {
   readonly evidence: readonly EvidenceRef[];
 }
 
-export type GaugeRecord = CriteriaSet | CaseSet | EvaluationResult | Comparison | FailureAttribution;
+export type GaugeRecord = CriteriaSet | CaseSet | Revision | EvaluationResult | Comparison | FailureAttribution;
 
 /** First applicable rejection reason, in the contract's order. */
 export type Rejection =
@@ -141,9 +156,14 @@ export type Rejection =
 
 export type Verdict = { readonly ok: true } | { readonly ok: false; readonly reason: Rejection };
 
-/** Known criteria sets, case sets and results, keyed by `criteria`, `caseset` and `result`. */
+/**
+ * Known criteria sets, case sets, results and revisions, keyed by `criteria`,
+ * `caseset`, `result` and `revision`. A criteria set or case set is known only
+ * while a revision records it.
+ */
 export interface Context {
   readonly criteria: Readonly<Record<string, unknown>>;
   readonly casesets: Readonly<Record<string, unknown>>;
   readonly results: Readonly<Record<string, unknown>>;
+  readonly revisions: Readonly<Record<string, unknown>>;
 }
