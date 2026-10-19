@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
-import { mkdtemp, stat, rm } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, stat, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildAuthorizeUrl, createAuthorizationAttempt, handleCallback, exchangeCode, refreshCredentials, validateIdToken, planUsageStatus, ensureHostId, ChatGPTAuthError } from '../src/index.js';
@@ -85,6 +85,29 @@ test('host ID persists before first sign-in and file permissions are private', a
     assert.equal(await ensureHostId(store), host);
     assert.equal((await stat(join(directory, 'private', 'chatgpt.json'))).mode & 0o777, 0o600);
     assert.equal((await stat(join(directory, 'private'))).mode & 0o777, 0o700);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+test('file store never chmods an existing directory and refuses one that others can access', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'weave-auth-dir-'));
+  try {
+    for (const mode of [0o755, 0o750, 0o705, 0o1777]) {
+      const shared = join(directory, `shared-${mode.toString(8)}`);
+      await mkdir(shared);
+      await chmod(shared, mode);
+      await assert.rejects(new FileCredentialStore(join(shared, 'chatgpt.json')).save({ ext_agent_host_id: 'urn:uuid:host' }),
+        error => error instanceof ChatGPTAuthError && error.code === 'credential store directory not private');
+      assert.equal((await stat(shared)).mode & 0o7777, mode);
+      assert.deepEqual(await readdir(shared), []);
+    }
+    const existing = join(directory, 'existing');
+    await mkdir(existing);
+    await chmod(existing, 0o700);
+    await new FileCredentialStore(join(existing, 'chatgpt.json')).save({ ext_agent_host_id: 'urn:uuid:host' });
+    assert.equal((await stat(join(existing, 'chatgpt.json'))).mode & 0o777, 0o600);
+    const nested = join(directory, 'created', 'nested');
+    await new FileCredentialStore(join(nested, 'chatgpt.json')).save({ ext_agent_host_id: 'urn:uuid:host' });
+    assert.equal((await stat(nested)).mode & 0o777, 0o700);
+    assert.equal((await stat(join(nested, 'chatgpt.json'))).mode & 0o777, 0o600);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 test('refresh rejects terminal OAuth failures without reflecting token values', async () => {

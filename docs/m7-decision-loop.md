@@ -326,7 +326,11 @@ ID before authorization, uses PKCE S256, state and nonce, validates RS256 ID
 signatures and issuer/audience/expiry/nonce, and checks the token response's
 plan-usage scope. Returning sign-in reuses the selected issued client ID and
 checks the validated subject before replacing credentials. The filesystem
-implementation writes atomically with file mode 0600 and directory mode 0700.
+implementation writes atomically with file mode 0600. It creates a missing
+directory with mode 0700. It never changes the mode of an existing directory
+and refuses to write into one that grants group or other access
+(`credential store directory not private`). The check reads POSIX mode bits.
+The repository does not verify Windows, where those bits do not describe ACLs.
 No runtime or Fabric package imports authentication.
 
 `@weave/gateway/openai-chatgpt-plan` sends credential-injected Responses calls to
