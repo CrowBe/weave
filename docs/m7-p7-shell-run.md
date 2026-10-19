@@ -23,7 +23,11 @@ failures timeout | denied | spawn_failed | cancelled
 `env_allow` is a list of variable names. The composition root's env port
 supplies values. The host does not copy `process.env`. A value is refused
 when it already appears on `argv` or `stdin`, and it is redacted from tails,
-traces, and error text. Grant mismatch, a forged grant, and a decision-shaped
+traces, and error text. A value shorter than 8 characters, including an
+empty one, is `DENIED` before any spawn. Matching it would refuse or redact
+ordinary text (`1`, `test`), and skipping it would leak it. Redaction
+replaces only a whole value, never a fragment of one. A name the env port does
+not supply is not injected. Grant mismatch, a forged grant, and a decision-shaped
 object are `DENIED` before any spawn.
 
 Resource effects still carry `write` on `cwd_ref`, so the host locks that

@@ -130,6 +130,14 @@ function asOutcome(value: Settled): InvocationOutcome {
   assert.fail(`expected an outcome, got ${value.code}`);
 }
 
+function succeeded(value: Settled): { exit: number; stdout_tail: string; stderr_tail: string; stdout_truncated: boolean } {
+  const outcome = asOutcome(value);
+  if (outcome.outcome !== 'succeeded') {
+    assert.fail(`expected success, got ${outcome.outcome}`);
+  }
+  return outcome.output as { exit: number; stdout_tail: string; stderr_tail: string; stdout_truncated: boolean };
+}
+
 function observed(host: AgentFabricHost): string {
   return JSON.stringify({
     traces: host.shellTraces(),
@@ -326,6 +334,41 @@ describe('shell.run@1', () => {
     } finally {
       rmSync(world.dir, { recursive: true, force: true });
       rmSync(throwing.dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses env values too short to redact, and redacts only whole accepted values', async () => {
+    const SHORT = 'q7Zx9Kw';
+    const EXACT = 'k8Vw2pQz';
+    const values: Record<string, string> = { SHORT, ONE: '1', EMPTY: '', CANARY: EXACT };
+    const world = hostFor(undefined, { lookup: (name: string) => values[name] });
+    const effects = ['process.spawn', `fs.write:${world.cwd}`];
+    try {
+      for (const name of ['SHORT', 'ONE', 'EMPTY']) {
+        const refused = asRejected(await invoke(world.host, grant(world.authority, SHELL_RUN.id, world.cwd, `shell-short-${name}`, effects),
+          SHELL_RUN.id, shellInputs(world.cwd, [process.execPath, STUB, '--report'], [name])));
+        assert.equal(refused.code, 'DENIED', name);
+        assert.equal(refused.reason, 'denied', name);
+      }
+      assert.equal(world.host.spawnRecords().length, 0);
+      assert.equal(observed(world.host).includes(SHORT), false);
+
+      // Eight characters is the shortest value injected. It is refused on argv and redacted as a whole.
+      const carried = asRejected(await invoke(world.host, grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-exact-argv', effects),
+        SHELL_RUN.id, shellInputs(world.cwd, [process.execPath, STUB, '--report', `--token=${EXACT}`], ['CANARY'])));
+      assert.equal(carried.code, 'DENIED');
+      const leaked = succeeded(await invoke(world.host, grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-exact-leak', effects),
+        SHELL_RUN.id, shellInputs(world.cwd, [process.execPath, STUB, '--leak'], ['CANARY'])));
+      assert.equal(leaked.stdout_tail, '[redacted]');
+      // Fragments of the value and common short tokens are ordinary output, not redaction targets.
+      const ordinary = succeeded(await invoke(world.host, grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-exact-ordinary', effects),
+        SHELL_RUN.id, shellInputs(world.cwd, [process.execPath, STUB, '--report'], ['CANARY'], 5_000, `${EXACT.slice(0, 7)} 1 exit`)));
+      const report = JSON.parse(ordinary.stdout_tail) as { stdin: string; canary_len: number };
+      assert.equal(report.stdin, `${EXACT.slice(0, 7)} 1 exit`);
+      assert.equal(report.canary_len, EXACT.length);
+      assert.equal(observed(world.host).includes(EXACT), false);
+    } finally {
+      rmSync(world.dir, { recursive: true, force: true });
     }
   });
 
