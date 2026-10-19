@@ -47,6 +47,17 @@ it, as in the Weft screen, so an id such as `bearer_x` is kept (#158). D3's
 routed-unit id uses the same screen. No generic secret detector can sanitize arbitrary
 operator content, so that content is never copied into the record.
 
+A `stale_answer` record does not say which freshness check failed (#93). The
+check compares the recorded `state_revision` and `observed_at`, the input's
+`state_revision` and `state_updated_at`, and the current reading. Only the
+input's `state_revision` is in the record. No audit consumer needs the cause
+yet, because the `view.audit@1` decisions slice carries no site reason. Adding
+`state_updated_at` and `observed_at` after `state_revision` would change
+decision-site@1's fixed keys, so it needs a new schema version. That waits
+until an audit reads stale causes. Until then, a caller that needs the cause
+persists the recorded answer and the current reading it passes to the pure
+transition, which reproduces the decision.
+
 `stopForNoProgress(history, issues)` stops on the last two stalled/regressing
 choices or a currently reappearing issue with at least two recorded fix attempts.
 Transport, persistence and full-loop integration remain
