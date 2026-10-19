@@ -75,9 +75,12 @@ excluded entry, and only after the margin has passed. Any such value is
 `low_confidence` and the full index. Published low confidence elsewhere,
 including on a required entry, does not block. A published value that is not a
 finite number in [0, 1], for example 60, -1, NaN, or a non-number, is not
-unknown. Any published invalid confidence, on any entry, is `invalid_confidence`
-and the full index. That includes a boundary entry, a non-boundary entry, a
-required entry, and the case where nothing is excluded. D4 and D7 do not use
+unknown. The TypeSafe and Vercel AI Gateway adapters forward a published
+non-number, `null` included, as NaN rather than dropping it; Amos rejects any
+published confidence outside [0, 1] as `malformed_response`. Any published
+invalid confidence, on any entry, is `invalid_confidence` and the full index.
+That includes a boundary entry, a non-boundary entry, a required entry, and
+the case where nothing is excluded. D4 and D7 do not use
 this split: a non-unit confidence there is still `missing_confidence`. A
 missing or malformed probability, a wrong kind, a stale or changed revision,
 an outage, or cancellation is `admission` and returns the whole index.
@@ -229,9 +232,10 @@ k = 3, floor = 0, max_excluded = .4, and min_margin = .3, and the cap is 8.
 `resolvePreselectPolicy` fills each missing or out-of-range field with its own
 default. The pure D3 transition does not: an invalid or incomplete policy is
 replaced wholesale, as specified above.
-Amos readiness uses GET `/v1/models`.
-An unreachable service, non-2xx health response or timeout produces a typed
-unavailable failure and gateway `provider_unavailable` evidence. Intake then
+Amos readiness uses GET `/v1/models`, which must list the configured model.
+An unreachable service, non-2xx health response, unlisted model or timeout
+produces a typed unavailable failure and gateway `provider_unavailable`
+evidence. A response naming another model is `malformed_response`. Intake then
 uses `ask_user` / `needs_human`; dispatch-dependent steps remain paused under
 the existing rule. A model classification remains an observation, not authority.
 

@@ -3,8 +3,10 @@
  *
  * The wire profile below is the request and response mapping for
  * `/v1/systemone`. HTTP, status classification, and credential redaction live
- * in the shared decision transport. TypeSafe direct is the sole decision
- * provider. OpenAI Decisions, Cloudflare Workers AI, and the Vercel route are
+ * in the shared decision transport. TypeSafe direct is the configured
+ * decision provider's route. The Vercel AI Gateway route remains an optional
+ * extra evaluation route (`examples/weigh.ts`, `benchmarks/inference/jev/run.ts`),
+ * not a decision provider. OpenAI Decisions and Cloudflare Workers AI are
  * deferred; a second profile can use the same transport later.
  *
  * Note the destination. Content sent here crosses a different boundary than
@@ -142,8 +144,9 @@ function toWireQuestion(question: EvaluationQuestion, shuffle: false | (() => nu
 
 // ---------------------------------------------------------------------------
 // Response translation. An unparseable answer is a malformed response, not a
-// judgment. Confidence is copied only when the provider publishes a number.
-// Absence is not zero. The site policy decides what a missing statistic means.
+// judgment. A published confidence is always copied: a number as is, anything
+// else as NaN, so a site reads it as invalid rather than as absent. Absence is
+// not zero. The site policy decides what a missing or invalid statistic means.
 // ---------------------------------------------------------------------------
 
 const supportedAnswerTypes = new Map<string, EvaluationAnswer['type']>([
@@ -162,7 +165,11 @@ function parseBody(body: unknown, call: EvaluationCall): DecisionParse {
   for (const [id, raw] of Object.entries(rawAnswers)) {
     if (!Object.hasOwn(call.questions, id)) continue;
     const question = call.questions[id]!;
-    if (isRecord(raw) && (typeof raw['type'] !== 'string' || !supportedAnswerTypes.has(raw['type']))) continue;
+    // An asked id answered with a type this profile cannot read (a box, or a type
+    // added later) is a visible provider change, not a silently missing answer.
+    if (isRecord(raw) && (typeof raw['type'] !== 'string' || !supportedAnswerTypes.has(raw['type']))) {
+      return { status: 'malformed', detail: `answer '${id}' had an unsupported answer type` };
+    }
     const answer = toAnswer(raw);
     if (answer === null) return { status: 'malformed', detail: `answer '${id}' was not a recognised shape` };
     if (answer.type !== question.type) {
@@ -183,8 +190,8 @@ function parseBody(body: unknown, call: EvaluationCall): DecisionParse {
       answers[id] = answer;
     }
 
-    if (isRecord(raw) && typeof raw['confidence'] === 'number') {
-      confidence[id] = raw['confidence'];
+    if (isRecord(raw) && raw['confidence'] !== undefined) {
+      confidence[id] = publishedConfidence(raw['confidence']);
     }
   }
 
@@ -231,6 +238,14 @@ function toAnswer(raw: unknown): EvaluationAnswer | null {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * A published non-number becomes NaN rather than being dropped. NaN keeps the
+ * port's numeric type, carries no provider text, and fails every range check.
+ */
+function publishedConfidence(value: unknown): number {
+  return typeof value === 'number' ? value : Number.NaN;
 }
 
 function numberOrUndefined(value: unknown): number | undefined {
