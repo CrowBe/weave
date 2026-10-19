@@ -218,6 +218,29 @@ describe('Amos local decision contract', () => {
         },
       );
     });
+  it('reads a score legend that echoes a null level as null or as the string null', async () => {
+    const nullLevel: EvaluationCall = {
+      ...call,
+      kind: 'score',
+      questions: { severity: { type: 'score', instructions: 'Severity?', criteria: ['low', null] } },
+    };
+    const answer = { type: 'score', score: 0.8, probabilities: { '0': 0.2, '1': 0.8 } };
+    for (const legend of [{ '0': 'low', '1': 'null' }, { '0': 'low', '1': null }]) {
+      const fetch = (async (url: string | URL | Request) => String(url).endsWith('/v1/models')
+        ? new Response(JSON.stringify({ models: [{ name: 'amos-1-2b' }] }))
+        : new Response(JSON.stringify({ ...body, answers: { severity: { ...answer, legend } } }))) as typeof globalThis.fetch;
+      const result = await amosEvaluator({ fetch }).evaluate(nullLevel);
+      assert.equal(result.status, 'completed', JSON.stringify(legend));
+      if (result.status === 'completed') assert.deepEqual(result.answers['severity'], { type: 'score', score: 0.8, probabilities: { '0': 0.2, '1': 0.8 } });
+    }
+    for (const legend of [{ '0': 'low', '1': 'high' }, { '0': 'null', '1': null }]) {
+      const fetch = (async (url: string | URL | Request) => String(url).endsWith('/v1/models')
+        ? new Response(JSON.stringify({ models: [{ name: 'amos-1-2b' }] }))
+        : new Response(JSON.stringify({ ...body, answers: { severity: { ...answer, legend } } }))) as typeof globalThis.fetch;
+      const result = await amosEvaluator({ fetch }).evaluate(nullLevel);
+      assert.equal(result.status === 'failed' && result.failure.code, 'malformed_response', JSON.stringify(legend));
+    }
+  });
   it('round-trips a multi-entry boolean preselect set as noul', async () => {
     const questions = {
       entry_0: { type: 'boolean' as const, instructions: 'Is this disclosed catalogue entry relevant to this step?' },
