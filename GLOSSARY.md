@@ -199,7 +199,11 @@ the pause grants no authority and cannot bypass D4 or D7.
 
 ### Implementation step
 
-One generate call at a routed tier, followed by the configured repo checks and D5 output evaluation. Retries and a single tier escalation stay inside the step and share one execution id. Each check on each attempt uses a fresh grant of equal scope from the composition root. The step records artifact refs, check outcomes, and criterion verdicts. It cannot mint a grant, pass the D2 ceiling, or complete the goal. A decision answer cannot mint one either.
+One generate call at a routed tier, followed by the configured repo checks and D5 output evaluation of the criteria whose criterion proof is `judgment`. Retries and a single tier escalation stay inside the step and share one execution id. Each check on each attempt uses a fresh grant of equal scope from the composition root. The step records artifact refs, check outcomes, and criterion verdicts. It cannot mint a grant, pass the D2 ceiling, or complete the goal. A decision answer cannot mint one either.
+
+### Criterion proof
+
+How a success criterion is proven: `check` or `judgment`. Decomposition proposes it. Code admits `check` only when every bound check takes its verdict from an oracle that the check's grant may read and that the implementation step's generation cannot write, compared by the host's canonical resource identity. Anything else is `judgment`. A `check` criterion is settled by its green bound checks and needs no D5 pass; a `judgment` criterion keeps D5. A criterion proof grants nothing and leaves every other completion gate in place.
 
 ### Open issue
 

@@ -852,3 +852,39 @@ test('D5 iteration scope: changed live revision cannot combine a saved observati
   assert.equal(result.goal_done, false);
   assert.equal(result.state_digest, observed.state.digest);
 });
+
+// Criterion proof (#199): a check-proven criterion completes on its green bound checks.
+function proofObservation(success_criteria: readonly { readonly criterion_id: string; readonly statement: string; readonly check_ids: readonly string[]; readonly proof?: 'check' | 'judgment' }[],
+  evals: readonly ReturnType<typeof iterationEval>[], red = false) {
+  return { revision, state: assembleAuditState({ authorized_slices: AUDIT_SLICES, iteration: 2, evals,
+    goal: { goal_id: 'goal1', statement: 'goal', revision: 1, authority_scope: [], success_criteria: success_criteria.map(criterion => ({ ...criterion })) },
+    source_revisions: { goal: 1 },
+    checks: [{ check_id: 'repo.test', argv_digest: 'abc', passed: !red, exit: red ? 1 : 0, tail: '' }],
+  }) };
+}
+const proven = { criterion_id: 'c1', statement: 'held-out suite passes', check_ids: ['repo.test'], proof: 'check' as const };
+const judged = { criterion_id: 'c2', statement: 'passes', check_ids: ['repo.test'] };
+for (const [name, criteria, evals, red, expected] of [
+  ['check-proven criterion completes without a D5 eval', [proven], [], false, 'done'],
+  ['check-proven plus a judged criterion with a current pass completes', [proven, judged], [iterationEval('c2', 2)], false, 'done'],
+  ['explicit judgment still needs a current D5 pass', [{ ...proven, proof: 'judgment' as const }], [], false, 'evidence_missing'],
+  ['the judged criterion still needs its own current pass', [proven, judged], [], false, 'evidence_missing'],
+  ['a current failing eval still vetoes a check-proven criterion', [proven], [iterationEval('c1', 2, false)], false, 'evidence_missing'],
+  ['a red bound check vetoes a check-proven criterion', [proven], [], true, 'evidence_missing'],
+  ['a check-proven criterion with no bound checks cannot complete', [{ ...proven, check_ids: [] }], [], false, 'evidence_missing'],
+] as const) {
+  test(`criterion proof: ${name}`, async () => {
+    const f = fixture();
+    const observed = proofObservation(criteria, evals, red);
+    const result = await runAuditLoop(f.input, { ...f.ports, observe: async () => observed }, f.journal);
+    assert.equal(result.outcome, expected);
+    assert.equal(result.goal_done, expected === 'done');
+  });
+}
+
+test('criterion proof: assembly keeps legacy criteria unchanged and rejects an unknown proof', () => {
+  const legacy = proofObservation([judged], []).state;
+  assert.equal('proof' in legacy.goal.success_criteria[0]!, false);
+  assert.equal(proofObservation([proven], []).state.goal.success_criteria[0]?.proof, 'check');
+  assert.throws(() => proofObservation([{ ...proven, proof: 'maybe' as never }], []), /Invalid criterion proof/);
+});

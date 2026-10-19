@@ -1,3 +1,4 @@
+import { isCriterionProof, type CriterionProof } from './criterion-proof.js';
 import { digest } from './digest.js';
 import { stableStringify } from './stable-json.js';
 
@@ -7,6 +8,11 @@ export interface AuditCriterion {
   readonly criterion_id: string;
   readonly statement: string;
   readonly check_ids: readonly string[];
+  /**
+   * Admitted criterion proof (#199). Absent means `judgment`. The observation owner
+   * copies the implementation step's admitted value; assembly does not admit it.
+   */
+  readonly proof?: CriterionProof;
 }
 export interface AuditGoal {
   readonly goal_id: string;
@@ -110,6 +116,9 @@ export function assembleAuditState(input: AuditStateInput): AuditState {
   if (!Number.isSafeInteger(input.iteration) || input.iteration < 0) throw new Error('Invalid audit iteration.');
   const cap = input.max_body_bytes ?? 4096;
   if (!Number.isSafeInteger(cap) || cap < 0) throw new Error('Invalid audit body cap.');
+  for (const criterion of input.goal.success_criteria) {
+    if (criterion.proof !== undefined && !isCriterionProof(criterion.proof)) throw new Error('Invalid criterion proof.');
+  }
   const omissions = [...(input.omissions ?? [])];
   for (const slice of AUDIT_SLICES) if (!allowed.has(slice)) omissions.push(`${slice}:authority`);
   const refs = new Set(input.goal.authority_scope);

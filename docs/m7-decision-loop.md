@@ -72,7 +72,7 @@ The versioned view is `view.audit@1`, assembled by `assembleAuditState` from exp
 interface AuditState {
   schema: 'audit-state@1';
   view: 'view.audit@1';
-  goal: { goal_id; statement; success_criteria: { criterion_id; statement; check_ids: string[] }[]; authority_scope; revision };
+  goal: { goal_id; statement; success_criteria: { criterion_id; statement; check_ids: string[]; proof?: 'check'|'judgment' }[]; authority_scope; revision };
   iteration: number;                         // loop-back count
   plan: { step_id; intent; tier; status: 'done'|'failed'|'skipped' }[];
   decisions: { site; question_id; choice; probabilities; confidence; fallback_used: boolean; obs_seq }[];
@@ -254,7 +254,7 @@ Loop back to Observe when audit findings dispose as `fix_now`. Each finding beco
 
 Stop:
 
-1. **Done**: every success criterion has deterministic evidence (checks green), D5 passes all criteria, and the audit has no `fix_now`.
+1. **Done**: every success criterion has deterministic evidence (checks green), D5 passes every criterion whose criterion proof is `judgment`, and the audit has no `fix_now`.
 2. **Budget**: the weekly quota gate trips (§8), or the gateway cost ceiling is reached. The loop pauses with state persisted. This is not a failure.
 3. **Iteration cap**: `max_iterations` (default 4 audit rounds).
 4. **No progress**: D8 says `stalled`/`regressing` twice in a row, or the same `issue_id` reappears after two fix attempts.
@@ -545,6 +545,10 @@ D5 (`eval.output`) asks one boolean question per success criterion. The observat
 
 A red check fails the attempt even when every D5 criterion passes. On failure the step retries the same routed tier up to N times (`retries`, default 2), and the next prompt lists the failing criterion ids and check ids. It then escalates exactly one tier (`flash` to `standard`, or `standard` to `strong`) once. Escalation cannot pass the D2 ceiling. The budget port can downgrade a same-tier attempt or pause it. A downgrade is not escalation and cannot raise the tier. If the ceiling or the budget port blocks the escalated tier, the step does not generate again. It appends `impl.stop@1` and raises one `open_issue@1` for the audit tier. The issue carries the failing `criterion_id`s and check ids. Its source is `check` when a check failed, otherwise `eval`.
 
+**Criterion proof ([#199](https://github.com/CrowBe/weave/issues/199)).** A criterion may carry `proof` (`check` or `judgment`; absent means `judgment`) and `check_ids`. Before the first attempt the step admits each proposal with the pure `admitCriterionProof`. It admits `check` only when every bound id names a configured check, the input declares `generation_writes` (the resources the generate backend may write, taken from that backend's grant), the composition root supplies the host's `canonical` resource identity, and each bound check declares `oracle_refs` that its held grant may `read` and that share no canonical id with `generation_writes`. Otherwise the criterion stays `judgment` with reason `unbound_check`, `write_scope_unknown`, `no_oracle`, `oracle_not_granted` or `oracle_writable`. The step asks D5 only about `judgment` criteria and discloses only their statements. When none remain it sends no D5 request. A `check` criterion fails when any bound check is red; that failure comes from check evidence and is not recorded as a D5 eval. Every attempt records the admissions as `proofs`, and replay reads them.
+
+The oracle is what decides a check's verdict (held-out tests, fixtures), not the subject under test, which generation is expected to write. With today's CLI wiring the generate backend writes the workspace its checks run in, so a check whose oracle is that workspace stays `judgment`: tests generated in a step never prove a criterion for that step. Canonical identity is atomic, as it is for effect locks; nested resources would need containment before this rule could admit them. That the configured argv actually takes its verdict from the declared oracle is operator configuration, like the argv itself, and the repository cannot verify it.
+
 Crash safety uses one `execution_id` for every attempt and the escalation. Each finished attempt is appended to the attempt journal before the next attempt starts. A restart loads that journal, skips finished attempts, and continues. On load and on append, a torn final JSONL line is repaired: an unparseable tail is truncated to the last complete record, and a complete record missing its newline is terminated. Finished attempts stay in the journal, later appends remain loadable, and a restart does not repeat a finished attempt. Replay of a finished journal calls no provider and no host.
 
 Each accepted generation run gets a fresh opaque check-run identity, combined with the full generated-text digest in every check invocation id. Recovery may regenerate an unfinished attempt, but its checks must execute again: neither a different output nor identical text from a workspace-editing backend may reuse committed checks from a prior generation run. The execution id and attempt number remain stable; finished attempts are still skipped. Check evidence belongs to that generation run and its recorded `gen_` artifact. Generate backends are responsible for applying workspace edits; the step does not apply generated text. This assumes a single writer controls the workspace during generation and checks.
@@ -553,13 +557,14 @@ Each accepted generation run gets a fresh opaque check-run identity, combined wi
 impl.step@1 {
   schema, execution_id, status: 'passed'|'failed'|'paused', goal_done: false,
   reason: 'invalid_input'|null, tier, ceiling, effective_tier, escalated,
-  attempts, artifact_refs, checks, evals, observations, open_issue
+  attempts, artifact_refs, checks, evals, observations, open_issue, proofs
 }
 impl.attempt@1 {
   schema, id, parentId, execution_id, attempt, requested_tier, effective_tier,
   escalated, status, generate_request_id, artifact_refs, checks, evals,
-  observations, failing_criterion_ids, failing_check_ids, pause
+  observations, failing_criterion_ids, failing_check_ids, pause, proofs?
 }
+proofs: { criterion_id, proposed: 'check'|'judgment', proof: 'check'|'judgment', reason }
 checks: { check_id, argv_digest, exit, passed, tail, artifacts }
 evals: { criterion_id, verdict_probability, confidence, passed }
 open_issue@1 {
@@ -591,10 +596,18 @@ evidence_ref)`, excluding `proposed_fix`; duplicate keys keep the first finding.
 Historical full-finding ids remain unchanged on replay and serve as attempt
 aliases during recovery (maximum count, never a sum). Completion requires nonempty criteria,
 green deterministic checks bound to every criterion, passing D5 evidence for
-every criterion in the captured state's current iteration, and no `fix_now` or `needs_human` disposition. A red check
+every `judgment` criterion in the captured state's current iteration, and no `fix_now` or `needs_human` disposition. A red check
 vetoes completion even when the audit claims success. The claim itself is
 never a completion predicate. A final state-revision check after D6 rejects
 a disposition computed against changed state before loop-back or completion.
+
+A criterion whose goal-slice `proof` is `check` completes on its green bound
+checks without a D5 pass; a current failing D5 eval for it still vetoes.
+Absent or `judgment` keeps the D5 requirement. The audit trusts the goal
+slice's `proof` as it trusts `check_ids`: the observation owner copies the
+implementation step's admitted `proofs`, never a proposal. The audit view still
+lists every criterion, so the audit can report a gap or regression against a
+check-proven one.
 
 Per DEC-005, `complete()` filters the `evals` slice to nonnegative safe-integer
 iterations equal to `AuditState.iteration`. Each criterion requires a pass with

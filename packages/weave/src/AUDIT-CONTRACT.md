@@ -54,6 +54,14 @@ result remains `evidence_missing`, never `done`. Legacy checkpoints remain
 readable without treating untagged evidence as current. Green checks bound to
 each criterion and the audit disposition gates remain required.
 
+A criterion may carry `proof: 'check' | 'judgment'`. Absent means `judgment`,
+so legacy states assemble with the same digest; assembly rejects any other
+value. A `check` criterion needs no D5 pass: its non-empty bound checks must be
+green, and a current failing eval for it still vetoes. Assembly does not admit
+proofs. The goal slice is policy-supplied state like `check_ids`, and the
+observation owner must copy the implementation step's admitted `proofs`
+(`admitCriterionProof`), never a proposed value.
+
 The current iteration is the one in the checkpointed observation, not the
 audit round number. Iteration and evals are captured and recovered together;
 explicit pause resumption captures a fresh observation. Existing live-revision

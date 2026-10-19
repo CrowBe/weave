@@ -114,7 +114,9 @@ function complete(observed: AuditObservation): boolean {
   return observed.state.goal.success_criteria.length > 0 && checks.length > 0 && checks.every(check => check.passed && check.exit === 0) &&
     observed.state.goal.success_criteria.every(criterion => criterion.check_ids.length > 0 &&
       criterion.check_ids.every(id => checks.some(check => check.check_id === id && check.passed)) &&
-      evals.some(item => item.criterion_id === criterion.criterion_id && item.passed && (item.verdict_probability ?? 0) >= .8 && (item.confidence ?? 0) >= .9) &&
+      // A check-proven criterion (#199) is settled by its green bound checks; judgment still needs a current D5 pass.
+      (criterion.proof === 'check' ||
+        evals.some(item => item.criterion_id === criterion.criterion_id && item.passed && (item.verdict_probability ?? 0) >= .8 && (item.confidence ?? 0) >= .9)) &&
       !evals.some(item => item.criterion_id === criterion.criterion_id && !item.passed));
 }
 /** Preserve readable short ids; retain the full execution identity when bounded. */
