@@ -179,7 +179,7 @@ function readConfidence(map: unknown, key: string): { readonly confidence: numbe
 /** Bounded routed-unit id. Credential-shaped text is omitted, not copied. */
 function routedUnitId(value: unknown): string | null {
   return typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.:@-]{0,127}$/.test(value) &&
-    !/^(sk[-_]|Bearer|eyJ|gh[pousr]_|github_pat_|AKIA)/i.test(value) ? value : null;
+    !/^(sk[-_]|Bearer\s+|eyJ|gh[pousr]_|github_pat_|AKIA)/i.test(value) ? value : null;
 }
 function preselectSelection(entries: readonly CatalogueIndexEntry[], probabilities: readonly (number | null)[],
   confidences: readonly (number | null)[], confidenceInvalid: boolean, admission: boolean, requiredList: readonly string[],

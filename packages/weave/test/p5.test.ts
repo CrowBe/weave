@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { budgetRoute, createInferenceGateway, type EvaluationAdapter, type EvaluationOutcome, type InferenceGateway, type RoutedUnit } from '@weave/gateway';
-import { evaluateSite, transitionSite, stopForNoProgress } from '../src/sites/index.js';
+import { correlation, evaluateSite, transitionSite, stopForNoProgress } from '../src/sites/index.js';
 
 type Site = 'loop.triage' | 'loop.route' | 'loop.continue' | 'intake.classify';
 const current = { state_revision: 1, state_updated_at: 10 };
@@ -288,10 +288,22 @@ test('mismatched request/site and invalid confidence fail closed for every site'
 test('trace omits undisclosed state, diagnostics and recognizable credential correlation ids', () => {
   const recorded = answer('loop.route', 'strong', 1);
   const result = transitionSite('loop.route', { ...input, request_id: 'sk-secret', state: { token: 'state-secret' } },
-    { ...recorded, outcome: { ...recorded.outcome, request_id: 'sk-secret', provider_response_id: 'Bearer-secret' } }, current);
+    { ...recorded, outcome: { ...recorded.outcome, request_id: 'sk-secret', provider_response_id: 'ghp_secret' } }, current);
   assert.equal(result.observation.request_id, null);
   assert.equal(result.observation.provider_request_id, null);
   assert.ok(!JSON.stringify(result).includes('secret'));
+});
+
+test('ids that start with bearer are correlation ids; real token markers are not (#158)', () => {
+  for (const id of ['bearer_x', 'Bearer-1', 'BEARER.trace', 'bearerish']) assert.equal(correlation(id), id, id);
+  for (const id of ['Bearer abc', 'bearer\tabc', 'sk-abc', 'sk_live_x', 'ghp_abc', 'github_pat_abc', 'eyJhbGci', 'AKIAABC']) {
+    assert.equal(correlation(id), null, id);
+  }
+  const recorded = answer('loop.route', 'strong', 1);
+  const result = transitionSite('loop.route', { ...input, request_id: 'bearer_request' },
+    { ...recorded, outcome: { ...recorded.outcome, request_id: 'bearer_request', provider_response_id: 'bearer_x' } }, current);
+  assert.equal(result.observation.request_id, 'bearer_request');
+  assert.equal(result.observation.provider_request_id, 'bearer_x');
 });
 
 test('pre-cancelled evaluation does not call the port', async () => {

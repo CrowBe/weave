@@ -74,7 +74,7 @@ export interface SiteTransition {
 /** Bound opaque correlation ids; don't forward arbitrary provider text. */
 export function correlation(value: unknown): string | null {
   return typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/.test(value) &&
-    !/^(sk[-_]|Bearer|eyJ|gh[pousr]_|github_pat_|AKIA)/i.test(value) ? value : null;
+    !/^(sk[-_]|Bearer\s+|eyJ|gh[pousr]_|github_pat_|AKIA)/i.test(value) ? value : null;
 }
 export function unit(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;

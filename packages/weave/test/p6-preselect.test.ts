@@ -357,6 +357,13 @@ test('nothing excluded keeps the index without applying the margin or confidence
   assert.equal(covered.preselect?.outcome, 'narrowed');
 });
 
+test('a routed unit id that starts with bearer is recorded; a real token marker is omitted (#158)', () => {
+  for (const id of ['bearer_unit', 'Bearer-1', 'bearer.jev@1.14']) assert.equal(select([0.9, 0.1], {}, 1, id).preselect?.routed_unit_id, id, id);
+  for (const id of ['Bearer abc', 'sk-abc', 'ghp_abc', 'github_pat_abc', 'eyJhbGci', 'AKIAABC']) {
+    assert.equal(select([0.9, 0.1], {}, 1, id).preselect?.routed_unit_id, null, id);
+  }
+});
+
 test('a configured margin replaces the defaults, and the record names the routed unit without leaking it', () => {
   const loose = select([0.9, 0.5], { preselect_policy: policy(1, 0, 'amos', 0.5, 0.3) });
   assert.deepEqual(ids(loose), ['cap_0']);

@@ -42,7 +42,9 @@ Records use schema decision-site@1 and fixed keys. Record only closed-vocabulary
 answers, numeric statistics and safe correlation identifiers, never raw state,
 provider error details, arbitrary answers or distribution keys. Questions are
 fixed text. Correlation identifiers are bounded opaque identifiers; recognizable
-credential prefixes are omitted. No generic secret detector can sanitize arbitrary
+credential prefixes are omitted. `Bearer` counts only when whitespace follows
+it, as in the Weft screen, so an id such as `bearer_x` is kept (#158). D3's
+routed-unit id uses the same screen. No generic secret detector can sanitize arbitrary
 operator content, so that content is never copied into the record.
 
 `stopForNoProgress(history, issues)` stops on the last two stalled/regressing
