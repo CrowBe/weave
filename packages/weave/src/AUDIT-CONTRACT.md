@@ -79,6 +79,20 @@ proofs. The goal slice is policy-supplied state like `check_ids`, and the
 observation owner must copy the implementation step's admitted `proofs`
 (`admitCriterionProof`), never a proposed value.
 
+Open issues in the `open_issues` slice are disclosed context for the audit,
+not completion predicates (#151). This is intentional. An implementation-step
+`open_issue@1` (`source: 'check' | 'eval'`) summarizes evidence that the
+completion rule already reads: its red check vetoes through the `checks` slice,
+and its failing criterion vetoes through a current failing eval or a missing
+current pass. Completion therefore never trusts an issue in place of evidence,
+and a blocker from an earlier iteration whose evidence is now current and green
+does not hold the goal open. The audit may raise a finding from a listed issue,
+and D6 decides whether it is `fix_now`. The loop carries only the audit's
+`fix_now` issues. The observation owner must project each step's check and D5
+evidence, with its producing iteration, into `checks` and `evals`; dropping a
+red check from the slice would hide it from completion whether or not its issue
+is listed.
+
 The current iteration is the one in the checkpointed observation, not the
 audit round number. Iteration and evals are captured and recovered together;
 explicit pause resumption captures a fresh observation. Existing live-revision

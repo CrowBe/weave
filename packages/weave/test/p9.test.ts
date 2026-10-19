@@ -933,3 +933,33 @@ test('criterion proof: fresh green checks after an audit fix complete a check-pr
   assert.equal(result.outcome, 'done');
   assert.equal(result.goal_done, true);
 });
+
+// #151: implementation-step open issues are disclosed audit context; completion reads the evidence behind them.
+function implementationIssueObservation(red: boolean, evalPassed: boolean) {
+  return { revision, state: assembleAuditState({ authorized_slices: AUDIT_SLICES, iteration: 2,
+    goal: { goal_id: 'goal1', statement: 'goal', revision: 1, authority_scope: [],
+      success_criteria: [{ criterion_id: 'c1', statement: 'passes', check_ids: ['repo.test'] }] },
+    source_revisions: { goal: 1 },
+    checks: [{ check_id: 'repo.test', argv_digest: 'abc', passed: !red, exit: red ? 1 : 0, tail: '' }],
+    evals: [iterationEval('c1', 2, evalPassed)],
+    open_issues: [
+      { issue_id: 'exec-1:open', source: 'check', text: 'Deterministic checks failed.', severity: 'blocker' },
+      { issue_id: 'exec-2:open', source: 'eval', text: 'Output evaluation failed for the listed criteria.', severity: 'blocker' },
+    ],
+  }) };
+}
+for (const [name, red, evalPassed, expected] of [
+  ['current green evidence completes although an earlier step blocker is still listed', false, true, 'done'],
+  ['a check blocker holds the goal open through its red check evidence', true, true, 'evidence_missing'],
+  ['an eval blocker holds the goal open through its current failing D5 evidence', false, false, 'evidence_missing'],
+] as const) {
+  test(`implementation open issues are not completion predicates (#151): ${name}`, async () => {
+    const f = fixture();
+    const observed = implementationIssueObservation(red, evalPassed);
+    assert.deepEqual(observed.state.open_issues.map(issue => issue.source), ['check', 'eval']);
+    const result = await runAuditLoop(f.input, { ...f.ports, observe: async () => observed }, f.journal);
+    assert.equal(result.outcome, expected);
+    assert.equal(result.goal_done, expected === 'done');
+    assert.deepEqual(result.open_issues, [], 'the loop carries only audit fix_now issues');
+  });
+}

@@ -601,6 +601,10 @@ every `judgment` criterion in the captured state's current iteration, and no `fi
 vetoes completion even when the audit claims success. The claim itself is
 never a completion predicate. A final state-revision check after D6 rejects
 a disposition computed against changed state before loop-back or completion.
+Listed open issues are not completion predicates either, by design
+([#151](https://github.com/CrowBe/weave/issues/151)): a P8 `check` or `eval`
+blocker holds the goal open through the red check or failing current D5
+evidence it summarizes, which the observer projects into `checks` and `evals`.
 
 A criterion whose goal-slice `proof` is `check` completes without a D5 pass
 when every bound check has a run in the current iteration and every such run is
