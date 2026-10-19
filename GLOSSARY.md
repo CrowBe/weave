@@ -197,6 +197,14 @@ An audit round's resumable `decision_unavailable` outcome when dispatch needs D4
 and decisions are unavailable. Explicit resumption observes availability again;
 the pause grants no authority and cannot bypass D4 or D7.
 
+### Unconfirmed audit dispatch
+
+An audit round's resumable `audit_unconfirmed` outcome. Recovery found the
+durable intent recorded before a strong audit generation, but no report: the
+call may have been paid and its outcome is lost. The loop does not call again
+on its own; only an explicit resume, which captures fresh input, authorizes
+another strong generation.
+
 ### Implementation step
 
 One generate call at a routed tier, followed by the configured repo checks and D5 output evaluation of the criteria whose criterion proof is `judgment`. Retries and a single tier escalation stay inside the step and share one execution id. Each check on each attempt uses a fresh grant of equal scope from the composition root. The step records artifact refs, check outcomes, and criterion verdicts. It cannot mint a grant, pass the D2 ceiling, or complete the goal. A decision answer cannot mint one either.

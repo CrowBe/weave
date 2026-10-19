@@ -186,6 +186,24 @@ checkpoint: request-id reuse alone cannot prevent another charge. Any external
 reconciliation belongs to the inference port; the current gateway does not
 implement an outcome cache or idempotency protocol.
 
+## Dispatch intent (#165)
+
+Immediately before the strong `audit.generate` call, the loop checkpoints the
+round's capture with `dispatched` set to that call's request id. The accepted
+report checkpoint replaces it. Recovery that loads a capture with `dispatched`
+and no report does not dispatch again: the call may have completed and been
+paid, and its outcome was never recorded. It appends a round with outcome
+`audit_unconfirmed`, keeping the capture's digest and pending open issues,
+with no report or disposal. The outcome is a pause: replay returns it, and only
+an explicit `resume: true` continues, in the same round. Like every pause
+resumption, that captures fresh input under a distinct request id, so the
+re-spend is an explicit decision rather than a side effect of recovery. A
+cancellation, budget, authority, decision-outage or no-progress stop observed
+first still wins, and a new resumption's capture carries no intent. An abort
+after dispatch writes nothing further, so it also recovers as
+`audit_unconfirmed`. The intent cannot recover the lost outcome; only
+request-id reconciliation in the inference port could, and none exists.
+
 ## Pause precedence
 
 After generation, cancellation takes precedence, followed by gateway or live

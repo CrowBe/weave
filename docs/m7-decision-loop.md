@@ -640,8 +640,8 @@ stale observations.
 Each `audit.round@1` records its id/parentId, execution id, round, state digest,
 report, D6 disposal, open issues, outcome and `goal_done`. Outcomes distinguish
 `observe`, `done`, `budget`, `iteration_cap`, `no_progress`, `repeated_issue`,
-`authority`, `needs_human`, `cancelled`, `decision_unavailable`, `audit_unavailable` and
-`evidence_missing`; only `done` sets `goal_done`. The cap defaults to four audit
+`authority`, `needs_human`, `cancelled`, `decision_unavailable`, `audit_unavailable`,
+`audit_unconfirmed` and `evidence_missing`; only `done` sets `goal_done`. The cap defaults to four audit
 rounds. Two consecutive stalled/regressing D8 observations stop progress; a
 finding recurring after two fix attempts stops as `repeated_issue`. The
 Observe port supplies `issue_fix_attempts` attestations; merely seeing the
@@ -658,15 +658,20 @@ pause remain terminal `needs_human`. No fallback can bypass D4 or D7.
 Journal append and phase checkpoints must persist before returning, with one
 writer per execution. The composition root must serialize racing resumes
 before they enter the loop; there is no journal lock or compare-and-swap port.
-The loop checkpoints disclosed input before generation, the accepted report
-before D6, and D6 disposal before round append, so recovery reuses completed
-inference. In-flight inference interrupted before checkpoint commit requires
-request-id reconciliation by the inference port. Observation owners reconcile
+The loop checkpoints disclosed input before generation, a dispatch intent
+(the generation request id) immediately before the strong call, the accepted
+report before D6, and D6 disposal before round append, so recovery reuses
+completed inference. Recovery that finds a dispatch intent without a report
+records a resumable `audit_unconfirmed` pause instead of calling the strong
+tier again ([#165](https://github.com/CrowBe/weave/issues/165)): that call may
+have been paid, and only an explicit resume authorizes another. Recovering the
+lost outcome itself would need request-id reconciliation by the inference port,
+which the gateway does not implement. Observation owners reconcile
 fix effects without reusing single-use grants; the audit loop holds no grants. `MemoryAuditJournal` supports deterministic fixtures; production
 durability is the composition root's responsibility. Replay returns the recorded
 round without calling a provider. By default an already stopped execution
-remains stopped. An explicit `resume: true` may resume a `budget`, `decision_unavailable` or `cancelled`
-pause; other stops remain terminal. Pauses retain pending open issues, and
+remains stopped. An explicit `resume: true` may resume a `budget`, `decision_unavailable`,
+`audit_unconfirmed` or `cancelled` pause; other stops remain terminal. Pauses retain pending open issues, and
 resumption re-observes live state, revision and budget in the same round.
 A checkpoint's optional `resume_from` identifies that resumption's pause entry;
 crash recovery within the resumption reuses its fresh input, accepted report and
@@ -685,11 +690,14 @@ with changed prefix digests or findings execute fresh requests. The checkpoint
 pins the report to its disclosed observation; recovery after its durable write
 does not pay for generation again, and D6 runs afresh against those findings.
 A changed live revision is rejected before D6. A crash after provider completion
-but before its report checkpoint can still repeat a paid generation.
+but before its report checkpoint loses that outcome, but recovery stops as
+`audit_unconfirmed` rather than paying again; the explicit resume that follows
+captures fresh input under a new request id and pays once more.
 
 Signal abort returns `cancelled` without any further journal writes, including
 round appends. Recovery uses the last checkpoint committed before abort; the
-returned cancellation itself is not persisted. Gateway-reported cancellation
+returned cancellation itself is not persisted. An abort after the strong call
+was dispatched therefore recovers as `audit_unconfirmed`. Gateway-reported cancellation
 without an aborted signal retains the recorded explicit-resume pause behavior.
 
 ## 10. P9 ports and labelled follow-ups

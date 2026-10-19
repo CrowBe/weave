@@ -250,8 +250,9 @@ The journal port requires durable append-before-return and a single writer.
 
 The journal also checkpoints the detached tidy-state observation before generation
 and its accepted report before D6. Recovery reuses that report instead of
-repeating the strong call; a crash before the report checkpoint may repeat the
-read-only call. File durability is supplied through the journal port; the included
+repeating the strong call; after a crash before the report checkpoint, a durable
+dispatch intent stops recovery as a resumable `audit_unconfirmed` pause instead
+of calling again (see AUDIT-CONTRACT.md). File durability is supplied through the journal port; the included
 memory journal is a fixture. Observe owns normal implementation dispatch under
 existing policy and grants, and supplies completed issue fix-attempt counts;
 an issue's repeated appearance alone is not proof that a fix was attempted.
