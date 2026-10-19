@@ -8,7 +8,6 @@
  * uses a fresh grant of equal scope from the composition-root issuer. A decision
  * answer cannot mint a grant, raise the tier past the ceiling, or complete the goal.
  */
-import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, truncateSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { effectSetsEqual, isWellFormedRef, type CapabilityHost, type Grant, type GrantAuthority } from '@weave/agentsop';
@@ -122,6 +121,12 @@ export interface ImplementPorts {
    */
   readonly issueCheckGrant: EqualGrantIssuer['issue'];
   readonly now: () => number;
+  /**
+   * Fresh opaque value for each generation run, from the composition root (for
+   * example a random UUID), as time comes from `now`. It must not repeat
+   * for one execution, including across restarts. It is digested, never recorded.
+   */
+  readonly runId: () => string;
   readonly readState: () => SiteState;
   readonly budget?: (request: ImplementBudgetRequest) => ImplementBudgetDecision;
   /** Host canonical resource identity; aliases share one id. Absent admits no `check` proof. */
@@ -662,6 +667,9 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
     const effective = action.escalation ? action.requested
       : IMPLEMENT_TIERS[Math.min(rank(allowed), rank(action.requested), rank(normalized.ceiling))]!;
     const generateId = `${normalized.execution_id}:a${action.attempt}:gen`;
+    // Taken before the paid call, so a broken port fails before anything is spent.
+    const run = ports.runId();
+    if (typeof run !== 'string' || run.length === 0) throw new Error('Invalid implementation run id');
     const outcome = await ports.generate({
       request_id: generateId,
       site: 'impl.generate',
@@ -711,7 +719,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
       artifactRefs = [ref];
       // Text alone does not identify workspace edits: even equal output text can
       // accompany different edits on recovery. Never replay across generate runs.
-      const generationIdentity = `${digestHex}:${randomUUID()}`;
+      const generationIdentity = `${digestHex}:${digest({ run }).slice(0, 32)}`;
       checks = await runChecks(normalized, ports, action.attempt, generationIdentity, signal);
       if (signal?.aborted) {
         history.push(remember(journal, attemptRecord({

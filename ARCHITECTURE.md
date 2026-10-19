@@ -76,8 +76,9 @@ depends on Weft's public contract only, never on Loom, Fabric, AgentSOP or the
 gateway, so an external consumer such as Agent University can use both without
 the reference stack. Gauge produces evidence; promotion stays a separate
 governed decision.
-Package-direction and no-ambient-clock checks live under `checks/` and run
-without Loom's tests. The direction check fails on a package directory it has
+Package-direction, no-ambient-clock and no-ambient-entropy checks live under
+`checks/` and run without Loom's tests. Loom takes fresh identities from injected
+ports, as it takes time. The direction check fails on a package directory it has
 no rule for, so a new package cannot go unchecked. The external AgentFabric repository
 is a conceptual reference, not a dependency or a code source: the contract
 invariants it established (durable contracts, opaque references separated from

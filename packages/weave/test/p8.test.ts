@@ -161,6 +161,7 @@ function driver(options: {
   const evalStates: unknown[] = [];
   const invokes: Driver['invokes'] = [];
   let generates = 0;
+  let runs = 0;
   let checks = 0;
   let evals = 0;
   const usedGrants = new WeakSet<object>();
@@ -170,6 +171,7 @@ function driver(options: {
     journal: options.journal ?? new MemoryAttemptJournal(),
     ports: {
       now: () => 10,
+      runId: () => `run-${++runs}`,
       readState: () => ({ ...live }),
       ...(options.budget === undefined ? {} : { budget: options.budget }),
       async generate(request: GenerationRequest): Promise<GenerationOutcome> {
@@ -1003,4 +1005,28 @@ test('a red check on the last attempt raises a check-sourced open issue with no 
   assert.deepEqual(result.open_issue?.check_ids, ['repo.test']);
   assert.deepEqual(result.open_issue?.criterion_ids, []);
   assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), result);
+});
+
+// #120: the check-run identity comes from an injected port, as time does through `now`.
+test('check invocation ids come from the injected run-id port, not ambient entropy (#120)', async () => {
+  const run = async (runIds: readonly string[]) => {
+    const world = driver({ evaluations: [{ c1: { p: .2, conf: 1 } }, { c1: { p: 1, conf: 1 } }] });
+    const queue = [...runIds];
+    const result = await runImplementationStep(world.input, { ...world.ports, runId: () => queue.shift() ?? 'unexpected' },
+      world.journal);
+    assert.equal(result.status, 'passed');
+    assert.deepEqual(queue, [], 'one run id per generation run');
+    return world.invokes.map(call => call.invocation_id);
+  };
+  const first = await run(['run-a', 'run-b']);
+  assert.deepEqual(await run(['run-a', 'run-b']), first, 'the same run ids replay the same check identities');
+  assert.equal(new Set(first).size, 2, 'each generation run gets its own check identity');
+  const fresh = await run(['run-c', 'run-d']);
+  assert.ok(fresh.every(id => !first.includes(id)), 'a fresh run id never reuses a committed check identity');
+  assert.ok(first.every(id => !id?.includes('run-a') && !id?.includes('run-b')), 'run ids are digested, not copied');
+  for (const bad of [() => '', () => 7 as unknown as string]) {
+    const world = driver({});
+    await assert.rejects(runImplementationStep(world.input, { ...world.ports, runId: bad }, world.journal), /run id/);
+    assert.equal(world.generateIds.length, 0, 'an invalid run id is refused before generation spends');
+  }
 });
