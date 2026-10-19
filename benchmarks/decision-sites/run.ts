@@ -8,7 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { buildProviders } from './providers.ts';
 import { buildCompetitors, quotaAllowsCompetitors } from './competitors.ts';
 import type { ProcessRunner } from './competitors.ts';
-import { Journal, acquireLock, replayKey } from './journal.ts';
+import { Journal, acquireLock, ledger, replayKey } from './journal.ts';
 import { bindingFor } from './binding.ts';
 import { SITES, buildRequest } from './questions.ts';
 import { countCompetitorCalls, execute, persistentProviderSkip } from './engine.ts';
@@ -107,9 +107,13 @@ export async function main(args=process.argv.slice(2), injected?:{providers:read
    statuses,spent_usd:journal.spent(),
    input_tokens:records.filter(r=>r.type==='call').reduce((sum,r)=>sum+(r.result.input_tokens??0),0),
    output_tokens:records.filter(r=>r.type==='call').reduce((sum,r)=>sum+(r.result.output_tokens??0),0)},reportRecords);
-  Object.assign(report.summary,{metered_call_cost_usd:callCost,reserved_usd:journal.spent()-callCost});
+  // Reserved spend may over-state the bill (a usage-less 429 is charged at projection), never under-state it.
+  const spend=ledger(records);
+  Object.assign(report.summary,{metered_call_cost_usd:callCost,observed_usd:spend.observed_usd,reserved_usd:spend.reserved_usd,pending_reservation_usd:spend.pending_reservation_usd});
   writeFileSync(join(dir,'summary.json'),JSON.stringify(report.summary,null,2)+'\n',{mode:0o600});
-  const markdown=report.markdown+'\n\nLedger spend (including pending reservations): $'+journal.spent().toFixed(8)+'\n';
+  const markdown=report.markdown+'\n\nLedger spend (including pending reservations): $'+journal.spent().toFixed(8)+'\n'+
+   'Observed spend (usage receipts): $'+spend.observed_usd.toFixed(8)+'. Reserved spend (no usage receipt): $'+spend.reserved_usd.toFixed(8)+
+   ', of which pending reservations: $'+spend.pending_reservation_usd.toFixed(8)+'. The budget stop uses the ledger total.\n';
   writeFileSync(join(dir,'REPORT.md'),markdown);
   if(publish&&reportRecords.some(r=>r.result.status==='ok'))writeFileSync(join(root,'REPORT.md'),markdown);
   writeSync(1,`Run ${options.runId}: ${bound.length} items; spend $${journal.spent().toFixed(8)} / $${options.maxSpend.toFixed(2)}\n`);

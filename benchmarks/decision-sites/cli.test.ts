@@ -331,3 +331,26 @@ else fs.writeSync(1,JSON.stringify({answers:{decision:{choice:'flash',confidence
   }
  }finally{rmSync(helper,{recursive:true,force:true});}
 });
+
+test('summary and report separate observed spend from reserved spend; the ledger stays conservative',async()=>{
+ const id=`spend-split-${process.pid}`,dir=join(testRoot,'results',id);
+ const args=['--providers','fake','--sites','loop.route','--split','holdout','--run-id',id];
+ // Every item meets one usage-less 429 before an answer with a usage receipt.
+ const seen=new Set<string>();
+ const p:Provider={id:'fake',model:'spend-fake',price:.1,serialize:JSON.stringify,request:async request=>{
+  const key=JSON.stringify(request.state);
+  if(!seen.has(key)){seen.add(key);return {status:'failed',http_status:429,retry_after_ms:0};}
+  return {status:'ok',model:'spend-fake',input_tokens:10,answers:{decision:{choice:'flash',confidence:.99}}};
+ }};
+ try{
+  assert.equal(await main(args,{providers:[p]}),0);
+  const summary=JSON.parse(readFileSync(join(dir,'summary.json'),'utf8'));
+  assert.ok(Math.abs(summary.observed_usd-12*10*.1/1e6)<1e-15);
+  assert.ok(summary.reserved_usd>0);assert.equal(summary.pending_reservation_usd,0);
+  assert.ok(Math.abs(summary.spent_usd-(summary.observed_usd+summary.reserved_usd))<1e-15);
+  const report=readFileSync(join(dir,'REPORT.md'),'utf8');
+  assert.match(report,/Ledger spend \(including pending reservations\): \$/);
+  assert.match(report,/Observed spend \(usage receipts\): \$0\.00001200/);
+  assert.match(report,/Reserved spend \(no usage receipt\): \$/);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
