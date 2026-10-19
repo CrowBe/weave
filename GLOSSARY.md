@@ -96,19 +96,23 @@ The judgment site that evaluates state against possible actions and returns weig
 
 ### Acceptance line
 
-A proposed statement that a task is done. It names one fact, the artifact or command output that can show it, and an escape for when that state cannot show the fact. A proposal is an observation. It does not change the goal and it does not grant execution.
+A proposed statement that a task is done. It names one fact, the artifact or command output that can show it, and an escape for when that state cannot show the fact. Under `acceptance.line@2` the fact is either free text or an acceptance predicate, never both. A proposal is an observation. It does not change the goal and it does not grant execution.
 
 ### Acceptance fact
 
-An acceptance line that code has admitted. It is one observable fact. A count, a date, a total, or a taste judgment is not an acceptance fact. An acceptance fact is one boolean question — a Noul on the System One wire — and nothing else.
+An acceptance line that code has admitted. It is one observable fact. A count, a date, a total, or a taste judgment is not an acceptance fact. A free-text acceptance fact is one boolean question — a Noul on the System One wire — and nothing else. A predicate acceptance fact is decided by code and is never asked. Each recorded fact says which: `decided_by: code` or `noul`.
+
+### Acceptance predicate
+
+A closed property on an acceptance line that code can decide from its named evidence: `exit_status` (a command's recorded exit status equals an integer) or `contains_literal` (an artifact body or command output contains an exact literal). There is no regex and no arithmetic. Code renders the fact text from the predicate, admits it only on a fitting evidence kind, and decides it without the criteria gate or task validation. A failed predicate fails the fact; missing evidence, including an unrecorded exit status, escapes. A predicate establishes only its literal property: "the README contains `--dry-run`" may be a predicate, while "the README documents `--dry-run`" stays free text. It is not a completion predicate for a goal and grants nothing.
 
 ### Criteria gate
 
-The judgment site `task.criteria`. Before a run it asks whether each proposed line is one property and observable from the named evidence. Low confidence is an explicit revise or reject. The site does not write a plan, select an action, do arithmetic, or grant execution. It is not the decision layer and it is not `frontier.weigh`.
+The judgment site `task.criteria`. Before a run it asks whether each proposed free-text line is one property and observable from the named evidence. An acceptance predicate is not asked; code checks that it fits its evidence kind. Low confidence is an explicit revise or reject. The site does not write a plan, select an action, do arithmetic, or grant execution. It is not the decision layer and it is not `frontier.weigh`.
 
 ### Task validation
 
-The judgment site `task.validate`. It asks one boolean question per acceptance fact about a state built from that fact and its artifact or command output. Code decides done from thresholds declared before the run, and from the constraints and authority declared for that task. A constraint such as do-not-send is not a ban on every task: it fails a command only when this task declares it and this task's authority does not permit the effect. An ask permits a smaller consequential command when that constraint is declared; it does not authorize send or delete. Those constraints are not Noul questions. A write-up is not part of the validation state and cannot override a failed fact. The site grants nothing and executes nothing. It is not `frontier.weigh`.
+The judgment site `task.validate`. It asks one boolean question per free-text acceptance fact about a state built from that fact and its artifact or command output. Predicate facts are decided in code from the same evidence and combine with the Noul verdicts under the same dispositions; a task whose facts are all predicates sends no request. Code decides done from thresholds declared before the run, and from the constraints and authority declared for that task. A constraint such as do-not-send is not a ban on every task: it fails a command only when this task declares it and this task's authority does not permit the effect. An ask permits a smaller consequential command when that constraint is declared; it does not authorize send or delete. Those constraints are not Noul questions. A write-up is not part of the validation state and cannot override a failed fact. The site grants nothing and executes nothing. It is not `frontier.weigh`.
 
 ### Action proposal
 
@@ -272,6 +276,8 @@ A typed, invocable unit of software that satisfies a capability contract. The co
 ### Capability gap
 
 A semantic operation required to advance the goal that the current capability set cannot adequately perform through execution or composition.
+
+A capability gap may also be recorded for a check capability when D5 or the audit catches the same finding in a declared number of executions. Its recurrence key is the finding kind, criterion and check-relevant evidence, never free text or the execution id. The record cites those executions and names a desired operation. It grants nothing: it reaches crystallization only as the `gap` of an operator goal, through the gap search and every later gate, and the audit keeps running however many checks are admitted.
 
 ### Capability contract
 
