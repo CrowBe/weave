@@ -56,6 +56,14 @@ test('envelope ids, parent and thread ids are screened', () => {
   assert.equal(reason({ ...judgment, record_id: 'boolean.task@jev-1.13.0' }), 'ok');
 });
 
+test('an id that starts with bearer is not a credential (#158)', () => {
+  assert.equal(reason({ ...judgment, record_id: 'bearer_x' }), 'ok');
+  assert.equal(reason({ ...judgment, thread_id: 'Bearer-1' }), 'ok');
+  assert.equal(reason({ ...judgment, record_id: 'Bearer abc' }), 'id');
+  assert.equal(reason({ ...judgment, record_id: 'run:bearer.token' }), 'ok');
+  assert.equal(reason({ ...judgment, record_id: 'bearer_sk-live' }), 'id');
+});
+
 test('goal intent must not name a thread', () => {
   assert.equal(reason({ ...goal, thread_id: 't1' }), 'kind');
 });

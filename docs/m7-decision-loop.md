@@ -690,9 +690,11 @@ without an aborted signal retains the recorded explicit-resume pause behavior.
 
 ## 10. P9 ports and labelled follow-ups
 
-The [trace contract](../packages/agentsop/src/TRACE-CONTRACT.md) defines
-`weave.trace@1` with deterministic envelope order, id/parentId, run identity,
-kind, sequence and closed scalar payloads. Serialization requires an injected
+The [trace contract](../packages/weft/src/WEFT-CONTRACT.md#weavetrace1)
+defines `weave.trace@1` (moved from AgentSOP into Weft by W3,
+[#185](https://github.com/CrowBe/weave/issues/185)) with deterministic
+envelope order, id/parentId, run identity, kind, sequence and closed scalar
+payloads. Serialization requires an injected
 secret redactor and validates the resulting schema. Importers upsert by
 (run_id, id) for idempotence. No provider content, environment values, raw
 operator text or raw errors belong in this port.
