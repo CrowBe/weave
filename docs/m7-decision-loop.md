@@ -522,6 +522,9 @@ or expanded tool/scope access; there is no second model gate.
 D7 evaluates out-of-grant output effects. Both guards request approval at
 p >= .3 or on any uncertainty, missing/malformed/stale answer or outage.
 A pass supplies no grant and cannot override Fabric's deterministic enforcement.
+Approval requests name the rule; D7's is `out_of_grant_effect` (#98). The
+guards judge only the caller's disclosed state and inject no grant or scope,
+so the caller must disclose the effective grant and authorized scope (#99).
 
 Provisional confidence floors are .75 for a published D3 boundary confidence
 and .90 for D4/D7, pending P10 calibration. A missing D3 confidence is

@@ -164,6 +164,20 @@ output introduces effects outside the grant. Both escalate to needs_human for
 p >= .3 or any admission failure, with per-rule reasons. A clean judgment is
 only evidence and contains no grant or dispatch authority.
 
+An approval request names its rule: one of the four D4 rule ids, or
+`out_of_grant_effect` for D7. D7's wire question id stays `decision`, so its
+request and the frozen benchmark sets keep their shape. Neither guard injects a
+grant or scope. D4 judges scope broadening and destructive effect without grant,
+and D7 judges out-of-grant effects, only from what the caller discloses in
+`state`. The caller must therefore disclose the effective grant and authorized
+scope there. A guard that was not shown them cannot judge those rules, and its
+pass is still only evidence. The guards are not yet wired into the loop. Until
+they are, the guarantee that a clean D7 cannot widen a grant is structural: a
+guard transition has exactly `status`, `catalogue_index`, `approval_requests`,
+and `observations`. Fabric checks the grant it is given against the authority
+that issued it. A test feeds a clean D7 into a Fabric invocation to show this.
+Wiring the guards must keep both properties and must supply the disclosure.
+
 Provisional confidence floors: .75 for a published D3 boundary confidence and
 .90 for D4/D7, pending P10 calibration. A missing D3 confidence is unknown. A
 published D3 confidence outside [0, 1] is `invalid_confidence` for the whole

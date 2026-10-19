@@ -4,6 +4,9 @@ import { admissionReason, correlation, unit, type SiteInput, type SiteState, typ
 
 export const INPUT_RULES = Object.freeze(['secret_exfiltration', 'scope_broadening',
   'destructive_without_grant', 'prompt_injection'] as const);
+/** D7's one rule. Its wire question id stays `decision`; approval records name the rule (#98). */
+export const OUTPUT_RULE = 'out_of_grant_effect' as const;
+export type GuardRule = (typeof INPUT_RULES)[number] | typeof OUTPUT_RULE;
 export const BOOLEAN_SITE_POLICY = Object.freeze({
   'loop.preselect': Object.freeze({ confidence: .75, k: 3, floor: 0, cap: 8, max_excluded: .4, min_margin: .3 }),
   'guard.input': Object.freeze({ confidence: .90, threshold: .3 }),
@@ -77,7 +80,7 @@ export type BooleanObservation = Omit<SiteObservation, 'site' | 'answer' | 'reas
 export interface BooleanTransition {
   readonly status: 'transition' | 'needs_human' | 'paused';
   readonly catalogue_index: readonly CatalogueIndexEntry[];
-  readonly approval_requests: readonly { readonly rule: string; readonly reason: BooleanObservation['reason'] }[];
+  readonly approval_requests: readonly { readonly rule: GuardRule; readonly reason: BooleanObservation['reason'] }[];
   readonly observations: readonly BooleanObservation[];
   /** Present for loop.preselect only. Ordinals, never catalogue ids or purposes. */
   readonly preselect?: PreselectSelection;
@@ -94,10 +97,11 @@ const QUESTIONS = Object.freeze({
 function index(input: BooleanSiteInput): CatalogueIndexEntry[] {
   return (input.catalogue_index ?? []).map(({ id, purpose }) => ({ id, purpose }));
 }
-function questionSet(site: BooleanSite, entries: readonly CatalogueIndexEntry[]) {
-  return site === 'loop.preselect' ? entries.map((_, n) => ({ key: `entry_${n}`, question: QUESTIONS.relevance })) :
-    site === 'guard.input' ? INPUT_RULES.map(key => ({ key, question: QUESTIONS[key] })) :
-      [{ key: 'decision', question: QUESTIONS.decision }];
+function questionSet(site: BooleanSite, entries: readonly CatalogueIndexEntry[]):
+  { readonly key: string; readonly rule: GuardRule | null; readonly question: string }[] {
+  return site === 'loop.preselect' ? entries.map((_, n) => ({ key: `entry_${n}`, rule: null, question: QUESTIONS.relevance })) :
+    site === 'guard.input' ? INPUT_RULES.map(key => ({ key, rule: key, question: QUESTIONS[key] })) :
+      [{ key: 'decision', rule: OUTPUT_RULE, question: QUESTIONS.decision }];
 }
 function plain(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -268,7 +272,7 @@ export function transitionBooleanSite(site: BooleanSite, input: BooleanSiteInput
   const metadata = admissionReason(site, input, recorded, current);
   const answered = recorded.outcome?.status === 'accepted' ? recorded.outcome : null;
   const observations: BooleanObservation[] = [];
-  const approval_requests: { rule: string; reason: BooleanObservation['reason'] }[] = [];
+  const approval_requests: { rule: GuardRule; reason: BooleanObservation['reason'] }[] = [];
   const parsed = questions.map(({ key }) => {
     const raw = answered?.answers?.[key];
     const read = readConfidence(answered?.confidence, key);
@@ -305,7 +309,7 @@ export function transitionBooleanSite(site: BooleanSite, input: BooleanSiteInput
     reason: metadata && metadata !== 'decision_unavailable' ? metadata : 'empty_index',
     provider_request_id: correlation(answered?.provider_response_id),
   });
-  for (const [n, { key, question }] of questions.entries()) {
+  for (const [n, { rule, question }] of questions.entries()) {
     const fact = scanned[n]!;
     const answer = fact.p === null ? null : site === 'loop.preselect'
       ? (selection !== null && selection.kept.has(n) ? 'include' : 'exclude')
@@ -313,7 +317,7 @@ export function transitionBooleanSite(site: BooleanSite, input: BooleanSiteInput
     observations.push({ schema: 'decision-site@1', site, question, request_id: correlation(input.request_id),
       state_revision: input.state_revision, answer, confidence: fact.confidence, top_p: fact.p, accepted: fact.accepted,
       fallback_used: !fact.accepted, reason: fact.reason, provider_request_id: correlation(answered?.provider_response_id) });
-    if (site !== 'loop.preselect' && fact.reason !== 'accepted') approval_requests.push({ rule: key, reason: fact.reason });
+    if (rule !== null && fact.reason !== 'accepted') approval_requests.push({ rule, reason: fact.reason });
   }
   // Record unknown answers without copying their potentially secret-bearing keys.
   const expected = new Set(questions.map(q => q.key));
