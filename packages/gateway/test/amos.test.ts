@@ -1,8 +1,15 @@
 import assert from 'node:assert/strict';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { describe, it } from 'node:test';
-import { amosEvaluator, resolveAmosBaseURL, AMOS_BASE_URL } from '@weave/gateway/amos';
-import { createInferenceGateway, type EvaluationCall, type RoutedUnit } from '@weave/gateway';
+import { readFileSync } from 'node:fs';
+import { amosEvaluator, AMOS_DESTINATION } from '@weave/gateway/amos';
+import {
+  bindDecisionProvider,
+  createInferenceGateway,
+  parseRouteConfig,
+  type EvaluationCall,
+  type RoutedUnit,
+} from '@weave/gateway';
 
 const call: EvaluationCall = {
   model: 'amos-1-2b',
@@ -60,12 +67,43 @@ function serve(response: ServerResponse, value: unknown, status = 200) {
 }
 
 describe('Amos local decision contract', () => {
-  it('resolves the supplied environment and defaults without ambient reads', () => {
-    assert.equal(resolveAmosBaseURL({}), AMOS_BASE_URL);
-    assert.equal(
-      resolveAmosBaseURL({ AMOS_BASE_URL: 'http://localhost:9000' }),
-      'http://localhost:9000',
-    );
+  it('serves intake from the example config: configured base URL, callers\' local destination', async () => {
+    const example = JSON.parse(readFileSync(new URL('../../../../weave.routes.example.json', import.meta.url), 'utf8'));
+    // The configured base_url is the only source; a different port proves it is the one used.
+    example.decision.providers.amos.base_url = 'http://127.0.0.1:9876';
+    const parsed = parseRouteConfig(example);
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    const binding = bindDecisionProvider(parsed.decision, 'intake.classify');
+    assert.deepEqual(binding, { provider: 'amos', adapter: 'amos', baseURL: 'http://127.0.0.1:9876', model: 'amos-1-2b' });
+    const amosUnits = parsed.table.filter(unit => unit.adapter === 'amos');
+    assert.deepEqual(amosUnits.map(unit => unit.destination), [AMOS_DESTINATION, AMOS_DESTINATION]);
+
+    const urls: string[] = [];
+    const fetch = (async (url: string | URL | Request) => {
+      urls.push(String(url));
+      return String(url).endsWith('/v1/models')
+        ? new Response(JSON.stringify({ models: [{ name: 'amos-1-2b' }] }))
+        : new Response(JSON.stringify({ model: 'amos-1-2b', usage: { input_tokens: 9, output_tokens: 2 }, answers: {
+          decision: { type: 'choice', choice: 'new_thread', probabilities: { new_thread: 0.9, queue: 0.1 }, confidence: 0.9 },
+        } }));
+    }) as typeof globalThis.fetch;
+    const gateway = createInferenceGateway({
+      clock: { now: () => 10 },
+      routes: amosUnits,
+      decision: parsed.decision,
+      evaluators: [amosEvaluator({ baseURL: binding.baseURL, fetch })],
+    });
+    const outcome = await gateway.evaluate({
+      request_id: 'intake', site: 'intake.classify', role: 'working', kind: 'choice', state: 'disclosed',
+      questions: { decision: { type: 'choice', instructions: 'classify', criteria: { new_thread: null, queue: null } } },
+      // Intake callers permit the local destination, as packages/weave does.
+      terms: { quality: 'baseline', destinations: ['local'], max_context_tokens: 1000, deadline: 1_000_000,
+        cost_ceiling: 10, max_attempts: 1 },
+    });
+    assert.equal(outcome.status, 'accepted');
+    if (outcome.status === 'accepted') assert.equal(outcome.routed_unit_id, 'amos.choice');
+    assert.deepEqual(urls, ['http://127.0.0.1:9876/v1/models', 'http://127.0.0.1:9876/v1/systemone']);
   });
   it('rejects remote URLs, credentials, queries, and fragments', () => {
     for (const baseURL of [

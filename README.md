@@ -141,11 +141,12 @@ will move to `jev-1.14.0` about a week after 2026-10-14. TypeSafe intends to giv
 The data-sharing opt-in announced in that blog has no documented request field.
 `dataSharing?: false` defaults to false; Weave sends no data-sharing field.
 
-The composition root resolves `AMOS_BASE_URL` with the pure helper
-`resolveAmosBaseURL(process.env)` and passes it as `amosEvaluator({ baseURL })`; the default is
-`http://127.0.0.1:8766`, restricted to loopback with no authentication. Register
-an Amos choice routed unit with model `amos-1-2b` (amos-1-small) and destination
-`amos`; the disclosed intake terms must permit that destination. The adapter
+The composition root passes the configured `decision.providers.amos.base_url`,
+as bound by `bindDecisionProvider`, to `amosEvaluator({ baseURL })`; that is the
+single source, and the example is `http://127.0.0.1:8766`. It is restricted to
+loopback with no authentication. Register an Amos choice routed unit with model
+`amos-1-2b` (amos-1-small) and destination `local` (`AMOS_DESTINATION`): content
+stays on this machine, and intake terms permit `local`. The adapter
 checks that GET `/v1/models` lists the configured model before POST
 `/v1/systemone`, rejects a response naming another model as malformed, and
 bounds HTTP calls with a timeout. Unreachable, non-2xx health, an unlisted

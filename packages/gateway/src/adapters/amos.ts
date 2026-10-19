@@ -10,13 +10,15 @@ import type {
 } from '../types.js';
 
 export const AMOS_ADAPTER = 'amos';
-export const AMOS_DESTINATION = 'amos';
+/** Amos is loopback-only, so content stays on this machine: the same `local` destination intake callers permit. */
+export const AMOS_DESTINATION = 'local';
+/**
+ * The adapter's fallback when no `baseURL` is passed. A composition root passes
+ * the configured `decision.providers.amos.base_url` (`bindDecisionProvider`), the
+ * single source for the runtime; nothing here reads the environment.
+ */
 export const AMOS_BASE_URL = 'http://127.0.0.1:8766';
 export const AMOS_MODEL = 'amos-1-2b';
-
-export function resolveAmosBaseURL(env: Readonly<Record<string, string | undefined>>): string {
-  return env['AMOS_BASE_URL'] ?? AMOS_BASE_URL;
-}
 
 export interface AmosOptions {
   readonly baseURL?: string;
