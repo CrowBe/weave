@@ -191,3 +191,30 @@ it('known five-hour pressure with unknown reset pauses for a new observation', a
   assert.equal(outcome.paused?.until, null);
   assert.equal(f.calls, 0);
 });
+it('a deadline passing during the first quota read blocks with deadline_passed before any attempt (#79)', async () => {
+  let now = 100, calls = 0;
+  const gateway = createInferenceGateway({ routes: [unit], clock: { now: () => now },
+    quota: { async read() { now = request.terms.deadline; return snapshot(90); } },
+    adapters: [{ id: 'fake', async execute() { calls++; throw new Error('must not dispatch'); } }],
+  });
+  const outcome = await gateway.generate(request);
+  assert.equal(outcome.status, 'blocked');
+  if (outcome.status === 'blocked') assert.equal(outcome.reason, 'deadline_passed');
+  assert.deepEqual(outcome.attempts, []);
+  assert.equal(outcome.spent, 0);
+  assert.equal(calls, 0);
+});
+it('a deadline passing during the quota recheck after an attempt is deadline_reached (#79)', async () => {
+  let now = 100, reads = 0, calls = 0;
+  const gateway = createInferenceGateway({ routes: [unit], clock: { now: () => now },
+    quota: { async read() { if (++reads === 2) now = request.terms.deadline; return snapshot(90); } },
+    adapters: [{ id: 'fake', async execute() { calls++; return { status: 'failed',
+      failure: { code: 'unavailable', message: 'unavailable', retryable: true } }; } }],
+  });
+  const outcome = await gateway.generate(request);
+  assert.equal(outcome.status, 'unaccepted');
+  if (outcome.status === 'unaccepted') assert.equal(outcome.reason, 'deadline_reached');
+  assert.equal(outcome.attempts.length, 1);
+  assert.equal(calls, 1);
+  assert.equal(reads, 2);
+});

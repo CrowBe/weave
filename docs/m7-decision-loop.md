@@ -458,6 +458,13 @@ and uses this same gate at every audit-round dispatch; pace pressure pauses audi
 
 All providers unavailable has its own blocked reason `provider_unavailable`
 (issue #44); an empty or otherwise incompatible table remains `no_route`.
+
+The gate reads quota before every attempt, and the gateway checks the deadline
+again after each read. A deadline that passes before the first attempt,
+including during that read, gives `blocked: deadline_passed` with no attempts,
+the same outcome as a deadline already past on arrival. Once an attempt has
+been made it gives `unaccepted: deadline_reached` (#79).
+
 Offline fixtures cover 79/80/95% usage, stale/missing quota, unknown pace,
 downgrade constraints, audit pause, five-hour preference, retry rechecks,
 cancellation, deadlines, snapshot cache concurrency and durable pause records.
