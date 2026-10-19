@@ -223,7 +223,7 @@ An implementation of a capability contract that depends on inference. Its admiss
 
 ### Quota snapshot
 
-An injected observation of whole-account quota-axi provider totals, with collection time, provider status, quota windows, reset times and pace. It is data for deterministic budget policy, not authority to execute. A routed unit's `quota_provider` names the account provider independently of adapter and destination.
+An injected observation of whole-account quota-axi provider totals, with collection time, provider status, quota windows, reset times and pace. A provider reading reused from quota-axi's cache carries its own, earlier observation time, and its age counts from that time. It is data for deterministic budget policy, not authority to execute. A routed unit's `quota_provider` names the account provider independently of adapter and destination.
 
 ### Budget gate
 

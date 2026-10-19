@@ -38,8 +38,12 @@ function gate(unit: RoutedUnit, snapshot: QuotaSnapshot | undefined, now: number
     const resets = capped.map(w => reset(w, now));
     return { reason: 'weekly_budget_cap', until: resets.some(t => t === null) ? null : Math.min(...resets as number[]) };
   }
-  const fresh = snapshot !== undefined && Number.isFinite(snapshot.observed_at) &&
-    snapshot.observed_at <= now && now - snapshot.observed_at <= BUDGET_POLICY.max_snapshot_age_ms &&
+  // Age counts from when the provider's reading was taken, which a reused
+  // reading puts before the snapshot itself.
+  const observed = provider?.observed_at ?? snapshot?.observed_at;
+  const fresh = snapshot !== undefined && Number.isFinite(snapshot.observed_at) && snapshot.observed_at <= now &&
+    observed !== undefined && Number.isFinite(observed) && observed <= snapshot.observed_at &&
+    now - observed <= BUDGET_POLICY.max_snapshot_age_ms &&
     provider?.status === 'fresh' && reset(week, now) !== null;
   const pace = week?.pace?.status;
   const failClosed = strong || (unit.tier === 'standard' && unit.quota_provider !== undefined);

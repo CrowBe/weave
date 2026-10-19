@@ -296,3 +296,14 @@ it('a failed pause write rejects the call instead of returning an outcome, and d
   await assert.rejects(gateway.generate(request), error => error === failure);
   assert.equal(calls, 0);
 });
+it('freshness is measured from the provider observation, not the snapshot time (#76)', async () => {
+  // The snapshot was produced now (100); the provider's reading may be older.
+  for (const [observed, status] of [[100 - 60_000, 'accepted'], [100 - 60_001, 'blocked'], [101, 'blocked']] as const) {
+    const base = snapshot(90);
+    const data: QuotaSnapshot = { ...base, providers: [{ ...base.providers[0]!, observed_at: observed }] };
+    const f = fixture(data);
+    const outcome = await f.gateway.generate(request);
+    assert.equal(outcome.status, status, String(observed));
+    if (outcome.status === 'blocked') assert.equal(outcome.reason, 'quota_unknown');
+  }
+});

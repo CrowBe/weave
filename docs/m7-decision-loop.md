@@ -297,7 +297,7 @@ Order: P0 → P1 → P2 ChatGPT sign-in → P3 TypeSafe decision provider. OpenA
 
 **Loop mechanism (P4).** The hard rule: the loop stops at 80% of weekly quota, checked with `quota-axi --json`.
 
-- Before every routed dispatch, and at the start of every audit round, the composition root runs `quota-axi --json` with a ~60s cache. For each `quota_provider` it reads `windows[id=seven_day].percentRemaining`, `resetsAt`, `pace.status`, and `five_hour`.
+- Before every routed dispatch, and at the start of every audit round, the composition root runs `quota-axi --json` with a ~60s cache. For each `quota_provider` it reads `windows[id=seven_day].percentRemaining`, `resetsAt`, `pace.status`, and `five_hour`. Codex reports its weekly window as `weekly`; the root's normalizer maps it to `seven_day`.
 - **Weekly gate:** if `percentRemaining ≤ 20` (80% used) for the provider a unit draws on, the unit is excluded (`weekly_budget_cap`). If no eligible unit remains for the step, the loop records `loop.paused{until: resetsAt}` and stops dispatching. It resumes at reset, through the injected clock and timer only. The cap is enforced against the whole week, including use outside Weave, because quota-axi reports the account total. That is stricter than "Weave's share", and safe.
 - **Five-hour window:** if `≤ 10%`, prefer another provider; if none, wait until that reset (the gateway already waits on known delays).
 - **Pace:** `ahead` downgrades `strong` to `standard` except for the audit step, which pauses instead. An audit should not be done by a weaker model.
@@ -433,15 +433,36 @@ quality, context and cost constraints, before each generation or evaluation
 attempt, including retries, waits and fallbacks. `quota_provider` is an optional
 routed-unit attribute naming the whole-account quota-axi provider, independent
 of its adapter and destination. A strong unit without that mapping fails closed.
-The example subscription units name `codex`, `claude` and `grok`; Grok quota
-support is an operator assumption until quota-axi supplies that provider.
+The example subscription units name `codex`, `claude` and `grok`. quota-axi
+0.1.64 lists all three provider ids. Its Grok reading reports the allowance as
+window `credits` (kind `weekly` or `monthly` by plan period), and no Grok
+capture is recorded, so the normalizer does not map it: Grok strong and
+quota-tracked standard units fail closed with `quota_unknown`, and Grok flash
+units carry no weekly cap.
 
 `QuotaPort.read()` returns normalized snapshot data (`observed_at`, provider
 status, weekly/five-hour windows, numeric reset times and pace). Only the local
 composition-root helper runs `quota-axi --json`, with a 60s cache and concurrent
 refresh deduplication. It converts ISO timestamps and strips CLI diagnostics.
 Freshness requires a `fresh` provider, observation age ≤60s, and a future weekly
-reset. Missing, duplicate, malformed or expired windows cannot clear strong work.
+reset. Age counts from when the provider's reading was taken: a reading quota-axi
+reuses from its cache (`state.reused`, opt-in through `--max-age` or
+`QUOTA_AXI_MAX_AGE`) was taken at `state.refreshedAt`, which the normalizer
+passes on as that provider's `observed_at`; the report's `generatedAt` is the
+default. The root's own 60s cache therefore cannot make an older reading pass
+(#76). Missing, duplicate, malformed or expired windows cannot clear strong work.
+
+The normalizer reads quota-axi `--json` schemaVersion 5. A provider's status is
+`state.status`, and `state.stale: true` is never fresh. Only the windows the
+policy reads (`seven_day` or Codex `weekly`, and `five_hour`) must carry a
+percentage and a reset. Other windows (model, credit, code-review and used-share
+windows) may omit those optional fields without making the provider unknown, but
+a value that contradicts the published schema anywhere in the row does. A status
+quota-axi itself reports as not fresh is kept rather than replaced by `unknown`,
+and a reused reading keeps its observation time, so stale evidence survives a
+malformed row (#92). A recorded-fixture contract test checks these field names
+against a redacted verbatim Codex capture from the P10 live run (15 Oct 2026)
+and the documented Claude example in the quota-axi 0.1.64 README (#78).
 Unknown pace also fails closed; `ahead` permits a standard route only when no
 eligible strong route remains and quality and authority still hold.
 

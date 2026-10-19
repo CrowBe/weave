@@ -570,12 +570,23 @@ export function answersMatchQuestions(
   return extra === undefined ? { status: 'accepted' } : { status: 'rejected', reason: `unasked_question:${extra}` };
 }
 
-/** Normalized quota-axi data. Time conversion and acquisition belong to the caller. */
+/**
+ * Normalized quota-axi data. Time conversion and acquisition belong to the caller.
+ * Weekly windows use id `seven_day` and five-hour windows `five_hour`; budget
+ * policy reads no other window.
+ */
 export interface QuotaSnapshot {
+  /** When the snapshot was produced (quota-axi `generatedAt`). */
   readonly observed_at: Timestamp;
   readonly providers: readonly {
     readonly provider: string;
     readonly status?: string;
+    /**
+     * When this provider's reading was taken, if earlier than the snapshot: a
+     * reused reading's `refreshedAt`. Absent means the snapshot's `observed_at`.
+     * Freshness is measured from this time.
+     */
+    readonly observed_at?: Timestamp;
     readonly windows: readonly {
       readonly id: string;
       readonly percentRemaining: number | null;
