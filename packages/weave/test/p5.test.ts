@@ -188,6 +188,39 @@ for (const mode of ['normal', 'refusal', 'unavailable'] as const) {
   });
 }
 
+// #91: the gateway reports a refusal as attempts_exhausted at max_attempts 1 and as provider_failed above it.
+// Outage classification reads the failure codes, so max_attempts cannot change the site outcome.
+for (const [code, retryable, outage] of [['invalid_request', false, false], ['malformed_response', false, false],
+  ['unavailable', true, true], ['unauthorized', false, true], ['rate_limited', true, true]] as const) {
+  test(`${code} classifies the same at every max_attempts`, async () => {
+    const reasons = new Set<string>();
+    for (const max_attempts of [1, 2, 3]) {
+      const gateway = createInferenceGateway({ routes: [routed], clock: { now: () => 10 }, evaluators: [{
+        id: 'fake', async evaluate() { return { status: 'failed', failure: { code, retryable, message: 'sk-secret-detail' } }; },
+      }] });
+      const outcome = await gateway.evaluate({ request_id: 'r1', site: 'loop.route', role: 'working', kind: 'choice',
+        state: 'disclosed', questions: { decision: { type: 'choice', instructions: 'q', criteria: { flash: null, strong: null } } },
+        terms: { ...input.terms, max_attempts } });
+      if (outcome.status === 'unaccepted') reasons.add(outcome.reason);
+      const dispatch = transitionSite('loop.route', { ...input, needs_dispatch: true, terms: { ...input.terms, max_attempts } },
+        { state_revision: 1, observed_at: 10, outcome: outcome as EvaluationOutcome<'choice'> }, current);
+      assert.equal(dispatch.choice, 'standard');
+      assert.equal(dispatch.status, outage ? 'paused' : 'transition');
+      assert.equal(dispatch.observation.reason, outage ? 'decision_unavailable' : 'no_answer');
+      assert.ok(!JSON.stringify(dispatch).includes('sk-secret'));
+    }
+    if (!retryable) assert.deepEqual([...reasons].sort(), ['attempts_exhausted', 'provider_failed']);
+  });
+}
+
+test('provider_failed without any failed attempt is an abort before dispatch and stays an outage', () => {
+  const outcome: EvaluationOutcome<'choice'> = { status: 'unaccepted', reason: 'provider_failed', request_id: 'r1',
+    site: 'loop.route', attempts: [], spent: 0, uncertainty: [] };
+  const result = transitionSite('loop.route', { ...input, needs_dispatch: true }, { state_revision: 1, observed_at: 10, outcome }, current);
+  assert.equal(result.status, 'paused');
+  assert.equal(result.observation.reason, 'decision_unavailable');
+});
+
 test('D2 ceiling composes with P4 downgrade and never upgrades unavailable lower tiers', () => {
   const routes: RoutedUnit[] = ['flash', 'standard', 'strong'].map(tier => ({
     ...routed, operation: 'generate', kind: 'transform', tier: tier as 'flash' | 'standard' | 'strong',

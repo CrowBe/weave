@@ -19,6 +19,17 @@ An answer from a different revision, or observed before the current state's
 update, is stale. Request id/site must match. Nonaccepted outcomes and exceptions
 fall back; unavailable provider or thrown port pauses dispatch-dependent steps.
 Read-only steps may use deterministic fallback. Cancellation always pauses.
+An outage is classified on the attempts' failure codes, not on the gateway's
+unaccepted reason, because the gateway reports the same failed attempts as
+`attempts_exhausted` at `max_attempts: 1` and as `provider_failed` above it.
+`provider_failed` or `attempts_exhausted` is an outage when a failed attempt
+carries `unavailable`, `unauthorized`, `quota_exhausted`, `rate_limited`,
+`timeout`, or `cancelled`. A refusal (`invalid_request`) or a
+`malformed_response` alone is `no_answer` and takes the fallback at every
+`max_attempts`. `provider_failed` with no failed attempt is an abort before any
+attempt and stays an outage. `budget_exhausted`, `deadline_reached`, a gateway
+pause, and the blocked reasons `provider_unavailable`, `no_route`, `no_budget`,
+`quota_unknown`, `weekly_budget_cap`, and `deadline_passed` are outages.
 No returned transition dispatches or authorizes execution. D2's tier is a ceiling
 for the existing P4 gate.
 

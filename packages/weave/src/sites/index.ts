@@ -77,14 +77,20 @@ function validState(state: SiteState): boolean {
   return Number.isSafeInteger(state.state_revision) && state.state_revision >= 0 && Number.isFinite(state.state_updated_at);
 }
 
+/** Failure codes meaning no answer could be obtained, unlike a refusal or a malformed answer. */
+const OUTAGE_FAILURES: readonly string[] = ['unavailable', 'unauthorized', 'quota_exhausted', 'rate_limited', 'timeout', 'cancelled'];
 export function decisionUnavailable(outcome: EvaluationOutcome | null): boolean {
   if (!outcome || outcome.paused !== undefined) return true;
   if (outcome.status === 'accepted') return false;
   if (outcome.status === 'blocked') return ['provider_unavailable', 'no_route', 'no_budget', 'quota_unknown',
     'weekly_budget_cap', 'deadline_passed'].includes(outcome.reason);
-  return ['provider_failed', 'budget_exhausted', 'deadline_reached'].includes(outcome.reason) || outcome.attempts.some(attempt =>
-    attempt.disposition.status === 'failed' &&
-    ['unavailable', 'unauthorized', 'quota_exhausted', 'rate_limited', 'timeout'].includes(attempt.disposition.failure.code));
+  if (outcome.reason === 'budget_exhausted' || outcome.reason === 'deadline_reached') return true;
+  // The gateway reports the same failed attempts as provider_failed or attempts_exhausted depending on
+  // max_attempts, so classify on their failure codes (#91). provider_failed with no failed attempt is an
+  // abort before any attempt: there is no refusal to classify, so it stays an outage.
+  const codes = outcome.attempts.flatMap(attempt => attempt.disposition.status === 'failed' ? [attempt.disposition.failure.code] : []);
+  if (outcome.reason === 'provider_failed' && codes.length === 0) return true;
+  return codes.some(code => OUTAGE_FAILURES.includes(code));
 }
 
 /** Deterministic admission and record construction, usable without a gateway for replay. */
