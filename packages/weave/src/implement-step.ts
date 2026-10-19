@@ -619,18 +619,28 @@ function freshCheckGrant(ports: ImplementPorts, held: Grant | null): Grant | nul
  * time, so a later mutation of the held grant cannot widen a fresh one.
  * Object identity is the hold: a field-equal copy, a wider grant, or a
  * decision answer is refused. The held grant is not consumed.
+ *
+ * `limit` bounds fresh grants per held grant (#124). One step run invokes each
+ * check once per generation run, at most `retries + 2` times, so the default
+ * fits the default retries; bind one issuer per step run and pass
+ * `retries + 2` when the step is configured with more. Each fresh grant gets
+ * its own action id, `<held action_id>:g<n>`, so release and proceed by action
+ * id stay unambiguous among this issuer's grants (#125). Action id is not scope.
  */
-export function createEqualGrantIssuer(authority: GrantAuthority, held: readonly Grant[]): EqualGrantIssuer {
-  const scopes = new Map<Grant, Grant>();
+export function createEqualGrantIssuer(authority: GrantAuthority, held: readonly Grant[],
+  limit: number = DEFAULT_IMPLEMENT_RETRIES + 2): EqualGrantIssuer {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_RETRIES + 2) throw new Error('Invalid grant issue limit');
+  const scopes = new Map<Grant, { readonly scope: Grant; issued: number }>();
   for (const grant of held) {
     if (!authority.isIssued(grant) || !authority.isValid(grant)) continue;
-    scopes.set(grant, copyGrant(grant));
+    scopes.set(grant, { scope: copyGrant(grant), issued: 0 });
   }
   return {
     issue(template) {
-      const scope = scopes.get(template);
-      if (!scope || !authority.isValid(template)) return null;
-      return authority.issue(copyGrant(scope));
+      const bound = scopes.get(template);
+      if (!bound || bound.issued >= limit || !authority.isValid(template)) return null;
+      bound.issued += 1;
+      return authority.issue({ ...copyGrant(bound.scope), action_id: `${bound.scope.action_id}:g${bound.issued}` });
     },
   };
 }

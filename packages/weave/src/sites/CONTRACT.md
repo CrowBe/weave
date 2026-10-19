@@ -190,7 +190,9 @@ generates once at the routed tier, then each configured `repo.test`,
 issuer, supplied by the composition root and not by a decision answer, returns
 a fresh equally-scoped grant per attempt and per check. `createEqualGrantIssuer`
 copies that scope from a `GrantAuthority` grant it holds and refuses any other
-object. The step does not invoke a wider grant and does not consume the
+object. It names each fresh grant `<held action_id>:g<n>` and mints at most
+`limit` per held grant (default `retries + 2` for the default retries), one
+issuer per step run. The step does not invoke a wider grant and does not consume the
 template. A decision answer cannot mint a grant. The step then runs D5. Check
 evidence is `{ check_id, argv_digest, exit, passed, tail, artifacts, invocation_id }`. Eval
 evidence is `{ criterion_id, verdict_probability, confidence, passed }`. A red

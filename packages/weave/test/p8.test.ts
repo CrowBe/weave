@@ -461,8 +461,10 @@ test('a real host accepts a fresh grant when a green check is retried after D5 f
     assert.equal(used.length, 2);
     assert.notEqual(used[0], used[1]);
     assert.notEqual(used[0], template);
-    assert.deepEqual(grantScope(used[0]), grantScope(template));
-    assert.deepEqual(grantScope(used[1]), grantScope(template));
+    // Equal scope; each fresh grant has its own action id (#125).
+    assert.deepEqual({ ...grantScope(used[0]), action_id: null }, { ...grantScope(template), action_id: null });
+    assert.deepEqual({ ...grantScope(used[1]), action_id: null }, { ...grantScope(template), action_id: null });
+    assert.equal(new Set([template.action_id, used[0]?.action_id, used[1]?.action_id]).size, 3);
     assert.equal(authority.markInvoked(template), true);
     const reused = host.invoke(used[0] ?? null, 'repo.test', { cwd_ref: cwd, env_allow: [], timeout_ms: 5_000 }, { invocation_id: 'reuse' });
     assert.equal(reused.kind, 'rejected');
@@ -1108,4 +1110,35 @@ test('cancelling the step requests cancellation of the in-flight check and pause
   assert.equal(result.attempts[0]?.checks[0]?.exit, null);
   assert.deepEqual(world.evalSites, [], 'no D5 after cancellation');
   assert.equal(result.goal_done, false);
+});
+
+// #124, #125: the issuer bounds fresh grants per held grant and names each one.
+test('the equal issuer gives each fresh grant its own action id and stops at its limit (#124, #125)', () => {
+  const authority = createGrantAuthority();
+  const fields = {
+    action_id: 'act-1', operation: 'repo.test', contract_rev: 'r1',
+    permissions: [{ resource: 'workspace-1', mode: 'write' as const }],
+    effects: [{ resource: 'workspace-1', mode: 'write' as const }],
+    process_effects: ['process.spawn', 'fs.write:workspace-1'], issued_at: 1,
+  };
+  const held = authority.issue(fields);
+  const other = authority.issue({ ...fields, action_id: 'act-2' });
+  const issuer = createEqualGrantIssuer(authority, [held, other], 2);
+  const first = issuer.issue(held);
+  const second = issuer.issue(held);
+  assert.ok(first && second);
+  assert.equal(new Set([held.action_id, first.action_id, second.action_id]).size, 3, 'release/proceed by action id stay unambiguous');
+  assert.ok(authority.isIssued(first) && authority.isIssued(second));
+  assert.equal(issuer.issue(held), null, 'the limit bounds fresh grants per held grant');
+  const third = issuer.issue(other);
+  assert.ok(third, 'each held grant has its own count');
+  assert.equal(new Set([first.action_id, second.action_id, third.action_id]).size, 3);
+  const defaults = createEqualGrantIssuer(authority, [held]);
+  const minted = Array.from({ length: DEFAULT_IMPLEMENT_RETRIES + 3 }, () => defaults.issue(held));
+  assert.equal(minted.filter(item => item !== null).length, DEFAULT_IMPLEMENT_RETRIES + 2,
+    'by default one fresh grant per generation run of a step: retries, the first attempt and the escalation');
+  assert.equal(minted.at(-1), null);
+  for (const bad of [0, -1, 1.5, 11, Number.NaN]) {
+    assert.throws(() => createEqualGrantIssuer(authority, [held], bad), /limit/);
+  }
 });
