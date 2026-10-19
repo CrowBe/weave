@@ -3,8 +3,10 @@
  *
  * The wire profile below is the request and response mapping for
  * `/v1/systemone`. HTTP, status classification, and credential redaction live
- * in the shared decision transport. TypeSafe direct is the sole decision
- * provider. OpenAI Decisions, Cloudflare Workers AI, and the Vercel route are
+ * in the shared decision transport. TypeSafe direct is the configured
+ * decision provider's route. The Vercel AI Gateway route remains an optional
+ * extra evaluation route (`examples/weigh.ts`, `benchmarks/inference/jev/run.ts`),
+ * not a decision provider. OpenAI Decisions and Cloudflare Workers AI are
  * deferred; a second profile can use the same transport later.
  *
  * Note the destination. Content sent here crosses a different boundary than
