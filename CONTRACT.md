@@ -12,9 +12,11 @@ execution or replace deterministic evidence.
   `amos` ids; other ids, including `openai-decisions`, are config errors.
 - [Weft records](packages/weft/src/WEFT-CONTRACT.md): `weft.record@1`
   envelope, kinds, links, evidence and fail-closed validation
-  (`@weave/weft`, `validateRecord`), and the `weave.trace@1` JSONL tree
-  envelope it still supports: redaction and idempotent importer port
-  (`validateTrace`, `serializeTrace`, `importTraceLines`).
+  (`@weave/weft`, `validateRecord`); disclosure classes, the scoped inline
+  content policy and the redaction boundary (`serializeRecord`); and the
+  `weave.trace@1` JSONL tree envelope it still supports: redaction and
+  idempotent importer port (`validateTrace`, `serializeTrace`,
+  `importTraceLines`).
 - [Gauge evaluation](packages/gauge/src/GAUGE-CONTRACT.md): criteria sets,
   case sets, evaluation results, comparisons and failure attributions with
   recomputed verdicts (`@weave/gauge`, `validate`).

@@ -369,7 +369,19 @@ The Weft records sharing one `trace_id`, a correlation scope chosen by the compo
 
 ### Weft record
 
-One closed, versioned entry in a Weft trace: an envelope, a kind, links to other records, evidence references and kind-specific fields. Content appears only as a content class and digest, never as text. A record that fails validation is not stored.
+One closed, versioned entry in a Weft trace: an envelope, a kind, links to other records, evidence references and kind-specific fields. Content appears as a content class and digest. It appears as text only where an inline content policy for that trace permits its class. A record that fails validation is not stored.
+
+### Disclosure class
+
+What a Weft record field can reveal: `metric` (a count, measure, ratio or flag), `reference` (an id, code or digest naming something held elsewhere) or `content` (goal content). Every field has exactly one. A content field holds a content class, a digest and optionally a reference, and never text unless an inline content policy permits it. A disclosure class is not a content class, which says how sensitive the content itself is.
+
+### Inline content policy
+
+The composition root's permission to record content text inline in one Weft trace, for the content classes it names. It is never the default and permits nothing in any other trace. It grants no access, and no disclosure beyond that trace. Inline text must still match its digest and pass the credential screen. A malformed policy is a configuration error, not a rejected record.
+
+### Weft redactor
+
+The function the composition root must supply before Weft serializes a record. It removes secrets and any content the trace may not hold. Weft validates its output and writes nothing it rejects. A redactor does not grant disclosure, and passing it is not evidence that a record is safe to show anyone.
 
 ### Gauge
 
@@ -596,6 +608,7 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 - Say **criteria gate** for `task.criteria` and **task validation** for `task.validate`. Jev may answer either site. Neither site is the decision layer, and neither is `frontier.weigh`.
 - Say **confidence** for the provider statistic published beside a typed evaluation answer. It is not a weight and not a quality score.
 - Say **Weft trace**, not *trace*, when the observation log or Loom's cycle trace could be meant. Neither is a Weft trace.
+- Say **disclosure class** for what a Weft field can reveal and **content class** for how sensitive content is. They are not interchangeable.
 - Say **experiment**, not *swatch*, for a comparison of a baseline with a candidate.
 - Say **constraint** in a criteria set or **test corpus** case, not *pattern*, for an expected behaviour.
 - Say **evaluation result**, not *score*, for what Gauge records about a subject. A measure is one value within it.

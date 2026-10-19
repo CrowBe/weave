@@ -25,11 +25,21 @@ export interface Evidence {
   readonly ref: string;
 }
 
-/** Names and fingerprints text held elsewhere. v1 cannot carry the text. */
+/** What a field can reveal (WEFT-CONTRACT.md, Disclosure). Not a content class. */
+export type DisclosureClass = 'metric' | 'reference' | 'content';
+
+/** Names and fingerprints text held elsewhere; carries `text` only under an `InlinePolicy`. */
 export interface ContentValue {
   readonly content_class: ContentClass;
   readonly digest: string;
   readonly ref?: string;
+  readonly text?: string;
+}
+
+/** The composition root's permission to record text inline in one Weft trace, for these classes. Never the default. */
+export interface InlinePolicy {
+  readonly trace_id: string;
+  readonly classes: readonly ContentClass[];
 }
 
 export type Eligibility = 'allowed' | 'approval_required' | 'prohibited';
@@ -157,6 +167,9 @@ export type WeftRecord = {
     readonly fields: KindFields[K];
   };
 }[Kind];
+
+/** Supplied by the composition root before serialization. Weft validates what it returns. */
+export type Redactor = (record: WeftRecord) => unknown;
 
 /** First applicable rejection reason, in the contract's order. */
 export type Rejection = 'envelope' | 'id' | 'sequence' | 'kind' | 'link' | 'evidence' | 'content' | 'field';
