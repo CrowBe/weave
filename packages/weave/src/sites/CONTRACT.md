@@ -302,6 +302,31 @@ stalled/regressing D8 outcomes persist a stop. Authority blocks require a human.
 Round records are appended before loop-back; replay performs no provider calls.
 The journal port requires durable append-before-return and a single writer.
 
+Each round's progress choice comes from recorded evidence before D8 (#202).
+`progressDelta` builds `progress.delta@1` from two consecutive tidy states, in
+this key order: `schema`, `previous_digest`, `current_digest`, `criteria`,
+`removed`, `gained`, `lost`, `rule`. Each digest is SHA-256 over that state's
+checks, evals and artifacts. `criteria` lists `{ criterion_id, before, after }`
+in the current goal's order; `before` is null for a criterion the previous
+state did not list. A criterion is settled when every run of each bound check
+is green (for a check-proven criterion, it needs a run in the current iteration
+and only those runs count), no current D5 eval for it failed, and a judgment
+criterion has a current pass at p >= .8 and confidence >= .9. That is the
+per-criterion part of completion; with every check green, all criteria are
+settled exactly when completion holds. The rule is pure. A changed criterion
+set asks D8. Otherwise an unchanged digest is `stalled`, at least one criterion
+newly settled and none lost is `progressing`, and at least one lost and none
+gained is `regressing`. Anything else, and the first round, asks D8 through
+`evaluateSite('loop.continue', ...)` with its unchanged threshold and
+`stalled` fallback. `decideProgress` returns `progress.record@1`: `schema`,
+`delta`, `decided_by` (`rule` or `site`), `choice`, `status`, and `site` (D8's
+transition, or null when the rule decided). A rule decision makes no provider
+call, so a decision outage cannot turn it into a fallback. `transitionProgress`
+rebuilds the record from its recorded delta and D8 transition without a
+provider; replay uses that. The rule produces only D8's options and adds no stop
+condition. The Observe port supplies `progress` from these records' choices,
+so two consecutive rule-decided `stalled` rounds still stop as `no_progress`.
+
 The journal also checkpoints the detached tidy-state observation before generation
 and its accepted report before D6. Recovery reuses that report instead of
 repeating the strong call; a crash before the report checkpoint may repeat the

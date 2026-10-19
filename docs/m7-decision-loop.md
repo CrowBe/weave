@@ -261,7 +261,7 @@ Stop:
 1. **Done**: every success criterion has deterministic evidence (checks green), D5 passes every criterion whose criterion proof is `judgment`, and the audit has no `fix_now`.
 2. **Budget**: the weekly quota gate trips (§8), or the gateway cost ceiling is reached. The loop pauses with state persisted. This is not a failure.
 3. **Iteration cap**: `max_iterations` (default 4 audit rounds).
-4. **No progress**: D8 says `stalled`/`regressing` twice in a row, or the same `issue_id` reappears after two fix attempts.
+4. **No progress**: the round's progress choice is `stalled`/`regressing` twice in a row, or the same `issue_id` reappears after two fix attempts. Each choice comes first from a deterministic rule over `progress.delta@1` (unchanged evidence is `stalled`, criteria only gained is `progressing`, criteria only lost is `regressing`), and D8 answers only when that rule does not decide ([#202](https://github.com/CrowBe/weave/issues/202)).
 5. **Authority**: D4 or D7 block, or a needed approval, goes to `needs_human`.
 6. **Decision outage**: the configured decision provider is unavailable. The loop drops to `ScriptedDecisionLayer` plus deterministic fallbacks for *read-only* steps, and requests approval before any dispatch that needs D4 or D7. The outcomes differ by site on purpose ([#100](https://github.com/CrowBe/weave/issues/100)). D1, D2, D8 and intake pause dispatch-dependent steps, because their outage is a missing observation and the pause is resumable. D4 and D7 return approval requests with reason `decision_unavailable` (`needs_human`), because their outage leaves an authority question open. The [sites contract](../packages/weave/src/sites/CONTRACT.md) records the rationale.
 
@@ -659,8 +659,13 @@ report, D6 disposal, open issues, outcome and `goal_done`. Outcomes distinguish
 `observe`, `done`, `budget`, `iteration_cap`, `no_progress`, `repeated_issue`,
 `authority`, `needs_human`, `cancelled`, `decision_unavailable`, `audit_unavailable` and
 `evidence_missing`; only `done` sets `goal_done`. The cap defaults to four audit
-rounds. Two consecutive stalled/regressing D8 observations stop progress; a
-finding recurring after two fix attempts stops as `repeated_issue`. The
+rounds. Two consecutive stalled/regressing progress choices stop progress; a
+finding recurring after two fix attempts stops as `repeated_issue`. Each choice
+is a `progress.record@1`: the pure `progress.delta@1` rule decides when the
+evidence of two consecutive tidy states does, and D8 is asked otherwise. The
+record says which path decided, and replay rebuilds it without a provider call
+(#202). A decision outage cannot stop a rule decision, so repeated outages alone
+end the loop only when the evidence does not decide progress. The
 Observe port supplies `issue_fix_attempts` attestations; merely seeing the
 same finding again does not count as a fix attempt. Authority
 blocks stop for human review. Unavailable decisions before guarded dispatch

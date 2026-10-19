@@ -205,6 +205,10 @@ One generate call at a routed tier, followed by the configured repo checks and D
 
 How a success criterion is proven: `check` or `judgment`. Decomposition proposes it. Code admits `check` only when every bound check takes its verdict from an oracle that the check's grant may read and that the implementation step's generation cannot write, compared by the host's canonical resource identity. Anything else is `judgment`. A `check` criterion is settled by green runs of its bound checks in the current audit iteration and needs no D5 pass; a `judgment` criterion keeps D5. A criterion proof grants nothing and leaves every other completion gate in place.
 
+### Progress delta
+
+The `progress.delta@1` comparison of two consecutive tidy states that comes before D8. For each criterion it records whether the criterion was settled before and after, plus one digest over each state's checks, evals and artifacts. A settled criterion has green bound checks and no current failing D5 eval, and a `judgment` criterion also has a current confident D5 pass. A deterministic rule reads the delta: unchanged evidence is `stalled`, criteria only gained is `progressing`, and criteria only lost is `regressing`. Anything else asks D8. The `progress.record@1` names which path decided, and replay reads that record. The rule chooses only among D8's options, adds no stop condition, and grants nothing.
+
 ### Open issue
 
 A blocker recorded when an implementation step stops after retries and one escalation, when that escalation is blocked by the ceiling or the budget gate, or when an audit finding receives `fix_now`. It carries the affected criterion ids; an audit issue has a stable finding identity for repeated-fix detection. Raising an open issue does not dispatch work, mint a grant, or complete the goal.

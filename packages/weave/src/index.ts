@@ -93,6 +93,8 @@ export {
   type RecordedSiteAnswer, type SiteReason, type SiteObservation, type SiteTransition, type ProgressChoice,
 } from './sites/index.js';
 
+export { progressDelta, progressRule, transitionProgress, decideProgress,
+  type CriterionSettlement, type ProgressDelta, type ProgressRecord } from './progress.js';
 export { BOOLEAN_SITE_POLICY, INPUT_RULES, OUTPUT_RULE, evaluateBooleanSite, transitionBooleanSite,
   type GuardRule, type BooleanSite, type BooleanSiteInput, type CatalogueIndexEntry, type RecordedBooleanAnswer,
   type BooleanObservation, type BooleanTransition, type PreselectPolicyInput, type PreselectScore,
