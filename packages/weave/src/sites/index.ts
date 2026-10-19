@@ -26,13 +26,19 @@ export interface SiteInput extends SiteState {
   /** True for a step that needs dispatch: an outage must pause it. */
   readonly needs_dispatch: boolean;
 }
-export interface IntakeState {
+/** Intake discloses one inbound message and running-thread summaries; nothing channel-specific. */
+export type IntakeState = {
   readonly message: string;
   readonly running_threads: readonly {
     readonly thread_id: string;
     readonly summary: string;
   }[];
+};
+export interface IntakeSiteInput extends SiteInput {
+  readonly state: IntakeState;
 }
+/** Intake takes IntakeState (#90); every other choice site takes any disclosed evaluation content. */
+export type SiteInputFor<S extends DecisionSite> = S extends 'intake.classify' ? IntakeSiteInput : SiteInput;
 export interface RecordedSiteAnswer {
   readonly state_revision: number;
   /** Injected reading at response receipt, never a provider's clock. */
@@ -68,7 +74,7 @@ export interface SiteTransition {
 /** Bound opaque correlation ids; don't forward arbitrary provider text. */
 export function correlation(value: unknown): string | null {
   return typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/.test(value) &&
-    !/^(sk[-_]|Bearer|eyJ|gh[pousr]_|github_pat_|AKIA)/i.test(value) ? value : null;
+    !/^(sk[-_]|Bearer\s+|eyJ|gh[pousr]_|github_pat_|AKIA)/i.test(value) ? value : null;
 }
 export function unit(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
@@ -77,18 +83,24 @@ function validState(state: SiteState): boolean {
   return Number.isSafeInteger(state.state_revision) && state.state_revision >= 0 && Number.isFinite(state.state_updated_at);
 }
 
+/** Failure codes meaning no answer could be obtained, unlike a refusal or a malformed answer. */
+const OUTAGE_FAILURES: readonly string[] = ['unavailable', 'unauthorized', 'quota_exhausted', 'rate_limited', 'timeout', 'cancelled'];
 export function decisionUnavailable(outcome: EvaluationOutcome | null): boolean {
   if (!outcome || outcome.paused !== undefined) return true;
   if (outcome.status === 'accepted') return false;
   if (outcome.status === 'blocked') return ['provider_unavailable', 'no_route', 'no_budget', 'quota_unknown',
     'weekly_budget_cap', 'deadline_passed'].includes(outcome.reason);
-  return ['provider_failed', 'budget_exhausted', 'deadline_reached'].includes(outcome.reason) || outcome.attempts.some(attempt =>
-    attempt.disposition.status === 'failed' &&
-    ['unavailable', 'unauthorized', 'quota_exhausted', 'rate_limited', 'timeout'].includes(attempt.disposition.failure.code));
+  if (outcome.reason === 'budget_exhausted' || outcome.reason === 'deadline_reached') return true;
+  // The gateway reports the same failed attempts as provider_failed or attempts_exhausted depending on
+  // max_attempts, so classify on their failure codes (#91). provider_failed with no failed attempt is an
+  // abort before any attempt: there is no refusal to classify, so it stays an outage.
+  const codes = outcome.attempts.flatMap(attempt => attempt.disposition.status === 'failed' ? [attempt.disposition.failure.code] : []);
+  if (outcome.reason === 'provider_failed' && codes.length === 0) return true;
+  return codes.some(code => OUTAGE_FAILURES.includes(code));
 }
 
 /** Deterministic admission and record construction, usable without a gateway for replay. */
-export function transitionSite(site: DecisionSite, input: SiteInput, recorded: RecordedSiteAnswer,
+export function transitionSite<S extends DecisionSite>(site: S, input: SiteInputFor<S>, recorded: RecordedSiteAnswer,
   current: SiteState): SiteTransition {
   const policy = SITE_POLICY[site];
   const outcome = recorded.outcome;
@@ -144,7 +156,7 @@ function validTopProbability(probabilities: Readonly<Record<string, number>> | u
 }
 
 /** The only effect is the injected evaluate port; current is read after the await. */
-export async function evaluateSite(site: DecisionSite, input: SiteInput, port: Pick<InferenceGateway, 'evaluate'>,
+export async function evaluateSite<S extends DecisionSite>(site: S, input: SiteInputFor<S>, port: Pick<InferenceGateway, 'evaluate'>,
   current: () => SiteState & { readonly observed_at: number }, signal?: AbortSignal): Promise<SiteTransition> {
   // Capture request metadata before await: caller mutation cannot rebind an in-flight answer.
   const captured = { ...input };
