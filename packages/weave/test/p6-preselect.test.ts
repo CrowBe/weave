@@ -357,6 +357,13 @@ test('nothing excluded keeps the index without applying the margin or confidence
   assert.equal(covered.preselect?.outcome, 'narrowed');
 });
 
+test('a routed unit id that starts with bearer is recorded; a real token marker is omitted (#158)', () => {
+  for (const id of ['bearer_unit', 'Bearer-1', 'bearer.jev@1.14']) assert.equal(select([0.9, 0.1], {}, 1, id).preselect?.routed_unit_id, id, id);
+  for (const id of ['Bearer abc', 'sk-abc', 'ghp_abc', 'github_pat_abc', 'eyJhbGci', 'AKIAABC']) {
+    assert.equal(select([0.9, 0.1], {}, 1, id).preselect?.routed_unit_id, null, id);
+  }
+});
+
 test('a configured margin replaces the defaults, and the record names the routed unit without leaking it', () => {
   const loose = select([0.9, 0.5], { preselect_policy: policy(1, 0, 'amos', 0.5, 0.3) });
   assert.deepEqual(ids(loose), ['cap_0']);
@@ -624,4 +631,21 @@ test('confident answers below .5 never empty a nonempty index, while mixed and e
   assert.deepEqual(empty.catalogue_index, []);
   assert.equal(empty.preselect?.outcome, 'empty_index');
   assert.equal(empty.preselect?.reason, null);
+});
+
+// #96 (branch sweep): no k, floor or margin setting turns a nonempty index into an empty slice.
+test('no preselect policy empties a nonempty index', () => {
+  const distributions = [[0.49], [0.49, 0.49], [0.3, 0.2, 0.1, 0.05], [0.45, 0.4, 0.35, 0.01, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0.49, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01]];
+  for (const probabilities of distributions) for (let k = 1; k <= 8; k++) for (const floor of [0, 0.25, 0.49, 0.5, 0.9]) {
+    for (const [max_excluded, min_margin] of [[0.4, 0.3], [0, 0], [1, 1]] as const) {
+      const result = select(probabilities, { preselect_policy: policy(k, floor, 'typesafe-jev', max_excluded, min_margin) });
+      const label = `k=${k} floor=${floor} margins=${max_excluded}/${min_margin} p=${probabilities.join(',')}`;
+      assert.equal(result.status, 'transition', label);
+      assert.ok(result.catalogue_index.length > 0, label);
+      assert.notEqual(result.preselect?.outcome, 'empty_index', label);
+      // A fallback returns the whole index; a narrowed slice holds at least one kept entry.
+      if (result.preselect?.outcome === 'fallback') assert.equal(result.catalogue_index.length, probabilities.length, label);
+    }
+  }
 });

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { budgetRoute, createInferenceGateway, type EvaluationAdapter, type EvaluationOutcome, type InferenceGateway, type RoutedUnit } from '@weave/gateway';
-import { evaluateSite, transitionSite, stopForNoProgress } from '../src/sites/index.js';
+import { correlation, evaluateSite, transitionSite, stopForNoProgress } from '../src/sites/index.js';
 
 type Site = 'loop.triage' | 'loop.route' | 'loop.continue' | 'intake.classify';
 const current = { state_revision: 1, state_updated_at: 10 };
@@ -77,6 +77,19 @@ test('D1 requires selected top probability at least .6 and a valid distribution'
     assert.equal(result.choice, 'implement');
     assert.equal(result.observation.accepted, false);
   }
+});
+
+test('intake state is typed as a disclosed message plus running-thread summaries', async () => {
+  const typed = transitionSite('intake.classify', input, answer('intake.classify', 'queue', 1), current);
+  assert.equal(typed.choice, 'queue');
+  const untyped = { ...input, state: 'raw channel text' };
+  // @ts-expect-error intake requires IntakeState, not arbitrary evaluation content (#90)
+  transitionSite('intake.classify', untyped, answer('intake.classify', 'queue', 1), current);
+  // @ts-expect-error the evaluate entry point applies the same input type
+  await evaluateSite('intake.classify', untyped, port(async () => answer('intake.classify', 'queue', 1).outcome),
+    () => ({ ...current, observed_at: 10 }));
+  // Other sites keep accepting any disclosed evaluation content.
+  assert.equal(transitionSite('loop.route', untyped, answer('loop.route', 'strong', 1), current).choice, 'strong');
 });
 
 test('all intake choices are available without channel-specific input', () => {
@@ -188,6 +201,39 @@ for (const mode of ['normal', 'refusal', 'unavailable'] as const) {
   });
 }
 
+// #91: the gateway reports a refusal as attempts_exhausted at max_attempts 1 and as provider_failed above it.
+// Outage classification reads the failure codes, so max_attempts cannot change the site outcome.
+for (const [code, retryable, outage] of [['invalid_request', false, false], ['malformed_response', false, false],
+  ['unavailable', true, true], ['unauthorized', false, true], ['rate_limited', true, true]] as const) {
+  test(`${code} classifies the same at every max_attempts`, async () => {
+    const reasons = new Set<string>();
+    for (const max_attempts of [1, 2, 3]) {
+      const gateway = createInferenceGateway({ routes: [routed], clock: { now: () => 10 }, evaluators: [{
+        id: 'fake', async evaluate() { return { status: 'failed', failure: { code, retryable, message: 'sk-secret-detail' } }; },
+      }] });
+      const outcome = await gateway.evaluate({ request_id: 'r1', site: 'loop.route', role: 'working', kind: 'choice',
+        state: 'disclosed', questions: { decision: { type: 'choice', instructions: 'q', criteria: { flash: null, strong: null } } },
+        terms: { ...input.terms, max_attempts } });
+      if (outcome.status === 'unaccepted') reasons.add(outcome.reason);
+      const dispatch = transitionSite('loop.route', { ...input, needs_dispatch: true, terms: { ...input.terms, max_attempts } },
+        { state_revision: 1, observed_at: 10, outcome: outcome as EvaluationOutcome<'choice'> }, current);
+      assert.equal(dispatch.choice, 'standard');
+      assert.equal(dispatch.status, outage ? 'paused' : 'transition');
+      assert.equal(dispatch.observation.reason, outage ? 'decision_unavailable' : 'no_answer');
+      assert.ok(!JSON.stringify(dispatch).includes('sk-secret'));
+    }
+    if (!retryable) assert.deepEqual([...reasons].sort(), ['attempts_exhausted', 'provider_failed']);
+  });
+}
+
+test('provider_failed without any failed attempt is an abort before dispatch and stays an outage', () => {
+  const outcome: EvaluationOutcome<'choice'> = { status: 'unaccepted', reason: 'provider_failed', request_id: 'r1',
+    site: 'loop.route', attempts: [], spent: 0, uncertainty: [] };
+  const result = transitionSite('loop.route', { ...input, needs_dispatch: true }, { state_revision: 1, observed_at: 10, outcome }, current);
+  assert.equal(result.status, 'paused');
+  assert.equal(result.observation.reason, 'decision_unavailable');
+});
+
 test('D2 ceiling composes with P4 downgrade and never upgrades unavailable lower tiers', () => {
   const routes: RoutedUnit[] = ['flash', 'standard', 'strong'].map(tier => ({
     ...routed, operation: 'generate', kind: 'transform', tier: tier as 'flash' | 'standard' | 'strong',
@@ -242,10 +288,22 @@ test('mismatched request/site and invalid confidence fail closed for every site'
 test('trace omits undisclosed state, diagnostics and recognizable credential correlation ids', () => {
   const recorded = answer('loop.route', 'strong', 1);
   const result = transitionSite('loop.route', { ...input, request_id: 'sk-secret', state: { token: 'state-secret' } },
-    { ...recorded, outcome: { ...recorded.outcome, request_id: 'sk-secret', provider_response_id: 'Bearer-secret' } }, current);
+    { ...recorded, outcome: { ...recorded.outcome, request_id: 'sk-secret', provider_response_id: 'ghp_secret' } }, current);
   assert.equal(result.observation.request_id, null);
   assert.equal(result.observation.provider_request_id, null);
   assert.ok(!JSON.stringify(result).includes('secret'));
+});
+
+test('ids that start with bearer are correlation ids; real token markers are not (#158)', () => {
+  for (const id of ['bearer_x', 'Bearer-1', 'BEARER.trace', 'bearerish']) assert.equal(correlation(id), id, id);
+  for (const id of ['Bearer abc', 'bearer\tabc', 'sk-abc', 'sk_live_x', 'ghp_abc', 'github_pat_abc', 'eyJhbGci', 'AKIAABC']) {
+    assert.equal(correlation(id), null, id);
+  }
+  const recorded = answer('loop.route', 'strong', 1);
+  const result = transitionSite('loop.route', { ...input, request_id: 'bearer_request' },
+    { ...recorded, outcome: { ...recorded.outcome, request_id: 'bearer_request', provider_response_id: 'bearer_x' } }, current);
+  assert.equal(result.observation.request_id, 'bearer_request');
+  assert.equal(result.observation.provider_request_id, 'bearer_x');
 });
 
 test('pre-cancelled evaluation does not call the port', async () => {
