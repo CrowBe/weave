@@ -491,6 +491,12 @@ export type UnacceptedReason =
   | 'deadline_reached'
   | 'provider_failed';
 
+/**
+ * Every status carries the attempts made and their spend. `blocked` means the
+ * gateway stopped without an accepted answer; it does not mean nothing was
+ * spent. A budget pause after a failed attempt, and an Amos-bound evaluation
+ * whose every attempt was unavailable, are blocked with attempts and spend.
+ */
 interface OutcomeBase {
   readonly paused?: LoopPausedRecord;
   readonly request_id: string;
@@ -527,6 +533,13 @@ export type EvaluationOutcome<K extends EvaluationKind = EvaluationKind> =
   | (OutcomeBase & { readonly status: 'unaccepted'; readonly reason: UnacceptedReason })
   | (OutcomeBase & { readonly status: 'blocked'; readonly reason: BlockedReason });
 
+/**
+ * Each call resolves with an outcome for routing, budget, deadline,
+ * cancellation and provider conditions, with one exception: when the configured
+ * `persist_pause` port rejects, the call rejects with that port's error instead
+ * of returning a paused outcome, and nothing further is dispatched for it. A
+ * pause that was not recorded must not read as one that was.
+ */
 export interface InferenceGateway {
   generate(request: GenerationRequest, signal?: AbortSignal): Promise<GenerationOutcome>;
   evaluate<K extends EvaluationKind>(

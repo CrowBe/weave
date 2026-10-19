@@ -62,7 +62,10 @@ export interface GatewayConfig {
    * or at the deadline when a timer is configured, counts as no observation.
    */
   readonly quota?: QuotaPort;
-  /** Awaited persistence; a failed write prevents further dispatch. */
+  /**
+   * Awaited persistence. A failed write prevents further dispatch and rejects
+   * `generate`/`evaluate` with the port's error instead of returning an outcome.
+   */
   readonly persist_pause?: (record: LoopPausedRecord) => Promise<void>;
   readonly availability?: ProviderAvailability;
   readonly routes: RouteTable;

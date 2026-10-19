@@ -450,8 +450,11 @@ When no budget-eligible unit remains, the outcome carries `paused` with shape
 An injected `persist_pause` port is awaited; local roots append the record to
 `~/.local/state/weave/loop-paused.jsonl`. `until` is the earliest known reset, or
 null when a fresh observation is needed. This records the pause but adds no
-scheduler or resume consumer. A reset is permission to recheck, never permission
-to dispatch from the old snapshot. Five-hour pressure excludes the provider in
+scheduler or resume consumer. If `persist_pause` rejects, `generate` or
+`evaluate` rejects with that port's error instead of returning a paused outcome,
+and nothing further is dispatched for that request (#74); every other budget,
+routing and deadline condition still resolves with an outcome. A reset is
+permission to recheck, never permission to dispatch from the old snapshot. Five-hour pressure excludes the provider in
 favor of another eligible provider; when none remains, it records a pause until
 the five-hour reset. The P9 audit tier requests `tier:'strong', audit:true`
 and uses this same gate at every audit-round dispatch; pace pressure pauses audit.
@@ -468,6 +471,13 @@ wait out a slow `QuotaPort.read()`: cancellation, or the deadline when a timer
 is configured, ends the wait, and the pending read counts as no observation.
 The same rechecks then decide the outcome, so nothing dispatches (#75). Without
 a timer the deadline is checked only once the read settles.
+
+A `blocked` outcome does not mean nothing was spent. The gate rechecks quota
+before a retry, so a pause after a failed attempt is `blocked` with that attempt
+and its spend; an Amos-bound evaluation whose every attempt was unavailable is
+also `blocked` with attempts. Callers account `attempts` and `spent` for every
+status (#73). The Weave runtime, the frontier weigh decision provider and the
+Fabric host already record both for every status.
 
 Offline fixtures cover 79/80/95% usage, stale/missing quota, unknown pace,
 downgrade constraints, audit pause, five-hour preference, retry rechecks,
