@@ -192,7 +192,7 @@ a fresh equally-scoped grant per attempt and per check. `createEqualGrantIssuer`
 copies that scope from a `GrantAuthority` grant it holds and refuses any other
 object. The step does not invoke a wider grant and does not consume the
 template. A decision answer cannot mint a grant. The step then runs D5. Check
-evidence is `{ check_id, argv_digest, exit, passed, tail, artifacts }`. Eval
+evidence is `{ check_id, argv_digest, exit, passed, tail, artifacts, invocation_id }`. Eval
 evidence is `{ criterion_id, verdict_probability, confidence, passed }`. A red
 check fails the attempt even when D5 passes. The step retries the same tier up
 to N times (default 2), then escalates one tier once, never past the D2 ceiling.
@@ -214,7 +214,7 @@ journal stays loadable. Replay reads that journal and does not call a provider.
 Generate text is not stored on the attempt; the step keeps a `gen_` digest ref.
 Env values are not inputs to this step.
 
-Each generation run takes a fresh opaque value from the injected `runId` port, as time comes from `now`; Loom draws no ambient entropy (`checks/no-ambient-entropy.mjs`). Its digest, combined with the full generated-text digest, is the check-run identity in every check invocation id. The port must not repeat a value for one execution, including across restarts, and an invalid value stops the step before generation. Recovery may regenerate an unfinished attempt, but its checks must execute again: neither a different output nor identical text from a workspace-editing backend may reuse committed checks from a prior generation run. The execution id and attempt number remain stable; finished attempts are still skipped. Check evidence belongs to that generation run and its recorded `gen_` artifact. Generate backends are responsible for applying workspace edits; the step does not apply generated text. This assumes a single writer controls the workspace during generation and checks.
+Each generation run takes a fresh opaque value from the injected `runId` port, as time comes from `now`; Loom draws no ambient entropy (`checks/no-ambient-entropy.mjs`). A 128-bit digest over that value and the full generated-text digest is the check-run identity in every check invocation id, `<execution>:a<N>:<check-run>:<check_id>`. Each check record keeps the host's `invocation_id` (null when the host rejected the check or reported an unbounded id). Every step-built id keeps its readable `<execution><suffix>` form within the 128-character correlation limit; a longer one uses a bounded execution prefix plus the full execution digest, as audit request ids do. The port must not repeat a value for one execution, including across restarts, and an invalid value stops the step before generation. Recovery may regenerate an unfinished attempt, but its checks must execute again: neither a different output nor identical text from a workspace-editing backend may reuse committed checks from a prior generation run. The execution id and attempt number remain stable; finished attempts are still skipped. Check evidence belongs to that generation run and its recorded `gen_` artifact. Generate backends are responsible for applying workspace edits; the step does not apply generated text. This assumes a single writer controls the workspace during generation and checks.
 
 ## Local intake provider
 

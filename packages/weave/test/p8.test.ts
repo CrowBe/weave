@@ -9,6 +9,7 @@ import { AgentFabricHost, FabricStore } from '@weave/agentfabric';
 import type { EvaluationOutcome, EvaluationRequest, GenerationOutcome, GenerationRequest, InferenceTerms } from '@weave/gateway';
 import { DECLARED_TASK_POLICY } from '../src/task-acceptance.js';
 import { transitionOutputEval, OUTPUT_EVAL_POLICY, OUTPUT_EVAL_QUESTION } from '../src/sites/output-eval.js';
+import { correlation } from '../src/sites/index.js';
 import {
   DEFAULT_IMPLEMENT_RETRIES, FileAttemptJournal, MemoryAttemptJournal, createEqualGrantIssuer,
   replayImplementationStep, runImplementationStep,
@@ -1029,4 +1030,56 @@ test('check invocation ids come from the injected run-id port, not ambient entro
     await assert.rejects(runImplementationStep(world.input, { ...world.ports, runId: bad }, world.journal), /run id/);
     assert.equal(world.generateIds.length, 0, 'an invalid run id is refused before generation spends');
   }
+});
+
+// #121: check evidence links the attempt journal to the host's invocation record.
+test('check evidence records the host invocation id, or null when the host gave none (#121)', async () => {
+  const world = driver({});
+  const result = await runImplementationStep(world.input, world.ports, world.journal);
+  const recorded = result.checks[0]?.invocation_id;
+  assert.ok(recorded);
+  assert.equal(recorded, world.invokes[0]?.invocation_id);
+  assert.equal(correlation(recorded), recorded);
+  const saved = world.journal.load('exec-1')[0];
+  assert.ok(saved?.schema === 'impl.attempt@1');
+  assert.equal(saved.checks[0]?.invocation_id, recorded);
+  const denied = driver({ input: input({ checks: [{ ...input().checks[0]!, grant: null }] }) });
+  assert.equal((await runImplementationStep(denied.input, denied.ports, denied.journal)).checks[0]?.invocation_id, null);
+  const unsafe = driver({});
+  const leaky: ImplementPorts = { ...unsafe.ports, invoke: (token, operation, inputs, options) => {
+    const handle = unsafe.ports.invoke(token, operation, inputs, options);
+    return handle.kind === 'handle' ? { ...handle, invocation_id: 'sk-CANARYHOSTID' } : handle;
+  } };
+  const screened = await runImplementationStep(unsafe.input, leaky, unsafe.journal);
+  assert.equal(screened.checks[0]?.invocation_id, null);
+  assert.equal(JSON.stringify(unsafe.journal.load('exec-1')).includes('CANARY'), false);
+});
+
+// #122: ids the step builds stay valid correlation ids for any valid execution id.
+test('step-built ids stay within the 128-character correlation limit and stay distinct (#122)', async () => {
+  const prefix = 'e'.repeat(127);
+  const failing = { c1: { p: .1, conf: 1 } };
+  const ids = async (execution_id: string) => {
+    const world = driver({ input: input({ execution_id, ceiling: 'standard' }), evaluations: [failing, failing, failing, failing] });
+    const result = await runImplementationStep(world.input, world.ports, world.journal);
+    assert.equal(result.status, 'failed');
+    assert.equal(result.attempts.length, 4);
+    const built = [
+      ...world.generateIds, ...world.invokes.map(call => call.invocation_id), ...world.journal.load(execution_id).map(entry => entry.id),
+      ...result.attempts.flatMap(attempt => attempt.observations.map(observation => observation.request_id)),
+      ...result.attempts.flatMap(attempt => attempt.checks.map(check => check.invocation_id)),
+      result.open_issue?.issue_id,
+    ];
+    assert.equal(built.length, 4 + 4 + 5 + 4 + 4 + 1);
+    for (const id of built) assert.equal(correlation(id), id, `invalid step id ${String(id)}`);
+    return built;
+  };
+  const a = await ids(`${prefix}a`);
+  const b = await ids(`${prefix}b`);
+  assert.equal(new Set([...a, ...b]).size, new Set(a).size + new Set(b).size, 'shared prefixes keep distinct ids');
+  assert.deepEqual(await ids(`${prefix}a`), a, 'bounded ids are deterministic');
+  const short = driver({});
+  await runImplementationStep(short.input, short.ports, short.journal);
+  assert.deepEqual(short.generateIds, ['exec-1:a1:gen'], 'short ids keep their readable form');
+  assert.match(short.invokes[0]?.invocation_id ?? '', /^exec-1:a1:[a-f0-9]{32}:repo\.test$/);
 });
