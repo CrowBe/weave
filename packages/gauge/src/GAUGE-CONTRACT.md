@@ -1,7 +1,8 @@
 # Gauge evaluation contract v1
 
-Status: contract (G1, #189), validator (G2, #190) and governed revisions
-(G3, #191). `validate` in
+Status: contract (G1, #189), validator (G2, #190), governed revisions
+(G3, #191), and statistics, producers and evaluation cost (G5, #193).
+`validate` in
 `src/validate.ts` implements this contract; `test/contract.test.ts` runs the
 fixtures in `fixtures/records.json` against the compiled package as part of
 `npm test` (`npm run test:gauge-contract` alone). `@weave/gauge` imports
@@ -268,6 +269,84 @@ Rules:
 - `unattributed` is a valid result. It requires basis `none`, a null signal
   and a null confidence. Any other category forbids basis `none`.
 
+## `gauge.cost@1`: evaluation cost
+
+What producing one result cost, so an Experiment counts its whole cost and not
+only its successful trials.
+
+- `schema`: `"gauge.cost@1"`
+- `cost`: id; `result`: id
+- `trials`: count, every trial run for the result, failed ones included
+- `failed_trials`: count
+- `trial_micros`: metric, the cost of every trial, failed ones included
+- `evaluation_micros`: metric, scoring and judging the trials
+- `review_micros`: metric, human review
+- `total_micros`: metric
+
+Rules:
+
+- **Binding.** The result is known.
+- **Cost.** `failed_trials` is at most `trials`, and `total_micros` equals
+  `trial_micros + evaluation_micros + review_micros` within a relative error of
+  1e-9. Every line is required: a zero is stated, never left out.
+
+## Statistics
+
+`method` fixes how a producer computes intervals, so anyone holding the
+samples recomputes the same result. α is `1 - level` and z is the standard
+normal quantile at `1 - α/2` (Acklam's rational approximation).
+
+- `wilson@1`: for k successes in n samples and p = k/n, the Wilson score
+  interval `(p + z²/2n ± z·sqrt(p(1-p)/n + z²/4n²)) / (1 + z²/n)`.
+- `bootstrap@1`: 2000 resamples of n draws with replacement. A draw takes
+  sample `floor(u·n)`, where u comes from mulberry32 seeded with `seed` modulo
+  2³² and restarted for each measure. The interval is the sorted resample
+  statistics at indices `floor(2000·α/2)` and `ceil(2000·(1 - α/2)) - 1`.
+- Aggregates: `rate` and `mean` are the arithmetic mean (a rate sample is 0 or
+  1), `sum` is the sum, and `p95` is the nearest-rank percentile
+  `sorted[ceil(0.95·n) - 1]`.
+- A computed interval is widened to contain its value and, for a rate, clamped
+  to [0, 1], so rounding cannot put a value outside its own interval.
+
+## Producers
+
+`evaluate`, `compare` and `track` build what the rules above describe. They
+return `{ "ok": true, ... }` or `{ "ok": false, "reason": reason }`, and a
+record they return has passed `validate`.
+
+- `evaluate(run, context)` builds a `gauge.result@1` from one sample list per
+  criteria measure. The run names the workload its samples came from, which
+  must be the criteria set's and case set's (`binding`): samples from one
+  workload never become a result for another. Sample lists match the criteria
+  measures one-to-one (`binding`). An empty list is `n = 0` with a null value;
+  a list shorter than `min_samples` leaves its constraints `unknown`. Neither
+  is an error, and neither is a pass or a tie: the verdict says
+  `insufficient_evidence`. In `replay` mode a non-empty list for a measure
+  sourced from an outcome kind is `mode`, and a rate sample other than 0 or 1
+  is `measure`. Malformed samples are `envelope`. Otherwise the result's own
+  rejection, if any, is returned.
+- `compare(request, context)` builds a `gauge.comparison@1` from two recorded
+  results. A delta's interval combines theirs by the method of variance
+  estimates recovery, which is Newcombe's hybrid score interval when both are
+  Wilson intervals: for candidate c in [l₁, u₁] and baseline b in [l₂, u₂],
+  d = c - b and the interval is
+  `[d - sqrt((c - l₁)² + (u₂ - b)²), d + sqrt((u₁ - c)² + (b - l₂)²)]`. It
+  treats the results as independent, which is conservative when both ran on
+  the same cases. A value without an interval has unknown uncertainty, so
+  `compare` refuses it with `measure` rather than invent one.
+- `track(results, context)` takes results in the order recorded (Gauge reads
+  no clock) and compares each with the one before it by the same deltas and
+  verdict rules, so a regression is visible step by step. Every result
+  answers the same question: criteria set, case set, split, mode and subject
+  kind (`binding`). The subject may repeat, to follow one implementation,
+  routed unit or policy across re-evaluations, or change, to follow its
+  versions. A step is a regression when its verdict is `candidate_worse`, or
+  `bar_missed` after a result that met its bar. A track is evidence, not a
+  record, and promotes nothing.
+
+A result states its mode, so a replay result is never read as a trial: replay
+compares decisions on recorded inputs and leaves outcome measures unmeasured.
+
 ## Rejection reasons
 
 `validate(value, context)` returns `{ "ok": true }` or
@@ -305,3 +384,5 @@ first applicable reason, in this order:
 10. `verdict`: a verdict that does not match recomputation
 11. `attribution`: a basis, signal or confidence that breaks the attribution
     rules
+11. `cost`: more failed trials than trials, or a total that is not the sum of
+    its lines

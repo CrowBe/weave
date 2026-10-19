@@ -445,7 +445,15 @@ Gauge's record of one subject on one split of a case set under one criteria set,
 
 ### Comparison
 
-Gauge's recomputed verdict on a baseline and a candidate evaluation result for the same criteria set, case set, split and mode. A candidate that misses its bar is never better. A comparison is evidence an experiment may cite; it is not a promotion.
+Gauge's recomputed verdict on a baseline and a candidate evaluation result for the same criteria set, case set, split and mode. Every delta carries an interval; *insufficient evidence* is a valid verdict, never a tie broken by default. A candidate that misses its bar is never better. A comparison is evidence an experiment may cite; it is not a promotion.
+
+### Evaluation cost
+
+Gauge's record (`gauge.cost@1`) of what producing one evaluation result cost: every trial with failed trials counted, evaluation and human review, and their recomputed total. An experiment weighs its benefit against this whole cost, not against its successful trials alone.
+
+### Track
+
+Gauge's step-by-step comparison of results for one question in the order they were recorded, so a regression is visible. Unlike a comparison it may follow one subject across re-evaluations. A step is a regression when the later result is worse or misses a bar the earlier one met. A track is evidence, not a record, and promotes nothing.
 
 ### Failure attribution
 
