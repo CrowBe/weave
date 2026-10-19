@@ -416,6 +416,19 @@ describe('typesafe-ai adapter: failures', () => {
     assert.equal(result.status === 'failed' && result.failure.code, 'cancelled');
   });
 
+  it('classifies a 200 body that cannot be read as retryable unavailable, not malformed', async () => {
+    const fetch = (async () => new Response(new ReadableStream({
+      start(controller) { controller.error(new TypeError('terminated')); },
+    }), { status: 200, headers: { 'x-typesafe-request-id': REQUEST_ID } })) as unknown as typeof globalThis.fetch;
+
+    const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
+    assert.equal(result.status, 'failed');
+    if (result.status !== 'failed') return;
+    assert.equal(result.failure.code, 'unavailable');
+    assert.equal(result.failure.retryable, true);
+    assert.match(result.failure.message, new RegExp(REQUEST_ID));
+  });
+
   it('refuses to construct without a credential', () => {
     assert.throws(() => typesafeAiEvaluator({ apiKey: '  ' }), /requires an apiKey/);
   });
@@ -640,6 +653,15 @@ describe('TypeSafe decision contract', () => {
       assert.equal(transport.status, 'failed');
       if (transport.status !== 'failed') return;
       assert.equal(JSON.stringify(transport).includes(secret), false);
+
+      const succeeded = await typesafeAiEvaluator({
+        apiKey: secret,
+        fetch: stubFetch(LIVE_BODY, { headers: { 'x-typesafe-request-id': `req_${secret}` } }).fetch,
+      }).evaluate(CALL);
+      assert.equal(succeeded.status, 'completed');
+      if (succeeded.status !== 'completed') return;
+      assert.equal(succeeded.provider_response_id, 'req_[redacted]');
+      assert.equal(JSON.stringify(succeeded).includes(secret), false);
       assert.equal(logs.some((line) => line.includes(secret)), false);
     } finally {
       for (const name of methods) console[name] = originals.get(name) as typeof console.log;

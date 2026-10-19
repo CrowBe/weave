@@ -3,7 +3,8 @@
  *
  * The profile translates typed questions and answers. This transport only
  * carries that body: it does not choose a route, read the environment, or log.
- * Credentials arrive as options and are redacted from every failure message.
+ * Credentials arrive as options and are redacted from every failure message
+ * and from the provider request id.
  * A second profile can plug in here; this phase ships TypeSafe only.
  */
 import type {
@@ -89,8 +90,9 @@ export function evaluationTransport(
       let raw: string;
       try {
         raw = await response.text();
-      } catch {
-        return { status: 'failed', failure: malformed(withId('response body was not JSON')) };
+      } catch (error: unknown) {
+        // The body never arrived whole: a transport fault or cancellation, not a provider answer.
+        return { status: 'failed', failure: classifyTransport(error, withId) };
       }
 
       let body: unknown;
@@ -109,7 +111,7 @@ export function evaluationTransport(
         status: 'completed',
         answers: parsed.answers,
         usage: parsed.usage,
-        provider_response_id: requestId,
+        provider_response_id: requestId === undefined ? undefined : safe(requestId),
         confidence: parsed.confidence,
       };
     },
