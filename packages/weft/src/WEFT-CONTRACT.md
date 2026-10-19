@@ -4,8 +4,10 @@ Status: contract (W1, #183) and validator (W2, #184). `validateRecord` in
 `src/validate.ts` implements this contract; `test/contract.test.ts` runs the
 fixtures in `fixtures/records.json` against the compiled package as part of
 `npm test` (`npm run test:weft-contract` alone). `@weave/weft` imports nothing
-in-repo (`checks/import-direction.mjs`). W3 (#185) maps `weave.trace@1` onto
-these records; W4 (#186) decides whether any content may be recorded inline.
+in-repo (`checks/import-direction.mjs`). W3 (#185) moved `weave.trace@1` here
+as a supported version (see `weave.trace@1` below). W4 (#186) added disclosure
+classes, the inline content policy and the redacting serializer (see
+Disclosure).
 
 ## What a Weft trace is
 
@@ -85,20 +87,20 @@ field.
 
 | Type | Rule |
 | --- | --- |
-| id | `^[A-Za-z0-9_.:@-]{1,128}$`, and it fails the repository credential screen at token starts (`weave.trace@1`'s `safeId` until W3 resolves #158). `@` is allowed because contract revisions and routed units use it (`boolean.task@jev-1.13.0`); `weave.trace@1` ids remain a subset |
+| id | `^[A-Za-z0-9_.:@-]{1,128}$`, and it fails the credential screen (see Disclosure). `@` is allowed because contract revisions and routed units use it (`boolean.task@jev-1.13.0`); `weave.trace@1` ids remain a subset |
 | code | `^[a-z][a-z0-9_.@:-]{0,63}$`; a closed vocabulary where one is listed |
 | count | Non-negative safe integer |
 | metric | Finite number ≥ 0 |
 | ratio | Finite number in [0, 1] |
 | flag | Boolean |
 | digest | `^sha256:[0-9a-f]{64}$` |
-| content | `{ "content_class": class, "digest": digest }`, optionally plus `"ref": id` |
+| content | `{ "content_class": class, "digest": digest }`, optionally plus `"ref": id`, and plus `"text": string` only under an inline content policy |
 
 `content_class` uses the existing glossary **content class**: `public`,
-`non_sensitive`, `sensitive`, `private`. A content value names and fingerprints
-text held elsewhere; v1 has no way to carry the text itself. A bare string or
-any other key in a content position is rejected with `content`. W4 decides if
-and when inline content is allowed, and under what policy.
+`non_sensitive`, `sensitive`, `private`. By default a content value names and
+fingerprints text held elsewhere. It carries the text itself only under an
+inline content policy (see Disclosure). A bare string or any other key in a
+content position is rejected with `content`.
 
 A field may be `null` only where its type says so. List fields are arrays of
 the stated type and bound; an element in excess of the bound is rejected.
@@ -249,10 +251,74 @@ complete.
 
 Error records carry a code, never a message, stack or provider body.
 
+## Disclosure
+
+Status: W4 (#186). A Weft trace is durable knowledge: retaining a record grants
+no cross-goal access or disclosure, and nothing here grants either.
+
+**Disclosure classes.** Every field has a disclosure class that says what it
+can reveal. A field's class follows from its type:
+
+| Class | What it reveals | Types |
+| --- | --- | --- |
+| `metric` | A measure | count, metric, ratio, flag |
+| `reference` | A name or fingerprint of something held elsewhere, not its content | id, code, digest |
+| `content` | Goal content | content |
+
+A list or object takes the class of its most revealing member, so `candidates`,
+which carry weights beside references, is `reference`. In the envelope,
+`sequence` is `metric` and every other key is `reference`. `FIELD_DISCLOSURE`
+gives the class of every kind field. In v1 the only `content` field is
+`goal.intent` `statement`. A disclosure class is not a content class: the
+content class says how sensitive the content is.
+
+**Content defaults to a reference.** A content value carries its content class,
+a digest and optionally a `ref`. That is the default, and the only form a
+record may take without an inline content policy.
+
+**Inline content is a scoped policy decision.** The composition root may pass
+an inline content policy `{ "trace_id": id, "classes": class[] }` to the
+validator and the serializer. A content value may then carry `"text"` only if
+all of these hold:
+
+- the record's `trace_id` is the policy's `trace_id`: a policy for one trace
+  permits nothing in another;
+- the value's `content_class` is one of the policy's `classes`: the class must
+  be explicit and permitted;
+- the text is a non-empty string of well-formed Unicode;
+- `digest` is the SHA-256 of the text's UTF-8 bytes;
+- the text passes the credential screen.
+
+Otherwise the record is rejected with `content`. A policy with a missing or
+extra key, a bad `trace_id` or an unknown class is a configuration error: the
+validator and the serializer throw instead of returning a verdict. Without a
+policy, no record carries text.
+
+**Redaction boundary.** `serializeRecord(record, redact, inline?)` is Weft's
+serializer for `weft.record@1`. The composition root must supply `redact`.
+Without a function, or with a malformed policy, the call throws before the
+redactor runs. Weft reads what the redactor returns once, validates that copy
+under the same policy, and throws on any rejection. So a redactor that returns
+an invalid record, or leaves a credential, an unpermitted text or a stale
+digest, serializes nothing. A redactor that throws serializes nothing too. The output is one JSONL line: the envelope keys in contract order,
+fields in the order this contract lists them, and nested keys in their listed
+order (`content_class`, `digest`, `ref`, `text` for content). An export (W6)
+may carry nothing a serialized record could not.
+
+**Credential screen.** Ids, content refs and inline text are screened for the
+repository's credential markers at token starts (`src/credential.ts`, shared
+with `weave.trace@1`). These are the markers the gateway screens inference
+content for, copied because Weft imports nothing in-repo: `sk-` and `sk_`,
+`Bearer` followed by whitespace, `eyJ`, `ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`,
+`github_pat_`, `AKIA`, `AIza`, `xoxa-`, `xoxb-`, `xoxp-` and PEM private-key
+headers. `Bearer` alone is not a marker, so `bearer_x` is an id (#158). The
+screen is a safeguard after redaction, not a substitute for it.
+
 ## Rejection reasons
 
-The validator returns `{ "ok": true }` or `{ "ok": false, "reason": reason }`
-with the first applicable reason, checked in this order:
+The validator `validateRecord(value, inline?)` returns `{ "ok": true }` or
+`{ "ok": false, "reason": reason }` with the first applicable reason, checked
+in this order:
 
 1. `envelope`: not an object; missing, extra or mistyped envelope keys; unknown
    `schema`; bad `emitter`; record larger than 16 KiB
@@ -263,21 +329,56 @@ with the first applicable reason, checked in this order:
    links, or a transition that lacks its required link
 6. `evidence`: bad evidence shape or `source`, a duplicate pair, more than 64
    entries, or a Loom record with no observation evidence
-7. `content`: a content position holding anything but a content value
+7. `content`: a content position holding anything but a content value, or
+   text that the inline content policy does not permit, that is empty or not
+   well-formed, that does not match its digest, or that fails the credential
+   screen
 8. `field`: an unknown, missing or mistyped field, a null where none is
    allowed, an out-of-vocabulary code, an exceeded list bound, or a broken
    cross-field rule
 
 ## `weave.trace@1`
 
-`weave.trace@1` (`packages/agentsop/src/TRACE-CONTRACT.md`) is the predecessor.
-W3 moves it into Weft and defines the mapping: `run_id` → `trace_id`, `id` →
-`record_id`, `parentId` → `parent_id`, `sequence` → `sequence`, and its kinds
-onto the kinds above (`decision` and `audit` → `judgment`, `shell` →
-`capability.invoked`, `budget` → `budget`, `error` → `error`; `implement` is
-settled in W3). A value with no home in v1, such as `passed`, needs a contract
-revision, not an untyped field. Its guarantees carry over: fail-closed
-validation, a redactor required before serialization, and idempotent import.
+`weave.trace@1` is the P9 trace envelope. W3 (#185) moved it here from
+AgentSOP: tracing does not belong in the contract layer, and AgentSOP exports
+no trace API. Weft supports it as its own version beside `weft.record@1`
+(`validateTrace`, `serializeTrace`, `importTraceLines` and `TraceImportPort`
+in `src/weave-trace.ts`) and does not convert it.
+
+**Envelope.** One JSON object per JSONL line with exactly these keys, written
+in this order: `schema` (`"weave.trace@1"`), `id`, `parentId` (id or null),
+`run_id`, `kind`, `sequence` (count), `payload`. Ids match
+`^[A-Za-z0-9_.:-]{1,128}$` and fail the credential screen above. `kind` is one
+of `decision`, `implement`, `audit`, `shell`, `budget`, `error`. `payload` is
+closed: `spent_micros`, `latency_ms`, `input_tokens` and `output_tokens` are
+finite numbers ≥ 0, `confidence` is a ratio and `passed` a flag. No raw
+provider content, operator text, environment values or errors cross it.
+Unknown fields and malformed envelopes fail closed.
+
+**Redaction.** The composition root must supply a redactor, even for opaque
+ids. `serializeTrace` validates the redacted record and throws rather than
+write an invalid one. It writes payload keys in the order listed above. In
+disclosure terms its ids and `kind` are `reference`, its payload is `metric`,
+and it has no `content` field, so no inline content policy applies to it.
+
+**Import.** `importTraceLines` validates every line of a batch before the port
+sees any of them; one invalid or unparseable line rejects the whole batch. The
+port upserts by `(run_id, id)`, so importing the same JSONL again is
+idempotent. A changed record under the same identity replaces the stored one.
+That is P9's behaviour, kept; the `weft.record@1` conflict rule does not apply
+to this version. A database adapter is not part of this package (#132).
+
+**Why it is not converted.** The W1 sketch mapped `run_id` → `trace_id`, `id`
+→ `record_id`, `parentId` → `parent_id`, `sequence` → `sequence`, and each kind
+onto a v1 kind. The envelope corresponds, but no kind does: each target kind
+requires fields `weave.trace@1` never recorded. `judgment` needs `site`,
+`request_ref` and `accepted`. `capability.invoked` needs `contract_rev`,
+`implementation` and `status`. `budget` needs `line`, `error` needs `code`, and
+every `weft.record@1` needs an `emitter`. `implement`, an implementation step's
+totals, and `passed` have no v1 home at all. A conversion would have to invent
+those values. Carrying these records as `weft.record@1` needs a contract
+revision and emitters that record the missing fields at the source, not values
+filled in on import.
 
 ## OpenTelemetry
 
