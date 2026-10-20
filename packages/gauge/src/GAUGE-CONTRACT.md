@@ -1,7 +1,8 @@
 # Gauge evaluation contract v1
 
 Status: contract (G1, #189), validator (G2, #190), governed revisions
-(G3, #191), and statistics, producers and evaluation cost (G5, #193).
+(G3, #191), statistics, producers and evaluation cost (G5, #193), and
+routing preference sets (G6, #194).
 `validate` in
 `src/validate.ts` implements this contract; `test/contract.test.ts` runs the
 fixtures in `fixtures/records.json` against the compiled package as part of
@@ -274,6 +275,44 @@ Rules:
   `trial_micros + evaluation_micros + review_micros` within a relative error of
   1e-9. Every line is required: a zero is stated, never left out.
 
+## `gauge.preference@1`: routing preference set
+
+Eval-derived evidence for routing, published as data. The inference gateway
+reads it without importing Gauge, and Gauge never imports the gateway. A
+preference set changes nothing by existing: applying one to a gateway is a
+governed promotion outside Gauge, and the gateway's deterministic policy
+(destinations, training-allowed destinations, credential screening, quality,
+context, budget and cost ceiling) always filters routes before a preference
+can order them.
+
+- `schema`: `"gauge.preference@1"`
+- `preference`: rev, this set's name and revision
+- `workload`: id; `criteria`: rev; `caseset`: rev; `split`; `mode`
+- `accept`: code, the criteria measure the gateway reads as a routed unit's
+  accept rate
+- `entries`: 1–64, unique by `routed_unit`. Each is exactly
+  `{ "routed_unit": id, "result": id, "verdict": verdict, "measures": [...] }`,
+  where `measures` has the result's measure entries.
+
+Rules:
+
+- **Binding.** The criteria set and case set are recorded and belong to
+  `workload`. Each entry's result is known, its subject is the `routed_unit`
+  named by the entry, and it answers the set's question: its criteria set,
+  case set, split and mode are the set's. Entry measures match the criteria
+  measures one-to-one.
+- **Measure.** `accept` names a criteria measure with aggregate `rate` and
+  `better: "higher"`. Every entry measure equals the result's: same value,
+  `n` and interval. The figures are copied from a recomputed result, never
+  asserted.
+- **Verdict.** Each entry's verdict is its result's.
+
+What a consumer may do with it is the consumer's contract. The reference
+gateway (`packages/gateway/src/preferences.ts`) credits a unit named by a
+`meets_bar` entry with the low end of its accept interval, and gives any other
+named unit no evidence, so routing falls back to its configured order and
+records the uncertainty.
+
 ## Statistics
 
 `method` fixes how a producer computes intervals, so anyone holding the
@@ -350,7 +389,8 @@ first applicable reason, in this order:
    split, digest or result; measure or constraint entries that do not match
    the criteria set one-to-one; a comparison across different questions or of
    a result with itself; a revision whose set is unknown or has another
-   digest, or whose chain is broken
+   digest, or whose chain is broken; a preference entry whose result is for
+   another routed unit or question
 4. `governance`: a policy subject evaluated under criteria or cases it
    governs; a revision issued by anyone but the governor of the set it
    supersedes, or a superseding revision without evidence
@@ -360,7 +400,8 @@ first applicable reason, in this order:
 6. `mode`: the replay rule
 7. `measure`: a bad measure definition (unknown Weft kind or field, a
    duplicate measure, `wilson@1` on a non-rate aggregate), or a measure entry
-   or delta that breaks its rules
+   or delta that breaks its rules; a preference `accept` that is not a
+   higher-is-better rate, or an entry measure that differs from its result's
 8. `constraint`: a bad constraint definition (a duplicate, or an unknown
    measure), or a status that does not match recomputation
 9. `verdict`: a verdict that does not match recomputation

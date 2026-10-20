@@ -1963,6 +1963,157 @@
         "review_micros": 0,
         "total_micros": 18000
       }
+    },
+    {
+      "name": "a routing preference set over recorded results",
+      "record": {
+        "schema": "gauge.preference@1",
+        "preference": "decision-sites.routing@1",
+        "workload": "decision-sites",
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "mode": "trial",
+        "accept": "accuracy",
+        "entries": [
+          {
+            "routed_unit": "boolean.task@jev-1.14.0",
+            "result": "res-cand",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.91,
+                "n": 120,
+                "interval": [
+                  0.87,
+                  0.95
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 120,
+                "n": 120,
+                "interval": [
+                  110,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.72,
+                "n": 120,
+                "interval": [
+                  0.64,
+                  0.8
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.13.0",
+            "result": "res-base",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.85,
+                "n": 120,
+                "interval": [
+                  0.8,
+                  0.9
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 150,
+                "n": 120,
+                "interval": [
+                  140,
+                  160
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.78
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@amos-small",
+            "result": "res-cheap",
+            "verdict": "misses_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.76
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 60,
+                "n": 120,
+                "interval": [
+                  50,
+                  70
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.6,
+                "n": 120,
+                "interval": [
+                  0.51,
+                  0.69
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.15.0",
+            "result": "res-small",
+            "verdict": "insufficient_evidence",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.9,
+                "n": 12,
+                "interval": [
+                  0.6,
+                  1
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 100,
+                "n": 12,
+                "interval": [
+                  70,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.75,
+                "n": 12,
+                "interval": [
+                  0.45,
+                  0.95
+                ]
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "invalid": [
@@ -4747,6 +4898,2074 @@
         "evaluation_micros": 2400,
         "review_micros": 9000,
         "total_micros": 25800
+      }
+    },
+    {
+      "name": "a preference entry that carries a route field",
+      "reason": "envelope",
+      "record": {
+        "schema": "gauge.preference@1",
+        "preference": "decision-sites.routing@1",
+        "workload": "decision-sites",
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "mode": "trial",
+        "accept": "accuracy",
+        "entries": [
+          {
+            "routed_unit": "boolean.task@jev-1.14.0",
+            "result": "res-cand",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.91,
+                "n": 120,
+                "interval": [
+                  0.87,
+                  0.95
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 120,
+                "n": 120,
+                "interval": [
+                  110,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.72,
+                "n": 120,
+                "interval": [
+                  0.64,
+                  0.8
+                ]
+              }
+            ],
+            "destination_training_allowed": false
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.13.0",
+            "result": "res-base",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.85,
+                "n": 120,
+                "interval": [
+                  0.8,
+                  0.9
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 150,
+                "n": 120,
+                "interval": [
+                  140,
+                  160
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.78
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@amos-small",
+            "result": "res-cheap",
+            "verdict": "misses_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.76
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 60,
+                "n": 120,
+                "interval": [
+                  50,
+                  70
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.6,
+                "n": 120,
+                "interval": [
+                  0.51,
+                  0.69
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.15.0",
+            "result": "res-small",
+            "verdict": "insufficient_evidence",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.9,
+                "n": 12,
+                "interval": [
+                  0.6,
+                  1
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 100,
+                "n": 12,
+                "interval": [
+                  70,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.75,
+                "n": 12,
+                "interval": [
+                  0.45,
+                  0.95
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "a preference set that carries routes",
+      "reason": "envelope",
+      "record": {
+        "schema": "gauge.preference@1",
+        "preference": "decision-sites.routing@1",
+        "workload": "decision-sites",
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "mode": "trial",
+        "accept": "accuracy",
+        "entries": [
+          {
+            "routed_unit": "boolean.task@jev-1.14.0",
+            "result": "res-cand",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.91,
+                "n": 120,
+                "interval": [
+                  0.87,
+                  0.95
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 120,
+                "n": 120,
+                "interval": [
+                  110,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.72,
+                "n": 120,
+                "interval": [
+                  0.64,
+                  0.8
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.13.0",
+            "result": "res-base",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.85,
+                "n": 120,
+                "interval": [
+                  0.8,
+                  0.9
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 150,
+                "n": 120,
+                "interval": [
+                  140,
+                  160
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.78
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@amos-small",
+            "result": "res-cheap",
+            "verdict": "misses_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.76
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 60,
+                "n": 120,
+                "interval": [
+                  50,
+                  70
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.6,
+                "n": 120,
+                "interval": [
+                  0.51,
+                  0.69
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.15.0",
+            "result": "res-small",
+            "verdict": "insufficient_evidence",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.9,
+                "n": 12,
+                "interval": [
+                  0.6,
+                  1
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 100,
+                "n": 12,
+                "interval": [
+                  70,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.75,
+                "n": 12,
+                "interval": [
+                  0.45,
+                  0.95
+                ]
+              }
+            ]
+          }
+        ],
+        "routes": []
+      }
+    },
+    {
+      "name": "a preference set with no entries",
+      "reason": "envelope",
+      "record": {
+        "schema": "gauge.preference@1",
+        "preference": "decision-sites.routing@1",
+        "workload": "decision-sites",
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "mode": "trial",
+        "accept": "accuracy",
+        "entries": []
+      }
+    },
+    {
+      "name": "a preference set naming a routed unit twice",
+      "reason": "envelope",
+      "record": {
+        "schema": "gauge.preference@1",
+        "preference": "decision-sites.routing@1",
+        "workload": "decision-sites",
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "mode": "trial",
+        "accept": "accuracy",
+        "entries": [
+          {
+            "routed_unit": "boolean.task@jev-1.14.0",
+            "result": "res-cand",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.91,
+                "n": 120,
+                "interval": [
+                  0.87,
+                  0.95
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 120,
+                "n": 120,
+                "interval": [
+                  110,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.72,
+                "n": 120,
+                "interval": [
+                  0.64,
+                  0.8
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.14.0",
+            "result": "res-worse",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.91,
+                "n": 120,
+                "interval": [
+                  0.87,
+                  0.95
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 120,
+                "n": 120,
+                "interval": [
+                  110,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.72,
+                "n": 120,
+                "interval": [
+                  0.64,
+                  0.8
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "an unrevisioned preference set",
+      "reason": "ref",
+      "record": {
+        "schema": "gauge.preference@1",
+        "preference": "decision-sites.routing",
+        "workload": "decision-sites",
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "mode": "trial",
+        "accept": "accuracy",
+        "entries": [
+          {
+            "routed_unit": "boolean.task@jev-1.14.0",
+            "result": "res-cand",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.91,
+                "n": 120,
+                "interval": [
+                  0.87,
+                  0.95
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 120,
+                "n": 120,
+                "interval": [
+                  110,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.72,
+                "n": 120,
+                "interval": [
+                  0.64,
+                  0.8
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.13.0",
+            "result": "res-base",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.85,
+                "n": 120,
+                "interval": [
+                  0.8,
+                  0.9
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 150,
+                "n": 120,
+                "interval": [
+                  140,
+                  160
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.78
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@amos-small",
+            "result": "res-cheap",
+            "verdict": "misses_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.76
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 60,
+                "n": 120,
+                "interval": [
+                  50,
+                  70
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.6,
+                "n": 120,
+                "interval": [
+                  0.51,
+                  0.69
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.15.0",
+            "result": "res-small",
+            "verdict": "insufficient_evidence",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.9,
+                "n": 12,
+                "interval": [
+                  0.6,
+                  1
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 100,
+                "n": 12,
+                "interval": [
+                  70,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.75,
+                "n": 12,
+                "interval": [
+                  0.45,
+                  0.95
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "a preference entry for another routed unit",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.preference@1",
+        "preference": "decision-sites.routing@1",
+        "workload": "decision-sites",
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "mode": "trial",
+        "accept": "accuracy",
+        "entries": [
+          {
+            "routed_unit": "boolean.task@amos-large",
+            "result": "res-cand",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.91,
+                "n": 120,
+                "interval": [
+                  0.87,
+                  0.95
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 120,
+                "n": 120,
+                "interval": [
+                  110,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.72,
+                "n": 120,
+                "interval": [
+                  0.64,
+                  0.8
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.13.0",
+            "result": "res-base",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.85,
+                "n": 120,
+                "interval": [
+                  0.8,
+                  0.9
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 150,
+                "n": 120,
+                "interval": [
+                  140,
+                  160
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.78
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@amos-small",
+            "result": "res-cheap",
+            "verdict": "misses_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.76
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 60,
+                "n": 120,
+                "interval": [
+                  50,
+                  70
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.6,
+                "n": 120,
+                "interval": [
+                  0.51,
+                  0.69
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.15.0",
+            "result": "res-small",
+            "verdict": "insufficient_evidence",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.9,
+                "n": 12,
+                "interval": [
+                  0.6,
+                  1
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 100,
+                "n": 12,
+                "interval": [
+                  70,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.75,
+                "n": 12,
+                "interval": [
+                  0.45,
+                  0.95
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "a preference entry with an unknown result",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.preference@1",
+        "preference": "decision-sites.routing@1",
+        "workload": "decision-sites",
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "mode": "trial",
+        "accept": "accuracy",
+        "entries": [
+          {
+            "routed_unit": "boolean.task@jev-1.14.0",
+            "result": "res-cand",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.91,
+                "n": 120,
+                "interval": [
+                  0.87,
+                  0.95
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 120,
+                "n": 120,
+                "interval": [
+                  110,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.72,
+                "n": 120,
+                "interval": [
+                  0.64,
+                  0.8
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.13.0",
+            "result": "res-nowhere",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.85,
+                "n": 120,
+                "interval": [
+                  0.8,
+                  0.9
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 150,
+                "n": 120,
+                "interval": [
+                  140,
+                  160
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.78
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@amos-small",
+            "result": "res-cheap",
+            "verdict": "misses_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.76
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 60,
+                "n": 120,
+                "interval": [
+                  50,
+                  70
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.6,
+                "n": 120,
+                "interval": [
+                  0.51,
+                  0.69
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.15.0",
+            "result": "res-small",
+            "verdict": "insufficient_evidence",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.9,
+                "n": 12,
+                "interval": [
+                  0.6,
+                  1
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 100,
+                "n": 12,
+                "interval": [
+                  70,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.75,
+                "n": 12,
+                "interval": [
+                  0.45,
+                  0.95
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "a preference set for another workload",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.preference@1",
+        "preference": "decision-sites.routing@1",
+        "workload": "task-acceptance",
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "mode": "trial",
+        "accept": "accuracy",
+        "entries": [
+          {
+            "routed_unit": "boolean.task@jev-1.14.0",
+            "result": "res-cand",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.91,
+                "n": 120,
+                "interval": [
+                  0.87,
+                  0.95
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 120,
+                "n": 120,
+                "interval": [
+                  110,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.72,
+                "n": 120,
+                "interval": [
+                  0.64,
+                  0.8
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.13.0",
+            "result": "res-base",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.85,
+                "n": 120,
+                "interval": [
+                  0.8,
+                  0.9
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 150,
+                "n": 120,
+                "interval": [
+                  140,
+                  160
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.78
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@amos-small",
+            "result": "res-cheap",
+            "verdict": "misses_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.76
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 60,
+                "n": 120,
+                "interval": [
+                  50,
+                  70
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.6,
+                "n": 120,
+                "interval": [
+                  0.51,
+                  0.69
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.15.0",
+            "result": "res-small",
+            "verdict": "insufficient_evidence",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.9,
+                "n": 12,
+                "interval": [
+                  0.6,
+                  1
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 100,
+                "n": 12,
+                "interval": [
+                  70,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.75,
+                "n": 12,
+                "interval": [
+                  0.45,
+                  0.95
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "a preference set over results from another split",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.preference@1",
+        "preference": "decision-sites.routing@1",
+        "workload": "decision-sites",
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "holdout",
+        "mode": "trial",
+        "accept": "accuracy",
+        "entries": [
+          {
+            "routed_unit": "boolean.task@jev-1.14.0",
+            "result": "res-cand",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.91,
+                "n": 120,
+                "interval": [
+                  0.87,
+                  0.95
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 120,
+                "n": 120,
+                "interval": [
+                  110,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.72,
+                "n": 120,
+                "interval": [
+                  0.64,
+                  0.8
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.13.0",
+            "result": "res-base",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.85,
+                "n": 120,
+                "interval": [
+                  0.8,
+                  0.9
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 150,
+                "n": 120,
+                "interval": [
+                  140,
+                  160
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.78
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@amos-small",
+            "result": "res-cheap",
+            "verdict": "misses_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.76
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 60,
+                "n": 120,
+                "interval": [
+                  50,
+                  70
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.6,
+                "n": 120,
+                "interval": [
+                  0.51,
+                  0.69
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.15.0",
+            "result": "res-small",
+            "verdict": "insufficient_evidence",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.9,
+                "n": 12,
+                "interval": [
+                  0.6,
+                  1
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 100,
+                "n": 12,
+                "interval": [
+                  70,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.75,
+                "n": 12,
+                "interval": [
+                  0.45,
+                  0.95
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "a preference set over results from another mode",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.preference@1",
+        "preference": "decision-sites.routing@1",
+        "workload": "decision-sites",
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "mode": "live",
+        "accept": "accuracy",
+        "entries": [
+          {
+            "routed_unit": "boolean.task@jev-1.14.0",
+            "result": "res-cand",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.91,
+                "n": 120,
+                "interval": [
+                  0.87,
+                  0.95
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 120,
+                "n": 120,
+                "interval": [
+                  110,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.72,
+                "n": 120,
+                "interval": [
+                  0.64,
+                  0.8
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.13.0",
+            "result": "res-base",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.85,
+                "n": 120,
+                "interval": [
+                  0.8,
+                  0.9
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 150,
+                "n": 120,
+                "interval": [
+                  140,
+                  160
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.78
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@amos-small",
+            "result": "res-cheap",
+            "verdict": "misses_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.76
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 60,
+                "n": 120,
+                "interval": [
+                  50,
+                  70
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.6,
+                "n": 120,
+                "interval": [
+                  0.51,
+                  0.69
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.15.0",
+            "result": "res-small",
+            "verdict": "insufficient_evidence",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.9,
+                "n": 12,
+                "interval": [
+                  0.6,
+                  1
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 100,
+                "n": 12,
+                "interval": [
+                  70,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.75,
+                "n": 12,
+                "interval": [
+                  0.45,
+                  0.95
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "a preference entry missing a measure",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.preference@1",
+        "preference": "decision-sites.routing@1",
+        "workload": "decision-sites",
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "mode": "trial",
+        "accept": "accuracy",
+        "entries": [
+          {
+            "routed_unit": "boolean.task@jev-1.14.0",
+            "result": "res-cand",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.91,
+                "n": 120,
+                "interval": [
+                  0.87,
+                  0.95
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 120,
+                "n": 120,
+                "interval": [
+                  110,
+                  130
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.13.0",
+            "result": "res-base",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.85,
+                "n": 120,
+                "interval": [
+                  0.8,
+                  0.9
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 150,
+                "n": 120,
+                "interval": [
+                  140,
+                  160
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.78
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@amos-small",
+            "result": "res-cheap",
+            "verdict": "misses_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.76
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 60,
+                "n": 120,
+                "interval": [
+                  50,
+                  70
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.6,
+                "n": 120,
+                "interval": [
+                  0.51,
+                  0.69
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.15.0",
+            "result": "res-small",
+            "verdict": "insufficient_evidence",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.9,
+                "n": 12,
+                "interval": [
+                  0.6,
+                  1
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 100,
+                "n": 12,
+                "interval": [
+                  70,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.75,
+                "n": 12,
+                "interval": [
+                  0.45,
+                  0.95
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "a preference read from a lower-is-better measure",
+      "reason": "measure",
+      "record": {
+        "schema": "gauge.preference@1",
+        "preference": "decision-sites.routing@1",
+        "workload": "decision-sites",
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "mode": "trial",
+        "accept": "cost",
+        "entries": [
+          {
+            "routed_unit": "boolean.task@jev-1.14.0",
+            "result": "res-cand",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.91,
+                "n": 120,
+                "interval": [
+                  0.87,
+                  0.95
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 120,
+                "n": 120,
+                "interval": [
+                  110,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.72,
+                "n": 120,
+                "interval": [
+                  0.64,
+                  0.8
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.13.0",
+            "result": "res-base",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.85,
+                "n": 120,
+                "interval": [
+                  0.8,
+                  0.9
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 150,
+                "n": 120,
+                "interval": [
+                  140,
+                  160
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.78
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@amos-small",
+            "result": "res-cheap",
+            "verdict": "misses_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.76
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 60,
+                "n": 120,
+                "interval": [
+                  50,
+                  70
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.6,
+                "n": 120,
+                "interval": [
+                  0.51,
+                  0.69
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.15.0",
+            "result": "res-small",
+            "verdict": "insufficient_evidence",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.9,
+                "n": 12,
+                "interval": [
+                  0.6,
+                  1
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 100,
+                "n": 12,
+                "interval": [
+                  70,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.75,
+                "n": 12,
+                "interval": [
+                  0.45,
+                  0.95
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "a preference read from an unknown measure",
+      "reason": "measure",
+      "record": {
+        "schema": "gauge.preference@1",
+        "preference": "decision-sites.routing@1",
+        "workload": "decision-sites",
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "mode": "trial",
+        "accept": "latency",
+        "entries": [
+          {
+            "routed_unit": "boolean.task@jev-1.14.0",
+            "result": "res-cand",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.91,
+                "n": 120,
+                "interval": [
+                  0.87,
+                  0.95
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 120,
+                "n": 120,
+                "interval": [
+                  110,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.72,
+                "n": 120,
+                "interval": [
+                  0.64,
+                  0.8
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.13.0",
+            "result": "res-base",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.85,
+                "n": 120,
+                "interval": [
+                  0.8,
+                  0.9
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 150,
+                "n": 120,
+                "interval": [
+                  140,
+                  160
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.78
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@amos-small",
+            "result": "res-cheap",
+            "verdict": "misses_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.76
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 60,
+                "n": 120,
+                "interval": [
+                  50,
+                  70
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.6,
+                "n": 120,
+                "interval": [
+                  0.51,
+                  0.69
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.15.0",
+            "result": "res-small",
+            "verdict": "insufficient_evidence",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.9,
+                "n": 12,
+                "interval": [
+                  0.6,
+                  1
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 100,
+                "n": 12,
+                "interval": [
+                  70,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.75,
+                "n": 12,
+                "interval": [
+                  0.45,
+                  0.95
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "a preference entry that inflates its accept rate",
+      "reason": "measure",
+      "record": {
+        "schema": "gauge.preference@1",
+        "preference": "decision-sites.routing@1",
+        "workload": "decision-sites",
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "mode": "trial",
+        "accept": "accuracy",
+        "entries": [
+          {
+            "routed_unit": "boolean.task@jev-1.14.0",
+            "result": "res-cand",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.91,
+                "n": 120,
+                "interval": [
+                  0.87,
+                  0.95
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 120,
+                "n": 120,
+                "interval": [
+                  110,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.72,
+                "n": 120,
+                "interval": [
+                  0.64,
+                  0.8
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.13.0",
+            "result": "res-base",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.85,
+                "n": 120,
+                "interval": [
+                  0.8,
+                  0.9
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 150,
+                "n": 120,
+                "interval": [
+                  140,
+                  160
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.78
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@amos-small",
+            "result": "res-cheap",
+            "verdict": "misses_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.9,
+                "n": 120,
+                "interval": [
+                  0.85,
+                  0.95
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 60,
+                "n": 120,
+                "interval": [
+                  50,
+                  70
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.6,
+                "n": 120,
+                "interval": [
+                  0.51,
+                  0.69
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.15.0",
+            "result": "res-small",
+            "verdict": "insufficient_evidence",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.9,
+                "n": 12,
+                "interval": [
+                  0.6,
+                  1
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 100,
+                "n": 12,
+                "interval": [
+                  70,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.75,
+                "n": 12,
+                "interval": [
+                  0.45,
+                  0.95
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "a preference entry that claims a bar its result missed",
+      "reason": "verdict",
+      "record": {
+        "schema": "gauge.preference@1",
+        "preference": "decision-sites.routing@1",
+        "workload": "decision-sites",
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "mode": "trial",
+        "accept": "accuracy",
+        "entries": [
+          {
+            "routed_unit": "boolean.task@jev-1.14.0",
+            "result": "res-cand",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.91,
+                "n": 120,
+                "interval": [
+                  0.87,
+                  0.95
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 120,
+                "n": 120,
+                "interval": [
+                  110,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.72,
+                "n": 120,
+                "interval": [
+                  0.64,
+                  0.8
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.13.0",
+            "result": "res-base",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.85,
+                "n": 120,
+                "interval": [
+                  0.8,
+                  0.9
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 150,
+                "n": 120,
+                "interval": [
+                  140,
+                  160
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.78
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@amos-small",
+            "result": "res-cheap",
+            "verdict": "meets_bar",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.7,
+                "n": 120,
+                "interval": [
+                  0.62,
+                  0.76
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 60,
+                "n": 120,
+                "interval": [
+                  50,
+                  70
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.6,
+                "n": 120,
+                "interval": [
+                  0.51,
+                  0.69
+                ]
+              }
+            ]
+          },
+          {
+            "routed_unit": "boolean.task@jev-1.15.0",
+            "result": "res-small",
+            "verdict": "insufficient_evidence",
+            "measures": [
+              {
+                "measure": "accuracy",
+                "value": 0.9,
+                "n": 12,
+                "interval": [
+                  0.6,
+                  1
+                ]
+              },
+              {
+                "measure": "cost",
+                "value": 100,
+                "n": 12,
+                "interval": [
+                  70,
+                  130
+                ]
+              },
+              {
+                "measure": "completion",
+                "value": 0.75,
+                "n": 12,
+                "interval": [
+                  0.45,
+                  0.95
+                ]
+              }
+            ]
+          }
+        ]
       }
     }
   ]
