@@ -4,6 +4,7 @@ import { it } from 'node:test';
 import {
   applyRouteOverlay,
   bindDecisionProvider,
+  budgetRoute,
   parseRouteConfig,
   resolvePreselectPolicy,
   route,
@@ -240,6 +241,44 @@ it('tier never relaxes quality', () => {
   assert.equal(result.excluded[0]?.reason, 'quality_below_bar');
   assert.equal(route(units, { ...target, tier: 'strong' }, { ...terms, tier: 'flash' }, 20).order.length, 0);
 });
+it('a target tier that conflicts with the terms tier is invalid, not a routing miss (#43)', () => {
+  const units = table();
+  const invalid = 'target.tier conflicts with terms.tier';
+  assert.deepEqual(route(units, { ...target, tier: 'strong' }, { ...terms, tier: 'flash' }, 20),
+    { order: [], excluded: [], uncertainty: [], invalid });
+  // The budget gate neither gates nor pauses an invalid request.
+  const gated = budgetRoute(units, { ...target, tier: 'strong' }, { ...terms, tier: 'flash' }, 20,
+    undefined, undefined, 0);
+  assert.deepEqual(gated, { order: [], excluded: [], uncertainty: [], invalid, downgraded: false });
+  // Agreeing or one-sided tiers route as before.
+  for (const [targetTier, termsTier] of [['flash', 'flash'], ['strong', undefined], [undefined, 'flash']] as const) {
+    const decision = route(units, { ...target, ...(targetTier ? { tier: targetTier } : {}) },
+      { ...terms, ...(termsTier ? { tier: termsTier } : {}) }, 20);
+    assert.equal(decision.invalid, undefined);
+    assert.equal(decision.order.length > 0, true);
+  }
+});
+it('config cannot tell subscription billing, so an unmapped unit escapes the weekly cap (#77)', () => {
+  // Pins the documented gap: only a declared quota_provider ties a unit to its
+  // account's weekly cap, and parseRouteConfig has no billing field to require it from.
+  const input = example();
+  const codex = input.units.find((unit: { routed_unit_id: string }) => unit.routed_unit_id === 'codex.flash');
+  const capped = { observed_at: 0, providers: [{ provider: 'codex', status: 'fresh', windows: [
+    { id: 'seven_day', percentRemaining: 5, resetsAt: 1_000, pace: { status: 'on_pace' } }] }] };
+  for (const tier of ['flash', 'standard'] as const) {
+    for (const mapped of [true, false]) {
+      const unit = { ...codex, tier };
+      if (!mapped) delete unit.quota_provider;
+      const parsed = parseRouteConfig({ ...input, units: [...input.units.filter((u: { routed_unit_id: string }) => u !== codex), unit] });
+      assert.equal(parsed.ok, true);
+      if (!parsed.ok) return;
+      const parsedUnit = parsed.table.filter(u => u.routed_unit_id === 'codex.flash');
+      assert.equal(parsedUnit[0]?.quota_provider, mapped ? 'codex' : undefined);
+      const decision = budgetRoute(parsedUnit, { ...target, tier }, { ...terms, tier }, 20, undefined, capped, 0);
+      assert.deepEqual(decision.order.map(u => u.routed_unit_id), mapped ? [] : ['codex.flash'], `${tier} mapped=${mapped}`);
+    }
+  }
+});
 it('availability retains evidence tie order and exclusion declaration order', () => {
   const units = table().map(unit => ({ ...unit, evidence: { attempts: 20, accepted: 20 } }));
   const result = route(units, target, terms, 20, { codex: 'exhausted' });
@@ -380,6 +419,17 @@ for (const [url, ok] of [
   ['http://192.168.1.1', false],
   ['http://localhost.example.com', false],
   ['http://[::2]', false],
+  // #46: the whole 127.0.0.0/8 loopback range, in any form the URL parser
+  // canonicalizes to dotted decimal; never a domain that merely starts with it.
+  ['http://127.0.0.2:8080', true],
+  ['http://127.255.255.254', true],
+  ['http://127.1:8080', true],
+  ['http://2130706434', true],
+  ['http://127.0.0.1.evil.com', false],
+  ['http://127.0.0.1.nip.io', false],
+  ['http://127.evil.com', false],
+  ['http://128.0.0.1', false],
+  ['http://[::ffff:127.0.0.1]', false],
   ['http://user:password@localhost', false],
   ['https://api.typesafe.ai/?api_key=sk-example', false],
   ['https://api.typesafe.ai/#fragment', false],
@@ -393,6 +443,26 @@ for (const [url, ok] of [
   const result = parseRouteConfig(input);
   assert.equal(result.ok, ok);
   if (!result.ok) assert.ok(result.errors.some(e => e.includes('decision.providers.typesafe-jev.base_url')));
+});
+
+it('an overlay __proto__ key stays data: it sets no prototype and validation rejects it (#68)', () => {
+  // JSON.parse keeps `__proto__` as an own key, as when reading weave.routes.local.json.
+  const overlay = JSON.parse('{"__proto__":{"units":[]},"decision":{"__proto__":{"sites":{"loop.preselect":"amos"}}}}');
+  const merged = applyRouteOverlay(example(), overlay) as Record<string, Record<string, unknown>>;
+  assert.equal(Object.getPrototypeOf(merged), Object.prototype);
+  assert.equal(Object.getPrototypeOf(merged['decision']), Object.prototype);
+  assert.equal(Object.hasOwn(merged, '__proto__'), true);
+  const parsed = parseRouteConfig(merged);
+  assert.equal(parsed.ok, false);
+  if (!parsed.ok) {
+    assert.ok(parsed.errors.includes('invalid __proto__: unknown key'));
+    assert.ok(parsed.errors.includes('invalid decision.__proto__: unknown key'));
+  }
+  // No inherited field reaches validation from the overlay's __proto__ value.
+  const sparse = applyRouteOverlay({ decision: {} }, overlay) as Record<string, Record<string, unknown>>;
+  assert.equal(sparse['units'], undefined);
+  assert.equal(sparse['decision']!['sites'], undefined);
+  assert.equal(Object.hasOwn(sparse, '__proto__'), true);
 });
 
 it('chooses the TypeSafe provider from config and honours a local base URL', async () => {
@@ -691,7 +761,7 @@ it('declares primary then fallback Muse flash writers with training permission a
     assert.equal(unit.operation, 'generate');
     assert.equal(unit.kind, 'transform');
     assert.equal(unit.destination_training_allowed, true);
-    assert.deepEqual(unit.rate_limits, [{ requests: 150, tokens: 3_000_000, window_ms: 60_000 }]);
+    assert.deepEqual(unit.rate_limits, [{ requests: 150, tokens: 3_000_000, window_ms: 60_000, pace: true }]);
     assert.deepEqual(unit.price, { input_per_mtok: 0, output_per_mtok: 0 });
   }
   const target = { operation: 'generate', kind: 'transform' } as const;

@@ -41,6 +41,7 @@ import {
   type Micros,
   type ProviderAvailability,
   type QuotaPort,
+  type QuotaSnapshot,
   type LoopPausedRecord,
   type ProviderFailure,
   type ProviderUsage,
@@ -48,16 +49,25 @@ import {
   type RoutedUnit,
   type RoutedUnitId,
   type RouteTable,
+  type RateLimit,
   type RouteTarget,
   type Timer,
+  type Timestamp,
   type UnacceptedReason,
 } from './types.js';
 
 export interface GatewayConfig {
   /** Provider selection is exclusive: no cross-provider fallback. */
   readonly decision?: DecisionConfig;
+  /**
+   * Read before every attempt. A read still pending when the caller cancels,
+   * or at the deadline when a timer is configured, counts as no observation.
+   */
   readonly quota?: QuotaPort;
-  /** Awaited persistence; a failed write prevents further dispatch. */
+  /**
+   * Awaited persistence. A failed write prevents further dispatch and rejects
+   * `generate`/`evaluate` with the port's error instead of returning an outcome.
+   */
   readonly persist_pause?: (record: LoopPausedRecord) => Promise<void>;
   readonly availability?: ProviderAvailability;
   readonly routes: RouteTable;
@@ -67,8 +77,9 @@ export interface GatewayConfig {
   readonly evaluators?: readonly EvaluationAdapter[];
   readonly clock: Clock;
   /**
-   * Lets the gateway wait out a throttle instead of escalating past it. Without
-   * one it cannot wait, and a refusal that names a delay escalates immediately.
+   * Lets the gateway wait out a throttle instead of escalating past it, and hold
+   * a request for a paced rate limit. Without one it cannot wait: a refusal
+   * that names a delay escalates immediately, and a paced request goes at once.
    * Also enforces in-flight deadlines through the provider's AbortSignal;
    * without a timer deadlines are checked only between provider attempts.
    */
@@ -104,6 +115,9 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
     }
   }
   const minEvidence = config.min_evidence_attempts ?? DEFAULT_MIN_EVIDENCE_ATTEMPTS;
+  // Paced limits are the one state shared across calls: concurrent callers
+  // must see each other's requests to be spaced at all.
+  const pacing: PaceHistory = new Map();
 
   return {
     async generate(request: GenerationRequest, signal?: AbortSignal): Promise<GenerationOutcome> {
@@ -113,6 +127,7 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
         clock: config.clock,
         timer: config.timer,
         signal,
+        pacing,
         routes,
         availability: config.availability,
         quota: config.quota,
@@ -175,6 +190,7 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
         clock: config.clock,
         timer: config.timer,
         signal,
+        pacing,
         routes: binding ? routes.filter(u => u.operation === 'evaluate' && u.adapter === binding.adapter && u.model === binding.model) : routes,
         availability: config.availability,
         quota: config.quota,
@@ -297,6 +313,7 @@ interface BoundedParams<T> {
   readonly clock: Clock;
   readonly timer: Timer | undefined;
   readonly signal: AbortSignal | undefined;
+  readonly pacing: PaceHistory;
   readonly routes: RouteTable;
   readonly minEvidence: number;
   readonly target: RouteTarget;
@@ -339,8 +356,7 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
     if (clock.now() >= terms.deadline) {
       return finish(attempts.length ? { status: 'unaccepted', reason: 'deadline_reached' } : { status: 'blocked', reason: 'deadline_passed' });
     }
-    let snapshot;
-    try { snapshot = await params.quota?.read(); } catch { snapshot = undefined; }
+    const snapshot = await readQuota(params);
     const decision = budgetRoute(params.routes, params.target, terms, params.minEvidence,
       params.availability, snapshot, clock.now(), params.containsCredentials);
     for (const note of decision.uncertainty) if (!uncertainty.includes(note)) uncertainty.push(note);
@@ -361,6 +377,27 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
     const unit = decision.order.find(u => !exhausted.has(u.routed_unit_id) &&
       (consumed.get(u.routed_unit_id) ?? 0) < perRoute && spent + worstCaseCost(u, terms) <= terms.cost_ceiling);
     if (!unit) break;
+
+    // A paced limit holds the request until it fits. The wait spends deadline,
+    // so signal, deadline, budget gate and routing run again after it. When the
+    // gateway cannot wait, the request goes now and a refusal governs as before.
+    const pace = paceDelay(params.pacing, unit, terms, clock.now());
+    if (pace > 0) {
+      if (Number.isFinite(pace) && params.timer !== undefined && clock.now() + pace < terms.deadline) {
+        const before = clock.now();
+        if (await sleepInterrupted(params.timer, pace, params.signal)) {
+          return finish({ status: 'unaccepted', reason: 'provider_failed' });
+        }
+        waitedMs += Math.max(0, clock.now() - before);
+        continue;
+      }
+      uncertainty.push(!Number.isFinite(pace)
+        ? `${unit.routed_unit_id}: pacing cannot fit the worst-case tokens in a paced budget; sent without waiting`
+        : params.timer === undefined
+          ? `${unit.routed_unit_id}: pacing wait of ${Math.round(pace)}ms indicated but no timer is configured; sent without waiting`
+          : `${unit.routed_unit_id}: pacing wait of ${Math.round(pace)}ms would pass the deadline; sent without waiting`);
+    }
+    const paced = reservePace(params.pacing, unit, terms, clock.now());
     const worstCase = worstCaseCost(unit, terms);
     consumed.set(unit.routed_unit_id, (consumed.get(unit.routed_unit_id) ?? 0) + 1);
 
@@ -368,6 +405,9 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
     const result = await attemptBeforeDeadline(params, unit);
     const ended_at = clock.now();
 
+    if (paced !== undefined && result.usage.input_tokens !== undefined && result.usage.output_tokens !== undefined) {
+      paced.tokens = result.usage.input_tokens + result.usage.output_tokens;
+    }
     const metered = meteredCost(unit, terms, result.usage);
     const cost = metered ?? worstCase;
     if (metered === null) {
@@ -465,6 +505,43 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
     return finish({ status: 'unaccepted', reason: 'budget_exhausted' });
   }
   return finish({ status: 'unaccepted', reason: lastFailed ? 'provider_failed' : 'attempts_exhausted' });
+}
+
+/**
+ * A quota read that has not settled by the time the caller cancels, or by the
+ * request deadline when a timer is configured, counts as no observation. The
+ * loop rechecks the signal and the deadline afterwards, so nothing dispatches
+ * on it. A failed read is likewise no observation.
+ */
+async function readQuota<T>(params: BoundedParams<T>): Promise<QuotaSnapshot | undefined> {
+  const quota = params.quota;
+  if (quota === undefined) return undefined;
+  const read = Promise.resolve().then(() => quota.read()).catch(() => undefined);
+  const watcher = new AbortController();
+  let stop!: () => void;
+  const stopped = new Promise<undefined>(resolve => { stop = () => resolve(undefined); });
+  params.signal?.addEventListener('abort', stop, { once: true });
+  if (params.signal?.aborted) stop();
+  const deadline = async (timer: Timer) => {
+    try {
+      // A read that is already settling wins before any wait starts.
+      await Promise.race([read, Promise.resolve()]);
+      while (!watcher.signal.aborted) {
+        const remaining = params.terms.deadline - params.clock.now();
+        if (remaining <= 0) { stop(); return; }
+        await timer.sleep(Math.min(remaining, 2 ** 31 - 1), watcher.signal);
+      }
+    } catch {
+      // A failed timer cannot bound the read; the loop still rechecks after it.
+    }
+  };
+  if (params.timer !== undefined) void deadline(params.timer);
+  try {
+    return await Promise.race([read, stopped]);
+  } finally {
+    watcher.abort();
+    params.signal?.removeEventListener('abort', stop);
+  }
 }
 
 /** Each attempt owns its cancellation state; no timer or signal crosses calls. */
@@ -632,6 +709,58 @@ async function sleepInterrupted(
     return true;
   }
   return signal?.aborted === true;
+}
+
+/** Requests started on each routed unit with a paced limit, newest last. */
+type PaceHistory = Map<RoutedUnitId, { readonly at: Timestamp; tokens: number }[]>;
+
+function pacedLimits(unit: RoutedUnit): readonly RateLimit[] {
+  return (unit.rate_limits ?? []).filter(limit => limit.pace === true);
+}
+
+/** Started requests still inside the unit's longest paced window. */
+function recentStarts(history: PaceHistory, unit: RoutedUnit, limits: readonly RateLimit[], now: Timestamp) {
+  const window = Math.max(...limits.map(limit => limit.window_ms));
+  const kept = (history.get(unit.routed_unit_id) ?? []).filter(start => start.at > now - window);
+  history.set(unit.routed_unit_id, kept);
+  return kept;
+}
+
+/**
+ * How long until one more request on this unit fits every paced limit: zero
+ * when it fits now, Infinity when its worst-case tokens alone exceed a paced
+ * budget. A started request counts until a full window has passed since it.
+ */
+function paceDelay(history: PaceHistory, unit: RoutedUnit, terms: InferenceTerms, now: Timestamp): number {
+  const limits = pacedLimits(unit);
+  if (limits.length === 0) return 0;
+  const started = recentStarts(history, unit, limits, now);
+  const tokens = terms.max_context_tokens + unit.settings.max_output_tokens;
+  let fits = now;
+  for (const limit of limits) {
+    if (started.length >= limit.requests) {
+      fits = Math.max(fits, started[started.length - limit.requests]!.at + limit.window_ms);
+    }
+    if (limit.tokens === undefined) continue;
+    if (tokens > limit.tokens) return Infinity;
+    let used = tokens;
+    for (let i = started.length - 1; i >= 0; i--) {
+      used += started[i]!.tokens;
+      if (used > limit.tokens) {
+        fits = Math.max(fits, started[i]!.at + limit.window_ms);
+        break;
+      }
+    }
+  }
+  return fits - now;
+}
+
+/** Record a request as started, at its worst-case tokens until usage is reported. */
+function reservePace(history: PaceHistory, unit: RoutedUnit, terms: InferenceTerms, now: Timestamp) {
+  if (pacedLimits(unit).length === 0) return undefined;
+  const start = { at: now, tokens: terms.max_context_tokens + unit.settings.max_output_tokens };
+  history.set(unit.routed_unit_id, [...(history.get(unit.routed_unit_id) ?? []), start]);
+  return start;
 }
 
 /**
