@@ -19,6 +19,7 @@ const KEYS = [
   'goals',
   'inputs',
   'artifacts',
+  'process',
 ];
 
 function ok(result: WorkstreamResult): WorkstreamIndex {
@@ -54,6 +55,7 @@ test('opening a workstream records only identity, origin and evidence', () => {
     goals: [],
     inputs: [],
     artifacts: [],
+    process: null,
   });
   assert.deepEqual(result.index.workstreams, [result.workstream]);
   assert.equal(activeGoal(result.workstream), null);

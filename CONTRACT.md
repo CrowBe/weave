@@ -12,7 +12,8 @@ execution or replace deterministic evidence.
 - [Workstreams](packages/weave/src/WORKSTREAM-CONTRACT.md): `workstream@1`,
   the project's independently addressable streams of conversation and work,
   and their relation to goals, Threads, observations, artifacts and project
-  availability.
+  availability; `operating.process@1`, the explicit states and legal
+  transitions of a workstream's execution, separate from its conversation.
 - [Decision sites and audit loop](packages/weave/src/sites/CONTRACT.md):
   D1–D8 observation admission, D6 disposition and deterministic stop outcomes.
   D3 `decision.preselect` policies accept only configured `typesafe-jev` or
