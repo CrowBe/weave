@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,10 +10,11 @@ import { AgentFabricHost, FabricStore } from '@weave/agentfabric';
 import type { EvaluationOutcome, EvaluationRequest, GenerationOutcome, GenerationRequest, InferenceTerms } from '@weave/gateway';
 import { DECLARED_TASK_POLICY } from '../src/task-acceptance.js';
 import { transitionOutputEval, OUTPUT_EVAL_POLICY, OUTPUT_EVAL_QUESTION } from '../src/sites/output-eval.js';
+import { correlation } from '../src/sites/index.js';
 import {
   DEFAULT_IMPLEMENT_RETRIES, FileAttemptJournal, MemoryAttemptJournal, createEqualGrantIssuer,
   replayImplementationStep, runImplementationStep,
-  type AttemptJournal, type ImplementBudgetDecision, type ImplementCheck, type ImplementPorts, type ImplementStepInput,
+  type AttemptJournal, type ImplementBudgetDecision, type ImplementBudgetRequest, type ImplementCheck, type ImplementPorts, type ImplementStepInput,
   type ImplementTier,
 } from '../src/implement-step.js';
 
@@ -161,6 +163,7 @@ function driver(options: {
   const evalStates: unknown[] = [];
   const invokes: Driver['invokes'] = [];
   let generates = 0;
+  let runs = 0;
   let checks = 0;
   let evals = 0;
   const usedGrants = new WeakSet<object>();
@@ -170,6 +173,7 @@ function driver(options: {
     journal: options.journal ?? new MemoryAttemptJournal(),
     ports: {
       now: () => 10,
+      runId: () => `run-${++runs}`,
       readState: () => ({ ...live }),
       ...(options.budget === undefined ? {} : { budget: options.budget }),
       async generate(request: GenerationRequest): Promise<GenerationOutcome> {
@@ -458,8 +462,10 @@ test('a real host accepts a fresh grant when a green check is retried after D5 f
     assert.equal(used.length, 2);
     assert.notEqual(used[0], used[1]);
     assert.notEqual(used[0], template);
-    assert.deepEqual(grantScope(used[0]), grantScope(template));
-    assert.deepEqual(grantScope(used[1]), grantScope(template));
+    // Equal scope; each fresh grant has its own action id (#125).
+    assert.deepEqual({ ...grantScope(used[0]), action_id: null }, { ...grantScope(template), action_id: null });
+    assert.deepEqual({ ...grantScope(used[1]), action_id: null }, { ...grantScope(template), action_id: null });
+    assert.equal(new Set([template.action_id, used[0]?.action_id, used[1]?.action_id]).size, 3);
     assert.equal(authority.markInvoked(template), true);
     const reused = host.invoke(used[0] ?? null, 'repo.test', { cwd_ref: cwd, env_allow: [], timeout_ms: 5_000 }, { invocation_id: 'reuse' });
     assert.equal(reused.kind, 'rejected');
@@ -613,7 +619,7 @@ test('two retries then one tier escalation can pass, and a failed escalation rai
   assert.deepEqual(replayImplementationStep(fail.journal.load('exec-1'), fail.input), failed);
 });
 
-test('escalation blocked by the ceiling or the budget gate raises an open issue without another generate', async () => {
+test('escalation blocked by the ceiling or a budget downgrade raises an open issue without another generate', async () => {
   const ceiling = driver({ input: input({ ceiling: 'flash' }), evaluations: [{ c1: { p: .1, conf: 1 } }, { c1: { p: .1, conf: 1 } }, { c1: { p: .1, conf: 1 } }] });
   const capped = await runImplementationStep(ceiling.input, ceiling.ports, ceiling.journal);
   assert.equal(capped.status, 'failed');
@@ -621,8 +627,8 @@ test('escalation blocked by the ceiling or the budget gate raises an open issue 
   assert.equal(capped.open_issue?.blocked_by, 'ceiling');
   assert.deepEqual(capped.open_issue?.criterion_ids, ['c1']);
   assert.equal(capped.goal_done, false);
+  // A pause at escalation is resumable instead (#128); a downgrade cannot be that tier.
   for (const budget of [
-    () => ({ status: 'pause', reason: 'weekly_budget_cap', until: 80 } as ImplementBudgetDecision),
     () => ({ status: 'allow', tier: 'flash' } as ImplementBudgetDecision),
   ]) {
     let escalations = 0;
@@ -645,19 +651,16 @@ test('escalation blocked by the ceiling or the budget gate raises an open issue 
 });
 
 test('D5 uncertainty fails the step, and red checks fail it without asking D5', async () => {
+  // An outage pauses instead (#129); see the outage test below.
   const cases = [
     { name: 'low confidence', evaluation: { c1: { p: .95, conf: .89 } } as const, reason: 'low_confidence' },
     { name: 'missing confidence', evaluation: { c1: { p: .95 } } as const, reason: 'missing_confidence' },
     { name: 'stale', evaluation: 'stale' as const, reason: 'stale_answer' },
-    { name: 'outage', evaluation: 'throw' as const, reason: 'decision_unavailable' },
-    { name: 'provider outage', evaluation: 'outage' as const, reason: 'decision_unavailable' },
   ];
   for (const item of cases) {
     const world = driver({
       input: input({ ceiling: 'flash', retries: 0 }),
-      evaluations: [item.evaluation === 'stale' || item.evaluation === 'throw' || item.evaluation === 'outage'
-        ? item.evaluation
-        : item.evaluation],
+      evaluations: [item.evaluation],
     });
     const result = await runImplementationStep(world.input, world.ports, world.journal);
     assert.equal(result.status, 'failed', item.name);
@@ -1003,4 +1006,301 @@ test('a red check on the last attempt raises a check-sourced open issue with no 
   assert.deepEqual(result.open_issue?.check_ids, ['repo.test']);
   assert.deepEqual(result.open_issue?.criterion_ids, []);
   assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), result);
+});
+
+// #120: the check-run identity comes from an injected port, as time does through `now`.
+test('check invocation ids come from the injected run-id port, not ambient entropy (#120)', async () => {
+  const run = async (runIds: readonly string[]) => {
+    const world = driver({ evaluations: [{ c1: { p: .2, conf: 1 } }, { c1: { p: 1, conf: 1 } }] });
+    const queue = [...runIds];
+    const result = await runImplementationStep(world.input, { ...world.ports, runId: () => queue.shift() ?? 'unexpected' },
+      world.journal);
+    assert.equal(result.status, 'passed');
+    assert.deepEqual(queue, [], 'one run id per generation run');
+    return world.invokes.map(call => call.invocation_id);
+  };
+  const first = await run(['run-a', 'run-b']);
+  assert.deepEqual(await run(['run-a', 'run-b']), first, 'the same run ids replay the same check identities');
+  assert.equal(new Set(first).size, 2, 'each generation run gets its own check identity');
+  const fresh = await run(['run-c', 'run-d']);
+  assert.ok(fresh.every(id => !first.includes(id)), 'a fresh run id never reuses a committed check identity');
+  assert.ok(first.every(id => !id?.includes('run-a') && !id?.includes('run-b')), 'run ids are digested, not copied');
+  for (const bad of [() => '', () => 7 as unknown as string]) {
+    const world = driver({});
+    await assert.rejects(runImplementationStep(world.input, { ...world.ports, runId: bad }, world.journal), /run id/);
+    assert.equal(world.generateIds.length, 0, 'an invalid run id is refused before generation spends');
+  }
+});
+
+// #121: check evidence links the attempt journal to the host's invocation record.
+test('check evidence records the host invocation id, or null when the host gave none (#121)', async () => {
+  const world = driver({});
+  const result = await runImplementationStep(world.input, world.ports, world.journal);
+  const recorded = result.checks[0]?.invocation_id;
+  assert.ok(recorded);
+  assert.equal(recorded, world.invokes[0]?.invocation_id);
+  assert.equal(correlation(recorded), recorded);
+  const saved = world.journal.load('exec-1')[0];
+  assert.ok(saved?.schema === 'impl.attempt@1');
+  assert.equal(saved.checks[0]?.invocation_id, recorded);
+  const denied = driver({ input: input({ checks: [{ ...input().checks[0]!, grant: null }] }) });
+  assert.equal((await runImplementationStep(denied.input, denied.ports, denied.journal)).checks[0]?.invocation_id, null);
+  const unsafe = driver({});
+  const leaky: ImplementPorts = { ...unsafe.ports, invoke: (token, operation, inputs, options) => {
+    const handle = unsafe.ports.invoke(token, operation, inputs, options);
+    return handle.kind === 'handle' ? { ...handle, invocation_id: 'sk-CANARYHOSTID' } : handle;
+  } };
+  const screened = await runImplementationStep(unsafe.input, leaky, unsafe.journal);
+  assert.equal(screened.checks[0]?.invocation_id, null);
+  assert.equal(JSON.stringify(unsafe.journal.load('exec-1')).includes('CANARY'), false);
+});
+
+// #122: ids the step builds stay valid correlation ids for any valid execution id.
+test('step-built ids stay within the 128-character correlation limit and stay distinct (#122)', async () => {
+  const prefix = 'e'.repeat(127);
+  const failing = { c1: { p: .1, conf: 1 } };
+  const ids = async (execution_id: string) => {
+    const world = driver({ input: input({ execution_id, ceiling: 'standard' }), evaluations: [failing, failing, failing, failing] });
+    const result = await runImplementationStep(world.input, world.ports, world.journal);
+    assert.equal(result.status, 'failed');
+    assert.equal(result.attempts.length, 4);
+    const built = [
+      ...world.generateIds, ...world.invokes.map(call => call.invocation_id), ...world.journal.load(execution_id).map(entry => entry.id),
+      ...result.attempts.flatMap(attempt => attempt.observations.map(observation => observation.request_id)),
+      ...result.attempts.flatMap(attempt => attempt.checks.map(check => check.invocation_id)),
+      result.open_issue?.issue_id,
+    ];
+    assert.equal(built.length, 4 + 4 + 5 + 4 + 4 + 1);
+    for (const id of built) assert.equal(correlation(id), id, `invalid step id ${String(id)}`);
+    return built;
+  };
+  const a = await ids(`${prefix}a`);
+  const b = await ids(`${prefix}b`);
+  assert.equal(new Set([...a, ...b]).size, new Set(a).size + new Set(b).size, 'shared prefixes keep distinct ids');
+  assert.deepEqual(await ids(`${prefix}a`), a, 'bounded ids are deterministic');
+  const short = driver({});
+  await runImplementationStep(short.input, short.ports, short.journal);
+  assert.deepEqual(short.generateIds, ['exec-1:a1:gen'], 'short ids keep their readable form');
+  assert.match(short.invokes[0]?.invocation_id ?? '', /^exec-1:a1:[a-f0-9]{32}:repo\.test$/);
+});
+
+// #123: cancelling the step cancels the check in flight instead of leaving it running.
+test('cancelling the step requests cancellation of the in-flight check and pauses (#123)', async () => {
+  type Outcome = { outcome: 'failed'; failure: string } | { outcome: 'succeeded'; output: unknown };
+  const world = driver({});
+  const controller = new AbortController();
+  let cancels = 0;
+  const ports: ImplementPorts = { ...world.ports, invoke: (token, operation, inputs, options) => {
+    const handle = world.ports.invoke(token, operation, inputs, options);
+    if (handle.kind !== 'handle') return handle;
+    let settle: (outcome: Outcome) => void = () => {};
+    const result = new Promise<Outcome>(resolve => { settle = resolve; });
+    // A host that ends a long check only when asked to cancel; the fallback keeps a red run finite.
+    const fallback = setTimeout(() => settle({ outcome: 'succeeded', output: { exit: 0, stdout_tail: '', artifacts: [] } }), 500);
+    queueMicrotask(() => controller.abort());
+    return { ...handle, result, requestCancel() { cancels += 1; clearTimeout(fallback); settle({ outcome: 'failed', failure: 'cancelled' }); } };
+  } };
+  const result = await runImplementationStep(world.input, ports, world.journal, controller.signal);
+  assert.equal(cancels, 1, 'the in-flight check is asked to cancel');
+  assert.equal(result.status, 'paused');
+  assert.equal(result.attempts[0]?.pause?.reason, 'cancelled');
+  assert.equal(result.attempts[0]?.checks[0]?.passed, false);
+  assert.equal(result.attempts[0]?.checks[0]?.exit, null);
+  assert.deepEqual(world.evalSites, [], 'no D5 after cancellation');
+  assert.equal(result.goal_done, false);
+});
+
+// #128: a budget pause is temporary at escalation too.
+test('a budget pause at escalation pauses the step and resumes into the escalation (#128)', async () => {
+  const fail = { c1: { p: .1, conf: 1 } };
+  let pausing = true;
+  const world = driver({
+    evaluations: [fail, fail, fail, { c1: { p: 1, conf: 1 } }],
+    budget: request => request.escalation && pausing
+      ? { status: 'pause', reason: 'weekly_budget_cap', until: 80 }
+      : { status: 'allow', tier: request.requested },
+  });
+  const paused = await runImplementationStep(world.input, world.ports, world.journal);
+  assert.equal(paused.status, 'paused');
+  assert.equal(paused.open_issue, null, 'a pause raises no open issue');
+  assert.equal(paused.goal_done, false);
+  assert.equal(paused.escalated, false);
+  assert.deepEqual(world.tiers, ['flash', 'flash', 'flash']);
+  const held = paused.attempts.at(-1);
+  assert.equal(held?.status, 'paused');
+  assert.equal(held?.escalated, true);
+  assert.equal(held?.requested_tier, 'standard');
+  assert.equal(held?.effective_tier, null);
+  assert.deepEqual(held?.pause, { reason: 'weekly_budget_cap', until: 80 });
+  assert.equal(world.journal.load('exec-1').some(entry => entry.schema === 'impl.stop@1'), false);
+  assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), paused);
+  assert.deepEqual(await runImplementationStep(world.input, world.ports, world.journal).then(again => again.status), 'paused');
+  pausing = false;
+  const resumed = await runImplementationStep(world.input, world.ports, world.journal);
+  assert.equal(resumed.status, 'passed');
+  assert.equal(resumed.escalated, true);
+  assert.deepEqual(world.tiers, ['flash', 'flash', 'flash', 'standard'], 'the paused escalation runs once, at one tier up');
+  assert.equal(resumed.attempts.at(-1)?.escalated, true);
+  assert.equal(resumed.attempts.at(-1)?.effective_tier, 'standard');
+  assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), resumed);
+});
+
+// #129: a D5 outage pauses the step instead of spending its retries and escalation.
+test('a D5 outage pauses the attempt without consuming a retry or the escalation (#129)', async () => {
+  for (const outage of ['throw', 'outage'] as const) {
+    const world = driver({ input: input({ retries: 0, ceiling: 'standard' }), evaluations: [outage, { c1: { p: 1, conf: 1 } }] });
+    const paused = await runImplementationStep(world.input, world.ports, world.journal);
+    assert.equal(paused.status, 'paused', outage);
+    assert.equal(paused.open_issue, null, outage);
+    assert.equal(paused.goal_done, false, outage);
+    assert.deepEqual(paused.attempts[0]?.pause, { reason: 'decision_unavailable', until: null }, outage);
+    assert.ok(paused.observations.every(item => item.reason === 'decision_unavailable'), outage);
+    assert.deepEqual(world.tiers, ['flash'], 'no retry or escalation is spent during the outage');
+    assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), paused);
+    const resumed = await runImplementationStep(world.input, world.ports, world.journal);
+    assert.equal(resumed.status, 'passed', outage);
+    assert.deepEqual(world.tiers, ['flash', 'flash'], 'the resumed attempt stays on the routed tier');
+    assert.equal(resumed.escalated, false);
+    assert.equal(JSON.stringify(resumed).includes('CANARY_PROVIDER'), false);
+  }
+  // #200: a skipped D5 is not an outage; the red check consumes its retry as a check failure.
+  const red = driver({ input: input({ retries: 0, ceiling: 'flash' }), exits: [1] });
+  const failed = await runImplementationStep(red.input, red.ports, red.journal);
+  assert.equal(failed.status, 'failed');
+  assert.equal(failed.attempts[0]?.status, 'failed');
+  assert.equal(failed.attempts[0]?.eval_skipped, 'check_failed');
+  assert.equal(failed.attempts[0]?.pause, null);
+  assert.equal(failed.open_issue?.source, 'check');
+});
+
+// #131: FileAttemptJournal syncs each append, reads the file once, and fails closed on a second writer.
+test('the file journal fsyncs each append and does not reread the file per append (#131)', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-p8-durable-'));
+  const fsModule = createRequire(import.meta.url)('node:fs') as typeof import('node:fs');
+  const original = { readFileSync: fsModule.readFileSync, fsyncSync: fsModule.fsyncSync };
+  const path = join(dir, 'attempts.jsonl');
+  const counts = { reads: 0, fsyncs: 0 };
+  try {
+    const journal = new FileAttemptJournal(path);
+    fsModule.readFileSync = ((...args: Parameters<typeof original.readFileSync>) => {
+      if (String(args[0]) === path) counts.reads += 1;
+      return original.readFileSync(...args);
+    }) as typeof original.readFileSync;
+    fsModule.fsyncSync = (fd: number) => { counts.fsyncs += 1; original.fsyncSync(fd); };
+    syncBuiltinESMExports();
+    const fail = { c1: { p: .2, conf: 1 } };
+    const world = driver({ journal, evaluations: [fail, fail, { c1: { p: 1, conf: 1 } }] });
+    const result = await runImplementationStep(world.input, world.ports, world.journal);
+    assert.equal(result.attempts.length, 3);
+    assert.equal(journal.load('exec-1').length, 3);
+    assert.equal(counts.fsyncs, 3, 'every append is synced before it returns');
+    assert.ok(counts.reads <= 2, `the writer reads and repairs the file once, then appends without rereading (read ${counts.reads} times)`);
+  } finally {
+    fsModule.readFileSync = original.readFileSync;
+    fsModule.fsyncSync = original.fsyncSync;
+    syncBuiltinESMExports();
+  }
+  try {
+    assert.deepEqual(new FileAttemptJournal(path).load('exec-1').map(entry => entry.id), ['exec-1:a1', 'exec-1:a2', 'exec-1:a3']);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a second writer on one attempt journal is detected and refused (#131)', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-p8-writer-'));
+  try {
+    const path = join(dir, 'attempts.jsonl');
+    const source = driver({ evaluations: [{ c1: { p: .2, conf: 1 } }, { c1: { p: .2, conf: 1 } }, { c1: { p: 1, conf: 1 } }] });
+    await runImplementationStep(source.input, source.ports, source.journal);
+    const [first, second, third] = source.journal.load('exec-1');
+    assert.ok(first && second && third);
+    const owner = new FileAttemptJournal(path);
+    owner.append(first);
+    const intruder = new FileAttemptJournal(path);
+    assert.deepEqual(intruder.load('exec-1').map(entry => entry.id), ['exec-1:a1']);
+    intruder.append(second);
+    assert.throws(() => owner.append(third), /another writer/);
+    assert.throws(() => owner.load('exec-1'), /another writer/);
+    assert.deepEqual(new FileAttemptJournal(path).load('exec-1').map(entry => entry.id), ['exec-1:a1', 'exec-1:a2']);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// #130: escalation is relative to the D2-routed tier; the budget gate re-checks it.
+test('escalation steps up from the routed tier, not from a budget-lowered tier (#130)', async () => {
+  const fail = { c1: { p: .1, conf: 1 } };
+  const requests: [ImplementBudgetRequest['requested'], boolean][] = [];
+  const world = driver({
+    input: input({ tier: 'standard', ceiling: 'strong' }),
+    evaluations: [fail, fail, fail, { c1: { p: 1, conf: 1 } }],
+    budget: request => {
+      requests.push([request.requested, request.escalation]);
+      return { status: 'allow', tier: request.escalation ? request.requested : 'flash' };
+    },
+  });
+  const result = await runImplementationStep(world.input, world.ports, world.journal);
+  assert.equal(result.status, 'passed');
+  assert.deepEqual(requests, [['standard', false], ['standard', false], ['standard', false], ['strong', true]]);
+  assert.deepEqual(world.tiers, ['flash', 'flash', 'flash', 'strong']);
+  assert.deepEqual(result.attempts.map(attempt => attempt.requested_tier), ['standard', 'standard', 'standard', 'strong']);
+  const lowered = driver({
+    input: input({ tier: 'standard', ceiling: 'strong' }),
+    evaluations: [fail, fail, fail],
+    budget: () => ({ status: 'allow', tier: 'flash' }),
+  });
+  const stopped = await runImplementationStep(lowered.input, lowered.ports, lowered.journal);
+  assert.equal(stopped.status, 'failed');
+  assert.equal(stopped.open_issue?.blocked_by, 'budget', 'a budget that still lowers the escalated tier stops the step');
+  assert.deepEqual(lowered.tiers, ['flash', 'flash', 'flash']);
+});
+
+// #126: a journal the step has not finished does not read as a terminal failure.
+test('replay of an unfinished journal reports unfinished, not failed (#126)', async () => {
+  const world = driver({ evaluations: [{ c1: { p: .2, conf: 1 } }, { c1: { p: 1, conf: 1 } }] });
+  world.crashesAt = 2;
+  await assert.rejects(runImplementationStep(world.input, world.ports, world.journal), /simulated-crash/);
+  const midway = replayImplementationStep(world.journal.load('exec-1'), world.input);
+  assert.equal(midway.status, 'unfinished');
+  assert.equal(midway.open_issue, null);
+  assert.equal(midway.goal_done, false);
+  assert.equal(midway.attempts.length, 1);
+  assert.equal(midway.attempts[0]?.status, 'failed');
+  assert.equal(replayImplementationStep([], world.input).status, 'unfinished', 'nothing has run yet');
+  world.crashesAt = 0;
+  const finished = await runImplementationStep(world.input, world.ports, world.journal);
+  assert.equal(finished.status, 'passed');
+  assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), finished);
+});
+
+// #124, #125: the issuer bounds fresh grants per held grant and names each one.
+test('the equal issuer gives each fresh grant its own action id and stops at its limit (#124, #125)', () => {
+  const authority = createGrantAuthority();
+  const fields = {
+    action_id: 'act-1', operation: 'repo.test', contract_rev: 'r1',
+    permissions: [{ resource: 'workspace-1', mode: 'write' as const }],
+    effects: [{ resource: 'workspace-1', mode: 'write' as const }],
+    process_effects: ['process.spawn', 'fs.write:workspace-1'], issued_at: 1,
+  };
+  const held = authority.issue(fields);
+  const other = authority.issue({ ...fields, action_id: 'act-2' });
+  const issuer = createEqualGrantIssuer(authority, [held, other], 2);
+  const first = issuer.issue(held);
+  const second = issuer.issue(held);
+  assert.ok(first && second);
+  assert.equal(new Set([held.action_id, first.action_id, second.action_id]).size, 3, 'release/proceed by action id stay unambiguous');
+  assert.ok(authority.isIssued(first) && authority.isIssued(second));
+  assert.equal(issuer.issue(held), null, 'the limit bounds fresh grants per held grant');
+  const third = issuer.issue(other);
+  assert.ok(third, 'each held grant has its own count');
+  assert.equal(new Set([first.action_id, second.action_id, third.action_id]).size, 3);
+  const defaults = createEqualGrantIssuer(authority, [held]);
+  const minted = Array.from({ length: DEFAULT_IMPLEMENT_RETRIES + 3 }, () => defaults.issue(held));
+  assert.equal(minted.filter(item => item !== null).length, DEFAULT_IMPLEMENT_RETRIES + 2,
+    'by default one fresh grant per generation run of a step: retries, the first attempt and the escalation');
+  assert.equal(minted.at(-1), null);
+  for (const bad of [0, -1, 1.5, 11, Number.NaN]) {
+    assert.throws(() => createEqualGrantIssuer(authority, [held], bad), /limit/);
+  }
 });
