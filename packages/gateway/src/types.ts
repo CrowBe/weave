@@ -306,17 +306,27 @@ export interface TokenPrice {
  * per minute on its free tier and did not refuse 25 issued at once, and its
  * own daily counter lagged the requests it had served. So a declared limit
  * never suppresses an attempt and is never treated as a quota the gateway can
- * count down. Its one job is to estimate how long to wait once the provider
- * has actually refused and has not said for how long.
+ * count down. Unless it is paced, its one job is to estimate how long to wait
+ * once the provider has actually refused and has not said for how long.
  * Optional token budgets describe the same window. Refusals do not report
- * consumed tokens, so retry timing uses request spacing only; neither budget
- * is counted down or used to suppress an attempt.
+ * consumed tokens, so retry timing uses request spacing only.
+ *
+ * A limit marked `pace` also holds a request on this routed unit before it is
+ * sent, until the requests this gateway has already started on the unit fit
+ * the window: their count, and their tokens when a budget is declared, worst
+ * case (context bound plus output cap) until usage is reported. Pacing only
+ * delays. Without a timer, when the wait would pass the deadline, or when one
+ * request's worst case exceeds the budget, the request is sent at once and the
+ * provider's refusal governs as before. Pacing counts this gateway's requests
+ * on this unit only, not other processes or other units sharing the limit.
  */
 export interface RateLimit {
   readonly requests: number;
-  /** Declared token budget in this window; metadata, not a proactive throttle. */
+  /** Declared token budget in this window. Counted only when the limit is paced. */
   readonly tokens?: number;
   readonly window_ms: number;
+  /** Hold requests until they fit this limit. Set it for a limit worth waiting on. */
+  readonly pace?: boolean;
 }
 
 /** Observed outcomes for this routed unit at this site, supplied by the caller. */
@@ -343,7 +353,7 @@ export interface RoutedUnitBase {
   readonly quality: QualityBar;
   readonly context_limit_tokens: number;
   readonly price: TokenPrice;
-  /** Known provider limits, used only to time a retry after a refusal. */
+  /** Known provider limits: they time a retry after a refusal, and a paced one holds requests. */
   readonly rate_limits?: readonly RateLimit[];
   readonly evidence?: RouteEvidence;
 }
@@ -499,6 +509,12 @@ export type UnacceptedReason =
   | 'deadline_reached'
   | 'provider_failed';
 
+/**
+ * Every status carries the attempts made and their spend. `blocked` means the
+ * gateway stopped without an accepted answer; it does not mean nothing was
+ * spent. A budget pause after a failed attempt, and an Amos-bound evaluation
+ * whose every attempt was unavailable, are blocked with attempts and spend.
+ */
 interface OutcomeBase {
   readonly paused?: LoopPausedRecord;
   readonly request_id: string;
@@ -535,6 +551,13 @@ export type EvaluationOutcome<K extends EvaluationKind = EvaluationKind> =
   | (OutcomeBase & { readonly status: 'unaccepted'; readonly reason: UnacceptedReason })
   | (OutcomeBase & { readonly status: 'blocked'; readonly reason: BlockedReason });
 
+/**
+ * Each call resolves with an outcome for routing, budget, deadline,
+ * cancellation and provider conditions, with one exception: when the configured
+ * `persist_pause` port rejects, the call rejects with that port's error instead
+ * of returning a paused outcome, and nothing further is dispatched for it. A
+ * pause that was not recorded must not read as one that was.
+ */
 export interface InferenceGateway {
   generate(request: GenerationRequest, signal?: AbortSignal): Promise<GenerationOutcome>;
   evaluate<K extends EvaluationKind>(
@@ -565,12 +588,23 @@ export function answersMatchQuestions(
   return extra === undefined ? { status: 'accepted' } : { status: 'rejected', reason: `unasked_question:${extra}` };
 }
 
-/** Normalized quota-axi data. Time conversion and acquisition belong to the caller. */
+/**
+ * Normalized quota-axi data. Time conversion and acquisition belong to the caller.
+ * Weekly windows use id `seven_day` and five-hour windows `five_hour`; budget
+ * policy reads no other window.
+ */
 export interface QuotaSnapshot {
+  /** When the snapshot was produced (quota-axi `generatedAt`). */
   readonly observed_at: Timestamp;
   readonly providers: readonly {
     readonly provider: string;
     readonly status?: string;
+    /**
+     * When this provider's reading was taken, if earlier than the snapshot: a
+     * reused reading's `refreshedAt`. Absent means the snapshot's `observed_at`.
+     * Freshness is measured from this time.
+     */
+    readonly observed_at?: Timestamp;
     readonly windows: readonly {
       readonly id: string;
       readonly percentRemaining: number | null;

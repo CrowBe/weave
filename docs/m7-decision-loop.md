@@ -186,7 +186,9 @@ are unchanged; wiring the full M7 loop is outside P5.
 
 The composition root supplies parsed JSON to `parseRouteConfig`; the gateway
 reads no files, environment, or clock. The root may load `weave.routes.json` and
-an ignored `weave.routes.local.json` overlay. See
+an ignored `weave.routes.local.json` overlay. `applyRouteOverlay` keeps an
+overlay `__proto__` key as an ordinary key, which validation rejects as unknown;
+it never sets the merged object's prototype. See
 [weave.routes.example.json](../weave.routes.example.json) for the P1 shape:
 `units` is a route table and `decision` declares `provider`, nullable `fallback`,
 and named `providers` with `base_url`, `model`, optional `auth`, and optional
@@ -197,8 +199,10 @@ names, never embedded credentials. The example declares
 future adapters; parsing it does not install or execute them.
 
 `tier` is optional on a routed unit. A requested tier in `InferenceTerms` or
-`RouteTarget` filters mismatches with `tier_mismatch`; if both specify a tier,
-a unit must satisfy both. Omitting tier preserves existing routing. Quality is
+`RouteTarget` filters mismatches with `tier_mismatch`. If both specify a tier,
+they must agree: a conflict is an invalid request, so `route` and `budgetRoute`
+return no order with `invalid` set rather than excluding every unit (#43).
+Gateway requests carry a tier only in their terms. Omitting tier preserves existing routing. Quality is
 still `baseline` or `high`, independently checked. Prices are nonnegative finite
 micros per million tokens; subscription examples declare zero token prices.
 Quota accounting is a separate P4 gate, not an implication of zero cost.
@@ -222,7 +226,11 @@ adapter is `typesafe-ai` and whose model equals that provider's model, identical
 primary and fallback, a `key_env` without `auth: "api-key"`, a non-loopback provider with
 neither `auth` nor `key_env`, a `key_env` on `chatgpt-oauth`, an `api-key`
 provider without a `key_env`, and base URLs other than HTTPS or HTTP on loopback hosts
-(`127.0.0.1`, `::1`, `localhost`) without userinfo, `?`, or `#`. Adapters remain
+(any `127.0.0.0/8` address, `::1`, `localhost`) without userinfo, `?`, or `#`.
+The loopback test runs on the parsed URL host, which canonicalizes IPv4 forms,
+so a domain such as `127.0.0.1.evil.com` is not loopback (#46). The Amos adapter
+still applies its own narrower host check (`127.0.0.1`, `::1`, `localhost`) when
+it is constructed. Adapters remain
 credential-injected. `decision.sites` accepts `amos` or `typesafe-jev` for
 `intake.classify` and `loop.preselect` only. Amos on intake requires a matching
 choice unit; Amos on preselect requires a matching boolean unit.
@@ -289,7 +297,7 @@ Order: P0 → P1 → P2 ChatGPT sign-in → P3 TypeSafe decision provider. OpenA
 
 **Loop mechanism (P4).** The hard rule: the loop stops at 80% of weekly quota, checked with `quota-axi --json`.
 
-- Before every routed dispatch, and at the start of every audit round, the composition root runs `quota-axi --json` with a ~60s cache. For each `quota_provider` it reads `windows[id=seven_day].percentRemaining`, `resetsAt`, `pace.status`, and `five_hour`.
+- Before every routed dispatch, and at the start of every audit round, the composition root runs `quota-axi --json` with a ~60s cache. For each `quota_provider` it reads `windows[id=seven_day].percentRemaining`, `resetsAt`, `pace.status`, and `five_hour`. Codex reports its weekly window as `weekly`; the root's normalizer maps it to `seven_day`.
 - **Weekly gate:** if `percentRemaining ≤ 20` (80% used) for the provider a unit draws on, the unit is excluded (`weekly_budget_cap`). If no eligible unit remains for the step, the loop records `loop.paused{until: resetsAt}` and stops dispatching. It resumes at reset, through the injected clock and timer only. The cap is enforced against the whole week, including use outside Weave, because quota-axi reports the account total. That is stricter than "Weave's share", and safe.
 - **Five-hour window:** if `≤ 10%`, prefer another provider; if none, wait until that reset (the gateway already waits on known delays).
 - **Pace:** `ahead` downgrades `strong` to `standard` except for the audit step, which pauses instead. An audit should not be done by a weaker model.
@@ -425,15 +433,43 @@ quality, context and cost constraints, before each generation or evaluation
 attempt, including retries, waits and fallbacks. `quota_provider` is an optional
 routed-unit attribute naming the whole-account quota-axi provider, independent
 of its adapter and destination. A strong unit without that mapping fails closed.
-The example subscription units name `codex`, `claude` and `grok`; Grok quota
-support is an operator assumption until quota-axi supplies that provider.
+The weekly cap reaches only units that declare it, and a standard unit without
+it does not fail closed, so every unit that draws on a subscription account
+must declare its `quota_provider`. `parseRouteConfig` cannot enforce this: a
+route table records no billing, and a zero token price also describes local
+units and unpriced placeholders such as the Muse Spark entries. Requiring the
+mapping needs a billing declaration on routed units, which is not decided yet
+(#77); a test pins the current gap.
+The example subscription units name `codex`, `claude` and `grok`. quota-axi
+0.1.64 lists all three provider ids. Its Grok reading reports the allowance as
+window `credits` (kind `weekly` or `monthly` by plan period), and no Grok
+capture is recorded, so the normalizer does not map it: Grok strong and
+quota-tracked standard units fail closed with `quota_unknown`, and Grok flash
+units carry no weekly cap.
 
 `QuotaPort.read()` returns normalized snapshot data (`observed_at`, provider
 status, weekly/five-hour windows, numeric reset times and pace). Only the local
 composition-root helper runs `quota-axi --json`, with a 60s cache and concurrent
 refresh deduplication. It converts ISO timestamps and strips CLI diagnostics.
 Freshness requires a `fresh` provider, observation age ≤60s, and a future weekly
-reset. Missing, duplicate, malformed or expired windows cannot clear strong work.
+reset. Age counts from when the provider's reading was taken: a reading quota-axi
+reuses from its cache (`state.reused`, opt-in through `--max-age` or
+`QUOTA_AXI_MAX_AGE`) was taken at `state.refreshedAt`, which the normalizer
+passes on as that provider's `observed_at`; the report's `generatedAt` is the
+default. The root's own 60s cache therefore cannot make an older reading pass
+(#76). Missing, duplicate, malformed or expired windows cannot clear strong work.
+
+The normalizer reads quota-axi `--json` schemaVersion 5. A provider's status is
+`state.status`, and `state.stale: true` is never fresh. Only the windows the
+policy reads (`seven_day` or Codex `weekly`, and `five_hour`) must carry a
+percentage and a reset. Other windows (model, credit, code-review and used-share
+windows) may omit those optional fields without making the provider unknown, but
+a value that contradicts the published schema anywhere in the row does. A status
+quota-axi itself reports as not fresh is kept rather than replaced by `unknown`,
+and a reused reading keeps its observation time, so stale evidence survives a
+malformed row (#92). A recorded-fixture contract test checks these field names
+against a redacted verbatim Codex capture from the P10 live run (15 Oct 2026)
+and the documented Claude example in the quota-axi 0.1.64 README (#78).
 Unknown pace also fails closed; `ahead` permits a standard route only when no
 eligible strong route remains and quality and authority still hold.
 
@@ -442,14 +478,35 @@ When no budget-eligible unit remains, the outcome carries `paused` with shape
 An injected `persist_pause` port is awaited; local roots append the record to
 `~/.local/state/weave/loop-paused.jsonl`. `until` is the earliest known reset, or
 null when a fresh observation is needed. This records the pause but adds no
-scheduler or resume consumer. A reset is permission to recheck, never permission
-to dispatch from the old snapshot. Five-hour pressure excludes the provider in
+scheduler or resume consumer. If `persist_pause` rejects, `generate` or
+`evaluate` rejects with that port's error instead of returning a paused outcome,
+and nothing further is dispatched for that request (#74); every other budget,
+routing and deadline condition still resolves with an outcome. A reset is
+permission to recheck, never permission to dispatch from the old snapshot. Five-hour pressure excludes the provider in
 favor of another eligible provider; when none remains, it records a pause until
 the five-hour reset. The P9 audit tier requests `tier:'strong', audit:true`
 and uses this same gate at every audit-round dispatch; pace pressure pauses audit.
 
 All providers unavailable has its own blocked reason `provider_unavailable`
 (issue #44); an empty or otherwise incompatible table remains `no_route`.
+
+The gate reads quota before every attempt, and the gateway checks the deadline
+again after each read. A deadline that passes before the first attempt,
+including during that read, gives `blocked: deadline_passed` with no attempts,
+the same outcome as a deadline already past on arrival. Once an attempt has
+been made it gives `unaccepted: deadline_reached` (#79). The gateway does not
+wait out a slow `QuotaPort.read()`: cancellation, or the deadline when a timer
+is configured, ends the wait, and the pending read counts as no observation.
+The same rechecks then decide the outcome, so nothing dispatches (#75). Without
+a timer the deadline is checked only once the read settles.
+
+A `blocked` outcome does not mean nothing was spent. The gate rechecks quota
+before a retry, so a pause after a failed attempt is `blocked` with that attempt
+and its spend; an Amos-bound evaluation whose every attempt was unavailable is
+also `blocked` with attempts. Callers account `attempts` and `spent` for every
+status (#73). The Weave runtime, the frontier weigh decision provider and the
+Fabric host already record both for every status.
+
 Offline fixtures cover 79/80/95% usage, stale/missing quota, unknown pace,
 downgrade constraints, audit pause, five-hour preference, retry rechecks,
 cancellation, deadlines, snapshot cache concurrency and durable pause records.
