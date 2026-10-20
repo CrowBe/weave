@@ -57,15 +57,24 @@ export class Journal {
    rows.push(JSON.parse(serialized) as JournalRecord);
   } catch(error) {this.owner()?.journals.delete(resolve(this.path));throw error;}
  }
- spent(): number {
-  const rows=this.rows();const complete=new Set(rows.filter(r=>r.type==='call').map(r=>r.call_id));
-  const seen=new Set<string>();let total=0;
-  for(const r of rows) {
-   if(r.type==='call' && !seen.has(r.call_id)){total+=r.cost_usd??0;seen.add(r.call_id);}
-   if(r.type==='intent' && !complete.has(r.call_id)) total+=r.projected_usd??0;
-  }
-  return total;
+ spent(): number { return ledger(this.rows()).spent_usd; }
+}
+/**
+ * The conservative ledger, split by evidence for reporting only. Every completed
+ * attempt is charged once; an unacknowledged intent keeps its reservation.
+ * Observed spend is priced from a provider usage receipt. Reserved spend has no
+ * receipt: a completed call without usage keeps its byte projection (the engine
+ * charges a usage-less 429 that way on every retry) and pending intents keep
+ * theirs. The budget always uses the conservative total, `spent_usd`.
+ */
+export function ledger(rows: readonly JournalRecord[]): {spent_usd:number;observed_usd:number;reserved_usd:number;pending_reservation_usd:number} {
+ const complete=new Set(rows.filter(r=>r.type==='call').map(r=>r.call_id));
+ const seen=new Set<string>();let total=0,observed=0,pending=0;
+ for(const r of rows) {
+  if(r.type==='call' && !seen.has(r.call_id)){const cost=r.cost_usd??0;total+=cost;if(r.result?.input_tokens!==undefined)observed+=cost;seen.add(r.call_id);}
+  if(r.type==='intent' && !complete.has(r.call_id)){const cost=r.projected_usd??0;total+=cost;pending+=cost;}
  }
+ return {spent_usd:total,observed_usd:observed,reserved_usd:total-observed,pending_reservation_usd:pending};
 }
 interface HeldLock {nonce:string;journals:Map<string,JournalRecord[]>}
 const heldLocks=new Map<string,HeldLock>();

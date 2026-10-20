@@ -1,12 +1,13 @@
 /**
  * Executing the corpus against hosted Jev and recording what happened.
  *
- * The route table lists the Vercel AI Gateway first and TypeSafe direct
- * second. Both destinations are named in the terms, which is what permits the
- * escalation at all — drop one and that route is excluded at routing rather
- * than silently used. A timer is supplied, so a throttle that names a delay is
- * waited out and recorded in `waited_ms` instead of escalating past the
- * preferred route on first refusal.
+ * TypeSafe direct is the default route. The Vercel AI Gateway route exists only
+ * when its key is set; it then follows TypeSafe direct, unless `preferFree`
+ * asks for the free route first. Every configured destination is named in the
+ * terms, which is what permits the escalation at all — drop one and that route
+ * is excluded at routing rather than silently used. A timer is supplied, so a
+ * throttle that names a delay is waited out and recorded in `waited_ms`
+ * instead of escalating past the preferred route on first refusal.
  *
  * Nothing here judges an answer. It records the answer, the ranking the shape's
  * decision rule produced, every attempt, and the wall clock around the call.
@@ -57,7 +58,10 @@ const JEV_PRICE = { input_per_mtok: 42_000, output_per_mtok: 0 } as const;
 const VERCEL_DECLARED_LIMIT = { requests: 60, window_ms: 60_000 } as const;
 
 export interface RouteOptions {
-  /** Wait out a throttle on the free route instead of escalating to the billed one. */
+  /**
+   * Put the free Vercel route first and wait out its throttles instead of
+   * escalating to the billed direct route. Without it, TypeSafe direct is first.
+   */
   readonly preferFree: boolean;
   /**
    * Direct TypeSafe model. Blank or absent means jev-preview. The composition
@@ -68,7 +72,9 @@ export interface RouteOptions {
   readonly local?: boolean;
 }
 
-function jevRoutes(kind: EvaluationKind, includeDirect: boolean, options: RouteOptions): RoutedUnit[] {
+const DEFAULT_DIRECT_MODEL = 'jev-preview';
+
+function jevRoutes(kind: EvaluationKind, credentials: Credentials, options: RouteOptions): RoutedUnit[] {
   const shared = {
     operation: 'evaluate',
     kind,
@@ -82,7 +88,7 @@ function jevRoutes(kind: EvaluationKind, includeDirect: boolean, options: RouteO
     price: JEV_PRICE,
   } as const;
 
-  const routes: RoutedUnit[] = [
+  const vercel: RoutedUnit[] = credentials.vercel === undefined ? [] : [
     {
       ...shared,
       routed_unit_id: `${kind}@vercel`,
@@ -92,37 +98,51 @@ function jevRoutes(kind: EvaluationKind, includeDirect: boolean, options: RouteO
       ...(options.preferFree ? { rate_limits: [VERCEL_DECLARED_LIMIT] } : {}),
     },
   ];
-  if (includeDirect) {
-    routes.push({
+  const direct: RoutedUnit[] = credentials.typesafe === undefined ? [] : [
+    {
       ...shared,
       routed_unit_id: `${kind}@typesafe`,
       adapter: TYPESAFE_AI_ADAPTER,
       // The direct API names the model differently than the gateway catalogue.
-      model: options.model?.trim() || 'jev-preview',
+      model: options.model?.trim() || DEFAULT_DIRECT_MODEL,
       destination: TYPESAFE_AI_DESTINATION,
-    });
-  }
-  return routes;
-}
-
-export interface Credentials {
-  readonly vercel: string;
-  readonly typesafe: string | undefined;
+    },
+  ];
+  // Declaration order is routing order while no route has evidence.
+  return options.preferFree ? [...vercel, ...direct] : [...direct, ...vercel];
 }
 
 /** Every hosted route the credentials allow, in the order the gateway tries them. */
 export function jevRouteTable(credentials: Credentials, options: RouteOptions): RoutedUnit[] {
-  const includeDirect = credentials.typesafe !== undefined;
-  return EVALUATION_KINDS.flatMap((kind) => jevRoutes(kind, includeDirect, options));
+  return EVALUATION_KINDS.flatMap((kind) => jevRoutes(kind, credentials, options));
+}
+
+/** At least one is set: TypeSafe direct is the default route, Vercel optional. */
+export interface Credentials {
+  readonly vercel: string | undefined;
+  readonly typesafe: string | undefined;
 }
 
 /** Read from the environment by the composition root only. Never logged. */
 export function readCredentials(env: NodeJS.ProcessEnv): Credentials | { readonly error: string } {
-  const vercel = env['AI_GATEWAY_API_KEY'];
-  if (vercel === undefined || vercel.trim().length === 0) {
-    return { error: 'AI_GATEWAY_API_KEY is not set. Put it in .env.local (git-ignored) and rerun.' };
+  const vercel = env['AI_GATEWAY_API_KEY']?.trim() || undefined;
+  const typesafe = resolveTypesafeApiKey(env);
+  if (vercel === undefined && typesafe === undefined) {
+    return {
+      error:
+        'Set TYPESAFE_API_KEY (preferred; TYPESAFE_AI_API_KEY is the legacy fallback), or AI_GATEWAY_API_KEY for the optional Vercel route, in .env.local (git-ignored) and rerun.',
+    };
   }
-  return { vercel, typesafe: resolveTypesafeApiKey(env) };
+  return { vercel, typesafe };
+}
+
+/** One line for the run log: which routes exist and which is tried first. Names no secret. */
+export function describeRoutes(credentials: Credentials, options: RouteOptions): string {
+  if (credentials.vercel === undefined) return 'routes: TypeSafe direct only';
+  if (credentials.typesafe === undefined) return 'routes: Vercel AI Gateway only';
+  return options.preferFree
+    ? 'routes: Vercel AI Gateway first (throttles waited out), then TypeSafe direct'
+    : 'routes: TypeSafe direct first, then Vercel AI Gateway';
 }
 
 /**
@@ -177,8 +197,9 @@ export function createJevGateway(
   return createInferenceGateway({
     routes: jevRouteTable(credentials, options),
     evaluators: [
-      vercelAiGatewayEvaluator({ apiKey: credentials.vercel }),
+      // The probe controls presentation order, so the direct route never shuffles.
       ...(credentials.typesafe === undefined ? [] : [typesafeAiEvaluator({ apiKey: credentials.typesafe, shuffle: false })]),
+      ...(credentials.vercel === undefined ? [] : [vercelAiGatewayEvaluator({ apiKey: credentials.vercel })]),
     ],
     clock,
     timer: realTimer,
@@ -193,10 +214,10 @@ export function probeTerms(
   if (options.local === true) return kevTerms(clock);
   return {
     quality: 'baseline',
-    destinations:
-      credentials.typesafe === undefined
-        ? [VERCEL_AI_GATEWAY_DESTINATION]
-        : [VERCEL_AI_GATEWAY_DESTINATION, TYPESAFE_AI_DESTINATION],
+    destinations: [
+      ...(credentials.typesafe === undefined ? [] : [TYPESAFE_AI_DESTINATION]),
+      ...(credentials.vercel === undefined ? [] : [VERCEL_AI_GATEWAY_DESTINATION]),
+    ],
     max_context_tokens: 8_000,
     deadline: clock.now() + 120_000,
     cost_ceiling: 5_000,
