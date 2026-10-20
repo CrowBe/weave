@@ -157,7 +157,7 @@ Run the opt-in local intake probe after building:
 root. It uses the existing AI SDK `createGateway` + `generateText` path, checks a
 fresh key-free `/v1/models` catalogue before each attempt, and requires reported
 zero response cost. The five verified IDs are exported as
-`VERCEL_AI_GATEWAY_FREE_MODELS`; Laguna's known expiry is 2026-11-01 UTC.
+`VERCEL_AI_GATEWAY_FREE_MODELS`; Laguna's known expiry is 2026-10-31T00:00Z.
 Unknown, missing, priced, provider-dependent or expired entries fail closed.
 Callers injecting a catalogue snapshot are responsible for its freshness.
 

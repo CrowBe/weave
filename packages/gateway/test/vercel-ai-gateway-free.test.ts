@@ -17,7 +17,7 @@ afterEach(() => { assert.equal(unexpectedCalls, 0, 'no forbidden catalogue looku
 const PRIMARY = 'nvidia/nemotron-3.5-lightning-free';
 const FALLBACK = 'reflection/beam-free';
 const NOW = 1_792_454_400_000;
-const EXPIRY = 1_793_404_800_000;
+const EXPIRY = Date.parse('2026-10-31T00:00Z');
 const IDS = [PRIMARY, 'poolside/laguna-s-2.1-free', FALLBACK,
   'minimax/minimax-m3.1-flash', 'stealth/glyph-cluster'];
 const model = (id = PRIMARY, pricing: unknown = { input: '0', output: '0' }) =>
@@ -106,9 +106,6 @@ describe('Vercel promotional free contract', () => {
     { data: [model(PRIMARY, { input: '0', output: '0', input_cache_read: '0.1' })] },
     { data: [model(PRIMARY, { input: '0', output: '0', fast: { input: '1' } })] },
     { data: [model(PRIMARY, { input: '0', output: '0', varies_by_provider: true })] },
-    { data: [{ ...model(), varies_by_provider: true }] },
-    { data: [{ ...model(), deprecated_at: NOW }] },
-    { data: [{ ...model(), deprecated_at: 'unparseable' }] },
     { data: [model(), model()] },
   ];
   unsafe.forEach((source, index) => it(`fails closed on unsafe catalogue ${index}`, async () => {
@@ -121,7 +118,43 @@ describe('Vercel promotional free contract', () => {
     assert.equal(result.failure.retryable, false);
   }));
 
-  it('uses caller time and the known Laguna expiry even if the catalogue omits it', async () => {
+  for (const deprecation of [{}, { deprecated_at: null }, { deprecated_at: NOW + 1 }]) {
+    for (const variation of [{}, { varies_by_provider: false }]) {
+      const fields = { ...deprecation, ...variation };
+      it(`dispatches with safe optional catalogue fields ${JSON.stringify(fields)}`, async () => {
+        let calls = 0;
+        const result = await adapter(async () => { calls++; return completion(); },
+          { data: [{ ...model(), ...fields }] }).execute(call);
+        assert.equal(result.status, 'completed');
+        assert.equal(calls, 1);
+      });
+    }
+  }
+
+  const refusedFields = [
+    { name: 'provider-dependent price', fields: { varies_by_provider: true } },
+    ...[
+      { name: 'past deprecation', value: NOW - 1 },
+      { name: 'deprecation at caller time', value: NOW },
+      { name: 'NaN deprecation', value: NaN },
+      { name: 'positive infinite deprecation', value: Infinity },
+      { name: 'negative infinite deprecation', value: -Infinity },
+      { name: 'unparseable deprecation', value: 'unparseable' },
+      { name: 'numeric string deprecation', value: String(NOW + 1) },
+      { name: 'boolean deprecation', value: false },
+    ].map(({ name, value }) => ({ name, fields: { deprecated_at: value } })),
+  ];
+  for (const { name, fields } of refusedFields) {
+    it(`refuses ${name} before dispatch`, async () => {
+      const result = await adapter(async () => { unexpected('dispatch'); },
+        { data: [{ ...model(), ...fields }] }).execute(call);
+      assert.ok(result.status === 'failed');
+      assert.equal(result.failure.retryable, false);
+      assert.deepEqual(result.usage, { input_tokens: 0, output_tokens: 0 });
+    });
+  }
+
+  it('uses caller time and the 2026-10-31T00:00Z Laguna expiry even if the catalogue omits it', async () => {
     let now = EXPIRY - 1;
     let calls = 0;
     const instance = adapter(async () => { calls++; return completion(); }, catalogue(), () => now);
