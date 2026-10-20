@@ -145,6 +145,13 @@ Two profiles:
 | `profile.frame@1` | `goal.frame` | goal purpose, sources, authority ids, catalogue operation ids and input shapes, registered source ids and revisions the goal may read | gamma content and id-as-content, locators, prohibited candidate payloads, source bodies |
 | `profile.frontier-weigh@1` | `frontier.weigh` | goal purpose, eligible candidates (id, operation, input summary) | prohibited candidates, unauthorized source content |
 
+Gateway weighing now renders `profile.frontier-weigh@2` under the
+[`frontier.weigh@1` site contract](../packages/weave/src/FRONTIER-WEIGH-CONTRACT.md):
+it adds the success evidence, actions remaining and progress slices, discloses
+only scalar inputs, and names every omission. One frontier weighing is in
+flight at a time, and a stale or fully deferred weighing is weighed again only
+after new evidence (contract §8). The rules above still hold.
+
 A profile is a versioned record the runtime selects: `id`, `version`, and
 `catalogue_budget`. The renderer does not own a private budget.
 `profile.frame@1` has `catalogue_budget: 32` and discloses every operation the

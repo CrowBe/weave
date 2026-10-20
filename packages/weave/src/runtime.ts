@@ -38,6 +38,7 @@ import { narrowDestinations } from './destinations.js';
 import { measureCandidate, stablePrefixBytes } from './strategy.js';
 import { DEFAULT_FRAME_PROFILE, renderFrameView, renderReviewView, SHARED_ASSEMBLY_MICROS, renderWeighView, type FrameProfile } from './views.js';
 import { toAttempts, toMicros } from './gateway-decision.js';
+import { defersEverything, selectFrontier } from './frontier-weigh.js';
 import type {
   ActionId,
   ActionOutcome,
@@ -134,6 +135,16 @@ const GATEWAY_SOURCE = { kind: 'gateway', id: 'inference-gateway' } as const;
 
 /** Cost envelope reserved for one gateway weigh; framing must still have remaining budget. */
 const GATEWAY_WEIGH_COST = 10_000;
+
+/** Observations that are not new evidence for a `frontier.weigh@1` deferral. */
+const WEIGH_CONTROL_RECORDS: readonly string[] = [
+  'clock.tick',
+  'action.started',
+  'action.queued',
+  'inference.requested',
+  'inference.recorded',
+  'weights.recorded',
+];
 
 const PRIVILEGED_KINDS: readonly ProvenanceKind[] = ['operator', 'host', 'runtime', 'judgment', 'clock', 'gateway'];
 
@@ -697,9 +708,10 @@ export class Runtime {
       return {
         weights_ref: ready.seq,
         outcome: null,
-        selection: select(
+        selection: selectFrontier(
           candidates.filter((c) => c.eligibility.status === 'allowed' && c.weight !== null),
           this.state(),
+          ready.payload.contract,
         ),
       };
     }
@@ -713,6 +725,13 @@ export class Runtime {
         return {
           weights_ref: null,
           outcome: { status: 'blocked', reason: status.reason },
+          selection: { selected: [], not_selected: [] },
+        };
+      }
+      if (status.kind === 'deferred') {
+        return {
+          weights_ref: null,
+          outcome: this.anyInFlight() ? { status: 'waiting' } : { status: 'blocked', reason: REASON_TEXT.deferred },
           selection: { selected: [], not_selected: [] },
         };
       }
@@ -734,7 +753,7 @@ export class Runtime {
           selection: { selected: [], not_selected: [] },
         };
       }
-      const view = renderWeighView(state, eligible);
+      const view = renderWeighView(state, eligible, candidates);
       const request_id = `inf:c${cycle_no}:weigh`;
       const requested = this.appendInferenceRequested({
         request_id,
@@ -861,16 +880,15 @@ export class Runtime {
 
   private frontierWeighStatus(
     candidate_set: string,
-  ): { kind: 'needed' } | { kind: 'in_flight' } | { kind: 'finished'; reason: string } {
-    const records = Object.values(this.current.inferences).filter(
-      (record) => record.request.site === 'frontier.weigh' && record.request.candidate_set === candidate_set,
-    );
-    const latest = records.at(-1);
-    if (!latest) {
-      return { kind: 'needed' };
-    }
-    if (!latest.recorded) {
+  ): { kind: 'needed' } | { kind: 'in_flight' } | { kind: 'finished'; reason: string } | { kind: 'deferred' } {
+    const weighs = Object.values(this.current.inferences).filter((record) => record.request.site === 'frontier.weigh');
+    // One frontier weighing at a time: a second would make the first stale on arrival.
+    if (weighs.some((record) => !record.recorded)) {
       return { kind: 'in_flight' };
+    }
+    const latest = weighs.filter((record) => record.request.candidate_set === candidate_set).at(-1);
+    if (!latest?.recorded) {
+      return { kind: 'needed' };
     }
     if (latest.recorded.status !== 'accepted') {
       return { kind: 'finished', reason: latest.recorded.reason ?? latest.recorded.status };
@@ -881,10 +899,32 @@ export class Runtime {
         o.validation.status === 'accepted' &&
         (o.payload as WeightsRecordedPayload).request_id === latest.request_id,
     );
+    const evidence = this.evidenceSince(latest.evidence[0] ?? 0);
     if (!weights) {
-      return { kind: 'finished', reason: 'stale judgment' };
+      return evidence ? { kind: 'needed' } : { kind: 'finished', reason: 'stale judgment' };
+    }
+    if (defersEverything(weights.payload as WeightsRecordedPayload) && !evidence) {
+      return { kind: 'deferred' };
     }
     return { kind: 'needed' };
+  }
+
+  /**
+   * A stale or fully deferred weighing stands until new evidence arrives: an
+   * accepted observation that is not a clock tick, not Weave's own dispatch
+   * and not a weighing record.
+   */
+  private evidenceSince(seq: Seq): boolean {
+    return this.log.some(
+      (observation) =>
+        observation.seq > seq &&
+        observation.validation.status === 'accepted' &&
+        !WEIGH_CONTROL_RECORDS.includes(observation.payload_type),
+    );
+  }
+
+  private anyInFlight(): boolean {
+    return Object.values(this.current.actions).some((action) => action.state === 'running' || action.state === 'pending');
   }
 
   private appendInferenceRequested(payload: InferenceRequestedPayload): Observation {
@@ -938,6 +978,7 @@ export class Runtime {
           candidate_set: request.candidate_set,
           weights: result.weights,
           request_id,
+          ...(result.contract ? { contract: result.contract } : {}),
         } satisfies WeightsRecordedPayload,
       });
     }
@@ -2269,7 +2310,7 @@ function blockedReason(
     for (const entry of not_selected) {
       counts.set(entry.reason, (counts.get(entry.reason) ?? 0) + 1);
     }
-    const order: NotSelectedReason[] = ['budget', 'dependency', 'conflict', 'stale_read_set'];
+    const order: NotSelectedReason[] = ['budget', 'dependency', 'conflict', 'stale_read_set', 'deferred'];
     let dominant: NotSelectedReason = order[0] as NotSelectedReason;
     let best = -1;
     for (const reason of order) {
@@ -2326,6 +2367,7 @@ const REASON_TEXT: Readonly<Record<NotSelectedReason, string>> = {
   dependency: 'dependencies unsatisfied',
   conflict: 'effect conflict with running work',
   stale_read_set: 'read set is stale',
+  deferred: 'frontier deferred by frontier.weigh@1 weights',
 };
 
 // ---------------------------------------------------------------------------

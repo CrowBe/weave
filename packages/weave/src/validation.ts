@@ -5,6 +5,7 @@
  */
 import { isEffect } from '@weave/agentsop';
 import { candidateSetDigest } from './digest.js';
+import { FRONTIER_WEIGH_CONTRACT, validFrontierWeight } from './frontier-weigh.js';
 import { amendmentMovesProtocol, isCorePatch, promotionRefusal } from './strategy.js';
 import { PAYLOAD_TYPES, type ObservationInput, type PayloadType, type ProvenanceKind, type State, type Validation } from './types.js';
 
@@ -329,6 +330,14 @@ function validateWeights(payload: Record<string, unknown>, state: State): Valida
     )
   ) {
     return rejected('weights must be a list of { candidate_id, finite weight }');
+  }
+  if (payload['contract'] !== undefined) {
+    if (payload['contract'] !== FRONTIER_WEIGH_CONTRACT) {
+      return rejected('unknown weighing contract');
+    }
+    if (!(weights as { weight: number }[]).every((w) => validFrontierWeight(w.weight))) {
+      return rejected(`${FRONTIER_WEIGH_CONTRACT} weights must lie in [0, 2]`);
+    }
   }
   const ids = (weights as { candidate_id: string }[]).map((w) => w.candidate_id);
   if (new Set(ids).size !== ids.length) {
