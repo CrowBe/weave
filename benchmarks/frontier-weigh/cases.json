@@ -1,0 +1,168 @@
+{
+  "caseset": "frontier-weigh.report-goal@1",
+  "rubric": "frontier-weigh.rubric@1",
+  "note": "Labels follow the rubric in README.md. They were written by hand before any weigher was scored, and test/harness.test.ts checks them against an independent code reading of the same rubric.",
+  "cases": [
+    {
+      "id": "fw-t01",
+      "split": "tune",
+      "family": "frame",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta"], "review": false, "proposal": null, "inspected": [], "assembled": false, "changed": [], "running": [], "actions_remaining": 5 },
+      "label": { "preferred": ["goal.frame"], "critical": ["goal.frame"], "needed": 5, "kind": "gather", "rule": "R1", "rationale": "No proposal yet; framing is the only route to the inspections and five actions cover frame, two inspections, assembly and completion." }
+    },
+    {
+      "id": "fw-t02",
+      "split": "tune",
+      "family": "over_reach",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta", "source:delta"], "review": false, "proposal": ["source:alpha", "source:beta", "source:delta"], "inspected": [], "assembled": false, "changed": [], "running": [], "actions_remaining": 4 },
+      "label": { "preferred": ["source.inspect:source:alpha", "source.inspect:source:beta"], "critical": ["source.inspect:source:alpha", "source.inspect:source:beta"], "needed": 4, "kind": "gather", "rule": "R2", "rationale": "Delta is readable and proposed but not a goal source; inspecting it spends the action the completion needs." }
+    },
+    {
+      "id": "fw-t03",
+      "split": "tune",
+      "family": "budget_shortfall",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta"], "review": false, "proposal": ["source:alpha", "source:beta"], "inspected": [], "assembled": false, "changed": [], "running": [], "actions_remaining": 3 },
+      "label": { "preferred": [], "critical": ["source.inspect:source:alpha", "source.inspect:source:beta"], "needed": 4, "kind": "hold", "rule": "R3", "rationale": "Four actions are still needed and three remain; the goal cannot complete, so Weave should stay blocked and surface the shortfall." }
+    },
+    {
+      "id": "fw-t04",
+      "split": "tune",
+      "family": "review",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta"], "review": true, "proposal": null, "inspected": [], "assembled": false, "changed": [], "running": [], "actions_remaining": 7 },
+      "label": { "preferred": ["goal.frame", "report.review"], "critical": ["goal.frame"], "needed": 5, "kind": "gather", "rule": "R4", "rationale": "The goal asks for a review and six actions remain after it, more than the five completion needs; both run concurrently." }
+    },
+    {
+      "id": "fw-t05",
+      "split": "tune",
+      "family": "pipeline",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta"], "review": false, "proposal": ["source:alpha", "source:beta"], "inspected": ["source:alpha", "source:beta"], "assembled": false, "changed": [], "running": [], "actions_remaining": 2 },
+      "label": { "preferred": ["report.assemble"], "critical": ["report.assemble"], "needed": 2, "kind": "act", "rule": "R1", "rationale": "Both goal sources are inspected at their current revisions; assembly is the next evidence and two actions cover it and completion." }
+    },
+    {
+      "id": "fw-t06",
+      "split": "tune",
+      "family": "wait",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta", "source:delta"], "review": false, "proposal": ["source:alpha", "source:beta", "source:delta"], "inspected": ["source:alpha"], "assembled": false, "changed": [], "running": ["source:beta"], "actions_remaining": 3 },
+      "label": { "preferred": [], "critical": [], "needed": 2, "kind": "hold", "rule": "R2", "rationale": "Beta is already in flight and the only eligible candidate inspects delta, which the goal does not need; the right frontier is empty while beta runs." }
+    },
+    {
+      "id": "fw-t07",
+      "split": "tune",
+      "family": "stale",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta"], "review": false, "proposal": ["source:alpha", "source:beta"], "inspected": ["source:alpha", "source:beta"], "assembled": true, "changed": ["source:beta"], "running": [], "actions_remaining": 3 },
+      "label": { "preferred": ["source.inspect:source:beta"], "critical": ["source.inspect:source:beta"], "needed": 3, "kind": "gather", "rule": "R1", "rationale": "Beta changed after the report was assembled; re-inspecting it is the evidence the stale report lacks." }
+    },
+    {
+      "id": "fw-t08",
+      "split": "tune",
+      "family": "over_reach",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta", "source:epsilon"], "review": false, "proposal": ["source:alpha", "source:beta", "source:epsilon"], "inspected": ["source:alpha", "source:beta"], "assembled": true, "changed": [], "running": [], "actions_remaining": 1 },
+      "label": { "preferred": ["goal.complete"], "critical": ["goal.complete"], "needed": 1, "kind": "act", "rule": "R2", "rationale": "The report is current; completing is the goal. Epsilon was proposed but is not a goal source." }
+    },
+    {
+      "id": "fw-h01",
+      "split": "holdout",
+      "family": "budget_shortfall",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta"], "review": false, "proposal": null, "inspected": [], "assembled": false, "changed": [], "running": [], "actions_remaining": 3 },
+      "label": { "preferred": [], "critical": ["goal.frame"], "needed": 5, "kind": "hold", "rule": "R3", "rationale": "Five actions are still needed and three remain; framing would spend budget on a goal that cannot complete." }
+    },
+    {
+      "id": "fw-h02",
+      "split": "holdout",
+      "family": "over_reach",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta", "source:delta", "source:epsilon"], "review": false, "proposal": ["source:alpha", "source:beta", "source:delta", "source:epsilon"], "inspected": [], "assembled": false, "changed": [], "running": [], "actions_remaining": 8 },
+      "label": { "preferred": ["source.inspect:source:alpha", "source.inspect:source:beta"], "critical": ["source.inspect:source:alpha", "source.inspect:source:beta"], "needed": 4, "kind": "gather", "rule": "R2", "rationale": "The budget could absorb delta and epsilon, but neither is a goal source; reading them adds no success evidence." }
+    },
+    {
+      "id": "fw-h03",
+      "split": "holdout",
+      "family": "over_reach",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta", "source:delta"], "review": false, "proposal": ["source:alpha", "source:beta", "source:delta"], "inspected": ["source:alpha"], "assembled": false, "changed": [], "running": [], "actions_remaining": 3 },
+      "label": { "preferred": ["source.inspect:source:beta"], "critical": ["source.inspect:source:beta"], "needed": 3, "kind": "gather", "rule": "R2", "rationale": "Beta is the missing goal source; inspecting delta as well would leave too few actions to complete." }
+    },
+    {
+      "id": "fw-h04",
+      "split": "holdout",
+      "family": "pipeline",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta"], "review": false, "proposal": ["source:alpha", "source:beta"], "inspected": [], "assembled": false, "changed": [], "running": [], "actions_remaining": 4 },
+      "label": { "preferred": ["source.inspect:source:alpha", "source.inspect:source:beta"], "critical": ["source.inspect:source:alpha", "source.inspect:source:beta"], "needed": 4, "kind": "gather", "rule": "R1", "rationale": "Both goal sources need inspection and are independent; four actions cover them, assembly and completion." }
+    },
+    {
+      "id": "fw-h05",
+      "split": "holdout",
+      "family": "review",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta"], "review": true, "proposal": null, "inspected": [], "assembled": false, "changed": [], "running": [], "actions_remaining": 5 },
+      "label": { "preferred": ["goal.frame"], "critical": ["goal.frame"], "needed": 5, "kind": "gather", "rule": "R4", "rationale": "Completion needs all five remaining actions; the requested review would make the goal impossible, so it waits." }
+    },
+    {
+      "id": "fw-h06",
+      "split": "holdout",
+      "family": "budget_shortfall",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta"], "review": true, "proposal": null, "inspected": [], "assembled": false, "changed": [], "running": [], "actions_remaining": 4 },
+      "label": { "preferred": [], "critical": ["goal.frame"], "needed": 5, "kind": "hold", "rule": "R3", "rationale": "Four actions remain against five needed; neither framing nor the review can lead to completion." }
+    },
+    {
+      "id": "fw-h07",
+      "split": "holdout",
+      "family": "over_reach",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta", "source:delta"], "review": false, "proposal": ["source:alpha", "source:beta", "source:delta"], "inspected": ["source:alpha", "source:beta"], "assembled": false, "changed": [], "running": [], "actions_remaining": 2 },
+      "label": { "preferred": ["report.assemble"], "critical": ["report.assemble"], "needed": 2, "kind": "act", "rule": "R2", "rationale": "Assembly and completion need both remaining actions; inspecting delta would strand the goal." }
+    },
+    {
+      "id": "fw-h08",
+      "split": "holdout",
+      "family": "pipeline",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta"], "review": false, "proposal": ["source:alpha", "source:beta"], "inspected": ["source:alpha", "source:beta"], "assembled": true, "changed": [], "running": [], "actions_remaining": 1 },
+      "label": { "preferred": ["goal.complete"], "critical": ["goal.complete"], "needed": 1, "kind": "act", "rule": "R1", "rationale": "The report is current and covers both sources; completion is the last step." }
+    },
+    {
+      "id": "fw-h09",
+      "split": "holdout",
+      "family": "stale",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta"], "review": false, "proposal": ["source:alpha", "source:beta"], "inspected": ["source:alpha", "source:beta"], "assembled": true, "changed": ["source:alpha", "source:beta"], "running": [], "actions_remaining": 4 },
+      "label": { "preferred": ["source.inspect:source:alpha", "source.inspect:source:beta"], "critical": ["source.inspect:source:alpha", "source.inspect:source:beta"], "needed": 4, "kind": "gather", "rule": "R1", "rationale": "Both sources changed after assembly; both re-inspections are needed evidence and fit the budget together." }
+    },
+    {
+      "id": "fw-h10",
+      "split": "holdout",
+      "family": "budget_shortfall",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta"], "review": false, "proposal": ["source:alpha", "source:beta"], "inspected": ["source:alpha", "source:beta"], "assembled": false, "changed": [], "running": [], "actions_remaining": 1 },
+      "label": { "preferred": [], "critical": ["report.assemble"], "needed": 2, "kind": "hold", "rule": "R3", "rationale": "Assembly would spend the last action and leave nothing for completion." }
+    },
+    {
+      "id": "fw-h11",
+      "split": "holdout",
+      "family": "wait",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta", "source:epsilon"], "review": false, "proposal": ["source:alpha", "source:beta", "source:epsilon"], "inspected": [], "assembled": false, "changed": [], "running": ["source:alpha", "source:beta"], "actions_remaining": 2 },
+      "label": { "preferred": [], "critical": [], "needed": 2, "kind": "hold", "rule": "R2", "rationale": "Both goal inspections are in flight; the only eligible candidate reads epsilon, which the goal does not need." }
+    },
+    {
+      "id": "fw-h12",
+      "split": "holdout",
+      "family": "over_reach",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta", "source:delta"], "review": false, "proposal": ["source:alpha", "source:beta", "source:delta"], "inspected": ["source:alpha", "source:beta"], "assembled": false, "changed": ["source:alpha"], "running": [], "actions_remaining": 3 },
+      "label": { "preferred": ["source.inspect:source:alpha"], "critical": ["source.inspect:source:alpha"], "needed": 3, "kind": "gather", "rule": "R2", "rationale": "Alpha changed after inspection and must be read again; delta is not a goal source and three actions cover only the needed work." }
+    },
+    {
+      "id": "fw-h13",
+      "split": "holdout",
+      "family": "frame",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta"], "review": false, "proposal": null, "inspected": [], "assembled": false, "changed": [], "running": [], "actions_remaining": 6 },
+      "label": { "preferred": ["goal.frame"], "critical": ["goal.frame"], "needed": 5, "kind": "gather", "rule": "R1", "rationale": "Framing is the only step toward the inspections and the budget covers the whole goal." }
+    },
+    {
+      "id": "fw-h14",
+      "split": "holdout",
+      "family": "review",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta"], "review": true, "proposal": null, "inspected": [], "assembled": false, "changed": [], "running": [], "actions_remaining": 8 },
+      "label": { "preferred": ["goal.frame", "report.review"], "critical": ["goal.frame"], "needed": 5, "kind": "gather", "rule": "R4", "rationale": "The requested review fits: seven actions remain after it against five needed." }
+    },
+    {
+      "id": "fw-h15",
+      "split": "holdout",
+      "family": "stale",
+      "spec": { "goal_sources": ["source:alpha", "source:beta"], "readable": ["source:alpha", "source:beta"], "review": false, "proposal": ["source:alpha", "source:beta"], "inspected": ["source:alpha", "source:beta"], "assembled": true, "changed": ["source:alpha"], "running": [], "actions_remaining": 3 },
+      "label": { "preferred": ["source.inspect:source:alpha"], "critical": ["source.inspect:source:alpha"], "needed": 3, "kind": "gather", "rule": "R1", "rationale": "Alpha changed after assembly; re-inspecting it is the missing evidence." }
+    }
+  ]
+}

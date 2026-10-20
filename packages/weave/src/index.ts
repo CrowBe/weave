@@ -39,7 +39,7 @@ export {
 export type { ExtensionAuthor } from './crystallize-actions.js';
 export { PROCEDURE_IDS } from './candidates.js';
 export { formCandidates, type Describe } from './candidates.js';
-export { candidateSetDigest } from './digest.js';
+export { candidateId, candidateSetDigest } from './digest.js';
 export {
   FRONTIER_WEIGH_CONTRACT,
   FRONTIER_WEIGH_CRITERIA,
