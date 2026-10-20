@@ -12,7 +12,7 @@
   "scripts": {
     "build": "tsc -b",
     "test": "npm run build && node --test \"packages/*/dist/test/**/*.test.js\"",
-    "check": "node checks/import-direction.mjs && node checks/no-ambient-clock.mjs",
+    "check": "node checks/import-direction.mjs && node checks/no-ambient-clock.mjs && node checks/no-ambient-entropy.mjs",
     "typecheck:examples": "tsc -p tsconfig.examples.json",
     "test:entailment": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s benchmarks/inference/openjev -p 'test_*.py'",
     "test:decision": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s benchmarks/inference/kev -p 'test_*.py'",
