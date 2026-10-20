@@ -2,8 +2,8 @@
  * The OpenAI-compatible chat-completions protocol, implemented once.
  *
  * Internal. It is not in the package's exports map and no caller names it: the
- * public surface is the named provider modules beside it (`./open-router.ts`,
- * `./nous-portal.ts`), each of which is a base URL, an adapter id, a
+ * public surface is the named provider modules beside it (`./open-router.ts`;
+ * `./nous-portal.ts` now uses the AI SDK), each of which is a base URL, an adapter id, a
  * destination, and whatever that vendor does differently about rate limits.
  * Everything else — the request body, the response fields worth reading, the
  * mapping from status code to the gateway's closed failure vocabulary — is the

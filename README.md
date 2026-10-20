@@ -180,3 +180,36 @@ eligible. No reasoning parameter is sent. The declared 150 RPM / 3M TPM
 limits do not proactively throttle requests: after a rate-limit refusal,
 `Retry-After` wins, otherwise the gateway uses 400ms request spacing; the token
 budget is metadata because a refusal does not report token consumption.
+
+### Nous Portal free models
+
+`@weave/gateway/nous-portal` calls Nous Portal (`https://inference-api.nousresearch.com/v1`)
+through `@ai-sdk/openai-compatible` with `maxRetries: 0`, non-streaming, and the
+top-level `tags: ["user=weave"]` that Nous requires with an API key. The key is
+injected and sent only as a Bearer header. `npm run example:nous-portal` reads
+`NOUS_API_KEY` and makes one public `Reply with the single word: ok` call.
+
+| Routed unit (`weave.routes.example.json`) | Model | Notes |
+| --- | --- | --- |
+| `nous-portal.flash.solar-mini4` | `upstage/solar-mini4:free` | primary; no mandatory reasoning |
+| `nous-portal.flash.longcat-2.0` | `meituan/longcat-2.0:free` | first fallback |
+| `nous-portal.flash.step-3.7-flash` | `stepfun/step-3.7-flash:free` | second fallback; mandatory reasoning, at least 1024 output tokens |
+
+Only the eight IDs in the free-model allowlist (`NOUS_PORTAL_FREE_MODELS`, zero
+in the live catalogue on 17 Oct 2026) can be called. Route parsing rejects any
+other model on `adapter: "nous-portal"` and any non-zero price. Before the first
+call for a model, the adapter runs a catalogue price check on `GET /models`. It
+also refuses a response whose `usage.cost` is not exactly zero (see GLOSSARY).
+Prices of 0 in the route file come from that catalogue. The 32k context bound
+keeps one request inside the free 80k tokens/minute budget.
+
+A 429 is `rate_limited`. The delay comes from `Retry-After`, otherwise from the
+later of `x-ratelimit-reset-requests` and `x-ratelimit-reset-tokens` (relative
+seconds), otherwise from the declared free limits (10 requests and 80k tokens per
+minute; 420 requests and 3.36M tokens per hour, observed 17 Oct 2026), which
+gives 6 s spacing. A missing model, a 404 or 402, "no longer free" and "requires
+available credits" are non-retryable `unavailable`, so the gateway escalates to
+the next Nous unit. Nous may store, train on and license prompts and outputs by
+default, so its destination is training-allowed and gets the same privacy rules
+as the Muse contributor tier above. There is no Nous decision (evaluate) option,
+because typed evaluation over a chat model would need a new wire profile.

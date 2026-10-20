@@ -3,6 +3,7 @@ import {
   EVALUATION_KINDS, GENERATION_KINDS, QUALITY_BARS, TIERS,
   type RoutedUnit, type RouteTable,
 } from './types.js';
+import { NOUS_PORTAL_ADAPTER, isNousPortalFreeModel } from './adapters/nous-portal-catalogue.js';
 
 const DECISION_AUTH = ['chatgpt-oauth', 'api-key'] as const;
 
@@ -247,6 +248,13 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
     else {
       keys(unit.price, ['input_per_mtok', 'output_per_mtok'], `${path}.price`);
       for (const key of ['input_per_mtok', 'output_per_mtok']) check(number(unit.price[key]), `${path}.price.${key}`);
+    }
+    // Nous Portal serves only free models here: a priced ID or price fails closed.
+    if (unit.adapter === NOUS_PORTAL_ADAPTER) {
+      check(isNousPortalFreeModel(unit.model), `${path}.model: not on the Nous Portal free-model allowlist`);
+      if (object(unit.price)) {
+        check(unit.price.input_per_mtok === 0 && unit.price.output_per_mtok === 0, `${path}.price: Nous Portal units must be priced at zero`);
+      }
     }
     if (unit.evidence !== undefined) {
       if (!object(unit.evidence)) check(false, `${path}.evidence`);

@@ -158,6 +158,14 @@ A versioned context profile, prompt template, model, and settings selected toget
 
 A data destination whose provider may train on disclosed content. A routed unit marks it with `destination_training_allowed: true`; the mark applies to every unit sharing that destination. Routing excludes it unless the caller explicitly classifies the request as `public` or `non_sensitive`, even when the destination is otherwise permitted. Before routing the gateway screens content for the repository's credential markers at token starts. A match excludes every unit at that destination with reason `credential_content`, also recorded as a content-free note in outcome `uncertainty`, without consuming attempts. A permitted non-training destination may still receive the original content. When only excluded training destinations remain, the outcome is blocked with `no_route` and nothing is dispatched. Screening is a final safeguard, not permission to send sensitive or private material.
 
+### Free-model allowlist
+
+The fixed list of provider model IDs that a free-only adapter may call, each verified at zero price in the provider's live catalogue on a recorded date. Nous Portal's list is `NOUS_PORTAL_FREE_MODELS`. Route-config parsing rejects a unit that names any other ID or declares a non-zero price, and the adapter refuses such a call before any request. A paid twin, the same name without `:free`, is never on the list. Being listed is not evidence that a model is still free; the catalogue price check and the response cost decide that.
+
+### Catalogue price check
+
+The adapter's check of the provider's live model catalogue before its first request for a model. The model must be listed, and every pricing field, nested field and override tier must read exactly zero. An unlisted model fails as unavailable so routing escalates. A non-zero or unreadable price refuses the model for that adapter instance. A failed or abandoned check sends no request and is never kept as a pass. Concurrent first calls share one check. A pass lasts for the adapter instance, because the gateway has no clock to expire it. A refusal that suggests the model changed (402, 404, "no longer free", "requires available credits") discards the pass. A reported response cost that is not exactly zero also refuses the model. The check is a price safeguard, not authority to send content: privacy routing still decides that.
+
 ### Content class
 
 The caller's classification of all request content: `public` is publicly shareable, `non_sensitive` contains no confidential material, `sensitive` requires protection, and `private` includes private repository and operator data. Inference terms carry it as `content_class`. An absent class is treated as sensitive for training disclosure; classification does not add a permitted destination. Private repository or captain data must never be classified as public or non-sensitive.

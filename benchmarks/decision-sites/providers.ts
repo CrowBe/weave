@@ -1,8 +1,10 @@
 /** Direct benchmark routes: no gateway policy, shuffles, tier downgrades or ambient credentials. */
 import { typesafeWireProfile } from '@weave/gateway/typesafe-ai';
 import { amosBody, amosEvaluator } from '@weave/gateway/amos';
-import type { EvaluationAnswer, EvaluationCall, EvaluationQuestion } from '@weave/gateway';
+import { NOUS_PORTAL_FREE_MODELS, nousPortalAdapter } from '@weave/gateway/nous-portal';
+import type { EvaluationAnswer, EvaluationCall, EvaluationQuestion, GenerationAdapter } from '@weave/gateway';
 import type { Answer, Provider, Request, Result } from './types.ts';
+import { competitorPrompt, parseCompetitorOutput } from './competitors.ts';
 export type { Answer, Provider, Request, Result } from './types.ts';
 export const PRICES = Object.freeze({
   // https://docs.typesafe.ai/models (pinned Jev 1.14); output free.
@@ -10,15 +12,24 @@ export const PRICES = Object.freeze({
   // Decisions guide: $0.10/M input, no output or cache charges (source below).
   // Unconfirmed until a credentialed benchmark run; metering remains input-only.
   'openai-decisions': { input_per_million: .10, source: 'https://developers.openai.com/api/docs/guides/decisions' },
+  // Zero in the live catalogue on 17 Oct 2026; the adapter refuses any non-zero
+  // catalogue price or reported usage.cost before an answer is accepted.
+  'nous-portal': { input_per_million: 0, source: 'https://inference-api.nousresearch.com/v1/models' },
 });
+/** Free tier: 10 requests per 60 s, so one dispatch per 6 s when a clock and sleep are injected. */
+export const NOUS_MIN_DISPATCH_INTERVAL_MS = 6_000;
 export interface ProvidersConfig {
   typesafeKey?: string | undefined;
   openaiKey?: string;
+  /** Nous Portal key, sent only as a Bearer header by the gateway adapter. */
+  nousKey?: string;
   amosBaseURL?: string;
   fetch?: typeof globalThis.fetch;
   timeoutMs?: number;
   /** Required for parsing HTTP-date Retry-After without an ambient clock. */
   now?: () => number;
+  /** With `now`, spaces Nous dispatches to the free request limit. */
+  sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
 }
 export function buildProviders(config: ProvidersConfig): Provider[] {
   const wire = typesafeWireProfile({ shuffle: false });
@@ -29,7 +40,79 @@ export function buildProviders(config: ProvidersConfig): Provider[] {
     amosProvider(config),
     httpProvider('openai-decisions', 'gpt-6-luna', PRICES['openai-decisions'].input_per_million,
       config.openaiKey, 'https://api.openai.com/v1/decisions', request => openaiBody(request), config),
+    nousProvider(config),
   ];
+}
+function secrets(config: ProvidersConfig): string[] {
+  return [config.typesafeKey, config.openaiKey, config.nousKey].filter((s): s is string => !!s);
+}
+/**
+ * Nous Portal free model as a competitor harness: the shared competitor prompt
+ * over the production state and questions, sent through the gateway adapter
+ * directly (no gateway routing, privacy policy, shuffle or tier downgrade).
+ * The adapter keeps the free-model allowlist, catalogue price check and
+ * response-cost refusal. Benchmark content is synthetic and public; Nous may
+ * train on it. Dispatches are serialized, one at a time.
+ */
+function nousProvider(config: ProvidersConfig): Provider {
+  const model = NOUS_PORTAL_FREE_MODELS.solarMini;
+  let adapter: GenerationAdapter | undefined;
+  let skipped: Result | undefined;
+  let queue: Promise<unknown> = Promise.resolve();
+  let lastDispatch: number | undefined;
+  // Serialized dispatch makes this per-call flag unambiguous.
+  let chatSent = false;
+  const fetch: typeof globalThis.fetch = (url, init) => {
+    if (String(url).endsWith('/chat/completions')) chatSent = true;
+    return (config.fetch ?? globalThis.fetch)(url, init);
+  };
+  const dispatch = async (request: Request, external: AbortSignal): Promise<Result> => {
+    if (external.aborted) return { status: 'failed', reason: 'cancelled' };
+    if (skipped) return skipped;
+    if (adapter === undefined) {
+      if (!config.nousKey?.trim()) return { status: 'skipped', reason: 'no_credential' };
+      try { adapter = nousPortalAdapter({ apiKey: config.nousKey, fetch }); } catch { return { status: 'skipped', reason: 'no_credential' }; }
+    }
+    if (config.now && config.sleep && lastDispatch !== undefined) {
+      const wait = NOUS_MIN_DISPATCH_INTERVAL_MS - (config.now() - lastDispatch);
+      if (wait > 0) {
+        try { await config.sleep(wait, external); } catch { return { status: 'failed', reason: 'cancelled' }; }
+        if (external.aborted) return { status: 'failed', reason: 'cancelled' };
+      }
+    }
+    if (config.now) lastDispatch = config.now();
+    chatSent = false;
+    const result = await adapter.execute({
+      model, instructions: '', prompt: competitorPrompt(request), settings: { max_output_tokens: 1024 },
+      signal: AbortSignal.any([external, AbortSignal.timeout(config.timeoutMs ?? 30_000)]),
+    });
+    const usage = result.usage ?? { input_tokens: undefined, output_tokens: undefined };
+    const tokens = { ...(token(usage.input_tokens) && chatSent ? { input_tokens: usage.input_tokens } : {}),
+      ...(token(usage.output_tokens) && chatSent ? { output_tokens: usage.output_tokens } : {}) };
+    // Once the chat request left, cancellation cannot prove it was not served.
+    if (external.aborted && chatSent && result.status !== 'completed') throw new Error('unacknowledged_call');
+    if (result.status === 'completed') {
+      const answers = parseCompetitorOutput(result.text, request);
+      return answers ? { status: 'ok', model, answers, ...tokens } : { status: 'failed', reason: 'non_json_output', parse_failure: true, ...tokens };
+    }
+    const failure = result.failure;
+    if (failure.code === 'unauthorized') return skipped = { status: 'skipped', reason: 'unauthorized' };
+    if (failure.code === 'rate_limited') return { status: 'failed', reason: 'rate_limited', http_status: 429, ...(failure.retry_after_ms === undefined ? {} : { retry_after_ms: failure.retry_after_ms }), ...tokens };
+    // Not retryable and unavailable: not listed, removed, or no longer free.
+    if (failure.code === 'unavailable' && !failure.retryable) return skipped = { status: 'skipped', reason: 'model_not_listed' };
+    // The adapter's fixed price refusals: a catalogue price or a reported usage.cost.
+    if (failure.code === 'invalid_request' && /price|usage\.cost/.test(failure.message)) return { status: 'failed', reason: 'price_not_free', ...tokens };
+    if (failure.code === 'cancelled') return { status: 'failed', reason: 'cancelled' };
+    return { status: 'failed', reason: failure.code === 'malformed_response' ? 'malformed_body' : failure.code, ...tokens };
+  };
+  return { id: 'nous-portal', model, price: PRICES['nous-portal'].input_per_million, competitor: true,
+    serialize: competitorPrompt,
+    request(request, external) {
+      const next = queue.then(() => dispatch(request, external));
+      queue = next.catch(() => {});
+      return next;
+    },
+  };
 }
 function httpProvider(id: string, model: string, price: number, key: string | undefined, url: string,
   body: (request: Request) => unknown, config: ProvidersConfig): Provider {

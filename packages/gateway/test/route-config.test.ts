@@ -702,3 +702,76 @@ it('declares primary then fallback Muse flash writers with training permission a
     assert.deepEqual(route(parsed.table, target, denied as InferenceTerms, 20).order, []);
   }
 });
+
+const NOUS_FREE_LIMITS = [
+  { requests: 10, tokens: 80_000, window_ms: 60_000 },
+  { requests: 420, tokens: 3_360_000, window_ms: 3_600_000 },
+];
+
+it('declares Nous free flash writers in escalation order: training-allowed, zero-priced, free limits', () => {
+  const parsed = parseRouteConfig(example());
+  assert.ok(parsed.ok);
+  const units = parsed.table.filter(unit => unit.adapter === 'nous-portal');
+  assert.deepEqual(units.map(unit => unit.model), [
+    'upstage/solar-mini4:free', 'meituan/longcat-2.0:free', 'stepfun/step-3.7-flash:free',
+  ]);
+  for (const unit of units) {
+    assert.equal(unit.destination, 'nous-portal');
+    assert.equal(unit.destination_training_allowed, true);
+    assert.equal(unit.tier, 'flash');
+    assert.equal(unit.operation, 'generate');
+    assert.equal(unit.kind, 'transform');
+    assert.deepEqual(unit.price, { input_per_mtok: 0, output_per_mtok: 0 });
+    assert.deepEqual(unit.rate_limits, NOUS_FREE_LIMITS);
+    assert.ok(unit.settings.max_output_tokens >= 1024, 'room for mandatory reasoning');
+    // One full request must fit the 80k tokens/minute free budget.
+    assert.ok(unit.context_limit_tokens + unit.settings.max_output_tokens <= 80_000);
+  }
+  const target = { operation: 'generate', kind: 'transform' } as const;
+  const allowed = { ...terms, tier: 'flash', destinations: ['nous-portal'], content_class: 'public' } as const;
+  assert.deepEqual(route(parsed.table, target, allowed, 20).order.map(unit => unit.model), units.map(unit => unit.model));
+  for (const content_class of [undefined, 'sensitive', 'private'] as const) {
+    const denied = content_class === undefined ? { ...allowed, content_class: undefined } : { ...allowed, content_class };
+    assert.deepEqual(route(parsed.table, target, denied as InferenceTerms, 20).order, []);
+  }
+});
+
+function nousUnit(input: ReturnType<typeof example>) {
+  const index = input.units.findIndex((unit: { adapter: string }) => unit.adapter === 'nous-portal');
+  assert.ok(index >= 0);
+  return input.units[index];
+}
+
+it('rejects a Nous unit naming a paid twin or any model off the free-model allowlist, without echoing it', () => {
+  for (const model of ['upstage/solar-mini4', 'meituan/longcat-2.0', 'reflection/beam-1.0-501b-a23b',
+    'inclusionai/ling-3.0-flash-fin:free', 'stealth/space-bunny-alpha', 'sk-test-SENTINEL-model:free']) {
+    const input = example();
+    nousUnit(input).model = model;
+    const parsed = parseRouteConfig(input);
+    assert.equal(parsed.ok, false, model);
+    if (!parsed.ok) assert.ok(parsed.errors.some(error => /units\[\d+\]\.model: not on the Nous Portal free-model allowlist/.test(error)), parsed.errors.join('; '));
+    assert.ok(!JSON.stringify(parsed).includes('SENTINEL'));
+  }
+  // The same model under another adapter is not this check's business.
+  const other = example();
+  other.units[0].model = 'upstage/solar-mini4';
+  assert.equal(parseRouteConfig(other).ok, true);
+});
+
+it('rejects a non-zero declared price on a Nous unit', () => {
+  for (const price of [{ input_per_mtok: 1, output_per_mtok: 0 }, { input_per_mtok: 0, output_per_mtok: 0.5 }]) {
+    const input = example();
+    nousUnit(input).price = price;
+    const parsed = parseRouteConfig(input);
+    assert.equal(parsed.ok, false);
+    if (!parsed.ok) assert.ok(parsed.errors.some(error => /units\[\d+\]\.price: Nous Portal units must be priced at zero/.test(error)), parsed.errors.join('; '));
+  }
+});
+
+it('validates the Nous free limits and rejects a malformed token budget on them', () => {
+  const input = example();
+  nousUnit(input).rate_limits = NOUS_FREE_LIMITS;
+  assert.equal(parseRouteConfig(input).ok, true);
+  nousUnit(input).rate_limits = [{ requests: 10, tokens: 0, window_ms: 60_000 }];
+  assert.equal(parseRouteConfig(input).ok, false);
+});

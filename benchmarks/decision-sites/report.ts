@@ -51,7 +51,7 @@ export function makeReport(metadata:ReportMetadata, records:readonly BoundCall[]
  for(const site of sites)for(const provider of providers) {
   const subset=observations.filter(r=>r.site===site&&r.provider===provider);
   const holdout=subset.filter(r=>r.split==='holdout');
-  if(provider==='pi'||provider==='fx-ask') {
+  if(provider==='pi'||provider==='fx-ask'||provider==='nous-portal') {
    let skip_reason=subset.find(r=>r.result.status==='skipped')?.result.reason??null;
    for(const raw of metadata.statuses??[]) {
     const status=raw as {provider?:string;result?:{status?:string;reason?:string}}|null;

@@ -16,6 +16,9 @@ import { loadSets } from './sets.ts';
 import { makeReport } from './report.ts';
 import type { Provider } from './types.ts';
 const DEFAULT_PROVIDERS=['typesafe-jev','amos-small','openai-decisions','pi','fx-ask'];
+// Selectable with --providers, never implied: Nous terms flag automated and
+// performance-monitoring use for a captain decision (WV-016 scout report).
+const OPT_IN_PROVIDERS=['nous-portal'];
 export function flags(args:string[]) {
  const values:Record<string,string>={};const booleans=new Set<string>();
  for(let i=0;i<args.length;i++) {
@@ -30,7 +33,7 @@ export function flags(args:string[]) {
  if(!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$/.test(runId))throw new Error('Invalid run id');
  const sites=(values['--sites']??SITES.join(',')).split(',');if(sites.some(s=>!SITES.includes(s as typeof SITES[number])))throw new Error('Unknown site');
  const providers=(values['--providers']??DEFAULT_PROVIDERS.join(',')).split(',');
- if(providers.some(p=>![...DEFAULT_PROVIDERS,'fake'].includes(p)))throw new Error('Unknown provider');
+ if(providers.some(p=>![...DEFAULT_PROVIDERS,...OPT_IN_PROVIDERS,'fake'].includes(p)))throw new Error('Unknown provider');
  const split=values['--split']??'all';if(!['all','tune','holdout'].includes(split))throw new Error('Invalid split');
  return {maxSpend,maxSpendExplicit:values['--max-spend-usd']!==undefined,allowSpendIncrease:booleans.has('--allow-spend-increase'),allowSpendAbove5:booleans.has('--allow-spend-above-5'),runId,sites:[...new Set(sites)],providers:[...new Set(providers)],split,resume:booleans.has('--resume'),renderOnly:booleans.has('--render-only')};
 }
@@ -70,7 +73,8 @@ export async function main(args=process.argv.slice(2), injected?:{providers:read
   if(!options.renderOnly&&options.maxSpend>5&&!options.allowSpendAbove5)throw new Error('Spend ceiling above 5 requires --allow-spend-above-5');
   const {entries,digests}=loadSets(join(root,'sets'),options.sites,options.split);
   if(!options.renderOnly)journal.append({type:'run',run_id:options.runId,node_version:process.version,max_spend_usd:options.maxSpend,allow_spend_increase:options.allowSpendIncrease,set_digests:digests,providers:options.providers,sites:options.sites});
-  const configs={...(process.env.TYPESAFE_API_KEY??process.env.TYPESAFE_AI_API_KEY?{typesafeKey:(process.env.TYPESAFE_API_KEY??process.env.TYPESAFE_AI_API_KEY)!}:{}),...(process.env.OPENAI_API_KEY?{openaiKey:process.env.OPENAI_API_KEY}:{}),...(process.env.AMOS_BASE_URL?{amosBaseURL:process.env.AMOS_BASE_URL}:{}),now:Date.now};
+  const configs={...(process.env.TYPESAFE_API_KEY??process.env.TYPESAFE_AI_API_KEY?{typesafeKey:(process.env.TYPESAFE_API_KEY??process.env.TYPESAFE_AI_API_KEY)!}:{}),...(process.env.OPENAI_API_KEY?{openaiKey:process.env.OPENAI_API_KEY}:{}),...(process.env.NOUS_API_KEY?{nousKey:process.env.NOUS_API_KEY}:{}),...(process.env.AMOS_BASE_URL?{amosBaseURL:process.env.AMOS_BASE_URL}:{}),now:Date.now,
+   sleep:async(ms:number,signal?:AbortSignal)=>{await delay(ms,undefined,signal?{signal}:{});}};
   const counts=Object.fromEntries(['pi','fx-ask'].map(p=>[p,countCompetitorCalls(journal.read(),p)]));
   const competitors=buildCompetitors({run:runProcess,cwd:temp,quotaAllowed:true,callCounts:counts}).map(provider=>({
    ...provider, async request(request:Parameters<Provider['request']>[0],signal:AbortSignal) {

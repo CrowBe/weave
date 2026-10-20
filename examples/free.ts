@@ -32,7 +32,7 @@ import {
   NOUS_PORTAL_ADAPTER,
   NOUS_PORTAL_DESTINATION,
   NOUS_PORTAL_FREE_MODELS,
-  NOUS_PORTAL_OBSERVED_FREE_LIMITS,
+  NOUS_PORTAL_FREE_LIMITS,
   nousPortalAdapter,
 } from '@weave/gateway/nous-portal';
 import {
@@ -79,11 +79,13 @@ if (nousKey) {
     adapter: NOUS_PORTAL_ADAPTER,
     model: NOUS_PORTAL_FREE_MODELS.longcat,
     destination: NOUS_PORTAL_DESTINATION,
+    // Nous may store and train on prompts and outputs by default.
+    destination_training_allowed: true,
     context_limit_tokens: 1_048_576,
     price: { input_per_mtok: 0, output_per_mtok: 0 },
     // A fallback only. Nous states an exact reset on a refusal, and a stated
     // delay always beats a declared one.
-    rate_limits: NOUS_PORTAL_OBSERVED_FREE_LIMITS,
+    rate_limits: NOUS_PORTAL_FREE_LIMITS,
   });
 }
 
@@ -161,6 +163,9 @@ const request: GenerationRequest = {
   },
   terms: {
     quality: 'baseline',
+    // An invented holiday is public content. Without this class the
+    // training-allowed Nous destination is excluded.
+    content_class: 'public',
     // Each provider is its own destination: reaching a fallback at another
     // vendor is a disclosure decision the caller makes here, not plumbing.
     destinations: [
