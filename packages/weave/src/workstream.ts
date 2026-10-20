@@ -11,7 +11,7 @@ import {
   type ProcessEvent,
   type ProcessRefusal,
 } from './operating-process.js';
-import { correlation } from './sites/index.js';
+import { SITE_POLICY, correlation, type RouteOutcome } from './sites/index.js';
 import type { Seq } from './types.js';
 
 export const WORKSTREAM_SCHEMA = 'workstream@1' as const;
@@ -21,8 +21,18 @@ export interface WorkstreamGoal {
   readonly attached_at: Seq;
   readonly ended_at: Seq | null;
 }
+/** An operator input addressed here, and where routing placed it (WORKSTREAM-CONTRACT.md `input.route@1`). */
 export interface WorkstreamInput {
   readonly seq: Seq;
+  /** Null from arrival until a routing record with status `transition` is applied. */
+  readonly route: RouteOutcome | null;
+  readonly decided_by: 'operator' | 'rule' | 'site' | null;
+  /** The routing record's observation. */
+  readonly routed_at: Seq | null;
+  /** For `parallel`: the workstream opened for this input. */
+  readonly target: string | null;
+  /** For `queue`: true until released. */
+  readonly held: boolean;
 }
 export interface WorkstreamArtifact {
   readonly artifact_id: string;
@@ -58,7 +68,16 @@ export type WorkstreamEvent =
       readonly evidence: Seq;
     }
   | { readonly type: 'process.opened'; readonly process_id: string; readonly evidence: Seq }
-  | { readonly type: 'process.transition'; readonly event: ProcessEvent };
+  | { readonly type: 'process.transition'; readonly event: ProcessEvent }
+  | {
+      readonly type: 'input.routed';
+      readonly seq: Seq;
+      readonly route: RouteOutcome;
+      readonly decided_by: 'operator' | 'rule' | 'site';
+      readonly evidence: Seq;
+      readonly target: string | null;
+    }
+  | { readonly type: 'input.released'; readonly seq: Seq; readonly evidence: Seq };
 export type WorkstreamRefusal =
   | 'invalid_id'
   | 'invalid_origin'
@@ -76,6 +95,8 @@ export type WorkstreamRefusal =
   | 'process_live'
   | 'duplicate_process'
   | 'no_process'
+  | 'unknown_input'
+  | 'not_next'
   | ProcessRefusal;
 export type WorkstreamResult =
   | { readonly ok: true; readonly index: WorkstreamIndex; readonly workstream: Workstream }
@@ -91,6 +112,9 @@ export function validSeq(value: unknown): value is Seq {
 function refuse(reason: WorkstreamRefusal): WorkstreamResult {
   return { ok: false, reason };
 }
+const ROUTES: readonly string[] = SITE_POLICY['input.route'].options;
+/** Outcomes that act on the active goal's work. */
+const ACTIVE_ONLY: readonly string[] = ['steer', 'interrupt', 'queue'];
 
 export function emptyWorkstreamIndex(project_id: string): WorkstreamIndex {
   return { project_id, workstreams: [] };
@@ -206,7 +230,15 @@ export function transitionWorkstream(
       if (!validSeq(event.seq)) return refuse('invalid_evidence');
       const last = workstream.inputs.at(-1);
       if (last !== undefined && event.seq <= last.seq) return refuse('input_out_of_order');
-      return replaceWorkstream(index, next(workstream, { inputs: [...workstream.inputs, { seq: event.seq }] }));
+      return replaceWorkstream(
+        index,
+        next(workstream, {
+          inputs: [
+            ...workstream.inputs,
+            { seq: event.seq, route: null, decided_by: null, routed_at: null, target: null, held: false },
+          ],
+        }),
+      );
     }
     case 'artifact.recorded': {
       if (!boundedId(event.artifact_id)) return refuse('invalid_id');
@@ -246,6 +278,45 @@ export function transitionWorkstream(
       const entered = event.event.type === 'started' || event.event.type === 'resumed';
       if (working && entered && active === null) return refuse('no_active_goal');
       return replaceWorkstream(index, next(workstream, { process: result.process }));
+    }
+    case 'input.routed': {
+      if (!validSeq(event.seq) || !validSeq(event.evidence)) return refuse('invalid_evidence');
+      if (!ROUTES.includes(event.route) || !['operator', 'rule', 'site'].includes(event.decided_by))
+        return refuse('invalid_event');
+      if (!workstream.inputs.some((input) => input.seq === event.seq)) return refuse('unknown_input');
+      if (ACTIVE_ONLY.includes(event.route) && active === null) return refuse('no_active_goal');
+      if (event.route === 'parallel') {
+        if (!boundedId(event.target)) return refuse('invalid_id');
+        if (event.target === workstream_id || !index.workstreams.some((item) => item.workstream_id === event.target)) {
+          return refuse('unknown_workstream');
+        }
+      } else if (event.target !== null) return refuse('invalid_event');
+      const placed: WorkstreamInput = {
+        seq: event.seq,
+        route: event.route,
+        decided_by: event.decided_by,
+        routed_at: event.evidence,
+        target: event.target,
+        held: event.route === 'queue',
+      };
+      return replaceWorkstream(
+        index,
+        next(workstream, {
+          inputs: workstream.inputs.map((input) => (input.seq === event.seq ? placed : input)),
+        }),
+      );
+    }
+    case 'input.released': {
+      if (!validSeq(event.seq) || !validSeq(event.evidence)) return refuse('invalid_evidence');
+      if (active !== null) return refuse('goal_active');
+      if (!workstream.inputs.some((input) => input.seq === event.seq)) return refuse('unknown_input');
+      if (workstream.inputs.find((input) => input.held)?.seq !== event.seq) return refuse('not_next');
+      return replaceWorkstream(
+        index,
+        next(workstream, {
+          inputs: workstream.inputs.map((input) => (input.seq === event.seq ? { ...input, held: false } : input)),
+        }),
+      );
     }
     default:
       return refuse('invalid_event');

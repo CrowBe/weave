@@ -18,6 +18,8 @@ import {
   type WorkstreamResult,
 } from '../src/workstream.js';
 
+/** An operator input recorded on arrival, before routing places it. */
+const unrouted = (seq: number) => ({ seq, route: null, decided_by: null, routed_at: null, target: null, held: false });
 const KEYS = [
   'schema',
   'process_id',
@@ -282,7 +284,7 @@ test('a workstream outlives its processes and holds at most one live process', (
   assert.equal(after.process?.process_id, 'proc-2');
   assert.equal(after.process?.state, 'idle');
   assert.deepEqual(after.goals, [{ goal_id: 'g-1', attached_at: 3, ended_at: null }]);
-  assert.deepEqual(after.inputs, [{ seq: 5 }]);
+  assert.deepEqual(after.inputs, [unrouted(5)]);
   assert.equal(after.artifacts.length, 1);
 });
 
@@ -350,7 +352,7 @@ test('operator input stays available in every process state and leaves the proce
     assert.equal(process?.state, state);
     index = step(index, 'ws-a', { type: 'input.recorded', seq: 20 });
     assert.deepEqual(stream(index, 'ws-a').process, process, `input while ${state}`);
-    assert.deepEqual(stream(index, 'ws-a').inputs, [{ seq: 20 }]);
+    assert.deepEqual(stream(index, 'ws-a').inputs, [unrouted(20)]);
   }
 });
 
