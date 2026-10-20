@@ -4,12 +4,12 @@
  * Nothing here invokes the real codex, claude, or grok binaries.
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { createGrantAuthority } from '@weave/agentsop';
+import { createGrantAuthority, type GrantAuthority } from '@weave/agentsop';
 import { AgentFabricHost, createGrantedCliSpawn } from '@weave/agentfabric';
 import {
   claudePrintAdapter,
@@ -64,7 +64,7 @@ async function withAdapter(
   stubArgs: readonly string[],
   timeout_ms: number,
   env_allow: readonly string[],
-  run: (adapter: GenerationAdapter, host: AgentFabricHost) => Promise<void>,
+  run: (adapter: GenerationAdapter, host: AgentFabricHost, cwd: string, dir: string, authority: GrantAuthority) => Promise<void>,
 ): Promise<void> {
   const dir = mkdtempSync(join(tmpdir(), 'weave-p7-cli-'));
   const authority = createGrantAuthority();
@@ -90,9 +90,19 @@ async function withAdapter(
       env_allow,
       argv: [process.execPath, STUB, ...stubArgs],
     });
-    await run(adapter, host);
+    await run(adapter, host, cwd, dir, authority);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+async function waitForFile(file: string): Promise<void> {
+  const started = Date.now();
+  while (!existsSync(file) || readFileSync(file, 'utf8').trim() === '') {
+    if (Date.now() - started > 5_000) {
+      throw new Error('timed out waiting for the stub pid file');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
   }
 }
 
@@ -174,6 +184,31 @@ describe('stub CLI generate adapters', () => {
       }
     });
   }
+
+  it('a failed spawn carries the redacted tails and duration recorded in its trace', async () => {
+    await withAdapter(codexExecAdapter, [], 5_000, [], async (_adapter, host, cwd, dir, authority) => {
+      const spawn = createGrantedCliSpawn({ host, authority });
+      const pidFile = join(dir, 'partial.pid');
+      const abort = new AbortController();
+      const pending = spawn.run({
+        argv: [process.execPath, STUB, '--partial', pidFile], cwd_ref: cwd, env_allow: ['CANARY'], timeout_ms: 60_000, stdin: '', signal: abort.signal,
+      });
+      await waitForFile(pidFile);
+      abort.abort();
+      const cancelled = await pending;
+      const cancelledTrace = host.shellTraces().at(-1);
+      assert.deepEqual(cancelled, {
+        status: 'failed', failure: 'cancelled', stdout_tail: 'partial-out:[redacted]\n', stderr_tail: 'partial-err\n', duration_ms: cancelledTrace?.duration_ms,
+      });
+      assert.ok(cancelled.duration_ms > 0);
+      assert.equal(JSON.stringify(cancelled).includes(CANARY), false);
+
+      const signalled = await spawn.run({ argv: [process.execPath, STUB, '--signal'], cwd_ref: cwd, env_allow: [], timeout_ms: 5_000, stdin: '' });
+      assert.deepEqual(signalled, {
+        status: 'failed', failure: 'spawn_failed', stdout_tail: '', stderr_tail: 'stub-signalled\n', duration_ms: host.shellTraces().at(-1)?.duration_ms,
+      });
+    });
+  });
 
   it('redacts a canary injected for the codex adapter', async () => {
     await withAdapter(codexExecAdapter, ['--leak'], 5_000, ['CANARY'], async (adapter, host) => {

@@ -7,6 +7,7 @@ import type { GrantAuthority, InvocationOutcome } from '@weave/agentsop';
 import type { CliSpawn, CliSpawnRequest, CliSpawnResult } from '@weave/gateway/cli-generate';
 import type { AgentFabricHost } from './host.js';
 import { SHELL_RUN } from './shell-contracts.js';
+import type { ShellTraceRecord } from './shell.js';
 
 export function createGrantedCliSpawn(options: {
   readonly host: AgentFabricHost;
@@ -54,7 +55,10 @@ export function createGrantedCliSpawn(options: {
       }
       options.host.release(action_id);
       try {
-        return mapShellOutcome(await invoked.result);
+        const outcome = await invoked.result;
+        // A failed outcome carries only its failure; the redacted tails and duration are in the trace.
+        const trace = options.host.shellTraces().filter((record) => record.id === invoked.invocation_id && record.parentId === null).at(-1);
+        return mapShellOutcome(outcome, trace);
       } finally {
         request.signal?.removeEventListener('abort', cancel);
       }
@@ -62,7 +66,7 @@ export function createGrantedCliSpawn(options: {
   };
 }
 
-function mapShellOutcome(outcome: InvocationOutcome): CliSpawnResult {
+function mapShellOutcome(outcome: InvocationOutcome, trace: ShellTraceRecord | undefined): CliSpawnResult {
   if (outcome.outcome === 'succeeded' && isShellOutput(outcome.output)) {
     return {
       status: 'completed',
@@ -73,13 +77,14 @@ function mapShellOutcome(outcome: InvocationOutcome): CliSpawnResult {
       duration_ms: outcome.output.duration_ms,
     };
   }
-  if (outcome.outcome === 'failed') {
-    const failure = outcome.failure;
-    if (failure === 'timeout' || failure === 'denied' || failure === 'spawn_failed' || failure === 'cancelled') {
-      return { status: 'failed', failure, stdout_tail: '', stderr_tail: '', duration_ms: 0 };
-    }
-  }
-  return { status: 'failed', failure: 'spawn_failed', stdout_tail: '', stderr_tail: '', duration_ms: 0 };
+  const failure = outcome.outcome === 'failed' ? outcome.failure : null;
+  return {
+    status: 'failed',
+    failure: failure === 'timeout' || failure === 'denied' || failure === 'spawn_failed' || failure === 'cancelled' ? failure : 'spawn_failed',
+    stdout_tail: trace?.stdout_tail ?? '',
+    stderr_tail: trace?.stderr_tail ?? '',
+    duration_ms: trace?.duration_ms ?? 0,
+  };
 }
 
 function isShellOutput(value: unknown): value is {
