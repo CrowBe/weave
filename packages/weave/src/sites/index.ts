@@ -1,11 +1,13 @@
 /** P5 judgments are observations; these transitions confer no dispatch authority. */
 import type { EvaluationContent, EvaluationOutcome, InferenceGateway, InferenceTerms } from '@weave/gateway';
+import type { ProcessState } from '../operating-process.js';
 
 export const SITE_POLICY = {
   'loop.triage': { question: 'What does this request or state need next?', options: ['capability', 'implement', 'needs_human', 'out_of_scope', 'done_check'], confidence: .80, fallback: 'implement' },
   'loop.route': { question: 'Which tier fits this unit of work?', options: ['flash', 'standard', 'strong'], confidence: .75, fallback: 'standard' },
   'loop.continue': { question: 'Is progress continuing?', options: ['progressing', 'stalled', 'regressing'], confidence: .70, fallback: 'stalled' },
   'intake.classify': { question: 'How should this inbound message relate to the running threads?', options: ['new_thread', 'continue_thread', 'queue', 'steer', 'interrupt', 'stop'], confidence: .80, fallback: 'ask_user' },
+  'input.route': { question: 'How does this operator input relate to the active work?', options: ['conversation', 'steer', 'interrupt', 'parallel', 'queue'], confidence: .80, fallback: 'ask_user' },
 } as const;
 for (const policy of Object.values(SITE_POLICY)) {
   Object.freeze(policy.options);
@@ -37,8 +39,22 @@ export type IntakeState = {
 export interface IntakeSiteInput extends SiteInput {
   readonly state: IntakeState;
 }
-/** Intake takes IntakeState (#90); every other choice site takes any disclosed evaluation content. */
-export type SiteInputFor<S extends DecisionSite> = S extends 'intake.classify' ? IntakeSiteInput : SiteInput;
+/** What `input.route` may propose; WORKSTREAM-CONTRACT.md fixes what each one does. */
+export type RouteOutcome = typeof SITE_POLICY['input.route']['options'][number];
+/** Input routing (#27) discloses one operator input and its workstream's active work; nothing else. */
+export type RouteState = {
+  readonly input: string;
+  readonly active_work: {
+    readonly summary: string;
+    readonly process: ProcessState | null;
+  };
+};
+export interface RouteSiteInput extends SiteInput {
+  readonly state: RouteState;
+}
+/** Intake takes IntakeState (#90), input routing RouteState; every other choice site any disclosed content. */
+export type SiteInputFor<S extends DecisionSite> = S extends 'intake.classify' ? IntakeSiteInput :
+  S extends 'input.route' ? RouteSiteInput : SiteInput;
 export interface RecordedSiteAnswer {
   readonly state_revision: number;
   /** Injected reading at response receipt, never a provider's clock. */

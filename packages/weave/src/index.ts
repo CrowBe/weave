@@ -110,6 +110,7 @@ export {
 export {
   SITE_POLICY, evaluateSite, transitionSite, stopForNoProgress,
   type DecisionSite, type SiteChoice, type SiteState, type SiteInput, type IntakeState, type IntakeSiteInput, type SiteInputFor,
+  type RouteOutcome, type RouteState, type RouteSiteInput,
   type RecordedSiteAnswer, type SiteReason, type SiteObservation, type SiteTransition, type ProgressChoice,
 } from './sites/index.js';
 
@@ -148,3 +149,18 @@ export {
   type AuditJournal, type AuditCheckpoint, type AuditLoopInput, type AuditObservation, type AuditPorts,
   type AuditIssue as AuditOpenIssue,
 } from './audit-loop.js';
+export {
+  WORKSTREAM_SCHEMA, activeGoal, emptyWorkstreamIndex, openWorkstream, transitionWorkstream,
+  type Workstream, type WorkstreamArtifact, type WorkstreamEvent, type WorkstreamGoal, type WorkstreamIndex,
+  type WorkstreamInput, type WorkstreamOrigin, type WorkstreamRefusal, type WorkstreamResult,
+} from './workstream.js';
+export {
+  PROCESS_SCHEMA, PROCESS_STATES, isLive, openProcess, transitionProcess,
+  type OperatingProcess, type ProcessEvent, type ProcessRefusal, type ProcessResult, type ProcessState,
+  type ResumePoint, type WaitReason,
+} from './operating-process.js';
+export {
+  ROUTE_OUTCOMES, applyRoute, correctRoute, decideRoute, nextQueued, routeRule, transitionRoute,
+  type RouteApplied, type RouteAsk, type RouteContext, type RouteCorrected, type RouteCorrection, type RouteReason,
+  type RouteRecord, type RouteRefusal, type RouteRequest,
+} from './input-route.js';
