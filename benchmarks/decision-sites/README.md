@@ -34,8 +34,8 @@ ChatGPT sign-in is discovered through their local authentication configuration.
 All providers dispatch sequentially.
 No grants, guardrail middleware, shuffle, routing tiers, or gateway budget
 downgrades participate. Requests are captured from the actual production site
-builders through a port, then sent directly to adapters (Muse Spark excepted, below). There are no trace
-payloads; integration with the AgentSOP trace envelope remains a follow-up.
+builders through a port, then sent directly to adapters (Muse Spark excepted, below). Dispatch emits no
+trace; the journal can be read as a Weft trace afterwards (see Gauge and Weft below).
 
 `typesafe-jev` pins `jev-1.14.0`, sets `shuffle:false`, batches every item's
 questions, and rejects a different served model. OpenAI uses `/v1/decisions`,
@@ -246,3 +246,45 @@ confidence gates and thresholds remain unchanged.
 Generated artifacts from fake runs are explicitly labelled `fake` /
 `offline-fake` and are not live provider evidence. The crewmate records live
 results after the offline implementation is reviewed.
+
+## Gauge and Weft (G4, #192)
+
+The scoring rule is also expressed as Gauge records (`gauge.ts`), and a run's
+journal can be read as Weft records (`weft.ts`). Both are read-only consumers
+of the journal: dispatch, budgets, resume, render-only and the report are
+unchanged, and neither writes anything. Gauge produces evidence and never
+changes thresholds, routing or promotion.
+
+- **Criteria and cases.** Each site has one governed criteria set,
+  `decision-sites.<site>.criteria@1` (encoding `decision-sites.score@2`,
+  governed by this rule), and one case set, `decision-sites.<site>.cases@1`
+  (the frozen tune and holdout files by SHA-256, governed by the set
+  provenance). A `gauge.revision@1` records each at @1, so editing either in
+  place unbinds every result. There are no constraints: the benchmark is
+  non-gating, so a result's `meets_bar` means only that no bar was declared.
+- **Results.** Each report row is one holdout result in `replay` mode: a
+  provider's recorded answers admitted under the tuned or production thresholds
+  (subject kind `policy`) or a competitor's without a gate (`routed_unit`).
+  Results cite only the run's held-out report.
+- **Weft.** Each dispatched call is one `inference.attempt` in the run's
+  trace: question digest as `request_ref`, provider as `routed_unit`, attempt
+  number and `retry_of` by the replay binding, `accepted` or `failed`, tokens
+  and latency. Skips and cancellations before dispatch are not attempts.
+  `spent_micros` is left out because journal cost is fractional micro-USD, and
+  Weft v1 has no kind for an answer set, so answer-scored measures come from
+  the benchmark's check against frozen gold (Gauge source `check`). Weft's
+  contract is unchanged.
+
+Gauge measures coverage, accuracy (D3: all-needed recall), D3 exact-set
+agreement and needed recall, guard violation recall, Brier score, parse-failure
+rate and input/output tokens (tokens from the Weft records). On
+`live-20261015` it reproduces each of those report numbers exactly, and
+`recorded.test.ts` asserts that number for number against the committed
+`summary.json`. Gauge reports `n = 0` where the report prints 0 for an empty
+denominator. The other report numbers stay benchmark diagnostics
+(`DIAGNOSTICS` in `gauge.ts`): ECE (binned), p50/p90 latency (not Gauge
+aggregates), cost (fractional micro-USD; spend belongs to the journal ledger),
+mean and missing confidence, confidence coverage and D3 gaps (descriptive, with
+no declared direction, which every Gauge measure needs), multi-entry steps (a
+property of the cases), the failure count, and the probability-only
+diagnostics (descriptive, not applied; AUC is pairwise).
