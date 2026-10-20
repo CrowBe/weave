@@ -2,7 +2,8 @@
 
 This non-gating experiment compares the nine production judgment sites across
 TypeSafe Jev, local Amos, and the benchmark-local OpenAI Decisions profile.
-It also supports pi and fx ask as generic ChatGPT-sign-in competitor harnesses.
+It also supports pi and fx ask as generic ChatGPT-sign-in competitor harnesses,
+and the Meta Muse Spark contributor model as an opt-in competitor.
 It does not change production behavior, defaults, thresholds or provider routing.
 Read [SCORING.md](SCORING.md) before running. The 424 committed cases and
 [provenance](sets/PROVENANCE.md) are frozen by scenario and SHA-256; tune is used
@@ -33,7 +34,7 @@ ChatGPT sign-in is discovered through their local authentication configuration.
 All providers dispatch sequentially.
 No grants, guardrail middleware, shuffle, routing tiers, or gateway budget
 downgrades participate. Requests are captured from the actual production site
-builders through a port, then sent directly to adapters. There are no trace
+builders through a port, then sent directly to adapters (Muse Spark excepted, below). There are no trace
 payloads; integration with the AgentSOP trace envelope remains a follow-up.
 
 `typesafe-jev` pins `jev-1.14.0`, sets `shuffle:false`, batches every item's
@@ -54,7 +55,14 @@ The default metered decision-spend ceiling is **USD 2.00 per run**. Each HTTP
 attempt reserves `serialized_request_utf8_bytes * input_price / 1e6` before
 calling. Actual `usage.input_tokens` replaces the reservation after receipt.
 Missing usage retains that conservative estimate; skips before inference cost
-zero. Prices are TypeSafe $0.042/M input (output free) and OpenAI Decisions
+zero. A 429 without usage is therefore charged at its projection on each of its
+up to three attempts, which can over-state the bill and reach `budget_stop`
+early; no provider here documents usage-less 429s as unbilled, so the budget
+keeps that charge. Reports separate it instead: `summary.json` and the run
+report give `observed_usd` (priced from usage receipts) and `reserved_usd`
+(charged without a receipt: usage-less completed calls plus
+`pending_reservation_usd` for unacknowledged calls) beside the conservative
+ledger total `spent_usd`, which the budget stop uses. Prices are TypeSafe $0.042/M input (output free) and OpenAI Decisions
 $0.10/M input with output tokens assumed unbilled and no cache charges, based on the
 [Decisions guide](https://developers.openai.com/api/docs/guides/decisions).
 The OpenAI price remains unconfirmed until a credentialed run; [code](providers.ts)
@@ -99,6 +107,28 @@ tool suppression and is recorded `skipped: tools_cannot_be_disabled` after auth
 checks. A compatible version is needed for a tool-free fx comparison. Competitor served
 model ids are not observed: `chatgpt-sign-in` identifies authentication, and is
 excluded from the served-model list; the requested pi model is `gpt-6.1`.
+
+Meta Muse Spark contributor (`muse-spark`) is opt-in: it is never in the default
+provider set or the headline coverage requirement. Its destination may train on
+content, so the operator must classify the benchmark content with
+`--content-class public` or `--content-class non_sensitive`; the CLI refuses
+`muse-spark` without one, including on resume and render-only, and records the
+class in the run record. Never classify private repository work, operator or
+captain data, or sensitive content that way. `MODEL_API_KEY` is read only by
+`run.ts` and sent only as a Bearer header; a missing key skips with
+`no_credential`. It is the one benchmark route that goes through the gateway
+(`@weave/gateway/muse-spark`): routing admits the training-allowed destination
+only for the declared class and excludes credential-shaped content before
+dispatch, which fails that item as `credential_content`. Both units keep the
+1024-token output budget that default reasoning needs and send no reasoning
+parameter. Each makes one SDK attempt: the 1.3 contributor first, then the
+declared 1.2 fallback once, except after a refused credential, which skips the
+provider. The answering unit's requested model is recorded as the served model;
+the response's own model id is not checked. When both models are rate limited
+the item surfaces as HTTP 429 for the bounded retries above. Its price is
+unknown and recorded as zero, which is not a claim of free use. It receives the
+same strict-JSON prompt as pi and fx, holdout only, under the same 40-call cap.
+No live Muse Spark run has been made; its tests use a stubbed `fetch` only.
 
 Other flags: `--sites intake.classify,loop.route`, `--split tune|holdout|all`
 (default all), `--providers ...`, `--run-id NAME`, and `--resume`. A holdout-only

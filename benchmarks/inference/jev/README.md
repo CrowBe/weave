@@ -138,11 +138,15 @@ latency and accuracy at that budget.
 
 ## Route
 
-Vercel AI Gateway first, TypeSafe direct second, both destinations named in the
-request terms — which is what permits the escalation at all. A timer is
+TypeSafe direct (`TYPESAFE_API_KEY`, legacy `TYPESAFE_AI_API_KEY`) is the
+default route, and its key alone is enough to run the probe. Setting
+`AI_GATEWAY_API_KEY` adds the Vercel AI Gateway route after it; `--prefer-free`
+puts the free Vercel route first instead. Every configured destination is named
+in the request terms — which is what permits the escalation at all. A timer is
 supplied, so a throttle that names a delay is waited out and recorded in
 `waited_ms` rather than escalating silently. Which unit answered is recorded
-per request, so fallback frequency is data rather than an impression.
+per request, so escalation frequency is data rather than an impression. The
+run log's `routes:` line states which routes exist and which is tried first.
 
 Jev is free through the Vercel AI Gateway during the measurement window, which
 is why the volume experiments run there and now.
@@ -577,4 +581,6 @@ node benchmarks/inference/jev/transfer-probe.ts --from benchmarks/inference/jev/
 Both rescore recorded records and issue no inference.
 
 The direct route defaults to `jev-preview` (jev-1.14.0). Override it with
-`JEV_MODEL` or `RouteOptions.model` when constructing the benchmark gateway.
+`JEV_MODEL`, which only the `probe.ts` and `transfer-probe.ts` composition roots
+read, or `RouteOptions.model` when constructing the benchmark gateway. A blank
+value means the default.

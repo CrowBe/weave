@@ -635,7 +635,8 @@ tune split. Scenarios cannot cross between those portions.
 
 ### Competitor harness
 
-A generic inference application evaluated using the same disclosed state and
-production questions as a judgment site, without becoming a decision provider.
+A generic inference application, or a text-generation model prompted for strict
+JSON, evaluated using the same disclosed state and production questions as a
+judgment site, without becoming a decision provider.
 Competitor benchmarks report self-reported confidence separately from probability
 calibration and do not tune thresholds.
