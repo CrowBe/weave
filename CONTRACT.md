@@ -9,6 +9,10 @@ execution or replace deterministic evidence.
 - [Frontier weighing site](packages/weave/src/FRONTIER-WEIGH-CONTRACT.md):
   `frontier.weigh@1` state view `profile.frontier-weigh@2`, score question,
   valid weights, defer floor, recorded revisions and the control boundary.
+- [Workstreams](packages/weave/src/WORKSTREAM-CONTRACT.md): `workstream@1`,
+  the project's independently addressable streams of conversation and work,
+  and their relation to goals, Threads, observations, artifacts and project
+  availability.
 - [Decision sites and audit loop](packages/weave/src/sites/CONTRACT.md):
   D1–D8 observation admission, D6 disposition and deterministic stop outcomes.
   D3 `decision.preselect` policies accept only configured `typesafe-jev` or

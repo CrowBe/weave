@@ -108,6 +108,10 @@ The currently viable set of weighted actions. It may contain several independent
 
 A causally related sequence of actions and observations within a goal. Threads may run concurrently, join, be superseded, or be cancelled. A thread is not an operating-system thread.
 
+### Workstream
+
+An independently addressable stream of conversation and work within one project. It pursues at most one active goal at a time and keeps, by reference, every goal it has pursued, the operator input observations addressed to it, and the artifact revisions its goals produced. A Thread stays inside one goal and so inside one workstream. A workstream is not a Thread and not a Weft `thread_id`. Project availability gives a workstream no context, capability access, disclosure or visibility. Opening one grants nothing and starts no work.
+
 ## Intelligence and control
 
 ### State view
@@ -573,7 +577,7 @@ The principal that configures Weave locally, opens goals, and decides requests t
 
 ### Project
 
-The durable, presentation-independent record of what may be relevant to Loom: repositories, documents, artifacts, capability availability, history references, and goals over time. Loom holds it, so a headless invocation has it when Tapestry is absent. Availability is not a grant, not a slice fill, not disclosure, and not a reason to show the resource. A project is not an npm workspace, and it is not itself a goal.
+The durable, presentation-independent record of what may be relevant to Loom: repositories, documents, artifacts, capability availability, history references, and goals over time. Loom holds it, so a headless invocation has it when Tapestry is absent. Availability is not a grant, not a slice fill, not disclosure, and not a reason to show the resource. A project is not an npm workspace, and it is not itself a goal. Its independent streams of work are workstreams.
 
 ### Operator surface
 
@@ -711,6 +715,7 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 - Say **workspace**, not _dashboard_ or _mode_, for the adaptive operator surface. There is no chat, code, research, or agent mode.
 - Say **shell**, not _frame_ or _chrome_, for the fixed structure of a workspace. _Frame_ remains the name of framing: `profile.frame@1`, the `goal.frame` site, and the `framing` role.
 - Say **region**, not _slot_ or _coordinate_, for a semantic place in the shell. An execution slot is scheduler capacity.
+- Say **workstream**, not _thread_, for an independently addressable stream of conversation and work within a project. A Thread is a causally related sequence inside one goal.
 - Say **placement** for an operator's session-scoped assignment of a component to a region, and **pin** when that assignment is a hard constraint.
 - Say **cut-through**, not _modal_, for the region where a pending authority request stays visible.
 - Say **arrangement**, not _composition_ or _layout_, for an admitted assignment of components to adaptive regions. A composition is a capability assembled from capabilities.

@@ -240,3 +240,19 @@ export {
   type AuditPorts,
   type AuditIssue as AuditOpenIssue,
 } from './audit-loop.js';
+export {
+  WORKSTREAM_SCHEMA,
+  activeGoal,
+  emptyWorkstreamIndex,
+  openWorkstream,
+  transitionWorkstream,
+  type Workstream,
+  type WorkstreamArtifact,
+  type WorkstreamEvent,
+  type WorkstreamGoal,
+  type WorkstreamIndex,
+  type WorkstreamInput,
+  type WorkstreamOrigin,
+  type WorkstreamRefusal,
+  type WorkstreamResult,
+} from './workstream.js';
