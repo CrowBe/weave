@@ -650,19 +650,16 @@ test('escalation blocked by the ceiling or a budget downgrade raises an open iss
 });
 
 test('D5 uncertainty fails the step, and red checks fail it without asking D5', async () => {
+  // An outage pauses instead (#129); see the outage test below.
   const cases = [
     { name: 'low confidence', evaluation: { c1: { p: .95, conf: .89 } } as const, reason: 'low_confidence' },
     { name: 'missing confidence', evaluation: { c1: { p: .95 } } as const, reason: 'missing_confidence' },
     { name: 'stale', evaluation: 'stale' as const, reason: 'stale_answer' },
-    { name: 'outage', evaluation: 'throw' as const, reason: 'decision_unavailable' },
-    { name: 'provider outage', evaluation: 'outage' as const, reason: 'decision_unavailable' },
   ];
   for (const item of cases) {
     const world = driver({
       input: input({ ceiling: 'flash', retries: 0 }),
-      evaluations: [item.evaluation === 'stale' || item.evaluation === 'throw' || item.evaluation === 'outage'
-        ? item.evaluation
-        : item.evaluation],
+      evaluations: [item.evaluation],
     });
     const result = await runImplementationStep(world.input, world.ports, world.journal);
     assert.equal(result.status, 'failed', item.name);
@@ -1145,6 +1142,34 @@ test('a budget pause at escalation pauses the step and resumes into the escalati
   assert.equal(resumed.attempts.at(-1)?.escalated, true);
   assert.equal(resumed.attempts.at(-1)?.effective_tier, 'standard');
   assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), resumed);
+});
+
+// #129: a D5 outage pauses the step instead of spending its retries and escalation.
+test('a D5 outage pauses the attempt without consuming a retry or the escalation (#129)', async () => {
+  for (const outage of ['throw', 'outage'] as const) {
+    const world = driver({ input: input({ retries: 0, ceiling: 'standard' }), evaluations: [outage, { c1: { p: 1, conf: 1 } }] });
+    const paused = await runImplementationStep(world.input, world.ports, world.journal);
+    assert.equal(paused.status, 'paused', outage);
+    assert.equal(paused.open_issue, null, outage);
+    assert.equal(paused.goal_done, false, outage);
+    assert.deepEqual(paused.attempts[0]?.pause, { reason: 'decision_unavailable', until: null }, outage);
+    assert.ok(paused.observations.every(item => item.reason === 'decision_unavailable'), outage);
+    assert.deepEqual(world.tiers, ['flash'], 'no retry or escalation is spent during the outage');
+    assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), paused);
+    const resumed = await runImplementationStep(world.input, world.ports, world.journal);
+    assert.equal(resumed.status, 'passed', outage);
+    assert.deepEqual(world.tiers, ['flash', 'flash'], 'the resumed attempt stays on the routed tier');
+    assert.equal(resumed.escalated, false);
+    assert.equal(JSON.stringify(resumed).includes('CANARY_PROVIDER'), false);
+  }
+  // #200: a skipped D5 is not an outage; the red check consumes its retry as a check failure.
+  const red = driver({ input: input({ retries: 0, ceiling: 'flash' }), exits: [1] });
+  const failed = await runImplementationStep(red.input, red.ports, red.journal);
+  assert.equal(failed.status, 'failed');
+  assert.equal(failed.attempts[0]?.status, 'failed');
+  assert.equal(failed.attempts[0]?.eval_skipped, 'check_failed');
+  assert.equal(failed.attempts[0]?.pause, null);
+  assert.equal(failed.open_issue?.source, 'check');
 });
 
 // #130: escalation is relative to the D2-routed tier; the budget gate re-checks it.

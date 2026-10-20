@@ -202,7 +202,7 @@ A budget downgrade stays at or below the requested tier. Escalation is one tier 
 routed (input) tier, not above a budget-lowered tier. A downgrade of the
 escalated tier stops the step with an open issue; a budget pause, at escalation
 or not, is a resumable paused attempt. A budget pause or a
-blocked escalation does not mint a grant and does not complete the goal.
+blocked escalation does not mint a grant and does not complete the goal. A D5 outage (every judged criterion `decision_unavailable`) pauses the attempt with that reason instead of failing it, so it spends no retry and not the escalation.
 `goal_done` is false. The terminal blocker is `open_issue@1`:
 
 ```text

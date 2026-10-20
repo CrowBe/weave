@@ -41,7 +41,8 @@ export const OPEN_ISSUE_SCHEMA = 'open_issue@1' as const;
 const CHECKS = ['repo.test', 'repo.lint', 'repo.build'] as const;
 export type ImplementCheckId = (typeof CHECKS)[number];
 const GENERATION_KINDS: readonly GenerationKind[] = ['classify', 'extract', 'transform', 'draft-contract', 'judge'];
-const PAUSE_REASONS = ['weekly_budget_cap', 'five_hour_budget_low', 'quota_unknown', 'budget_pace_ahead', 'no_budget', 'cancelled'] as const;
+const PAUSE_REASONS = ['weekly_budget_cap', 'five_hour_budget_low', 'quota_unknown', 'budget_pace_ahead', 'no_budget', 'cancelled',
+  'decision_unavailable'] as const;
 export type ImplementPauseReason = (typeof PAUSE_REASONS)[number];
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const KEPT_REF = /^(?:ref_|gen_)[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
@@ -825,7 +826,10 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
       const evalFailed = new Set(transition.failing_criterion_ids);
       const failingOf = (): string[] => normalized.criteria.map(criterion => criterion.criterion_id)
         .filter(id => checkFailed.has(id) || evalFailed.has(id));
-      if (transition.status === 'paused') {
+      // A D5 outage judged nothing: pause rather than spend a retry or the escalation on it (#129).
+      // A skipped D5 has no evals, so it is never an outage.
+      const outage = transition.evals.length > 0 && transition.evals.every(item => item.observation.reason === 'decision_unavailable');
+      if (transition.status === 'paused' || outage) {
         history.push(remember(journal, attemptRecord({
           schema: IMPLEMENT_ATTEMPT_SCHEMA,
           id: attemptId,
@@ -843,7 +847,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
           observations: [...transition.observations],
           failing_criterion_ids: failingOf(),
           failing_check_ids: failingChecks,
-          pause: pauseOf('cancelled', null),
+          pause: pauseOf(transition.status === 'paused' ? 'cancelled' : 'decision_unavailable', null),
           proofs,
         })));
         return finish();
