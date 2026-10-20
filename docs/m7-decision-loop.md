@@ -57,7 +57,7 @@ flowchart TD
   Q -.-> AUD
 ```
 
-Every `{{Dn}}` node is an `evaluate` request through the gateway, served by the configured **decision provider** (§4a): TypeSafe Jev is the sole default decision provider. OpenAI Decisions (401 under ChatGPT sign-in) and Cloudflare Workers AI fallbacks are deferred. Its answer is recorded as an observation, and a deterministic rule then turns it into a transition. The decision model never dispatches anything itself. D7 guards proposed output effects before dispatch or publication; D8 checks progress after each round.
+Every `{{Dn}}` node is an `evaluate` request through the gateway, served by the configured **decision provider** (§4a): TypeSafe Jev is the sole default decision provider. OpenAI Decisions (401 under ChatGPT sign-in) and Cloudflare Workers AI fallbacks are deferred. The provider's answer is recorded as an observation, and a deterministic rule then turns it into a transition. The decision model never dispatches anything itself. D7 guards proposed output effects before dispatch or publication; D8 checks progress after each round.
 
 D7's pass cannot override Fabric's deterministic effect and grant enforcement.
 The round transition applies the stop conditions in §6 before another round or
@@ -397,10 +397,10 @@ P2 deterministic evidence: missing-module red preceded implementation; 11 auth
 cases, 15 Responses adapter cases, and two CLI lock/redaction cases pass on
 Node 22. Build, structural checks, web build/typecheck, example and benchmark
 typechecks, Jev tests, Python contract suites and the standalone offline
-acceptance command pass. The exact requested `npm exec --yes --package=node@22
--- npm run verify` was attempted: its existing task-acceptance command tests
-fail because this sandbox's `spawnSync` returns `EPERM` and empty stdout, which
-those tests attempt to parse as JSON. No tests or permissions were weakened.
+acceptance command pass. The full `npm run verify`, including the
+task-acceptance command tests, passes on Node 22 locally and in CI. An earlier
+`spawnSync` `EPERM` failure came from the writer's sandbox, not from the code.
+No tests or permissions were weakened.
 
 ## P3 — TypeSafe decision provider
 

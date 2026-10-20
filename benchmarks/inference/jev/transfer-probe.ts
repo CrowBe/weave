@@ -9,7 +9,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { Clock } from '@weave/gateway';
-import { createJevGateway, readCredentials } from './run.ts';
+import { createJevGateway, describeRoutes, readCredentials } from './run.ts';
 import {
   comparePaired,
   loadKevOutcomes,
@@ -126,18 +126,13 @@ async function main(): Promise<void> {
     }
     // The composition root reads the direct-route model; run.ts reads no env.
     const jevModel = process.env['JEV_MODEL'];
-    const options = {
-      preferFree: has('prefer-free'),
-      ...(jevModel === undefined ? {} : { model: jevModel }),
-    };
+    const options = { preferFree: has('prefer-free'), ...(jevModel === undefined ? {} : { model: jevModel }) };
+    console.log(describeRoutes(credentials, options));
     const suite = await loadSuite(flag('split') ?? 'development');
     const chosen = await selectRecords(suite, has('all'));
     const limit = flag('limit');
     const selected = limit === undefined ? chosen : chosen.slice(0, Number(limit));
-    console.log(
-      `${selected.length} records from transfer-v4 (${has('all') ? 'full split' : 'paired with Kev’s run'})` +
-        `; free route ${options.preferFree ? 'preferred, throttles waited out' : 'escalates on throttle'}`,
-    );
+    console.log(`${selected.length} records from transfer-v4 (${has('all') ? 'full split' : 'paired with Kev’s run'})`);
 
     const gateway = createJevGateway(credentials, clock, options);
     const permute = Math.max(1, Number(flag('permute') ?? 1));
