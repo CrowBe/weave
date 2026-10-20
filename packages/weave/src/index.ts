@@ -138,3 +138,8 @@ export {
   type Workstream, type WorkstreamArtifact, type WorkstreamEvent, type WorkstreamGoal, type WorkstreamIndex,
   type WorkstreamInput, type WorkstreamOrigin, type WorkstreamRefusal, type WorkstreamResult,
 } from './workstream.js';
+export {
+  PROCESS_SCHEMA, PROCESS_STATES, isLive, openProcess, transitionProcess,
+  type OperatingProcess, type ProcessEvent, type ProcessRefusal, type ProcessResult, type ProcessState,
+  type ResumePoint, type WaitReason,
+} from './operating-process.js';

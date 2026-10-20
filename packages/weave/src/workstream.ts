@@ -3,6 +3,8 @@
  * within one project. Pure transitions over versioned records. A workstream holds ids and sequence numbers,
  * never a resource, a grant, a slice or a payload.
  */
+import { isLive, openProcess, transitionProcess,
+  type OperatingProcess, type ProcessEvent, type ProcessRefusal } from './operating-process.js';
 import { correlation } from './sites/index.js';
 import type { Seq } from './types.js';
 
@@ -23,6 +25,7 @@ export interface Workstream {
   readonly goals: readonly WorkstreamGoal[];
   readonly inputs: readonly WorkstreamInput[];
   readonly artifacts: readonly WorkstreamArtifact[];
+  readonly process: OperatingProcess | null;
 }
 /** One project's workstreams. The project record and its availability index stay where they are. */
 export interface WorkstreamIndex { readonly project_id: string; readonly workstreams: readonly Workstream[] }
@@ -30,10 +33,13 @@ export type WorkstreamEvent =
   | { readonly type: 'goal.attached'; readonly goal_id: string; readonly evidence: Seq }
   | { readonly type: 'goal.ended'; readonly goal_id: string; readonly evidence: Seq }
   | { readonly type: 'input.recorded'; readonly seq: Seq }
-  | { readonly type: 'artifact.recorded'; readonly artifact_id: string; readonly revision: number; readonly evidence: Seq };
+  | { readonly type: 'artifact.recorded'; readonly artifact_id: string; readonly revision: number; readonly evidence: Seq }
+  | { readonly type: 'process.opened'; readonly process_id: string; readonly evidence: Seq }
+  | { readonly type: 'process.transition'; readonly event: ProcessEvent };
 export type WorkstreamRefusal = 'invalid_id' | 'invalid_origin' | 'invalid_evidence' | 'duplicate_workstream' |
   'unknown_workstream' | 'goal_active' | 'goal_attached' | 'goal_not_active' | 'input_out_of_order' |
-  'no_active_goal' | 'stale_revision' | 'invalid_event';
+  'no_active_goal' | 'stale_revision' | 'invalid_event' | 'work_in_flight' | 'process_live' | 'duplicate_process' |
+  'no_process' | ProcessRefusal;
 export type WorkstreamResult =
   | { readonly ok: true; readonly index: WorkstreamIndex; readonly workstream: Workstream }
   | { readonly ok: false; readonly reason: WorkstreamRefusal };
@@ -75,6 +81,7 @@ export function openWorkstream(index: WorkstreamIndex, request: {
     goals: [],
     inputs: [],
     artifacts: [],
+    process: null,
   };
   return { ok: true, index: { project_id: index.project_id, workstreams: [...index.workstreams, workstream] }, workstream };
 }
@@ -89,7 +96,7 @@ export function replaceWorkstream(index: WorkstreamIndex, next: Workstream): Wor
   };
 }
 
-function next(workstream: Workstream, change: Partial<Pick<Workstream, 'goals' | 'inputs' | 'artifacts'>>): Workstream {
+function next(workstream: Workstream, change: Partial<Pick<Workstream, 'goals' | 'inputs' | 'artifacts' | 'process'>>): Workstream {
   return {
     schema: WORKSTREAM_SCHEMA,
     workstream_id: workstream.workstream_id,
@@ -100,6 +107,7 @@ function next(workstream: Workstream, change: Partial<Pick<Workstream, 'goals' |
     goals: change.goals ?? workstream.goals,
     inputs: change.inputs ?? workstream.inputs,
     artifacts: change.artifacts ?? workstream.artifacts,
+    process: change.process === undefined ? workstream.process : change.process,
   };
 }
 
@@ -121,6 +129,7 @@ export function transitionWorkstream(index: WorkstreamIndex, workstream_id: stri
       if (!boundedId(event.goal_id)) return refuse('invalid_id');
       if (!validSeq(event.evidence)) return refuse('invalid_evidence');
       if (active !== event.goal_id) return refuse('goal_not_active');
+      if (workstream.process?.state === 'running' || workstream.process?.state === 'waiting') return refuse('work_in_flight');
       return replaceWorkstream(index, next(workstream, {
         goals: workstream.goals.map(goal => goal.goal_id === event.goal_id && goal.ended_at === null
           ? { goal_id: goal.goal_id, attached_at: goal.attached_at, ended_at: event.evidence } : goal),
@@ -143,6 +152,24 @@ export function transitionWorkstream(index: WorkstreamIndex, workstream_id: stri
         artifacts: [...workstream.artifacts,
           { artifact_id: event.artifact_id, revision: event.revision, goal_id: active, evidence: event.evidence }],
       }));
+    }
+    case 'process.opened': {
+      if (workstream.process !== null && isLive(workstream.process)) return refuse('process_live');
+      if (workstream.process?.process_id === event.process_id) return refuse('duplicate_process');
+      const opened = openProcess(event.process_id, workstream.workstream_id, event.evidence);
+      if (!opened.ok) return refuse(opened.reason);
+      return replaceWorkstream(index, next(workstream, { process: opened.process }));
+    }
+    case 'process.transition': {
+      const process = workstream.process;
+      if (process === null) return refuse('no_process');
+      const result = transitionProcess(process, event.event);
+      if (!result.ok) return refuse(result.reason);
+      // Work runs only under the workstream's active goal; idle and paused hold none in flight.
+      const working = result.process.state === 'running' || result.process.state === 'waiting';
+      const entered = event.event.type === 'started' || event.event.type === 'resumed';
+      if (working && entered && active === null) return refuse('no_active_goal');
+      return replaceWorkstream(index, next(workstream, { process: result.process }));
     }
     default:
       return refuse('invalid_event');

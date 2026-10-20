@@ -5,7 +5,8 @@ import {
   type WorkstreamIndex, type WorkstreamResult,
 } from '../src/workstream.js';
 
-const KEYS = ['schema', 'workstream_id', 'project_id', 'origin', 'opened_at', 'revision', 'goals', 'inputs', 'artifacts'];
+const KEYS = ['schema', 'workstream_id', 'project_id', 'origin', 'opened_at', 'revision', 'goals', 'inputs', 'artifacts',
+  'process'];
 
 function ok(result: WorkstreamResult): WorkstreamIndex {
   if (!result.ok) assert.fail(`refused: ${result.reason}`);
@@ -28,7 +29,7 @@ test('opening a workstream records only identity, origin and evidence', () => {
   assert.deepEqual(Object.keys(result.workstream), KEYS);
   assert.deepEqual(result.workstream, {
     schema: 'workstream@1', workstream_id: 'ws-a', project_id: 'proj-1', origin: 'operator', opened_at: 4,
-    revision: 0, goals: [], inputs: [], artifacts: [],
+    revision: 0, goals: [], inputs: [], artifacts: [], process: null,
   });
   assert.deepEqual(result.index.workstreams, [result.workstream]);
   assert.equal(activeGoal(result.workstream), null);
