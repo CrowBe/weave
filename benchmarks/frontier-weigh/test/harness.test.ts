@@ -4,7 +4,7 @@
  * reachable, and the committed report in step with the offline rows.
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import type { EvaluationCall } from '@weave/gateway';
 import { buildCase, loadCaseSet, type BuiltCase } from '../build.ts';
@@ -131,6 +131,17 @@ describe('frontier.weigh@1 promotion rule', () => {
 describe('frontier.weigh@1 paired report', () => {
   it('does not configure Jev without a credential', () => {
     assert.deepEqual(configureJev({}), { not_run: 'no_credential' });
+  });
+
+  it('binds the live path to the route table score unit without calling it', () => {
+    const local = ['weave.routes.json', 'weave.routes.local.json'].some((name) => existsSync(new URL(`../../../${name}`, import.meta.url)));
+    if (local) {
+      return; // a local route table may legitimately differ from the example
+    }
+    const configured = configureJev({ TYPESAFE_API_KEY: 'test-key-never-sent' });
+    assert.ok('weigher' in configured, JSON.stringify(configured));
+    assert.equal(configured.weigher.id, 'jev');
+    assert.equal(configured.routed_unit, 'typesafe-jev.score');
   });
 
   it('the committed report carries the offline rows and records Jev as not run', async () => {

@@ -93,7 +93,12 @@ export function configureJev(env: Readonly<Record<string, string | undefined>>):
   if (!unit) {
     return { not_run: 'no_route' };
   }
-  const binding = bindDecisionProvider(parsed.decision);
+  let binding: ReturnType<typeof bindDecisionProvider>;
+  try {
+    binding = bindDecisionProvider(parsed.decision);
+  } catch {
+    return { not_run: 'unsupported_decision_provider' };
+  }
   const gateway = createInferenceGateway({
     routes: [unit],
     evaluators: [typesafeAiEvaluator({ apiKey: key, baseURL: binding.baseURL })],
