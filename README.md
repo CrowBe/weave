@@ -195,12 +195,14 @@ injected and sent only as a Bearer header. `npm run example:nous-portal` reads
 | `nous-portal.flash.longcat-2.0` | `meituan/longcat-2.0:free` | first fallback |
 | `nous-portal.flash.step-3.7-flash` | `stepfun/step-3.7-flash:free` | second fallback; mandatory reasoning, at least 1024 output tokens |
 
-Only the eight IDs in the free-model allowlist (`NOUS_PORTAL_FREE_MODELS`, zero
-in the live catalogue on 17 Oct 2026) can be called. Route parsing rejects any
-other model on `adapter: "nous-portal"` and any non-zero price. Before the first
-call for a model, the adapter runs a catalogue price check on `GET /models`. It
-also refuses a response whose `usage.cost` is not exactly zero (see GLOSSARY).
-Prices of 0 in the route file come from that catalogue. The 32k context bound
+Only the six IDs whose every pricing field is exactly `"0"` with no overrides
+in the supplied live catalogue are in the free-model allowlist
+(`NOUS_PORTAL_FREE_MODELS`). Longcat 2.5 Preview and Beam use `"0.0000000000"`
+and are refused under the strict value contract, despite their `:free` suffix.
+Route parsing rejects any other model on `adapter: "nous-portal"` and any
+non-zero price. Before the first call for a model, the adapter runs a catalogue price check on `GET /models`. It
+also refuses a response whose `usage.cost` is present and is not the number
+`0` (see GLOSSARY). Prices of 0 in the route file come from that catalogue. The 32k context bound
 keeps one request inside the free 80k tokens/minute budget.
 
 A 429 is `rate_limited`. The delay comes from `Retry-After`, otherwise from the
@@ -208,8 +210,8 @@ later of `x-ratelimit-reset-requests` and `x-ratelimit-reset-tokens` (relative
 seconds), otherwise from the declared free limits (10 requests and 80k tokens per
 minute; 420 requests and 3.36M tokens per hour, observed 17 Oct 2026), which
 gives 6 s spacing. A missing model, a 404 or 402, "no longer free" and "requires
-available credits" are non-retryable `unavailable`, so the gateway escalates to
-the next Nous unit. Nous may store, train on and license prompts and outputs by
-default, so its destination is training-allowed and gets the same privacy rules
+available credits" are retryable `unavailable`; the routed-unit attempt cap
+escalates to the next Nous unit. Nous may store, train on and license prompts
+and outputs by default, so its destination is training-allowed and gets the same privacy rules
 as the Muse contributor tier above. There is no Nous decision (evaluate) option,
 because typed evaluation over a chat model would need a new wire profile.

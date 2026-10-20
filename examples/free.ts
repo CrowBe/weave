@@ -3,9 +3,9 @@
  *
  * This is the example that shows the gateway deciding between waiting and
  * escalating. Three routes, in the order a caller who prefers not to pay would
- * want them tried: Nous Portal first, because its free tier is generous and it
- * states an exact reset when it does refuse; OpenRouter second, free but on a
- * 50-a-day budget that cannot be polled; a paid model last, which answers but
+ * want them tried: Nous Portal first, whose free tier permits 10 requests per
+ * minute and states an exact reset when it refuses; OpenRouter second, free but
+ * on a 50-a-day budget that cannot be polled; a paid model last, which answers but
  * is not free.
  *
  * The caller says how long it is willing to wait by setting a deadline, and

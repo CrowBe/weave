@@ -16,16 +16,16 @@ export const NOUS_PORTAL_ADAPTER = 'nous-portal';
  * serving guarantee: on 25 Sep 2026 a $0-listed ID was refused as "no longer
  * free". So the adapter also checks the live catalogue and the response cost.
  * The Laguna IDs were listed as expiring on 31 Oct 2026.
+ * LongCat 2.5 Preview and Beam are excluded: their snapshot prices are
+ * "0.0000000000", which does not satisfy the exact "0" contract.
  */
 export const NOUS_PORTAL_FREE_MODELS = {
   solarMini: 'upstage/solar-mini4:free',
   longcat: 'meituan/longcat-2.0:free',
-  longcatPreview: 'meituan/longcat-2.5-preview:free',
   lagunaS: 'poolside/laguna-s-2.1:free',
   lagunaXS: 'poolside/laguna-xs-2.1:free',
   stepFlash: 'stepfun/step-3.7-flash:free',
   stepPreview: 'stepfun/step-5-preview:free',
-  beam: 'reflection/beam-1.0-501b-a23b:free',
 } as const;
 
 export type NousPortalFreeModel = (typeof NOUS_PORTAL_FREE_MODELS)[keyof typeof NOUS_PORTAL_FREE_MODELS];
@@ -56,7 +56,7 @@ export function nousPortalCatalogueVerdict(body: unknown, model: string): NousPo
 const OVERRIDE_THRESHOLDS: ReadonlySet<string> = new Set(['min_prompt_tokens', 'utc_start', 'utc_end']);
 
 /**
- * Every pricing field must read exactly zero: string or number, prompt and
+ * Every scalar pricing field must be exactly "0" or 0, prompt and
  * completion present, nested objects such as `original` included, and every
  * `overrides` tier's prices too. Anything unreadable fails closed.
  */
@@ -65,14 +65,14 @@ function freePricing(pricing: unknown): boolean {
   return Object.entries(pricing).every(([key, value]) => {
     if (key !== 'overrides') return zeroLeaves(value);
     return Array.isArray(value) && value.every(tier => object(tier) &&
+      Object.keys(tier).some(field => !OVERRIDE_THRESHOLDS.has(field)) &&
       Object.entries(tier).every(([field, price]) => OVERRIDE_THRESHOLDS.has(field) || zeroLeaves(price)));
   });
 }
 
 function zeroLeaves(value: unknown): boolean {
-  if (object(value)) return Object.values(value).every(zeroLeaves);
-  if (typeof value === 'number') return value === 0;
-  return typeof value === 'string' && value.trim().length > 0 && Number(value) === 0;
+  if (object(value)) return Object.keys(value).length > 0 && Object.values(value).every(zeroLeaves);
+  return value === 0 || value === '0';
 }
 
 function object(value: unknown): value is Record<string, unknown> {

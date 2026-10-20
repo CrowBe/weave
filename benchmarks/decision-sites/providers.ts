@@ -16,7 +16,7 @@ export const PRICES = Object.freeze({
   // catalogue price or reported usage.cost before an answer is accepted.
   'nous-portal': { input_per_million: 0, source: 'https://inference-api.nousresearch.com/v1/models' },
 });
-/** Free tier: 10 requests per 60 s, so one dispatch per 6 s when a clock and sleep are injected. */
+/** Free tier: 10 requests per 60 s, so one dispatch per 6 s. */
 export const NOUS_MIN_DISPATCH_INTERVAL_MS = 6_000;
 export interface ProvidersConfig {
   typesafeKey?: string | undefined;
@@ -28,7 +28,7 @@ export interface ProvidersConfig {
   timeoutMs?: number;
   /** Required for parsing HTTP-date Retry-After without an ambient clock. */
   now?: () => number;
-  /** With `now`, spaces Nous dispatches to the free request limit. */
+  /** With `now`, required for repeated Nous dispatches within the free request limit. */
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
 }
 export function buildProviders(config: ProvidersConfig): Provider[] {
@@ -58,29 +58,39 @@ function nousProvider(config: ProvidersConfig): Provider {
   const model = NOUS_PORTAL_FREE_MODELS.solarMini;
   let adapter: GenerationAdapter | undefined;
   let skipped: Result | undefined;
+  let priceRefused = false;
   let queue: Promise<unknown> = Promise.resolve();
   let lastDispatch: number | undefined;
+  let retryNotBefore: number | undefined;
+  let hasDispatched = false;
   // Serialized dispatch makes this per-call flag unambiguous.
   let chatSent = false;
   const fetch: typeof globalThis.fetch = (url, init) => {
-    if (String(url).endsWith('/chat/completions')) chatSent = true;
+    if (String(url).endsWith('/chat/completions')) {
+      chatSent = true;
+      hasDispatched = true;
+      lastDispatch = config.now?.();
+    }
     return (config.fetch ?? globalThis.fetch)(url, init);
   };
   const dispatch = async (request: Request, external: AbortSignal): Promise<Result> => {
     if (external.aborted) return { status: 'failed', reason: 'cancelled' };
     if (skipped) return skipped;
+    if (priceRefused) return { status: 'failed', reason: 'price_not_free' };
     if (adapter === undefined) {
       if (!config.nousKey?.trim()) return { status: 'skipped', reason: 'no_credential' };
       try { adapter = nousPortalAdapter({ apiKey: config.nousKey, fetch }); } catch { return { status: 'skipped', reason: 'no_credential' }; }
     }
-    if (config.now && config.sleep && lastDispatch !== undefined) {
-      const wait = NOUS_MIN_DISPATCH_INTERVAL_MS - (config.now() - lastDispatch);
+    if (hasDispatched && (!config.now || !config.sleep)) return { status: 'failed', reason: 'rate_limit_unavailable' };
+    if (config.now && config.sleep) {
+      const now = config.now();
+      const wait = Math.max(lastDispatch === undefined ? 0 : NOUS_MIN_DISPATCH_INTERVAL_MS - (now - lastDispatch),
+        retryNotBefore === undefined ? 0 : retryNotBefore - now);
       if (wait > 0) {
         try { await config.sleep(wait, external); } catch { return { status: 'failed', reason: 'cancelled' }; }
         if (external.aborted) return { status: 'failed', reason: 'cancelled' };
       }
     }
-    if (config.now) lastDispatch = config.now();
     chatSent = false;
     const result = await adapter.execute({
       model, instructions: '', prompt: competitorPrompt(request), settings: { max_output_tokens: 1024 },
@@ -97,11 +107,19 @@ function nousProvider(config: ProvidersConfig): Provider {
     }
     const failure = result.failure;
     if (failure.code === 'unauthorized') return skipped = { status: 'skipped', reason: 'unauthorized' };
-    if (failure.code === 'rate_limited') return { status: 'failed', reason: 'rate_limited', http_status: 429, ...(failure.retry_after_ms === undefined ? {} : { retry_after_ms: failure.retry_after_ms }), ...tokens };
-    // Not retryable and unavailable: not listed, removed, or no longer free.
-    if (failure.code === 'unavailable' && !failure.retryable) return skipped = { status: 'skipped', reason: 'model_not_listed' };
+    if (failure.code === 'rate_limited') {
+      hasDispatched = true;
+      if (config.now) retryNotBefore = config.now() + (failure.retry_after_ms ?? NOUS_MIN_DISPATCH_INTERVAL_MS);
+      return { status: 'failed', reason: 'rate_limited', http_status: 429, ...(failure.retry_after_ms === undefined ? {} : { retry_after_ms: failure.retry_after_ms }), ...tokens };
+    }
+    // Gateway routing can fall back on these retryable failures; the direct
+    // benchmark has one fixed model and records a skip instead.
+    if (failure.code === 'unavailable' && /not listed|no longer serves this model free/.test(failure.message)) return skipped = { status: 'skipped', reason: 'model_not_listed' };
     // The adapter's fixed price refusals: a catalogue price or a reported usage.cost.
-    if (failure.code === 'invalid_request' && /price|usage\.cost/.test(failure.message)) return { status: 'failed', reason: 'price_not_free', ...tokens };
+    if (failure.code === 'invalid_request' && /price|usage\.cost/.test(failure.message)) {
+      priceRefused = true;
+      return { status: 'failed', reason: 'price_not_free', ...tokens };
+    }
     if (failure.code === 'cancelled') return { status: 'failed', reason: 'cancelled' };
     return { status: 'failed', reason: failure.code === 'malformed_response' ? 'malformed_body' : failure.code, ...tokens };
   };
@@ -220,7 +238,7 @@ function amosProvider(config: ProvidersConfig): Provider {
 function safeMetadata(value:unknown,config:ProvidersConfig):string|undefined {
   if(typeof value!=='string')return undefined;
   let output=value;
-  for(const secret of [config.typesafeKey,config.openaiKey].filter((entry):entry is string=>!!entry)) {
+  for(const secret of secrets(config)) {
     for(const variant of [secret,JSON.stringify(secret).slice(1,-1),encodeURIComponent(secret)])output=output.split(variant).join('[redacted]');
   }
   return output.slice(0,200);

@@ -142,6 +142,73 @@ test('Nous competitor spaces dispatches to the 10-per-minute free limit and neve
   assert.deepEqual(sleeps, [5_500, 5_500]);
 });
 
+test('Nous competitor refuses a second dispatch without an injected rate limiter', async () => {
+  for (const limiter of [{}, { now: () => 1_000 }, { sleep: async () => {} }]) {
+    const e = endpoint();
+    const p = nous({ nousKey: KEY, fetch: e.fetch, ...limiter });
+    assert.equal((await p.request(request, signal())).status, 'ok');
+    assert.deepEqual(await p.request(request, signal()), { status: 'failed', reason: 'rate_limit_unavailable' });
+    assert.equal(e.chats().length, 1);
+  }
+});
+
+test('Nous competitor spaces actual chat dispatches after a slow catalogue check', async () => {
+  let now = 1_000;
+  const sleeps: number[] = [];
+  const sentAt: number[] = [];
+  const e = endpoint({
+    catalogue: () => { now += 7_000; return json(CATALOGUE); },
+    chat: () => { sentAt.push(now); return completion(answerText(request)); },
+  });
+  const p = nous({ nousKey: KEY, fetch: e.fetch, now: () => now, sleep: async ms => { sleeps.push(ms); now += ms; } });
+  assert.equal((await p.request(request, signal())).status, 'ok');
+  assert.equal((await p.request(request, signal())).status, 'ok');
+  assert.deepEqual(sleeps, [6_000]);
+  assert.deepEqual(sentAt, [8_000, 14_000]);
+});
+
+test('Nous competitor applies Retry-After to queued concurrent calls without exposing provider messages', async () => {
+  let now = 1_000;
+  const sleeps: number[] = [];
+  let chats = 0;
+  const e = endpoint({ chat: () => ++chats === 1
+    ? json({ error: { message: KEY } }, 429, { 'retry-after': '12', 'x-ratelimit-reset-tokens': '50' })
+    : completion(answerText(request)) });
+  const p = nous({ nousKey: KEY, fetch: e.fetch, now: () => now, sleep: async ms => { sleeps.push(ms); now += ms; } });
+  const results = await Promise.all([p.request(request, signal()), p.request(request, signal())]);
+  assert.deepEqual(results[0], { status: 'failed', reason: 'rate_limited', http_status: 429, retry_after_ms: 12_000 });
+  assert.equal(results[1]!.status, 'ok');
+  assert.deepEqual(sleeps, [12_000]);
+  assert.ok(!JSON.stringify(results).includes(KEY));
+});
+
+test('Nous competitor cancellation during limiter wait sends no chat and preserves the next slot', async () => {
+  let now = 1_000;
+  const controller = new AbortController();
+  const sleeps: number[] = [];
+  const e = endpoint();
+  const p = nous({ nousKey: KEY, fetch: e.fetch, now: () => now, sleep: async (ms, waiting) => {
+    sleeps.push(ms);
+    if (sleeps.length === 1) { controller.abort(); waiting?.throwIfAborted(); }
+    now += ms;
+  } });
+  assert.equal((await p.request(request, signal())).status, 'ok');
+  assert.deepEqual(await p.request(request, controller.signal), { status: 'failed', reason: 'cancelled' });
+  assert.equal(e.chats().length, 1);
+  assert.equal((await p.request(request, signal())).status, 'ok');
+  assert.equal(e.chats().length, 2);
+  assert.deepEqual(sleeps, [6_000, 6_000]);
+});
+
+test('Nous key is redacted from every provider metadata field before journal admission', async () => {
+  const p = buildProviders({ typesafeKey: 'typesafe-key', nousKey: KEY, fetch: async () =>
+    json({ error: { code: encodeURIComponent(KEY) } }, 401, { 'x-typesafe-request-id': KEY }) })[0]!;
+  const result = await p.request(request, signal());
+  assert.equal(result.request_id, '[redacted]');
+  assert.equal(result.error_code, '[redacted]');
+  assert.ok(!JSON.stringify(result).includes(KEY));
+});
+
 test('Nous competitor: cancellation before dispatch is retryable; after chat dispatch it is unacknowledged', async () => {
   const before = endpoint();
   const aborted = new AbortController(); aborted.abort();

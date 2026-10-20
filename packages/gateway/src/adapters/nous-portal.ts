@@ -82,13 +82,12 @@ export const NOUS_PORTAL_FREE_LIMITS = [
 ] as const;
 
 /**
- * Free models whose catalogue entry declares reasoning mandatory on 17 Oct
- * 2026. `meituan/longcat-2.5-preview:free` declared nothing and is not listed.
+ * Allowlisted models whose catalogue entry declares reasoning mandatory on
+ * 17 Oct 2026.
  */
 export const NOUS_PORTAL_REASONING_MODELS: readonly string[] = Object.freeze([
   NOUS_PORTAL_FREE_MODELS.stepFlash,
   NOUS_PORTAL_FREE_MODELS.stepPreview,
-  NOUS_PORTAL_FREE_MODELS.beam,
 ]);
 
 /**
@@ -140,7 +139,7 @@ export function nousPortalAdapter(options: NousPortalOptions): GenerationAdapter
     fetch: doFetch,
     transformRequestBody: (body) => ({ ...body, tags: [...REQUEST_TAGS] }),
   });
-  const redactKey = (value: string) => value.replaceAll(apiKey, '[REDACTED]');
+  const redactKey = (value: string) => value.replaceAll(apiKey, '[REDACTED]').replaceAll(contentKey, '[REDACTED]');
 
   /** Models refused for this instance after a price was observed. */
   const refused = new Set<string>();
@@ -266,9 +265,9 @@ export function nousPortalAdapter(options: NousPortalOptions): GenerationAdapter
 
 const NOT_ALLOWLISTED = failure('invalid_request', 'model is not on the free-model allowlist; no request sent', false);
 const PRICE_REFUSED = failure('invalid_request', 'model refused: a non-zero or unreadable price was observed', false);
-const NOT_LISTED = failure('unavailable', 'model is not listed in the live catalogue', false);
+const NOT_LISTED = failure('unavailable', 'model is not listed in the live catalogue', true);
 const CHECK_FAILED = failure('unavailable', 'catalogue price check failed; no request sent', true);
-const NO_LONGER_SERVED_FREE = failure('unavailable', 'provider no longer serves this model free', false);
+const NO_LONGER_SERVED_FREE = failure('unavailable', 'provider no longer serves this model free', true);
 const COST_REPORTED = failure('invalid_request', 'response reported a non-zero or non-numeric usage.cost; model refused from now on', false);
 
 /** A present `usage.cost` must be exactly the number zero. */
@@ -336,13 +335,13 @@ function classify(error: unknown, signal: AbortSignal | undefined, modelChanged:
     return typeof value === 'string' ? value : undefined;
   };
   const body = typeof record['responseBody'] === 'string' ? record['responseBody'] : '';
+  if (status === 429) return withDelay(failure('rate_limited', 'provider rate limit refused the request', true), header);
   if (status === 402 || status === 404 || NO_LONGER_FREE.test(body)) {
     modelChanged();
     return NO_LONGER_SERVED_FREE;
   }
   if (status === 401 || status === 403) return withDelay(failure('unauthorized', 'provider refused authentication', false), header);
   if (status === 408) return withDelay(failure('timeout', 'provider request timed out', false), header);
-  if (status === 429) return withDelay(failure('rate_limited', 'provider rate limit refused the request', true), header);
   if (status !== undefined && status >= 500) return withDelay(failure('unavailable', 'provider unavailable', true), header);
   if (status !== undefined && status >= 400) return withDelay(failure('invalid_request', 'provider refused the request', false), header);
   if (status !== undefined || name === 'AI_InvalidResponseDataError' || name === 'AI_NoOutputGeneratedError') {

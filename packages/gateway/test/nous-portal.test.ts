@@ -156,15 +156,13 @@ describe('nous-portal adapter', () => {
 
   // Data updated on 17 Oct 2026 from the live catalogue and free-tier headers:
   // ling-*, solar-pro4 and space-bunny are gone, and 400 rpm was the paid pool.
-  it('names the eight zero-priced IDs verified in the live catalogue', () => {
+  it('names the six IDs whose live catalogue prices are exactly zero', () => {
     const ids = Object.values(NOUS_PORTAL_FREE_MODELS);
-    assert.equal(ids.length, 8);
+    assert.equal(ids.length, 6);
     assert.deepEqual([...ids].sort(), [
       'meituan/longcat-2.0:free',
-      'meituan/longcat-2.5-preview:free',
       'poolside/laguna-s-2.1:free',
       'poolside/laguna-xs-2.1:free',
-      'reflection/beam-1.0-501b-a23b:free',
       'stepfun/step-3.7-flash:free',
       'stepfun/step-5-preview:free',
       'upstage/solar-mini4:free',

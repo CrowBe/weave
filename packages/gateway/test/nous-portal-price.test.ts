@@ -110,7 +110,7 @@ describe('nous-portal request shape and credential', () => {
 
   it('redacts a credential echoed in successful response fields', async () => {
     const endpoint = nousEndpoint({ chat: () => json({ ...completionBody(`echo ${KEY}`), id: `id-${KEY}` }) });
-    const result = await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL);
+    const result = await nousPortalAdapter({ apiKey: ` ${KEY} `, fetch: endpoint.fetch }).execute(CALL);
     assert.equal(result.status, 'completed');
     assert.ok(!JSON.stringify(result).includes(KEY));
   });
@@ -122,7 +122,7 @@ describe('nous-portal free-model allowlist', () => {
       assert.equal(isNousPortalFreeModel(id), true);
       assert.equal(isNousPortalFreeModel(id.replace(/:free$/, '')), false, `${id} paid twin`);
     }
-    for (const id of ['', 'upstage/solar-mini4:FREE', ' upstage/solar-mini4:free', 'upstage/solar-pro4:free', 'stealth/space-bunny-alpha', 'toString', '__proto__', 7, null]) {
+    for (const id of ['', 'upstage/solar-mini4:FREE', ' upstage/solar-mini4:free', 'upstage/solar-pro4:free', 'meituan/longcat-2.5-preview:free', 'reflection/beam-1.0-501b-a23b:free', 'stealth/space-bunny-alpha', 'toString', '__proto__', 7, null]) {
       assert.equal(isNousPortalFreeModel(id), false, String(id));
     }
   });
@@ -146,7 +146,7 @@ describe('nous-portal mandatory-reasoning output budget', () => {
   it('names the mandatory-reasoning free models and a 1024-token minimum', () => {
     assert.equal(NOUS_PORTAL_MIN_REASONING_OUTPUT_TOKENS, 1024);
     assert.deepEqual([...NOUS_PORTAL_REASONING_MODELS].sort(), [
-      NOUS_PORTAL_FREE_MODELS.beam, NOUS_PORTAL_FREE_MODELS.stepFlash, NOUS_PORTAL_FREE_MODELS.stepPreview,
+      NOUS_PORTAL_FREE_MODELS.stepFlash, NOUS_PORTAL_FREE_MODELS.stepPreview,
     ].sort());
   });
 
@@ -187,6 +187,15 @@ describe('nous-portal catalogue price check', () => {
     ['negative price', { prompt: '-0.0000001', completion: '0' }],
   ];
   const unreadable: readonly [string, unknown][] = [
+    ['padded zero', { prompt: ' 0 ', completion: '0' }],
+    ['decimal zero', { prompt: '0.0000000000', completion: '0' }],
+    ['exponent zero', { prompt: '0e0', completion: '0' }],
+    ['hexadecimal zero', { prompt: '0x0', completion: '0' }],
+    ['negative zero text', { prompt: '-0', completion: '0' }],
+    ['signed zero', { prompt: '+0', completion: '0' }],
+    ['empty nested price', { prompt: '0', completion: '0', original: {} }],
+    ['empty override', { prompt: '0', completion: '0', overrides: [{}] }],
+    ['override without prices', { prompt: '0', completion: '0', overrides: [{ min_prompt_tokens: 1000 }] }],
     ['empty string', { prompt: '', completion: '0' }],
     ['word', { prompt: 'free', completion: '0' }],
     ['null', { prompt: null, completion: '0' }],
@@ -212,14 +221,14 @@ describe('nous-portal catalogue price check', () => {
     });
   }
 
-  it('accepts every free ID as listed in the live catalogue, including padded zero strings', async () => {
+  it('accepts allowlisted catalogue IDs with exact string or numeric zero prices', async () => {
     for (const model of Object.values(NOUS_PORTAL_FREE_MODELS)) {
       const endpoint = nousEndpoint();
       const result = await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch })
         .execute({ ...CALL, model, settings: { max_output_tokens: 1024 } });
       assert.equal(result.status, 'completed', model);
     }
-    const zeroes = { prompt: '0.0000000000', completion: 0, input_cache_read: ' 0 ', overrides: [{ min_prompt_tokens: 100000, utc_start: 1, utc_end: 2, prompt: '0', completion: '0' }] };
+    const zeroes = { prompt: '0', completion: 0, input_cache_read: 0, overrides: [{ min_prompt_tokens: 100000, utc_start: 1, utc_end: 2, prompt: '0', completion: '0' }] };
     const endpoint = nousEndpoint({ catalogue: () => json(catalogueWith(SOLAR, zeroes)) });
     assert.equal((await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL)).status, 'completed');
   });
@@ -246,7 +255,7 @@ describe('nous-portal catalogue price check', () => {
     let listed = false;
     const endpoint = nousEndpoint({ catalogue: () => json(listed ? { data: LIVE_CATALOGUE_ENTRIES } : catalogueWithout(SOLAR)) });
     const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
-    assert.deepEqual(failureOf(await adapter.execute(CALL)), { code: 'unavailable', message: NOT_LISTED, retryable: false });
+    assert.deepEqual(failureOf(await adapter.execute(CALL)), { code: 'unavailable', message: NOT_LISTED, retryable: true });
     assert.equal(endpoint.chatRequests.length, 0);
     listed = true;
     assert.equal((await adapter.execute(CALL)).status, 'completed');
@@ -309,7 +318,7 @@ describe('nous-portal catalogue price check', () => {
       const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
       assert.equal((await adapter.execute(CALL)).status, 'completed');
       chatStatus = status;
-      assert.deepEqual(failureOf(await adapter.execute(CALL)), { code: 'unavailable', message: NO_LONGER_FREE, retryable: false });
+      assert.deepEqual(failureOf(await adapter.execute(CALL)), { code: 'unavailable', message: NO_LONGER_FREE, retryable: true });
       paid = true;
       chatStatus = 200;
       assert.equal(failureOf(await adapter.execute(CALL)).message, PRICE_REFUSED);
@@ -373,6 +382,14 @@ describe('nous-portal refusals and faults', () => {
       assert.equal(failure.retry_after_ms, delay);
     });
   }
+
+  it('keeps a 429 retryable with its delay even when the body mentions credit requirements', async () => {
+    const endpoint = nousEndpoint({ chat: () => json({ error: { message: `requires available credits ${KEY}` } }, 429, { 'retry-after': '7' }) });
+    const result = failureOf(await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL));
+    assert.equal(result.code, 'rate_limited');
+    assert.equal(result.retryable, true);
+    assert.equal(result.retry_after_ms, 7000);
+  });
 
   it('fails closed on malformed JSON, empty choices and absent text', async () => {
     for (const chat of [

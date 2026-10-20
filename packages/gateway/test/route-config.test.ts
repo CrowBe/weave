@@ -744,7 +744,8 @@ function nousUnit(input: ReturnType<typeof example>) {
 
 it('rejects a Nous unit naming a paid twin or any model off the free-model allowlist, without echoing it', () => {
   for (const model of ['upstage/solar-mini4', 'meituan/longcat-2.0', 'reflection/beam-1.0-501b-a23b',
-    'inclusionai/ling-3.0-flash-fin:free', 'stealth/space-bunny-alpha', 'sk-test-SENTINEL-model:free']) {
+    'inclusionai/ling-3.0-flash-fin:free', 'stealth/space-bunny-alpha',
+    'meituan/longcat-2.5-preview:free', 'reflection/beam-1.0-501b-a23b:free', 'sk-test-SENTINEL-model:free']) {
     const input = example();
     nousUnit(input).model = model;
     const parsed = parseRouteConfig(input);

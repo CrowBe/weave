@@ -108,9 +108,13 @@ guardrail or shuffle) to `upstage/solar-mini4:free` through the gateway's Nous
 adapter directly, with no gateway routing. Only the free-model allowlist ID can
 be called. The catalogue price check and a non-zero `usage.cost` refuse as
 `price_not_free`, and it meters at $0. A 429 carries the relative reset delay
-into the usual retry. A missing, removed or no-longer-free model skips the provider as
-`model_not_listed`, and auth refusal skips it as `unauthorized`. Dispatches are
-serialized and spaced at least 6 s apart, under the free 10 requests/minute.
+into the usual retry and delays queued dispatches. A missing, removed or
+no-longer-free model skips the provider as `model_not_listed`, and auth refusal
+skips it as `unauthorized`. Dispatches are serialized and spaced at least 6 s
+apart, under the free 10 requests/minute.
+Callers of `buildProviders` must inject both `now` and `sleep` for repeated Nous
+dispatches; without them the provider refuses a second dispatch as
+`rate_limit_unavailable`. The CLI supplies both.
 It shares the competitor holdout-only schedule and 40-call cap. Benchmark
 content is synthetic and public; Nous may store and train on it. The Nous terms
 restrict automated and performance-monitoring use (scout report WV-016), so the
