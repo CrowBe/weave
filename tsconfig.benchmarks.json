@@ -10,6 +10,7 @@
     "benchmarks/inference/jev/**/*.ts",
     "benchmarks/inference/bev-sample/**/*.ts",
     "benchmarks/task-acceptance/**/*.ts",
-    "benchmarks/decision-sites/**/*.ts"
+    "benchmarks/decision-sites/**/*.ts",
+    "benchmarks/frontier-weigh/**/*.ts"
   ]
 }
