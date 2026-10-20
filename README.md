@@ -176,7 +176,13 @@ recorded as a content-free note in outcome `uncertainty`, without consuming atte
 A permitted non-training destination may still receive the original content.
 When only excluded training destinations remain, the outcome is blocked with
 `no_route` and nothing is dispatched. Screening does not make sensitive or private work
-eligible. No reasoning parameter is sent. The declared 150 RPM / 3M TPM
-limits do not proactively throttle requests: after a rate-limit refusal,
-`Retry-After` wins, otherwise the gateway uses 400ms request spacing; the token
-budget is metadata because a refusal does not report token consumption.
+eligible. No reasoning parameter is sent. In `weave.routes.example.json` the
+documented 150 RPM / 3M TPM limits are marked `pace: true`, so one gateway holds
+a request on each Muse unit until the requests it started there in the last
+minute fit both budgets, counting worst-case tokens (context bound plus output
+cap) until usage is reported. Pacing only delays: without a timer, or when the
+wait would pass the deadline, the request goes at once. It does not count other
+processes, and the two Muse units are paced separately. After a rate-limit
+refusal, `Retry-After` wins, otherwise the gateway uses 400ms request spacing.
+`MUSE_SPARK_DOCUMENTED_CONTRIBUTOR_LIMITS` itself carries no `pace`, so routes
+built from it stay reactive unless they opt in.

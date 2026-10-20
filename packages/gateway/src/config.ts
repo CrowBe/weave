@@ -272,9 +272,10 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
     if (unit.rate_limits !== undefined) {
       check(Array.isArray(unit.rate_limits), `${path}.rate_limits`);
       if (Array.isArray(unit.rate_limits)) unit.rate_limits.forEach((limit: unknown, j: number) => {
-        if (object(limit)) keys(limit, ['requests', 'tokens', 'window_ms'], `${path}.rate_limits[${j}]`);
+        if (object(limit)) keys(limit, ['requests', 'tokens', 'window_ms', 'pace'], `${path}.rate_limits[${j}]`);
         check(object(limit) && positiveInteger(limit.requests) && number(limit.window_ms) && limit.window_ms > 0 &&
-          (limit.tokens === undefined || positiveInteger(limit.tokens)), `${path}.rate_limits[${j}]`);
+          (limit.tokens === undefined || positiveInteger(limit.tokens)) &&
+          (limit.pace === undefined || typeof limit.pace === 'boolean'), `${path}.rate_limits[${j}]`);
       });
     }
   });

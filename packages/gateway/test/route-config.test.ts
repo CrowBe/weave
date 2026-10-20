@@ -761,7 +761,7 @@ it('declares primary then fallback Muse flash writers with training permission a
     assert.equal(unit.operation, 'generate');
     assert.equal(unit.kind, 'transform');
     assert.equal(unit.destination_training_allowed, true);
-    assert.deepEqual(unit.rate_limits, [{ requests: 150, tokens: 3_000_000, window_ms: 60_000 }]);
+    assert.deepEqual(unit.rate_limits, [{ requests: 150, tokens: 3_000_000, window_ms: 60_000, pace: true }]);
     assert.deepEqual(unit.price, { input_per_mtok: 0, output_per_mtok: 0 });
   }
   const target = { operation: 'generate', kind: 'transform' } as const;

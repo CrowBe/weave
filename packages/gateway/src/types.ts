@@ -306,17 +306,27 @@ export interface TokenPrice {
  * per minute on its free tier and did not refuse 25 issued at once, and its
  * own daily counter lagged the requests it had served. So a declared limit
  * never suppresses an attempt and is never treated as a quota the gateway can
- * count down. Its one job is to estimate how long to wait once the provider
- * has actually refused and has not said for how long.
+ * count down. Unless it is paced, its one job is to estimate how long to wait
+ * once the provider has actually refused and has not said for how long.
  * Optional token budgets describe the same window. Refusals do not report
- * consumed tokens, so retry timing uses request spacing only; neither budget
- * is counted down or used to suppress an attempt.
+ * consumed tokens, so retry timing uses request spacing only.
+ *
+ * A limit marked `pace` also holds a request on this routed unit before it is
+ * sent, until the requests this gateway has already started on the unit fit
+ * the window: their count, and their tokens when a budget is declared, worst
+ * case (context bound plus output cap) until usage is reported. Pacing only
+ * delays. Without a timer, when the wait would pass the deadline, or when one
+ * request's worst case exceeds the budget, the request is sent at once and the
+ * provider's refusal governs as before. Pacing counts this gateway's requests
+ * on this unit only, not other processes or other units sharing the limit.
  */
 export interface RateLimit {
   readonly requests: number;
-  /** Declared token budget in this window; metadata, not a proactive throttle. */
+  /** Declared token budget in this window. Counted only when the limit is paced. */
   readonly tokens?: number;
   readonly window_ms: number;
+  /** Hold requests until they fit this limit. Set it for a limit worth waiting on. */
+  readonly pace?: boolean;
 }
 
 /** Observed outcomes for this routed unit at this site, supplied by the caller. */
@@ -343,7 +353,7 @@ export interface RoutedUnitBase {
   readonly quality: QualityBar;
   readonly context_limit_tokens: number;
   readonly price: TokenPrice;
-  /** Known provider limits, used only to time a retry after a refusal. */
+  /** Known provider limits: they time a retry after a refusal, and a paced one holds requests. */
   readonly rate_limits?: readonly RateLimit[];
   readonly evidence?: RouteEvidence;
 }

@@ -229,6 +229,10 @@ An injected observation of whole-account quota-axi provider totals, with collect
 
 The deterministic `budget.policy@1` filter applied before every routed dispatch. Known weekly usage at ≥80% excludes the provider; five-hour pressure prefers another provider or pauses; ahead pace downgrades strong work to standard while audit pauses. Unknown quota fails closed for strong, while decision and flash remain bounded by the gateway cost ceiling.
 
+### Paced limit
+
+A declared routed-unit rate limit marked `pace`. The gateway holds a request on that unit until the requests it has already started there fit the limit's window, counting worst-case tokens until usage is reported. It is a wait inside the deadline, not a quota: it never suppresses an attempt, and a request that cannot wait is sent at once.
+
 ### Loop pause record
 
 Persisted `loop.paused` evidence that budget policy stopped dispatch, carrying the reason and a known reset time (`until`), or null when a new observation is required. It does not schedule resumption or confer authority at reset.
