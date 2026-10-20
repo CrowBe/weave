@@ -198,12 +198,12 @@ async function freePreflight(
     const pricing = model.pricing;
     if (!record(pricing) || !zero(pricing.input) || !zero(pricing.output) ||
       Object.keys(pricing).some(field => field !== 'input' && field !== 'output') ||
-      model.varies_by_provider === true) {
+      ('varies_by_provider' in model && model.varies_by_provider !== false)) {
       return freeFailure('invalid_request', 'catalogue does not establish an unconditional zero price');
     }
     const now = options.now();
     if (!Number.isFinite(now)) return freeFailure('invalid_request', 'caller time is invalid');
-    if ((model.deprecated_at != null && (typeof model.deprecated_at !== 'number' ||
+    if (('deprecated_at' in model && model.deprecated_at !== null && (typeof model.deprecated_at !== 'number' ||
       !Number.isFinite(model.deprecated_at) || now >= model.deprecated_at)) ||
       (call.model === VERCEL_AI_GATEWAY_FREE_MODELS.laguna && now >= LAGUNA_FREE_EXPIRY)) {
       return freeFailure('unavailable', 'promotional model is deprecated or expiry is invalid');

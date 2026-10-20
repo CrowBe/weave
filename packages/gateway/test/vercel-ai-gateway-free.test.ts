@@ -134,6 +134,19 @@ describe('Vercel promotional free contract', () => {
   const refusedFields = [
     { name: 'provider-dependent price', fields: { varies_by_provider: true } },
     ...[
+      { name: 'true string', value: 'true' },
+      { name: 'false string', value: 'false' },
+      { name: 'one', value: 1 },
+      { name: 'zero', value: 0 },
+      { name: 'object', value: {} },
+      { name: 'array', value: [] },
+      { name: 'null', value: null },
+      { name: 'explicit undefined', value: undefined },
+      { name: 'null string', value: 'null' },
+      { name: 'undefined string', value: 'undefined' },
+      { name: 'NaN', value: NaN },
+    ].map(({ name, value }) => ({ name: `${name} provider variation`, fields: { varies_by_provider: value } })),
+    ...[
       { name: 'past deprecation', value: NOW - 1 },
       { name: 'deprecation at caller time', value: NOW },
       { name: 'NaN deprecation', value: NaN },
@@ -142,6 +155,12 @@ describe('Vercel promotional free contract', () => {
       { name: 'unparseable deprecation', value: 'unparseable' },
       { name: 'numeric string deprecation', value: String(NOW + 1) },
       { name: 'boolean deprecation', value: false },
+      { name: 'true boolean deprecation', value: true },
+      { name: 'object deprecation', value: {} },
+      { name: 'array deprecation', value: [] },
+      { name: 'explicit undefined deprecation', value: undefined },
+      { name: 'null string deprecation', value: 'null' },
+      { name: 'undefined string deprecation', value: 'undefined' },
     ].map(({ name, value }) => ({ name, fields: { deprecated_at: value } })),
   ];
   for (const { name, fields } of refusedFields) {
