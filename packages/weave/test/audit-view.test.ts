@@ -217,3 +217,42 @@ test('audit eval iteration provenance is preserved, detached and canonically dig
   assert.deepEqual(old.evals, [legacy]);
   assert.equal(Object.hasOwn(old.evals[0]!, 'iteration'), false, 'old states acquire no invented iteration');
 });
+
+test('prefix bounds repair lone surrogates like check tails and record the field cap marker (#162)', () => {
+  for (const [statement, expectedStatement, decisionText, expectedDecision] of [
+    ['a\ud800b\udc00😀', 'a�b�😀', 'x\udbff', 'x�'],
+    ['x'.repeat(4094) + '\ud800', 'x'.repeat(4094), 'x'.repeat(238) + '\udc00', 'x'.repeat(238)],
+    ['x'.repeat(4093) + '\ud800', 'x'.repeat(4093) + '�', 'x'.repeat(237) + '\udc00', 'x'.repeat(237) + '�'],
+  ]) {
+    const input = textFixture(statement!, decisionText!);
+    const state = assembleAuditState({ ...input, artifacts: [{ ...input.artifacts![0]!, summary: decisionText! }] });
+    for (const text of [state.goal.statement, state.goal.success_criteria[0]!.statement, state.plan[0]!.intent, state.open_issues[0]!.text]) {
+      assert.equal(text, expectedStatement);
+      assert.ok(isWellFormed(text), 'prefix must not contain a lone surrogate');
+      assert.ok(Buffer.byteLength(text) <= 4096);
+    }
+    for (const field of ['site', 'question_id', 'choice'] as const) assert.equal(state.decisions[0]![field], expectedDecision, field);
+    assert.equal(state.artifacts[0]!.summary, expectedDecision);
+    assert.deepEqual(state.omissions, ['artifact:a1:summary_cap', 'criterion:c1:statement_cap', 'decision:0:choice_cap',
+      'decision:0:question_id_cap', 'decision:0:site_cap', 'goal:statement_cap', 'issue:i1:text_cap', 'plan:s1:intent_cap']);
+  }
+});
+
+test('cap markers name an item by position when its id is not a bounded identifier (#162)', () => {
+  const longId = 'id'.repeat(100);
+  const input = textFixture('x'.repeat(4097), 'x');
+  const criterion = input.goal.success_criteria[0]!;
+  const state = assembleAuditState({ ...input,
+    goal: { ...input.goal, success_criteria: [criterion, { ...criterion, criterion_id: longId },
+      { ...criterion, criterion_id: 'sk-NOT-A-REAL-KEY' }] },
+    plan: [{ ...input.plan![0]!, step_id: longId }],
+    open_issues: [{ ...input.open_issues![0]!, issue_id: 'bad id with spaces' }],
+    artifacts: [{ ...input.artifacts![0]!, artifact_id: longId, summary: 'y'.repeat(241), body: 'z'.repeat(5000) }],
+    checks: [{ check_id: longId, argv_digest: 'abc', exit: 0, passed: true, tail: 't'.repeat(241) }],
+  });
+  assert.deepEqual(state.omissions, ['artifact:@0:size_cap', 'artifact:@0:summary_cap', 'check:@0:tail_cap',
+    'criterion:@1:statement_cap', 'criterion:@2:statement_cap', 'criterion:c1:statement_cap', 'goal:statement_cap',
+    'issue:@0:text_cap', 'plan:@0:intent_cap']);
+  assert.equal(state.goal.success_criteria[1]!.criterion_id, longId, 'item ids are retained unchanged');
+  assert.equal(state.omissions.some(marker => marker.includes('sk-') || marker.includes(longId)), false);
+});

@@ -8,8 +8,9 @@
  * uses a fresh grant of equal scope from the composition-root issuer. A decision
  * answer cannot mint a grant, raise the tier past the ceiling, or complete the goal.
  */
-import { randomUUID } from 'node:crypto';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, truncateSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync, closeSync, existsSync, fstatSync, fsyncSync, mkdirSync, openSync, readFileSync, statSync, truncateSync, writeSync,
+} from 'node:fs';
 import { dirname } from 'node:path';
 import { effectSetsEqual, isWellFormedRef, type CapabilityHost, type Grant, type GrantAuthority } from '@weave/agentsop';
 import type {
@@ -42,7 +43,8 @@ export const OPEN_ISSUE_SCHEMA = 'open_issue@1' as const;
 const CHECKS = ['repo.test', 'repo.lint', 'repo.build'] as const;
 export type ImplementCheckId = (typeof CHECKS)[number];
 const GENERATION_KINDS: readonly GenerationKind[] = ['classify', 'extract', 'transform', 'draft-contract', 'judge'];
-const PAUSE_REASONS = ['weekly_budget_cap', 'five_hour_budget_low', 'quota_unknown', 'budget_pace_ahead', 'no_budget', 'cancelled'] as const;
+const PAUSE_REASONS = ['weekly_budget_cap', 'five_hour_budget_low', 'quota_unknown', 'budget_pace_ahead', 'no_budget', 'cancelled',
+  'decision_unavailable'] as const;
 export type ImplementPauseReason = (typeof PAUSE_REASONS)[number];
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const KEPT_REF = /^(?:ref_|gen_)[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
@@ -135,6 +137,12 @@ export interface ImplementPorts {
    */
   readonly issueCheckGrant: EqualGrantIssuer['issue'];
   readonly now: () => number;
+  /**
+   * Fresh opaque value for each generation run, from the composition root (for
+   * example a random UUID), as time comes from `now`. It must not repeat
+   * for one execution, including across restarts. It is digested, never recorded.
+   */
+  readonly runId: () => string;
   readonly readState: () => SiteState;
   readonly budget?: (request: ImplementBudgetRequest) => ImplementBudgetDecision;
   /** Host canonical resource identity; aliases share one id. Absent admits no `check` proof. */
@@ -151,6 +159,12 @@ export interface CheckEvidence {
   readonly passed: boolean;
   readonly tail: string;
   readonly artifacts: readonly string[];
+  /**
+   * The host's invocation id for this check, linking the attempt journal to the
+   * host record. Null when the host rejected it or reported no bounded id.
+   * Absent on records written before #121.
+   */
+  readonly invocation_id?: string | null;
 }
 export interface ImplementEval {
   readonly criterion_id: string;
@@ -204,7 +218,11 @@ export type JournalEntry = AttemptRecord | StopRecord;
 export interface ImplementStepResult {
   readonly schema: typeof IMPLEMENT_STEP_SCHEMA;
   readonly execution_id: string | null;
-  readonly status: 'passed' | 'failed' | 'paused';
+  /**
+   * `unfinished` only from replay of a journal the step has not finished (a
+   * crash between attempts, or nothing yet): running the step continues it.
+   */
+  readonly status: 'passed' | 'failed' | 'paused' | 'unfinished';
   readonly goal_done: false;
   readonly reason: 'invalid_input' | null;
   readonly tier: ImplementTier | null;
@@ -423,7 +441,8 @@ function project(entries: readonly JournalEntry[], input: Normalized, cancelled:
     status = 'failed';
     open_issue = openIssue(input, lastFailure(attempts), action.blocked_by);
   } else if (last?.status === 'paused') status = 'paused';
-  else status = 'failed';
+  // Another attempt is due: not terminal, and no open issue is raised yet.
+  else status = 'unfinished';
   return {
     schema: IMPLEMENT_STEP_SCHEMA,
     execution_id: input.execution_id,
@@ -513,26 +532,37 @@ function attemptRecord(fields: AttemptRecord): AttemptRecord {
     ...(fields.proofs === undefined ? {} : { proofs: fields.proofs }),
   };
 }
-async function runChecks(input: Normalized, ports: ImplementPorts, attempt: number, generationIdentity: string, signal: AbortSignal | undefined): Promise<CheckEvidence[]> {
+async function runChecks(input: Normalized, ports: ImplementPorts, attempt: number, checkRun: string, signal: AbortSignal | undefined): Promise<CheckEvidence[]> {
   const evidence: CheckEvidence[] = [];
   for (const check of input.checks) {
     if (signal?.aborted) break;
     const argv_digest = digest(check.argv ?? [check.operation]);
+    const requested = stepId(input.execution_id, `:a${attempt}:${checkRun}:${check.operation}`);
     let exit: number | null = null;
     let passed = false;
     let tail = '';
     let artifacts: string[] = [];
+    let invocation_id: string | null = null;
     try {
       const invoked = ports.invoke(freshCheckGrant(ports, check.grant), check.operation, {
         cwd_ref: check.cwd_ref,
         env_allow: [...check.env_allow],
         timeout_ms: check.timeout_ms,
-      }, { invocation_id: `${input.execution_id}:a${attempt}:${generationIdentity}:${check.operation}` });
+      }, { invocation_id: requested });
       if (invoked.kind === 'rejected') {
-        evidence.push({ check_id: check.operation, argv_digest, exit, passed, tail, artifacts });
+        evidence.push({ check_id: check.operation, argv_digest, exit, passed, tail, artifacts, invocation_id });
         continue;
       }
-      const outcome = await invoked.result;
+      invocation_id = correlation(invoked.invocation_id);
+      // Cancelling the step cancels the check in flight; the host still settles its result.
+      const cancel = (): void => invoked.requestCancel();
+      signal?.addEventListener('abort', cancel, { once: true });
+      let outcome: Awaited<typeof invoked.result>;
+      try {
+        outcome = await invoked.result;
+      } finally {
+        signal?.removeEventListener('abort', cancel);
+      }
       if (outcome.outcome === 'succeeded' && outcome.output !== null && typeof outcome.output === 'object') {
         const output = outcome.output as Record<string, unknown>;
         if (Number.isInteger(output['exit'])) {
@@ -548,7 +578,7 @@ async function runChecks(input: Normalized, ports: ImplementPorts, attempt: numb
       tail = '';
       artifacts = [];
     }
-    evidence.push({ check_id: check.operation, argv_digest, exit, passed, tail, artifacts });
+    evidence.push({ check_id: check.operation, argv_digest, exit, passed, tail, artifacts, invocation_id });
   }
   return evidence;
 }
@@ -598,18 +628,28 @@ function freshCheckGrant(ports: ImplementPorts, held: Grant | null): Grant | nul
  * time, so a later mutation of the held grant cannot widen a fresh one.
  * Object identity is the hold: a field-equal copy, a wider grant, or a
  * decision answer is refused. The held grant is not consumed.
+ *
+ * `limit` bounds fresh grants per held grant (#124). One step run invokes each
+ * check once per generation run, at most `retries + 2` times, so the default
+ * fits the default retries; bind one issuer per step run and pass
+ * `retries + 2` when the step is configured with more. Each fresh grant gets
+ * its own action id, `<held action_id>:g<n>`, so release and proceed by action
+ * id stay unambiguous among this issuer's grants (#125). Action id is not scope.
  */
-export function createEqualGrantIssuer(authority: GrantAuthority, held: readonly Grant[]): EqualGrantIssuer {
-  const scopes = new Map<Grant, Grant>();
+export function createEqualGrantIssuer(authority: GrantAuthority, held: readonly Grant[],
+  limit: number = DEFAULT_IMPLEMENT_RETRIES + 2): EqualGrantIssuer {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_RETRIES + 2) throw new Error('Invalid grant issue limit');
+  const scopes = new Map<Grant, { readonly scope: Grant; issued: number }>();
   for (const grant of held) {
     if (!authority.isIssued(grant) || !authority.isValid(grant)) continue;
-    scopes.set(grant, copyGrant(grant));
+    scopes.set(grant, { scope: copyGrant(grant), issued: 0 });
   }
   return {
     issue(template) {
-      const scope = scopes.get(template);
-      if (!scope || !authority.isValid(template)) return null;
-      return authority.issue(copyGrant(scope));
+      const bound = scopes.get(template);
+      if (!bound || bound.issued >= limit || !authority.isValid(template)) return null;
+      bound.issued += 1;
+      return authority.issue({ ...copyGrant(bound.scope), action_id: `${bound.scope.action_id}:g${bound.issued}` });
     },
   };
 }
@@ -641,24 +681,26 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
       return finish();
     }
     if (signal?.aborted) return project(history, normalized, true);
+    const attemptId = stepId(normalized.execution_id, `:a${action.attempt}`);
     const decision = ports.budget?.({ requested: action.requested, escalation: action.escalation, attempt: action.attempt })
       ?? { status: 'allow' as const, tier: action.requested };
     const allowed = decision.status === 'allow' && isTier(decision.tier) ? decision.tier : null;
-    // Escalation is exactly one tier. A downgrade or pause there is not that tier.
+    // Escalation is exactly one tier, so a downgrade there stops the step. A pause
+    // is temporary at either tier: it is recorded and a later run resumes (#128).
     if (allowed === null || (action.escalation && allowed !== action.requested)) {
-      if (action.escalation) {
+      if (action.escalation && allowed !== null) {
         history.push(remember(journal, stopRecord(normalized, attempts, 'budget')));
         return finish();
       }
       history.push(remember(journal, attemptRecord({
         schema: IMPLEMENT_ATTEMPT_SCHEMA,
-        id: stepId(normalized.execution_id, `:a${action.attempt}`),
+        id: attemptId,
         parentId: action.parentId,
         execution_id: normalized.execution_id,
         attempt: action.attempt,
         requested_tier: action.requested,
         effective_tier: null,
-        escalated: false,
+        escalated: action.escalation,
         status: 'paused',
         generate_request_id: null,
         artifact_refs: [],
@@ -675,6 +717,9 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
     const effective = action.escalation ? action.requested
       : IMPLEMENT_TIERS[Math.min(rank(allowed), rank(action.requested), rank(normalized.ceiling))]!;
     const generateId = stepId(normalized.execution_id, `:a${action.attempt}:gen`);
+    // Taken before the paid call, so a broken port fails before anything is spent.
+    const run = ports.runId();
+    if (typeof run !== 'string' || run.length === 0) throw new Error('Invalid implementation run id');
     const outcome = await ports.generate({
       request_id: generateId,
       site: 'impl.generate',
@@ -688,7 +733,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
     if (held || signal?.aborted) {
       history.push(remember(journal, attemptRecord({
         schema: IMPLEMENT_ATTEMPT_SCHEMA,
-        id: stepId(normalized.execution_id, `:a${action.attempt}`),
+        id: attemptId,
         parentId: action.parentId,
         execution_id: normalized.execution_id,
         attempt: action.attempt,
@@ -724,12 +769,13 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
       artifactRefs = [ref];
       // Text alone does not identify workspace edits: even equal output text can
       // accompany different edits on recovery. Never replay across generate runs.
-      const generationIdentity = `${digestHex}:${randomUUID()}`;
-      checks = await runChecks(normalized, ports, action.attempt, generationIdentity, signal);
+      // 128 bits over the full text digest and this run's value: a fresh identity per run.
+      const checkRun = digest({ artifact: digestHex, run }).slice(0, 32);
+      checks = await runChecks(normalized, ports, action.attempt, checkRun, signal);
       if (signal?.aborted) {
         history.push(remember(journal, attemptRecord({
           schema: IMPLEMENT_ATTEMPT_SCHEMA,
-          id: stepId(normalized.execution_id, `:a${action.attempt}`),
+          id: attemptId,
           parentId: action.parentId,
           execution_id: normalized.execution_id,
           attempt: action.attempt,
@@ -783,10 +829,13 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
       const evalFailed = new Set(transition.failing_criterion_ids);
       const failingOf = (): string[] => normalized.criteria.map(criterion => criterion.criterion_id)
         .filter(id => checkFailed.has(id) || evalFailed.has(id));
-      if (transition.status === 'paused') {
+      // A D5 outage judged nothing: pause rather than spend a retry or the escalation on it (#129).
+      // A skipped D5 has no evals, so it is never an outage.
+      const outage = transition.evals.length > 0 && transition.evals.every(item => item.observation.reason === 'decision_unavailable');
+      if (transition.status === 'paused' || outage) {
         history.push(remember(journal, attemptRecord({
           schema: IMPLEMENT_ATTEMPT_SCHEMA,
-          id: stepId(normalized.execution_id, `:a${action.attempt}`),
+          id: attemptId,
           parentId: action.parentId,
           execution_id: normalized.execution_id,
           attempt: action.attempt,
@@ -801,7 +850,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
           observations: [...transition.observations],
           failing_criterion_ids: failingOf(),
           failing_check_ids: failingChecks,
-          pause: pauseOf('cancelled', null),
+          pause: pauseOf(transition.status === 'paused' ? 'cancelled' : 'decision_unavailable', null),
           proofs,
         })));
         return finish();
@@ -814,7 +863,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
     const failed = outcome.status !== 'accepted' || failingChecks.length > 0 || failingCriteria.length > 0;
     history.push(remember(journal, attemptRecord({
       schema: IMPLEMENT_ATTEMPT_SCHEMA,
-      id: stepId(normalized.execution_id, `:a${action.attempt}`),
+      id: attemptId,
       parentId: action.parentId,
       execution_id: normalized.execution_id,
       attempt: action.attempt,
@@ -857,19 +906,60 @@ export class MemoryAttemptJournal implements AttemptJournal {
   }
 }
 
-/** JSONL attempt log. A torn final line is repaired before the next read or append. */
+/**
+ * JSONL attempt log for a single writer (#131). The first load or append reads
+ * the file once, repairing a torn final line; later calls use that view and
+ * append without rereading. Each append is fsynced before it returns, and a
+ * new file is synced with its directory. The instance remembers the file's
+ * size and inode after its own read or write: if another writer changed the
+ * file since, it fails closed rather than repairing or appending over that
+ * writer's records. This detects a second writer; it is not a lock, so the
+ * composition root must still give each journal file one writer.
+ */
 export class FileAttemptJournal implements AttemptJournal {
+  private entries: JournalEntry[] | null = null;
+  private seen: { readonly size: number; readonly ino: number } | null = null;
   constructor(readonly path: string) {
     const directory = dirname(path);
     if (!existsSync(directory)) mkdirSync(directory, { recursive: true });
-    if (!existsSync(path)) writeFileSync(path, '');
+    if (!existsSync(path)) {
+      const fd = openSync(path, 'a');
+      try { fsyncSync(fd); } finally { closeSync(fd); }
+      // Make the new directory entry durable too; Windows cannot open a directory to sync it.
+      if (process.platform !== 'win32') {
+        const dir = openSync(directory, 'r');
+        try { fsyncSync(dir); } finally { closeSync(dir); }
+      }
+    }
   }
   load(execution_id: string): JournalEntry[] {
-    return readEntries(this.path).filter(entry => entry.execution_id === execution_id);
+    return this.view().filter(entry => entry.execution_id === execution_id).map(entry => structuredClone(entry));
   }
   append(entry: JournalEntry): void {
-    if (readEntries(this.path).some(item => item.id === entry.id)) return;
-    appendFileSync(this.path, `${JSON.stringify(entry)}\n`);
+    const entries = this.view();
+    if (entries.some(item => item.id === entry.id)) return;
+    const fd = openSync(this.path, 'a');
+    try {
+      writeSync(fd, `${JSON.stringify(entry)}\n`);
+      fsyncSync(fd);
+      const { size, ino } = fstatSync(fd);
+      this.seen = { size, ino };
+    } finally {
+      closeSync(fd);
+    }
+    entries.push(structuredClone(entry));
+  }
+  private view(): JournalEntry[] {
+    const { size, ino } = statSync(this.path);
+    if (this.entries && this.seen) {
+      if (size === this.seen.size && ino === this.seen.ino) return this.entries;
+      throw new Error('impl.attempt journal was changed by another writer');
+    }
+    const entries = readEntries(this.path);
+    const repaired = statSync(this.path);
+    this.entries = entries;
+    this.seen = { size: repaired.size, ino: repaired.ino };
+    return entries;
   }
 }
 /**

@@ -1,5 +1,6 @@
 import { isCriterionProof, type CriterionProof } from './criterion-proof.js';
 import { digest } from './digest.js';
+import { correlation } from './sites/index.js';
 import { stableStringify } from './stable-json.js';
 
 export const AUDIT_SLICES = ['goal', 'iteration', 'plan', 'decisions', 'artifacts', 'checks', 'evals', 'open_issues', 'budget'] as const;
@@ -83,7 +84,9 @@ export type AuditStateInput = Pick<AuditState, 'goal' | 'iteration' | 'source_re
 function boundedUtf8(value: string, cap: number): string {
   let bytes = 0;
   let result = '';
-  for (const character of value) {
+  for (const code of value) {
+    // Repair an existing lone surrogate, as check tails do; never split a pair.
+    const character = code.length === 1 && code >= '\ud800' && code <= '\udfff' ? '\ufffd' : code;
     const width = Buffer.byteLength(character, 'utf8');
     if (bytes + width > cap) break;
     result += character;
@@ -111,6 +114,11 @@ function boundedUtf8Tail(value: string, cap: number): string {
   return result;
 }
 
+/** A marker names an item by a bounded identifier, otherwise by its zero-based position in the list. */
+function markerId(id: unknown, index: number): string {
+  return correlation(id) ?? `@${index}`;
+}
+
 /** Policy supplies already disclosed, secret-free slices. No inference or IO. */
 export function assembleAuditState(input: AuditStateInput): AuditState {
   const allowed = new Set(input.authorized_slices);
@@ -131,10 +139,11 @@ export function assembleAuditState(input: AuditStateInput): AuditState {
       continue;
     }
     const { body, summary, ...metadata } = artifact;
+    const marker = `artifact:${markerId(artifact.artifact_id, artifacts.length)}`;
     const boundedSummary = boundedUtf8(summary, 240);
-    if (boundedSummary !== summary) omissions.push(`artifact:${artifact.artifact_id}:summary_cap`);
+    if (boundedSummary !== summary) omissions.push(`${marker}:summary_cap`);
     if (body !== undefined && Buffer.byteLength(body, 'utf8') > cap) {
-      omissions.push(`artifact:${artifact.artifact_id}:size_cap`);
+      omissions.push(`${marker}:size_cap`);
       artifacts.push({ ...metadata, summary: boundedSummary });
     } else artifacts.push({ ...metadata, summary: boundedSummary, ...(body === undefined ? {} : { body }) });
   }
@@ -148,12 +157,12 @@ export function assembleAuditState(input: AuditStateInput): AuditState {
     schema: 'audit-state@1' as const, view: 'view.audit@1' as const,
     goal: { ...input.goal,
       statement: boundText(input.goal.statement, 4096, 'goal:statement_cap'),
-      success_criteria: input.goal.success_criteria.map(criterion => ({ ...criterion,
-        statement: boundText(criterion.statement, 4096, `criterion:${criterion.criterion_id}:statement_cap`),
+      success_criteria: input.goal.success_criteria.map((criterion, index) => ({ ...criterion,
+        statement: boundText(criterion.statement, 4096, `criterion:${markerId(criterion.criterion_id, index)}:statement_cap`),
       })),
     }, iteration: input.iteration,
-    plan: allowed.has('plan') ? (input.plan ?? []).map(step => ({ ...step,
-      intent: boundText(step.intent, 4096, `plan:${step.step_id}:intent_cap`),
+    plan: allowed.has('plan') ? (input.plan ?? []).map((step, index) => ({ ...step,
+      intent: boundText(step.intent, 4096, `plan:${markerId(step.step_id, index)}:intent_cap`),
     })) : [],
     decisions: allowed.has('decisions') ? (input.decisions ?? []).map((decision, index) => ({ ...decision,
       site: boundText(decision.site, 240, `decision:${index}:site_cap`),
@@ -161,14 +170,14 @@ export function assembleAuditState(input: AuditStateInput): AuditState {
       choice: decision.choice === null ? null : boundText(decision.choice, 240, `decision:${index}:choice_cap`),
     })) : [],
     artifacts,
-    checks: allowed.has('checks') ? (input.checks ?? []).map(check => {
+    checks: allowed.has('checks') ? (input.checks ?? []).map((check, index) => {
       const tail = boundedUtf8Tail(check.tail, 240);
-      if (tail !== check.tail) omissions.push(`check:${check.check_id}:tail_cap`);
+      if (tail !== check.tail) omissions.push(`check:${markerId(check.check_id, index)}:tail_cap`);
       return { ...check, tail };
     }) : [],
     evals: allowed.has('evals') ? input.evals ?? [] : [],
-    open_issues: allowed.has('open_issues') ? (input.open_issues ?? []).map(issue => ({ ...issue,
-      text: boundText(issue.text, 4096, `issue:${issue.issue_id}:text_cap`),
+    open_issues: allowed.has('open_issues') ? (input.open_issues ?? []).map((issue, index) => ({ ...issue,
+      text: boundText(issue.text, 4096, `issue:${markerId(issue.issue_id, index)}:text_cap`),
     })) : [],
     budget: allowed.has('budget') ? input.budget ?? null : null,
     omissions: [...new Set(omissions)].sort(), source_revisions,
