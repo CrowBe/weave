@@ -6,6 +6,10 @@ execution or replace deterministic evidence.
 
 - [Audit state and bounded compaction policy](packages/weave/src/AUDIT-CONTRACT.md):
   `view.audit@1`, authorized slices, omissions and digest.
+- [Workstreams](packages/weave/src/WORKSTREAM-CONTRACT.md): `workstream@1`,
+  the project's independently addressable streams of conversation and work,
+  and their relation to goals, Threads, observations, artifacts and project
+  availability.
 - [Decision sites and audit loop](packages/weave/src/sites/CONTRACT.md):
   D1–D8 observation admission, D6 disposition and deterministic stop outcomes.
   D3 `decision.preselect` policies accept only configured `typesafe-jev` or
