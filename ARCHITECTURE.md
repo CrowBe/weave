@@ -318,6 +318,16 @@ what it enforces; a declared limit therefore estimates a wait after a refusal
 and never suppresses an attempt. A wait consumes deadline but not attempts, and
 is recorded against the attempt it preceded.
 
+An operator may mark a declared limit to be paced when it is worth waiting on.
+The gateway then holds a request on that routed unit until the requests it has
+already started there fit the limit's window, counting worst-case tokens until
+usage is reported, so concurrent callers are spaced before they are refused.
+Pacing is still a wait, not a quota: it stays inside the deadline and never
+suppresses an attempt. When the gateway has no timer, when the wait would pass
+the deadline, or when one request could never fit, the request is sent at once
+and a refusal is handled as above. Pacing sees only one gateway's requests on
+one routed unit; traffic from other processes or other units is not counted.
+
 Inference on the operator's own hardware is a routed unit like any other, and
 deliberately so: it earns no exemption from accounting, acceptance or the
 deadline, and it fails and is retried by the same rules. What distinguishes it

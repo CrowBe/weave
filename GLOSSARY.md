@@ -257,11 +257,15 @@ An implementation of a capability contract that depends on inference. Its admiss
 
 ### Quota snapshot
 
-An injected observation of whole-account quota-axi provider totals, with collection time, provider status, quota windows, reset times and pace. It is data for deterministic budget policy, not authority to execute. A routed unit's `quota_provider` names the account provider independently of adapter and destination.
+An injected observation of whole-account quota-axi provider totals, with collection time, provider status, quota windows, reset times and pace. A provider reading reused from quota-axi's cache carries its own, earlier observation time, and its age counts from that time. It is data for deterministic budget policy, not authority to execute. A routed unit's `quota_provider` names the account provider independently of adapter and destination.
 
 ### Budget gate
 
 The deterministic `budget.policy@1` filter applied before every routed dispatch. Known weekly usage at ≥80% excludes the provider; five-hour pressure prefers another provider or pauses; ahead pace downgrades strong work to standard while audit pauses. Unknown quota fails closed for strong, while decision and flash remain bounded by the gateway cost ceiling.
+
+### Paced limit
+
+A declared routed-unit rate limit marked `pace`. The gateway holds a request on that unit until the requests it has already started there fit the limit's window, counting worst-case tokens until usage is reported. It is a wait inside the deadline, not a quota: it never suppresses an attempt, and a request that cannot wait is sent at once.
 
 ### Loop pause record
 
