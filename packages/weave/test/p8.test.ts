@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1170,6 +1171,61 @@ test('a D5 outage pauses the attempt without consuming a retry or the escalation
   assert.equal(failed.attempts[0]?.eval_skipped, 'check_failed');
   assert.equal(failed.attempts[0]?.pause, null);
   assert.equal(failed.open_issue?.source, 'check');
+});
+
+// #131: FileAttemptJournal syncs each append, reads the file once, and fails closed on a second writer.
+test('the file journal fsyncs each append and does not reread the file per append (#131)', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-p8-durable-'));
+  const fsModule = createRequire(import.meta.url)('node:fs') as typeof import('node:fs');
+  const original = { readFileSync: fsModule.readFileSync, fsyncSync: fsModule.fsyncSync };
+  const path = join(dir, 'attempts.jsonl');
+  const counts = { reads: 0, fsyncs: 0 };
+  try {
+    const journal = new FileAttemptJournal(path);
+    fsModule.readFileSync = ((...args: Parameters<typeof original.readFileSync>) => {
+      if (String(args[0]) === path) counts.reads += 1;
+      return original.readFileSync(...args);
+    }) as typeof original.readFileSync;
+    fsModule.fsyncSync = (fd: number) => { counts.fsyncs += 1; original.fsyncSync(fd); };
+    syncBuiltinESMExports();
+    const fail = { c1: { p: .2, conf: 1 } };
+    const world = driver({ journal, evaluations: [fail, fail, { c1: { p: 1, conf: 1 } }] });
+    const result = await runImplementationStep(world.input, world.ports, world.journal);
+    assert.equal(result.attempts.length, 3);
+    assert.equal(journal.load('exec-1').length, 3);
+    assert.equal(counts.fsyncs, 3, 'every append is synced before it returns');
+    assert.ok(counts.reads <= 2, `the writer reads and repairs the file once, then appends without rereading (read ${counts.reads} times)`);
+  } finally {
+    fsModule.readFileSync = original.readFileSync;
+    fsModule.fsyncSync = original.fsyncSync;
+    syncBuiltinESMExports();
+  }
+  try {
+    assert.deepEqual(new FileAttemptJournal(path).load('exec-1').map(entry => entry.id), ['exec-1:a1', 'exec-1:a2', 'exec-1:a3']);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a second writer on one attempt journal is detected and refused (#131)', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-p8-writer-'));
+  try {
+    const path = join(dir, 'attempts.jsonl');
+    const source = driver({ evaluations: [{ c1: { p: .2, conf: 1 } }, { c1: { p: .2, conf: 1 } }, { c1: { p: 1, conf: 1 } }] });
+    await runImplementationStep(source.input, source.ports, source.journal);
+    const [first, second, third] = source.journal.load('exec-1');
+    assert.ok(first && second && third);
+    const owner = new FileAttemptJournal(path);
+    owner.append(first);
+    const intruder = new FileAttemptJournal(path);
+    assert.deepEqual(intruder.load('exec-1').map(entry => entry.id), ['exec-1:a1']);
+    intruder.append(second);
+    assert.throws(() => owner.append(third), /another writer/);
+    assert.throws(() => owner.load('exec-1'), /another writer/);
+    assert.deepEqual(new FileAttemptJournal(path).load('exec-1').map(entry => entry.id), ['exec-1:a1', 'exec-1:a2']);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 // #130: escalation is relative to the D2-routed tier; the budget gate re-checks it.

@@ -212,10 +212,13 @@ blocked escalation does not mint a grant and does not complete the goal. A D5 ou
 
 Finished attempts are `impl.attempt@1` records under one `execution_id`, linked
 by `id` and `parentId`, appended before the next attempt. A stop is
-`impl.stop@1` and carries the open issue. A torn final line is repaired on
-load and append: an unparseable tail is truncated, and a complete record
+`impl.stop@1` and carries the open issue. A torn final line is repaired on the
+first load or append: an unparseable tail is truncated, and a complete record
 missing its newline is terminated, so a finished attempt is not lost and the
-journal stays loadable. Replay reads that journal and does not call a provider. Replay of an unfinished
+journal stays loadable. `FileAttemptJournal` fsyncs each append, reads and
+repairs the file once per instance, and fails closed if another writer changed
+the file since its last read or write. One writer per journal file is assumed;
+the check detects a second writer and is not a lock. Replay reads that journal and does not call a provider. Replay of an unfinished
 journal reports `unfinished` with no open issue, not `failed`.
 Generate text is not stored on the attempt; the step keeps a `gen_` digest ref.
 Env values are not inputs to this step.

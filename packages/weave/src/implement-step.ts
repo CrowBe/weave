@@ -8,7 +8,9 @@
  * uses a fresh grant of equal scope from the composition-root issuer. A decision
  * answer cannot mint a grant, raise the tier past the ceiling, or complete the goal.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, truncateSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync, closeSync, existsSync, fstatSync, fsyncSync, mkdirSync, openSync, readFileSync, statSync, truncateSync, writeSync,
+} from 'node:fs';
 import { dirname } from 'node:path';
 import { effectSetsEqual, isWellFormedRef, type CapabilityHost, type Grant, type GrantAuthority } from '@weave/agentsop';
 import type {
@@ -903,19 +905,60 @@ export class MemoryAttemptJournal implements AttemptJournal {
   }
 }
 
-/** JSONL attempt log. A torn final line is repaired before the next read or append. */
+/**
+ * JSONL attempt log for a single writer (#131). The first load or append reads
+ * the file once, repairing a torn final line; later calls use that view and
+ * append without rereading. Each append is fsynced before it returns, and a
+ * new file is synced with its directory. The instance remembers the file's
+ * size and inode after its own read or write: if another writer changed the
+ * file since, it fails closed rather than repairing or appending over that
+ * writer's records. This detects a second writer; it is not a lock, so the
+ * composition root must still give each journal file one writer.
+ */
 export class FileAttemptJournal implements AttemptJournal {
+  private entries: JournalEntry[] | null = null;
+  private seen: { readonly size: number; readonly ino: number } | null = null;
   constructor(readonly path: string) {
     const directory = dirname(path);
     if (!existsSync(directory)) mkdirSync(directory, { recursive: true });
-    if (!existsSync(path)) writeFileSync(path, '');
+    if (!existsSync(path)) {
+      const fd = openSync(path, 'a');
+      try { fsyncSync(fd); } finally { closeSync(fd); }
+      // Make the new directory entry durable too; Windows cannot open a directory to sync it.
+      if (process.platform !== 'win32') {
+        const dir = openSync(directory, 'r');
+        try { fsyncSync(dir); } finally { closeSync(dir); }
+      }
+    }
   }
   load(execution_id: string): JournalEntry[] {
-    return readEntries(this.path).filter(entry => entry.execution_id === execution_id);
+    return this.view().filter(entry => entry.execution_id === execution_id).map(entry => structuredClone(entry));
   }
   append(entry: JournalEntry): void {
-    if (readEntries(this.path).some(item => item.id === entry.id)) return;
-    appendFileSync(this.path, `${JSON.stringify(entry)}\n`);
+    const entries = this.view();
+    if (entries.some(item => item.id === entry.id)) return;
+    const fd = openSync(this.path, 'a');
+    try {
+      writeSync(fd, `${JSON.stringify(entry)}\n`);
+      fsyncSync(fd);
+      const { size, ino } = fstatSync(fd);
+      this.seen = { size, ino };
+    } finally {
+      closeSync(fd);
+    }
+    entries.push(structuredClone(entry));
+  }
+  private view(): JournalEntry[] {
+    const { size, ino } = statSync(this.path);
+    if (this.entries && this.seen) {
+      if (size === this.seen.size && ino === this.seen.ino) return this.entries;
+      throw new Error('impl.attempt journal was changed by another writer');
+    }
+    const entries = readEntries(this.path);
+    const repaired = statSync(this.path);
+    this.entries = entries;
+    this.seen = { size: repaired.size, ino: repaired.ino };
+    return entries;
   }
 }
 /**
