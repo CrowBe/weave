@@ -159,6 +159,28 @@ export interface EvaluationCost {
   readonly total: CostLine;
 }
 
+/**
+ * Eval-derived routing evidence published as data. The gateway reads it
+ * without importing Gauge; applying it is a governed promotion outside Gauge.
+ */
+export interface PreferenceSet {
+  readonly schema: 'gauge.preference@1';
+  readonly preference: string;
+  readonly workload: string;
+  readonly criteria: string;
+  readonly caseset: string;
+  readonly split: Split;
+  readonly mode: EvaluationResult['mode'];
+  /** The criteria measure read as a routed unit's accept rate. */
+  readonly accept: string;
+  readonly entries: readonly {
+    readonly routed_unit: string;
+    readonly result: string;
+    readonly verdict: ResultVerdict;
+    readonly measures: EvaluationResult['measures'];
+  }[];
+}
+
 export type GaugeRecord =
   | CriteriaSet
   | CaseSet
@@ -166,7 +188,8 @@ export type GaugeRecord =
   | EvaluationResult
   | Comparison
   | FailureAttribution
-  | EvaluationCost;
+  | EvaluationCost
+  | PreferenceSet;
 
 /** First applicable rejection reason, in the contract's order. */
 export type Rejection =
