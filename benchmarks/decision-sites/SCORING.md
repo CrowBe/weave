@@ -101,3 +101,8 @@ runtime D5. Tune pass grid: .7,.8,.85,.9,.95; fail grid: .05,.1,.15,.2,.3;
 confidence uses the declared grid. A lower pass cutoff, higher fail cutoff, or
 lower confidence floor is marked `not_applied: needs captain (#142)`. Reports
 label this profile explicitly, separately from the existing production Jev D5.
+
+This rule governs the Gauge criteria sets `decision-sites.<site>.criteria@1`
+(`gauge.ts`), which encode it per site. Changing what counts as success here
+needs a new criteria revision issued by this rule's authority, with evidence;
+editing a criteria set in place unbinds every Gauge result that cites it.
