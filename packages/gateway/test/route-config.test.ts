@@ -258,6 +258,27 @@ it('a target tier that conflicts with the terms tier is invalid, not a routing m
     assert.equal(decision.order.length > 0, true);
   }
 });
+it('config cannot tell subscription billing, so an unmapped unit escapes the weekly cap (#77)', () => {
+  // Pins the documented gap: only a declared quota_provider ties a unit to its
+  // account's weekly cap, and parseRouteConfig has no billing field to require it from.
+  const input = example();
+  const codex = input.units.find((unit: { routed_unit_id: string }) => unit.routed_unit_id === 'codex.flash');
+  const capped = { observed_at: 0, providers: [{ provider: 'codex', status: 'fresh', windows: [
+    { id: 'seven_day', percentRemaining: 5, resetsAt: 1_000, pace: { status: 'on_pace' } }] }] };
+  for (const tier of ['flash', 'standard'] as const) {
+    for (const mapped of [true, false]) {
+      const unit = { ...codex, tier };
+      if (!mapped) delete unit.quota_provider;
+      const parsed = parseRouteConfig({ ...input, units: [...input.units.filter((u: { routed_unit_id: string }) => u !== codex), unit] });
+      assert.equal(parsed.ok, true);
+      if (!parsed.ok) return;
+      const parsedUnit = parsed.table.filter(u => u.routed_unit_id === 'codex.flash');
+      assert.equal(parsedUnit[0]?.quota_provider, mapped ? 'codex' : undefined);
+      const decision = budgetRoute(parsedUnit, { ...target, tier }, { ...terms, tier }, 20, undefined, capped, 0);
+      assert.deepEqual(decision.order.map(u => u.routed_unit_id), mapped ? [] : ['codex.flash'], `${tier} mapped=${mapped}`);
+    }
+  }
+});
 it('availability retains evidence tie order and exclusion declaration order', () => {
   const units = table().map(unit => ({ ...unit, evidence: { attempts: 20, accepted: 20 } }));
   const result = route(units, target, terms, 20, { codex: 'exhausted' });

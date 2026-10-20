@@ -433,6 +433,13 @@ quality, context and cost constraints, before each generation or evaluation
 attempt, including retries, waits and fallbacks. `quota_provider` is an optional
 routed-unit attribute naming the whole-account quota-axi provider, independent
 of its adapter and destination. A strong unit without that mapping fails closed.
+The weekly cap reaches only units that declare it, and a standard unit without
+it does not fail closed, so every unit that draws on a subscription account
+must declare its `quota_provider`. `parseRouteConfig` cannot enforce this: a
+route table records no billing, and a zero token price also describes local
+units and unpriced placeholders such as the Muse Spark entries. Requiring the
+mapping needs a billing declaration on routed units, which is not decided yet
+(#77); a test pins the current gap.
 The example subscription units name `codex`, `claude` and `grok`. quota-axi
 0.1.64 lists all three provider ids. Its Grok reading reports the allowance as
 window `credits` (kind `weekly` or `monthly` by plan period), and no Grok
