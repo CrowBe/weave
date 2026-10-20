@@ -11,7 +11,10 @@ export const SHELL_MAX_STDIN_CHARS = 1_000_000;
 export const SHELL_MAX_TIMEOUT_MS = 600_000;
 export const SHELL_MAX_ENV = 32;
 export const SHELL_MAX_ARTIFACTS = 32;
-/** Shorter values are not secrets we can redact without eating ordinary output. */
+/**
+ * Every injected value is a secret. A shorter one cannot be redacted without
+ * eating ordinary output, so the host refuses to inject it at all.
+ */
 export const SHELL_MIN_SECRET_CHARS = 8;
 
 export const SHELL_TRACE_SCHEMA = 'shell.trace@1';
@@ -147,7 +150,11 @@ export interface EnvLookup {
   readonly secrets: readonly string[];
 }
 
-/** Names only go in. Values stay in the returned record and are never logged here. */
+/**
+ * Names only go in. Values stay in the returned record and are never logged here.
+ * A value shorter than SHELL_MIN_SECRET_CHARS, including an empty one, fails the
+ * whole lookup: it could be neither refused on argv nor redacted reliably.
+ */
 export function lookupEnv(port: EnvPort, names: readonly string[]): EnvLookup | { ok: false } {
   const env: Record<string, string> = {};
   const secrets: string[] = [];
@@ -161,19 +168,18 @@ export function lookupEnv(port: EnvPort, names: readonly string[]): EnvLookup | 
     if (typeof value !== 'string') {
       continue;
     }
-    env[name] = value;
-    if (value.length >= SHELL_MIN_SECRET_CHARS) {
-      secrets.push(value);
+    if (value.length < SHELL_MIN_SECRET_CHARS) {
+      return { ok: false };
     }
+    env[name] = value;
+    secrets.push(value);
   }
   return { ok: true, env, secrets };
 }
 
+/** `secrets` come from lookupEnv, so each has at least SHELL_MIN_SECRET_CHARS characters. */
 export function containsSecret(parts: readonly string[], secrets: readonly string[]): boolean {
   for (const secret of secrets) {
-    if (secret.length < SHELL_MIN_SECRET_CHARS) {
-      continue;
-    }
     for (const part of parts) {
       if (part.includes(secret)) {
         return true;
@@ -185,7 +191,7 @@ export function containsSecret(parts: readonly string[], secrets: readonly strin
 
 export function redactSecrets(text: string, secrets: readonly string[]): string {
   let out = text;
-  const ordered = secrets.filter((secret) => secret.length >= SHELL_MIN_SECRET_CHARS).sort((a, b) => b.length - a.length);
+  const ordered = [...secrets].sort((a, b) => b.length - a.length);
   for (const secret of ordered) {
     if (out.includes(secret)) {
       out = out.split(secret).join('[redacted]');

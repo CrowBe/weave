@@ -1,4 +1,4 @@
-import { mkdir, chmod, open, readFile, rename, unlink } from 'node:fs/promises';
+import { mkdir, chmod, open, readFile, rename, stat, unlink } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { CredentialState, CredentialStore } from './index.js';
@@ -38,12 +38,18 @@ export class FileCredentialStore implements CredentialStore {
       throw new ChatGPTAuthError('credential store read failed');
     }
   }
+  /** Writes into a directory it created (mode 0700) or an existing one without group or other access. It never chmods an existing directory. */
   async save(state: CredentialState): Promise<void> {
     const directory = dirname(this.path);
+    let mode: number;
+    try {
+      // mkdir returns the first directory it created, or undefined when the path already existed.
+      if (await mkdir(directory, { recursive: true, mode: 0o700 }) !== undefined) await chmod(directory, 0o700);
+      mode = (await stat(directory)).mode;
+    } catch { throw new ChatGPTAuthError('credential store write failed'); }
+    if (mode & 0o077) throw new ChatGPTAuthError('credential store directory not private');
     const temporary = `${this.path}.${randomUUID()}.tmp`;
     try {
-      await mkdir(directory, { recursive: true, mode: 0o700 });
-      await chmod(directory, 0o700);
       const handle = await open(temporary, 'wx', 0o600);
       try { await handle.writeFile(JSON.stringify(state, null, 2)); await handle.sync(); } finally { await handle.close(); }
       await rename(temporary, this.path);

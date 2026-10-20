@@ -82,8 +82,10 @@ export async function validateIdToken(token: string, options: AuthDependencies &
     if (!verify('RSA-SHA256', Buffer.from(`${parts[0]}.${parts[1]}`), key, Buffer.from(parts[2]!, 'base64url'))) fail('invalid ID token signature');
     if (claims.iss !== 'https://auth.openai.com') fail('invalid ID token issuer');
     if (Array.isArray(claims.aud)) {
-      if (!claims.aud.every(audience => typeof audience === 'string') || !claims.aud.includes(options.clientId) || (claims.aud.length > 1 && claims.azp !== options.clientId)) fail('invalid ID token audience');
+      if (!claims.aud.every(audience => typeof audience === 'string') || !claims.aud.includes(options.clientId) || (claims.aud.length > 1 && claims.azp === undefined)) fail('invalid ID token audience');
     } else if (claims.aud !== options.clientId) fail('invalid ID token audience');
+    // A present azp must name this client, whatever the audience shape.
+    if (claims.azp !== undefined && claims.azp !== options.clientId) fail('invalid ID token audience');
     if (typeof claims.exp !== 'number' || !Number.isFinite(claims.exp) || claims.exp <= options.clock.now() / 1000) fail('expired ID token');
     if (options.nonce !== undefined && claims.nonce !== options.nonce) fail('invalid ID token nonce');
     if (typeof claims.sub !== 'string' || !claims.sub) fail('invalid ID token subject');
