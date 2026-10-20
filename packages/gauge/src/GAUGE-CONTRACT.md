@@ -1,6 +1,9 @@
 # Gauge evaluation contract v1
 
-Status: contract (G1, #189) and validator (G2, #190). `validate` in
+Status: contract (G1, #189), validator (G2, #190), governed revisions
+(G3, #191), statistics, producers and evaluation cost (G5, #193), and
+routing preference sets (G6, #194).
+`validate` in
 `src/validate.ts` implements this contract; `test/contract.test.ts` runs the
 fixtures in `fixtures/records.json` against the compiled package as part of
 `npm test` (`npm run test:gauge-contract` alone). `@weave/gauge` imports
@@ -25,7 +28,9 @@ Gauge produces evidence. It does not decide:
   assert that it won.
 - It does not define success. Criteria sets and case sets are governed records
   with their own authority, and they are not authored by the subject under
-  evaluation (G3, #191, makes this structural beyond the rules below).
+  evaluation. A result binds only to a revision that a governed revision
+  (`gauge.revision@1`) records, so a change to what counts as success is a
+  separate, recorded change with its own authority and justification.
 
 Gauge depends on the Weft contract only: its kinds and field names. It imports
 nothing from Loom, Fabric, AgentSOP or the gateway. Agent University and other
@@ -86,7 +91,51 @@ What counts as success for a workload, and how it is measured.
   `{ "split": "tune" | "holdout", "digest": digest, "size": count }`, size ≥ 1.
 
 The record names cases by digest only. Holdout content is never readable by
-the producer of a candidate.
+the producer of a candidate. The holdout digest differs from the tune digest:
+a holdout identical to the tune split would be visible to whoever tunes.
+
+## `gauge.revision@1`: governed revision
+
+The recorded change that makes one revision of a criteria set or case set
+usable. Results, comparisons and attributions bind only to recorded revisions,
+so a criteria set or case set that no revision records is unknown.
+
+- `schema`: `"gauge.revision@1"`
+- `revision`: rev, the criteria set or case set this records
+- `record`: `"criteria"` | `"caseset"`
+- `digest`: digest of that set
+- `supersedes`: rev | null
+- `issued_by`: governance
+- `justification`: code
+- `evidence`: 0–16, unique by `(source, ref)`, same shape as result evidence
+
+A set's digest is `sha256:` and the lowercase hex SHA-256 of its canonical
+JSON: object keys sorted recursively, no whitespace (`recordDigest`).
+
+Rules:
+
+- **Binding.** The set named by `revision` is known as a `record` set and its
+  digest equals `digest`. A recorded revision number is a positive integer
+  without leading zeros. Revision `@1` supersedes nothing. Revision `@n`, for
+  n > 1, supersedes `@n-1` of the same name, and that revision is itself
+  recorded as the same kind of set. A revision is recorded only when its whole
+  chain back to `@1` validates.
+- **Governance.** `issued_by` equals the `governed_by` of the set it
+  supersedes, or for `@1` the set's own `governed_by`: only the authority
+  that governs a set can change it, and only the old governor can hand it to a
+  new one. A revision that supersedes another cites at least one evidence
+  entry, its justification for changing what counts as success.
+- **Immutability.** Editing a recorded set in place changes its digest, so the
+  set is no longer recorded and nothing binds to it. A change is a new
+  revision. A result keeps binding to the revision it cites, and a comparison
+  across revisions is a `binding` failure.
+
+A subject under evaluation cannot change its own criteria or held-out cases:
+it is not the governor that must issue the change, and a policy subject cannot
+be evaluated under a set it governs. Gauge checks that the issuer is the
+governor; it cannot authenticate an issuer. Whoever supplies `context` vouches
+that each revision in it was issued by the authority it names, and an
+Experiment fixes the criteria and case set revisions before results are read.
 
 ## `gauge.result@1`: evaluation result
 
@@ -205,33 +254,158 @@ Rules:
 - `unattributed` is a valid result. It requires basis `none`, a null signal
   and a null confidence. Any other category forbids basis `none`.
 
+## `gauge.cost@1`: evaluation cost
+
+What producing one result cost, so an Experiment counts its whole cost and not
+only its successful trials.
+
+- `schema`: `"gauge.cost@1"`
+- `cost`: id; `result`: id
+- `trials`: count, every trial run for the result, failed ones included
+- `failed_trials`: count
+- `trial_micros`: metric, the cost of every trial, failed ones included
+- `evaluation_micros`: metric, scoring and judging the trials
+- `review_micros`: metric, human review
+- `total_micros`: metric
+
+Rules:
+
+- **Binding.** The result is known.
+- **Cost.** `failed_trials` is at most `trials`, and `total_micros` equals
+  `trial_micros + evaluation_micros + review_micros` within a relative error of
+  1e-9. Every line is required: a zero is stated, never left out.
+
+## `gauge.preference@1`: routing preference set
+
+Eval-derived evidence for routing, published as data. The inference gateway
+reads it without importing Gauge, and Gauge never imports the gateway. A
+preference set changes nothing by existing: applying one to a gateway is a
+governed promotion outside Gauge, and the gateway's deterministic policy
+(destinations, training-allowed destinations, credential screening, quality,
+context, budget and cost ceiling) always filters routes before a preference
+can order them.
+
+- `schema`: `"gauge.preference@1"`
+- `preference`: rev, this set's name and revision
+- `workload`: id; `criteria`: rev; `caseset`: rev; `split`; `mode`
+- `accept`: code, the criteria measure the gateway reads as a routed unit's
+  accept rate
+- `entries`: 1–64, unique by `routed_unit`. Each is exactly
+  `{ "routed_unit": id, "result": id, "verdict": verdict, "measures": [...] }`,
+  where `measures` has the result's measure entries.
+
+Rules:
+
+- **Binding.** The criteria set and case set are recorded and belong to
+  `workload`. Each entry's result is known, its subject is the `routed_unit`
+  named by the entry, and it answers the set's question: its criteria set,
+  case set, split and mode are the set's. Entry measures match the criteria
+  measures one-to-one.
+- **Measure.** `accept` names a criteria measure with aggregate `rate` and
+  `better: "higher"`. Every entry measure equals the result's: same value,
+  `n` and interval. The figures are copied from a recomputed result, never
+  asserted.
+- **Verdict.** Each entry's verdict is its result's.
+
+What a consumer may do with it is the consumer's contract. The reference
+gateway (`packages/gateway/src/preferences.ts`) credits a unit named by a
+`meets_bar` entry with the low end of its accept interval, and gives any other
+named unit no evidence, so routing falls back to its configured order and
+records the uncertainty.
+
+## Statistics
+
+`method` fixes how a producer computes intervals, so anyone holding the
+samples recomputes the same result. α is `1 - level` and z is the standard
+normal quantile at `1 - α/2` (Acklam's rational approximation).
+
+- `wilson@1`: for k successes in n samples and p = k/n, the Wilson score
+  interval `(p + z²/2n ± z·sqrt(p(1-p)/n + z²/4n²)) / (1 + z²/n)`.
+- `bootstrap@1`: 2000 resamples of n draws with replacement. A draw takes
+  sample `floor(u·n)`, where u comes from mulberry32 seeded with `seed` modulo
+  2³² and restarted for each measure. The interval is the sorted resample
+  statistics at indices `floor(2000·α/2)` and `ceil(2000·(1 - α/2)) - 1`.
+- Aggregates: `rate` and `mean` are the arithmetic mean (a rate sample is 0 or
+  1), `sum` is the sum, and `p95` is the nearest-rank percentile
+  `sorted[ceil(0.95·n) - 1]`.
+- A computed interval is widened to contain its value and, for a rate, clamped
+  to [0, 1], so rounding cannot put a value outside its own interval.
+
+## Producers
+
+`evaluate`, `compare` and `track` build what the rules above describe. They
+return `{ "ok": true, ... }` or `{ "ok": false, "reason": reason }`, and a
+record they return has passed `validate`.
+
+- `evaluate(run, context)` builds a `gauge.result@1` from one sample list per
+  criteria measure. The run names the workload its samples came from, which
+  must be the criteria set's and case set's (`binding`): samples from one
+  workload never become a result for another. Sample lists match the criteria
+  measures one-to-one (`binding`). An empty list is `n = 0` with a null value;
+  a list shorter than `min_samples` leaves its constraints `unknown`. Neither
+  is an error, and neither is a pass or a tie: the verdict says
+  `insufficient_evidence`. In `replay` mode a non-empty list for a measure
+  sourced from an outcome kind is `mode`, and a rate sample other than 0 or 1
+  is `measure`. Malformed samples are `envelope`. Otherwise the result's own
+  rejection, if any, is returned.
+- `compare(request, context)` builds a `gauge.comparison@1` from two recorded
+  results. A delta's interval combines theirs by the method of variance
+  estimates recovery, which is Newcombe's hybrid score interval when both are
+  Wilson intervals: for candidate c in [l₁, u₁] and baseline b in [l₂, u₂],
+  d = c - b and the interval is
+  `[d - sqrt((c - l₁)² + (u₂ - b)²), d + sqrt((u₁ - c)² + (b - l₂)²)]`. It
+  treats the results as independent, which is conservative when both ran on
+  the same cases. A value without an interval has unknown uncertainty, so
+  `compare` refuses it with `measure` rather than invent one.
+- `track(results, context)` takes results in the order recorded (Gauge reads
+  no clock) and compares each with the one before it by the same deltas and
+  verdict rules, so a regression is visible step by step. Every result
+  answers the same question: criteria set, case set, split, mode and subject
+  kind (`binding`). The subject may repeat, to follow one implementation,
+  routed unit or policy across re-evaluations, or change, to follow its
+  versions. A step is a regression when its verdict is `candidate_worse`, or
+  `bar_missed` after a result that met its bar. A track is evidence, not a
+  record, and promotes nothing.
+
+A result states its mode, so a replay result is never read as a trial: replay
+compares decisions on recorded inputs and leaves outcome measures unmeasured.
+
 ## Rejection reasons
 
 `validate(value, context)` returns `{ "ok": true }` or
 `{ "ok": false, "reason": reason }`. `context` supplies the known criteria
-sets, case sets and results, keyed by `criteria`, `caseset` and `result`. A
-context entry is known only if it validates itself and its key equals its own
-name; anything else in `context` is unknown, so a record bound to it fails with
-`binding`. The
+sets, case sets, results and revisions, keyed by `criteria`, `caseset`,
+`result` and `revision`. A context entry is known only if it validates itself
+and its key equals its own name, and a criteria set or case set only if a
+revision in `context` also records it; anything else in `context` is unknown,
+so a record bound to it fails with `binding`. The
 first applicable reason, in this order:
 
 1. `envelope`: not an object, unknown `schema`, missing, extra or mistyped
    keys, an out-of-range scalar (`level`, `min_samples`, `size`), an exceeded
    list bound, or a duplicate split or evidence entry
 2. `ref`: an id, rev or digest that fails its pattern
-3. `binding`: an unknown or mismatched criteria set, case set, split, digest or
-   result; measure or constraint entries that do not match the criteria set
-   one-to-one; a comparison across different questions or of a result with
-   itself
-4. `governance`: a policy subject evaluated under criteria or cases it governs
+3. `binding`: an unknown, unrecorded or mismatched criteria set, case set,
+   split, digest or result; measure or constraint entries that do not match
+   the criteria set one-to-one; a comparison across different questions or of
+   a result with itself; a revision whose set is unknown or has another
+   digest, or whose chain is broken; a preference entry whose result is for
+   another routed unit or question
+4. `governance`: a policy subject evaluated under criteria or cases it
+   governs; a revision issued by anyone but the governor of the set it
+   supersedes, or a superseding revision without evidence
 5. `holdout`: a holdout result with any evidence other than held-out reports,
-   or an attribution on a holdout result
+   an attribution on a holdout result, or a case set whose holdout digest
+   equals its tune digest
 6. `mode`: the replay rule
 7. `measure`: a bad measure definition (unknown Weft kind or field, a
    duplicate measure, `wilson@1` on a non-rate aggregate), or a measure entry
-   or delta that breaks its rules
+   or delta that breaks its rules; a preference `accept` that is not a
+   higher-is-better rate, or an entry measure that differs from its result's
 8. `constraint`: a bad constraint definition (a duplicate, or an unknown
    measure), or a status that does not match recomputation
 9. `verdict`: a verdict that does not match recomputation
 10. `attribution`: a basis, signal or confidence that breaks the attribution
     rules
+11. `cost`: more failed trials than trials, or a total that is not the sum of
+    its lines

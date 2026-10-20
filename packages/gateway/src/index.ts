@@ -37,3 +37,14 @@ export {
 } from './config.js';
 
 export { BUDGET_POLICY, budgetRoute } from './budget.js';
+
+export {
+  applyPreferences,
+  loadPreferenceSet,
+  PREFERENCE_SCHEMA,
+  type PreferenceEntry,
+  type PreferenceLoad,
+  type PreferenceMeasure,
+  type PreferenceSet,
+  type PreferenceVerdict,
+} from './preferences.js';

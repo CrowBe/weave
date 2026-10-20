@@ -8,6 +8,7 @@
  * an unknown or malformed one is a `binding` failure, never a crash.
  */
 import { KIND_FIELDS, isCode, isCount, isDigest, isId, isKind, isMetric, isRatio } from '@weave/weft';
+import { recordDigest } from './digest.js';
 import type {
   CaseSet,
   ComparisonVerdict,
@@ -15,10 +16,12 @@ import type {
   ConstraintStatus,
   Context,
   CriteriaSet,
+  EvaluationCost,
   EvaluationResult,
   Interval,
   Rejection,
   ResultVerdict,
+  Revision,
   Verdict,
 } from './types.js';
 
@@ -53,7 +56,7 @@ const evidenceShaped = (x: unknown, min: number, max: number): x is readonly Obj
   && unique(x, evidenceKey);
 
 /** Weft kinds a replay cannot measure: it never takes the actions they report. */
-const OUTCOME_KINDS = new Set(['outcome', 'capability.invoked', 'action.transition']);
+export const OUTCOME_KINDS: ReadonlySet<string> = new Set(['outcome', 'capability.invoked', 'action.transition']);
 /** Recomputation tolerance for deltas. */
 const EPSILON = 1e-9;
 
@@ -64,10 +67,16 @@ export function validate(value: unknown, context: Context): Verdict {
       return validateCriteria(value);
     case 'gauge.caseset@1':
       return validateCaseSet(value);
+    case 'gauge.revision@1':
+      return validateRevision(value, context);
     case 'gauge.result@1':
       return validateResult(value, context);
     case 'gauge.comparison@1':
       return validateComparison(value, context);
+    case 'gauge.cost@1':
+      return validateCost(value, context);
+    case 'gauge.preference@1':
+      return validatePreference(value, context);
     case 'gauge.attribution@1':
       return validateAttribution(value, context);
     default:
@@ -142,33 +151,125 @@ function validateCaseSet(r: Obj): Verdict {
 
   if (!isRev(r.caseset) || !isId(r.workload) || !isId((r.governed_by as Obj).ref)) return reject('ref');
   if (!splits.every(s => isDigest(s.digest))) return reject('ref');
+  // A holdout that is the tune split is visible to whoever tunes.
+  if (splits.length === 2 && splits[0]!.digest === splits[1]!.digest) return reject('holdout');
+  return OK;
+}
+
+// gauge.revision@1
+
+const REVISION_KEYS = ['schema', 'revision', 'record', 'digest', 'supersedes', 'issued_by', 'justification', 'evidence'];
+type SetKind = Revision['record'];
+
+/** An own entry of a context table, or undefined. A missing table holds nothing. */
+const entryOf = (table: unknown, key: string): unknown =>
+  isObject(table) && Object.hasOwn(table, key) ? table[key] : undefined;
+
+/** A revision number a chain can hold: a positive integer without leading zeros. */
+function revisionNumber(rev: string): number | null {
+  const m = /@([1-9][0-9]*)$/.exec(rev);
+  return m === null ? null : Number(m[1]);
+}
+
+function revisionShape(r: Obj): Verdict {
+  if (!hasExactly(r, REVISION_KEYS)) return reject('envelope');
+  if (typeof r.revision !== 'string' || !oneOf(r.record, 'criteria', 'caseset') || typeof r.digest !== 'string'
+    || !(r.supersedes === null || typeof r.supersedes === 'string') || !isGovernance(r.issued_by)
+    || !isCode(r.justification) || !evidenceShaped(r.evidence, 0, 16)) {
+    return reject('envelope');
+  }
+  if (!isRev(r.revision) || !(r.supersedes === null || isRev(r.supersedes)) || !isDigest(r.digest)
+    || !isId((r.issued_by as Obj).ref) || !r.evidence.every(e => isId(e.ref))) {
+    return reject('ref');
+  }
+  return OK;
+}
+
+/** A criteria set or case set filed under its own name that validates. Recording is checked separately. */
+function governedSet(context: Context, kind: SetKind, name: string): CriteriaSet | CaseSet | null {
+  const set = entryOf(kind === 'criteria' ? context.criteria : context.casesets, name);
+  if (!isObject(set)) return null;
+  const filed = kind === 'criteria'
+    ? set.schema === 'gauge.criteria@1' && set.criteria === name && validateCriteria(set).ok
+    : set.schema === 'gauge.caseset@1' && set.caseset === name && validateCaseSet(set).ok;
+  return filed ? set as unknown as CriteriaSet | CaseSet : null;
+}
+
+/** One link binds: its set is known with this digest, and it names the revision before it. */
+function linkBinds(r: Revision, context: Context): boolean {
+  const set = governedSet(context, r.record, r.revision);
+  const n = revisionNumber(r.revision);
+  if (set === null || n === null || recordDigest(set) !== r.digest) return false;
+  if (n === 1) return r.supersedes === null;
+  return r.supersedes === `${r.revision.slice(0, r.revision.lastIndexOf('@'))}@${n - 1}`
+    && governedSet(context, r.record, r.supersedes) !== null;
+}
+
+/** Only the governor of the superseded set (for @1, of the set itself) issues a link, with evidence for a change. */
+function linkGoverned(r: Revision, context: Context): boolean {
+  const governor = governedSet(context, r.record, r.supersedes ?? r.revision)!.governed_by;
+  return r.issued_by.kind === governor.kind && r.issued_by.ref === governor.ref
+    && (r.supersedes === null || r.evidence.length > 0);
+}
+
+/**
+ * Whether a revision in `context` records this set: every link back to @1
+ * validates. Walked iteratively, so a long chain cannot exhaust the stack.
+ */
+function recorded(context: Context, kind: SetKind, name: string): boolean {
+  let rev: string | null = name;
+  while (rev !== null) {
+    const r = entryOf(context.revisions, rev);
+    if (!isObject(r) || r.schema !== 'gauge.revision@1' || r.revision !== rev || !revisionShape(r).ok || r.record !== kind) {
+      return false;
+    }
+    const link = r as unknown as Revision;
+    if (!linkBinds(link, context) || !linkGoverned(link, context)) return false;
+    rev = link.supersedes;
+  }
+  return true;
+}
+
+function validateRevision(r: Obj, context: Context): Verdict {
+  const shape = revisionShape(r);
+  if (!shape.ok) return shape;
+  const link = r as unknown as Revision;
+  if (!linkBinds(link, context)) return reject('binding');
+  if (link.supersedes !== null && !recorded(context, link.record, link.supersedes)) return reject('binding');
+  if (!linkGoverned(link, context)) return reject('governance');
   return OK;
 }
 
 // gauge.result@1
+
+/** A result's measure entries, as a result or a preference entry carries them. */
+const measureEntriesShaped = (x: unknown): x is readonly Obj[] =>
+  objects(x, 0, 32, ['measure', 'value', 'n', 'interval'])
+  && x.every(e => isCode(e.measure) && (e.value === null || isNumber(e.value)) && isCount(e.n)
+    && (e.interval === null || isInterval(e.interval)));
 
 const RESULT_KEYS = [
   'schema', 'result', 'subject', 'criteria', 'caseset', 'split', 'caseset_digest',
   'mode', 'evidence', 'measures', 'constraints', 'verdict',
 ];
 
-function boundCriteria(context: Context, name: unknown): CriteriaSet | null {
-  if (typeof name !== 'string' || !Object.hasOwn(context.criteria, name)) return null;
-  const set = context.criteria[name];
-  if (!isObject(set) || set.schema !== 'gauge.criteria@1' || set.criteria !== name || !validateCriteria(set).ok) return null;
-  return set as unknown as CriteriaSet;
+/** A criteria set is known only while a governed revision records it. */
+export function boundCriteria(context: Context, name: unknown): CriteriaSet | null {
+  if (typeof name !== 'string') return null;
+  const set = governedSet(context, 'criteria', name);
+  return set !== null && recorded(context, 'criteria', name) ? set as CriteriaSet : null;
 }
 
-function boundCaseSet(context: Context, name: unknown): CaseSet | null {
-  if (typeof name !== 'string' || !Object.hasOwn(context.casesets, name)) return null;
-  const set = context.casesets[name];
-  if (!isObject(set) || set.schema !== 'gauge.caseset@1' || set.caseset !== name || !validateCaseSet(set).ok) return null;
-  return set as unknown as CaseSet;
+/** A case set is known only while a governed revision records it. */
+export function boundCaseSet(context: Context, name: unknown): CaseSet | null {
+  if (typeof name !== 'string') return null;
+  const set = governedSet(context, 'caseset', name);
+  return set !== null && recorded(context, 'caseset', name) ? set as CaseSet : null;
 }
 
-function boundResult(context: Context, id: unknown): EvaluationResult | null {
-  if (typeof id !== 'string' || !Object.hasOwn(context.results, id)) return null;
-  const result = context.results[id];
+export function boundResult(context: Context, id: unknown): EvaluationResult | null {
+  if (typeof id !== 'string') return null;
+  const result = entryOf(context.results, id);
   if (!isObject(result) || result.schema !== 'gauge.result@1' || result.result !== id || !validateResult(result, context).ok) {
     return null;
   }
@@ -214,11 +315,7 @@ function validateResult(r: Obj, context: Context): Verdict {
   }
   if (!evidenceShaped(r.evidence, 1, 256)) return reject('envelope');
   const measures = r.measures;
-  if (!objects(measures, 0, 32, ['measure', 'value', 'n', 'interval'])
-    || !measures.every(e => isCode(e.measure) && (e.value === null || isNumber(e.value)) && isCount(e.n)
-      && (e.interval === null || isInterval(e.interval)))) {
-    return reject('envelope');
-  }
+  if (!measureEntriesShaped(measures)) return reject('envelope');
   const constraints = r.constraints;
   if (!objects(constraints, 0, 32, ['constraint', 'status'])
     || !constraints.every(c => isCode(c.constraint) && oneOf(c.status, 'held', 'violated', 'unknown'))) {
@@ -285,6 +382,11 @@ function validateResult(r: Obj, context: Context): Verdict {
 
 // gauge.comparison@1
 
+/** Two results answer the same question: criteria set, case set, split, mode and subject kind. */
+export const sameQuestion = (a: EvaluationResult, b: EvaluationResult): boolean =>
+  a.criteria === b.criteria && a.caseset === b.caseset && a.split === b.split && a.mode === b.mode
+  && a.subject.kind === b.subject.kind;
+
 function validateComparison(r: Obj, context: Context): Verdict {
   // 1. envelope
   if (!hasExactly(r, ['schema', 'comparison', 'experiment', 'baseline', 'candidate', 'deltas', 'verdict'])) {
@@ -312,11 +414,7 @@ function validateComparison(r: Obj, context: Context): Verdict {
   const baseline = boundResult(context, r.baseline);
   const candidate = boundResult(context, r.candidate);
   if (baseline === null || candidate === null) return reject('binding');
-  if (baseline.criteria !== candidate.criteria || baseline.caseset !== candidate.caseset
-    || baseline.split !== candidate.split || baseline.mode !== candidate.mode
-    || baseline.subject.kind !== candidate.subject.kind || baseline.subject.ref === candidate.subject.ref) {
-    return reject('binding');
-  }
+  if (!sameQuestion(baseline, candidate) || baseline.subject.ref === candidate.subject.ref) return reject('binding');
   // A bound result validated, so its criteria set is known and valid.
   const criteria = boundCriteria(context, baseline.criteria)!;
   if (!matchesOneToOne(deltas, 'measure', criteria.measures.map(d => d.measure))) return reject('binding');
@@ -343,7 +441,7 @@ function validateComparison(r: Obj, context: Context): Verdict {
   return OK;
 }
 
-function comparisonVerdict(
+export function comparisonVerdict(
   baseline: EvaluationResult,
   candidate: EvaluationResult,
   criteria: CriteriaSet,
@@ -411,4 +509,92 @@ function validateAttribution(r: Obj, context: Context): Verdict {
       if (r.category !== 'unattributed' || r.signal !== null || r.confidence !== null) return reject('attribution');
       return OK;
   }
+}
+
+// gauge.cost@1
+
+const COST_LINES = ['trial_micros', 'evaluation_micros', 'review_micros', 'total_micros'] as const;
+
+function validateCost(r: Obj, context: Context): Verdict {
+  // 1. envelope: every line is required, so none can be left out.
+  if (!hasExactly(r, ['schema', 'cost', 'result', 'trials', 'failed_trials', ...COST_LINES])) return reject('envelope');
+  if (typeof r.cost !== 'string' || typeof r.result !== 'string' || !isCount(r.trials) || !isCount(r.failed_trials)
+    || !COST_LINES.every(line => isMetric(r[line]))) {
+    return reject('envelope');
+  }
+
+  // 2. ref
+  if (!isId(r.cost) || !isId(r.result)) return reject('ref');
+
+  // 3. binding
+  if (boundResult(context, r.result) === null) return reject('binding');
+
+  // 11. cost: failed trials are among the trials, and the total is every line.
+  const cost = r as unknown as EvaluationCost;
+  if (cost.failed_trials > cost.trials) return reject('cost');
+  const lines = cost.trial_micros + cost.evaluation_micros + cost.review_micros;
+  if (Math.abs(cost.total_micros - lines) > EPSILON * Math.max(1, cost.total_micros)) return reject('cost');
+  return OK;
+}
+
+// gauge.preference@1
+
+const PREFERENCE_KEYS = ['schema', 'preference', 'workload', 'criteria', 'caseset', 'split', 'mode', 'accept', 'entries'];
+
+const sameInterval = (a: Interval | null, b: Interval | null): boolean =>
+  a === null || b === null ? a === b : a[0] === b[0] && a[1] === b[1];
+
+function validatePreference(r: Obj, context: Context): Verdict {
+  // 1. envelope: closed keys, so an entry cannot carry a route field.
+  if (!hasExactly(r, PREFERENCE_KEYS)) return reject('envelope');
+  if (typeof r.preference !== 'string' || typeof r.workload !== 'string' || typeof r.criteria !== 'string'
+    || typeof r.caseset !== 'string' || !oneOf(r.split, 'tune', 'holdout') || !oneOf(r.mode, 'replay', 'trial', 'live')
+    || !isCode(r.accept)) {
+    return reject('envelope');
+  }
+  const entries = r.entries;
+  if (!objects(entries, 1, 64, ['routed_unit', 'result', 'verdict', 'measures'])
+    || !entries.every(e => typeof e.routed_unit === 'string' && typeof e.result === 'string'
+      && oneOf(e.verdict, 'meets_bar', 'misses_bar', 'insufficient_evidence') && measureEntriesShaped(e.measures))
+    || !unique(entries, e => e.routed_unit as string)) {
+    return reject('envelope');
+  }
+
+  // 2. ref
+  if (!isRev(r.preference) || !isId(r.workload) || !isRev(r.criteria) || !isRev(r.caseset)
+    || !entries.every(e => isId(e.routed_unit) && isId(e.result))) {
+    return reject('ref');
+  }
+
+  // 3. binding: every entry is a recorded result for its own routed unit on the set's question.
+  const criteria = boundCriteria(context, r.criteria);
+  const caseset = boundCaseSet(context, r.caseset);
+  if (criteria === null || caseset === null || criteria.workload !== r.workload || caseset.workload !== r.workload) {
+    return reject('binding');
+  }
+  const names = criteria.measures.map(d => d.measure);
+  const results: EvaluationResult[] = [];
+  for (const e of entries) {
+    const result = boundResult(context, e.result);
+    if (result === null || result.subject.kind !== 'routed_unit' || result.subject.ref !== e.routed_unit
+      || result.criteria !== r.criteria || result.caseset !== r.caseset || result.split !== r.split || result.mode !== r.mode
+      || !matchesOneToOne(e.measures as readonly Obj[], 'measure', names)) {
+      return reject('binding');
+    }
+    results.push(result);
+  }
+
+  // 7. measure: the accept rate is a higher-is-better rate, and figures are copied, never asserted.
+  const accept = criteria.measures.find(d => d.measure === r.accept);
+  if (accept === undefined || accept.aggregate !== 'rate' || accept.better !== 'higher') return reject('measure');
+  for (const [i, e] of entries.entries()) {
+    for (const m of e.measures as EvaluationResult['measures']) {
+      const own = results[i]!.measures.find(x => x.measure === m.measure)!;
+      if (m.value !== own.value || m.n !== own.n || !sameInterval(m.interval, own.interval)) return reject('measure');
+    }
+  }
+
+  // 9. verdict
+  if (!entries.every((e, i) => e.verdict === results[i]!.verdict)) return reject('verdict');
+  return OK;
 }
