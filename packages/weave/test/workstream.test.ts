@@ -5,6 +5,8 @@ import {
   type WorkstreamIndex, type WorkstreamResult,
 } from '../src/workstream.js';
 
+/** An operator input recorded on arrival, before routing places it. */
+const unrouted = (seq: number) => ({ seq, route: null, decided_by: null, routed_at: null, target: null, held: false });
 const KEYS = ['schema', 'workstream_id', 'project_id', 'origin', 'opened_at', 'revision', 'goals', 'inputs', 'artifacts',
   'process'];
 
@@ -107,7 +109,7 @@ test('workstreams of one project progress independently, each with its own activ
   const [a, b] = index.workstreams;
   assert.equal(activeGoal(a!), 'g-1');
   assert.equal(activeGoal(b!), 'g-2');
-  assert.deepEqual(a!.inputs, [{ seq: 5 }]);
+  assert.deepEqual(a!.inputs, [unrouted(5)]);
   assert.deepEqual(b!.inputs, [], 'input addressed to one workstream is not in another');
   assert.notDeepEqual(untouched, b);
   refused(transitionWorkstream(index, 'ws-z', { type: 'input.recorded', seq: 6 }), 'unknown_workstream');
@@ -120,7 +122,7 @@ test('inputs are recorded in log order without payloads', () => {
   refused(transitionWorkstream(index, 'ws-a', { type: 'input.recorded', seq: 6 }), 'input_out_of_order');
   refused(transitionWorkstream(index, 'ws-a', { type: 'input.recorded', seq: -1 }), 'invalid_evidence');
   index = ok(transitionWorkstream(index, 'ws-a', { type: 'input.recorded', seq: 9 }));
-  assert.deepEqual(index.workstreams[0]!.inputs, [{ seq: 7 }, { seq: 9 }]);
+  assert.deepEqual(index.workstreams[0]!.inputs, [unrouted(7), unrouted(9)]);
 });
 
 test('artifacts are recorded by reference under the active goal, with increasing revisions', () => {

@@ -98,6 +98,14 @@ message relates to summaries of running threads: `new_thread`,
 confidence rule records the observation and returns `ask_user` / `needs_human`
 when uncertain. Classification grants no authority to execute or interrupt.
 
+### Input routing
+
+The `input.route` judgment site and the fixed meaning of its outcomes. When operator input reaches a workstream with active work, Loom decides how the input relates to that work: `conversation` (respond without changing the work), `steer` (the active goal's work reads it at its next boundary), `interrupt` (request a pause at the next boundary, then reconsider), `parallel` (open a new workstream for it), or `queue` (hold it until the current goal ends). Explicit operator direction decides first and never reaches the site. With no active work a rule decides `conversation`. An uncertain or unavailable answer asks the operator. The answer is an observation: it starts no work, attaches no goal, creates no grant, and never stops work. It does not replace intake classification.
+
+### Route correction
+
+The `input.route.correction@1` record made when the operator re-places a routed input. It holds the earlier outcome and who decided it, the corrected outcome, and the site's answer statistics, never input text. It is evaluation evidence for input routing. It changes no threshold and trains nothing.
+
 ### Judgment site
 
 A named place where bounded judgment is requested for a specific purpose, with typed inputs and outputs and its own evaluation history. Weighing, semantic matching, and response evaluation are distinct sites; a model such as Jev may serve more than one.
@@ -636,6 +644,7 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 - Say **project** for the durable container. A repository may be attached to a project. The npm workspace is the package layout, not a project.
 - Say **workstream**, not *thread*, for an independently addressable stream of conversation and work within a project. A Thread is a causally related sequence inside one goal.
 - Say **operating process**, not *process* or *sandbox*, for a workstream's execution state. `process.spawn` remains an effect, and an execution tier is where code runs.
+- Say **`input.route`**, not *mode* or *intent detection*, for the judgment site that proposes how operator input relates to active work. The operator never has to choose a mode.
 - Say **workspace**, not *dashboard* or *mode*, for the adaptive operator surface. There is no chat, code, research, or agent mode.
 - Say **shell**, not *frame* or *chrome*, for the fixed structure of a workspace. *Frame* remains the name of framing: `profile.frame@1`, the `goal.frame` site, and the `framing` role.
 - Say **region**, not *slot* or *coordinate*, for a semantic place in the shell. An execution slot is scheduler capacity.

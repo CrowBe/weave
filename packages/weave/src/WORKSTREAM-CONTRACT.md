@@ -1,9 +1,11 @@
 # Workstream contract v1
 
-Status: first slices of #26 and #28. `workstream.ts` and
-`operating-process.ts` implement this contract as pure, deterministic
-transitions over versioned records. `test/workstream.test.ts` and
-`test/operating-process.test.ts` pin it. Nothing here is wired into the runtime
+Status: first slices of #26, #28 and #27. `workstream.ts`,
+`operating-process.ts` and `input-route.ts` implement this contract as pure,
+deterministic transitions over versioned records, and `input.route` is a
+choice site under [sites/CONTRACT.md](sites/CONTRACT.md).
+`test/workstream.test.ts`, `test/operating-process.test.ts` and
+`test/input-route.test.ts` pin it. Nothing here is wired into the runtime
 loop, persisted, or presented yet. Tapestry presents projects and
 workstreams; Loom owns their meaning.
 
@@ -72,7 +74,7 @@ A record is a JSON object with exactly these keys, in this order:
 | `opened_at` | seq | Observation that supports opening |
 | `revision` | integer | 0 when opened, plus 1 per transition |
 | `goals` | `{ goal_id, attached_at, ended_at }[]` | In attachment order. `ended_at` is null while the goal is active |
-| `inputs` | `{ seq }[]` | Operator input observations, in increasing seq |
+| `inputs` | `{ seq, route, decided_by, routed_at, target, held }[]` | Operator input observations, in increasing seq, with their placement (see `input.route@1`) |
 | `artifacts` | `{ artifact_id, revision, goal_id, evidence }[]` | In recording order |
 | `process` | `operating.process@1` \| null | The current or most recent operating process |
 
@@ -93,6 +95,8 @@ mutated. A transition on one workstream never changes another.
 | `goal.attached { goal_id, evidence }` | no active goal here; goal not attached to any workstream of the project | `goal_active`, `goal_attached` |
 | `goal.ended { goal_id, evidence }` | that goal is this workstream's active goal; no work in flight (process not `running` or `waiting`) | `goal_not_active`, `work_in_flight` |
 | `input.recorded { seq }` | seq greater than every input already recorded here | `input_out_of_order` |
+| `input.routed { seq, route, decided_by, evidence, target }` | the input is recorded here; an active goal for `steer`, `interrupt` and `queue`; for `parallel`, a target workstream in the project | `unknown_input`, `no_active_goal`, `unknown_workstream`, `invalid_event` |
+| `input.released { seq, evidence }` | no active goal; the input is recorded here and is the oldest held one | `goal_active`, `unknown_input`, `not_next` |
 | `artifact.recorded { artifact_id, revision, evidence }` | an active goal; a revision greater than this workstream's last revision of that artifact | `no_active_goal`, `stale_revision` |
 | `process.opened { process_id, evidence }` | no live process here; an id other than the current process's | `process_live`, `duplicate_process` |
 | `process.transition { event }` | a process here; the process transition below is legal | `no_process`, or the process refusal |
@@ -188,6 +192,91 @@ The rules that matter:
 - **Processes are independent.** A transition on one workstream's process
   never changes another's.
 
+## `input.route@1`
+
+Operator input can arrive while work runs. Loom records it on its workstream
+at once (`input.recorded`, with no placement), so the conversation stays
+responsive, and then decides how the input relates to that workstream's
+active work. The decision and its outcome's meaning are separate: a
+judgment may propose an outcome; what each outcome does is fixed here.
+
+### Deciding
+
+`input-route.ts` decides in this order, and the first rule that applies wins:
+
+1. **Explicit operator direction.** The operator may name an outcome. It
+   reaches Loom through trusted ingress as its own field; Loom never reads a
+   direction out of the input text. A direction is decided by `operator` and
+   never reaches the site. A direction that cannot apply (`steer`,
+   `interrupt` or `queue` with no active goal, or a word outside the five
+   outcomes) is `needs_human` with reason `invalid_direction`. It is not
+   sent to the site either.
+2. **No active work.** With no active goal in the workstream there is
+   nothing to route across. The rule decides `conversation` with reason
+   `no_active_work`.
+3. **The `input.route` site.** Otherwise one choice question is asked. The
+   site sees only the disclosed input text, a disclosed summary of the active
+   work, and the operating process state. An accepted answer is decided by
+   `site`. A fallback is `needs_human` with no outcome: the input stays
+   recorded and unplaced, the work is unaffected, and the operator is asked.
+   A cancellation is `paused` with no outcome.
+
+The record is `input.route@1`, with exactly these keys in this order:
+`schema`, `workstream_id`, `input_seq`, `decided_by` (`operator`, `rule` or
+`site`), `outcome` (one of the five, or null), `status` (`transition`,
+`needs_human` or `paused`), `reason` (`operator_direction`,
+`invalid_direction`, `no_active_work`, or the site's reason), and `site`
+(the `decision-site@1` observation, or null when the site was not asked).
+It copies no input text and no summary. Replay rebuilds it from the
+recorded site transition without a provider (`transitionRoute`).
+
+### What each outcome does
+
+Applying a record places the input on its workstream and makes only the
+changes below, all or none. The record's own observation (`evidence`)
+supports every change. A record without an outcome is refused (`no_route`).
+An input that is already placed can be re-placed only by the operator
+(otherwise `already_routed`), and only to a different outcome (otherwise
+`unchanged`).
+
+| Outcome | Loom does | Loom does not |
+| --- | --- | --- |
+| `conversation` | Places the input. The workstream's ordinary cycle may respond. | Change the goal, the process or the queue |
+| `steer` | Places the input for the active goal's work, which reads it at its next boundary. | Change the process, the goal's scope or its authority. A steer that would broaden scope still needs a goal revision under authority |
+| `interrupt` | Places the input. If the process is idle, running or waiting with no pending pause request, records `pause_requested`. The provider pauses at its next boundary; then Loom reconsiders the goal with the input. | Stop work. Only an explicit operator stop request ends a process |
+| `parallel` | Opens a new workstream (origin `route`, id from the caller's injected port), records the input there as `conversation` decided by `rule`, and places it on the original workstream with that target. | Attach a goal, open a process or grant anything in the new workstream. Work there starts only through the ordinary goal path |
+| `queue` | Places the input as held. Once the workstream has no active goal, held inputs are offered oldest first (`nextQueued`); `input.released` marks one released. | Dispatch it, or offer it while a goal is active |
+
+A routing answer is an observation. It cannot dispatch work, create a grant,
+or widen disclosure. No outcome starts or resumes a process, attaches a goal
+or opens a process. None of these records has a field for a grant, an
+approval, a scope or a slice. The site's answer is read only through the
+site's admitted choice. Every other field a provider returns is ignored.
+
+### Correcting
+
+The operator sees each placement and may correct it with one direction.
+`correctRoute` checks that the record still describes the input's current
+placement (otherwise `stale_record`). It refuses a correction to the same
+outcome (`unchanged`), and a direction that cannot apply
+(`invalid_direction`). Then it re-places the input as decided by
+`operator`:
+
+- A pause request that the corrected `interrupt` made and the provider has
+  not yet honoured is withdrawn (`pause_withdrawn`). A pause that already
+  happened stays: resuming is its own explicit decision.
+- A held `queue` placement stops being held.
+- A workstream that `parallel` opened stays open, with no goal and no
+  process.
+- Work that already read a `steer` is not rewound.
+
+Every correction yields `input.route.correction@1`, with exactly these keys
+in this order: `schema`, `workstream_id`, `input_seq`, `routed_by`,
+`routed`, `corrected`, `site_answer`, `site_confidence`, `site_top_p` and
+`evidence`. It holds closed-vocabulary values, numbers and ids only. It is
+evaluation evidence for `input.route`: a later evaluation may read it. It
+changes no threshold, trains nothing and promotes nothing.
+
 ## What this slice does not do
 
 - Wire workstreams into the runtime loop, the observation log or replay. The
@@ -200,6 +289,12 @@ The rules that matter:
   writes stay a matter for effect locks.
 - Move the project record. The reference binding keeps its availability
   index.
+- Route input that names no workstream, or choose among several
+  workstreams' active work. The site judges one workstream's active work;
+  `parallel` opens a new workstream and never targets an existing one.
+- Reconsider an interrupted goal, read steers at a boundary, or respond to
+  conversation. Those belong to the cycle that runs the goal.
+- Replace `intake.classify`. It keeps its options and frozen benchmark sets.
 - Run anything. There is no execution-provider seam, worker, snapshot
   store, resume-point MAC or retention rule, and no reconciliation of
   effects still in flight when work stops. Worker capacity as a scheduler

@@ -58,6 +58,23 @@ until an audit reads stale causes. Until then, a caller that needs the cause
 persists the recorded answer and the current reading it passes to the pure
 transition, which reproduces the decision.
 
+`input.route` (#27) is a choice site with options `conversation`, `steer`,
+`interrupt`, `parallel` and `queue`. It requires confidence .80
+(provisional, as intake, until calibration) and falls back to `ask_user` /
+`needs_human`. Its state is `RouteState`: one disclosed operator input, a
+disclosed summary of the workstream's active work, and that workstream's
+operating process state. The type enforces that shape as it does for
+intake. Routing never dispatches, so `needs_dispatch` is always false: an
+outage takes the fallback and asks the operator, and only cancellation
+pauses. The site is asked only after explicit operator direction and the
+no-active-work rule have not decided. The routing record and what each
+outcome does are in [WORKSTREAM-CONTRACT.md](../WORKSTREAM-CONTRACT.md).
+The answer is an observation and grants no authority to dispatch,
+interrupt or open work. `input.route` does not replace `intake.classify`. It
+has no `stop` outcome, because only explicit operator direction may end
+work. It has no benchmark set yet, and `decision.sites` cannot yet override
+its provider.
+
 `stopForNoProgress(history, issues)` stops on the last two stalled/regressing
 choices or a currently reappearing issue with at least two recorded fix attempts.
 Transport, persistence and full-loop integration remain
