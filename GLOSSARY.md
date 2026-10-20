@@ -399,11 +399,15 @@ The evaluation package, namespaced Weave Gauge. It turns Weft traces and other r
 
 ### Criteria set
 
-A governed, versioned record of what counts as success for a workload: measures, quality-bar and protected constraints, and a deterministic statistical method. Its revision cites the authority that issued it. The subject under evaluation cannot author or govern it.
+A governed, versioned record of what counts as success for a workload: measures, quality-bar and protected constraints, and a deterministic statistical method. It cites the authority that governs it, and a governed revision records each revision. The subject under evaluation cannot author or govern it. Both kinds of constraint are pass/fail gates, never terms traded against a score.
 
 ### Case set
 
-A governed, versioned record naming a workload's cases by digest, split into a tune split and a holdout.
+A governed, versioned record naming a workload's cases by digest, split into a tune split and a holdout. The holdout never repeats the tune split.
+
+### Governed revision
+
+Gauge's record (`gauge.revision@1`) that one revision of a criteria set or case set exists: its digest, the revision it supersedes, the authority that issued it and its justification. Only the governor of the superseded set may issue it, and a change cites evidence. Gauge binds results only to recorded revisions, so editing a set in place unbinds everything that cites it, and an optimiser cannot redefine success for its own candidate.
 
 ### Evaluation result
 
@@ -411,7 +415,19 @@ Gauge's record of one subject on one split of a case set under one criteria set,
 
 ### Comparison
 
-Gauge's recomputed verdict on a baseline and a candidate evaluation result for the same criteria set, case set, split and mode. A candidate that misses its bar is never better. A comparison is evidence an experiment may cite; it is not a promotion.
+Gauge's recomputed verdict on a baseline and a candidate evaluation result for the same criteria set, case set, split and mode. Every delta carries an interval; *insufficient evidence* is a valid verdict, never a tie broken by default. A candidate that misses its bar is never better. A comparison is evidence an experiment may cite; it is not a promotion.
+
+### Evaluation cost
+
+Gauge's record (`gauge.cost@1`) of what producing one evaluation result cost: every trial with failed trials counted, evaluation and human review, and their recomputed total. An experiment weighs its benefit against this whole cost, not against its successful trials alone.
+
+### Track
+
+Gauge's step-by-step comparison of results for one question in the order they were recorded, so a regression is visible. Unlike a comparison it may follow one subject across re-evaluations. A step is a regression when the later result is worse or misses a bar the earlier one met. A track is evidence, not a record, and promotes nothing.
+
+### Routing preference set
+
+Gauge's versioned record (`gauge.preference@1`) of eval-derived routing evidence: for each routed unit, the measures and verdict copied from its evaluation result on one question, with their uncertainty. The gateway loads it as data without importing Gauge. Applying one is a governed promotion by the composition root; it replaces only the named units' routing evidence, so deterministic policy always filters routes before a preference can order them.
 
 ### Failure attribution
 
