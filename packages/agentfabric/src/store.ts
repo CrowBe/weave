@@ -1,8 +1,19 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  truncateSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CapabilityContract, InvocationOutcome } from '@weave/agentsop';
 
 const openStores = new Set<string>();
+const COMPACT_BYTES = 256 * 1024;
 
 export type ResourceKind = 'source' | 'destination' | 'workspace';
 
@@ -79,56 +90,55 @@ export interface FabricSnapshot {
 
 interface MutableResource extends StoredResource {}
 
+type FabricMutation =
+  | { readonly op: 'snapshot'; readonly snapshot: FabricSnapshot }
+  | { readonly op: 'allocate'; readonly id: string }
+  | { readonly op: 'issue'; readonly ref: IssuedRef }
+  | { readonly op: 'put'; readonly resource: StoredResource }
+  | { readonly op: 'start'; readonly record: InvocationRecord; readonly measured_cost_micros: number }
+  | { readonly op: 'result'; readonly record: InvocationRecord }
+  | { readonly op: 'cost'; readonly micros: number }
+  | { readonly op: 'admission'; readonly admission: StoredAdmission }
+  | { readonly op: 'conclusion'; readonly conclusion: unknown }
+  | { readonly op: 'workload'; readonly workload: StoredWorkload }
+  | { readonly op: 'remember'; readonly result: StoredBuiltinResult };
+
+interface LoadedJournal {
+  readonly records: readonly FabricMutation[];
+  readonly legacySnapshot: FabricSnapshot | null;
+  readonly torn_tail_ignored: boolean;
+  readonly ignored_tail_bytes: number;
+}
+
 /**
  * Host store. Locators never leave this object. When constructed with a path,
- * every mutation is written atomically so a later process can restore it.
+ * every mutation is appended to a JSONL journal and folded back on open.
  */
 export class FabricStore {
-  private next_handle: number;
-  private next_canonical: number;
-  private readonly resources: Map<string, MutableResource>;
-  private readonly refs: Map<string, IssuedRef>;
-  private readonly canonicalPrimary: Map<string, string>;
-  private readonly publicationOwners: Map<string, string>;
-  private readonly invocations: Map<string, InvocationRecord>;
-  private admissions: StoredAdmission[];
-  private conclusionRecords: unknown[];
-  private workloadRecords: StoredWorkload[];
-  private measured_cost_micros: number;
-  private readonly builtinResults: Map<string, StoredBuiltinResult>;
+  private next_handle = 1;
+  private next_canonical = 1;
+  private readonly resources = new Map<string, MutableResource>();
+  private readonly refs = new Map<string, IssuedRef>();
+  private readonly canonicalPrimary = new Map<string, string>();
+  private readonly publicationOwners = new Map<string, string>();
+  private readonly invocations = new Map<string, InvocationRecord>();
+  private admissions: StoredAdmission[] = [];
+  private conclusionRecords: unknown[] = [];
+  private workloadRecords: StoredWorkload[] = [];
+  private measured_cost_micros = 0;
+  private readonly builtinResults = new Map<string, StoredBuiltinResult>();
   private readonly path: string | null;
+  private fileBytes = 0;
+  private tailBytes = 0;
+  private written_bytes = 0;
+  private journalReady = false;
+  recovery = { torn_tail_ignored: false, ignored_tail_bytes: 0 };
   persistStart = true;
   persistResult = true;
 
   constructor(snapshot?: FabricSnapshot, path: string | null = null) {
-    this.next_handle = snapshot?.next_handle ?? 1;
-    this.next_canonical = snapshot?.next_canonical ?? 1;
-    this.resources = new Map((snapshot?.resources ?? []).map((r) => [r.canonical_id, { ...r }]));
-    this.refs = new Map((snapshot?.refs ?? []).map((r) => [r.handle, { ...r }]));
-    this.canonicalPrimary = new Map();
-    for (const ref of snapshot?.refs ?? []) {
-      if (!this.canonicalPrimary.has(ref.canonical_id)) {
-        this.canonicalPrimary.set(ref.canonical_id, ref.handle);
-      }
-    }
-    this.publicationOwners = new Map();
-    for (const resource of this.resources.values()) {
-      if (resource.publication && !this.publicationOwners.has(resource.publication.invocation_id)) {
-        this.publicationOwners.set(resource.publication.invocation_id, resource.canonical_id);
-      }
-    }
-    this.invocations = new Map((snapshot?.invocations ?? []).map((r) => [r.invocation_id, { ...r }]));
-    this.admissions = (snapshot?.admissions ?? []).map((admission) => ({ ...admission, contract: { ...admission.contract } }));
-    this.conclusionRecords = (snapshot?.conclusions ?? []).map((conclusion) => structuredClone(conclusion));
-    this.workloadRecords = (snapshot?.workload ?? []).map((item) => ({ ...item }));
-    this.measured_cost_micros = snapshot?.measured_cost_micros ?? 0;
-    this.builtinResults = new Map(
-      (snapshot?.builtin_results ?? []).map((item) => [
-        item.key,
-        { ...item, outcome: structuredClone(item.outcome) },
-      ]),
-    );
     this.path = path;
+    this.applySnapshot(snapshot);
   }
 
   static open(path: string): FabricStore {
@@ -136,14 +146,37 @@ export class FabricStore {
     if (openStores.has(key)) {
       throw new Error(`host store is already open: ${key}`);
     }
-    const store = existsSync(path)
-      ? new FabricStore(JSON.parse(readFileSync(path, 'utf8')) as FabricSnapshot, path)
-      : new FabricStore(undefined, path);
-    if (!existsSync(path)) {
-      store.save();
+    const directory = dirname(path);
+    if (!existsSync(directory)) {
+      mkdirSync(directory, { recursive: true });
     }
-    openStores.add(key);
-    return store;
+    acquireLock(path);
+    try {
+      if (!existsSync(path)) {
+        writeFileSync(path, '');
+      }
+      const loaded = readJournal(path);
+      const store = loaded.legacySnapshot
+        ? new FabricStore(loaded.legacySnapshot, path)
+        : new FabricStore(undefined, path);
+      store.recovery = {
+        torn_tail_ignored: loaded.torn_tail_ignored,
+        ignored_tail_bytes: loaded.ignored_tail_bytes,
+      };
+      if (loaded.legacySnapshot) {
+        store.compact();
+      } else {
+        store.replay(loaded.records);
+      }
+      store.fileBytes = statSync(path).size;
+      store.tailBytes = 0;
+      store.journalReady = true;
+      openStores.add(key);
+      return store;
+    } catch (error) {
+      releaseLock(path);
+      throw error;
+    }
   }
 
   /** Release this process's ownership so a later restart can open the store. */
@@ -152,6 +185,7 @@ export class FabricStore {
       return;
     }
     openStores.delete(resolve(this.path));
+    releaseLock(this.path);
   }
 
   snapshot(): FabricSnapshot {
@@ -181,7 +215,7 @@ export class FabricStore {
 
   allocateCanonical(save = true): string {
     const id = `res_${this.next_canonical}`;
-    this.next_canonical += 1;
+    this.mutate({ op: 'allocate', id });
     if (save) {
       this.save();
     }
@@ -190,11 +224,7 @@ export class FabricStore {
 
   issue(canonical_id: string, kind: ResourceKind, save = true): string {
     const handle = `ref_${this.next_handle}`;
-    this.next_handle += 1;
-    this.refs.set(handle, { handle, canonical_id, kind });
-    if (!this.canonicalPrimary.has(canonical_id)) {
-      this.canonicalPrimary.set(canonical_id, handle);
-    }
+    this.mutate({ op: 'issue', ref: { handle, canonical_id, kind } });
     if (save) {
       this.save();
     }
@@ -210,21 +240,7 @@ export class FabricStore {
   }
 
   putResource(resource: MutableResource, save = true): void {
-    const previous = this.resources.get(resource.canonical_id);
-    if (
-      previous?.publication &&
-      previous.publication.invocation_id !== resource.publication?.invocation_id &&
-      this.publicationOwners.get(previous.publication.invocation_id) === resource.canonical_id
-    ) {
-      this.publicationOwners.delete(previous.publication.invocation_id);
-    }
-    this.resources.set(resource.canonical_id, resource);
-    if (resource.publication) {
-      const owner = this.publicationOwners.get(resource.publication.invocation_id);
-      if (owner === undefined || owner === resource.canonical_id) {
-        this.publicationOwners.set(resource.publication.invocation_id, resource.canonical_id);
-      }
-    }
+    this.mutate({ op: 'put', resource });
     if (save) {
       this.save();
     }
@@ -247,16 +263,7 @@ export class FabricStore {
     if (!this.persistStart) {
       throw new PersistFailure('invocation start');
     }
-    const previous = this.invocations.get(record.invocation_id);
-    const previousCost = previous
-      ? previous.measured_cost_micros ?? measuredCostMicros
-      : 0;
-    this.invocations.set(record.invocation_id, {
-      ...record,
-      inputs: structuredClone(record.inputs),
-      measured_cost_micros: measuredCostMicros,
-    });
-    this.measured_cost_micros += measuredCostMicros - previousCost;
+    this.mutate({ op: 'start', record, measured_cost_micros: measuredCostMicros });
     this.save();
   }
 
@@ -264,20 +271,13 @@ export class FabricStore {
     if (!this.persistResult) {
       throw new PersistFailure('invocation result');
     }
-    this.setInvocation(record);
+    this.mutate({ op: 'result', record });
     this.save();
   }
 
   recordAdmission(admission: StoredAdmission): void {
     const copy = { ...admission, contract: { ...admission.contract } };
-    const index = this.admissions.findIndex(
-      (item) => item.operation === admission.operation && item.implementation_id === admission.implementation_id,
-    );
-    if (index >= 0) {
-      this.admissions[index] = copy;
-    } else {
-      this.admissions.push(copy);
-    }
+    this.mutate({ op: 'admission', admission: copy });
     this.save();
   }
 
@@ -286,7 +286,7 @@ export class FabricStore {
   }
 
   retainConclusion(conclusion: unknown): void {
-    this.conclusionRecords.push(structuredClone(conclusion));
+    this.mutate({ op: 'conclusion', conclusion });
     this.save();
   }
 
@@ -295,12 +295,7 @@ export class FabricStore {
   }
 
   noteWorkload(record: StoredWorkload): void {
-    const index = this.workloadRecords.findIndex((item) => item.goal_id === record.goal_id);
-    if (index >= 0) {
-      this.workloadRecords[index] = { ...record };
-    } else {
-      this.workloadRecords.push({ ...record });
-    }
+    this.mutate({ op: 'workload', workload: record });
     this.save();
   }
 
@@ -309,7 +304,7 @@ export class FabricStore {
   }
 
   addMeasuredCost(micros: number): void {
-    this.measured_cost_micros += micros;
+    this.mutate({ op: 'cost', micros });
     this.save();
   }
 
@@ -318,7 +313,7 @@ export class FabricStore {
   }
 
   rememberResult(result: StoredBuiltinResult): void {
-    this.builtinResults.set(result.key, { ...result, outcome: structuredClone(result.outcome) });
+    this.mutate({ op: 'remember', result: { ...result, outcome: structuredClone(result.outcome) } });
     this.save();
   }
 
@@ -328,8 +323,216 @@ export class FabricStore {
   }
 
   writeInvocation(record: InvocationRecord): void {
-    this.setInvocation(record);
+    this.mutate({ op: 'result', record });
     this.save();
+  }
+
+  /** Total journal bytes written by this store instance, including compaction. */
+  bytesWritten(): number {
+    return this.written_bytes;
+  }
+
+  save(): void {
+    if (!this.path) {
+      return;
+    }
+    if (this.tailBytes >= COMPACT_BYTES) {
+      this.compact();
+    }
+  }
+
+  private mutate(mutation: FabricMutation): void {
+    this.append(mutation);
+    this.applyMutation(mutation);
+  }
+
+  private append(mutation: FabricMutation): void {
+    if (!this.path) {
+      return;
+    }
+    if (!this.journalReady) {
+      this.compact();
+    }
+    const line = `${JSON.stringify(mutation)}\n`;
+    appendFileSync(this.path, line);
+    const bytes = Buffer.byteLength(line);
+    this.fileBytes += bytes;
+    this.tailBytes += bytes;
+    this.written_bytes += bytes;
+  }
+
+  private compact(): void {
+    if (!this.path) {
+      return;
+    }
+    const directory = dirname(this.path);
+    if (!existsSync(directory)) {
+      mkdirSync(directory, { recursive: true });
+    }
+    const text = `${JSON.stringify({ op: 'snapshot', snapshot: this.snapshot() })}\n`;
+    const tmp = `${this.path}.tmp`;
+    writeFileSync(tmp, text);
+    renameSync(tmp, this.path);
+    const bytes = Buffer.byteLength(text);
+    this.fileBytes = bytes;
+    this.tailBytes = 0;
+    this.written_bytes += bytes;
+    this.journalReady = true;
+  }
+
+  private replay(records: readonly FabricMutation[]): void {
+    for (const mutation of records) {
+      this.applyMutation(mutation);
+    }
+  }
+
+  private applyMutation(mutation: FabricMutation): void {
+    switch (mutation.op) {
+      case 'snapshot':
+        this.applySnapshot(mutation.snapshot);
+        return;
+      case 'allocate': {
+        const value = counterAfter(mutation.id, 'res_');
+        if (value === undefined) {
+          throw new Error(`invalid host store allocation: ${mutation.id}`);
+        }
+        this.next_canonical = Math.max(this.next_canonical, value + 1);
+        return;
+      }
+      case 'issue':
+        this.applyIssue(mutation.ref);
+        return;
+      case 'put':
+        this.applyPut(mutation.resource);
+        return;
+      case 'start':
+        this.applyStart(mutation.record, mutation.measured_cost_micros);
+        return;
+      case 'result':
+        this.setInvocation(mutation.record);
+        return;
+      case 'cost':
+        this.measured_cost_micros += mutation.micros;
+        return;
+      case 'admission':
+        this.applyAdmission(mutation.admission);
+        return;
+      case 'conclusion':
+        this.conclusionRecords.push(structuredClone(mutation.conclusion));
+        return;
+      case 'workload':
+        this.applyWorkload(mutation.workload);
+        return;
+      case 'remember':
+        this.applyRemember(mutation.result);
+        return;
+    }
+  }
+
+  private applySnapshot(snapshot?: FabricSnapshot): void {
+    this.next_handle = snapshot?.next_handle ?? 1;
+    this.next_canonical = snapshot?.next_canonical ?? 1;
+    this.resources.clear();
+    for (const resource of snapshot?.resources ?? []) {
+      this.resources.set(resource.canonical_id, { ...resource });
+    }
+    this.refs.clear();
+    for (const ref of snapshot?.refs ?? []) {
+      this.refs.set(ref.handle, { ...ref });
+    }
+    this.canonicalPrimary.clear();
+    for (const ref of snapshot?.refs ?? []) {
+      if (!this.canonicalPrimary.has(ref.canonical_id)) {
+        this.canonicalPrimary.set(ref.canonical_id, ref.handle);
+      }
+    }
+    this.publicationOwners.clear();
+    for (const resource of this.resources.values()) {
+      if (resource.publication && !this.publicationOwners.has(resource.publication.invocation_id)) {
+        this.publicationOwners.set(resource.publication.invocation_id, resource.canonical_id);
+      }
+    }
+    this.invocations.clear();
+    for (const record of snapshot?.invocations ?? []) {
+      this.invocations.set(record.invocation_id, { ...record });
+    }
+    this.admissions = (snapshot?.admissions ?? []).map((admission) => ({
+      ...admission,
+      contract: { ...admission.contract },
+    }));
+    this.conclusionRecords = (snapshot?.conclusions ?? []).map((conclusion) => structuredClone(conclusion));
+    this.workloadRecords = (snapshot?.workload ?? []).map((item) => ({ ...item }));
+    this.measured_cost_micros = snapshot?.measured_cost_micros ?? 0;
+    this.builtinResults.clear();
+    for (const item of snapshot?.builtin_results ?? []) {
+      this.builtinResults.set(item.key, { ...item, outcome: structuredClone(item.outcome) });
+    }
+  }
+
+  private applyIssue(ref: IssuedRef): void {
+    this.refs.set(ref.handle, { ...ref });
+    if (!this.canonicalPrimary.has(ref.canonical_id)) {
+      this.canonicalPrimary.set(ref.canonical_id, ref.handle);
+    }
+    const value = counterAfter(ref.handle, 'ref_');
+    if (value === undefined) {
+      throw new Error(`invalid host store reference: ${ref.handle}`);
+    }
+    this.next_handle = Math.max(this.next_handle, value + 1);
+  }
+
+  private applyPut(resource: StoredResource): void {
+    const previous = this.resources.get(resource.canonical_id);
+    if (
+      previous?.publication &&
+      previous.publication.invocation_id !== resource.publication?.invocation_id &&
+      this.publicationOwners.get(previous.publication.invocation_id) === resource.canonical_id
+    ) {
+      this.publicationOwners.delete(previous.publication.invocation_id);
+    }
+    this.resources.set(resource.canonical_id, resource);
+    if (resource.publication) {
+      const owner = this.publicationOwners.get(resource.publication.invocation_id);
+      if (owner === undefined || owner === resource.canonical_id) {
+        this.publicationOwners.set(resource.publication.invocation_id, resource.canonical_id);
+      }
+    }
+  }
+
+  private applyStart(record: InvocationRecord, measuredCostMicros: number): void {
+    const previous = this.invocations.get(record.invocation_id);
+    const previousCost = previous ? previous.measured_cost_micros ?? measuredCostMicros : 0;
+    this.invocations.set(record.invocation_id, {
+      ...record,
+      inputs: structuredClone(record.inputs),
+      measured_cost_micros: measuredCostMicros,
+    });
+    this.measured_cost_micros += measuredCostMicros - previousCost;
+  }
+
+  private applyAdmission(admission: StoredAdmission): void {
+    const copy = { ...admission, contract: { ...admission.contract } };
+    const index = this.admissions.findIndex(
+      (item) => item.operation === admission.operation && item.implementation_id === admission.implementation_id,
+    );
+    if (index >= 0) {
+      this.admissions[index] = copy;
+    } else {
+      this.admissions.push(copy);
+    }
+  }
+
+  private applyWorkload(record: StoredWorkload): void {
+    const index = this.workloadRecords.findIndex((item) => item.goal_id === record.goal_id);
+    if (index >= 0) {
+      this.workloadRecords[index] = { ...record };
+    } else {
+      this.workloadRecords.push({ ...record });
+    }
+  }
+
+  private applyRemember(result: StoredBuiltinResult): void {
+    this.builtinResults.set(result.key, { ...result, outcome: structuredClone(result.outcome) });
   }
 
   private setInvocation(record: InvocationRecord): void {
@@ -340,19 +543,6 @@ export class FabricStore {
     }
     this.invocations.set(record.invocation_id, stored);
   }
-
-  save(): void {
-    if (!this.path) {
-      return;
-    }
-    const directory = dirname(this.path);
-    if (!existsSync(directory)) {
-      mkdirSync(directory, { recursive: true });
-    }
-    const tmp = `${this.path}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(this.snapshot())}\n`);
-    renameSync(tmp, this.path);
-  }
 }
 
 export class PersistFailure extends Error {
@@ -360,4 +550,149 @@ export class PersistFailure extends Error {
     super(`failed to persist ${what}`);
     this.name = 'PersistFailure';
   }
+}
+
+function acquireLock(path: string): void {
+  const lockPath = `${path}.lock`;
+  try {
+    writeFileSync(lockPath, String(process.pid), { flag: 'wx' });
+  } catch (error) {
+    if (!isErrno(error, 'EEXIST')) {
+      throw error;
+    }
+    let owner: number | undefined;
+    try {
+      owner = Number.parseInt(readFileSync(lockPath, 'utf8').trim(), 10);
+    } catch {
+      owner = undefined;
+    }
+    if (owner !== undefined && Number.isInteger(owner) && isAlive(owner)) {
+      throw new Error(`host store is already open: ${resolve(path)}`);
+    }
+    writeFileSync(lockPath, String(process.pid));
+  }
+}
+
+function releaseLock(path: string): void {
+  const lockPath = `${path}.lock`;
+  try {
+    const owner = Number.parseInt(readFileSync(lockPath, 'utf8').trim(), 10);
+    if (owner === process.pid) {
+      unlinkSync(lockPath);
+    }
+  } catch {
+    return;
+  }
+}
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return isErrno(error, 'EPERM');
+  }
+}
+
+function isErrno(error: unknown, code: string): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === code;
+}
+
+function counterAfter(value: string, prefix: string): number | undefined {
+  if (!value.startsWith(prefix)) {
+    return undefined;
+  }
+  const parsed = Number(value.slice(prefix.length));
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+function readJournal(path: string): LoadedJournal {
+  let text = readFileSync(path, 'utf8');
+  let torn_tail_ignored = false;
+  let ignored_tail_bytes = 0;
+  if (text.length > 0 && !text.endsWith('\n')) {
+    const breakAt = text.lastIndexOf('\n');
+    const tail = text.slice(breakAt + 1);
+    try {
+      JSON.parse(tail);
+      appendFileSync(path, '\n');
+      text += '\n';
+    } catch {
+      const valid = text.slice(0, breakAt + 1);
+      truncateSync(path, Buffer.byteLength(valid));
+      text = valid;
+      torn_tail_ignored = true;
+      ignored_tail_bytes = Buffer.byteLength(tail);
+    }
+  }
+  const lines = text.split('\n');
+  if (lines.at(-1) === '') {
+    lines.pop();
+  }
+  const parsed: unknown[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? '';
+    if (line.length === 0) {
+      continue;
+    }
+    let value: unknown;
+    try {
+      value = JSON.parse(line);
+    } catch {
+      if (index === lines.length - 1) {
+        const validLines = lines.slice(0, index);
+        const valid = validLines.length === 0 ? '' : `${validLines.join('\n')}\n`;
+        truncateSync(path, Buffer.byteLength(valid));
+        torn_tail_ignored = true;
+        ignored_tail_bytes += Buffer.byteLength(line);
+        continue;
+      }
+      throw new Error(`invalid host store log at line ${index + 1}: ${path}`);
+    }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error(`invalid host store log at line ${index + 1}: ${path}`);
+    }
+    parsed.push(value);
+  }
+  if (parsed.length === 1 && isLegacySnapshot(parsed[0])) {
+    return {
+      records: [],
+      legacySnapshot: parsed[0],
+      torn_tail_ignored,
+      ignored_tail_bytes,
+    };
+  }
+  const records = parsed.map((value, index) => asMutation(value, index, path));
+  return { records, legacySnapshot: null, torn_tail_ignored, ignored_tail_bytes };
+}
+
+function isLegacySnapshot(value: unknown): value is FabricSnapshot {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return !('op' in record) && 'next_handle' in record && 'resources' in record && 'refs' in record;
+}
+
+function asMutation(value: unknown, index: number, path: string): FabricMutation {
+  const record = value as { op?: unknown };
+  if (
+    typeof record.op !== 'string' ||
+    ![
+      'snapshot',
+      'allocate',
+      'issue',
+      'put',
+      'start',
+      'result',
+      'cost',
+      'admission',
+      'conclusion',
+      'workload',
+      'remember',
+    ].includes(record.op)
+  ) {
+    throw new Error(`invalid host store mutation at line ${index + 1}: ${path}`);
+  }
+  return value as FabricMutation;
 }
