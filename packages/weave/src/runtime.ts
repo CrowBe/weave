@@ -174,6 +174,8 @@ export class IngressHandle {
   }
 }
 
+const runtimeLogs = new WeakMap<Runtime, readonly Observation[]>();
+
 export class Runtime {
   private readonly log: Observation[] = [];
   private readonly cycles: CycleRecord[] = [];
@@ -213,6 +215,7 @@ export class Runtime {
     this.slots = options.executionSlots ?? Number.POSITIVE_INFINITY;
     this.frameProfile = options.frameProfile ?? DEFAULT_FRAME_PROFILE;
     this.replayLog = recorded;
+    runtimeLogs.set(this, this.log);
     if (recorded) {
       for (const observation of recorded) {
         if (observation.payload_type === 'capability.described' && observation.validation.status === 'accepted') {
@@ -393,11 +396,6 @@ export class Runtime {
 
   trace(): Trace {
     return structuredClone({ observations: this.log, cycles: this.cycles });
-  }
-
-  /** Internal: the live log without a defensive copy. Replay verifies only its appended suffix. */
-  observationLog(): readonly Observation[] {
-    return this.log;
   }
 
   /** Rejections kept for diagnosis. Oversize payloads are not copied into the log. */
@@ -2375,9 +2373,9 @@ export function replay(recorded: readonly Observation[], options: RuntimeOptions
       }
       const { seq: _seq, validation: _validation, ...input } = observation;
       runtime.feed(input);
-      verified = checkPrefix(runtime.observationLog(), ordered, verified);
+      verified = checkPrefix(liveLog(runtime), ordered, verified);
     }
-    const replayed = runtime.observationLog();
+    const replayed = liveLog(runtime);
     checkPrefix(replayed, ordered);
     if (replayed.length !== ordered.length) {
       throw new ReplayFailureError(replayed.length + 1, null, 'recorded log continues beyond what replay reproduced');
@@ -2400,6 +2398,14 @@ export function recover(recorded: readonly Observation[], options: RuntimeOption
   runtime.load(recorded);
   runtime.reconcile();
   return runtime;
+}
+
+function liveLog(runtime: Runtime): readonly Observation[] {
+  const log = runtimeLogs.get(runtime);
+  if (!log) {
+    throw new Error('runtime log is only available to replay');
+  }
+  return log;
 }
 
 function checkPrefix(

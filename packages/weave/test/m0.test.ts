@@ -621,6 +621,15 @@ describe('M0 replay', () => {
       assert.equal(stableStringify(again.trace.observations), recorded);
     }
   });
+
+  it('M0-T24 Runtime does not expose its mutable observation log', () => {
+    const runtime = scenario().runtime;
+    assert.equal(
+      'observationLog' in runtime,
+      false,
+      'the live log must stay private so callers cannot truncate it and reuse sequence numbers',
+    );
+  });
 });
 
 describe('M0 structural', () => {
