@@ -241,7 +241,7 @@ describe('FabricStore append-only journal', () => {
     } finally { first?.close(); second?.close(); rmSync(dir, { recursive: true, force: true }); }
   });
 
-  it('retries when a claim disappears while checking its claimant after backoff', () => {
+  it('retries when a claim disappears during owner revalidation after backoff', () => {
     const dir = mkdtempSync(join(tmpdir(), 'weave-store-reaper-finished-'));
     const path = join(dir, 'fabric.json');
     const reclaim = `${path}.lock.reclaim`;
@@ -259,7 +259,7 @@ describe('FabricStore append-only journal', () => {
     let store: FabricStore | undefined;
     mutableFs.readFileSync = ((...args: Parameters<typeof original>) => {
       const result = original(...args);
-      if (!finished && String(args[0]) === `${claim}/owner`) {
+      if (!finished && sleeps === 8 && String(args[0]) === `${reclaim}/owner`) {
         finished = true;
         rmSync(reclaim, { recursive: true });
       }
@@ -279,7 +279,7 @@ describe('FabricStore append-only journal', () => {
     }
   });
 
-  it('does not prescribe cleanup for a live claimant that exceeds the retry bound', () => {
+  it('names the blocked claim under a dead reclaim owner after the retry bound', () => {
     const dir = mkdtempSync(join(tmpdir(), 'weave-store-live-reaper-bound-'));
     const path = join(dir, 'fabric.json');
     const reclaim = `${path}.lock.reclaim`;
@@ -293,7 +293,10 @@ describe('FabricStore append-only journal', () => {
     try {
       assert.throws(() => FabricStore.open(path, { sleep() { sleeps += 1; } }), (error: Error) => {
         assert.match(error.message, /already open/);
-        assert.doesNotMatch(error.message, /remove|claimant/);
+        assert.ok(error.message.includes(`stale-lock reclaim is blocked by ${claim}`));
+        assert.ok(error.message.includes(`confirm no weave process is using ${path}`));
+        assert.ok(error.message.includes(`then remove ${claim} and retry`));
+        assert.doesNotMatch(error.message, /claimant/);
         return true;
       });
       assert.ok(sleeps > 0 && sleeps <= 16);
@@ -627,6 +630,119 @@ describe('FabricStore append-only journal', () => {
     } finally {
       mutableFs.readFileSync = originalRead;
       mutableFs.renameSync = originalRename;
+      syncBuiltinESMExports();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('removes only the quarantined reclaim generation when a successor arrives during release', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-store-reclaim-release-'));
+    const path = join(dir, 'fabric.json');
+    const reclaim = `${path}.lock.reclaim`;
+    const dead = spawnSync(process.execPath, ['-e', '']);
+    assert.equal(dead.status, 0);
+    writeFileSync(`${path}.lock`, String(dead.pid));
+    const mutableFs = createRequire(import.meta.url)('node:fs') as typeof nodeFs;
+    const originalRemove = mutableFs.rmSync;
+    let injected = false;
+    let store: FabricStore | undefined;
+    mutableFs.rmSync = ((...args: Parameters<typeof originalRemove>) => {
+      const target = String(args[0]);
+      if (!injected && (target === reclaim || target.startsWith(`${reclaim}.released.`))) {
+        injected = true;
+        // Another contender occupies the live name after release has selected
+        // its removal target, before recursive removal starts walking it.
+        if (existsSync(reclaim)) nodeFs.renameSync(reclaim, `${reclaim}.previous`);
+        nodeFs.mkdirSync(reclaim);
+        writeFileSync(`${reclaim}/owner`, `${process.pid}:successor`);
+      }
+      return originalRemove(...args);
+    }) as typeof originalRemove;
+    syncBuiltinESMExports();
+    try {
+      store = FabricStore.open(path);
+      assert.ok(injected);
+      assert.ok(existsSync(reclaim), 'release must preserve the successor directory');
+      assert.equal(readFileSync(`${reclaim}/owner`, 'utf8'), `${process.pid}:successor`);
+    } finally {
+      mutableFs.rmSync = originalRemove;
+      syncBuiltinESMExports();
+      store?.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  for (const changedOwner of ['dead', 'live'] as const) {
+    it(`removes its own reap claim after revalidation finds a changed ${changedOwner} owner`, () => {
+      const dir = mkdtempSync(join(tmpdir(), 'weave-store-reclaim-revalidate-'));
+      const path = join(dir, 'fabric.json');
+      const reclaim = `${path}.lock.reclaim`;
+      const claim = `${reclaim}/reap`;
+      const dead = spawnSync(process.execPath, ['-e', '']);
+      assert.equal(dead.status, 0);
+      writeFileSync(`${path}.lock`, String(dead.pid));
+      nodeFs.mkdirSync(reclaim);
+      writeFileSync(`${reclaim}/owner`, String(dead.pid));
+      const mutableFs = createRequire(import.meta.url)('node:fs') as typeof nodeFs;
+      const originalWrite = mutableFs.writeFileSync;
+      let changed = false;
+      let store: FabricStore | undefined;
+      mutableFs.writeFileSync = ((...args: Parameters<typeof originalWrite>) => {
+        const result = originalWrite(...args);
+        if (!changed && String(args[0]) === `${claim}/owner`) {
+          changed = true;
+          originalWrite(`${reclaim}/owner`, `${changedOwner === 'live' ? process.pid : dead.pid}:changed`);
+        }
+        return result;
+      }) as typeof originalWrite;
+      syncBuiltinESMExports();
+      try {
+        if (changedOwner === 'live') assert.throws(() => FabricStore.open(path), /already open/);
+        else store = FabricStore.open(path);
+        assert.ok(changed);
+        assert.equal(existsSync(claim), false, 'failed revalidation must release its own claim');
+        if (changedOwner === 'live') {
+          assert.equal(readFileSync(`${reclaim}/owner`, 'utf8'), `${process.pid}:changed`);
+          assert.equal(readFileSync(`${path}.lock`, 'utf8'), String(dead.pid));
+        }
+      } finally {
+        mutableFs.writeFileSync = originalWrite;
+        syncBuiltinESMExports();
+        store?.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+
+  it('preserves another contender reap claim when failed revalidation finds a replacement token', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-store-reclaim-foreign-claim-'));
+    const path = join(dir, 'fabric.json');
+    const reclaim = `${path}.lock.reclaim`;
+    const claim = `${reclaim}/reap`;
+    const dead = spawnSync(process.execPath, ['-e', '']);
+    assert.equal(dead.status, 0);
+    writeFileSync(`${path}.lock`, String(dead.pid));
+    nodeFs.mkdirSync(reclaim);
+    writeFileSync(`${reclaim}/owner`, String(dead.pid));
+    const mutableFs = createRequire(import.meta.url)('node:fs') as typeof nodeFs;
+    const originalWrite = mutableFs.writeFileSync;
+    let changed = false;
+    mutableFs.writeFileSync = ((...args: Parameters<typeof originalWrite>) => {
+      const result = originalWrite(...args);
+      if (!changed && String(args[0]) === `${claim}/owner`) {
+        changed = true;
+        originalWrite(`${reclaim}/owner`, `${process.pid}:successor`);
+        originalWrite(`${claim}/owner`, `${process.pid}:foreign-claim`);
+      }
+      return result;
+    }) as typeof originalWrite;
+    syncBuiltinESMExports();
+    try {
+      assert.throws(() => FabricStore.open(path), /already open/);
+      assert.ok(changed);
+      assert.equal(readFileSync(`${claim}/owner`, 'utf8'), `${process.pid}:foreign-claim`);
+    } finally {
+      mutableFs.writeFileSync = originalWrite;
       syncBuiltinESMExports();
       rmSync(dir, { recursive: true, force: true });
     }
@@ -1165,6 +1281,31 @@ describe('FabricStore append-only journal', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  for (const malformedPrefix of [false, true]) {
+    it(`repairs torn UTF-8 using raw byte offsets (malformed prefix: ${malformedPrefix})`, () => {
+      const dir = mkdtempSync(join(tmpdir(), 'weave-store-torn-utf8-'));
+      const path = join(dir, 'fabric.json');
+      const complete = Buffer.concat([
+        Buffer.from('{"op":"conclusion","conclusion":"'),
+        malformedPrefix ? Buffer.from([0xff]) : Buffer.from('evidence 🧵'),
+        Buffer.from('"}\n'),
+      ]);
+      const tail = Buffer.concat([Buffer.from('{"op":"'), Buffer.from([0xe2, 0x82])]);
+      writeFileSync(path, Buffer.concat([complete, tail]));
+      let store: FabricStore | undefined;
+      try {
+        store = FabricStore.open(path);
+        assert.equal(store.recovery.ignored_tail_bytes, tail.length);
+        assert.deepEqual(readFileSync(path), complete);
+        store.retainConclusion('after repair');
+        store.close();
+        store = FabricStore.open(path);
+        assert.equal(store.recovery.torn_tail_ignored, false);
+        assert.deepEqual(store.conclusions(), [malformedPrefix ? '\ufffd' : 'evidence 🧵', 'after repair']);
+      } finally { store?.close(); rmSync(dir, { recursive: true, force: true }); }
+    });
+  }
 
   it('ignores and reports a torn final line without losing earlier state', () => {
     const dir = mkdtempSync(join(tmpdir(), 'weave-store-torn-'));

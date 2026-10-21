@@ -50,6 +50,7 @@ import { contentDigest, digest } from './digest.js';
 import { IsolateRunner, isolatedCall } from './isolate.js';
 import {
   FabricStore,
+  normalizeInvocationOutcome,
   PersistFailure,
   type FabricSnapshot,
   type InvocationRecord,
@@ -564,9 +565,8 @@ export class AgentFabricHost implements CapabilityHost {
 
   /** Store a conclusion in the registry. This does not widen its authority scope. */
   retainConclusion(conclusion: unknown): void {
-    const copy = structuredClone(conclusion);
-    this.retainedConclusions.push(copy);
-    this.store.retainConclusion(copy);
+    const accepted = this.store.retainConclusion(conclusion);
+    this.retainedConclusions.push(accepted);
   }
 
   conclusions(): readonly unknown[] {
@@ -946,7 +946,14 @@ export class AgentFabricHost implements CapabilityHost {
     open.outcome = outcome;
   }
 
-  private finish(open: OpenInvocation, outcome: InvocationOutcome, status?: InvocationRecord['status']): void {
+  private finish(open: OpenInvocation, value: unknown, status?: InvocationRecord['status']): void {
+    let outcome: InvocationOutcome;
+    try {
+      outcome = normalizeInvocationOutcome(value);
+    } catch {
+      outcome = { outcome: 'failed', failure: 'implementation returned an invalid outcome' };
+      status = 'stopped';
+    }
     const terminal: InvocationRecord['status'] =
       status ?? (outcome.outcome === 'succeeded' ? 'committed' : outcome.outcome === 'uncertain' ? 'uncertain' : 'stopped');
     try {

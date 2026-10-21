@@ -332,9 +332,10 @@ export class FabricStore {
     return this.admissions.map((admission) => ({ ...admission, contract: { ...admission.contract } }));
   }
 
-  retainConclusion(conclusion: unknown): void {
+  retainConclusion(conclusion: unknown): unknown {
     this.mutate({ op: 'conclusion', conclusion });
     this.save();
+    return structuredClone(this.conclusionRecords.at(-1));
   }
 
   conclusions(): readonly unknown[] {
@@ -799,12 +800,8 @@ function acquireReclaim(path: string, token: string, sleep: (milliseconds: numbe
           const current = readReclaimIdentity(reclaimPath);
           if (!sameReclaimOwner(owner, current) || isAlive(current.pid) || !existsSync(claimPath)) return false;
         }
-        const claimant = lockOwner(readLockContent(`${claimPath}/owner`));
         const current = readReclaimIdentity(reclaimPath);
         if (!sameReclaimOwner(owner, current) || isAlive(current.pid) || !existsSync(claimPath)) return false;
-        if (claimant !== undefined && isAlive(claimant)) {
-          throw new Error(`host store is already open: ${path}`);
-        }
         throw new Error(
           `host store is already open: ${path}; stale-lock reclaim is blocked by ${claimPath}; ` +
           `confirm no weave process is using ${path}, then remove ${claimPath} and retry`,
@@ -814,9 +811,9 @@ function acquireReclaim(path: string, token: string, sleep: (milliseconds: numbe
     }
     const current = readReclaimIdentity(reclaimPath);
     if (!sameReclaimOwner(owner, current) || isAlive(current.pid)) {
-      // Leave the claim in place. Removing it through a reused pathname could
-      // release another reaper's claim. A live holder removes it on release;
-      // a crashed reaper requires operator recovery, failing closed meanwhile.
+      // A successor may now own the directory. Release only our token's claim,
+      // leaving any replacement claim for its owner.
+      releaseReclaim(claimPath, token);
       return false;
     }
     const quarantine = `${reclaimPath}.stale.${process.pid}.${(lockSequence += 1)}`;
@@ -855,7 +852,9 @@ function acquireReclaim(path: string, token: string, sleep: (milliseconds: numbe
 function releaseReclaim(reclaimPath: string, token: string): void {
   try {
     if (readLockContent(`${reclaimPath}/owner`) === token) {
-      rmSync(reclaimPath, { recursive: true, force: true });
+      const quarantine = `${reclaimPath}.released.${process.pid}.${(lockSequence += 1)}`;
+      renameSync(reclaimPath, quarantine);
+      rmSync(quarantine, { recursive: true, force: true });
     }
   } catch {
     // ignore
@@ -934,22 +933,24 @@ function counterAfter(value: string, prefix: string): number | undefined {
 }
 
 function readJournal(path: string, assertWritable: () => void): LoadedJournal {
-  const originalText = readFileSync(path, 'utf8');
+  const raw = readFileSync(path);
+  const originalText = raw.toString('utf8');
   let text = originalText;
   let torn_tail_ignored = false;
   let ignored_tail_bytes = 0;
-  if (text.length > 0 && !text.endsWith('\n')) {
-    const breakAt = text.lastIndexOf('\n');
-    const tail = text.slice(breakAt + 1);
+  let retainedBytes = raw.length;
+  if (raw.length > 0 && raw.at(-1) !== 0x0a) {
+    const breakAt = raw.lastIndexOf(0x0a);
+    const tail = raw.subarray(breakAt + 1).toString('utf8');
     let validTail = false;
     try {
       JSON.parse(tail);
       validTail = true;
     } catch {
-      const valid = text.slice(0, breakAt + 1);
-      text = valid;
+      retainedBytes = breakAt + 1;
+      text = raw.subarray(0, retainedBytes).toString('utf8');
       torn_tail_ignored = true;
-      ignored_tail_bytes = Buffer.byteLength(tail);
+      ignored_tail_bytes = raw.length - retainedBytes;
     }
     if (validTail) {
       text += '\n';
@@ -982,8 +983,8 @@ function readJournal(path: string, assertWritable: () => void): LoadedJournal {
   // Validate every complete record before repairing a torn tail or adding a newline.
   if (text !== originalText) {
     assertWritable();
-    if (originalText.startsWith(text)) {
-      truncateSync(path, Buffer.byteLength(text));
+    if (torn_tail_ignored) {
+      truncateSync(path, retainedBytes);
     } else {
       appendFileSync(path, '\n');
     }
@@ -1067,6 +1068,14 @@ function isOutcome(value: unknown): boolean {
     (value.outcome === 'failed' && isString(value.failure)) ||
     (value.outcome === 'uncertain' && isString(value.reason))
   );
+}
+
+/** Validate and detach an untrusted outcome using the journal's replay rules. */
+export function normalizeInvocationOutcome(value: unknown): InvocationOutcome {
+  if (!isOutcome(value)) throw new Error('invalid host store outcome');
+  const normalized: unknown = JSON.parse(JSON.stringify(value));
+  if (!isOutcome(normalized)) throw new Error('invalid host store serialized outcome');
+  return normalized as InvocationOutcome;
 }
 
 function isPublication(value: unknown): boolean {
