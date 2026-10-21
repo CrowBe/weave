@@ -5,18 +5,21 @@
  * `generateText`). Each execute makes at most one chat request
  * (`maxRetries: 0`, never streamed); fallback belongs to routing, declared as
  * several Nous routed units in escalation order. Credentials and transport are
- * injected; nothing here reads the environment, a file, a shell or a clock.
+ * injected; nothing here reads the environment, a file, a shell or an ambient clock.
  *
  * Only free models are served, and a price is refused at three layers:
  *
  * 1. Free-model allowlist: `call.model` must be one of
- *    `NOUS_PORTAL_FREE_MODELS`; paid twins and anything else are refused before
- *    a request (route-config parsing refuses them too).
+ *    `NOUS_PORTAL_FREE_MODELS`, or an explicitly opted-in, unexpired entry in
+ *    `NOUS_PORTAL_PROMO_MODELS`. Promos require injected `now` and are checked
+ *    before catalogue lookup and again before chat; observing expiry refuses
+ *    that model permanently for this instance. Route-config parsing accepts
+ *    only the default allowlist. Paid twins and anything else are refused.
  * 2. Catalogue price check: before the first chat request for a model, `GET
  *    {base}/models` with the same Bearer must list that model with every
  *    pricing field, nested field and `overrides` tier exactly zero. Concurrent
  *    first calls share one in-flight check. A pass is trusted for the life of
- *    this adapter instance, because there is no clock to expire it; it is
+ *    this adapter instance, independently of the promo expiry gate; it is
  *    dropped after a refusal suggesting the model changed (402, 404, "no
  *    longer free", "requires available credits"), so the next call checks
  *    again. A failed, abandoned or absent check is never cached as a pass. A
@@ -53,6 +56,7 @@ import { secondsToMs } from './openai-compatible.js';
 import {
   NOUS_PORTAL_ADAPTER,
   NOUS_PORTAL_FREE_MODELS,
+  NOUS_PORTAL_PROMO_MODELS,
   isNousPortalFreeModel,
   nousPortalCatalogueVerdict,
 } from './nous-portal-catalogue.js';
@@ -60,6 +64,7 @@ import {
 export {
   NOUS_PORTAL_ADAPTER,
   NOUS_PORTAL_FREE_MODELS,
+  NOUS_PORTAL_PROMO_MODELS,
   isNousPortalFreeModel,
   type NousPortalFreeModel,
 } from './nous-portal-catalogue.js';
@@ -104,10 +109,17 @@ export interface NousPortalOptions {
   readonly baseURL?: string;
   /** Injectable for offline tests; defaults to the global fetch at call time. */
   readonly fetch?: typeof globalThis.fetch;
+  /** Explicitly enable the separate promo map, subject to expiry and price checks. */
+  readonly promoModels?: boolean;
+  /** Caller time in epoch milliseconds. Promos fail closed without valid injected time. */
+  readonly now?: () => number;
 }
 
 const REQUEST_TAGS: readonly string[] = ['user=weave'];
 const REASONING: ReadonlySet<string> = new Set(NOUS_PORTAL_REASONING_MODELS);
+const PROMO_EXPIRIES: ReadonlyMap<string, number> = new Map(
+  Object.values(NOUS_PORTAL_PROMO_MODELS).map(({ id, expires_at }) => [id, expires_at]),
+);
 const ZERO_USAGE: ProviderUsage = { input_tokens: 0, output_tokens: 0 };
 /** Refusal text that says the model is no longer served free; never echoed. */
 const NO_LONGER_FREE = /no longer free|requires available credits/i;
@@ -131,6 +143,8 @@ export function nousPortalAdapter(options: NousPortalOptions): GenerationAdapter
   const contentKey = apiKey.trim();
   const baseURL = (options.baseURL ?? NOUS_PORTAL_BASE_URL).replace(/\/+$/, '');
   const injectedFetch = options.fetch;
+  const promoModels = options.promoModels === true;
+  const now = options.now;
   const doFetch: typeof globalThis.fetch = (input, init) => (injectedFetch ?? globalThis.fetch)(input, init);
   const provider = createOpenAICompatible({
     name: NOUS_PORTAL_ADAPTER,
@@ -145,6 +159,22 @@ export function nousPortalAdapter(options: NousPortalOptions): GenerationAdapter
   const refused = new Set<string>();
   /** In-flight checks and passed (`free`) checks, per model. */
   const checks = new Map<string, CatalogueCheck>();
+  /** Observed expiry cannot be undone by a later clock regression. */
+  const expired = new Set<string>();
+
+  function allowlisted(model: string): boolean {
+    if (isNousPortalFreeModel(model)) return true;
+    const expiry = PROMO_EXPIRIES.get(model);
+    if (!promoModels || expiry === undefined || expired.has(model) || typeof now !== 'function') return false;
+    let time: number;
+    try { time = now(); } catch { return false; }
+    if (!Number.isFinite(time)) return false;
+    if (time >= expiry) {
+      expired.add(model);
+      return false;
+    }
+    return true;
+  }
 
   async function lookup(model: string, signal: AbortSignal): Promise<CatalogueResult> {
     try {
@@ -211,7 +241,7 @@ export function nousPortalAdapter(options: NousPortalOptions): GenerationAdapter
         return refuse(failure('invalid_request', 'request content contains the adapter credential', false));
       }
       const model = call.model;
-      if (!isNousPortalFreeModel(model)) return refuse(NOT_ALLOWLISTED);
+      if (!allowlisted(model)) return refuse(NOT_ALLOWLISTED);
       // Route settings validation is adapter-agnostic; enforce this minimum here.
       if (REASONING.has(model) && (!Number.isInteger(call.settings.max_output_tokens) ||
           call.settings.max_output_tokens < NOUS_PORTAL_MIN_REASONING_OUTPUT_TOKENS)) {
@@ -223,6 +253,8 @@ export function nousPortalAdapter(options: NousPortalOptions): GenerationAdapter
 
       const unchecked = await checkCatalogue(model, call.signal);
       if (unchecked !== undefined) return refuse(unchecked);
+      // Catalogue lookup may have crossed expiry; cached price evidence cannot extend it.
+      if (!allowlisted(model)) return refuse(NOT_ALLOWLISTED);
 
       try {
         const result = await generateText({

@@ -16,9 +16,8 @@ export const NOUS_PORTAL_ADAPTER = 'nous-portal';
  * serving guarantee: on 25 Sep 2026 a $0-listed ID was refused as "no longer
  * free". So the adapter also checks the live catalogue and the response cost.
  * The Laguna IDs were listed as expiring on 31 Oct 2026.
- * LongCat 2.5 Preview and Beam remain excluded from this fixed allowlist.
- * Their "0.0000000000" snapshot prices satisfy the catalogue price check,
- * but changing the allowlist requires a separate decision.
+ * LongCat 2.5 Preview and Beam are opt-in, expiring entries in the separate
+ * `NOUS_PORTAL_PROMO_MODELS` map; they are never default allowlist members.
  */
 export const NOUS_PORTAL_FREE_MODELS = {
   solarMini: 'upstage/solar-mini4:free',
@@ -29,11 +28,21 @@ export const NOUS_PORTAL_FREE_MODELS = {
   stepPreview: 'stepfun/step-5-preview:free',
 } as const;
 
+/**
+ * Explicit adapter opt-in only; all catalogue and response cost checks still
+ * apply. `expires_at` is epoch milliseconds: 2026-10-23T10:30:00+11:00.
+ * Missing injected time or time at/after this boundary refuses dispatch.
+ */
+export const NOUS_PORTAL_PROMO_MODELS = Object.freeze({
+  longcat25: Object.freeze({ id: 'meituan/longcat-2.5-preview:free', expires_at: 1_792_711_800_000 }),
+  beam: Object.freeze({ id: 'reflection/beam-1.0-501b-a23b:free', expires_at: 1_792_711_800_000 }),
+} as const);
+
 export type NousPortalFreeModel = (typeof NOUS_PORTAL_FREE_MODELS)[keyof typeof NOUS_PORTAL_FREE_MODELS];
 
 const FREE_MODEL_IDS: ReadonlySet<string> = new Set(Object.values(NOUS_PORTAL_FREE_MODELS));
 
-/** Exact match only: no trimming, case folding, or suffix inference. */
+/** Default allowlist only, excluding promos. No trimming, case folding, or suffix inference. */
 export function isNousPortalFreeModel(model: unknown): model is NousPortalFreeModel {
   return typeof model === 'string' && FREE_MODEL_IDS.has(model);
 }
