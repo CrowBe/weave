@@ -107,6 +107,7 @@ function generationAdapter(
 
   return {
     id: free ? VERCEL_AI_GATEWAY_FREE_ADAPTER : VERCEL_AI_GATEWAY_ADAPTER,
+    ...(free ? { settle_on_abort: true } : {}),
     async execute(call: GenerationCall): Promise<GenerationProviderResult> {
       if (free) {
         const refused = await freePreflight(call, free, key);
@@ -227,12 +228,16 @@ function freeCost(metadata: unknown): boolean {
 /** Gateway bills in currency units; the provider-neutral port meters in micros. */
 function reportedCost(metadata: unknown): number | undefined {
   if (!record(metadata) || !record(metadata.gateway)) return undefined;
-  const value = metadata.gateway.cost;
-  if (typeof value !== 'number' && !(typeof value === 'string' && /^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value))) {
-    return undefined;
+  let reported: number | undefined;
+  // These fields can overlap (total, market price, gateway price). Use the
+  // largest charge evidence rather than assuming they are additive components.
+  for (const field of ['cost', 'marketCost', 'gatewayCost']) {
+    const value = metadata.gateway[field];
+    if (typeof value !== 'number' && !(typeof value === 'string' && /^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value))) continue;
+    const cost = Number(value) * 1_000_000;
+    if (Number.isFinite(cost) && cost > 0) reported = Math.max(reported ?? 0, cost);
   }
-  const cost = Number(value) * 1_000_000;
-  return Number.isFinite(cost) && cost > 0 ? cost : undefined;
+  return reported ?? (freeCost(metadata) ? 0 : undefined);
 }
 
 function freeFault(error: unknown, signal: AbortSignal | undefined): ProviderFailure {

@@ -124,6 +124,7 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
         terms: request.terms,
         invalid: invalidGeneration(request),
         containsCredentials: containsCredentialContent(request.input),
+        settle_on_abort: unit => generators.get(unit.adapter)?.settle_on_abort === true,
         attempt: async (unit, attemptSignal) => {
           const adapter = generators.get(unit.adapter);
           if (adapter === undefined) return missingAdapter(unit);
@@ -289,6 +290,7 @@ interface Bounded<T> {
 }
 
 interface BoundedParams<T> {
+  readonly settle_on_abort?: (unit: RoutedUnit) => boolean;
   readonly quota: QuotaPort | undefined;
   readonly persist_pause: GatewayConfig['persist_pause'];
   readonly request_id: string;
@@ -515,7 +517,15 @@ async function attemptBeforeDeadline<T>(
     void attempt.then(() => watcher.abort(), () => watcher.abort());
     // The watcher catches its own failures, including cancellation during cleanup.
     void deadline(attempt);
-    return await Promise.race([attempt, interrupted]);
+    const result = await Promise.race([attempt, interrupted]);
+    if (provider.signal.aborted && params.settle_on_abort?.(unit)) {
+      // Cancellation fixes the disposition, not the bill. These adapters
+      // settle after abort, possibly with a response already charged in flight.
+      const failure = await interrupted;
+      const usage = await attempt.then(settled => settled.usage, () => failure.usage);
+      return { ...failure, usage };
+    }
+    return result;
   } finally {
     watcher.abort();
     params.signal?.removeEventListener('abort', cancel);

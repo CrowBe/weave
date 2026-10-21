@@ -1,12 +1,13 @@
 /** WV-018 contract: one accounted native SDK call, with fail-closed free evidence. */
 import assert from 'node:assert/strict';
+import { setImmediate } from 'node:timers/promises';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { createInferenceGateway } from '../src/gateway.js';
 import {
   vercelAiGatewayFreeAdapter, VERCEL_AI_GATEWAY_FREE_ADAPTER,
   VERCEL_AI_GATEWAY_FREE_DESTINATION, VERCEL_AI_GATEWAY_FREE_MODELS,
 } from '../src/adapters/vercel-ai-gateway.js';
-import type { GenerationCall, GenerationRequest, RoutedUnit } from '../src/types.js';
+import type { GenerationCall, GenerationRequest, RoutedUnit, Timer } from '../src/types.js';
 
 // Synthetic sentinel only; no live credential or network is used.
 const KEY = 'synthetic-wv018-credential';
@@ -62,6 +63,23 @@ function deferred() {
   let resolve!: () => void;
   const promise = new Promise<void>(r => { resolve = r; });
   return { promise, resolve };
+}
+
+function controlledTime() {
+  let now = NOW;
+  const wakes = new Set<() => void>();
+  const timer: Timer = { sleep(_ms, signal) {
+    return new Promise(resolve => {
+      const done = () => { wakes.delete(done); signal?.removeEventListener('abort', done); resolve(); };
+      wakes.add(done);
+      if (signal?.aborted) done();
+      else signal?.addEventListener('abort', done, { once: true });
+    });
+  } };
+  return { timer, clock: { now: () => now }, expire() {
+    now = NOW + 10_000;
+    for (const wake of wakes) wake();
+  }, active: () => wakes.size };
 }
 
 describe('Vercel promotional free contract', () => {
@@ -252,6 +270,39 @@ describe('Vercel promotional free contract', () => {
     });
   }
 
+  for (const evidence of [
+    { cost: '0', marketCost: '0.01', gatewayCost: '0' },
+    { cost: '0', marketCost: '0', gatewayCost: 0.01 },
+    { cost: '0.01', marketCost: '0.01', gatewayCost: '0.01' },
+    { cost: '0.001', marketCost: '0.01', gatewayCost: '0.005' },
+  ]) it(`meters cost evidence without adding overlapping figures ${JSON.stringify(evidence)}`, async () => {
+    let calls = 0;
+    const result = await gateway(async () => {
+      calls++;
+      const body = await completion().json() as Record<string, unknown>;
+      return Response.json({ ...body, providerMetadata: { gateway: evidence } });
+    }).generate(request());
+    assert.equal(result.spent, 10_000);
+    assert.equal(result.attempts[0]?.cost, 10_000);
+    assert.equal(result.attempts[0]?.usage.cost, 10_000);
+    assert.equal(result.attempts[0]?.cost_is_upper_bound, false);
+    assert.equal(result.status === 'unaccepted' && result.reason, 'budget_exhausted');
+    assert.equal(calls, 1, 'a component charge must also prevent fallback');
+  });
+
+  it('keeps a verified zero charge at zero despite declared token prices', async () => {
+    const instance = createInferenceGateway({ routes: [{ ...primary,
+      price: { input_per_mtok: 100, output_per_mtok: 100 } }],
+      adapters: [adapter(async () => completion())], clock: { now: () => NOW } });
+    const input = request();
+    const result = await instance.generate({ ...input, terms: { ...input.terms, cost_ceiling: 10_000 } });
+    assert.equal(result.status, 'accepted');
+    assert.equal(result.spent, 0);
+    assert.equal(result.attempts[0]?.usage.cost, 0);
+    assert.equal(result.attempts[0]?.cost, 0);
+    assert.equal(result.attempts[0]?.cost_is_upper_bound, false);
+  });
+
   it('meters a reported charge even when token usage is absent', async () => {
     const result = await gateway(async () => {
       const body = await completion('0.01').json() as Record<string, unknown>;
@@ -283,6 +334,61 @@ describe('Vercel promotional free contract', () => {
     const failure = result.attempts[0]?.disposition;
     assert.ok(failure?.status === 'failed' && failure.failure.code === 'cancelled');
   });
+
+  for (const interruption of ['cancel', 'deadline'] as const) {
+    it(`awaits billed settlement on Timer ${interruption} and isolates concurrent usage`, async () => {
+      const time = controlledTime();
+      const controller = new AbortController();
+      const entered = deferred();
+      const release = deferred();
+      const otherEntered = deferred();
+      const otherRelease = deferred();
+      let calls = 0;
+      let observed: AbortSignal | null | undefined;
+      const instance = createInferenceGateway({ routes: [primary, fallback], ...time,
+        adapters: [adapter(async (_url, init) => {
+          if (++calls === 2) { otherEntered.resolve(); await otherRelease.promise; return completion(); }
+          observed = init?.signal;
+          const bytes = new Uint8Array(await completion('0.01').arrayBuffer());
+          return new Response(new ReadableStream({ async pull(stream) {
+            entered.resolve();
+            await release.promise;
+            stream.enqueue(bytes); stream.close();
+          } }), { headers: { 'content-type': 'application/json' } });
+        })] });
+      const pending = instance.generate(request('billed'), controller.signal);
+      await entered.promise;
+      const otherInput = request('free');
+      const other = instance.generate({ ...otherInput, terms: { ...otherInput.terms, deadline: NOW + 20_000 } });
+      await otherEntered.promise;
+      await setImmediate();
+      if (interruption === 'cancel') controller.abort();
+      else time.expire();
+      await setImmediate();
+      assert.equal(observed?.aborted, true);
+      release.resolve();
+      const result = await pending;
+      assert.equal(result.spent, 10_000);
+      assert.equal(result.attempts[0]?.cost, 10_000);
+      assert.equal(result.attempts[0]?.cost_is_upper_bound, false);
+      assert.equal(result.attempts.length, 1);
+      assert.equal(result.status === 'unaccepted' && result.reason,
+        interruption === 'cancel' ? 'provider_failed' : 'deadline_reached');
+      const disposition = result.attempts[0]?.disposition;
+      assert.ok(disposition?.status === 'failed');
+      assert.equal(disposition.failure.code, interruption === 'cancel' ? 'cancelled' : 'timeout');
+      const snapshot = structuredClone(result);
+      otherRelease.resolve();
+      const free = await other;
+      assert.equal(free.status, 'accepted');
+      assert.equal(free.spent, 0);
+      assert.equal(free.attempts.length, 1);
+      await setImmediate();
+      assert.deepEqual(result, snapshot, 'settled evidence must remain immutable');
+      assert.equal(calls, 2, 'interruption must never dispatch a fallback');
+      assert.equal(time.active(), 0, 'all deadline watchers must be cleaned up');
+    });
+  }
 
   it('isolates reported charges across concurrent attempts', async () => {
     const entered = deferred();
@@ -466,7 +572,7 @@ describe('Vercel promotional free contract', () => {
     }).execute(call);
     assert.ok(!JSON.stringify(result).includes(KEY));
     assert.deepEqual(result.usage, { input_tokens: undefined, output_tokens: undefined,
-      ...(cost === '0' ? {} : { cost: 10_000 }) });
+      cost: cost === '0' ? 0 : 10_000 });
   });
 
   for (const contentClass of [undefined, 'sensitive', 'private', 'public', 'non_sensitive'] as const) {
