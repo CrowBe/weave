@@ -181,7 +181,11 @@ function parse(body: unknown, call: EvaluationCall): EvaluationProviderResult {
       )
         return failure("malformed_response");
       const legend = raw["legend"];
-      if (!question.criteria.every((level, index) => legend[String(index)] === content(level)))
+      if (
+        !question.criteria.every((level, index) =>
+          echoesLevel(legend[String(index)], content(level)),
+        )
+      )
         return failure("malformed_response");
       const probabilities = distribution(raw["probabilities"], keys);
       if (!probabilities) return failure("malformed_response");
@@ -198,6 +202,10 @@ function parse(body: unknown, call: EvaluationCall): EvaluationProviderResult {
     usage: { input_tokens: usage["input_tokens"], output_tokens: usage["output_tokens"] },
     provider_response_id: undefined,
   };
+}
+
+function echoesLevel(echoed: unknown, level: string | null): boolean {
+  return echoed === level || (level === null && echoed === "null");
 }
 
 function distribution(value: unknown, keys: readonly string[]): Record<string, number> | undefined {
