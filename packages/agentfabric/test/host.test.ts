@@ -3,6 +3,9 @@
  * failure precedence, catalogue rules).
  */
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { createGrantAuthority, type Grant, validateCatalogue } from '@weave/agentsop';
 import { AgentFabricHost, FabricStore, REPORT_PUBLISH, SOURCE_INSPECT } from '@weave/agentfabric';
@@ -569,6 +572,82 @@ describe('Fabric store indexes', () => {
     const restored = FabricStore.restore(restarted.snapshot());
     assert.equal(restored.publishedBy('inv-replaced-a'), undefined);
     assert.equal(restored.publishedBy('inv-replaced-b')?.publication?.invocation_id, 'inv-replaced-b');
+  });
+
+  it('coalesces registration writes and folds invocation cost into the start write', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-coalesce-'));
+    const path = join(dir, 'fabric.json');
+    const store = FabricStore.open(path);
+    try {
+      const authority = createGrantAuthority();
+      const host = new AgentFabricHost({ authority, store });
+      let saves = 0;
+      const save = store.save.bind(store);
+      store.save = () => {
+        saves += 1;
+        save();
+      };
+
+      const source = host.registerSource('mem:coalesce-alpha', 'line');
+      assert.equal(saves, 1);
+      const destination = host.registerDestination('mem:coalesce-outbox');
+      assert.equal(saves, 2);
+
+      saves = 0;
+      const grant = publishGrant(authority, source, destination, 'a:coalesce:1', 1);
+      const handle = host.invoke(grant, REPORT_PUBLISH.id, publishInput(source, destination), {
+        invocation_id: 'inv-coalesce',
+      });
+      assert.equal(handle.kind, 'handle');
+      assert.equal(saves, 1);
+      const cost = host.measuredCostMicros();
+      assert.ok(cost > 0);
+      assert.equal(store.getInvocation('inv-coalesce')?.measured_cost_micros, cost);
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps invocation cost once across a restart before the result', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-coalesce-restart-'));
+    const path = join(dir, 'fabric.json');
+    const first = FabricStore.open(path);
+    let cost = 0;
+    let source = '';
+    let destination = '';
+    try {
+      const authority = createGrantAuthority();
+      const host = new AgentFabricHost({ authority, store: first });
+      source = host.registerSource('mem:coalesce-restart-alpha', 'line');
+      destination = host.registerDestination('mem:coalesce-restart-outbox');
+      const grant = publishGrant(authority, source, destination, 'a:coalesce:2', 1);
+      const handle = host.invoke(grant, REPORT_PUBLISH.id, publishInput(source, destination), {
+        invocation_id: 'inv-coalesce-restart',
+      });
+      assert.equal(handle.kind, 'handle');
+      cost = host.measuredCostMicros();
+      assert.ok(cost > 0);
+    } finally {
+      first.close();
+    }
+
+    const restarted = FabricStore.open(path);
+    try {
+      assert.equal(restarted.measuredCostMicros(), cost);
+      assert.equal(restarted.getInvocation('inv-coalesce-restart')?.measured_cost_micros, cost);
+      const authority = createGrantAuthority();
+      const host = new AgentFabricHost({ authority, store: restarted });
+      const grant = publishGrant(authority, source, destination, 'a:coalesce:3', 2);
+      const retried = host.invoke(grant, REPORT_PUBLISH.id, publishInput(source, destination), {
+        invocation_id: 'inv-coalesce-restart',
+      });
+      assert.equal(retried.kind, 'handle');
+      assert.equal(host.measuredCostMicros(), cost);
+    } finally {
+      restarted.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('keeps builtin results deduplicated and unchanged in snapshots', () => {

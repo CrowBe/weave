@@ -35,6 +35,7 @@ export interface InvocationRecord {
   status: InvocationStatus;
   outcome: InvocationOutcome | null;
   cancel_requested: boolean;
+  measured_cost_micros?: number;
 }
 
 export interface IssuedRef {
@@ -178,21 +179,25 @@ export class FabricStore {
     return new FabricStore(snapshot, path);
   }
 
-  allocateCanonical(): string {
+  allocateCanonical(save = true): string {
     const id = `res_${this.next_canonical}`;
     this.next_canonical += 1;
-    this.save();
+    if (save) {
+      this.save();
+    }
     return id;
   }
 
-  issue(canonical_id: string, kind: ResourceKind): string {
+  issue(canonical_id: string, kind: ResourceKind, save = true): string {
     const handle = `ref_${this.next_handle}`;
     this.next_handle += 1;
     this.refs.set(handle, { handle, canonical_id, kind });
     if (!this.canonicalPrimary.has(canonical_id)) {
       this.canonicalPrimary.set(canonical_id, handle);
     }
-    this.save();
+    if (save) {
+      this.save();
+    }
     return handle;
   }
 
@@ -204,7 +209,7 @@ export class FabricStore {
     return this.canonicalPrimary.get(canonical_id);
   }
 
-  putResource(resource: MutableResource): void {
+  putResource(resource: MutableResource, save = true): void {
     const previous = this.resources.get(resource.canonical_id);
     if (
       previous?.publication &&
@@ -220,7 +225,9 @@ export class FabricStore {
         this.publicationOwners.set(resource.publication.invocation_id, resource.canonical_id);
       }
     }
-    this.save();
+    if (save) {
+      this.save();
+    }
   }
 
   publishedBy(invocation_id: string): MutableResource | undefined {
@@ -236,11 +243,20 @@ export class FabricStore {
     return this.invocations.get(id);
   }
 
-  persistInvocationStart(record: InvocationRecord): void {
+  persistInvocationStart(record: InvocationRecord, measuredCostMicros = 0): void {
     if (!this.persistStart) {
       throw new PersistFailure('invocation start');
     }
-    this.invocations.set(record.invocation_id, { ...record, inputs: structuredClone(record.inputs) });
+    const previous = this.invocations.get(record.invocation_id);
+    const previousCost = previous
+      ? previous.measured_cost_micros ?? measuredCostMicros
+      : 0;
+    this.invocations.set(record.invocation_id, {
+      ...record,
+      inputs: structuredClone(record.inputs),
+      measured_cost_micros: measuredCostMicros,
+    });
+    this.measured_cost_micros += measuredCostMicros - previousCost;
     this.save();
   }
 
@@ -248,7 +264,7 @@ export class FabricStore {
     if (!this.persistResult) {
       throw new PersistFailure('invocation result');
     }
-    this.invocations.set(record.invocation_id, { ...record, inputs: structuredClone(record.inputs) });
+    this.setInvocation(record);
     this.save();
   }
 
@@ -312,8 +328,17 @@ export class FabricStore {
   }
 
   writeInvocation(record: InvocationRecord): void {
-    this.invocations.set(record.invocation_id, { ...record, inputs: structuredClone(record.inputs) });
+    this.setInvocation(record);
     this.save();
+  }
+
+  private setInvocation(record: InvocationRecord): void {
+    const previous = this.invocations.get(record.invocation_id);
+    const stored: InvocationRecord = { ...record, inputs: structuredClone(record.inputs) };
+    if (stored.measured_cost_micros === undefined && previous?.measured_cost_micros !== undefined) {
+      stored.measured_cost_micros = previous.measured_cost_micros;
+    }
+    this.invocations.set(record.invocation_id, stored);
   }
 
   save(): void {
