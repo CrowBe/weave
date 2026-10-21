@@ -26,6 +26,16 @@ const openStores = new Map<string, FabricStore>();
 const COMPACT_BYTES = 256 * 1024;
 let lockSequence = 0;
 
+/** Synchronous backoff for the path-backed writer lock; injectable for deterministic races. */
+export interface FabricStoreOptions {
+  readonly sleep?: (milliseconds: number) => void;
+}
+
+const lockWait = new Int32Array(new SharedArrayBuffer(4));
+const defaultLockSleep = (milliseconds: number): void => {
+  Atomics.wait(lockWait, 0, 0, milliseconds);
+};
+
 export type ResourceKind = 'source' | 'destination' | 'workspace';
 
 export interface PublicationRecord {
@@ -153,7 +163,12 @@ export class FabricStore {
   persistStart = true;
   persistResult = true;
 
-  constructor(snapshot?: FabricSnapshot, path: string | null = null) {
+  constructor(snapshot?: FabricSnapshot, path: string | null = null, options: FabricStoreOptions = {}) {
+    if (snapshot !== undefined) {
+      const validated = encodeMutation({ op: 'snapshot', snapshot }).mutation;
+      if (validated.op !== 'snapshot') throw new Error('invalid host store snapshot');
+      snapshot = validated.snapshot;
+    }
     this.path = path === null ? null : canonicalStorePath(path);
     this.applySnapshot(snapshot);
     if (this.path === null) {
@@ -167,7 +182,7 @@ export class FabricStore {
     if (!existsSync(directory)) {
       mkdirSync(directory, { recursive: true });
     }
-    const lockToken = acquireLock(key);
+    const lockToken = acquireLock(key, options.sleep ?? defaultLockSleep);
     this.lockToken = lockToken;
     try {
       this.assertWritable();
@@ -200,8 +215,8 @@ export class FabricStore {
     }
   }
 
-  static open(path: string): FabricStore {
-    return new FabricStore(undefined, path);
+  static open(path: string, options: FabricStoreOptions = {}): FabricStore {
+    return new FabricStore(undefined, path, options);
   }
 
   /** Release this process's ownership so a later restart can open the store. */
@@ -345,7 +360,7 @@ export class FabricStore {
   }
 
   rememberResult(result: StoredBuiltinResult): void {
-    this.mutate({ op: 'remember', result: { ...result, outcome: structuredClone(result.outcome) } });
+    this.mutate({ op: 'remember', result });
     this.save();
   }
 
@@ -373,7 +388,6 @@ export class FabricStore {
     if (!this.path) {
       return;
     }
-    this.assertWritable();
     const retained = Math.max(0, this.fileBytes - this.tailBytes);
     if (this.tailBytes >= Math.max(COMPACT_BYTES, retained)) {
       // Appends have already committed. Maintenance cannot turn that success
@@ -388,11 +402,23 @@ export class FabricStore {
   }
 
   private mutate(mutation: FabricMutation): void {
-    this.append(mutation);
+    // Validate both the supplied value and its JSON representation. Apply exactly
+    // the detached value that replay will see, including allowed JSON normalization.
+    const encoded = encodeMutation(mutation);
+    mutation = encoded.mutation;
+    let cost = this.measured_cost_micros;
+    if (mutation.op === 'cost') cost += mutation.micros;
+    if (mutation.op === 'start') {
+      const previous = this.invocations.get(mutation.record.invocation_id);
+      const previousCost = previous ? previous.measured_cost_micros ?? mutation.measured_cost_micros : 0;
+      cost += mutation.measured_cost_micros - previousCost;
+    }
+    if (!isNonNegativeNumber(cost)) throw new Error('invalid host store measured cost');
+    this.append(encoded.text);
     this.applyMutation(mutation);
   }
 
-  private append(mutation: FabricMutation): void {
+  private append(text: string): void {
     if (!this.path) {
       return;
     }
@@ -400,9 +426,7 @@ export class FabricStore {
     if (!this.journalReady) {
       this.compact();
     }
-    const line = Buffer.from(`${JSON.stringify(mutation)}\n`);
-    // Serialization can call user-provided toJSON methods. Check again before I/O.
-    this.assertWritable();
+    const line = Buffer.from(text);
     const previousBytes = this.fileBytes;
     const fd = openSync(this.path, 'a+');
     let written = 0;
@@ -458,7 +482,7 @@ export class FabricStore {
     if (!existsSync(directory)) {
       mkdirSync(directory, { recursive: true });
     }
-    const text = `${JSON.stringify({ op: 'snapshot', snapshot: this.snapshot() })}\n`;
+    const { text } = encodeMutation({ op: 'snapshot', snapshot: this.snapshot() });
     this.assertWritable();
     const tmp = `${this.path}.tmp`;
     writeFileSync(tmp, text);
@@ -675,7 +699,7 @@ function canonicalStorePath(path: string): string {
   }
 }
 
-function acquireLock(path: string): string {
+function acquireLock(path: string, sleep: (milliseconds: number) => void): string {
   const lockPath = `${path}.lock`;
   const token = `${process.pid}:${(lockSequence += 1)}`;
   const tempPath = `${lockPath}.${token}.tmp`;
@@ -695,7 +719,7 @@ function acquireLock(path: string): string {
       if (pid === undefined || isAlive(pid)) {
         throw new Error(`host store is already open: ${resolve(path)}`);
       }
-      if (!acquireReclaim(path, token)) {
+      if (!acquireReclaim(path, token, sleep)) {
         continue;
       }
       try {
@@ -728,7 +752,7 @@ function acquireLock(path: string): string {
  * Serialize stale-lock reclamation so only the holder removes the main lock
  * and no contender can move a live writer's lock into quarantine.
  */
-function acquireReclaim(path: string, token: string): boolean {
+function acquireReclaim(path: string, token: string, sleep: (milliseconds: number) => void): boolean {
   const reclaimPath = `${path}.lock.reclaim`;
   for (let attempt = 0; attempt < 16; attempt += 1) {
     const tempPath = `${reclaimPath}.${process.pid}.${(lockSequence += 1)}.tmp`;
@@ -764,11 +788,23 @@ function acquireReclaim(path: string, token: string): boolean {
     const claimPath = `${reclaimPath}/reap`;
     try {
       mkdirSync(claimPath);
+      writeFileSync(`${claimPath}/owner`, token);
     } catch (error) {
       if (isErrno(error, 'ENOENT')) continue;
       if (isErrno(error, 'EEXIST')) {
+        // A reaper can be between mkdir, writing its token and moving the directory.
+        // Bound the wait by injected sleeps, without consulting an ambient clock.
+        for (let wait = 0; wait < 8; wait += 1) {
+          sleep(5);
+          const current = readReclaimIdentity(reclaimPath);
+          if (!sameReclaimOwner(owner, current) || isAlive(current.pid) || !existsSync(claimPath)) return false;
+        }
+        const claimant = lockOwner(readLockContent(`${claimPath}/owner`));
         const current = readReclaimIdentity(reclaimPath);
-        if (!sameReclaimOwner(owner, current) || isAlive(current.pid)) return false;
+        if (!sameReclaimOwner(owner, current) || isAlive(current.pid) || !existsSync(claimPath)) return false;
+        if (claimant !== undefined && isAlive(claimant)) {
+          throw new Error(`host store is already open: ${path}`);
+        }
         throw new Error(
           `host store is already open: ${path}; stale-lock reclaim is blocked by ${claimPath}; ` +
           `confirm no weave process is using ${path}, then remove ${claimPath} and retry`,
@@ -890,11 +926,11 @@ function isErrno(error: unknown, code: string): boolean {
 }
 
 function counterAfter(value: string, prefix: string): number | undefined {
-  if (!value.startsWith(prefix)) {
+  if (!value.startsWith(prefix) || !/^[0-9]+$/.test(value.slice(prefix.length))) {
     return undefined;
   }
   const parsed = Number(value.slice(prefix.length));
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
+  return Number.isSafeInteger(parsed) && parsed >= 0 && parsed < Number.MAX_SAFE_INTEGER ? parsed : undefined;
 }
 
 function readJournal(path: string, assertWritable: () => void): LoadedJournal {
@@ -968,25 +1004,37 @@ function asMutation(value: unknown, index: number, path: string): FabricMutation
   if (record.op === 'snapshot' && !isSnapshot(record.snapshot)) {
     throw new Error(`invalid host store snapshot at line ${index + 1}: ${path}`);
   }
-  if (
-    typeof record.op !== 'string' ||
-    ![
-      'snapshot',
-      'allocate',
-      'issue',
-      'put',
-      'start',
-      'result',
-      'cost',
-      'admission',
-      'conclusion',
-      'workload',
-      'remember',
-    ].includes(record.op)
-  ) {
+  if (!isMutation(value)) {
     throw new Error(`invalid host store mutation at line ${index + 1}: ${path}`);
   }
   return value as FabricMutation;
+}
+
+/** One payload contract for journal input, appends and compaction. */
+function isMutation(value: unknown): value is FabricMutation {
+  if (!isRecord(value)) return false;
+  switch (value.op) {
+    case 'snapshot': return isSnapshot(value.snapshot);
+    case 'allocate': return isString(value.id) && counterAfter(value.id, 'res_') !== undefined;
+    case 'issue': return isRef(value.ref);
+    case 'put': return isResource(value.resource);
+    case 'start': return isInvocation(value.record) && isNonNegativeNumber(value.measured_cost_micros);
+    case 'result': return isInvocation(value.record);
+    case 'cost': return isNonNegativeNumber(value.micros);
+    case 'admission': return isAdmission(value.admission);
+    case 'conclusion': return 'conclusion' in value;
+    case 'workload': return isWorkload(value.workload);
+    case 'remember': return isBuiltinResult(value.result);
+    default: return false;
+  }
+}
+
+function encodeMutation(value: FabricMutation): { mutation: FabricMutation; text: string } {
+  if (!isMutation(value)) throw new Error('invalid host store mutation');
+  const json = JSON.stringify(value);
+  const mutation: unknown = JSON.parse(json);
+  if (!isMutation(mutation)) throw new Error('invalid host store serialized mutation');
+  return { mutation, text: `${json}\n` };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1033,7 +1081,7 @@ function isResource(value: unknown): boolean {
 }
 
 function isRef(value: unknown): boolean {
-  return isRecord(value) && isString(value.handle) && isString(value.canonical_id) && isKind(value.kind);
+  return isRecord(value) && isString(value.handle) && counterAfter(value.handle, 'ref_') !== undefined && isString(value.canonical_id) && isKind(value.kind);
 }
 
 function isInvocation(value: unknown): boolean {
