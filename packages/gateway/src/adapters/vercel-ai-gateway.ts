@@ -131,9 +131,11 @@ function generationAdapter(
           ...(call.signal === undefined ? {} : { abortSignal: call.signal }),
         });
 
+        const cost = free ? reportedCost(result.providerMetadata) : undefined;
         const usage = { input_tokens: free ? tokenCount(result.usage.inputTokens) : result.usage.inputTokens,
-          output_tokens: free ? tokenCount(result.usage.outputTokens) : result.usage.outputTokens };
-        if (free && call.signal?.aborted) return { status: 'failed', failure: freeFailure('cancelled', 'request cancelled') };
+          output_tokens: free ? tokenCount(result.usage.outputTokens) : result.usage.outputTokens,
+          ...(cost === undefined ? {} : { cost }) };
+        if (free && call.signal?.aborted) return { status: 'failed', failure: freeFailure('cancelled', 'request cancelled'), usage };
         if (free && !freeCost(result.providerMetadata)) {
           return { status: 'failed', failure: freeFailure('invalid_request',
             'response cost is absent, invalid, or no longer zero; promotional model refused'),
@@ -220,6 +222,17 @@ function freeCost(metadata: unknown): boolean {
   if (!record(metadata) || !record(metadata.gateway)) return false;
   const gateway = metadata.gateway;
   return zero(gateway.cost) && ['marketCost', 'gatewayCost'].every(field => !(field in gateway) || zero(gateway[field]));
+}
+
+/** Gateway bills in currency units; the provider-neutral port meters in micros. */
+function reportedCost(metadata: unknown): number | undefined {
+  if (!record(metadata) || !record(metadata.gateway)) return undefined;
+  const value = metadata.gateway.cost;
+  if (typeof value !== 'number' && !(typeof value === 'string' && /^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value))) {
+    return undefined;
+  }
+  const cost = Number(value) * 1_000_000;
+  return Number.isFinite(cost) && cost > 0 ? cost : undefined;
 }
 
 function freeFault(error: unknown, signal: AbortSignal | undefined): ProviderFailure {

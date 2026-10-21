@@ -658,10 +658,12 @@ function retryDelayMs(failure: ProviderFailure, unit: RoutedUnit): number {
 }
 
 /**
+ * Prefer a reported charge to token pricing, including on failed attempts.
  * Actual cost when the provider reported usage; null when it did not.
  * A missing report stays the cold ceiling. The hit discount is not invented.
  */
 function meteredCost(unit: RoutedUnit, terms: InferenceTerms, usage: ProviderUsage): Micros | null {
+  if (usage.cost !== undefined && Number.isFinite(usage.cost) && usage.cost >= 0) return usage.cost;
   if (usage.input_tokens === undefined || usage.output_tokens === undefined) return null;
   return priceAttempt(unit, terms, { input_tokens: usage.input_tokens, output_tokens: usage.output_tokens }).cost;
 }

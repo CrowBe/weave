@@ -68,7 +68,7 @@ test('Vercel free example requires an injected environment key before network', 
     assert.equal(result.stderr, 'AI_GATEWAY_API_KEY is not set\n');
   }
 });
-for (const [scenario, requests, status] of [['ok', 1, 0], ['rate', 2, 0], ['paid', 5, 1]] as const) {
+for (const [scenario, requests, status] of [['ok', 1, 0], ['rate', 2, 0], ['paid', 1, 1]] as const) {
   test(`Vercel free example ${scenario} prints safe accounted outcomes`, () => {
     const key = 'synthetic-wv018-example';
     const result = run(key, scenario, requests);
@@ -79,5 +79,10 @@ for (const [scenario, requests, status] of [['ok', 1, 0], ['rate', 2, 0], ['paid
     const outcome = JSON.parse(result.stdout);
     assert.equal(outcome.outcome, status === 0 ? 'accepted' : 'unaccepted');
     assert.equal(outcome.attempts.length, requests);
+    if (scenario === 'paid') {
+      assert.equal(outcome.attempts[0].outcome, 'failed');
+      assert.equal(outcome.attempts[0].failure, 'invalid_request');
+      assert.equal(outcome.attempts[0].usage.cost, 10_000);
+    }
   });
 }

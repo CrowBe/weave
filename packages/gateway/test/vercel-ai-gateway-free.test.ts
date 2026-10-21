@@ -216,7 +216,7 @@ describe('Vercel promotional free contract', () => {
     assert.equal(calls, 1);
   });
 
-  for (const cost of ['0.01', '-1', '', null, false, '1e-999']) {
+  for (const cost of ['-1', '', null, false, '1e-999']) {
     it(`records nonzero or invalid post-call cost ${JSON.stringify(cost)} and never retries that route`, async () => {
       const models: string[] = [];
       const instance = gateway(async (_url, init) => {
@@ -234,6 +234,77 @@ describe('Vercel promotional free contract', () => {
       assert.match(failure.failure.message, /cost/);
     });
   }
+
+  for (const cost of ['0.01', 0.01, '0.0000001']) {
+    it(`meters reported charge ${cost} and stops a stale catalogue at the spending ceiling`, async () => {
+      let calls = 0;
+      const result = await gateway(async () => { calls++; return completion(cost); }).generate(request());
+      assert.equal(result.spent, Number(cost) * 1_000_000);
+      assert.equal(result.status, 'unaccepted');
+      assert.equal(result.status === 'unaccepted' && result.reason, 'budget_exhausted');
+      assert.equal(calls, 1, 'a charged free route must not fan out to the next route');
+      assert.equal(result.attempts.length, 1);
+      assert.equal(result.attempts[0]?.cost, result.spent);
+      assert.equal(result.attempts[0]?.cost_is_upper_bound, false);
+      const failure = result.attempts[0]?.disposition;
+      assert.ok(failure?.status === 'failed' && !failure.failure.retryable);
+      assert.ok(!JSON.stringify(result).includes(KEY));
+    });
+  }
+
+  it('meters a reported charge even when token usage is absent', async () => {
+    const result = await gateway(async () => {
+      const body = await completion('0.01').json() as Record<string, unknown>;
+      return Response.json({ ...body, usage: { inputTokens: {}, outputTokens: {} } });
+    }).generate(request());
+    assert.equal(result.spent, 10_000);
+    assert.equal(result.attempts[0]?.cost, 10_000);
+    assert.equal(result.attempts[0]?.cost_is_upper_bound, false);
+    assert.equal(result.attempts.length, 1);
+  });
+
+  it('retains the reported charge when cancellation arrives with a completed response', async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const result = await gateway(async () => {
+      calls++;
+      const bytes = new Uint8Array(await completion('0.01').arrayBuffer());
+      // A transport can finish reading a billed response despite cancellation.
+      return new Response(new ReadableStream({ pull(stream) {
+        stream.enqueue(bytes); stream.close(); controller.abort();
+      } }), { headers: { 'content-type': 'application/json' } });
+    }).generate(request(), controller.signal);
+    assert.equal(result.spent, 10_000);
+    assert.equal(result.attempts[0]?.cost, 10_000);
+    assert.equal(result.attempts[0]?.cost_is_upper_bound, false);
+    assert.equal(calls, 1);
+    assert.equal(result.attempts.length, 1);
+    assert.equal(controller.signal.aborted, true);
+    const failure = result.attempts[0]?.disposition;
+    assert.ok(failure?.status === 'failed' && failure.failure.code === 'cancelled');
+  });
+
+  it('isolates reported charges across concurrent attempts', async () => {
+    const entered = deferred();
+    const release = deferred();
+    let calls = 0;
+    const instance = gateway(async () => {
+      const charge = ++calls === 1 ? '0.01' : '0';
+      if (calls === 2) entered.resolve();
+      await release.promise;
+      return completion(charge);
+    });
+    const pending = Promise.all([instance.generate(request('charged')), instance.generate(request('free'))]);
+    await entered.promise;
+    release.resolve();
+    const [charged, free] = await pending;
+    assert.equal(charged.spent, 10_000);
+    assert.equal(charged.status, 'unaccepted');
+    assert.equal(free.spent, 0);
+    assert.equal(free.status, 'accepted');
+    assert.equal(calls, 2);
+    assert.ok([charged, free].every(result => result.attempts.length === 1));
+  });
 
   it('fails closed when cost metadata is absent', async () => {
     const result = await adapter(async () => {
@@ -394,7 +465,8 @@ describe('Vercel promotional free contract', () => {
         usage: { inputTokens: { total: KEY }, outputTokens: { total: KEY } } });
     }).execute(call);
     assert.ok(!JSON.stringify(result).includes(KEY));
-    assert.deepEqual(result.usage, { input_tokens: undefined, output_tokens: undefined });
+    assert.deepEqual(result.usage, { input_tokens: undefined, output_tokens: undefined,
+      ...(cost === '0' ? {} : { cost: 10_000 }) });
   });
 
   for (const contentClass of [undefined, 'sensitive', 'private', 'public', 'non_sensitive'] as const) {

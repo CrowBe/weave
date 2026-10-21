@@ -369,6 +369,8 @@ export type RouteTarget =
 export interface ProviderUsage {
   readonly input_tokens: number | undefined;
   readonly output_tokens: number | undefined;
+  /** Provider-reported total charge in micros, including on a failed attempt. */
+  readonly cost?: Micros;
 }
 
 export const PROVIDER_FAILURES = [
