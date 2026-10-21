@@ -202,6 +202,7 @@ export class Runtime {
   /** Views rendered at cycle start, kept for an action that starts after the cycle. */
   private readonly preparedForAction = new Map<string, StateView>();
   private readonly diagnostics: Observation[] = [];
+  private readonly observationIds = new Set<string>();
   private transitionLock = false;
 
   constructor(
@@ -473,11 +474,10 @@ export class Runtime {
           payload: { reason: 'budget', bytes },
         };
         this.diagnostics.push(diagnostic);
+        this.observationIds.add(diagnostic.observation_id);
         return diagnostic;
       }
-      const duplicate =
-        this.log.some((item) => item.observation_id === envelope.observation_id) ||
-        this.diagnostics.some((item) => item.observation_id === envelope.observation_id);
+      const duplicate = this.observationIds.has(envelope.observation_id);
       const midValue = hasMidValue(envelope.payload);
       let validation = forced ?? validate(envelope, this.current);
       if (duplicate) {
@@ -514,6 +514,7 @@ export class Runtime {
         }
       }
       this.log.push(observation);
+      this.observationIds.add(observation.observation_id);
       if (observation.validation.status === 'accepted') {
         applyAccepted(this.current, observation);
         this.followAccepted(observation);
@@ -1594,7 +1595,9 @@ export class Runtime {
 
   load(observations: readonly Observation[]): void {
     for (const observation of observations) {
-      this.log.push(structuredClone(observation));
+      const stored = structuredClone(observation);
+      this.log.push(stored);
+      this.observationIds.add(stored.observation_id);
       if (observation.validation.status === 'accepted') {
         applyAccepted(this.current, observation);
       }

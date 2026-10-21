@@ -17,6 +17,7 @@ import {
   TraceRetention,
   recover,
   replay,
+  type Observation,
 } from '@weave/weave';
 import { FakeHost, FixtureEnvironment } from './fake-host.js';
 import { ALPHA, FailingDecisionLayer, baseGoal, changed, goalOpened, registered, release, tick } from './fixture.js';
@@ -167,6 +168,81 @@ describe('H1 bound the log', () => {
     assert.equal(durable.filter((observation) => observation.observation_id === first.observation_id).length, 1);
     assert.equal(durable.some((observation) => observation.observation_id === distinct.observation_id), true);
     assert.equal(JSON.stringify(durable).includes('alpha two'), false);
+  });
+
+  it('H1-T07 rejects a duplicate after recover loads the log', () => {
+    const { runtime, journal } = runtimeWith();
+    const first = runtime.observe(registered(ALPHA, 'alpha one'));
+    assert.equal(first.validation.status, 'accepted');
+    const restored = recover(journal.snapshot(), {
+      host: new FakeHost(new FixtureEnvironment()),
+      decisionLayer: new ScriptedDecisionLayer(),
+    });
+    const reused = restored.observe(registered(ALPHA, 'alpha two'));
+    assert.equal(reused.validation.status, 'rejected');
+    if (reused.validation.status === 'rejected') {
+      assert.equal(reused.validation.reason, 'duplicate');
+    }
+    const distinct = restored.observe({
+      ...changed(ALPHA, 2, 'alpha three'),
+      observation_id: `${first.observation_id}x`,
+    });
+    assert.equal(distinct.validation.status, 'accepted');
+    const replayed = replay(restored.trace().observations, {
+      host: new FakeHost(new FixtureEnvironment()),
+      decisionLayer: new ScriptedDecisionLayer(),
+    });
+    assert.equal(replayed.ok, true);
+    if (replayed.ok) {
+      const copy = replayed.trace.observations.find((observation) => observation.seq === reused.seq);
+      assert.equal(copy?.validation.status, 'rejected');
+      if (copy?.validation.status === 'rejected') {
+        assert.equal(copy.validation.reason, 'duplicate');
+      }
+    }
+  });
+
+  it('H1-T09 treats an oversize diagnostic id as present', () => {
+    const { runtime } = runtimeWith({ logBound: { max_observation_bytes: 64 } });
+    const oversize = runtime.observe({
+      ...registered(ALPHA, MARKER.repeat(8)),
+      observation_id: 'test:source.registered:oversize',
+    });
+    assert.equal(oversize.validation.status, 'rejected');
+    if (oversize.validation.status === 'rejected') {
+      assert.equal(oversize.validation.reason, 'budget');
+    }
+    assert.equal(runtime.diagnosticRejections().length, 1);
+    const reused = runtime.observe({
+      ...registered(ALPHA, 'alpha one'),
+      observation_id: 'test:source.registered:oversize',
+    });
+    assert.equal(reused.validation.status, 'rejected');
+    if (reused.validation.status === 'rejected') {
+      assert.equal(reused.validation.reason, 'duplicate');
+    }
+    assert.equal(runtime.diagnosticRejections().length, 1);
+  });
+
+  it('H1-T08 answers the duplicate check without scanning the log', () => {
+    const { runtime } = runtimeWith();
+    const first = runtime.observe(registered(ALPHA, 'alpha one'));
+    assert.equal(first.validation.status, 'accepted');
+    const internals = runtime as unknown as { log: Observation[] };
+    let scans = 0;
+    internals.log = new Proxy(internals.log, {
+      get(target, property, receiver) {
+        if (property === 'some') {
+          scans += 1;
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    for (let revision = 2; revision <= 17; revision += 1) {
+      const observation = runtime.observe(changed(ALPHA, revision, `alpha ${revision}`));
+      assert.equal(observation.validation.status, 'accepted');
+    }
+    assert.equal(scans, 0);
   });
 
   it('H1-T05 refuses a second runtime on the same host store', () => {
