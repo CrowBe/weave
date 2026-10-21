@@ -123,6 +123,8 @@ for (const [name, { id: model }] of Object.entries(PROMOS)) {
       refused(await adapter.execute(call));
       now += 1;
       refused(await adapter.execute(call));
+      now = EXPIRES_AT - 1;
+      refused(await adapter.execute(call));
       assert.equal(endpoint.catalogueRequests.length, 1);
       assert.equal(endpoint.chatRequests.length, 1);
     });
@@ -136,6 +138,7 @@ for (const [name, { id: model }] of Object.entries(PROMOS)) {
       const options = { apiKey: KEY, fetch: endpoint.fetch, promoModels: true, now: () => now };
       const adapter = nous.nousPortalAdapter(options);
       refused(await adapter.execute(call));
+      now = EXPIRES_AT - 1;
       refused(await adapter.execute(call));
       assert.equal(endpoint.catalogueRequests.length, 1);
       assert.equal(endpoint.chatRequests.length, 0);

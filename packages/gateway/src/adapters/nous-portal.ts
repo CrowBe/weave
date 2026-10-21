@@ -131,6 +131,8 @@ interface CatalogueCheck {
   result: Promise<CatalogueResult>;
   waiters: number;
   settled: boolean;
+  /** A caller accepted the free verdict before abandoning its check. */
+  accepted: boolean;
 }
 
 export function nousPortalAdapter(options: NousPortalOptions): GenerationAdapter {
@@ -199,7 +201,7 @@ export function nousPortalAdapter(options: NousPortalOptions): GenerationAdapter
   async function checkCatalogue(model: string, signal: AbortSignal | undefined): Promise<ProviderFailure | undefined> {
     let check = checks.get(model);
     if (check === undefined) {
-      const created: CatalogueCheck = { controller: new AbortController(), result: Promise.resolve({ failure: CHECK_FAILED }), waiters: 0, settled: false };
+      const created: CatalogueCheck = { controller: new AbortController(), result: Promise.resolve({ failure: CHECK_FAILED }), waiters: 0, settled: false, accepted: false };
       created.result = lookup(model, created.controller.signal).then(result => {
         created.settled = true;
         if (!('verdict' in result) || result.verdict !== 'free') {
@@ -214,16 +216,19 @@ export function nousPortalAdapter(options: NousPortalOptions): GenerationAdapter
     check.waiters += 1;
     const result = await untilAborted(check.result, signal);
     check.waiters -= 1;
-    if (result === ABORTED) {
+    if (result === ABORTED || signal?.aborted) {
       // The last waiter leaving abandons the check; an abandoned check is not a pass.
-      if (!check.settled && check.waiters === 0) {
-        check.controller.abort();
+      if (!check.accepted && check.waiters === 0) {
+        if (!check.settled) check.controller.abort();
         if (checks.get(model) === check) checks.delete(model);
       }
       return abortFailure(signal);
     }
     if ('failure' in result) return result.failure;
-    if (result.verdict === 'free') return refused.has(model) ? PRICE_REFUSED : undefined;
+    if (result.verdict === 'free') {
+      check.accepted = true;
+      return refused.has(model) ? PRICE_REFUSED : undefined;
+    }
     return result.verdict === 'priced' ? PRICE_REFUSED : NOT_LISTED;
   }
 

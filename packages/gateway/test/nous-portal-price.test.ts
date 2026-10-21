@@ -256,6 +256,20 @@ describe('nous-portal catalogue price check', () => {
     assert.equal(result.status, 'completed');
   });
 
+  it('recursively checks nested override prices', async () => {
+    for (const [price, free] of [['0e0', true], ['0.01', false], ['1e-400', false]] as const) {
+      const pricing = { prompt: '0', completion: '0', overrides: [{
+        min_prompt_tokens: 100000, prompt: '0', completion: '0',
+        original: { pricing: { prompt: price, completion: '0' } },
+      }] };
+      const endpoint = nousEndpoint({ catalogue: () => json(catalogueWith(SOLAR, pricing)) });
+      const result = await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL);
+      assert.equal(endpoint.chatRequests.length, free ? 1 : 0);
+      if (free) assert.equal(result.status, 'completed');
+      else assert.equal(failureOf(result).message, PRICE_REFUSED);
+    }
+  });
+
   it('keeps concurrent and subsequent calls refused without chat after one priced check', async () => {
     const started = deferred();
     const release = deferred();
@@ -532,6 +546,57 @@ describe('nous-portal refusals and faults', () => {
 });
 
 describe('nous-portal cancellation', () => {
+  for (const waiterCount of [1, 3]) {
+    for (const keepWaiter of [false, true]) {
+      for (const afterDelivery of [false, true]) {
+        it(`handles ${waiterCount} waiters aborting as a catalogue pass settles, survivor: ${keepWaiter}, after delivery: ${afterDelivery}`, async () => {
+          const started = deferred();
+          const parsed = deferred<unknown>();
+          const endpoint = nousEndpoint({ catalogue: () => {
+            if (endpoint.catalogueRequests.length > 1) return json({ data: LIVE_CATALOGUE_ENTRIES });
+            return Object.assign(json({}), { json: () => {
+              started.resolve();
+              return parsed.promise;
+            } });
+          } });
+          const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
+          const controllers = Array.from({ length: waiterCount }, () => new AbortController());
+          const leaving = controllers.map(controller => adapter.execute({ ...CALL, signal: controller.signal }));
+          const staying = keepWaiter ? adapter.execute(CALL) : undefined;
+          await started.promise;
+          // Lookup reads the body first. Abort after it returns its verdict, before
+          // the shared result reaches the waiters: settlement must not retain an abandoned pass.
+          const abort = () => {
+            for (const controller of controllers) controller.abort();
+          };
+          void parsed.promise.then(() => queueMicrotask(() => {
+            if (afterDelivery) queueMicrotask(abort);
+            else abort();
+          }));
+          parsed.resolve({ data: LIVE_CATALOGUE_ENTRIES });
+          for (const result of await Promise.all(leaving)) assert.equal(failureOf(result).code, 'cancelled');
+          if (staying !== undefined) assert.equal((await staying).status, 'completed');
+          assert.equal(endpoint.chatRequests.length, keepWaiter ? 1 : 0);
+          assert.equal((await adapter.execute(CALL)).status, 'completed');
+          assert.equal(endpoint.catalogueRequests.length, keepWaiter ? 1 : 2);
+        });
+      }
+    }
+  }
+
+  it('keeps an already accepted catalogue pass when a later waiter aborts', async () => {
+    const endpoint = nousEndpoint();
+    const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
+    assert.equal((await adapter.execute(CALL)).status, 'completed');
+    const controller = new AbortController();
+    const pending = adapter.execute({ ...CALL, signal: controller.signal });
+    controller.abort();
+    assert.equal(failureOf(await pending).code, 'cancelled');
+    assert.equal((await adapter.execute(CALL)).status, 'completed');
+    assert.equal(endpoint.catalogueRequests.length, 1);
+    assert.equal(endpoint.chatRequests.length, 2);
+  });
+
   for (const [name, code] of [['AbortError', 'cancelled'], ['TimeoutError', 'timeout']] as const) {
     it(`propagates ${name} to the in-flight chat request without another request`, async () => {
       const controller = new AbortController();
