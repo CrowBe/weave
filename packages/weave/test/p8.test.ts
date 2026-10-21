@@ -9,6 +9,7 @@ import { AgentFabricHost, FabricStore } from '@weave/agentfabric';
 import type { EvaluationOutcome, EvaluationRequest, GenerationOutcome, GenerationRequest, InferenceTerms } from '@weave/gateway';
 import { DECLARED_TASK_POLICY } from '../src/task-acceptance.js';
 import { transitionOutputEval, OUTPUT_EVAL_POLICY, OUTPUT_EVAL_QUESTION } from '../src/sites/output-eval.js';
+import { correlation } from '../src/sites/index.js';
 import {
   DEFAULT_IMPLEMENT_RETRIES, FileAttemptJournal, MemoryAttemptJournal, createEqualGrantIssuer,
   replayImplementationStep, runImplementationStep,
@@ -136,6 +137,7 @@ interface Driver {
   readonly ports: ImplementPorts;
   readonly journal: AttemptJournal;
   readonly generateIds: string[];
+  readonly evalIds: string[];
   readonly tiers: ImplementTier[];
   readonly prompts: string[];
   readonly evalSites: string[];
@@ -155,6 +157,7 @@ function driver(options: {
 }): Driver {
   const work = options.input ?? input();
   const generateIds: string[] = [];
+  const evalIds: string[] = [];
   const tiers: ImplementTier[] = [];
   const prompts: string[] = [];
   const evalSites: string[] = [];
@@ -166,7 +169,7 @@ function driver(options: {
   const usedGrants = new WeakSet<object>();
   const live = { ...state };
   const found: Driver = {
-    input: work, generateIds, tiers, prompts, evalSites, evalStates, invokes,
+    input: work, generateIds, evalIds, tiers, prompts, evalSites, evalStates, invokes,
     journal: options.journal ?? new MemoryAttemptJournal(),
     ports: {
       now: () => 10,
@@ -187,6 +190,7 @@ function driver(options: {
       evaluate: (async (request: EvaluationRequest<'boolean'>): Promise<EvaluationOutcome<'boolean'>> => {
         evals += 1;
         evalSites.push(request.site);
+        evalIds.push(request.request_id);
         evalStates.push(request.state);
         assert.equal(request.kind, 'boolean');
         assert.equal(request.terms.tier, 'decision');
@@ -834,6 +838,45 @@ test('a finished attempt missing its newline is kept when the next attempt is ap
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('step-built ids stay bounded, unique and deterministic for long execution ids', async () => {
+  const run = async (execution_id: string) => {
+    const world = driver({
+      input: input({ execution_id, retries: 1 }),
+      evaluations: [{ c1: { p: .2, conf: 1 } }, { c1: { p: 1, conf: 1 } }],
+    });
+    const result = await runImplementationStep(world.input, world.ports, world.journal);
+    assert.equal(result.status, 'passed');
+    assert.equal(result.attempts.length, 2);
+    const ids = [...world.generateIds, ...world.evalIds, ...result.attempts.map(attempt => attempt.id)];
+    for (const id of ids) {
+      assert.equal(correlation(id), id, 'step id must be a valid correlation');
+      assert.ok(id.length <= 128, 'step id must be bounded');
+    }
+    assert.equal(new Set(world.generateIds).size, 2);
+    assert.equal(new Set(world.evalIds).size, 2);
+    assert.equal(new Set(ids).size, ids.length);
+    assert.ok(world.generateIds.every(id => id.endsWith(':gen')));
+    assert.ok(world.evalIds.every(id => id.endsWith(':eval')));
+    assert.equal(result.observations[0]?.request_id, world.evalIds[1]);
+    assert.deepEqual(replayImplementationStep(world.journal.load(execution_id), world.input), result);
+    return { generate: world.generateIds, eval: world.evalIds, attempts: result.attempts.map(attempt => attempt.id) };
+  };
+  const executions = ['x', 'e'.repeat(120), 'f'.repeat(128)];
+  const runs = await Promise.all(executions.map(run));
+  for (const item of runs) {
+    assert.ok(item.generate[0]?.endsWith(':a1:gen'));
+    assert.ok(item.generate[1]?.endsWith(':a2:gen'));
+    assert.ok(item.eval[0]?.endsWith(':a1:eval'));
+    assert.ok(item.eval[1]?.endsWith(':a2:eval'));
+  }
+  assert.deepEqual(await Promise.all(executions.map(run)), runs);
+  const multibyte = driver({ input: input({ execution_id: 'é'.repeat(64) }) });
+  const invalid = await runImplementationStep(multibyte.input, multibyte.ports, multibyte.journal);
+  assert.equal(invalid.reason, 'invalid_input');
+  assert.equal(invalid.execution_id, null);
+  assert.equal(multibyte.generateIds.length, 0);
 });
 
 test('an invalid execution id is rejected without being copied or dispatched', async () => {
