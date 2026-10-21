@@ -1,8 +1,12 @@
 import {
   appendFileSync,
+  closeSync,
   existsSync,
+  fstatSync,
+  ftruncateSync,
   linkSync,
   mkdirSync,
+  openSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -10,6 +14,7 @@ import {
   truncateSync,
   unlinkSync,
   writeFileSync,
+  writeSync,
 } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CapabilityContract, InvocationOutcome } from '@weave/agentsop';
@@ -116,6 +121,8 @@ interface LoadedJournal {
 /**
  * Host store. Locators never leave this object. When constructed with a path,
  * every mutation is appended to a JSONL journal and folded back on open.
+ * All path-backed entry points take the writer lock. A supplied snapshot may
+ * seed an empty path, but cannot replace existing journal history.
  */
 export class FabricStore {
   private next_handle = 1;
@@ -143,47 +150,54 @@ export class FabricStore {
   persistResult = true;
 
   constructor(snapshot?: FabricSnapshot, path: string | null = null) {
-    this.path = path;
+    this.path = path === null ? null : resolve(path);
     this.applySnapshot(snapshot);
-  }
-
-  static open(path: string): FabricStore {
-    const key = resolve(path);
+    if (this.path === null) {
+      return;
+    }
+    const key = this.path;
     if (openStores.has(key)) {
       throw new Error(`host store is already open: ${key}`);
     }
-    const directory = dirname(path);
+    const directory = dirname(key);
     if (!existsSync(directory)) {
       mkdirSync(directory, { recursive: true });
     }
-    const lockToken = acquireLock(path);
+    const lockToken = acquireLock(key);
+    this.lockToken = lockToken;
     try {
-      if (!existsSync(path)) {
-        writeFileSync(path, '');
+      this.assertWritable();
+      if (snapshot !== undefined && existsSync(key) && statSync(key).size > 0) {
+        throw new Error(`cannot restore a snapshot over existing host store history: ${key}`);
       }
-      const loaded = readJournal(path);
-      const store = loaded.legacySnapshot
-        ? new FabricStore(loaded.legacySnapshot, path)
-        : new FabricStore(undefined, path);
-      store.lockToken = lockToken;
-      store.recovery = {
+      if (!existsSync(key)) {
+        writeFileSync(key, '', { flag: 'wx' });
+      }
+      const loaded = readJournal(key, () => this.assertWritable());
+      this.recovery = {
         torn_tail_ignored: loaded.torn_tail_ignored,
         ignored_tail_bytes: loaded.ignored_tail_bytes,
       };
-      if (loaded.legacySnapshot) {
-        store.compact();
+      if (snapshot !== undefined || loaded.legacySnapshot) {
+        if (loaded.legacySnapshot) {
+          this.applySnapshot(loaded.legacySnapshot);
+        }
+        this.compact();
       } else {
-        store.replay(loaded.records);
+        this.replay(loaded.records);
       }
-      store.fileBytes = statSync(path).size;
-      store.tailBytes = 0;
-      store.journalReady = true;
-      openStores.set(key, store);
-      return store;
+      this.fileBytes = statSync(key).size;
+      this.tailBytes = 0;
+      this.journalReady = true;
+      openStores.set(key, this);
     } catch (error) {
-      releaseLock(path, lockToken);
+      releaseLock(key, lockToken);
       throw error;
     }
+  }
+
+  static open(path: string): FabricStore {
+    return new FabricStore(undefined, path);
   }
 
   /** Release this process's ownership so a later restart can open the store. */
@@ -350,6 +364,7 @@ export class FabricStore {
     if (!this.path) {
       return;
     }
+    this.assertWritable();
     const retained = Math.max(0, this.fileBytes - this.tailBytes);
     if (this.tailBytes >= Math.max(COMPACT_BYTES, retained)) {
       this.compact();
@@ -365,25 +380,49 @@ export class FabricStore {
     if (!this.path) {
       return;
     }
-    if (this.poisoned) {
-      throw new Error(this.poisoned);
-    }
+    this.assertWritable();
     if (!this.journalReady) {
       this.compact();
     }
-    const line = `${JSON.stringify(mutation)}\n`;
+    const line = Buffer.from(`${JSON.stringify(mutation)}\n`);
+    // Serialization can call user-provided toJSON methods. Check again before I/O.
+    this.assertWritable();
     const previousBytes = this.fileBytes;
+    const fd = openSync(this.path, 'a');
+    let written = 0;
     try {
-      appendFileSync(this.path, line);
-    } catch (error) {
-      try {
-        truncateSync(this.path, previousBytes);
-      } catch {
-        this.poisoned = `host store must be reopened after a failed append: ${String(error)}`;
+      if (fstatSync(fd).size !== previousBytes) {
+        this.poisoned = 'host store must be reopened after an unexpected journal length';
+        throw new Error(this.poisoned);
       }
-      throw error;
+      try {
+        while (written < line.length) {
+          this.assertWritable();
+          const count = writeSync(fd, line, written, line.length - written);
+          if (count === 0) {
+            throw new Error('host store append made no progress');
+          }
+          written += count;
+        }
+      } catch (error) {
+        try {
+          this.assertWritable();
+          if (fstatSync(fd).size !== previousBytes + written) {
+            throw new Error('host store append range changed');
+          }
+          // Only successful writeSync calls contribute to the rollback range.
+          if (written > 0) {
+            ftruncateSync(fd, previousBytes);
+          }
+        } catch {
+          this.poisoned = 'host store must be reopened after a failed append';
+        }
+        throw error;
+      }
+    } finally {
+      closeSync(fd);
     }
-    const bytes = Buffer.byteLength(line);
+    const bytes = line.length;
     this.fileBytes += bytes;
     this.tailBytes += bytes;
     this.written_bytes += bytes;
@@ -393,19 +432,34 @@ export class FabricStore {
     if (!this.path) {
       return;
     }
+    this.assertWritable();
     const directory = dirname(this.path);
     if (!existsSync(directory)) {
       mkdirSync(directory, { recursive: true });
     }
     const text = `${JSON.stringify({ op: 'snapshot', snapshot: this.snapshot() })}\n`;
+    this.assertWritable();
     const tmp = `${this.path}.tmp`;
     writeFileSync(tmp, text);
+    this.assertWritable();
     renameSync(tmp, this.path);
     const bytes = Buffer.byteLength(text);
     this.fileBytes = bytes;
     this.tailBytes = 0;
     this.written_bytes += bytes;
     this.journalReady = true;
+  }
+
+  private assertWritable(): void {
+    if (this.closed) {
+      throw new Error('host store is closed');
+    }
+    if (this.path && (this.lockToken === null || readLockContent(`${this.path}.lock`) !== this.lockToken)) {
+      throw new Error('host store no longer owns its lock');
+    }
+    if (this.poisoned) {
+      throw new Error(this.poisoned);
+    }
   }
 
   private replay(records: readonly FabricMutation[]): void {
@@ -757,8 +811,9 @@ function counterAfter(value: string, prefix: string): number | undefined {
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
-function readJournal(path: string): LoadedJournal {
-  let text = readFileSync(path, 'utf8');
+function readJournal(path: string, assertWritable: () => void): LoadedJournal {
+  const originalText = readFileSync(path, 'utf8');
+  let text = originalText;
   let torn_tail_ignored = false;
   let ignored_tail_bytes = 0;
   if (text.length > 0 && !text.endsWith('\n')) {
@@ -770,13 +825,11 @@ function readJournal(path: string): LoadedJournal {
       validTail = true;
     } catch {
       const valid = text.slice(0, breakAt + 1);
-      truncateSync(path, Buffer.byteLength(valid));
       text = valid;
       torn_tail_ignored = true;
       ignored_tail_bytes = Buffer.byteLength(tail);
     }
     if (validTail) {
-      appendFileSync(path, '\n');
       text += '\n';
     }
   }
@@ -784,7 +837,7 @@ function readJournal(path: string): LoadedJournal {
   if (lines.at(-1) === '') {
     lines.pop();
   }
-  const parsed: unknown[] = [];
+  const parsed: { value: unknown; index: number }[] = [];
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? '';
     if (line.length === 0) {
@@ -794,10 +847,10 @@ function readJournal(path: string): LoadedJournal {
     try {
       value = JSON.parse(line);
     } catch {
-      if (index === lines.length - 1) {
+      if (index === lines.length - 1 && line.trim().length === 0) {
         const validLines = lines.slice(0, index);
         const valid = validLines.length === 0 ? '' : `${validLines.join('\n')}\n`;
-        truncateSync(path, Buffer.byteLength(valid));
+        text = valid;
         torn_tail_ignored = true;
         ignored_tail_bytes += Buffer.byteLength(line);
         continue;
@@ -807,18 +860,21 @@ function readJournal(path: string): LoadedJournal {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       throw new Error(`invalid host store log at line ${index + 1}: ${path}`);
     }
-    parsed.push(value);
+    parsed.push({ value, index });
   }
-  if (parsed.length === 1 && isLegacySnapshot(parsed[0])) {
-    return {
-      records: [],
-      legacySnapshot: parsed[0],
-      torn_tail_ignored,
-      ignored_tail_bytes,
-    };
+  const single = parsed.length === 1 ? parsed[0] : undefined;
+  const legacySnapshot = single && isLegacySnapshot(single.value) ? single.value : null;
+  const records = legacySnapshot ? [] : parsed.map(({ value, index }) => asMutation(value, index, path));
+  // Validate every complete record before repairing a torn tail or adding a newline.
+  if (text !== originalText) {
+    assertWritable();
+    if (originalText.startsWith(text)) {
+      truncateSync(path, Buffer.byteLength(text));
+    } else {
+      appendFileSync(path, '\n');
+    }
   }
-  const records = parsed.map((value, index) => asMutation(value, index, path));
-  return { records, legacySnapshot: null, torn_tail_ignored, ignored_tail_bytes };
+  return { records, legacySnapshot, torn_tail_ignored, ignored_tail_bytes };
 }
 
 function isLegacySnapshot(value: unknown): value is FabricSnapshot {
@@ -826,11 +882,14 @@ function isLegacySnapshot(value: unknown): value is FabricSnapshot {
     return false;
   }
   const record = value as Record<string, unknown>;
-  return !('op' in record) && 'next_handle' in record && 'resources' in record && 'refs' in record;
+  return !('op' in record) && isSnapshot(value);
 }
 
 function asMutation(value: unknown, index: number, path: string): FabricMutation {
-  const record = value as { op?: unknown };
+  const record = value as { op?: unknown; snapshot?: unknown };
+  if (record.op === 'snapshot' && !isSnapshot(record.snapshot)) {
+    throw new Error(`invalid host store snapshot at line ${index + 1}: ${path}`);
+  }
   if (
     typeof record.op !== 'string' ||
     ![
@@ -850,4 +909,104 @@ function asMutation(value: unknown, index: number, path: string): FabricMutation
     throw new Error(`invalid host store mutation at line ${index + 1}: ${path}`);
   }
   return value as FabricMutation;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isNonNegativeNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function isCounter(value: unknown): boolean {
+  return Number.isSafeInteger(value) && (value as number) >= 1;
+}
+
+function arrayOf(value: unknown, valid: (item: unknown) => boolean): boolean {
+  return Array.isArray(value) && value.every(valid);
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isKind(value: unknown): boolean {
+  return value === 'source' || value === 'destination' || value === 'workspace';
+}
+
+function isOutcome(value: unknown): boolean {
+  return isRecord(value) && (
+    (value.outcome === 'succeeded' && 'output' in value) ||
+    (value.outcome === 'failed' && isString(value.failure)) ||
+    (value.outcome === 'uncertain' && isString(value.reason))
+  );
+}
+
+function isPublication(value: unknown): boolean {
+  return isRecord(value) && isString(value.invocation_id) && isString(value.binding_digest) &&
+    isString(value.report_digest) && isString(value.destination) && isCounter(value.committed_revision);
+}
+
+function isResource(value: unknown): boolean {
+  return isRecord(value) && isString(value.canonical_id) && isKind(value.kind) &&
+    isString(value.locator) && isCounter(value.revision) && isString(value.content) &&
+    (value.publication === null || isPublication(value.publication));
+}
+
+function isRef(value: unknown): boolean {
+  return isRecord(value) && isString(value.handle) && isString(value.canonical_id) && isKind(value.kind);
+}
+
+function isInvocation(value: unknown): boolean {
+  return isRecord(value) && isString(value.invocation_id) && isString(value.action_id) &&
+    isString(value.operation) && (value.implementation_id === undefined || isString(value.implementation_id)) &&
+    isString(value.binding_digest) && 'inputs' in value &&
+    ['running', 'committed', 'stopped', 'uncertain'].includes(value.status as string) &&
+    (value.outcome === null || isOutcome(value.outcome)) && typeof value.cancel_requested === 'boolean' &&
+    (value.measured_cost_micros === undefined || isNonNegativeNumber(value.measured_cost_micros));
+}
+
+function isContract(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const stringMap = (item: unknown) => isRecord(item) && Object.values(item).every(isString);
+  const selector = (item: unknown) => isRecord(item) && isString(item.input) &&
+    ['discover', 'read', 'create', 'write', 'append', 'delete'].includes(item.mode as string);
+  const processSelector = (item: unknown) => isRecord(item) && (
+    item.name === 'process.spawn' || (item.name === 'fs.write' && isString(item.input))
+  );
+  const inference = value.inference;
+  return isString(value.id) && isString(value.revision) && isString(value.purpose) &&
+    stringMap(value.input) && stringMap(value.output) && arrayOf(value.effects, selector) &&
+    arrayOf(value.permissions, selector) && arrayOf(value.failures, isString) &&
+    arrayOf(value.depends_on, isString) &&
+    (value.process_effects === undefined || arrayOf(value.process_effects, processSelector)) &&
+    (inference === undefined || (isRecord(inference) && isString(inference.kind) &&
+      ['framing', 'working', 'extension'].includes(inference.role as string) &&
+      isNonNegativeNumber(inference.max_cost) && arrayOf(inference.destinations, isString) &&
+      isCounter(inference.max_attempts)));
+}
+
+function isAdmission(value: unknown): boolean {
+  return isRecord(value) && isString(value.operation) && isString(value.implementation_id) &&
+    isContract(value.contract) && isString(value.source);
+}
+
+function isWorkload(value: unknown): boolean {
+  return isRecord(value) && isString(value.goal_id) && (value.quality === 'held' || value.quality === 'missed');
+}
+
+function isBuiltinResult(value: unknown): boolean {
+  return isRecord(value) && isString(value.key) && isString(value.operation) &&
+    isString(value.implementation_id) && isOutcome(value.outcome);
+}
+
+function isSnapshot(value: unknown): value is FabricSnapshot {
+  return isRecord(value) && isCounter(value.next_handle) && isCounter(value.next_canonical) &&
+    arrayOf(value.resources, isResource) && arrayOf(value.refs, isRef) && arrayOf(value.invocations, isInvocation) &&
+    (value.admissions === undefined || arrayOf(value.admissions, isAdmission)) &&
+    (value.conclusions === undefined || Array.isArray(value.conclusions)) &&
+    (value.workload === undefined || arrayOf(value.workload, isWorkload)) &&
+    (value.measured_cost_micros === undefined || isNonNegativeNumber(value.measured_cost_micros)) &&
+    (value.builtin_results === undefined || arrayOf(value.builtin_results, isBuiltinResult));
 }

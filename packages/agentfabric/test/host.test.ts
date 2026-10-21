@@ -3,7 +3,7 @@
  * failure precedence, catalogue rules).
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -22,6 +22,32 @@ function inspectGrant(authority: ReturnType<typeof createGrantAuthority>, source
 }
 
 describe('AgentFabric host authority', () => {
+  for (const late of ['completion', 'cancellation'] as const) {
+    it(`refuses late invocation ${late} after store close and preserves successor records`, () => {
+      const dir = mkdtempSync(join(tmpdir(), 'weave-host-closed-store-'));
+      const path = join(dir, 'fabric.json');
+      const store = FabricStore.open(path);
+      const authority = createGrantAuthority();
+      const host = new AgentFabricHost({ authority, store });
+      const source = host.registerSource('mem:late', 'line');
+      const handle = host.invoke(inspectGrant(authority, source, 'late-action'), SOURCE_INSPECT.id,
+        { source }, { invocation_id: 'late-invocation' });
+      assert.equal(handle.kind, 'handle');
+      store.close();
+      const successor = FabricStore.open(path);
+      try {
+        successor.retainConclusion('successor evidence');
+        const before = readFileSync(path);
+        assert.throws(() => late === 'completion' ? host.release('late-action') : host.requestCancel('late-invocation'), /closed/);
+        assert.deepEqual(readFileSync(path), before);
+        assert.deepEqual(successor.conclusions(), ['successor evidence']);
+      } finally {
+        successor.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+
   it('M1-T04 forged, absent, copied and widened grants are denied without resource access', () => {
     const authority = createGrantAuthority();
     const host = new AgentFabricHost({ authority });
