@@ -270,29 +270,39 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   registerSource(locator: string, content: string): ResourceRef {
-    const canonical_id = this.store.allocateCanonical();
-    this.store.putResource({
-      canonical_id,
-      kind: 'source',
-      locator,
-      revision: 1,
-      content,
-      publication: null,
-    });
-    return this.store.issue(canonical_id, 'source');
+    const canonical_id = this.store.allocateCanonical(false);
+    this.store.putResource(
+      {
+        canonical_id,
+        kind: 'source',
+        locator,
+        revision: 1,
+        content,
+        publication: null,
+      },
+      false,
+    );
+    const handle = this.store.issue(canonical_id, 'source', false);
+    this.store.save();
+    return handle;
   }
 
   registerDestination(locator: string): ResourceRef {
-    const canonical_id = this.store.allocateCanonical();
-    this.store.putResource({
-      canonical_id,
-      kind: 'destination',
-      locator,
-      revision: 1,
-      content: '',
-      publication: null,
-    });
-    return this.store.issue(canonical_id, 'destination');
+    const canonical_id = this.store.allocateCanonical(false);
+    this.store.putResource(
+      {
+        canonical_id,
+        kind: 'destination',
+        locator,
+        revision: 1,
+        content: '',
+        publication: null,
+      },
+      false,
+    );
+    const handle = this.store.issue(canonical_id, 'destination', false);
+    this.store.save();
+    return handle;
   }
 
   alias(handle: ResourceRef): ResourceRef {
@@ -636,7 +646,7 @@ export class AgentFabricHost implements CapabilityHost {
     }
     const { open, record } = prepared;
     try {
-      this.store.persistInvocationStart(record);
+      this.store.persistInvocationStart(record, HOST_INVOCATION_MICROS);
     } catch (error) {
       this.coordinator.release(open.invocation_id);
       if (error instanceof PersistFailure) {
@@ -651,7 +661,6 @@ export class AgentFabricHost implements CapabilityHost {
       implementation_id: open.implementation_id,
       inputs: open.inputs,
     });
-    this.store.addMeasuredCost(HOST_INVOCATION_MICROS);
     this.open.set(open.invocation_id, open);
     const result = new Promise<InvocationOutcome>((resolve) => {
       open.resolve = resolve;
