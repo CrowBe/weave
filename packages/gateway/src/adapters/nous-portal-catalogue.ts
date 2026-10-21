@@ -58,7 +58,8 @@ const OVERRIDE_THRESHOLDS: ReadonlySet<string> = new Set(['min_prompt_tokens', '
 
 /**
  * Every scalar pricing field must be numeric zero or an unsigned decimal
- * string matching ^[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$ with Number(value) === 0.
+ * string with an all-zero mantissa matching ^0+(\.0+)?([eE][+-]?[0-9]+)?$.
+ * Nonzero mantissas fail closed even when Number(value) underflows to zero.
  * Prompt and completion must be present, nested objects such as `original`
  * included, and every `overrides` tier's prices too. Unreadable prices fail closed.
  */
@@ -77,7 +78,7 @@ function zeroLeaves(value: unknown): boolean {
   // A leading sign is anomalous and outside the unsigned price grammar;
   // fail closed: refusing can never meter a paid call as $0.
   return value === 0 || (typeof value === 'string' &&
-    /^[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$/.test(value) && Number(value) === 0);
+    /^0+(\.0+)?([eE][+-]?[0-9]+)?$/.test(value) && Number(value) === 0);
 }
 
 function object(value: unknown): value is Record<string, unknown> {
