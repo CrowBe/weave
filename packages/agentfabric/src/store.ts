@@ -5,9 +5,11 @@ import {
   fstatSync,
   ftruncateSync,
   linkSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
@@ -16,7 +18,7 @@ import {
   writeFileSync,
   writeSync,
 } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import type { CapabilityContract, InvocationOutcome } from '@weave/agentsop';
 
 const openStores = new Map<string, FabricStore>();
@@ -145,12 +147,13 @@ export class FabricStore {
   private poisoned: string | null = null;
   private lockToken: string | null = null;
   private closed = false;
+  private lastCompactionError: unknown = null;
   recovery = { torn_tail_ignored: false, ignored_tail_bytes: 0 };
   persistStart = true;
   persistResult = true;
 
   constructor(snapshot?: FabricSnapshot, path: string | null = null) {
-    this.path = path === null ? null : resolve(path);
+    this.path = path === null ? null : canonicalStorePath(path);
     this.applySnapshot(snapshot);
     if (this.path === null) {
       return;
@@ -360,6 +363,11 @@ export class FabricStore {
     return this.written_bytes;
   }
 
+  /** Most recent maintenance failure; a successful compaction clears it. */
+  compactionError(): unknown {
+    return this.lastCompactionError;
+  }
+
   save(): void {
     if (!this.path) {
       return;
@@ -367,7 +375,14 @@ export class FabricStore {
     this.assertWritable();
     const retained = Math.max(0, this.fileBytes - this.tailBytes);
     if (this.tailBytes >= Math.max(COMPACT_BYTES, retained)) {
-      this.compact();
+      // Appends have already committed. Maintenance cannot turn that success
+      // into an apparent mutation failure (and release an invocation reservation).
+      try {
+        this.compact();
+        this.lastCompactionError = null;
+      } catch (error) {
+        this.lastCompactionError = error;
+      }
     }
   }
 
@@ -634,6 +649,26 @@ export class PersistFailure extends Error {
   }
 }
 
+function canonicalStorePath(path: string): string {
+  const absolute = resolve(path);
+  const directory = dirname(absolute);
+  mkdirSync(directory, { recursive: true });
+  try {
+    return realpathSync(absolute);
+  } catch (error) {
+    if (!isErrno(error, 'ENOENT')) throw error;
+    try {
+      // A dangling symlink is an existing alias, not a new journal filename.
+      lstatSync(absolute);
+    } catch (missing) {
+      if (!isErrno(missing, 'ENOENT')) throw missing;
+      // A new journal has no inode yet; resolve directory aliases before locking.
+      return join(realpathSync(directory), basename(absolute));
+    }
+    throw error;
+  }
+}
+
 function acquireLock(path: string): string {
   const lockPath = `${path}.lock`;
   const token = `${process.pid}:${(lockSequence += 1)}`;
@@ -649,15 +684,16 @@ function acquireLock(path: string): string {
           throw error;
         }
       }
-      const owner = readLockOwner(lockPath);
-      if (owner === undefined || isAlive(owner)) {
+      const owner = readLockContent(lockPath);
+      const pid = lockOwner(owner);
+      if (pid === undefined || isAlive(pid)) {
         throw new Error(`host store is already open: ${resolve(path)}`);
       }
-      if (!acquireReclaim(`${lockPath}.reclaim`)) {
+      if (!acquireReclaim(`${lockPath}.reclaim`, token)) {
         continue;
       }
       try {
-        const current = readLockOwner(lockPath);
+        const current = readLockContent(lockPath);
         if (current !== owner) {
           continue;
         }
@@ -669,7 +705,7 @@ function acquireLock(path: string): string {
           }
         }
       } finally {
-        releaseReclaim(`${lockPath}.reclaim`);
+        releaseReclaim(`${lockPath}.reclaim`, token);
       }
     }
     throw new Error(`host store is already open: ${resolve(path)}`);
@@ -686,12 +722,12 @@ function acquireLock(path: string): string {
  * Serialize stale-lock reclamation so only the holder removes the main lock
  * and no contender can move a live writer's lock into quarantine.
  */
-function acquireReclaim(reclaimPath: string): boolean {
+function acquireReclaim(reclaimPath: string, token: string): boolean {
   for (let attempt = 0; attempt < 16; attempt += 1) {
     const tempPath = `${reclaimPath}.${process.pid}.${(lockSequence += 1)}.tmp`;
     mkdirSync(tempPath);
     try {
-      writeFileSync(`${tempPath}/owner`, String(process.pid));
+      writeFileSync(`${tempPath}/owner`, token);
       renameSync(tempPath, reclaimPath);
       return true;
     } catch (error) {
@@ -711,8 +747,25 @@ function acquireReclaim(reclaimPath: string): boolean {
         // ignore
       }
     }
-    const owner = readReclaimOwner(reclaimPath);
-    if (owner !== undefined && isAlive(owner)) {
+    const owner = readReclaimIdentity(reclaimPath);
+    if (owner === undefined || isAlive(owner.pid)) {
+      return false;
+    }
+    // Atomic mkdir grants a single contender the right to move this generation.
+    // All reapers must claim before revalidating: a check followed by rename
+    // alone allows a delayed contender to quarantine a live successor.
+    try {
+      mkdirSync(`${reclaimPath}/reap`);
+    } catch (error) {
+      if (isErrno(error, 'ENOENT')) continue;
+      if (isErrno(error, 'EEXIST')) return false;
+      throw error;
+    }
+    const current = readReclaimIdentity(reclaimPath);
+    if (!sameReclaimOwner(owner, current) || isAlive(current.pid)) {
+      // Leave the claim in place. Removing it through a reused pathname could
+      // release another reaper's claim. A live holder removes it on release;
+      // a crashed reaper requires operator recovery, failing closed meanwhile.
       return false;
     }
     const quarantine = `${reclaimPath}.stale.${process.pid}.${(lockSequence += 1)}`;
@@ -724,14 +777,11 @@ function acquireReclaim(reclaimPath: string): boolean {
       }
       throw error;
     }
-    if (readReclaimOwner(quarantine) !== owner) {
-      try {
-        renameSync(quarantine, reclaimPath);
-      } catch (error) {
-        if (!isErrno(error, 'ENOENT') && !isErrno(error, 'EEXIST') && !isErrno(error, 'ENOTEMPTY')) {
-          throw error;
-        }
-      }
+    const moved = readReclaimIdentity(quarantine);
+    if (!sameReclaimOwner(owner, moved) || isAlive(moved.pid)) {
+      // Defensive validation: restoration failure must stop acquisition. Never
+      // continue while a displaced owner could still be in the critical section.
+      renameSync(quarantine, reclaimPath);
       return false;
     }
     try {
@@ -743,9 +793,9 @@ function acquireReclaim(reclaimPath: string): boolean {
   return false;
 }
 
-function releaseReclaim(reclaimPath: string): void {
+function releaseReclaim(reclaimPath: string, token: string): void {
   try {
-    if (readReclaimOwner(reclaimPath) === process.pid) {
+    if (readLockContent(`${reclaimPath}/owner`) === token) {
       rmSync(reclaimPath, { recursive: true, force: true });
     }
   } catch {
@@ -753,21 +803,34 @@ function releaseReclaim(reclaimPath: string): void {
   }
 }
 
-function readReclaimOwner(reclaimPath: string): number | undefined {
+interface ReclaimIdentity {
+  readonly token: string;
+  readonly pid: number;
+  readonly dev: number;
+  readonly ino: number;
+}
+
+function readReclaimIdentity(reclaimPath: string): ReclaimIdentity | undefined {
   try {
-    const owner = Number.parseInt(readFileSync(`${reclaimPath}/owner`, 'utf8').trim(), 10);
-    return Number.isInteger(owner) && owner > 0 ? owner : undefined;
+    const before = statSync(reclaimPath);
+    const token = readLockContent(`${reclaimPath}/owner`);
+    const pid = lockOwner(token);
+    const after = statSync(reclaimPath);
+    if (token === undefined || pid === undefined || before.dev !== after.dev || before.ino !== after.ino) {
+      return undefined;
+    }
+    return { token, pid, dev: after.dev, ino: after.ino };
   } catch {
     return undefined;
   }
 }
 
-function readLockOwner(lockPath: string): number | undefined {
-  const content = readLockContent(lockPath);
-  if (content === undefined) {
-    return undefined;
-  }
-  const owner = Number.parseInt(content, 10);
+function sameReclaimOwner(expected: ReclaimIdentity, actual: ReclaimIdentity | undefined): actual is ReclaimIdentity {
+  return actual !== undefined && expected.token === actual.token && expected.dev === actual.dev && expected.ino === actual.ino;
+}
+
+function lockOwner(content: string | undefined): number | undefined {
+  const owner = Number.parseInt(content ?? '', 10);
   return Number.isInteger(owner) && owner > 0 ? owner : undefined;
 }
 
@@ -847,14 +910,6 @@ function readJournal(path: string, assertWritable: () => void): LoadedJournal {
     try {
       value = JSON.parse(line);
     } catch {
-      if (index === lines.length - 1 && line.trim().length === 0) {
-        const validLines = lines.slice(0, index);
-        const valid = validLines.length === 0 ? '' : `${validLines.join('\n')}\n`;
-        text = valid;
-        torn_tail_ignored = true;
-        ignored_tail_bytes += Buffer.byteLength(line);
-        continue;
-      }
       throw new Error(`invalid host store log at line ${index + 1}: ${path}`);
     }
     if (!value || typeof value !== 'object' || Array.isArray(value)) {

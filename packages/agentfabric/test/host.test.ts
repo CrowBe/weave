@@ -3,7 +3,9 @@
  * failure precedence, catalogue rules).
  */
 import assert from 'node:assert/strict';
+import * as nodeFs from 'node:fs';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -469,6 +471,53 @@ describe('Fabric store indexes', () => {
       issued_at,
     });
   }
+
+  it('cancels an in-flight invocation while compaction rename keeps failing', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-host-compaction-cancel-'));
+    const path = join(dir, 'fabric.json');
+    const store = FabricStore.open(path);
+    const authority = createGrantAuthority();
+    const host = new AgentFabricHost({ authority, store });
+    const source = host.registerSource('mem:cancel', 'line');
+    const destination = host.registerDestination('mem:cancel-outbox');
+    store.putResource({ canonical_id: 'res_padding', kind: 'source', locator: 'mem:padding', revision: 1,
+      content: 'x'.repeat(300 * 1024), publication: null }, false);
+    const mutableFs = createRequire(import.meta.url)('node:fs') as typeof nodeFs;
+    const original = mutableFs.renameSync;
+    let failures = 0;
+    mutableFs.renameSync = ((...args: Parameters<typeof original>) => {
+      if (String(args[0]) === `${path}.tmp`) {
+        failures += 1;
+        throw new Error('injected compaction rename failure');
+      }
+      return original(...args);
+    }) as typeof original;
+    syncBuiltinESMExports();
+    try {
+      const handle = host.invoke(publishGrant(authority, source, destination, 'cancel-action', 1), REPORT_PUBLISH.id,
+        publishInput(source, destination), { invocation_id: 'cancel-invocation' });
+      assert.equal(handle.kind, 'handle');
+      if (handle.kind !== 'handle') throw new Error('expected invocation handle');
+      handle.requestCancel();
+      host.release('cancel-action');
+      assert.deepEqual(await handle.result, { outcome: 'failed', failure: 'cancelled' });
+      assert.ok(failures >= 3);
+      assert.equal(host.openCount(), 0);
+      assert.equal(store.getInvocation('cancel-invocation')?.status, 'stopped');
+      assert.equal(store.getInvocation('cancel-invocation')?.cancel_requested, true);
+      store.close();
+      const reopened = FabricStore.open(path);
+      try {
+        assert.equal(reopened.getInvocation('cancel-invocation')?.status, 'stopped');
+        assert.equal(reopened.getInvocation('cancel-invocation')?.cancel_requested, true);
+      } finally { reopened.close(); }
+    } finally {
+      mutableFs.renameSync = original;
+      syncBuiltinESMExports();
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 
   it('rebuilds canonical-primary and publication indexes from a snapshot', async () => {
     const authority = createGrantAuthority();
