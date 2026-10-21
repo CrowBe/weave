@@ -124,7 +124,12 @@ async function main(): Promise<void> {
       console.error(credentials.error);
       process.exit(1);
     }
-    const options = { preferFree: has('prefer-free') };
+    // The composition root reads the direct-route model; run.ts reads no env.
+    const jevModel = process.env['JEV_MODEL'];
+    const options = {
+      preferFree: has('prefer-free'),
+      ...(jevModel === undefined ? {} : { model: jevModel }),
+    };
     const suite = await loadSuite(flag('split') ?? 'development');
     const chosen = await selectRecords(suite, has('all'));
     const limit = flag('limit');
