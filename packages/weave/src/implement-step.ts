@@ -52,6 +52,19 @@ const MAX_RETRIES = 8;
 const CHECK_TEXT = 'Deterministic checks failed.';
 const EVAL_TEXT = 'Output evaluation failed for the listed criteria.';
 
+/**
+ * Preserve readable short ids; retain the full execution identity when bounded.
+ * Readable ids stay below 128 chars while compressed ids are exactly 128, so
+ * the two namespaces cannot collide.
+ */
+function stepId(execution_id: string, suffix: string): string {
+  const readable = `${execution_id}${suffix}`;
+  const id = readable.length < 128 ? readable :
+    `${execution_id.slice(0, 128 - suffix.length - 65)}:${digest(execution_id)}${suffix}`;
+  if (!correlation(id)) throw new Error('Invalid step id');
+  return id;
+}
+
 export interface ImplementCheck {
   readonly operation: ImplementCheckId;
   /**
@@ -382,7 +395,7 @@ function openIssue(input: Normalized, last: AttemptRecord | null, blocked_by: Op
   const source = check_ids.length > 0 ? 'check' : 'eval';
   return {
     schema: OPEN_ISSUE_SCHEMA,
-    issue_id: `${input.execution_id}:open`,
+    issue_id: stepId(input.execution_id, ':open'),
     execution_id: input.execution_id,
     source,
     criterion_ids: [...criterion_ids],
@@ -434,7 +447,7 @@ function stopRecord(input: Normalized, attempts: readonly AttemptRecord[], block
   const parent = attempts.at(-1) ?? null;
   return {
     schema: IMPLEMENT_STOP_SCHEMA,
-    id: `${input.execution_id}:stop`,
+    id: stepId(input.execution_id, ':stop'),
     parentId: parent?.id ?? null,
     execution_id: input.execution_id,
     blocked_by,
@@ -639,7 +652,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
       }
       history.push(remember(journal, attemptRecord({
         schema: IMPLEMENT_ATTEMPT_SCHEMA,
-        id: `${normalized.execution_id}:a${action.attempt}`,
+        id: stepId(normalized.execution_id, `:a${action.attempt}`),
         parentId: action.parentId,
         execution_id: normalized.execution_id,
         attempt: action.attempt,
@@ -661,7 +674,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
     }
     const effective = action.escalation ? action.requested
       : IMPLEMENT_TIERS[Math.min(rank(allowed), rank(action.requested), rank(normalized.ceiling))]!;
-    const generateId = `${normalized.execution_id}:a${action.attempt}:gen`;
+    const generateId = stepId(normalized.execution_id, `:a${action.attempt}:gen`);
     const outcome = await ports.generate({
       request_id: generateId,
       site: 'impl.generate',
@@ -675,7 +688,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
     if (held || signal?.aborted) {
       history.push(remember(journal, attemptRecord({
         schema: IMPLEMENT_ATTEMPT_SCHEMA,
-        id: `${normalized.execution_id}:a${action.attempt}`,
+        id: stepId(normalized.execution_id, `:a${action.attempt}`),
         parentId: action.parentId,
         execution_id: normalized.execution_id,
         attempt: action.attempt,
@@ -716,7 +729,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
       if (signal?.aborted) {
         history.push(remember(journal, attemptRecord({
           schema: IMPLEMENT_ATTEMPT_SCHEMA,
-          id: `${normalized.execution_id}:a${action.attempt}`,
+          id: stepId(normalized.execution_id, `:a${action.attempt}`),
           parentId: action.parentId,
           execution_id: normalized.execution_id,
           attempt: action.attempt,
@@ -750,7 +763,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
       if (judged.length > 0 && failingChecks.length > 0) evalSkipped = 'check_failed';
       else if (judged.length > 0) {
         const live = ports.readState();
-        const evalRequest = `${normalized.execution_id}:a${action.attempt}:eval`;
+        const evalRequest = stepId(normalized.execution_id, `:a${action.attempt}:eval`);
         const disclosed = {
           criteria: judged.map(criterion => ({ criterion_id: criterion.criterion_id, statement: criterion.statement })),
           artifact: { ref, digest: digestHex },
@@ -773,7 +786,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
       if (transition.status === 'paused') {
         history.push(remember(journal, attemptRecord({
           schema: IMPLEMENT_ATTEMPT_SCHEMA,
-          id: `${normalized.execution_id}:a${action.attempt}`,
+          id: stepId(normalized.execution_id, `:a${action.attempt}`),
           parentId: action.parentId,
           execution_id: normalized.execution_id,
           attempt: action.attempt,
@@ -801,7 +814,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
     const failed = outcome.status !== 'accepted' || failingChecks.length > 0 || failingCriteria.length > 0;
     history.push(remember(journal, attemptRecord({
       schema: IMPLEMENT_ATTEMPT_SCHEMA,
-      id: `${normalized.execution_id}:a${action.attempt}`,
+      id: stepId(normalized.execution_id, `:a${action.attempt}`),
       parentId: action.parentId,
       execution_id: normalized.execution_id,
       attempt: action.attempt,
