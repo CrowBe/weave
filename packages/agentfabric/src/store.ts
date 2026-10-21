@@ -1,22 +1,40 @@
 import {
   appendFileSync,
+  closeSync,
   existsSync,
+  fstatSync,
+  ftruncateSync,
   linkSync,
+  lstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
+  readSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
   truncateSync,
   unlinkSync,
   writeFileSync,
+  writeSync,
 } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import type { CapabilityContract, InvocationOutcome } from '@weave/agentsop';
 
 const openStores = new Map<string, FabricStore>();
 const COMPACT_BYTES = 256 * 1024;
 let lockSequence = 0;
+
+/** Synchronous backoff for the path-backed writer lock; injectable for deterministic races. */
+export interface FabricStoreOptions {
+  readonly sleep?: (milliseconds: number) => void;
+}
+
+const lockWait = new Int32Array(new SharedArrayBuffer(4));
+const defaultLockSleep = (milliseconds: number): void => {
+  Atomics.wait(lockWait, 0, 0, milliseconds);
+};
 
 export type ResourceKind = 'source' | 'destination' | 'workspace';
 
@@ -116,6 +134,8 @@ interface LoadedJournal {
 /**
  * Host store. Locators never leave this object. When constructed with a path,
  * every mutation is appended to a JSONL journal and folded back on open.
+ * All path-backed entry points take the writer lock. A supplied snapshot may
+ * seed an empty path, but cannot replace existing journal history.
  */
 export class FabricStore {
   private next_handle = 1;
@@ -138,52 +158,65 @@ export class FabricStore {
   private poisoned: string | null = null;
   private lockToken: string | null = null;
   private closed = false;
+  private lastCompactionError: unknown = null;
   recovery = { torn_tail_ignored: false, ignored_tail_bytes: 0 };
   persistStart = true;
   persistResult = true;
 
-  constructor(snapshot?: FabricSnapshot, path: string | null = null) {
-    this.path = path;
+  constructor(snapshot?: FabricSnapshot, path: string | null = null, options: FabricStoreOptions = {}) {
+    if (snapshot !== undefined) {
+      const validated = encodeMutation({ op: 'snapshot', snapshot }).mutation;
+      if (validated.op !== 'snapshot') throw new Error('invalid host store snapshot');
+      snapshot = validated.snapshot;
+    }
+    this.path = path === null ? null : canonicalStorePath(path);
     this.applySnapshot(snapshot);
-  }
-
-  static open(path: string): FabricStore {
-    const key = resolve(path);
+    if (this.path === null) {
+      return;
+    }
+    const key = this.path;
     if (openStores.has(key)) {
       throw new Error(`host store is already open: ${key}`);
     }
-    const directory = dirname(path);
+    const directory = dirname(key);
     if (!existsSync(directory)) {
       mkdirSync(directory, { recursive: true });
     }
-    const lockToken = acquireLock(path);
+    const lockToken = acquireLock(key, options.sleep ?? defaultLockSleep);
+    this.lockToken = lockToken;
     try {
-      if (!existsSync(path)) {
-        writeFileSync(path, '');
+      this.assertWritable();
+      if (snapshot !== undefined && existsSync(key) && statSync(key).size > 0) {
+        throw new Error(`cannot restore a snapshot over existing host store history: ${key}`);
       }
-      const loaded = readJournal(path);
-      const store = loaded.legacySnapshot
-        ? new FabricStore(loaded.legacySnapshot, path)
-        : new FabricStore(undefined, path);
-      store.lockToken = lockToken;
-      store.recovery = {
+      if (!existsSync(key)) {
+        writeFileSync(key, '', { flag: 'wx' });
+      }
+      const loaded = readJournal(key, () => this.assertWritable());
+      this.recovery = {
         torn_tail_ignored: loaded.torn_tail_ignored,
         ignored_tail_bytes: loaded.ignored_tail_bytes,
       };
-      if (loaded.legacySnapshot) {
-        store.compact();
+      if (snapshot !== undefined || loaded.legacySnapshot) {
+        if (loaded.legacySnapshot) {
+          this.applySnapshot(loaded.legacySnapshot);
+        }
+        this.compact();
       } else {
-        store.replay(loaded.records);
+        this.replay(loaded.records);
       }
-      store.fileBytes = statSync(path).size;
-      store.tailBytes = 0;
-      store.journalReady = true;
-      openStores.set(key, store);
-      return store;
+      this.fileBytes = statSync(key).size;
+      this.tailBytes = 0;
+      this.journalReady = true;
+      openStores.set(key, this);
     } catch (error) {
-      releaseLock(path, lockToken);
+      releaseLock(key, lockToken);
       throw error;
     }
+  }
+
+  static open(path: string, options: FabricStoreOptions = {}): FabricStore {
+    return new FabricStore(undefined, path, options);
   }
 
   /** Release this process's ownership so a later restart can open the store. */
@@ -299,9 +332,10 @@ export class FabricStore {
     return this.admissions.map((admission) => ({ ...admission, contract: { ...admission.contract } }));
   }
 
-  retainConclusion(conclusion: unknown): void {
+  retainConclusion(conclusion: unknown): unknown {
     this.mutate({ op: 'conclusion', conclusion });
     this.save();
+    return structuredClone(this.conclusionRecords.at(-1));
   }
 
   conclusions(): readonly unknown[] {
@@ -327,7 +361,7 @@ export class FabricStore {
   }
 
   rememberResult(result: StoredBuiltinResult): void {
-    this.mutate({ op: 'remember', result: { ...result, outcome: structuredClone(result.outcome) } });
+    this.mutate({ op: 'remember', result });
     this.save();
   }
 
@@ -346,44 +380,95 @@ export class FabricStore {
     return this.written_bytes;
   }
 
+  /** Most recent maintenance failure; a successful compaction clears it. */
+  compactionError(): unknown {
+    return this.lastCompactionError;
+  }
+
   save(): void {
     if (!this.path) {
       return;
     }
     const retained = Math.max(0, this.fileBytes - this.tailBytes);
     if (this.tailBytes >= Math.max(COMPACT_BYTES, retained)) {
-      this.compact();
+      // Appends have already committed. Maintenance cannot turn that success
+      // into an apparent mutation failure (and release an invocation reservation).
+      try {
+        this.compact();
+        this.lastCompactionError = null;
+      } catch (error) {
+        this.lastCompactionError = error;
+      }
     }
   }
 
   private mutate(mutation: FabricMutation): void {
-    this.append(mutation);
+    // Validate both the supplied value and its JSON representation. Apply exactly
+    // the detached value that replay will see, including allowed JSON normalization.
+    const encoded = encodeMutation(mutation);
+    mutation = encoded.mutation;
+    let cost = this.measured_cost_micros;
+    if (mutation.op === 'cost') cost += mutation.micros;
+    if (mutation.op === 'start') {
+      const previous = this.invocations.get(mutation.record.invocation_id);
+      const previousCost = previous ? previous.measured_cost_micros ?? mutation.measured_cost_micros : 0;
+      cost += mutation.measured_cost_micros - previousCost;
+    }
+    if (!isNonNegativeNumber(cost)) throw new Error('invalid host store measured cost');
+    this.append(encoded.text);
     this.applyMutation(mutation);
   }
 
-  private append(mutation: FabricMutation): void {
+  private append(text: string): void {
     if (!this.path) {
       return;
     }
-    if (this.poisoned) {
-      throw new Error(this.poisoned);
-    }
+    this.assertWritable();
     if (!this.journalReady) {
       this.compact();
     }
-    const line = `${JSON.stringify(mutation)}\n`;
+    const line = Buffer.from(text);
     const previousBytes = this.fileBytes;
+    const fd = openSync(this.path, 'a+');
+    let written = 0;
     try {
-      appendFileSync(this.path, line);
-    } catch (error) {
-      try {
-        truncateSync(this.path, previousBytes);
-      } catch {
-        this.poisoned = `host store must be reopened after a failed append: ${String(error)}`;
+      if (fstatSync(fd).size !== previousBytes) {
+        this.poisoned = 'host store must be reopened after an unexpected journal length';
+        throw new Error(this.poisoned);
       }
-      throw error;
+      try {
+        while (written < line.length) {
+          this.assertWritable();
+          const count = writeSync(fd, line, written, line.length - written);
+          if (count === 0) {
+            throw new Error('host store append made no progress');
+          }
+          written += count;
+        }
+      } catch (error) {
+        try {
+          this.assertWritable();
+          if (fstatSync(fd).size !== previousBytes + written) {
+            throw new Error('host store append range changed');
+          }
+          // Only successful writeSync calls contribute to the rollback range.
+          if (written > 0) {
+            const appended = Buffer.alloc(written);
+            if (readSync(fd, appended, 0, written, previousBytes) !== written ||
+                !appended.equals(line.subarray(0, written))) {
+              throw new Error('host store append range changed');
+            }
+            ftruncateSync(fd, previousBytes);
+          }
+        } catch {
+          this.poisoned = 'host store must be reopened after a failed append';
+        }
+        throw error;
+      }
+    } finally {
+      closeSync(fd);
     }
-    const bytes = Buffer.byteLength(line);
+    const bytes = line.length;
     this.fileBytes += bytes;
     this.tailBytes += bytes;
     this.written_bytes += bytes;
@@ -393,19 +478,34 @@ export class FabricStore {
     if (!this.path) {
       return;
     }
+    this.assertWritable();
     const directory = dirname(this.path);
     if (!existsSync(directory)) {
       mkdirSync(directory, { recursive: true });
     }
-    const text = `${JSON.stringify({ op: 'snapshot', snapshot: this.snapshot() })}\n`;
+    const { text } = encodeMutation({ op: 'snapshot', snapshot: this.snapshot() });
+    this.assertWritable();
     const tmp = `${this.path}.tmp`;
     writeFileSync(tmp, text);
+    this.assertWritable();
     renameSync(tmp, this.path);
     const bytes = Buffer.byteLength(text);
     this.fileBytes = bytes;
     this.tailBytes = 0;
     this.written_bytes += bytes;
     this.journalReady = true;
+  }
+
+  private assertWritable(): void {
+    if (this.closed) {
+      throw new Error('host store is closed');
+    }
+    if (this.path && (this.lockToken === null || readLockContent(`${this.path}.lock`) !== this.lockToken)) {
+      throw new Error('host store no longer owns its lock');
+    }
+    if (this.poisoned) {
+      throw new Error(this.poisoned);
+    }
   }
 
   private replay(records: readonly FabricMutation[]): void {
@@ -580,7 +680,27 @@ export class PersistFailure extends Error {
   }
 }
 
-function acquireLock(path: string): string {
+function canonicalStorePath(path: string): string {
+  const absolute = resolve(path);
+  const directory = dirname(absolute);
+  mkdirSync(directory, { recursive: true });
+  try {
+    return realpathSync(absolute);
+  } catch (error) {
+    if (!isErrno(error, 'ENOENT')) throw error;
+    try {
+      // A dangling symlink is an existing alias, not a new journal filename.
+      lstatSync(absolute);
+    } catch (missing) {
+      if (!isErrno(missing, 'ENOENT')) throw missing;
+      // A new journal has no inode yet; resolve directory aliases before locking.
+      return join(realpathSync(directory), basename(absolute));
+    }
+    throw error;
+  }
+}
+
+function acquireLock(path: string, sleep: (milliseconds: number) => void): string {
   const lockPath = `${path}.lock`;
   const token = `${process.pid}:${(lockSequence += 1)}`;
   const tempPath = `${lockPath}.${token}.tmp`;
@@ -595,15 +715,16 @@ function acquireLock(path: string): string {
           throw error;
         }
       }
-      const owner = readLockOwner(lockPath);
-      if (owner === undefined || isAlive(owner)) {
+      const owner = readLockContent(lockPath);
+      const pid = lockOwner(owner);
+      if (pid === undefined || isAlive(pid)) {
         throw new Error(`host store is already open: ${resolve(path)}`);
       }
-      if (!acquireReclaim(`${lockPath}.reclaim`)) {
+      if (!acquireReclaim(path, token, sleep)) {
         continue;
       }
       try {
-        const current = readLockOwner(lockPath);
+        const current = readLockContent(lockPath);
         if (current !== owner) {
           continue;
         }
@@ -615,7 +736,7 @@ function acquireLock(path: string): string {
           }
         }
       } finally {
-        releaseReclaim(`${lockPath}.reclaim`);
+        releaseReclaim(`${lockPath}.reclaim`, token);
       }
     }
     throw new Error(`host store is already open: ${resolve(path)}`);
@@ -632,12 +753,13 @@ function acquireLock(path: string): string {
  * Serialize stale-lock reclamation so only the holder removes the main lock
  * and no contender can move a live writer's lock into quarantine.
  */
-function acquireReclaim(reclaimPath: string): boolean {
+function acquireReclaim(path: string, token: string, sleep: (milliseconds: number) => void): boolean {
+  const reclaimPath = `${path}.lock.reclaim`;
   for (let attempt = 0; attempt < 16; attempt += 1) {
     const tempPath = `${reclaimPath}.${process.pid}.${(lockSequence += 1)}.tmp`;
     mkdirSync(tempPath);
     try {
-      writeFileSync(`${tempPath}/owner`, String(process.pid));
+      writeFileSync(`${tempPath}/owner`, token);
       renameSync(tempPath, reclaimPath);
       return true;
     } catch (error) {
@@ -657,8 +779,41 @@ function acquireReclaim(reclaimPath: string): boolean {
         // ignore
       }
     }
-    const owner = readReclaimOwner(reclaimPath);
-    if (owner !== undefined && isAlive(owner)) {
+    const owner = readReclaimIdentity(reclaimPath);
+    if (owner === undefined || isAlive(owner.pid)) {
+      return false;
+    }
+    // Atomic mkdir grants a single contender the right to move this generation.
+    // All reapers must claim before revalidating: a check followed by rename
+    // alone allows a delayed contender to quarantine a live successor.
+    const claimPath = `${reclaimPath}/reap`;
+    try {
+      mkdirSync(claimPath);
+      writeFileSync(`${claimPath}/owner`, token);
+    } catch (error) {
+      if (isErrno(error, 'ENOENT')) continue;
+      if (isErrno(error, 'EEXIST')) {
+        // A reaper can be between mkdir, writing its token and moving the directory.
+        // Bound the wait by injected sleeps, without consulting an ambient clock.
+        for (let wait = 0; wait < 8; wait += 1) {
+          sleep(5);
+          const current = readReclaimIdentity(reclaimPath);
+          if (!sameReclaimOwner(owner, current) || isAlive(current.pid) || !existsSync(claimPath)) return false;
+        }
+        const current = readReclaimIdentity(reclaimPath);
+        if (!sameReclaimOwner(owner, current) || isAlive(current.pid) || !existsSync(claimPath)) return false;
+        throw new Error(
+          `host store is already open: ${path}; stale-lock reclaim is blocked by ${claimPath}; ` +
+          `confirm no weave process is using ${path}, then remove ${claimPath} and retry`,
+        );
+      }
+      throw error;
+    }
+    const current = readReclaimIdentity(reclaimPath);
+    if (!sameReclaimOwner(owner, current) || isAlive(current.pid)) {
+      // A successor may now own the directory. Release only our token's claim,
+      // leaving any replacement claim for its owner.
+      releaseReclaim(claimPath, token);
       return false;
     }
     const quarantine = `${reclaimPath}.stale.${process.pid}.${(lockSequence += 1)}`;
@@ -670,13 +825,18 @@ function acquireReclaim(reclaimPath: string): boolean {
       }
       throw error;
     }
-    if (readReclaimOwner(quarantine) !== owner) {
+    const moved = readReclaimIdentity(quarantine);
+    if (!sameReclaimOwner(owner, moved) || isAlive(moved.pid)) {
+      // Defensive validation: restoration failure must stop acquisition. Never
+      // continue while a displaced owner could still be in the critical section.
       try {
         renameSync(quarantine, reclaimPath);
       } catch (error) {
-        if (!isErrno(error, 'ENOENT') && !isErrno(error, 'EEXIST') && !isErrno(error, 'ENOTEMPTY')) {
-          throw error;
-        }
+        throw new Error(
+          `failed to restore host store reclaim directory from ${quarantine} to ${reclaimPath}; ` +
+          `confirm no weave process is using ${path}, then move ${reclaimPath} and ${quarantine} aside and retry`,
+          { cause: error },
+        );
       }
       return false;
     }
@@ -689,31 +849,46 @@ function acquireReclaim(reclaimPath: string): boolean {
   return false;
 }
 
-function releaseReclaim(reclaimPath: string): void {
+function releaseReclaim(reclaimPath: string, token: string): void {
   try {
-    if (readReclaimOwner(reclaimPath) === process.pid) {
-      rmSync(reclaimPath, { recursive: true, force: true });
+    if (readLockContent(`${reclaimPath}/owner`) === token) {
+      const quarantine = `${reclaimPath}.released.${process.pid}.${(lockSequence += 1)}`;
+      renameSync(reclaimPath, quarantine);
+      rmSync(quarantine, { recursive: true, force: true });
     }
   } catch {
     // ignore
   }
 }
 
-function readReclaimOwner(reclaimPath: string): number | undefined {
+interface ReclaimIdentity {
+  readonly token: string;
+  readonly pid: number;
+  readonly dev: number;
+  readonly ino: number;
+}
+
+function readReclaimIdentity(reclaimPath: string): ReclaimIdentity | undefined {
   try {
-    const owner = Number.parseInt(readFileSync(`${reclaimPath}/owner`, 'utf8').trim(), 10);
-    return Number.isInteger(owner) && owner > 0 ? owner : undefined;
+    const before = statSync(reclaimPath);
+    const token = readLockContent(`${reclaimPath}/owner`);
+    const pid = lockOwner(token);
+    const after = statSync(reclaimPath);
+    if (token === undefined || pid === undefined || before.dev !== after.dev || before.ino !== after.ino) {
+      return undefined;
+    }
+    return { token, pid, dev: after.dev, ino: after.ino };
   } catch {
     return undefined;
   }
 }
 
-function readLockOwner(lockPath: string): number | undefined {
-  const content = readLockContent(lockPath);
-  if (content === undefined) {
-    return undefined;
-  }
-  const owner = Number.parseInt(content, 10);
+function sameReclaimOwner(expected: ReclaimIdentity, actual: ReclaimIdentity | undefined): actual is ReclaimIdentity {
+  return actual !== undefined && expected.token === actual.token && expected.dev === actual.dev && expected.ino === actual.ino;
+}
+
+function lockOwner(content: string | undefined): number | undefined {
+  const owner = Number.parseInt(content ?? '', 10);
   return Number.isInteger(owner) && owner > 0 ? owner : undefined;
 }
 
@@ -750,33 +925,34 @@ function isErrno(error: unknown, code: string): boolean {
 }
 
 function counterAfter(value: string, prefix: string): number | undefined {
-  if (!value.startsWith(prefix)) {
+  if (!value.startsWith(prefix) || !/^[0-9]+$/.test(value.slice(prefix.length))) {
     return undefined;
   }
   const parsed = Number(value.slice(prefix.length));
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
+  return Number.isSafeInteger(parsed) && parsed >= 0 && parsed < Number.MAX_SAFE_INTEGER ? parsed : undefined;
 }
 
-function readJournal(path: string): LoadedJournal {
-  let text = readFileSync(path, 'utf8');
+function readJournal(path: string, assertWritable: () => void): LoadedJournal {
+  const raw = readFileSync(path);
+  const originalText = raw.toString('utf8');
+  let text = originalText;
   let torn_tail_ignored = false;
   let ignored_tail_bytes = 0;
-  if (text.length > 0 && !text.endsWith('\n')) {
-    const breakAt = text.lastIndexOf('\n');
-    const tail = text.slice(breakAt + 1);
+  let retainedBytes = raw.length;
+  if (raw.length > 0 && raw.at(-1) !== 0x0a) {
+    const breakAt = raw.lastIndexOf(0x0a);
+    const tail = raw.subarray(breakAt + 1).toString('utf8');
     let validTail = false;
     try {
       JSON.parse(tail);
       validTail = true;
     } catch {
-      const valid = text.slice(0, breakAt + 1);
-      truncateSync(path, Buffer.byteLength(valid));
-      text = valid;
+      retainedBytes = breakAt + 1;
+      text = raw.subarray(0, retainedBytes).toString('utf8');
       torn_tail_ignored = true;
-      ignored_tail_bytes = Buffer.byteLength(tail);
+      ignored_tail_bytes = raw.length - retainedBytes;
     }
     if (validTail) {
-      appendFileSync(path, '\n');
       text += '\n';
     }
   }
@@ -784,7 +960,7 @@ function readJournal(path: string): LoadedJournal {
   if (lines.at(-1) === '') {
     lines.pop();
   }
-  const parsed: unknown[] = [];
+  const parsed: { value: unknown; index: number }[] = [];
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? '';
     if (line.length === 0) {
@@ -794,31 +970,26 @@ function readJournal(path: string): LoadedJournal {
     try {
       value = JSON.parse(line);
     } catch {
-      if (index === lines.length - 1) {
-        const validLines = lines.slice(0, index);
-        const valid = validLines.length === 0 ? '' : `${validLines.join('\n')}\n`;
-        truncateSync(path, Buffer.byteLength(valid));
-        torn_tail_ignored = true;
-        ignored_tail_bytes += Buffer.byteLength(line);
-        continue;
-      }
       throw new Error(`invalid host store log at line ${index + 1}: ${path}`);
     }
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       throw new Error(`invalid host store log at line ${index + 1}: ${path}`);
     }
-    parsed.push(value);
+    parsed.push({ value, index });
   }
-  if (parsed.length === 1 && isLegacySnapshot(parsed[0])) {
-    return {
-      records: [],
-      legacySnapshot: parsed[0],
-      torn_tail_ignored,
-      ignored_tail_bytes,
-    };
+  const single = parsed.length === 1 ? parsed[0] : undefined;
+  const legacySnapshot = single && isLegacySnapshot(single.value) ? single.value : null;
+  const records = legacySnapshot ? [] : parsed.map(({ value, index }) => asMutation(value, index, path));
+  // Validate every complete record before repairing a torn tail or adding a newline.
+  if (text !== originalText) {
+    assertWritable();
+    if (torn_tail_ignored) {
+      truncateSync(path, retainedBytes);
+    } else {
+      appendFileSync(path, '\n');
+    }
   }
-  const records = parsed.map((value, index) => asMutation(value, index, path));
-  return { records, legacySnapshot: null, torn_tail_ignored, ignored_tail_bytes };
+  return { records, legacySnapshot, torn_tail_ignored, ignored_tail_bytes };
 }
 
 function isLegacySnapshot(value: unknown): value is FabricSnapshot {
@@ -826,28 +997,151 @@ function isLegacySnapshot(value: unknown): value is FabricSnapshot {
     return false;
   }
   const record = value as Record<string, unknown>;
-  return !('op' in record) && 'next_handle' in record && 'resources' in record && 'refs' in record;
+  return !('op' in record) && isSnapshot(value);
 }
 
 function asMutation(value: unknown, index: number, path: string): FabricMutation {
-  const record = value as { op?: unknown };
-  if (
-    typeof record.op !== 'string' ||
-    ![
-      'snapshot',
-      'allocate',
-      'issue',
-      'put',
-      'start',
-      'result',
-      'cost',
-      'admission',
-      'conclusion',
-      'workload',
-      'remember',
-    ].includes(record.op)
-  ) {
+  const record = value as { op?: unknown; snapshot?: unknown };
+  if (record.op === 'snapshot' && !isSnapshot(record.snapshot)) {
+    throw new Error(`invalid host store snapshot at line ${index + 1}: ${path}`);
+  }
+  if (!isMutation(value)) {
     throw new Error(`invalid host store mutation at line ${index + 1}: ${path}`);
   }
   return value as FabricMutation;
+}
+
+/** One payload contract for journal input, appends and compaction. */
+function isMutation(value: unknown): value is FabricMutation {
+  if (!isRecord(value)) return false;
+  switch (value.op) {
+    case 'snapshot': return isSnapshot(value.snapshot);
+    case 'allocate': return isString(value.id) && counterAfter(value.id, 'res_') !== undefined;
+    case 'issue': return isRef(value.ref);
+    case 'put': return isResource(value.resource);
+    case 'start': return isInvocation(value.record) && isNonNegativeNumber(value.measured_cost_micros);
+    case 'result': return isInvocation(value.record);
+    case 'cost': return isNonNegativeNumber(value.micros);
+    case 'admission': return isAdmission(value.admission);
+    case 'conclusion': return 'conclusion' in value;
+    case 'workload': return isWorkload(value.workload);
+    case 'remember': return isBuiltinResult(value.result);
+    default: return false;
+  }
+}
+
+function encodeMutation(value: FabricMutation): { mutation: FabricMutation; text: string } {
+  if (!isMutation(value)) throw new Error('invalid host store mutation');
+  const json = JSON.stringify(value);
+  const mutation: unknown = JSON.parse(json);
+  if (!isMutation(mutation)) throw new Error('invalid host store serialized mutation');
+  return { mutation, text: `${json}\n` };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isNonNegativeNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function isCounter(value: unknown): boolean {
+  return Number.isSafeInteger(value) && (value as number) >= 1;
+}
+
+function arrayOf(value: unknown, valid: (item: unknown) => boolean): boolean {
+  return Array.isArray(value) && value.every(valid);
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isKind(value: unknown): boolean {
+  return value === 'source' || value === 'destination' || value === 'workspace';
+}
+
+function isOutcome(value: unknown): boolean {
+  return isRecord(value) && (
+    (value.outcome === 'succeeded' && 'output' in value) ||
+    (value.outcome === 'failed' && isString(value.failure)) ||
+    (value.outcome === 'uncertain' && isString(value.reason))
+  );
+}
+
+/** Validate and detach an untrusted outcome using the journal's replay rules. */
+export function normalizeInvocationOutcome(value: unknown): InvocationOutcome {
+  if (!isOutcome(value)) throw new Error('invalid host store outcome');
+  const normalized: unknown = JSON.parse(JSON.stringify(value));
+  if (!isOutcome(normalized)) throw new Error('invalid host store serialized outcome');
+  return normalized as InvocationOutcome;
+}
+
+function isPublication(value: unknown): boolean {
+  return isRecord(value) && isString(value.invocation_id) && isString(value.binding_digest) &&
+    isString(value.report_digest) && isString(value.destination) && isCounter(value.committed_revision);
+}
+
+function isResource(value: unknown): boolean {
+  return isRecord(value) && isString(value.canonical_id) && isKind(value.kind) &&
+    isString(value.locator) && isCounter(value.revision) && isString(value.content) &&
+    (value.publication === null || isPublication(value.publication));
+}
+
+function isRef(value: unknown): boolean {
+  return isRecord(value) && isString(value.handle) && counterAfter(value.handle, 'ref_') !== undefined && isString(value.canonical_id) && isKind(value.kind);
+}
+
+function isInvocation(value: unknown): boolean {
+  return isRecord(value) && isString(value.invocation_id) && isString(value.action_id) &&
+    isString(value.operation) && (value.implementation_id === undefined || isString(value.implementation_id)) &&
+    isString(value.binding_digest) && 'inputs' in value &&
+    ['running', 'committed', 'stopped', 'uncertain'].includes(value.status as string) &&
+    (value.outcome === null || isOutcome(value.outcome)) && typeof value.cancel_requested === 'boolean' &&
+    (value.measured_cost_micros === undefined || isNonNegativeNumber(value.measured_cost_micros));
+}
+
+function isContract(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const stringMap = (item: unknown) => isRecord(item) && Object.values(item).every(isString);
+  const selector = (item: unknown) => isRecord(item) && isString(item.input) &&
+    ['discover', 'read', 'create', 'write', 'append', 'delete'].includes(item.mode as string);
+  const processSelector = (item: unknown) => isRecord(item) && (
+    item.name === 'process.spawn' || (item.name === 'fs.write' && isString(item.input))
+  );
+  const inference = value.inference;
+  return isString(value.id) && isString(value.revision) && isString(value.purpose) &&
+    stringMap(value.input) && stringMap(value.output) && arrayOf(value.effects, selector) &&
+    arrayOf(value.permissions, selector) && arrayOf(value.failures, isString) &&
+    arrayOf(value.depends_on, isString) &&
+    (value.process_effects === undefined || arrayOf(value.process_effects, processSelector)) &&
+    (inference === undefined || (isRecord(inference) && isString(inference.kind) &&
+      ['framing', 'working', 'extension'].includes(inference.role as string) &&
+      isNonNegativeNumber(inference.max_cost) && arrayOf(inference.destinations, isString) &&
+      isCounter(inference.max_attempts)));
+}
+
+function isAdmission(value: unknown): boolean {
+  return isRecord(value) && isString(value.operation) && isString(value.implementation_id) &&
+    isContract(value.contract) && isString(value.source);
+}
+
+function isWorkload(value: unknown): boolean {
+  return isRecord(value) && isString(value.goal_id) && (value.quality === 'held' || value.quality === 'missed');
+}
+
+function isBuiltinResult(value: unknown): boolean {
+  return isRecord(value) && isString(value.key) && isString(value.operation) &&
+    isString(value.implementation_id) && isOutcome(value.outcome);
+}
+
+function isSnapshot(value: unknown): value is FabricSnapshot {
+  return isRecord(value) && isCounter(value.next_handle) && isCounter(value.next_canonical) &&
+    arrayOf(value.resources, isResource) && arrayOf(value.refs, isRef) && arrayOf(value.invocations, isInvocation) &&
+    (value.admissions === undefined || arrayOf(value.admissions, isAdmission)) &&
+    (value.conclusions === undefined || Array.isArray(value.conclusions)) &&
+    (value.workload === undefined || arrayOf(value.workload, isWorkload)) &&
+    (value.measured_cost_micros === undefined || isNonNegativeNumber(value.measured_cost_micros)) &&
+    (value.builtin_results === undefined || arrayOf(value.builtin_results, isBuiltinResult));
 }

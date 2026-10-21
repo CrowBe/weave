@@ -3,7 +3,10 @@
  * failure precedence, catalogue rules).
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import * as nodeFs from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -22,6 +25,119 @@ function inspectGrant(authority: ReturnType<typeof createGrantAuthority>, source
 }
 
 describe('AgentFabric host authority', () => {
+  for (const malformed of ['undefined output', 'non-string failure', 'BigInt output', 'cyclic output', 'invalid serialized outcome']) {
+    it(`settles an admitted implementation's ${malformed} without an unhandled rejection`, () => {
+      // Isolate rejection observation from node:test's own unhandled-rejection hook.
+      const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+        import assert from 'node:assert/strict';
+        import { mkdtempSync, rmSync } from 'node:fs';
+        import { tmpdir } from 'node:os';
+        import { join } from 'node:path';
+        import { createGrantAuthority } from '@weave/agentsop';
+        import { AgentFabricHost, FabricStore, SOURCE_INSPECT } from '@weave/agentfabric';
+        const dir = mkdtempSync(join(tmpdir(), 'weave-host-invalid-outcome-'));
+        const path = join(dir, 'fabric.json');
+        const store = FabricStore.open(path);
+        const unhandled = [];
+        process.on('unhandledRejection', (error) => unhandled.push(error));
+        try {
+          const authority = createGrantAuthority();
+          const host = new AgentFabricHost({ authority, store });
+          const source = host.registerSource('mem:invalid-outcome', 'line');
+          const cyclic = {}; cyclic.self = cyclic;
+          const outcomes = {
+            'undefined output': { outcome: 'succeeded', output: undefined },
+            'non-string failure': { outcome: 'failed', failure: 42 },
+            'BigInt output': { outcome: 'succeeded', output: 1n },
+            'cyclic output': { outcome: 'succeeded', output: cyclic },
+            'invalid serialized outcome': { outcome: 'succeeded', output: {}, toJSON: () => ({ outcome: 'succeeded' }) },
+          };
+          host.installAdmitted(SOURCE_INSPECT, async () => outcomes[${JSON.stringify(malformed)}]);
+          const grant = authority.issue({ action_id: 'invalid-action', operation: SOURCE_INSPECT.id,
+            contract_rev: SOURCE_INSPECT.revision, permissions: [{ resource: source, mode: 'read' }],
+            effects: [{ resource: source, mode: 'read' }], issued_at: 1 });
+          const handle = host.invoke(grant, SOURCE_INSPECT.id, { source }, { invocation_id: 'invalid-invocation' });
+          assert.equal(handle.kind, 'handle');
+          assert.equal(host.coordinator.held().length, 1);
+          host.release('invalid-action');
+          const result = await Promise.race([handle.result, new Promise((resolve) => setImmediate(() => resolve('unsettled')))]);
+          assert.deepEqual(result, { outcome: 'failed', failure: 'implementation returned an invalid outcome' });
+          assert.equal(host.openCount(), 0);
+          assert.deepEqual(host.openInvocationIds(), []);
+          assert.deepEqual(host.coordinator.held(), []);
+          assert.equal(store.getInvocation('invalid-invocation').status, 'stopped');
+          store.close();
+          const reopened = FabricStore.open(path);
+          try { assert.deepEqual(reopened.getInvocation('invalid-invocation').outcome, result); }
+          finally { reopened.close(); }
+          await new Promise((resolve) => setImmediate(resolve));
+          assert.deepEqual(unhandled, []);
+        } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+      `], { encoding: 'utf8', timeout: 10_000 });
+      assert.equal(child.status, 0, child.stderr || String(child.error));
+    });
+  }
+
+  it('retains only conclusions accepted and normalized by the store', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-host-conclusion-'));
+    const path = join(dir, 'fabric.json');
+    const store = FabricStore.open(path);
+    const host = new AgentFabricHost({ authority: createGrantAuthority(), store });
+    try {
+      host.retainConclusion('accepted');
+      for (const invalid of [undefined, 1n]) {
+        assert.throws(() => host.retainConclusion(invalid));
+        assert.deepEqual(host.conclusions(), ['accepted']);
+      }
+      const conclusion = { optional: undefined, finite: NaN, nested: { evidence: 'accepted' } };
+      host.retainConclusion(conclusion);
+      conclusion.nested.evidence = 'mutated';
+      assert.deepEqual(host.conclusions(), ['accepted', { finite: null, nested: { evidence: 'accepted' } }]);
+      assert.deepEqual(host.conclusions(), store.conclusions());
+      store.close();
+      const reopened = FabricStore.open(path);
+      try { assert.deepEqual(host.conclusions(), reopened.conclusions()); }
+      finally { reopened.close(); }
+    } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('does not retain a conclusion after persistence is refused', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-host-conclusion-closed-'));
+    const store = FabricStore.open(join(dir, 'fabric.json'));
+    const host = new AgentFabricHost({ authority: createGrantAuthority(), store });
+    store.close();
+    try {
+      assert.throws(() => host.retainConclusion('unaccepted'), /closed/);
+      assert.deepEqual(host.conclusions(), []);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  for (const late of ['completion', 'cancellation'] as const) {
+    it(`refuses late invocation ${late} after store close and preserves successor records`, () => {
+      const dir = mkdtempSync(join(tmpdir(), 'weave-host-closed-store-'));
+      const path = join(dir, 'fabric.json');
+      const store = FabricStore.open(path);
+      const authority = createGrantAuthority();
+      const host = new AgentFabricHost({ authority, store });
+      const source = host.registerSource('mem:late', 'line');
+      const handle = host.invoke(inspectGrant(authority, source, 'late-action'), SOURCE_INSPECT.id,
+        { source }, { invocation_id: 'late-invocation' });
+      assert.equal(handle.kind, 'handle');
+      store.close();
+      const successor = FabricStore.open(path);
+      try {
+        successor.retainConclusion('successor evidence');
+        const before = readFileSync(path);
+        assert.throws(() => late === 'completion' ? host.release('late-action') : host.requestCancel('late-invocation'), /closed/);
+        assert.deepEqual(readFileSync(path), before);
+        assert.deepEqual(successor.conclusions(), ['successor evidence']);
+      } finally {
+        successor.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+
   it('M1-T04 forged, absent, copied and widened grants are denied without resource access', () => {
     const authority = createGrantAuthority();
     const host = new AgentFabricHost({ authority });
@@ -443,6 +559,53 @@ describe('Fabric store indexes', () => {
       issued_at,
     });
   }
+
+  it('cancels an in-flight invocation while compaction rename keeps failing', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-host-compaction-cancel-'));
+    const path = join(dir, 'fabric.json');
+    const store = FabricStore.open(path);
+    const authority = createGrantAuthority();
+    const host = new AgentFabricHost({ authority, store });
+    const source = host.registerSource('mem:cancel', 'line');
+    const destination = host.registerDestination('mem:cancel-outbox');
+    store.putResource({ canonical_id: 'res_padding', kind: 'source', locator: 'mem:padding', revision: 1,
+      content: 'x'.repeat(300 * 1024), publication: null }, false);
+    const mutableFs = createRequire(import.meta.url)('node:fs') as typeof nodeFs;
+    const original = mutableFs.renameSync;
+    let failures = 0;
+    mutableFs.renameSync = ((...args: Parameters<typeof original>) => {
+      if (String(args[0]) === `${path}.tmp`) {
+        failures += 1;
+        throw new Error('injected compaction rename failure');
+      }
+      return original(...args);
+    }) as typeof original;
+    syncBuiltinESMExports();
+    try {
+      const handle = host.invoke(publishGrant(authority, source, destination, 'cancel-action', 1), REPORT_PUBLISH.id,
+        publishInput(source, destination), { invocation_id: 'cancel-invocation' });
+      assert.equal(handle.kind, 'handle');
+      if (handle.kind !== 'handle') throw new Error('expected invocation handle');
+      handle.requestCancel();
+      host.release('cancel-action');
+      assert.deepEqual(await handle.result, { outcome: 'failed', failure: 'cancelled' });
+      assert.ok(failures >= 3);
+      assert.equal(host.openCount(), 0);
+      assert.equal(store.getInvocation('cancel-invocation')?.status, 'stopped');
+      assert.equal(store.getInvocation('cancel-invocation')?.cancel_requested, true);
+      store.close();
+      const reopened = FabricStore.open(path);
+      try {
+        assert.equal(reopened.getInvocation('cancel-invocation')?.status, 'stopped');
+        assert.equal(reopened.getInvocation('cancel-invocation')?.cancel_requested, true);
+      } finally { reopened.close(); }
+    } finally {
+      mutableFs.renameSync = original;
+      syncBuiltinESMExports();
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 
   it('rebuilds canonical-primary and publication indexes from a snapshot', async () => {
     const authority = createGrantAuthority();
