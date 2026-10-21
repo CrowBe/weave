@@ -100,6 +100,31 @@ checks. A compatible version is needed for a tool-free fx comparison. Competitor
 model ids are not observed: `chatgpt-sign-in` identifies authentication, and is
 excluded from the served-model list; the requested pi model is `gpt-6.1`.
 
+`nous-portal` is an opt-in competitor that is never in the default set. Select
+it with `--providers ...,nous-portal`. Its key is `NOUS_API_KEY`, read only in
+`run.ts` and redacted like the others; a missing key gives `skipped: no_credential`.
+It sends the same competitor prompt (production state and questions, no
+guardrail or shuffle) to `upstage/solar-mini4:free` through the gateway's Nous
+adapter directly, with no gateway routing. Only the free-model allowlist ID can
+be called. The catalogue price check and a non-zero `usage.cost` refuse as
+`price_not_free`, and it meters at $0. A 429 retains the full relative reset delay
+as `retry_after_ms` in the journal. A delay above the shared 60-second retry
+bound ends that item without retry; later queued items wait at most 60 seconds,
+with that cap recorded as `retry_after_applied_ms` alongside the original delay.
+The cooldown is local to the provider instance; resume reuses terminal receipts
+and never re-sends an unacknowledged call, but does not restore a cooldown.
+A missing, removed or
+no-longer-free model skips the provider as `model_not_listed`, and auth refusal
+skips it as `unauthorized`. Dispatches are serialized and spaced at least 6 s
+apart, under the free 10 requests/minute.
+Callers of `buildProviders` must inject both `now` and `sleep` for repeated Nous
+dispatches; without them the provider refuses a second dispatch as
+`rate_limit_unavailable`. The CLI supplies both.
+It shares the competitor holdout-only schedule and 40-call cap. Benchmark
+content is synthetic and public; Nous may store and train on it. The Nous terms
+restrict automated and performance-monitoring use (scout report WV-016), so the
+captain decides whether to run it.
+
 Other flags: `--sites intake.classify,loop.route`, `--split tune|holdout|all`
 (default all), `--providers ...`, `--run-id NAME`, and `--resume`. A holdout-only
 run without tune results reports production thresholds with `no_tune_data`; to

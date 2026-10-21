@@ -7,7 +7,9 @@
  * identity and catalogue strings a routed unit has to name correctly.
  *
  * Offline. `fetch` is injected. The success fixture and the header set are
- * copied from a live call to `meituan/longcat-2.0:free`, not invented.
+ * copied from a live call to `meituan/longcat-2.0:free`, not invented. The
+ * stub answers the catalogue price check (GET /models) with the live
+ * catalogue entries recorded on 17 Oct 2026.
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -15,10 +17,11 @@ import {
   NOUS_PORTAL_ADAPTER,
   NOUS_PORTAL_BASE_URL,
   NOUS_PORTAL_FREE_MODELS,
-  NOUS_PORTAL_OBSERVED_FREE_LIMITS,
+  NOUS_PORTAL_FREE_LIMITS,
   nousPortalAdapter,
 } from '@weave/gateway/nous-portal';
 import type { GenerationCall } from '@weave/gateway';
+import { LIVE_CATALOGUE } from './nous-portal-fixtures.js';
 
 /** A live response. Note `delta`, `matched_stop` and `lastOne`, which the
  *  adapter ignores, and the absence of OpenRouter's `cost` field. */
@@ -58,6 +61,7 @@ function stubFetch(
   const urls: string[] = [];
   const fetch = (async (url: string | URL | Request) => {
     urls.push(String(url));
+    if (String(url).endsWith('/models')) return new Response(JSON.stringify(LIVE_CATALOGUE), { status: 200 });
     return new Response(JSON.stringify(body), {
       status: init.status ?? 200,
       headers: { 'content-type': 'application/json', ...(init.headers ?? {}) },
@@ -88,7 +92,10 @@ describe('nous-portal adapter', () => {
     const { fetch, urls } = stubFetch(LIVE_BODY, { headers: LIVE_HEADERS });
     const result = await nousPortalAdapter({ apiKey: 'k', fetch }).execute(CALL);
 
-    assert.equal(urls[0], 'https://inference-api.nousresearch.com/v1/chat/completions');
+    assert.deepEqual(urls, [
+      'https://inference-api.nousresearch.com/v1/models',
+      'https://inference-api.nousresearch.com/v1/chat/completions',
+    ]);
     assert.ok(result.status === 'completed');
     assert.equal(result.text, 'Sushi');
     assert.equal(result.finish_reason, 'stop');
@@ -99,7 +106,8 @@ describe('nous-portal adapter', () => {
 
   it('sends the user tag required by free models through the Portal API key', async () => {
     let body: Record<string, unknown> | undefined;
-    const fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    const fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith('/models')) return new Response(JSON.stringify(LIVE_CATALOGUE), { status: 200 });
       body = JSON.parse(String(init?.body)) as Record<string, unknown>;
       return new Response(JSON.stringify(LIVE_BODY), { status: 200 });
     }) as typeof globalThis.fetch;
@@ -146,16 +154,25 @@ describe('nous-portal adapter', () => {
     assert.throws(() => nousPortalAdapter({ apiKey: '' }), /nousPortalAdapter requires an apiKey/);
   });
 
-  it('names the eight catalogue-listed zero-priced IDs, including unsuffixed Space Bunny', () => {
+  // Data updated on 17 Oct 2026 from the live catalogue and free-tier headers:
+  // ling-*, solar-pro4 and space-bunny are gone, and 400 rpm was the paid pool.
+  it('names the six IDs whose live catalogue prices are exactly zero', () => {
     const ids = Object.values(NOUS_PORTAL_FREE_MODELS);
-    assert.equal(ids.length, 8);
-    assert.equal(NOUS_PORTAL_FREE_MODELS.spaceBunny, 'stealth/space-bunny-alpha');
-    for (const id of ids.filter((id) => id !== NOUS_PORTAL_FREE_MODELS.spaceBunny)) {
+    assert.equal(ids.length, 6);
+    assert.deepEqual([...ids].sort(), [
+      'meituan/longcat-2.0:free',
+      'poolside/laguna-s-2.1:free',
+      'poolside/laguna-xs-2.1:free',
+      'stepfun/step-3.7-flash:free',
+      'stepfun/step-5-preview:free',
+      'upstage/solar-mini4:free',
+    ]);
+    for (const id of ids) {
       assert.ok(id.endsWith(':free'), `${id} must carry the :free suffix`);
     }
-    assert.deepEqual([...NOUS_PORTAL_OBSERVED_FREE_LIMITS], [
-      { requests: 400, window_ms: 60_000 },
-      { requests: 16_800, window_ms: 3_600_000 },
+    assert.deepEqual([...NOUS_PORTAL_FREE_LIMITS], [
+      { requests: 10, tokens: 80_000, window_ms: 60_000 },
+      { requests: 420, tokens: 3_360_000, window_ms: 3_600_000 },
     ]);
   });
 });

@@ -3,9 +3,9 @@
  *
  * This is the example that shows the gateway deciding between waiting and
  * escalating. Three routes, in the order a caller who prefers not to pay would
- * want them tried: Nous Portal first, because its free tier is generous and it
- * states an exact reset when it does refuse; OpenRouter second, free but on a
- * 50-a-day budget that cannot be polled; a paid model last, which answers but
+ * want them tried: Nous Portal first, whose free tier permits 10 requests per
+ * minute and states an exact reset when it refuses; OpenRouter second, free but
+ * on a 50-a-day budget that cannot be polled; a paid model last, which answers but
  * is not free.
  *
  * The caller says how long it is willing to wait by setting a deadline, and
@@ -32,7 +32,7 @@ import {
   NOUS_PORTAL_ADAPTER,
   NOUS_PORTAL_DESTINATION,
   NOUS_PORTAL_FREE_MODELS,
-  NOUS_PORTAL_OBSERVED_FREE_LIMITS,
+  NOUS_PORTAL_FREE_LIMITS,
   nousPortalAdapter,
 } from '@weave/gateway/nous-portal';
 import {
@@ -79,11 +79,13 @@ if (nousKey) {
     adapter: NOUS_PORTAL_ADAPTER,
     model: NOUS_PORTAL_FREE_MODELS.longcat,
     destination: NOUS_PORTAL_DESTINATION,
+    // Nous may store and train on prompts and outputs by default.
+    destination_training_allowed: true,
     context_limit_tokens: 1_048_576,
     price: { input_per_mtok: 0, output_per_mtok: 0 },
     // A fallback only. Nous states an exact reset on a refusal, and a stated
     // delay always beats a declared one.
-    rate_limits: NOUS_PORTAL_OBSERVED_FREE_LIMITS,
+    rate_limits: NOUS_PORTAL_FREE_LIMITS,
   });
 }
 
@@ -161,6 +163,9 @@ const request: GenerationRequest = {
   },
   terms: {
     quality: 'baseline',
+    // An invented holiday is public content. Without this class the
+    // training-allowed Nous destination is excluded.
+    content_class: 'public',
     // Each provider is its own destination: reaching a fallback at another
     // vendor is a disclosure decision the caller makes here, not plumbing.
     destinations: [

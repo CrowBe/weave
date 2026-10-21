@@ -1,5 +1,7 @@
 /** Benchmark contracts. Answers are observations, never runtime authority. */
 import type { EvaluationContent, EvaluationQuestion } from '@weave/gateway';
+/** Shared bound for engine retries and provider queued-dispatch backoff. */
+export const MAX_RETRY_AFTER_MS = 60_000;
 export interface Item {
   id: string;
   scenario_id: string;
@@ -29,6 +31,8 @@ export interface Result {
   error_code?: string;
   request_id?: string;
   retry_after_ms?: number;
+  /** Bounded queued-dispatch delay, recorded only when the provider delay was capped. */
+  retry_after_applied_ms?: number;
   parse_failure?: boolean;
 }
 export interface Provider {

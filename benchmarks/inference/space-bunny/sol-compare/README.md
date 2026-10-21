@@ -1,6 +1,10 @@
 # Space Bunny Alpha versus GPT-6 Sol: text-only quality probe
 
-Status: exploratory. This compares answer quality on self-contained synthetic
+Status: historical exploratory results. The runner is retired because Space
+Bunny is no longer in the free-model allowlist. Cases and results are preserved;
+the runner source remains in git history.
+
+This compares answer quality on self-contained synthetic
 questions, not latency, cost, tool use, creative writing, long context, or a
 general intelligence score. The original 20-question Space Bunny set was not
 reused: its answers had already appeared in this Codex conversation.
@@ -13,7 +17,7 @@ has five per category. Their answer keys were frozen before inference. Arithmeti
 constraint, and code-output keys were independently checked with local scripts
 or language runtimes. All content is newly authored synthetic material.
 
-[`run.mjs`](run.mjs) grouped one case from each category into each four-question
+The retired `run.mjs` grouped one case from each category into each four-question
 batch. Both models received the identical question prompt and had to return a
 JSON object of short answers. The prompt forbade tools, files, and browsing;
 the Codex event logs confirmed no tool calls. Space Bunny ran through the real Nous Portal adapter with
@@ -30,8 +34,7 @@ machine has no OpenAI API key configured. No latency comparison is made.
 
 Raw prompts, answers, batch responses, status, and scoring are saved in
 [`results.json`](results.json) and [`hard-results.json`](hard-results.json).
-The cases and scoring code are inspectable; changing a key changes the corpus
-hash and requires a rerun.
+The cases remain inspectable; the historical scoring code is in git history.
 
 | Category | Space Bunny | GPT-6 Sol |
 | --- | ---: | ---: |
@@ -61,18 +64,3 @@ fact retrieval, long-document work, nuanced writing, or tool-using agents.
 Space Bunny's anonymous-preview identity also leaves training overlap unknown.
 The observed strengths and errors are useful for choosing the next, more
 realistic tasks, not for ranking the models broadly.
-
-## Reproduce
-
-Use a signed-in Codex CLI that supports `gpt-6-sol` and a Nous Portal API key.
-This host's global CLI 0.149.0 rejected GPT-6 Sol with ChatGPT sign-in; the
-comparison used 0.157.0 installed in an isolated `/tmp` directory. Output is
-resumable when its corpus hash, model list, and settings match. Remove the
-specific result file to deliberately rerun all batches.
-
-```bash
-npm run build
-mkdir -p /tmp/weave-sol-llm-probe
-CODEX_BENCH_BIN=/path/to/current/codex node --env-file=.env.local benchmarks/inference/space-bunny/sol-compare/run.mjs
-BENCH_CASES=hard-cases.json CODEX_BENCH_BIN=/path/to/current/codex node --env-file=.env.local benchmarks/inference/space-bunny/sol-compare/run.mjs
-```

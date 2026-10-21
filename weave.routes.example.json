@@ -266,6 +266,111 @@
           "window_ms": 60000
         }
       ]
+    },
+    {
+      "routed_unit_id": "nous-portal.flash.solar-mini4",
+      "adapter": "nous-portal",
+      "model": "upstage/solar-mini4:free",
+      "tier": "flash",
+      "operation": "generate",
+      "kind": "transform",
+      "destination": "nous-portal",
+      "destination_training_allowed": true,
+      "quality": "baseline",
+      "context_profile": "implementation",
+      "context_profile_version": 1,
+      "prompt_template": "implementation",
+      "prompt_template_version": 1,
+      "settings": {
+        "max_output_tokens": 8192
+      },
+      "context_limit_tokens": 32768,
+      "price": {
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      },
+      "rate_limits": [
+        {
+          "requests": 10,
+          "tokens": 80000,
+          "window_ms": 60000
+        },
+        {
+          "requests": 420,
+          "tokens": 3360000,
+          "window_ms": 3600000
+        }
+      ]
+    },
+    {
+      "routed_unit_id": "nous-portal.flash.longcat-2.0",
+      "adapter": "nous-portal",
+      "model": "meituan/longcat-2.0:free",
+      "tier": "flash",
+      "operation": "generate",
+      "kind": "transform",
+      "destination": "nous-portal",
+      "destination_training_allowed": true,
+      "quality": "baseline",
+      "context_profile": "implementation",
+      "context_profile_version": 1,
+      "prompt_template": "implementation",
+      "prompt_template_version": 1,
+      "settings": {
+        "max_output_tokens": 8192
+      },
+      "context_limit_tokens": 32768,
+      "price": {
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      },
+      "rate_limits": [
+        {
+          "requests": 10,
+          "tokens": 80000,
+          "window_ms": 60000
+        },
+        {
+          "requests": 420,
+          "tokens": 3360000,
+          "window_ms": 3600000
+        }
+      ]
+    },
+    {
+      "routed_unit_id": "nous-portal.flash.step-3.7-flash",
+      "adapter": "nous-portal",
+      "model": "stepfun/step-3.7-flash:free",
+      "tier": "flash",
+      "operation": "generate",
+      "kind": "transform",
+      "destination": "nous-portal",
+      "destination_training_allowed": true,
+      "quality": "baseline",
+      "context_profile": "implementation",
+      "context_profile_version": 1,
+      "prompt_template": "implementation",
+      "prompt_template_version": 1,
+      "settings": {
+        "max_output_tokens": 8192
+      },
+      "context_limit_tokens": 32768,
+      "price": {
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      },
+      "rate_limits": [
+        {
+          "requests": 10,
+          "tokens": 80000,
+          "window_ms": 60000
+        },
+        {
+          "requests": 420,
+          "tokens": 3360000,
+          "window_ms": 3600000
+        }
+      ]
     }
   ]
 }

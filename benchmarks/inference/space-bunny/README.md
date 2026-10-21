@@ -1,7 +1,10 @@
 # Space Bunny Alpha through Nous Portal
 
-Status: exploratory. Adding the model ID to the gateway options does not enable
-a routed unit or grant model output authority.
+Status: historical exploratory results. Space Bunny is no longer in the
+free-model allowlist. The three runners (`run.mjs`, `run_general.mjs`, and
+`sol-compare/run.mjs`) and their commands are retired; their source remains in
+git history. Recorded cases and results are preserved and are not current
+availability or routing evidence.
 
 The newer [60-case quality comparison with GPT-6 Sol](sol-compare/README.md)
 scored Space Bunny 56/60 and Sol 60/60 on fresh, self-contained text questions.
@@ -26,9 +29,9 @@ The eight catalogue IDs were `stealth/space-bunny-alpha`,
 `stepfun/step-3.7-flash:free`, and `upstage/solar-pro4:free`.
 **Catalogue presence did not guarantee service:** the free LongCat ID returned
 HTTP 404 with “This model is no longer free” on the first benchmark request.
-The paid LongCat variant was not called. Both benchmark runners recheck exact
-input and output prices in the authenticated catalogue and fail closed if
-their selected model is no longer listed at zero price.
+The paid LongCat variant was not called. The retired runners checked
+input and output prices in the authenticated catalogue; current adapters enforce
+the free-model allowlist and catalogue price check.
 
 ## General reasoning probe
 
@@ -39,7 +42,7 @@ easy-to-moderate sanity check, with no independent question sourcing or
 contamination audit. It has a ceiling: a high score does not establish broad
 reasoning ability or predict performance on difficult tasks.
 
-[`run_general.mjs`](run_general.mjs) sent the same prompt and settings to Space
+The retired `run_general.mjs` sent the same prompt and settings to Space
 Bunny and the catalogue-listed free Step 3.7 Flash ID through the real Nous
 gateway adapter. Temperature was 0; output was capped at 1,024 tokens. The
 adapter does not expose reasoning effort, so each model used its provider
@@ -64,17 +67,9 @@ Bunny is more intelligent than Step under a suitable Step configuration.
 Latency includes network and provider work. This is one pass with no
 resampling, uncertainty interval, or held-out public benchmark.
 
-```bash
-npm run build
-node --env-file=.env.local benchmarks/inference/space-bunny/run_general.mjs
-```
-
-The runner resumes a partial report when its case hash, models, and settings
-match. Delete `general-results.json` before a deliberate fresh pass.
-
 ## Narrow Weave judgment probe
 
-The earlier [`run.mjs`](run.mjs) measured 18 authored synthetic validation
+The retired `run.mjs` measured 18 authored synthetic validation
 rows each for `capability.match` and `result.evaluate`, using the existing
 GLiNER2.5-Decide seed. Space Bunny scored 18/18 and 17/18, respectively, at
 1.64 s overall median end-to-end latency. Its one miss labeled missing
@@ -83,10 +78,4 @@ surface variants are correlated, and the cases are specific to Weave. These
 [`results.json`](results.json) are supplementary and are **not** a general
 intelligence score or a routing gate.
 
-```bash
-python3 benchmarks/inference/gliner-decide/collect.py
-npm run build
-node --env-file=.env.local benchmarks/inference/space-bunny/run.mjs
-```
-
-No paid fallback is configured in either runner.
+Neither retired runner configured a paid fallback.
