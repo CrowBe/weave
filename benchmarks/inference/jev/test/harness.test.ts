@@ -16,7 +16,7 @@ import { CORPUS, type DecisionCase } from '../corpus.ts';
 import { reduceAnswers, renderQuestions, renderState, ADVANCEMENT_LEVELS } from '../shapes.ts';
 import { scoreShape } from '../score.ts';
 import { optionKeys, toGatewayQuestion } from '../transfer.ts';
-import type { ProbeRecord } from '../run.ts';
+import { jevRouteTable, type ProbeRecord } from '../run.ts';
 
 const CASE = CORPUS.find((c) => c.id === 'blocked.beta-unread')!;
 
@@ -210,4 +210,24 @@ test('option counts drive the uniform floor for every question type', () => {
   assert.equal(optionKeys({ type: 'choice', instructions: '', criteria: { a: 1, b: 2, c: 3 }, label: 'a', src: '' }).length, 3);
   assert.equal(optionKeys({ type: 'noul', instructions: '', label: true, src: '' }).length, 2);
   assert.equal(optionKeys({ type: 'score', instructions: '', criteria: ['a', 'b', 'c', 'd'], label: 0, src: '' }).length, 4);
+});
+
+// --- the direct model must be named, not merely present ---------------------
+
+test('the direct model defaults to jev-preview; blank is not a model and the env is not read here', () => {
+  const prior = process.env['JEV_MODEL'];
+  process.env['JEV_MODEL'] = 'from-ambient-env';
+  try {
+    const model = (options: { preferFree: boolean; model?: string }): string =>
+      jevRouteTable({ vercel: 'gw', typesafe: 'ts' }, options).find(
+        (unit) => unit.routed_unit_id === 'choice@typesafe',
+      )!.model;
+    assert.equal(model({ preferFree: false }), 'jev-preview');
+    assert.equal(model({ preferFree: false, model: '' }), 'jev-preview');
+    assert.equal(model({ preferFree: false, model: '   ' }), 'jev-preview');
+    assert.equal(model({ preferFree: false, model: ' jev-1.14.0 ' }), 'jev-1.14.0');
+  } finally {
+    if (prior === undefined) delete process.env['JEV_MODEL'];
+    else process.env['JEV_MODEL'] = prior;
+  }
 });

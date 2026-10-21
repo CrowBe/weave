@@ -59,7 +59,10 @@ const VERCEL_DECLARED_LIMIT = { requests: 60, window_ms: 60_000 } as const;
 export interface RouteOptions {
   /** Wait out a throttle on the free route instead of escalating to the billed one. */
   readonly preferFree: boolean;
-  /** Direct TypeSafe model override; otherwise JEV_MODEL or jev-preview. */
+  /**
+   * Direct TypeSafe model. Blank or absent means jev-preview. The composition
+   * root reads `JEV_MODEL` and passes it here; this module reads no env.
+   */
   readonly model?: string;
   /** Route to the local Kev service instead of the hosted Jev routes. */
   readonly local?: boolean;
@@ -95,7 +98,7 @@ function jevRoutes(kind: EvaluationKind, includeDirect: boolean, options: RouteO
       routed_unit_id: `${kind}@typesafe`,
       adapter: TYPESAFE_AI_ADAPTER,
       // The direct API names the model differently than the gateway catalogue.
-      model: options.model ?? (process.env['JEV_MODEL']?.trim() || 'jev-preview'),
+      model: options.model?.trim() || 'jev-preview',
       destination: TYPESAFE_AI_DESTINATION,
     });
   }
@@ -105,6 +108,12 @@ function jevRoutes(kind: EvaluationKind, includeDirect: boolean, options: RouteO
 export interface Credentials {
   readonly vercel: string;
   readonly typesafe: string | undefined;
+}
+
+/** Every hosted route the credentials allow, in the order the gateway tries them. */
+export function jevRouteTable(credentials: Credentials, options: RouteOptions): RoutedUnit[] {
+  const includeDirect = credentials.typesafe !== undefined;
+  return EVALUATION_KINDS.flatMap((kind) => jevRoutes(kind, includeDirect, options));
 }
 
 /** Read from the environment by the composition root only. Never logged. */
@@ -165,9 +174,8 @@ export function createJevGateway(
   clock: Clock,
   options: RouteOptions = { preferFree: false },
 ): InferenceGateway {
-  const includeDirect = credentials.typesafe !== undefined;
   return createInferenceGateway({
-    routes: EVALUATION_KINDS.flatMap((kind) => jevRoutes(kind, includeDirect, options)),
+    routes: jevRouteTable(credentials, options),
     evaluators: [
       vercelAiGatewayEvaluator({ apiKey: credentials.vercel }),
       ...(credentials.typesafe === undefined ? [] : [typesafeAiEvaluator({ apiKey: credentials.typesafe, shuffle: false })]),

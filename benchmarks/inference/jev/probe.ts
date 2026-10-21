@@ -168,7 +168,13 @@ async function main(): Promise<void> {
     const repeats = Number(flag('repeats') ?? 1);
     const permute = Math.max(1, Number(flag('permute') ?? 1));
     const local = (flag('model') ?? 'jev') === 'kev';
-    const options = { preferFree: present('prefer-free'), local };
+    // The composition root reads the direct-route model; run.ts reads no env.
+    const jevModel = process.env['JEV_MODEL'];
+    const options = {
+      preferFree: present('prefer-free'),
+      local,
+      ...(jevModel === undefined ? {} : { model: jevModel }),
+    };
     const kevBaseURL = readKevBaseURL(process.env);
     const gateway = local ? createKevGateway(clock, kevBaseURL) : createJevGateway(credentials, clock, options);
     console.log(
