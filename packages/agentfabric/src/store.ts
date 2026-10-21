@@ -87,12 +87,14 @@ export class FabricStore {
   private next_canonical: number;
   private readonly resources: Map<string, MutableResource>;
   private readonly refs: Map<string, IssuedRef>;
+  private readonly canonicalPrimary: Map<string, string>;
+  private readonly publicationOwners: Map<string, string>;
   private readonly invocations: Map<string, InvocationRecord>;
   private admissions: StoredAdmission[];
   private conclusionRecords: unknown[];
   private workloadRecords: StoredWorkload[];
   private measured_cost_micros: number;
-  private builtinResults: StoredBuiltinResult[];
+  private readonly builtinResults: Map<string, StoredBuiltinResult>;
   private readonly path: string | null;
   persistStart = true;
   persistResult = true;
@@ -102,15 +104,29 @@ export class FabricStore {
     this.next_canonical = snapshot?.next_canonical ?? 1;
     this.resources = new Map((snapshot?.resources ?? []).map((r) => [r.canonical_id, { ...r }]));
     this.refs = new Map((snapshot?.refs ?? []).map((r) => [r.handle, { ...r }]));
+    this.canonicalPrimary = new Map();
+    for (const ref of snapshot?.refs ?? []) {
+      if (!this.canonicalPrimary.has(ref.canonical_id)) {
+        this.canonicalPrimary.set(ref.canonical_id, ref.handle);
+      }
+    }
+    this.publicationOwners = new Map();
+    for (const resource of this.resources.values()) {
+      if (resource.publication && !this.publicationOwners.has(resource.publication.invocation_id)) {
+        this.publicationOwners.set(resource.publication.invocation_id, resource.canonical_id);
+      }
+    }
     this.invocations = new Map((snapshot?.invocations ?? []).map((r) => [r.invocation_id, { ...r }]));
     this.admissions = (snapshot?.admissions ?? []).map((admission) => ({ ...admission, contract: { ...admission.contract } }));
     this.conclusionRecords = (snapshot?.conclusions ?? []).map((conclusion) => structuredClone(conclusion));
     this.workloadRecords = (snapshot?.workload ?? []).map((item) => ({ ...item }));
     this.measured_cost_micros = snapshot?.measured_cost_micros ?? 0;
-    this.builtinResults = (snapshot?.builtin_results ?? []).map((item) => ({
-      ...item,
-      outcome: structuredClone(item.outcome),
-    }));
+    this.builtinResults = new Map(
+      (snapshot?.builtin_results ?? []).map((item) => [
+        item.key,
+        { ...item, outcome: structuredClone(item.outcome) },
+      ]),
+    );
     this.path = path;
   }
 
@@ -151,7 +167,10 @@ export class FabricStore {
       conclusions: this.conclusionRecords.map((conclusion) => structuredClone(conclusion)),
       workload: this.workloadRecords.map((item) => ({ ...item })),
       measured_cost_micros: this.measured_cost_micros,
-      builtin_results: this.builtinResults.map((item) => ({ ...item, outcome: structuredClone(item.outcome) })),
+      builtin_results: [...this.builtinResults.values()].map((item) => ({
+        ...item,
+        outcome: structuredClone(item.outcome),
+      })),
     };
   }
 
@@ -170,6 +189,9 @@ export class FabricStore {
     const handle = `ref_${this.next_handle}`;
     this.next_handle += 1;
     this.refs.set(handle, { handle, canonical_id, kind });
+    if (!this.canonicalPrimary.has(canonical_id)) {
+      this.canonicalPrimary.set(canonical_id, handle);
+    }
     this.save();
     return handle;
   }
@@ -178,9 +200,32 @@ export class FabricStore {
     return this.refs.get(handle);
   }
 
+  primaryRef(canonical_id: string): string | undefined {
+    return this.canonicalPrimary.get(canonical_id);
+  }
+
   putResource(resource: MutableResource): void {
+    const previous = this.resources.get(resource.canonical_id);
+    if (
+      previous?.publication &&
+      previous.publication.invocation_id !== resource.publication?.invocation_id &&
+      this.publicationOwners.get(previous.publication.invocation_id) === resource.canonical_id
+    ) {
+      this.publicationOwners.delete(previous.publication.invocation_id);
+    }
     this.resources.set(resource.canonical_id, resource);
+    if (resource.publication) {
+      const owner = this.publicationOwners.get(resource.publication.invocation_id);
+      if (owner === undefined || owner === resource.canonical_id) {
+        this.publicationOwners.set(resource.publication.invocation_id, resource.canonical_id);
+      }
+    }
     this.save();
+  }
+
+  publishedBy(invocation_id: string): MutableResource | undefined {
+    const canonical_id = this.publicationOwners.get(invocation_id);
+    return canonical_id === undefined ? undefined : this.resources.get(canonical_id);
   }
 
   getResource(canonical_id: string): MutableResource | undefined {
@@ -257,18 +302,12 @@ export class FabricStore {
   }
 
   rememberResult(result: StoredBuiltinResult): void {
-    const index = this.builtinResults.findIndex((item) => item.key === result.key);
-    const copy = { ...result, outcome: structuredClone(result.outcome) };
-    if (index >= 0) {
-      this.builtinResults[index] = copy;
-    } else {
-      this.builtinResults.push(copy);
-    }
+    this.builtinResults.set(result.key, { ...result, outcome: structuredClone(result.outcome) });
     this.save();
   }
 
   cachedResult(key: string): StoredBuiltinResult | undefined {
-    const found = this.builtinResults.find((item) => item.key === key);
+    const found = this.builtinResults.get(key);
     return found ? { ...found, outcome: structuredClone(found.outcome) } : undefined;
   }
 
