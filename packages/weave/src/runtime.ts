@@ -394,6 +394,14 @@ export class Runtime {
     return snapshot(this.current);
   }
 
+  /**
+   * Internal read-only view of current state. Loom readers never mutate it;
+   * transitions still go through `applyAccepted` from `append`.
+   */
+  private view(): State {
+    return this.current as State;
+  }
+
   trace(): Trace {
     return structuredClone({ observations: this.log, cycles: this.cycles });
   }
@@ -566,7 +574,7 @@ export class Runtime {
     this.prefetchContracts();
     const cycle_no = this.nextCycleNo();
     const state_revision = this.current.state_revision;
-    const state = this.state();
+    const state = this.view();
 
     const formation = formCandidates(state, this.describe, (ref) =>
       this.replayMode ? ref : this.options.host.canonicalResource(ref),
@@ -703,7 +711,7 @@ export class Runtime {
         outcome: null,
         selection: select(
           candidates.filter((c) => c.eligibility.status === 'allowed' && c.weight !== null),
-          this.state(),
+          this.view(),
         ),
       };
     }
@@ -809,7 +817,7 @@ export class Runtime {
       outcome: null,
       selection: select(
         candidates.filter((c) => c.eligibility.status === 'allowed' && c.weight !== null),
-        this.state(),
+        this.view(),
       ),
     };
   }
@@ -1015,7 +1023,7 @@ export class Runtime {
 
   private reviewGoal(started: ActionStartedPayload): ActionOutcome | null {
     const prepared = this.takePrepared(started.action_id, 'report.review');
-    const view = prepared ?? renderReviewView(this.state());
+    const view = prepared ?? renderReviewView(this.view());
     if (!prepared) {
       this.noteViewAssemblies(view);
     }
@@ -1046,7 +1054,7 @@ export class Runtime {
     const prepared = this.takePrepared(started.action_id, 'goal.frame');
     const view =
       prepared ??
-      renderFrameView(this.state(), this.catalogueOps(), profile, this.options.shareAssemblies ? { assemblies: true } : undefined);
+      renderFrameView(this.view(), this.catalogueOps(), profile, this.options.shareAssemblies ? { assemblies: true } : undefined);
     if (!prepared) {
       this.noteViewAssemblies(view);
     }
@@ -1137,7 +1145,7 @@ export class Runtime {
             this.recordResult(started.action_id, { outcome: 'failed', failure: parsed.reason }, GATEWAY_SOURCE);
             return;
           }
-          const proposal = validateProposal(parsed.bindings, this.state(), this.describe);
+          const proposal = validateProposal(parsed.bindings, this.view(), this.describe);
           this.recordResult(started.action_id, { outcome: 'succeeded', output: proposal }, GATEWAY_SOURCE);
         }),
     );
@@ -1197,7 +1205,7 @@ export class Runtime {
     if (candidate.operation !== 'report.publish') {
       return candidate.eligibility.status === 'allowed';
     }
-    const fresh = formCandidates(this.state(), this.describe, (ref) =>
+    const fresh = formCandidates(this.view(), this.describe, (ref) =>
       this.replayMode ? ref : this.options.host.canonicalResource(ref),
     );
     const match = fresh.candidates.find((c) => c.candidate_id === candidate.candidate_id);
@@ -1337,13 +1345,13 @@ export class Runtime {
     if (standingWrite) {
       return true;
     }
-    const approval = matchingApproval(this.state(), bindingDigest(action.inputs, action.effects), destination);
-    return !!approval && approvalStillValid(approval, this.state());
+    const approval = matchingApproval(this.view(), bindingDigest(action.inputs, action.effects), destination);
+    return !!approval && approvalStillValid(approval, this.view());
   }
 
   /** `goal.complete` is a runtime action: it records completion only when the recorded success evidence is present. */
   private completeGoal(started: ActionStartedPayload): ActionOutcome {
-    const state = this.state();
+    const state = this.view();
     if (successEvidencePresent(state)) {
       return {
         outcome: 'succeeded',
@@ -1856,7 +1864,7 @@ export class Runtime {
       return;
     }
     const catalogue = this.catalogueOps();
-    const rendered = this.state();
+    const rendered = this.view();
     const baselineView = renderFrameView(rendered, catalogue, baselineProfile);
     const candidateView = renderFrameView(rendered, catalogue, candidateProfile);
     const humanCorrections = this.current.corrections.filter((item) => item.evidence > experiment.evidence).length;
