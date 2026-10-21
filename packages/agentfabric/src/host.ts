@@ -1449,17 +1449,19 @@ export class AgentFabricHost implements CapabilityHost {
         },
       };
     }
-    dest.revision += 1;
     const record: PublicationRecord = {
       invocation_id: open.invocation_id,
       binding_digest,
       report_digest,
       destination: input.destination,
-      committed_revision: dest.revision,
+      committed_revision: dest.revision + 1,
     };
-    dest.publication = record;
-    dest.content = report_digest;
-    this.store.putResource(dest);
+    this.store.putResource({
+      ...dest,
+      revision: dest.revision + 1,
+      content: report_digest,
+      publication: record,
+    });
     return { kind: 'committed', record };
   }
 

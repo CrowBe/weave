@@ -530,6 +530,47 @@ describe('Fabric store indexes', () => {
     assert.equal('status' in stopped && stopped.status, 'stopped');
   });
 
+  it('does not leave a stale publication owner when the prior result was unpersisted', async () => {
+    const authority = createGrantAuthority();
+    const host = new AgentFabricHost({ authority });
+    const source = host.registerSource('mem:index-replaced', 'line');
+    const destination = host.registerDestination('mem:index-replaced-outbox');
+
+    host.store.persistResult = false;
+    const firstGrant = publishGrant(authority, source, destination, 'a:replaced:1', 1);
+    const first = host.invoke(firstGrant, REPORT_PUBLISH.id, publishInput(source, destination), {
+      invocation_id: 'inv-replaced-a',
+    });
+    assert.equal(first.kind, 'handle');
+    host.release('a:replaced:1');
+    const firstOutcome = await (first as { result: Promise<{ outcome: string }> }).result;
+    assert.equal(firstOutcome.outcome, 'uncertain');
+
+    const restarted = new AgentFabricHost({ authority, store: FabricStore.restore(host.snapshot()) });
+    const secondGrant = publishGrant(authority, source, destination, 'a:replaced:2', 2);
+    const second = restarted.invoke(
+      secondGrant,
+      REPORT_PUBLISH.id,
+      { ...publishInput(source, destination), expected_revision: 2 },
+      { invocation_id: 'inv-replaced-b' },
+    );
+    assert.equal(second.kind, 'handle');
+    restarted.release('a:replaced:2');
+    const secondOutcome = await (second as { result: Promise<{ outcome: string }> }).result;
+    assert.equal(secondOutcome.outcome, 'succeeded');
+
+    assert.equal(restarted.store.publishedBy('inv-replaced-a'), undefined);
+    assert.equal(restarted.store.publishedBy('inv-replaced-b')?.publication?.invocation_id, 'inv-replaced-b');
+
+    const lookupGrant = publishGrant(authority, source, destination, 'a:replaced:1', 3);
+    const recovered = restarted.lookup('inv-replaced-a', lookupGrant);
+    assert.equal('status' in recovered && recovered.status, 'stopped');
+
+    const restored = FabricStore.restore(restarted.snapshot());
+    assert.equal(restored.publishedBy('inv-replaced-a'), undefined);
+    assert.equal(restored.publishedBy('inv-replaced-b')?.publication?.invocation_id, 'inv-replaced-b');
+  });
+
   it('keeps builtin results deduplicated and unchanged in snapshots', () => {
     const store = FabricStore.restore({
       next_handle: 1,
