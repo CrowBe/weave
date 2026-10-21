@@ -16,8 +16,9 @@ export const NOUS_PORTAL_ADAPTER = 'nous-portal';
  * serving guarantee: on 25 Sep 2026 a $0-listed ID was refused as "no longer
  * free". So the adapter also checks the live catalogue and the response cost.
  * The Laguna IDs were listed as expiring on 31 Oct 2026.
- * LongCat 2.5 Preview and Beam are excluded: their snapshot prices are
- * "0.0000000000", which does not satisfy the exact "0" contract.
+ * LongCat 2.5 Preview and Beam remain excluded from this fixed allowlist.
+ * Their "0.0000000000" snapshot prices satisfy the catalogue price check,
+ * but changing the allowlist requires a separate decision.
  */
 export const NOUS_PORTAL_FREE_MODELS = {
   solarMini: 'upstage/solar-mini4:free',
@@ -56,9 +57,10 @@ export function nousPortalCatalogueVerdict(body: unknown, model: string): NousPo
 const OVERRIDE_THRESHOLDS: ReadonlySet<string> = new Set(['min_prompt_tokens', 'utc_start', 'utc_end']);
 
 /**
- * Every scalar pricing field must be exactly "0" or 0, prompt and
- * completion present, nested objects such as `original` included, and every
- * `overrides` tier's prices too. Anything unreadable fails closed.
+ * Every scalar pricing field must be numeric zero or an unsigned decimal
+ * string matching ^[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$ with Number(value) === 0.
+ * Prompt and completion must be present, nested objects such as `original`
+ * included, and every `overrides` tier's prices too. Unreadable prices fail closed.
  */
 function freePricing(pricing: unknown): boolean {
   if (!object(pricing) || !Object.hasOwn(pricing, 'prompt') || !Object.hasOwn(pricing, 'completion')) return false;
@@ -72,7 +74,10 @@ function freePricing(pricing: unknown): boolean {
 
 function zeroLeaves(value: unknown): boolean {
   if (object(value)) return Object.keys(value).length > 0 && Object.values(value).every(zeroLeaves);
-  return value === 0 || value === '0';
+  // A leading sign is anomalous and outside the unsigned price grammar;
+  // fail closed: refusing can never meter a paid call as $0.
+  return value === 0 || (typeof value === 'string' &&
+    /^[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$/.test(value) && Number(value) === 0);
 }
 
 function object(value: unknown): value is Record<string, unknown> {
