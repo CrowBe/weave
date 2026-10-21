@@ -451,6 +451,27 @@ describe('M1 publish under authority', () => {
     assert.equal(liveDispatch.kind, 'rejected');
   });
 
+  it('M1-T20 replay reports observations beyond the recorded log', async () => {
+    const world = m1World();
+    await assembleReport(world);
+    const trace = world.runtime.trace();
+    const approval = trace.observations.findIndex((observation) => observation.payload_type === 'approval.requested');
+    assert.ok(approval > 0);
+    const truncated = trace.observations.slice(0, approval);
+    const seq = truncated.length + 1;
+
+    const result = replay(truncated, {
+      host: new AgentFabricHost({ authority: createGrantAuthority() }),
+      decisionLayer: new FailingDecisionLayer(),
+    });
+    assert.equal(result.ok, false);
+    if (result.ok) {
+      return;
+    }
+    assert.equal(result.failure.at_seq, seq);
+    assert.equal(result.failure.reason, `replay produced seq ${seq} beyond the recorded log`);
+  });
+
   it('M1-T18 failed start persist prevents invoke; lost result persist reconciles', async () => {
     const world = m1World();
     await assembleReport(world);

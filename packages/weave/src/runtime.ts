@@ -174,6 +174,8 @@ export class IngressHandle {
   }
 }
 
+const runtimeLogs = new WeakMap<Runtime, readonly Observation[]>();
+
 export class Runtime {
   private readonly log: Observation[] = [];
   private readonly cycles: CycleRecord[] = [];
@@ -213,6 +215,7 @@ export class Runtime {
     this.slots = options.executionSlots ?? Number.POSITIVE_INFINITY;
     this.frameProfile = options.frameProfile ?? DEFAULT_FRAME_PROFILE;
     this.replayLog = recorded;
+    runtimeLogs.set(this, this.log);
     if (recorded) {
       for (const observation of recorded) {
         if (observation.payload_type === 'capability.described' && observation.validation.status === 'accepted') {
@@ -2361,6 +2364,7 @@ export function replay(recorded: readonly Observation[], options: RuntimeOptions
         )
         .map((observation) => (observation.payload as { action_id: string }).action_id),
     );
+    let verified = 0;
     for (const observation of ordered) {
       const resultAction = observation.payload_type === 'action.result' ? (observation.payload as { action_id?: string }).action_id : undefined;
       const feedReviewResult = observation.source.kind === 'runtime' && resultAction !== undefined && reviewActions.has(resultAction);
@@ -2369,9 +2373,10 @@ export function replay(recorded: readonly Observation[], options: RuntimeOptions
       }
       const { seq: _seq, validation: _validation, ...input } = observation;
       runtime.feed(input);
-      checkPrefix(runtime.trace().observations, ordered);
+      verified = checkPrefix(liveLog(runtime), ordered, verified);
     }
-    const replayed = runtime.trace().observations;
+    const replayed = liveLog(runtime);
+    checkPrefix(replayed, ordered);
     if (replayed.length !== ordered.length) {
       throw new ReplayFailureError(replayed.length + 1, null, 'recorded log continues beyond what replay reproduced');
     }
@@ -2395,8 +2400,20 @@ export function recover(recorded: readonly Observation[], options: RuntimeOption
   return runtime;
 }
 
-function checkPrefix(replayed: readonly Observation[], recorded: readonly Observation[]): void {
-  for (let i = 0; i < replayed.length; i += 1) {
+function liveLog(runtime: Runtime): readonly Observation[] {
+  const log = runtimeLogs.get(runtime);
+  if (!log) {
+    throw new Error('runtime log is only available to replay');
+  }
+  return log;
+}
+
+function checkPrefix(
+  replayed: readonly Observation[],
+  recorded: readonly Observation[],
+  from = 0,
+): number {
+  for (let i = from; i < replayed.length; i += 1) {
     const actual = replayed[i] as Observation;
     const expected = recorded[i];
     if (!expected) {
@@ -2406,6 +2423,7 @@ function checkPrefix(replayed: readonly Observation[], recorded: readonly Observ
       throw new ReplayFailureError(actual.seq, null, `replay diverged from the record at seq ${actual.seq}`);
     }
   }
+  return replayed.length;
 }
 
 // ---------------------------------------------------------------------------
