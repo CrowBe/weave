@@ -340,7 +340,12 @@ export class AgentFabricHost implements CapabilityHost {
     this.coordinator.release(invocation_id);
   }
 
-  tryWriteSource(handle: ResourceRef, content: string): { ok: true; revision: number } | { ok: false; reason: 'conflict' | 'unknown' } {
+  /** Journal a fixture source edit; an expected revision rejects stale writers. */
+  tryWriteSource(
+    handle: ResourceRef,
+    content: string,
+    expectedRevision?: number,
+  ): { ok: true; revision: number } | { ok: false; reason: 'conflict' | 'unknown' } {
     const issued = this.store.lookupRef(handle);
     if (!issued || issued.kind !== 'source') {
       return { ok: false, reason: 'unknown' };
@@ -352,9 +357,12 @@ export class AgentFabricHost implements CapabilityHost {
     if (!resource) {
       return { ok: false, reason: 'unknown' };
     }
-    resource.content = content;
-    resource.revision += 1;
-    return { ok: true, revision: resource.revision };
+    if (expectedRevision !== undefined && resource.revision !== expectedRevision) {
+      return { ok: false, reason: 'conflict' };
+    }
+    const revision = resource.revision + 1;
+    this.store.putResource({ ...resource, content, revision });
+    return { ok: true, revision };
   }
 
   /**
