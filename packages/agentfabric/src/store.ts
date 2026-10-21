@@ -1,6 +1,7 @@
 import {
   appendFileSync,
   existsSync,
+  linkSync,
   mkdirSync,
   readFileSync,
   renameSync,
@@ -14,6 +15,7 @@ import type { CapabilityContract, InvocationOutcome } from '@weave/agentsop';
 
 const openStores = new Set<string>();
 const COMPACT_BYTES = 256 * 1024;
+let lockSequence = 0;
 
 export type ResourceKind = 'source' | 'destination' | 'workspace';
 
@@ -132,6 +134,7 @@ export class FabricStore {
   private tailBytes = 0;
   private written_bytes = 0;
   private journalReady = false;
+  private poisoned: string | null = null;
   recovery = { torn_tail_ignored: false, ignored_tail_bytes: 0 };
   persistStart = true;
   persistResult = true;
@@ -336,7 +339,8 @@ export class FabricStore {
     if (!this.path) {
       return;
     }
-    if (this.tailBytes >= COMPACT_BYTES) {
+    const retained = Math.max(0, this.fileBytes - this.tailBytes);
+    if (this.tailBytes >= Math.max(COMPACT_BYTES, retained)) {
       this.compact();
     }
   }
@@ -350,11 +354,24 @@ export class FabricStore {
     if (!this.path) {
       return;
     }
+    if (this.poisoned) {
+      throw new Error(this.poisoned);
+    }
     if (!this.journalReady) {
       this.compact();
     }
     const line = `${JSON.stringify(mutation)}\n`;
-    appendFileSync(this.path, line);
+    const previousBytes = this.fileBytes;
+    try {
+      appendFileSync(this.path, line);
+    } catch (error) {
+      try {
+        truncateSync(this.path, previousBytes);
+      } catch {
+        this.poisoned = `host store must be reopened after a failed append: ${String(error)}`;
+      }
+      throw error;
+    }
     const bytes = Buffer.byteLength(line);
     this.fileBytes += bytes;
     this.tailBytes += bytes;
@@ -554,30 +571,75 @@ export class PersistFailure extends Error {
 
 function acquireLock(path: string): void {
   const lockPath = `${path}.lock`;
+  const tempPath = `${lockPath}.${process.pid}.${(lockSequence += 1)}.tmp`;
+  writeFileSync(tempPath, String(process.pid));
   try {
-    writeFileSync(lockPath, String(process.pid), { flag: 'wx' });
-  } catch (error) {
-    if (!isErrno(error, 'EEXIST')) {
-      throw error;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      try {
+        linkSync(tempPath, lockPath);
+        return;
+      } catch (error) {
+        if (!isErrno(error, 'EEXIST')) {
+          throw error;
+        }
+      }
+      const owner = readLockOwner(lockPath);
+      if (owner === undefined || isAlive(owner)) {
+        throw new Error(`host store is already open: ${resolve(path)}`);
+      }
+      const quarantine = `${lockPath}.stale.${process.pid}.${(lockSequence += 1)}`;
+      try {
+        renameSync(lockPath, quarantine);
+      } catch (error) {
+        if (isErrno(error, 'ENOENT')) {
+          continue;
+        }
+        throw error;
+      }
+      if (readLockOwner(quarantine) !== owner) {
+        // A live writer replaced the stale lock as we took it. Put it back
+        // rather than becoming a second writer.
+        try {
+          linkSync(quarantine, lockPath);
+        } catch {
+          // The lock path is already published by another contender.
+        }
+        try {
+          unlinkSync(quarantine);
+        } catch {
+          // ignore
+        }
+        throw new Error(`host store is already open: ${resolve(path)}`);
+      }
+      try {
+        unlinkSync(quarantine);
+      } catch {
+        // ignore
+      }
     }
-    let owner: number | undefined;
+    throw new Error(`host store is already open: ${resolve(path)}`);
+  } finally {
     try {
-      owner = Number.parseInt(readFileSync(lockPath, 'utf8').trim(), 10);
+      unlinkSync(tempPath);
     } catch {
-      owner = undefined;
+      // ignore
     }
-    if (owner !== undefined && Number.isInteger(owner) && isAlive(owner)) {
-      throw new Error(`host store is already open: ${resolve(path)}`);
-    }
-    writeFileSync(lockPath, String(process.pid));
+  }
+}
+
+function readLockOwner(lockPath: string): number | undefined {
+  try {
+    const owner = Number.parseInt(readFileSync(lockPath, 'utf8').trim(), 10);
+    return Number.isInteger(owner) && owner > 0 ? owner : undefined;
+  } catch {
+    return undefined;
   }
 }
 
 function releaseLock(path: string): void {
   const lockPath = `${path}.lock`;
   try {
-    const owner = Number.parseInt(readFileSync(lockPath, 'utf8').trim(), 10);
-    if (owner === process.pid) {
+    if (readLockOwner(lockPath) === process.pid) {
       unlinkSync(lockPath);
     }
   } catch {

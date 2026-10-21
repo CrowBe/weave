@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import * as nodeFs from 'node:fs';
 import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -41,6 +43,85 @@ describe('FabricStore append-only journal', () => {
       assert.ok(sizes[79]! < 4_096);
     } finally {
       store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps per-invocation bytes bounded across repeated compactions', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-store-compact-bytes-'));
+    const path = join(dir, 'fabric.json');
+    const store = FabricStore.open(path);
+    const original = store.snapshot.bind(store);
+    let compactions = 0;
+    store.snapshot = () => {
+      compactions += 1;
+      return original();
+    };
+    try {
+      const total = 1_024;
+      const blob = 'x'.repeat(4_096);
+      const sizes: number[] = [];
+      for (let index = 0; index < total; index += 1) {
+        const id = `inv-${String(index).padStart(4, '0')}`;
+        const before = store.bytesWritten();
+        store.persistInvocationStart(invocation(id), 1_000);
+        store.persistInvocationResult({
+          ...invocation(id),
+          status: 'committed',
+          outcome: { outcome: 'succeeded', output: { ok: true, blob } },
+        });
+        sizes.push(store.bytesWritten() - before);
+      }
+      assert.ok(compactions >= 3, `expected repeated compactions, saw ${compactions}`);
+      const firstHalf = sizes.slice(0, total / 2).reduce((sum, value) => sum + value, 0);
+      const secondHalf = sizes.slice(total / 2).reduce((sum, value) => sum + value, 0);
+      assert.ok(secondHalf <= firstHalf * 2, `write volume grew with history: ${firstHalf} -> ${secondHalf}`);
+      assert.ok(store.bytesWritten() < total * 16_384, `bytes grew with history: ${store.bytesWritten()}`);
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('restores the journal length after a partial append failure', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-store-append-failure-'));
+    const path = join(dir, 'fabric.json');
+    const store = FabricStore.open(path);
+    const canonical = store.allocateCanonical();
+    const mutableFs = createRequire(import.meta.url)('node:fs') as {
+      appendFileSync: typeof nodeFs.appendFileSync;
+    };
+    const original = mutableFs.appendFileSync;
+    let failOnce = true;
+    mutableFs.appendFileSync = ((file: nodeFs.PathLike, data: string, options?: nodeFs.WriteFileOptions) => {
+      if (failOnce && String(file) === path) {
+        failOnce = false;
+        original(file, data.slice(0, 5));
+        const error = new Error('simulated short write') as NodeJS.ErrnoException;
+        error.code = 'ENOSPC';
+        throw error;
+      }
+      return original(file, data, options);
+    }) as typeof nodeFs.appendFileSync;
+    syncBuiltinESMExports();
+    try {
+      assert.throws(() => store.issue(canonical, 'source'), /simulated short write/);
+    } finally {
+      mutableFs.appendFileSync = original;
+      syncBuiltinESMExports();
+    }
+    try {
+      store.issue(canonical, 'source');
+      store.close();
+
+      const reopened = FabricStore.open(path);
+      try {
+        assert.equal(reopened.snapshot().refs.length, 1);
+        assert.equal(reopened.lookupRef('ref_1')?.canonical_id, canonical);
+      } finally {
+        reopened.close();
+      }
+    } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
@@ -248,6 +329,18 @@ describe('FabricStore append-only journal', () => {
       assert.deepEqual(again.snapshot(), expected.snapshot());
     } finally {
       again.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses an empty lock instead of stealing it', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-store-empty-lock-'));
+    const path = join(dir, 'fabric.json');
+    try {
+      writeFileSync(`${path}.lock`, '');
+      assert.throws(() => FabricStore.open(path), /already open/);
+      assert.equal(readFileSync(`${path}.lock`, 'utf8'), '');
+    } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
