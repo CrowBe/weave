@@ -435,6 +435,66 @@ describe('M0 replay', () => {
     return { live, trace };
   }
 
+  function freshReplay(observations: readonly Observation[]): ReturnType<typeof replay> {
+    return replay(observations, {
+      host: new FakeHost(new FixtureEnvironment()),
+      decisionLayer: new FailingDecisionLayer(),
+    });
+  }
+
+  async function longTickLog(ticks: number): Promise<Trace> {
+    const live = scenario({
+      goal: baseGoal({ budget: { actions: ticks + 20, judgments: ticks + 20 } }),
+    });
+    for (let i = 1; i <= ticks; i += 1) {
+      live.runtime.clock.submit(tick(i));
+    }
+    for (let guard = 0; guard < 10; guard += 1) {
+      const open = Object.values(live.runtime.state().actions).filter(
+        (action) => action.state === 'running' || action.state === 'pending',
+      );
+      if (open.length === 0) {
+        break;
+      }
+      for (const action of open) {
+        await release(live, action.action_id);
+      }
+    }
+    assert.equal(live.runtime.state().goal?.status, 'complete');
+    return live.runtime.trace();
+  }
+
+  function measureReplay(trace: Trace): {
+    result: ReturnType<typeof replay>;
+    traceClones: number;
+    stringifies: number;
+  } {
+    const originalClone = globalThis.structuredClone;
+    const originalStringify = JSON.stringify as unknown as (
+      value: unknown,
+      ...rest: unknown[]
+    ) => string | undefined;
+    let traceClones = 0;
+    let stringifies = 0;
+    try {
+      globalThis.structuredClone = function <T>(value: T, options?: Parameters<typeof originalClone>[1]): T {
+        if (value !== null && typeof value === 'object' && 'observations' in value && 'cycles' in value) {
+          traceClones += 1;
+        }
+        return originalClone(value, options);
+      };
+      JSON.stringify = ((value: unknown, ...rest: unknown[]) => {
+        stringifies += 1;
+        return originalStringify(value, ...rest);
+      }) as typeof JSON.stringify;
+      const result = freshReplay(trace.observations);
+      return { result, traceClones, stringifies };
+    } finally {
+      globalThis.structuredClone = originalClone;
+      JSON.stringify = originalStringify as typeof JSON.stringify;
+    }
+  }
+
   it('M0-T18 replay reproduces the trace without executing', async () => {
     const { trace } = await completedLog();
     const freshHost = new FakeHost(new FixtureEnvironment());
@@ -463,10 +523,103 @@ describe('M0 replay', () => {
       return;
     }
     assert.equal(result.failure.action_id, missingAction);
-    assert.match(result.failure.reason, /missing recorded/);
+    assert.equal(result.failure.reason, `missing recorded action.result for ${missingAction}`);
     assert.equal(freshHost.invocations.length, 0);
     assert.equal(resultFor(result.trace, missingAction), undefined, 'no synthetic result is recorded');
     assert.notEqual(result.state.goal?.status, 'complete');
+  });
+
+  it('M0-T20 replay verifies only the newly appended suffix', async () => {
+    const small = await longTickLog(120);
+    const large = await longTickLog(240);
+    assert.ok(small.observations.length > 120);
+    assert.ok(large.observations.length > small.observations.length * 1.5);
+
+    const smallWork = measureReplay(small);
+    const largeWork = measureReplay(large);
+    assert.equal(smallWork.result.ok, true, smallWork.result.ok ? '' : smallWork.result.failure.reason);
+    assert.equal(largeWork.result.ok, true, largeWork.result.ok ? '' : largeWork.result.failure.reason);
+    assert.ok(
+      smallWork.traceClones <= 1,
+      `replayed ${small.observations.length} observations with ${smallWork.traceClones} trace clones`,
+    );
+    assert.ok(
+      largeWork.traceClones <= 1,
+      `replayed ${large.observations.length} observations with ${largeWork.traceClones} trace clones`,
+    );
+    assert.ok(
+      largeWork.stringifies <= smallWork.stringifies * 2.5,
+      `canonical scans grew from ${smallWork.stringifies} to ${largeWork.stringifies} when the log doubled`,
+    );
+  });
+
+  it('M0-T21 replay reports the first divergence on the canonical encoding', async () => {
+    const { trace } = await completedLog();
+    const mutated = structuredClone(trace.observations);
+    const started = mutated.find((observation) => observation.payload_type === 'action.started');
+    assert.ok(started);
+    (started.payload as Record<string, unknown>).weight = 0.123456;
+
+    const diverged = freshReplay(mutated);
+    assert.equal(diverged.ok, false);
+    if (diverged.ok) {
+      return;
+    }
+    assert.equal(diverged.failure.at_seq, started.seq);
+    assert.equal(diverged.failure.reason, `replay diverged from the record at seq ${started.seq}`);
+
+    const reordered = trace.observations.map((observation) =>
+      observation.payload_type === 'action.started'
+        ? { ...observation, payload: Object.fromEntries(Object.entries(observation.payload as object).reverse()) }
+        : observation,
+    );
+    const sameEncoding = freshReplay(reordered);
+    assert.equal(sameEncoding.ok, true, sameEncoding.ok ? '' : sameEncoding.failure.reason);
+  });
+
+  it('M0-T22 replay reports a recorded log that continues beyond the replay', async () => {
+    const { trace } = await completedLog();
+    const extra: Observation = {
+      observation_id: 'runtime:extra',
+      source: { kind: 'runtime', id: 'weave' },
+      caused_by: null,
+      payload_type: 'runtime.heartbeat',
+      payload_version: 1,
+      payload: {},
+      seq: trace.observations.length + 1,
+      validation: { status: 'accepted' },
+    };
+
+    const result = freshReplay([...trace.observations, extra]);
+    assert.equal(result.ok, false);
+    if (result.ok) {
+      return;
+    }
+    assert.equal(result.failure.at_seq, extra.seq);
+    assert.equal(result.failure.reason, 'recorded log continues beyond what replay reproduced');
+  });
+
+  it('M0-T23 replay returns a defensive trace copy', async () => {
+    const { trace } = await completedLog();
+    const recorded = stableStringify(trace.observations);
+    const result = freshReplay(trace.observations);
+    assert.equal(result.ok, true);
+    if (!result.ok) {
+      return;
+    }
+
+    const observations = result.trace.observations as Observation[];
+    const first = observations[0];
+    assert.ok(first);
+    (first.payload as Record<string, unknown>).mutated = true;
+    observations.length = 0;
+
+    assert.equal(stableStringify(trace.observations), recorded);
+    const again = freshReplay(trace.observations);
+    assert.equal(again.ok, true, again.ok ? '' : again.failure.reason);
+    if (again.ok) {
+      assert.equal(stableStringify(again.trace.observations), recorded);
+    }
   });
 });
 
