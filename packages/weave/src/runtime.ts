@@ -205,6 +205,8 @@ export class Runtime {
   private readonly preparedForAction = new Map<string, StateView>();
   private readonly diagnostics: Observation[] = [];
   private readonly observationIds = new Set<string>();
+  /** Conclusion ids already applied to State, so an import can skip without scanning. */
+  private readonly importedConclusions = new Set<string>();
   private transitionLock = false;
 
   constructor(
@@ -528,6 +530,9 @@ export class Runtime {
       this.observationIds.add(observation.observation_id);
       if (observation.validation.status === 'accepted') {
         applyAccepted(this.current, observation);
+        if (observation.payload_type === 'conclusion.cached') {
+          this.importedConclusions.add((observation.payload as { conclusion_id: string }).conclusion_id);
+        }
         this.followAccepted(observation);
       } else {
         this.noteRejectedAmendment(observation);
@@ -1617,6 +1622,9 @@ export class Runtime {
       this.observationIds.add(stored.observation_id);
       if (observation.validation.status === 'accepted') {
         applyAccepted(this.current, observation);
+        if (observation.payload_type === 'conclusion.cached') {
+          this.importedConclusions.add((observation.payload as { conclusion_id: string }).conclusion_id);
+        }
       }
     }
   }
@@ -2032,7 +2040,7 @@ export class Runtime {
       if (!isCachedConclusion(item)) {
         continue;
       }
-      if (this.current.conclusions.some((conclusion) => conclusion.conclusion_id === item.conclusion_id)) {
+      if (this.importedConclusions.has(item.conclusion_id)) {
         continue;
       }
       this.append({
