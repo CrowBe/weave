@@ -52,10 +52,14 @@ const MAX_RETRIES = 8;
 const CHECK_TEXT = 'Deterministic checks failed.';
 const EVAL_TEXT = 'Output evaluation failed for the listed criteria.';
 
-/** Preserve readable short ids; retain the full execution identity when bounded. */
+/**
+ * Preserve readable short ids; retain the full execution identity when bounded.
+ * Readable ids stay below 128 chars while compressed ids are exactly 128, so
+ * the two namespaces cannot collide.
+ */
 function stepId(execution_id: string, suffix: string): string {
   const readable = `${execution_id}${suffix}`;
-  const id = readable.length <= 128 ? readable :
+  const id = readable.length < 128 ? readable :
     `${execution_id.slice(0, 128 - suffix.length - 65)}:${digest(execution_id)}${suffix}`;
   if (!correlation(id)) throw new Error('Invalid step id');
   return id;

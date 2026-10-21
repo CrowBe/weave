@@ -10,6 +10,7 @@ import type { EvaluationOutcome, EvaluationRequest, GenerationOutcome, Generatio
 import { DECLARED_TASK_POLICY } from '../src/task-acceptance.js';
 import { transitionOutputEval, OUTPUT_EVAL_POLICY, OUTPUT_EVAL_QUESTION } from '../src/sites/output-eval.js';
 import { correlation } from '../src/sites/index.js';
+import { digest } from '../src/digest.js';
 import {
   DEFAULT_IMPLEMENT_RETRIES, FileAttemptJournal, MemoryAttemptJournal, createEqualGrantIssuer,
   replayImplementationStep, runImplementationStep,
@@ -877,6 +878,25 @@ test('step-built ids stay bounded, unique and deterministic for long execution i
   assert.equal(invalid.reason, 'invalid_input');
   assert.equal(invalid.execution_id, null);
   assert.equal(multibyte.generateIds.length, 0);
+});
+
+test('compressed step ids do not collide with readable ids across executions sharing a journal (#122)', async () => {
+  const execution = 'f'.repeat(128);
+  const readableCollision = `${execution.slice(0, 60)}:${digest(execution)}`;
+  assert.equal(readableCollision.length, 125);
+  assert.equal(correlation(readableCollision), readableCollision);
+  const journal = new MemoryAttemptJournal();
+  const first = driver({ input: input({ execution_id: execution }), journal });
+  const firstResult = await runImplementationStep(first.input, first.ports, first.journal);
+  const second = driver({ input: input({ execution_id: readableCollision }), journal });
+  const secondResult = await runImplementationStep(second.input, second.ports, second.journal);
+  assert.equal(firstResult.status, 'passed');
+  assert.equal(secondResult.status, 'passed');
+  assert.notEqual(firstResult.attempts[0]?.id, secondResult.attempts[0]?.id);
+  assert.equal(journal.load(execution).length, 1);
+  assert.equal(journal.load(readableCollision).length, 1);
+  assert.deepEqual(replayImplementationStep(journal.load(execution), first.input), firstResult);
+  assert.deepEqual(replayImplementationStep(journal.load(readableCollision), second.input), secondResult);
 });
 
 test('an invalid execution id is rejected without being copied or dispatched', async () => {
