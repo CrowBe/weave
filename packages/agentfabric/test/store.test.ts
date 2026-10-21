@@ -336,7 +336,11 @@ describe('FabricStore append-only journal', () => {
     }) as typeof originalRename;
     syncBuiltinESMExports();
     try {
-      assert.throws(() => FabricStore.open(path), /already open|reclaim/);
+      assert.throws(() => FabricStore.open(path), (error: Error) => {
+        assert.match(error.message, /already open|reclaim/);
+        assert.doesNotMatch(error.message, /remove/i);
+        return true;
+      });
       assert.ok(injected);
       assert.equal(movedLive, false);
       assert.equal(readFileSync(`${reclaim}/owner`, 'utf8'), `${process.pid}:successor`);
@@ -386,59 +390,143 @@ describe('FabricStore append-only journal', () => {
     }
   });
 
-  it('fails closed on a crashed recovery claim without moving the reclaim directory', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'weave-store-reclaim-abandoned-'));
-    const path = join(dir, 'fabric.json');
-    const reclaim = `${path}.lock.reclaim`;
-    const dead = spawnSync(process.execPath, ['-e', '']);
-    assert.equal(dead.status, 0);
-    writeFileSync(`${path}.lock`, String(dead.pid));
-    nodeFs.mkdirSync(`${reclaim}/reap`, { recursive: true });
-    writeFileSync(`${reclaim}/owner`, String(dead.pid));
-    try {
-      const inode = nodeFs.statSync(reclaim).ino;
-      assert.throws(() => FabricStore.open(path), /already open/);
-      assert.equal(nodeFs.statSync(reclaim).ino, inode);
-      assert.equal(readFileSync(`${path}.lock`, 'utf8'), String(dead.pid));
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it('fails closed when restoring a changed reclaim owner fails', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'weave-store-reclaim-restore-'));
-    const path = join(dir, 'fabric.json');
-    const reclaim = `${path}.lock.reclaim`;
-    const dead = spawnSync(process.execPath, ['-e', '']);
-    assert.equal(dead.status, 0);
-    writeFileSync(`${path}.lock`, String(dead.pid));
-    nodeFs.mkdirSync(reclaim);
-    writeFileSync(`${reclaim}/owner`, String(dead.pid));
-    const mutableFs = createRequire(import.meta.url)('node:fs') as typeof nodeFs;
-    const originalRename = mutableFs.renameSync;
-    mutableFs.renameSync = ((...args: Parameters<typeof originalRename>) => {
-      if (String(args[0]) === reclaim) {
-        // Defensive fault: the moved directory no longer has the observed owner,
-        // and a third contender has occupied the vacated name.
-        originalRename(...args);
-        writeFileSync(`${String(args[1])}/owner`, `${process.pid}:live`);
-        nodeFs.mkdirSync(reclaim);
-        writeFileSync(`${reclaim}/owner`, `${process.pid}:third`);
-        return;
+  for (const aliasKind of ['direct', 'file', 'parent'] as const) {
+    it(`names the exact crashed recovery claim and manual cleanup through a ${aliasKind} path`, () => {
+      const dir = mkdtempSync(join(tmpdir(), 'weave-store-reclaim-abandoned-'));
+      const path = join(nodeFs.realpathSync(dir), 'fabric.json');
+      const alias = aliasKind === 'file' ? join(dir, 'alias.json') : join(dir, 'alias', 'fabric.json');
+      if (aliasKind === 'file') {
+        writeFileSync(path, '');
+        nodeFs.symlinkSync(path, alias);
+      } else if (aliasKind === 'parent') {
+        nodeFs.symlinkSync(dir, join(dir, 'alias'));
       }
-      return originalRename(...args);
-    }) as typeof originalRename;
-    syncBuiltinESMExports();
-    try {
-      assert.throws(() => FabricStore.open(path), /ENOTEMPTY|EEXIST|restore.*reclaim/);
-      assert.equal(readFileSync(`${path}.lock`, 'utf8'), String(dead.pid));
-      assert.equal(readFileSync(`${reclaim}/owner`, 'utf8'), `${process.pid}:third`);
-    } finally {
-      mutableFs.renameSync = originalRename;
+      const openedPath = aliasKind === 'direct' ? path : alias;
+      const reclaim = `${path}.lock.reclaim`;
+      const claim = `${reclaim}/reap`;
+      const dead = spawnSync(process.execPath, ['-e', '']);
+      assert.equal(dead.status, 0);
+      writeFileSync(`${path}.lock`, String(dead.pid));
+      nodeFs.mkdirSync(claim, { recursive: true });
+      writeFileSync(`${reclaim}/owner`, String(dead.pid));
+      let reopened: FabricStore | undefined;
+      try {
+        const inode = nodeFs.statSync(reclaim).ino;
+        assert.throws(() => FabricStore.open(openedPath), (error: Error) => {
+          assert.ok(error.message.includes(`confirm no weave process is using ${path}`));
+          assert.ok(error.message.includes(`then remove ${claim} and retry`));
+          if (aliasKind !== 'direct') assert.ok(!error.message.includes(alias));
+          return true;
+        });
+        assert.equal(nodeFs.statSync(reclaim).ino, inode);
+        assert.equal(readFileSync(`${path}.lock`, 'utf8'), String(dead.pid));
+        assert.ok(existsSync(claim), 'open must leave the abandoned claim for manual cleanup');
+        rmSync(claim, { recursive: true });
+        reopened = FabricStore.open(openedPath);
+        reopened.retainConclusion('manual cleanup succeeded');
+      } finally {
+        reopened?.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+
+  for (const liveOwner of ['writer', 'reclaim'] as const) {
+    it(`never instructs removal of a live ${liveOwner} owner's lock`, () => {
+      const dir = mkdtempSync(join(tmpdir(), 'weave-store-live-reclaim-'));
+      const path = join(dir, 'fabric.json');
+      const reclaim = `${path}.lock.reclaim`;
+      const dead = spawnSync(process.execPath, ['-e', '']);
+      assert.equal(dead.status, 0);
+      const live = `${process.pid}:private-owner-token`;
+      const writer = liveOwner === 'writer' ? live : String(dead.pid);
+      const reclaimer = liveOwner === 'reclaim' ? live : String(dead.pid);
+      writeFileSync(`${path}.lock`, writer);
+      nodeFs.mkdirSync(`${reclaim}/reap`, { recursive: true });
+      writeFileSync(`${reclaim}/owner`, reclaimer);
+      try {
+        assert.throws(() => FabricStore.open(path), (error: Error) => {
+          assert.match(error.message, /already open/);
+          assert.doesNotMatch(error.message, /remove/i);
+          assert.ok(!error.message.includes(live));
+          return true;
+        });
+        assert.equal(readFileSync(`${path}.lock`, 'utf8'), writer);
+        assert.equal(readFileSync(`${reclaim}/owner`, 'utf8'), reclaimer);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+
+  for (const changedOwner of ['dead', 'live'] as const) {
+    it(`gives exact paths and manual cleanup when a changed ${changedOwner} reclaim owner cannot be restored`, () => {
+      const dir = mkdtempSync(join(tmpdir(), 'weave-store-reclaim-restore-'));
+      const path = join(nodeFs.realpathSync(dir), 'fabric.json');
+      const alias = join(dir, 'alias.json');
+      writeFileSync(path, '');
+      nodeFs.symlinkSync(path, alias);
+      const reclaim = `${path}.lock.reclaim`;
+      const dead = spawnSync(process.execPath, ['-e', '']);
+      assert.equal(dead.status, 0);
+      const pid = changedOwner === 'live' ? process.pid : dead.pid;
+      const movedOwner = `${pid}:changed-private-owner-token`;
+      const conflictingOwner = `${pid}:conflicting-private-owner-token`;
+      writeFileSync(`${path}.lock`, String(dead.pid));
+      nodeFs.mkdirSync(reclaim);
+      writeFileSync(`${reclaim}/owner`, String(dead.pid));
+      const mutableFs = createRequire(import.meta.url)('node:fs') as typeof nodeFs;
+      const originalRename = mutableFs.renameSync;
+      let quarantine: string | undefined;
+      let reopened: FabricStore | undefined;
+      mutableFs.renameSync = ((...args: Parameters<typeof originalRename>) => {
+        if (String(args[0]) === reclaim) {
+          // Defensive fault: the moved directory no longer has the observed owner,
+          // and a third contender has occupied the vacated name.
+          originalRename(...args);
+          quarantine = String(args[1]);
+          writeFileSync(`${quarantine}/owner`, movedOwner);
+          nodeFs.mkdirSync(reclaim);
+          writeFileSync(`${reclaim}/owner`, conflictingOwner);
+          return;
+        }
+        return originalRename(...args);
+      }) as typeof originalRename;
       syncBuiltinESMExports();
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
+      try {
+        assert.throws(() => FabricStore.open(alias), (error: Error) => {
+          assert.ok(quarantine);
+          assert.match(error.message, /restore.*reclaim/);
+          assert.ok(error.message.includes(`confirm no weave process is using ${path}`));
+          assert.ok(error.message.includes(`then move ${reclaim} and ${quarantine} aside and retry`));
+          assert.ok(!error.message.includes(alias));
+          assert.ok(!error.message.includes(movedOwner));
+          assert.ok(!error.message.includes(conflictingOwner));
+          assert.doesNotMatch(error.message, /remove/i);
+          assert.ok(['ENOTEMPTY', 'EEXIST'].some((code) =>
+            (error.cause as NodeJS.ErrnoException)?.code === code));
+          return true;
+        });
+        assert.equal(readFileSync(`${path}.lock`, 'utf8'), String(dead.pid));
+        assert.equal(readFileSync(`${reclaim}/owner`, 'utf8'), conflictingOwner);
+        assert.equal(readFileSync(`${quarantine}/owner`, 'utf8'), movedOwner);
+        mutableFs.renameSync = originalRename;
+        syncBuiltinESMExports();
+        if (changedOwner === 'dead') {
+          assert.ok(quarantine);
+          nodeFs.renameSync(reclaim, `${reclaim}.manual-backup`);
+          nodeFs.renameSync(quarantine, `${quarantine}.manual-backup`);
+          reopened = FabricStore.open(alias);
+          reopened.retainConclusion('manual restoration succeeded');
+        }
+      } finally {
+        mutableFs.renameSync = originalRename;
+        syncBuiltinESMExports();
+        reopened?.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
 
   it('keeps journal bytes per invocation flat as history grows', () => {
     const dir = mkdtempSync(join(tmpdir(), 'weave-store-bytes-'));

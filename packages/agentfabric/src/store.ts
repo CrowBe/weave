@@ -689,7 +689,7 @@ function acquireLock(path: string): string {
       if (pid === undefined || isAlive(pid)) {
         throw new Error(`host store is already open: ${resolve(path)}`);
       }
-      if (!acquireReclaim(`${lockPath}.reclaim`, token)) {
+      if (!acquireReclaim(path, token)) {
         continue;
       }
       try {
@@ -722,7 +722,8 @@ function acquireLock(path: string): string {
  * Serialize stale-lock reclamation so only the holder removes the main lock
  * and no contender can move a live writer's lock into quarantine.
  */
-function acquireReclaim(reclaimPath: string, token: string): boolean {
+function acquireReclaim(path: string, token: string): boolean {
+  const reclaimPath = `${path}.lock.reclaim`;
   for (let attempt = 0; attempt < 16; attempt += 1) {
     const tempPath = `${reclaimPath}.${process.pid}.${(lockSequence += 1)}.tmp`;
     mkdirSync(tempPath);
@@ -754,11 +755,19 @@ function acquireReclaim(reclaimPath: string, token: string): boolean {
     // Atomic mkdir grants a single contender the right to move this generation.
     // All reapers must claim before revalidating: a check followed by rename
     // alone allows a delayed contender to quarantine a live successor.
+    const claimPath = `${reclaimPath}/reap`;
     try {
-      mkdirSync(`${reclaimPath}/reap`);
+      mkdirSync(claimPath);
     } catch (error) {
       if (isErrno(error, 'ENOENT')) continue;
-      if (isErrno(error, 'EEXIST')) return false;
+      if (isErrno(error, 'EEXIST')) {
+        const current = readReclaimIdentity(reclaimPath);
+        if (!sameReclaimOwner(owner, current) || isAlive(current.pid)) return false;
+        throw new Error(
+          `host store is already open: ${path}; stale-lock reclaim is blocked by ${claimPath}; ` +
+          `confirm no weave process is using ${path}, then remove ${claimPath} and retry`,
+        );
+      }
       throw error;
     }
     const current = readReclaimIdentity(reclaimPath);
@@ -781,7 +790,15 @@ function acquireReclaim(reclaimPath: string, token: string): boolean {
     if (!sameReclaimOwner(owner, moved) || isAlive(moved.pid)) {
       // Defensive validation: restoration failure must stop acquisition. Never
       // continue while a displaced owner could still be in the critical section.
-      renameSync(quarantine, reclaimPath);
+      try {
+        renameSync(quarantine, reclaimPath);
+      } catch (error) {
+        throw new Error(
+          `failed to restore host store reclaim directory from ${quarantine} to ${reclaimPath}; ` +
+          `confirm no weave process is using ${path}, then move ${reclaimPath} and ${quarantine} aside and retry`,
+          { cause: error },
+        );
+      }
       return false;
     }
     try {
