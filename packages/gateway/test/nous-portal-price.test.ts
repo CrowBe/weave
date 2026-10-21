@@ -171,6 +171,127 @@ describe('nous-portal mandatory-reasoning output budget', () => {
 });
 
 describe('nous-portal catalogue price check', () => {
+  const scalarPrices: readonly [string, unknown, boolean][] = [
+    ['numeric zero', 0, true],
+    ['numeric negative zero', -0, true],
+    ['zero string', '0', true],
+    ['leading zeroes', '00', true],
+    ['decimal zero', '0.0', true],
+    ['long decimal zero', '0.0000000000', true],
+    ['exponent zero', '0e0', true],
+    ['positive exponent', '0e+1', true],
+    ['negative exponent', '00.00E-2', true],
+    ['large positive exponent zero', '0e999', true],
+    ['large negative exponent zero', '0e-999', true],
+    ['decimal exponent zero', '0.000e5', true],
+    ['leading decimal zeroes', '00.00', true],
+    ['small nonzero string', '0.0000000001', false],
+    ['underflow 1e-400', '1e-400', false],
+    ['underflow 1e-324', '1e-324', false],
+    ['small decimal exponent', '0.0000000001e-5', false],
+    ['underflow 0.1e-400', '0.1e-400', false],
+    ['underflow 5e-500', '5e-500', false],
+    ['underflow 00001e-999', '00001e-999', false],
+    ['positive string', '1', false],
+    ['negative string', '-1', false],
+    ['negative zero string', '-0', false],
+    ['negative decimal zero', '-0.0', false],
+    ['positive zero string', '+0', false],
+    ['word', 'free', false],
+    ['empty string', '', false],
+    ['space', ' ', false],
+    ['leading space', ' 0', false],
+    ['trailing space', '0 ', false],
+    ['trailing newline', '0\n', false],
+    ['trailing carriage return', '0\r', false],
+    ['NaN string', 'NaN', false],
+    ['Infinity string', 'Infinity', false],
+    ['hexadecimal zero', '0x0', false],
+    ['missing integer part', '.0', false],
+    ['missing fractional part', '0.', false],
+    ['null', null, false],
+    ['undefined / missing field', undefined, false],
+    ['false', false, false],
+    ['true', true, false],
+    ['empty array', [], false],
+    ['zero array', ['0'], false],
+    ['empty object', {}, false],
+    ['numeric positive', 1, false],
+    ['numeric negative', -1, false],
+    ['numeric NaN', NaN, false],
+    ['numeric Infinity', Infinity, false],
+    ['numeric negative Infinity', -Infinity, false],
+  ];
+  for (const [label, price, free] of scalarPrices) {
+    for (const field of ['prompt', 'completion'] as const) {
+      it(`${free ? 'sends chat' : 'refuses without chat'} for ${field}: ${label}`, async () => {
+        const pricing = { prompt: '0', completion: '0', [field]: price };
+        if (price === undefined) delete (pricing as Partial<typeof pricing>)[field];
+        const catalogue = catalogueWith(SOLAR, pricing);
+        // Preserve numeric -0, NaN and Infinity instead of JSON normalizing them.
+        const endpoint = nousEndpoint({ catalogue: () => Object.assign(json(catalogue), {
+          json: async () => catalogue,
+        }) });
+        const result = await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL);
+        assert.equal(endpoint.chatRequests.length, free ? 1 : 0);
+        assert.equal(endpoint.catalogueRequests.length, 1);
+        if (free) assert.equal(result.status, 'completed');
+        else assert.deepEqual(failureOf(result), { code: 'invalid_request', message: PRICE_REFUSED, retryable: false });
+      });
+    }
+  }
+
+  it('refuses mixed decimal zero and nonzero prices without chat', async () => {
+    const endpoint = nousEndpoint({ catalogue: () => json(catalogueWith(SOLAR, { prompt: '0.0', completion: '0.0000000001' })) });
+    const result = await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL);
+    assert.equal(endpoint.chatRequests.length, 0);
+    assert.equal(failureOf(result).message, PRICE_REFUSED);
+  });
+
+  it('accepts decimal zero prices in an override tier', async () => {
+    const pricing = { prompt: '0', completion: '0', overrides: [{ min_prompt_tokens: 100000, prompt: '0.0', completion: '0.0' }] };
+    const endpoint = nousEndpoint({ catalogue: () => json(catalogueWith(SOLAR, pricing)) });
+    const result = await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL);
+    assert.equal(endpoint.chatRequests.length, 1);
+    assert.equal(result.status, 'completed');
+  });
+
+  it('recursively checks nested override prices', async () => {
+    for (const [price, free] of [['0e0', true], ['0.01', false], ['1e-400', false]] as const) {
+      const pricing = { prompt: '0', completion: '0', overrides: [{
+        min_prompt_tokens: 100000, prompt: '0', completion: '0',
+        original: { pricing: { prompt: price, completion: '0' } },
+      }] };
+      const endpoint = nousEndpoint({ catalogue: () => json(catalogueWith(SOLAR, pricing)) });
+      const result = await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL);
+      assert.equal(endpoint.chatRequests.length, free ? 1 : 0);
+      if (free) assert.equal(result.status, 'completed');
+      else assert.equal(failureOf(result).message, PRICE_REFUSED);
+    }
+  });
+
+  it('keeps concurrent and subsequent calls refused without chat after one priced check', async () => {
+    const started = deferred();
+    const release = deferred();
+    const endpoint = nousEndpoint({ catalogue: async () => {
+      started.resolve();
+      await release.promise;
+      return json(catalogueWith(SOLAR, { prompt: '0.0', completion: '0.0000000001' }));
+    } });
+    const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
+    const pending = [adapter.execute(CALL), adapter.execute(CALL)];
+    await started.promise;
+    assert.equal(endpoint.chatRequests.length, 0);
+    assert.equal(endpoint.catalogueRequests.length, 1);
+    release.resolve();
+    const results = [...await Promise.all(pending), await adapter.execute(CALL)];
+    assert.equal(endpoint.chatRequests.length, 0);
+    assert.equal(endpoint.catalogueRequests.length, 1);
+    for (const result of results) {
+      assert.deepEqual(failureOf(result), { code: 'invalid_request', message: PRICE_REFUSED, retryable: false });
+    }
+  });
+
   const pricedVariants: readonly [string, unknown][] = [
     ['prompt', { prompt: '0.0000000500', completion: '0' }],
     ['completion', { prompt: '0', completion: '0.0000002' }],
@@ -188,8 +309,6 @@ describe('nous-portal catalogue price check', () => {
   ];
   const unreadable: readonly [string, unknown][] = [
     ['padded zero', { prompt: ' 0 ', completion: '0' }],
-    ['decimal zero', { prompt: '0.0000000000', completion: '0' }],
-    ['exponent zero', { prompt: '0e0', completion: '0' }],
     ['hexadecimal zero', { prompt: '0x0', completion: '0' }],
     ['negative zero text', { prompt: '-0', completion: '0' }],
     ['signed zero', { prompt: '+0', completion: '0' }],
@@ -427,6 +546,57 @@ describe('nous-portal refusals and faults', () => {
 });
 
 describe('nous-portal cancellation', () => {
+  for (const waiterCount of [1, 3]) {
+    for (const keepWaiter of [false, true]) {
+      for (const afterDelivery of [false, true]) {
+        it(`handles ${waiterCount} waiters aborting as a catalogue pass settles, survivor: ${keepWaiter}, after delivery: ${afterDelivery}`, async () => {
+          const started = deferred();
+          const parsed = deferred<unknown>();
+          const endpoint = nousEndpoint({ catalogue: () => {
+            if (endpoint.catalogueRequests.length > 1) return json({ data: LIVE_CATALOGUE_ENTRIES });
+            return Object.assign(json({}), { json: () => {
+              started.resolve();
+              return parsed.promise;
+            } });
+          } });
+          const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
+          const controllers = Array.from({ length: waiterCount }, () => new AbortController());
+          const leaving = controllers.map(controller => adapter.execute({ ...CALL, signal: controller.signal }));
+          const staying = keepWaiter ? adapter.execute(CALL) : undefined;
+          await started.promise;
+          // Lookup reads the body first. Abort after it returns its verdict, before
+          // the shared result reaches the waiters: settlement must not retain an abandoned pass.
+          const abort = () => {
+            for (const controller of controllers) controller.abort();
+          };
+          void parsed.promise.then(() => queueMicrotask(() => {
+            if (afterDelivery) queueMicrotask(abort);
+            else abort();
+          }));
+          parsed.resolve({ data: LIVE_CATALOGUE_ENTRIES });
+          for (const result of await Promise.all(leaving)) assert.equal(failureOf(result).code, 'cancelled');
+          if (staying !== undefined) assert.equal((await staying).status, 'completed');
+          assert.equal(endpoint.chatRequests.length, keepWaiter ? 1 : 0);
+          assert.equal((await adapter.execute(CALL)).status, 'completed');
+          assert.equal(endpoint.catalogueRequests.length, keepWaiter ? 1 : 2);
+        });
+      }
+    }
+  }
+
+  it('keeps an already accepted catalogue pass when a later waiter aborts', async () => {
+    const endpoint = nousEndpoint();
+    const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
+    assert.equal((await adapter.execute(CALL)).status, 'completed');
+    const controller = new AbortController();
+    const pending = adapter.execute({ ...CALL, signal: controller.signal });
+    controller.abort();
+    assert.equal(failureOf(await pending).code, 'cancelled');
+    assert.equal((await adapter.execute(CALL)).status, 'completed');
+    assert.equal(endpoint.catalogueRequests.length, 1);
+    assert.equal(endpoint.chatRequests.length, 2);
+  });
+
   for (const [name, code] of [['AbortError', 'cancelled'], ['TimeoutError', 'timeout']] as const) {
     it(`propagates ${name} to the in-flight chat request without another request`, async () => {
       const controller = new AbortController();

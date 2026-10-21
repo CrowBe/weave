@@ -214,12 +214,23 @@ injected and sent only as a Bearer header. `npm run example:nous-portal` reads
 | `nous-portal.flash.longcat-2.0` | `meituan/longcat-2.0:free` | first fallback |
 | `nous-portal.flash.step-3.7-flash` | `stepfun/step-3.7-flash:free` | second fallback; mandatory reasoning, at least 1024 output tokens |
 
-Only the six IDs whose every pricing field is exactly `"0"` with no overrides
-in the supplied live catalogue are in the free-model allowlist
-(`NOUS_PORTAL_FREE_MODELS`). Longcat 2.5 Preview and Beam use `"0.0000000000"`
-and are refused under the strict value contract, despite their `:free` suffix.
-Route parsing rejects any other model on `adapter: "nous-portal"` and any
-non-zero price. Before the first call for a model, the adapter runs a catalogue price check on `GET /models`. It
+The six default IDs are in the free-model allowlist (`NOUS_PORTAL_FREE_MODELS`).
+LongCat 2.5 Preview (`meituan/longcat-2.5-preview:free`) and Beam
+(`reflection/beam-1.0-501b-a23b:free`) are separate opt-in entries exported as
+`NOUS_PORTAL_PROMO_MODELS.longcat25` and `.beam`, each with `id` and `expires_at`
+(epoch milliseconds). Both stop accepting calls at **2026-10-23T10:30:00+11:00**.
+Enable them with `nousPortalAdapter({ apiKey, promoModels: true, now: () => clock.now() })`,
+using the composition root's injected clock. Without opt-in or valid injected time
+they are refused before any request. At/after expiry they are refused before even
+catalogue lookup and remain refused for that adapter instance. Expiry is checked
+again after catalogue resolution, so a cached price pass cannot extend a promotion.
+`isNousPortalFreeModel` and route-file parsing accept only the default allowlist;
+promo routed units use a programmatic route table with the opted-in adapter.
+Route parsing also rejects any non-zero declared Nous price.
+
+Before the first call for an eligible model, the adapter runs a catalogue price check
+on `GET /models`. All prices must satisfy the zero-price rule in GLOSSARY, including
+decimal zero strings such as `"0.0000000000"`; promo opt-in never bypasses this check. It
 also refuses a response whose `usage.cost` is present and is not the number
 `0` (see GLOSSARY). Prices of 0 in the route file come from that catalogue. The 32k context bound
 keeps one request inside the free 80k tokens/minute budget.

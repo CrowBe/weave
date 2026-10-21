@@ -12,7 +12,7 @@ import { Journal } from '../journal.ts';
 import { buildRequest } from '../questions.ts';
 import { makeReport } from '../report.ts';
 import { flags } from '../run.ts';
-import { NOUS_PORTAL_FREE_MODELS } from '@weave/gateway/nous-portal';
+import { NOUS_PORTAL_FREE_MODELS, NOUS_PORTAL_PROMO_MODELS, isNousPortalFreeModel } from '@weave/gateway/nous-portal';
 import type { Item, Provider, Request } from '../types.ts';
 
 const KEY = 'sk-test-SENTINEL-nous-p10-credential';
@@ -286,12 +286,18 @@ test('Nous journal retains the raw and bounded delay, ends the over-bound item, 
   assert.ok(!readFileSync(path, 'utf8').includes(KEY));
 }));
 
-test('runnable inference probes reference only existing free-model allowlist entries', () => {
+test('runnable inference probes reference existing default or separate promo entries', () => {
+  for (const { id } of Object.values(NOUS_PORTAL_PROMO_MODELS)) {
+    assert.equal(isNousPortalFreeModel(id), false, 'promos must never join the default allowlist');
+  }
   const root = new URL('../../inference/', import.meta.url);
   for (const path of readdirSync(root, { recursive: true, encoding: 'utf8' }).filter(path => path.endsWith('.mjs'))) {
     const source = readFileSync(new URL(path, root), 'utf8');
     for (const [, key] of source.matchAll(/NOUS_PORTAL_FREE_MODELS\.(\w+)/g)) {
       assert.ok(Object.hasOwn(NOUS_PORTAL_FREE_MODELS, key!), `${path}: unknown allowlist key ${key}`);
+    }
+    for (const [, key] of source.matchAll(/NOUS_PORTAL_PROMO_MODELS\.(\w+)/g)) {
+      assert.ok(Object.hasOwn(NOUS_PORTAL_PROMO_MODELS, key!), `${path}: unknown promo key ${key}`);
     }
   }
 });

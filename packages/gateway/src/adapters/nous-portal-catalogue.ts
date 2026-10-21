@@ -16,8 +16,8 @@ export const NOUS_PORTAL_ADAPTER = 'nous-portal';
  * serving guarantee: on 25 Sep 2026 a $0-listed ID was refused as "no longer
  * free". So the adapter also checks the live catalogue and the response cost.
  * The Laguna IDs were listed as expiring on 31 Oct 2026.
- * LongCat 2.5 Preview and Beam are excluded: their snapshot prices are
- * "0.0000000000", which does not satisfy the exact "0" contract.
+ * LongCat 2.5 Preview and Beam are opt-in, expiring entries in the separate
+ * `NOUS_PORTAL_PROMO_MODELS` map; they are never default allowlist members.
  */
 export const NOUS_PORTAL_FREE_MODELS = {
   solarMini: 'upstage/solar-mini4:free',
@@ -28,11 +28,21 @@ export const NOUS_PORTAL_FREE_MODELS = {
   stepPreview: 'stepfun/step-5-preview:free',
 } as const;
 
+/**
+ * Explicit adapter opt-in only; all catalogue and response cost checks still
+ * apply. `expires_at` is epoch milliseconds: 2026-10-23T10:30:00+11:00.
+ * Missing injected time or time at/after this boundary refuses dispatch.
+ */
+export const NOUS_PORTAL_PROMO_MODELS = Object.freeze({
+  longcat25: Object.freeze({ id: 'meituan/longcat-2.5-preview:free', expires_at: 1_792_711_800_000 }),
+  beam: Object.freeze({ id: 'reflection/beam-1.0-501b-a23b:free', expires_at: 1_792_711_800_000 }),
+} as const);
+
 export type NousPortalFreeModel = (typeof NOUS_PORTAL_FREE_MODELS)[keyof typeof NOUS_PORTAL_FREE_MODELS];
 
 const FREE_MODEL_IDS: ReadonlySet<string> = new Set(Object.values(NOUS_PORTAL_FREE_MODELS));
 
-/** Exact match only: no trimming, case folding, or suffix inference. */
+/** Default allowlist only, excluding promos. No trimming, case folding, or suffix inference. */
 export function isNousPortalFreeModel(model: unknown): model is NousPortalFreeModel {
   return typeof model === 'string' && FREE_MODEL_IDS.has(model);
 }
@@ -56,9 +66,11 @@ export function nousPortalCatalogueVerdict(body: unknown, model: string): NousPo
 const OVERRIDE_THRESHOLDS: ReadonlySet<string> = new Set(['min_prompt_tokens', 'utc_start', 'utc_end']);
 
 /**
- * Every scalar pricing field must be exactly "0" or 0, prompt and
- * completion present, nested objects such as `original` included, and every
- * `overrides` tier's prices too. Anything unreadable fails closed.
+ * Every scalar pricing field must be numeric zero or an unsigned decimal
+ * string with an all-zero mantissa matching ^0+(\.0+)?([eE][+-]?[0-9]+)?$.
+ * Nonzero mantissas fail closed even when Number(value) underflows to zero.
+ * Prompt and completion must be present, nested objects such as `original`
+ * included, and every `overrides` tier's prices too. Unreadable prices fail closed.
  */
 function freePricing(pricing: unknown): boolean {
   if (!object(pricing) || !Object.hasOwn(pricing, 'prompt') || !Object.hasOwn(pricing, 'completion')) return false;
@@ -72,7 +84,10 @@ function freePricing(pricing: unknown): boolean {
 
 function zeroLeaves(value: unknown): boolean {
   if (object(value)) return Object.keys(value).length > 0 && Object.values(value).every(zeroLeaves);
-  return value === 0 || value === '0';
+  // A leading sign is anomalous and outside the unsigned price grammar;
+  // fail closed: refusing can never meter a paid call as $0.
+  return value === 0 || (typeof value === 'string' &&
+    /^0+(\.0+)?([eE][+-]?[0-9]+)?$/.test(value) && Number(value) === 0);
 }
 
 function object(value: unknown): value is Record<string, unknown> {
