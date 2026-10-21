@@ -594,3 +594,34 @@ test('max_excluded and min_margin accept exactly 0 and exactly 1', () => {
   assert.equal(marginHolds.preselect?.reason, 'weak_margin');
   assert.equal(marginHolds.preselect?.best_excluded_p, 0.8);
 });
+
+// #96: the old include-if-p >= .5 rule removed every capability when all confident answers were below .5.
+// D3 keeps top-k instead, so a nonempty index never yields an empty slice; only an empty catalogue is empty.
+test('confident answers below .5 never empty a nonempty index, while mixed and empty catalogues keep the rule', () => {
+  const allLow = select([0.45, 0.4, 0.35, 0.01]);
+  assert.equal(allLow.status, 'transition');
+  assert.equal(allLow.preselect?.outcome, 'narrowed');
+  assert.deepEqual(ids(allLow), ['cap_0', 'cap_1', 'cap_2']);
+
+  const allLowWeak = select([0.3, 0.2, 0.1, 0.05]);
+  assert.equal(allLowWeak.status, 'transition');
+  assert.equal(allLowWeak.preselect?.reason, 'weak_margin');
+  assert.deepEqual(ids(allLowWeak), ['cap_0', 'cap_1', 'cap_2', 'cap_3']);
+
+  const allLowFloored = select([0.45, 0.4, 0.01], { preselect_policy: policy(3, 0.5) });
+  assert.equal(allLowFloored.status, 'transition');
+  assert.equal(allLowFloored.preselect?.reason, 'no_candidate');
+  assert.deepEqual(ids(allLowFloored), ['cap_0', 'cap_1', 'cap_2']);
+
+  const mixed = select([0.9, 0.49, 0.1, 0.05]);
+  assert.equal(mixed.status, 'transition');
+  assert.equal(mixed.preselect?.outcome, 'narrowed');
+  assert.deepEqual(ids(mixed), ['cap_0', 'cap_1', 'cap_2']);
+
+  const empty = transitionBooleanSite('loop.preselect', { ...input([]), catalogue_index: [] },
+    { state_revision: 1, observed_at: 10, outcome: null }, current);
+  assert.equal(empty.status, 'transition');
+  assert.deepEqual(empty.catalogue_index, []);
+  assert.equal(empty.preselect?.outcome, 'empty_index');
+  assert.equal(empty.preselect?.reason, null);
+});

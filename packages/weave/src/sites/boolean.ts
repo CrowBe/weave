@@ -177,6 +177,13 @@ function routedUnitId(value: unknown): string | null {
   return typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.:@-]{0,127}$/.test(value) &&
     !/^(sk[-_]|Bearer|eyJ|gh[pousr]_|github_pat_|AKIA)/i.test(value) ? value : null;
 }
+/**
+ * D3 has no include-if-p >= .5 rule: top-k keeps entries for low p(true) alone, and a
+ * fallback, including `no_candidate` when the floor removes every non-required entry,
+ * returns the whole index. A nonempty index therefore never yields an empty slice.
+ * Only an empty disclosed catalogue yields `[]`, with outcome `empty_index` and status
+ * `transition`; it does not fall back to a full index because there is none.
+ */
 function preselectSelection(entries: readonly CatalogueIndexEntry[], probabilities: readonly (number | null)[],
   confidences: readonly (number | null)[], confidenceInvalid: boolean, admission: boolean, requiredList: readonly string[],
   requiredInvalid: boolean, policy: ResolvedSitePolicy, routed_unit_id: string | null):
