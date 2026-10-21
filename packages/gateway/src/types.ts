@@ -424,9 +424,9 @@ export type GenerationProviderResult =
 export interface GenerationAdapter {
   readonly id: AdapterId;
   /**
-   * Wait for execute to settle after abort so its final usage is accounted.
-   * Opt-in adapters must settle reliably on cancellation; the interruption
-   * still determines disposition, and no later attempt starts while waiting.
+   * With an injected Timer, allow up to 100 ms after abort for final usage.
+   * On expiry usage remains unknown. The interruption still determines
+   * disposition, and no later attempt starts while waiting.
    */
   readonly settle_on_abort?: boolean;
   execute(call: GenerationCall): Promise<GenerationProviderResult>;

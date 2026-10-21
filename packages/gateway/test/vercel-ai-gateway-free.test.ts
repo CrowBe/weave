@@ -67,8 +67,10 @@ function deferred() {
 
 function controlledTime() {
   let now = NOW;
+  const waits: number[] = [];
   const wakes = new Set<() => void>();
-  const timer: Timer = { sleep(_ms, signal) {
+  const timer: Timer = { sleep(ms, signal) {
+    waits.push(ms);
     return new Promise(resolve => {
       const done = () => { wakes.delete(done); signal?.removeEventListener('abort', done); resolve(); };
       wakes.add(done);
@@ -76,7 +78,10 @@ function controlledTime() {
       else signal?.addEventListener('abort', done, { once: true });
     });
   } };
-  return { timer, clock: { now: () => now }, expire() {
+  return { timer, waits, clock: { now: () => now }, advance(ms: number) {
+    now += ms;
+    for (const wake of wakes) wake();
+  }, expire() {
     now = NOW + 10_000;
     for (const wake of wakes) wake();
   }, active: () => wakes.size };
@@ -336,6 +341,43 @@ describe('Vercel promotional free contract', () => {
   });
 
   for (const interruption of ['cancel', 'deadline'] as const) {
+    it(`settles after the usage grace on ${interruption} when transport never settles`, async () => {
+      const time = controlledTime();
+      const controller = new AbortController();
+      const entered = deferred();
+      let calls = 0;
+      let observed: AbortSignal | null | undefined;
+      const instance = createInferenceGateway({ routes: [primary, fallback], ...time,
+        adapters: [adapter((_url, init) => {
+          calls++;
+          observed = init?.signal;
+          entered.resolve();
+          // Deliberately ignore abort and never release this transport.
+          return new Promise<Response>(() => {});
+        })] });
+      const pending = instance.generate(request('stuck'), controller.signal);
+      await entered.promise;
+      await setImmediate();
+      if (interruption === 'cancel') controller.abort();
+      else time.expire();
+      await setImmediate();
+      assert.equal(observed?.aborted, true);
+      time.advance(100);
+      const result = await Promise.race([pending, setImmediate().then(() => undefined)]);
+      assert.ok(result, 'generate must settle when the 100 ms usage grace expires');
+      assert.deepEqual(time.waits, [10_000, 100]);
+      assert.equal(result.status === 'unaccepted' && result.reason,
+        interruption === 'cancel' ? 'provider_failed' : 'deadline_reached');
+      assert.equal(result.attempts.length, 1);
+      assert.deepEqual(result.attempts[0]?.usage, { input_tokens: undefined, output_tokens: undefined });
+      assert.equal(result.attempts[0]?.cost_is_upper_bound, true);
+      const disposition = result.attempts[0]?.disposition;
+      assert.ok(disposition?.status === 'failed');
+      assert.equal(disposition.failure.code, interruption === 'cancel' ? 'cancelled' : 'timeout');
+      assert.equal(calls, 1, 'interruption must never dispatch a fallback');
+      assert.equal(time.active(), 0, 'settlement must clean up all timer waits');
+    });
+
     it(`awaits billed settlement on Timer ${interruption} and isolates concurrent usage`, async () => {
       const time = controlledTime();
       const controller = new AbortController();

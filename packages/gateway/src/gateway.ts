@@ -519,11 +519,19 @@ async function attemptBeforeDeadline<T>(
     void deadline(attempt);
     const result = await Promise.race([attempt, interrupted]);
     if (provider.signal.aborted && params.settle_on_abort?.(unit)) {
-      // Cancellation fixes the disposition, not the bill. These adapters
-      // settle after abort, possibly with a response already charged in flight.
+      // Cancellation fixes the disposition. Allow final billed usage a short
+      // grace, but a transport ignoring abort must not hold the outcome open.
       const failure = await interrupted;
-      const usage = await attempt.then(settled => settled.usage, () => failure.usage);
-      return { ...failure, usage };
+      const grace = new AbortController();
+      try {
+        const usage = await Promise.race([
+          attempt.then(settled => settled.usage, () => failure.usage),
+          params.timer.sleep(100, grace.signal).then(() => failure.usage, () => failure.usage),
+        ]);
+        return { ...failure, usage };
+      } finally {
+        grace.abort();
+      }
     }
     return result;
   } finally {
