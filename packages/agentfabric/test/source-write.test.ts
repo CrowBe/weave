@@ -149,25 +149,30 @@ describe('AgentFabric source write journal', () => {
     const canonical = f.store.lookupRef(f.source)!.canonical_id;
     const resource = f.store.getResource(canonical)!;
     const mutableFs = createRequire(import.meta.url)('node:fs') as {
-      appendFileSync: typeof nodeFs.appendFileSync;
+      writeSync: typeof nodeFs.writeSync;
     };
-    const original = mutableFs.appendFileSync;
+    const original = mutableFs.writeSync;
+    let partial = true;
     let injected = false;
-    mutableFs.appendFileSync = ((file: nodeFs.PathLike, data: string, options?: nodeFs.WriteFileOptions) => {
-      if (!injected && String(file) === f.path) {
+    mutableFs.writeSync = ((fd: number, data: Buffer, offset: number, length: number) => {
+      // The store tracks successful writeSync byte counts for append rollback.
+      if (partial) {
+        partial = false;
+        return original(fd, data, offset, 5);
+      }
+      if (!injected) {
         injected = true;
-        original(file, data.slice(0, 5));
         const error = new Error('simulated source append failure') as NodeJS.ErrnoException;
         error.code = 'ENOSPC';
         throw error;
       }
-      return original(file, data, options);
-    }) as typeof nodeFs.appendFileSync;
+      return original(fd, data, offset, length);
+    }) as typeof nodeFs.writeSync;
     syncBuiltinESMExports();
     try {
       assert.throws(() => f.write('failed', 1), /simulated source append failure/);
     } finally {
-      mutableFs.appendFileSync = original;
+      mutableFs.writeSync = original;
       syncBuiltinESMExports();
     }
     assert.equal(injected, true);
