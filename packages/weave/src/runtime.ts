@@ -580,9 +580,13 @@ export class Runtime {
       this.replayMode ? ref : this.options.host.canonicalResource(ref),
     );
     const pausedFraming = this.framingPaused();
-    const candidates: Candidate[] = pausedFraming
+    const formed = pausedFraming
       ? formation.candidates.filter((candidate) => candidate.operation !== 'goal.frame')
       : [...formation.candidates];
+    const candidates: Candidate[] = formed.map((candidate) => ({
+      ...candidate,
+      inputs: structuredClone(candidate.inputs),
+    }));
     this.requestApprovals(candidates);
     const eligible = candidates.filter((c) => c.eligibility.status === 'allowed');
 
@@ -598,7 +602,7 @@ export class Runtime {
     }
 
     if (this.options.shareAssemblies) {
-      this.prepareSharedViews(state, candidates);
+      this.prepareSharedViews(state, candidates, state_revision);
     }
 
     const selected: { candidate_id: string; action_id: ActionId; reservation: Candidate['resources'] }[] = [];
@@ -643,15 +647,17 @@ export class Runtime {
     return this.preparedViews.get(operation);
   }
 
-  private prepareSharedViews(state: State, candidates: readonly Candidate[]): void {
+  private prepareSharedViews(state: State, candidates: readonly Candidate[], state_revision: Seq): void {
+    const rendered: State =
+      state.state_revision === state_revision ? state : { ...state, state_revision };
     const profile = this.profileForFrame();
     if (profile && candidates.some((candidate) => candidate.operation === 'goal.frame')) {
-      const view = renderFrameView(state, this.catalogueOps(), profile, { assemblies: true });
+      const view = renderFrameView(rendered, this.catalogueOps(), profile, { assemblies: true });
       this.preparedViews.set('goal.frame', view);
       this.noteViewAssemblies(view);
     }
     if (candidates.some((candidate) => candidate.operation === 'report.review')) {
-      const view = renderReviewView(state);
+      const view = renderReviewView(rendered);
       this.preparedViews.set('report.review', view);
       this.noteViewAssemblies(view);
     }
