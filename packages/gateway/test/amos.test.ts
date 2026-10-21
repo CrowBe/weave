@@ -227,6 +227,43 @@ describe("Amos local decision contract", () => {
         },
       );
     });
+  it("accepts a score legend that echoes a null level as null or the string null", async () => {
+    const nullLevel: EvaluationCall = {
+      ...call,
+      kind: "score",
+      questions: {
+        severity: { type: "score", instructions: "Severity?", criteria: ["low", null] },
+      },
+    };
+    const answer = { type: "score", score: 0.8, probabilities: { "0": 0.2, "1": 0.8 } };
+    const evaluate = (legend: Record<string, unknown>) => {
+      const fetch = (async (url: string | URL | Request) =>
+        String(url).endsWith("/v1/models")
+          ? new Response(JSON.stringify({ models: [{ name: "amos-1-2b" }] }), { status: 200 })
+          : new Response(
+              JSON.stringify({ ...body, answers: { severity: { ...answer, legend } } }),
+              { status: 200 },
+            )) as typeof globalThis.fetch;
+      return amosEvaluator({ fetch }).evaluate(nullLevel);
+    };
+    for (const legend of [{ "0": "low", "1": "null" }, { "0": "low", "1": null }]) {
+      const result = await evaluate(legend);
+      assert.equal(result.status, "completed", JSON.stringify(legend));
+    }
+    for (const legend of [
+      { "0": "low" },
+      { "0": "low", "1": 0 },
+      { "0": "low", "1": "high" },
+      { "0": "null", "1": null },
+    ]) {
+      const result = await evaluate(legend);
+      assert.equal(
+        result.status === "failed" && result.failure.code,
+        "malformed_response",
+        JSON.stringify(legend),
+      );
+    }
+  });
   it("round-trips a multi-entry boolean preselect set as noul", async () => {
     const questions = {
       entry_0: { type: "boolean" as const, instructions: "Is this disclosed catalogue entry relevant to this step?" },
