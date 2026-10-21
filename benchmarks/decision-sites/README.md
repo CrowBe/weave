@@ -107,8 +107,13 @@ It sends the same competitor prompt (production state and questions, no
 guardrail or shuffle) to `upstage/solar-mini4:free` through the gateway's Nous
 adapter directly, with no gateway routing. Only the free-model allowlist ID can
 be called. The catalogue price check and a non-zero `usage.cost` refuse as
-`price_not_free`, and it meters at $0. A 429 carries the relative reset delay
-into the usual retry and delays queued dispatches. A missing, removed or
+`price_not_free`, and it meters at $0. A 429 retains the full relative reset delay
+as `retry_after_ms` in the journal. A delay above the shared 60-second retry
+bound ends that item without retry; later queued items wait at most 60 seconds,
+with that cap recorded as `retry_after_applied_ms` alongside the original delay.
+The cooldown is local to the provider instance; resume reuses terminal receipts
+and never re-sends an unacknowledged call, but does not restore a cooldown.
+A missing, removed or
 no-longer-free model skips the provider as `model_not_listed`, and auth refusal
 skips it as `unauthorized`. Dispatches are serialized and spaced at least 6 s
 apart, under the free 10 requests/minute.

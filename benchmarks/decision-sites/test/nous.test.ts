@@ -1,7 +1,7 @@
 /** Nous Portal as a P10 competitor: direct adapter route, free models only, journal-safe. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync, appendFileSync } from 'node:fs';
+import { readFileSync, appendFileSync, readdirSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -12,6 +12,7 @@ import { Journal } from '../journal.ts';
 import { buildRequest } from '../questions.ts';
 import { makeReport } from '../report.ts';
 import { flags } from '../run.ts';
+import { NOUS_PORTAL_FREE_MODELS } from '@weave/gateway/nous-portal';
 import type { Item, Provider, Request } from '../types.ts';
 
 const KEY = 'sk-test-SENTINEL-nous-p10-credential';
@@ -182,6 +183,43 @@ test('Nous competitor applies Retry-After to queued concurrent calls without exp
   assert.ok(!JSON.stringify(results).includes(KEY));
 });
 
+for (const seconds of [0, 60, 61, 3600]) for (const phase of ['catalogue', 'chat']) {
+  test(`Nous ${phase} 429 (${seconds}s) bounds queued concurrent dispatch and preserves the provider delay`, async () => {
+    let now = 1_000, refusals = 0;
+    const sleeps: number[] = [];
+    const refuse = () => ++refusals === 1 ? json({ error: { message: KEY } }, 429, { 'retry-after': String(seconds) }) : undefined;
+    const e = endpoint(phase === 'catalogue'
+      ? { catalogue: () => refuse() ?? json(CATALOGUE) }
+      : { chat: () => refuse() ?? completion(answerText(request)) });
+    const p = nous({ nousKey: KEY, fetch: e.fetch, now: () => now, sleep: async ms => { sleeps.push(ms); now += ms; } });
+    const results = await Promise.all([p.request(request, signal()), p.request(request, signal()), p.request(request, signal())]);
+    // A zero-delay catalogue refusal has not dispatched a chat to space yet.
+    assert.deepEqual(sleeps, phase === 'catalogue' && seconds === 0 ? [6_000]
+      : [Math.max(6_000, Math.min(60_000, seconds * 1000)), 6_000]);
+    assert.deepEqual(results[0], { status: 'failed', reason: 'rate_limited', http_status: 429, retry_after_ms: seconds * 1000,
+      ...(seconds > 60 ? { retry_after_applied_ms: 60_000 } : {}) });
+    assert.ok(results.slice(1).every(r => r.status === 'ok'));
+    assert.ok(!JSON.stringify(results).includes(KEY));
+  });
+}
+
+test('Nous cancellation during bounded Retry-After sends no chat and leaves the cooldown for the next caller', async () => {
+  let now = 1_000, chats = 0;
+  const sleeps: number[] = [];
+  const controller = new AbortController();
+  const e = endpoint({ chat: () => ++chats === 1 ? json({}, 429, { 'retry-after': '3600' }) : completion(answerText(request)) });
+  const p = nous({ nousKey: KEY, fetch: e.fetch, now: () => now, sleep: async (ms, waiting) => {
+    sleeps.push(ms);
+    if (sleeps.length === 1) { controller.abort(); waiting?.throwIfAborted(); }
+    now += ms;
+  } });
+  await p.request(request, signal());
+  assert.deepEqual(await p.request(request, controller.signal), { status: 'failed', reason: 'cancelled' });
+  assert.equal(e.chats().length, 1);
+  assert.equal((await p.request(request, signal())).status, 'ok');
+  assert.deepEqual(sleeps, [60_000, 60_000]);
+});
+
 test('Nous competitor cancellation during limiter wait sends no chat and preserves the next slot', async () => {
   let now = 1_000;
   const controller = new AbortController();
@@ -226,6 +264,37 @@ async function fixture(fn: (journal: Journal, path: string) => Promise<void>) {
   const dir = await mkdtemp(join(tmpdir(), 'nous-p10-'));
   try { const path = join(dir, 'journal.jsonl'); await fn(new Journal(path), path); } finally { await rm(dir, { recursive: true, force: true }); }
 }
+
+test('Nous journal retains the raw and bounded delay, ends the over-bound item, and replays both receipts without dispatch', () => fixture(async (journal, path) => {
+  let now = 1_000, chats = 0;
+  const sleeps: number[] = [];
+  const production = await buildRequest(item);
+  const e = endpoint({ chat: () => ++chats === 1 ? json({}, 429, { 'retry-after': '3600' }) : completion(answerText(production)) });
+  const limiter = { now: () => now, sleep: async (ms: number) => { sleeps.push(ms); now += ms; } };
+  const entries = [entry, { ...entry, item: { ...item, id: 'j' } }];
+  await execute({ entries, providers: [nous({ nousKey: KEY, fetch: e.fetch, ...limiter })], journal, maxSpend: 0, ...limiter });
+  assert.deepEqual(sleeps, [60_000]);
+  const calls = journal.read().filter(r => r.type === 'call');
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0]!.terminal, true);
+  assert.equal(calls[0]!.result.retry_after_ms, 3_600_000);
+  assert.equal(calls[0]!.result.retry_after_applied_ms, 60_000);
+  assert.equal(calls[1]!.result.status, 'ok');
+  await execute({ entries, providers: [nous({ nousKey: KEY, fetch: e.fetch, ...limiter })], journal: new Journal(path), maxSpend: 0, ...limiter });
+  assert.equal(e.chats().length, 2);
+  assert.deepEqual(sleeps, [60_000]);
+  assert.ok(!readFileSync(path, 'utf8').includes(KEY));
+}));
+
+test('runnable inference probes reference only existing free-model allowlist entries', () => {
+  const root = new URL('../../inference/', import.meta.url);
+  for (const path of readdirSync(root, { recursive: true, encoding: 'utf8' }).filter(path => path.endsWith('.mjs'))) {
+    const source = readFileSync(new URL(path, root), 'utf8');
+    for (const [, key] of source.matchAll(/NOUS_PORTAL_FREE_MODELS\.(\w+)/g)) {
+      assert.ok(Object.hasOwn(NOUS_PORTAL_FREE_MODELS, key!), `${path}: unknown allowlist key ${key}`);
+    }
+  }
+});
 
 test('Nous journal: intent before dispatch, $0 metering, and replay does not re-send a completed call', () => fixture(async (journal, path) => {
   const production = await buildRequest(item);

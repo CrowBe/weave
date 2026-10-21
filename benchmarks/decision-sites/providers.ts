@@ -4,6 +4,7 @@ import { amosBody, amosEvaluator } from '@weave/gateway/amos';
 import { NOUS_PORTAL_FREE_MODELS, nousPortalAdapter } from '@weave/gateway/nous-portal';
 import type { EvaluationAnswer, EvaluationCall, EvaluationQuestion, GenerationAdapter } from '@weave/gateway';
 import type { Answer, Provider, Request, Result } from './types.ts';
+import { MAX_RETRY_AFTER_MS } from './types.ts';
 import { competitorPrompt, parseCompetitorOutput } from './competitors.ts';
 export type { Answer, Provider, Request, Result } from './types.ts';
 export const PRICES = Object.freeze({
@@ -109,8 +110,13 @@ function nousProvider(config: ProvidersConfig): Provider {
     if (failure.code === 'unauthorized') return skipped = { status: 'skipped', reason: 'unauthorized' };
     if (failure.code === 'rate_limited') {
       hasDispatched = true;
-      if (config.now) retryNotBefore = config.now() + (failure.retry_after_ms ?? NOUS_MIN_DISPATCH_INTERVAL_MS);
-      return { status: 'failed', reason: 'rate_limited', http_status: 429, ...(failure.retry_after_ms === undefined ? {} : { retry_after_ms: failure.retry_after_ms }), ...tokens };
+      const delay = failure.retry_after_ms ?? NOUS_MIN_DISPATCH_INTERVAL_MS;
+      const applied = Math.min(delay, MAX_RETRY_AFTER_MS);
+      if (config.now) retryNotBefore = config.now() + applied;
+      // Preserve the raw delay: the engine ends this item above the bound.
+      // Record the cap explicitly; only later queued items use this shorter wait.
+      return { status: 'failed', reason: 'rate_limited', http_status: 429, ...(failure.retry_after_ms === undefined ? {} : { retry_after_ms: failure.retry_after_ms }),
+        ...(delay > applied ? { retry_after_applied_ms: applied } : {}), ...tokens };
     }
     // Gateway routing can fall back on these retryable failures; the direct
     // benchmark has one fixed model and records a skip instead.

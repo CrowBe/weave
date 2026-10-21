@@ -3,6 +3,7 @@ import { Journal, digest, projectedCost, replayKey, type JournalRecord } from '.
 import { buildRequest } from './questions.ts';
 import { bindingFor } from './binding.ts';
 import type { Item, Provider, Result } from './types.ts';
+import { MAX_RETRY_AFTER_MS } from './types.ts';
 export interface Entry {item:Item;split:'tune'|'holdout';set_digest:string}
 export function providerSkip(result:Result):boolean {
  return result.http_status===401||result.http_status===403||(result.status==='skipped'&&['auth_required','unauthorized','no_credential','quota_unavailable_or_weekly_cap','call_cap','model_not_listed','tools_cannot_be_disabled','unsupported_cli_flags'].includes(result.reason??''));
@@ -61,7 +62,7 @@ export async function execute(options:{entries:readonly Entry[];providers:readon
      journal.append({type:'uncertain',...binding,reason:'unacknowledged_call_no_automatic_retry'});break;
     }
     const cancelled=retryableCancellation(result);
-    const retry=result.http_status===429 && attempt<2 && (result.retry_after_ms??0)<=60000;
+    const retry=result.http_status===429 && attempt<2 && (result.retry_after_ms??0)<=MAX_RETRY_AFTER_MS;
     const cost=cancelled?0:result.input_tokens===undefined?(result.status==='skipped'?0:projected):result.input_tokens*provider.price/1e6;
     const skip=providerSkip(result);
     if(result.status==='skipped'&&!skip)result={...result,status:'failed'};
@@ -71,7 +72,7 @@ export async function execute(options:{entries:readonly Entry[];providers:readon
     if(cost>projected)return;
     if(skip){journal.append({type:'provider_status',provider:provider.id,persistent:persistentProviderSkip(result),result:{...result,status:'skipped'}});skipped.add(provider.id);break;}
     if(!retry)break;
-    try{await options.sleep(Math.min(60000,Math.max(0,result.retry_after_ms??1000*(attempt+1))),signal);}catch{journal.append({type:'cancelled'});return;}
+    try{await options.sleep(Math.min(MAX_RETRY_AFTER_MS,Math.max(0,result.retry_after_ms??1000*(attempt+1))),signal);}catch{journal.append({type:'cancelled'});return;}
    }
    if(skipped.has(provider.id))break;
   }
