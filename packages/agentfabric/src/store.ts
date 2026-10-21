@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  rmSync,
   statSync,
   truncateSync,
   unlinkSync,
@@ -13,7 +14,7 @@ import {
 import { dirname, resolve } from 'node:path';
 import type { CapabilityContract, InvocationOutcome } from '@weave/agentsop';
 
-const openStores = new Set<string>();
+const openStores = new Map<string, FabricStore>();
 const COMPACT_BYTES = 256 * 1024;
 let lockSequence = 0;
 
@@ -135,6 +136,8 @@ export class FabricStore {
   private written_bytes = 0;
   private journalReady = false;
   private poisoned: string | null = null;
+  private lockToken: string | null = null;
+  private closed = false;
   recovery = { torn_tail_ignored: false, ignored_tail_bytes: 0 };
   persistStart = true;
   persistResult = true;
@@ -153,7 +156,7 @@ export class FabricStore {
     if (!existsSync(directory)) {
       mkdirSync(directory, { recursive: true });
     }
-    acquireLock(path);
+    const lockToken = acquireLock(path);
     try {
       if (!existsSync(path)) {
         writeFileSync(path, '');
@@ -162,6 +165,7 @@ export class FabricStore {
       const store = loaded.legacySnapshot
         ? new FabricStore(loaded.legacySnapshot, path)
         : new FabricStore(undefined, path);
+      store.lockToken = lockToken;
       store.recovery = {
         torn_tail_ignored: loaded.torn_tail_ignored,
         ignored_tail_bytes: loaded.ignored_tail_bytes,
@@ -174,21 +178,28 @@ export class FabricStore {
       store.fileBytes = statSync(path).size;
       store.tailBytes = 0;
       store.journalReady = true;
-      openStores.add(key);
+      openStores.set(key, store);
       return store;
     } catch (error) {
-      releaseLock(path);
+      releaseLock(path, lockToken);
       throw error;
     }
   }
 
   /** Release this process's ownership so a later restart can open the store. */
   close(): void {
-    if (!this.path) {
+    if (!this.path || this.closed) {
       return;
     }
-    openStores.delete(resolve(this.path));
-    releaseLock(this.path);
+    this.closed = true;
+    const key = resolve(this.path);
+    if (openStores.get(key) === this) {
+      openStores.delete(key);
+    }
+    if (this.lockToken !== null) {
+      releaseLock(this.path, this.lockToken);
+      this.lockToken = null;
+    }
   }
 
   snapshot(): FabricSnapshot {
@@ -569,15 +580,16 @@ export class PersistFailure extends Error {
   }
 }
 
-function acquireLock(path: string): void {
+function acquireLock(path: string): string {
   const lockPath = `${path}.lock`;
-  const tempPath = `${lockPath}.${process.pid}.${(lockSequence += 1)}.tmp`;
-  writeFileSync(tempPath, String(process.pid));
+  const token = `${process.pid}:${(lockSequence += 1)}`;
+  const tempPath = `${lockPath}.${token}.tmp`;
+  writeFileSync(tempPath, token);
   try {
-    for (let attempt = 0; attempt < 8; attempt += 1) {
+    for (let attempt = 0; attempt < 32; attempt += 1) {
       try {
         linkSync(tempPath, lockPath);
-        return;
+        return token;
       } catch (error) {
         if (!isErrno(error, 'EEXIST')) {
           throw error;
@@ -587,34 +599,23 @@ function acquireLock(path: string): void {
       if (owner === undefined || isAlive(owner)) {
         throw new Error(`host store is already open: ${resolve(path)}`);
       }
-      const quarantine = `${lockPath}.stale.${process.pid}.${(lockSequence += 1)}`;
+      if (!acquireReclaim(`${lockPath}.reclaim`)) {
+        continue;
+      }
       try {
-        renameSync(lockPath, quarantine);
-      } catch (error) {
-        if (isErrno(error, 'ENOENT')) {
+        const current = readLockOwner(lockPath);
+        if (current !== owner) {
           continue;
         }
-        throw error;
-      }
-      if (readLockOwner(quarantine) !== owner) {
-        // A live writer replaced the stale lock as we took it. Put it back
-        // rather than becoming a second writer.
         try {
-          linkSync(quarantine, lockPath);
-        } catch {
-          // The lock path is already published by another contender.
+          unlinkSync(lockPath);
+        } catch (error) {
+          if (!isErrno(error, 'ENOENT')) {
+            throw error;
+          }
         }
-        try {
-          unlinkSync(quarantine);
-        } catch {
-          // ignore
-        }
-        throw new Error(`host store is already open: ${resolve(path)}`);
-      }
-      try {
-        unlinkSync(quarantine);
-      } catch {
-        // ignore
+      } finally {
+        releaseReclaim(`${lockPath}.reclaim`);
       }
     }
     throw new Error(`host store is already open: ${resolve(path)}`);
@@ -627,19 +628,107 @@ function acquireLock(path: string): void {
   }
 }
 
-function readLockOwner(lockPath: string): number | undefined {
+/**
+ * Serialize stale-lock reclamation so only the holder removes the main lock
+ * and no contender can move a live writer's lock into quarantine.
+ */
+function acquireReclaim(reclaimPath: string): boolean {
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const tempPath = `${reclaimPath}.${process.pid}.${(lockSequence += 1)}.tmp`;
+    mkdirSync(tempPath);
+    try {
+      writeFileSync(`${tempPath}/owner`, String(process.pid));
+      renameSync(tempPath, reclaimPath);
+      return true;
+    } catch (error) {
+      if (
+        !isErrno(error, 'EEXIST') &&
+        !isErrno(error, 'ENOTEMPTY') &&
+        !isErrno(error, 'ENOTDIR') &&
+        !isErrno(error, 'EISDIR') &&
+        !isErrno(error, 'EPERM')
+      ) {
+        throw error;
+      }
+    } finally {
+      try {
+        rmSync(tempPath, { recursive: true, force: true });
+      } catch {
+        // ignore
+      }
+    }
+    const owner = readReclaimOwner(reclaimPath);
+    if (owner !== undefined && isAlive(owner)) {
+      return false;
+    }
+    const quarantine = `${reclaimPath}.stale.${process.pid}.${(lockSequence += 1)}`;
+    try {
+      renameSync(reclaimPath, quarantine);
+    } catch (error) {
+      if (isErrno(error, 'ENOENT')) {
+        continue;
+      }
+      throw error;
+    }
+    if (readReclaimOwner(quarantine) !== owner) {
+      try {
+        renameSync(quarantine, reclaimPath);
+      } catch (error) {
+        if (!isErrno(error, 'ENOENT') && !isErrno(error, 'EEXIST') && !isErrno(error, 'ENOTEMPTY')) {
+          throw error;
+        }
+      }
+      return false;
+    }
+    try {
+      rmSync(quarantine, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  }
+  return false;
+}
+
+function releaseReclaim(reclaimPath: string): void {
   try {
-    const owner = Number.parseInt(readFileSync(lockPath, 'utf8').trim(), 10);
+    if (readReclaimOwner(reclaimPath) === process.pid) {
+      rmSync(reclaimPath, { recursive: true, force: true });
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function readReclaimOwner(reclaimPath: string): number | undefined {
+  try {
+    const owner = Number.parseInt(readFileSync(`${reclaimPath}/owner`, 'utf8').trim(), 10);
     return Number.isInteger(owner) && owner > 0 ? owner : undefined;
   } catch {
     return undefined;
   }
 }
 
-function releaseLock(path: string): void {
+function readLockOwner(lockPath: string): number | undefined {
+  const content = readLockContent(lockPath);
+  if (content === undefined) {
+    return undefined;
+  }
+  const owner = Number.parseInt(content, 10);
+  return Number.isInteger(owner) && owner > 0 ? owner : undefined;
+}
+
+function readLockContent(lockPath: string): string | undefined {
+  try {
+    return readFileSync(lockPath, 'utf8').trim();
+  } catch {
+    return undefined;
+  }
+}
+
+function releaseLock(path: string, token: string): void {
   const lockPath = `${path}.lock`;
   try {
-    if (readLockOwner(lockPath) === process.pid) {
+    if (readLockContent(lockPath) === token) {
       unlinkSync(lockPath);
     }
   } catch {
@@ -675,16 +764,20 @@ function readJournal(path: string): LoadedJournal {
   if (text.length > 0 && !text.endsWith('\n')) {
     const breakAt = text.lastIndexOf('\n');
     const tail = text.slice(breakAt + 1);
+    let validTail = false;
     try {
       JSON.parse(tail);
-      appendFileSync(path, '\n');
-      text += '\n';
+      validTail = true;
     } catch {
       const valid = text.slice(0, breakAt + 1);
       truncateSync(path, Buffer.byteLength(valid));
       text = valid;
       torn_tail_ignored = true;
       ignored_tail_bytes = Buffer.byteLength(tail);
+    }
+    if (validTail) {
+      appendFileSync(path, '\n');
+      text += '\n';
     }
   }
   const lines = text.split('\n');

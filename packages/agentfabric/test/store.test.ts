@@ -83,6 +83,107 @@ describe('FabricStore append-only journal', () => {
     }
   });
 
+  it('keeps a valid final record when appending its newline fails', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-store-final-newline-'));
+    const path = join(dir, 'fabric.json');
+    const first = `${JSON.stringify({ op: 'allocate', id: 'res_1' })}\n`;
+    const second = JSON.stringify({ op: 'allocate', id: 'res_2' });
+    writeFileSync(path, `${first}${second}`);
+    const mutableFs = createRequire(import.meta.url)('node:fs') as {
+      appendFileSync: typeof nodeFs.appendFileSync;
+    };
+    const original = mutableFs.appendFileSync;
+    let failOnce = true;
+    mutableFs.appendFileSync = ((file: nodeFs.PathLike, data: string, options?: nodeFs.WriteFileOptions) => {
+      if (failOnce && String(file) === path) {
+        failOnce = false;
+        const error = new Error('simulated newline write failure') as NodeJS.ErrnoException;
+        error.code = 'ENOSPC';
+        throw error;
+      }
+      return original(file, data, options);
+    }) as typeof nodeFs.appendFileSync;
+    syncBuiltinESMExports();
+    try {
+      assert.throws(() => FabricStore.open(path), /simulated newline write failure/);
+    } finally {
+      mutableFs.appendFileSync = original;
+      syncBuiltinESMExports();
+    }
+    assert.equal(readFileSync(path, 'utf8'), `${first}${second}`);
+
+    const reopened = FabricStore.open(path);
+    try {
+      assert.equal(reopened.recovery.torn_tail_ignored, false);
+      assert.equal(reopened.allocateCanonical(), 'res_3');
+    } finally {
+      reopened.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not remove a live lock claimed during stale-lock reclamation', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-store-reclaim-race-'));
+    const path = join(dir, 'fabric.json');
+    const lockPath = `${path}.lock`;
+    const dead = spawnSync(process.execPath, ['-e', '']);
+    assert.equal(dead.status, 0);
+    assert.ok(dead.pid);
+    writeFileSync(lockPath, String(dead.pid));
+    const live = `${process.pid}:live-a`;
+    const successor = `${process.pid}:live-c`;
+    const mutableFs = createRequire(import.meta.url)('node:fs') as {
+      readFileSync: typeof nodeFs.readFileSync;
+      linkSync: typeof nodeFs.linkSync;
+    };
+    const originalRead = mutableFs.readFileSync;
+    const originalLink = mutableFs.linkSync;
+    let injected = false;
+    mutableFs.readFileSync = ((file: nodeFs.PathLike, options?: unknown) => {
+      if (!injected && String(file) === lockPath) {
+        injected = true;
+        writeFileSync(lockPath, live);
+        return String(dead.pid);
+      }
+      return originalRead(file, options as never);
+    }) as typeof nodeFs.readFileSync;
+    mutableFs.linkSync = ((existing: nodeFs.PathLike, next: nodeFs.PathLike) => {
+      if (String(next) === lockPath && String(existing).includes('.stale.')) {
+        writeFileSync(lockPath, successor);
+      }
+      return originalLink(existing, next);
+    }) as typeof nodeFs.linkSync;
+    syncBuiltinESMExports();
+    try {
+      assert.throws(() => FabricStore.open(path), /already open/);
+    } finally {
+      mutableFs.readFileSync = originalRead;
+      mutableFs.linkSync = originalLink;
+      syncBuiltinESMExports();
+    }
+    try {
+      assert.equal(readFileSync(lockPath, 'utf8'), live, 'stale reclamation removed the live owner lock');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('close is idempotent and cannot release a successor lock', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-store-close-'));
+    const path = join(dir, 'fabric.json');
+    const first = FabricStore.open(path);
+    first.close();
+    const second = FabricStore.open(path);
+    try {
+      first.close();
+      assert.throws(() => FabricStore.open(path), /already open/);
+      assert.equal(existsSync(`${path}.lock`), true);
+    } finally {
+      second.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('restores the journal length after a partial append failure', () => {
     const dir = mkdtempSync(join(tmpdir(), 'weave-store-append-failure-'));
     const path = join(dir, 'fabric.json');
