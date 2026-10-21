@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { createGrantAuthority, type Grant, validateCatalogue } from '@weave/agentsop';
-import { AgentFabricHost, REPORT_PUBLISH, SOURCE_INSPECT } from '@weave/agentfabric';
+import { AgentFabricHost, FabricStore, REPORT_PUBLISH, SOURCE_INSPECT } from '@weave/agentfabric';
 
 function inspectGrant(authority: ReturnType<typeof createGrantAuthority>, source: string, action_id: string): Grant {
   return authority.issue({
@@ -406,5 +406,198 @@ describe('AgentFabric host authority', () => {
     assert.throws(() => ctx.write(gamma, 1, 'rewritten'), /DENIED/);
     assert.equal(host.content(gamma), 'gamma one');
     assert.equal(host.revision(gamma), 1);
+  });
+});
+
+describe('Fabric store indexes', () => {
+  function publishInput(source: string, destination: string) {
+    const report = {
+      entries: [{ source, revision: 1, line_count: 1, digest: 'x' }],
+      read_set: [{ resource: source, revision: 1 }],
+    };
+    return { report, read_set: report.read_set, sources: [source], destination, expected_revision: 1 };
+  }
+
+  function publishGrant(
+    authority: ReturnType<typeof createGrantAuthority>,
+    source: string,
+    destination: string,
+    action_id: string,
+    issued_at: number,
+  ): Grant {
+    return authority.issue({
+      action_id,
+      operation: REPORT_PUBLISH.id,
+      contract_rev: REPORT_PUBLISH.revision,
+      permissions: [
+        { resource: source, mode: 'read' },
+        { resource: destination, mode: 'write' },
+      ],
+      effects: [
+        { resource: source, mode: 'read' },
+        { resource: destination, mode: 'write' },
+      ],
+      issued_at,
+    });
+  }
+
+  it('rebuilds canonical-primary and publication indexes from a snapshot', async () => {
+    const authority = createGrantAuthority();
+    const host = new AgentFabricHost({ authority });
+    const source = host.registerSource('mem:index-alpha', 'line');
+    const alias = host.alias(source);
+    const destination = host.registerDestination('mem:index-outbox');
+    const grant = publishGrant(authority, source, destination, 'a:index:1', 1);
+    const handle = host.invoke(grant, REPORT_PUBLISH.id, publishInput(source, destination), {
+      invocation_id: 'inv-index',
+    });
+    assert.equal(handle.kind, 'handle');
+    host.release('a:index:1');
+    await (handle as { result: Promise<unknown> }).result;
+
+    const store = FabricStore.restore(host.snapshot());
+    const sourceIssued = store.lookupRef(alias);
+    const destinationIssued = store.lookupRef(destination);
+    assert.ok(sourceIssued);
+    assert.ok(destinationIssued);
+    assert.equal(store.primaryRef(sourceIssued.canonical_id), source);
+    assert.equal(store.primaryRef(destinationIssued.canonical_id), destination);
+    assert.equal(store.primaryRef('res_missing'), undefined);
+    assert.equal(store.publishedBy('inv-index')?.canonical_id, destinationIssued.canonical_id);
+    assert.equal(store.publishedBy('inv-index')?.publication?.invocation_id, 'inv-index');
+    assert.equal(store.publishedBy('inv-missing'), undefined);
+
+    const restored = new AgentFabricHost({ authority, store });
+    assert.equal(restored.canonicalResource(alias), source);
+    assert.equal(restored.canonicalResource('ref_missing'), 'ref_missing');
+  });
+
+  it('canonicalResource and lookup read indexes without snapshotting the store', async () => {
+    const authority = createGrantAuthority();
+    const host = new AgentFabricHost({ authority });
+    const source = host.registerSource('mem:index-alpha', 'line');
+    const alias = host.alias(source);
+    const destination = host.registerDestination('mem:index-outbox');
+    const grant = publishGrant(authority, source, destination, 'a:index:2', 2);
+    const handle = host.invoke(grant, REPORT_PUBLISH.id, publishInput(source, destination), {
+      invocation_id: 'inv-index-lookup',
+    });
+    assert.equal(handle.kind, 'handle');
+    host.release('a:index:2');
+    await (handle as { result: Promise<unknown> }).result;
+
+    const snapshot = host.snapshot();
+    const running = {
+      ...snapshot,
+      invocations: snapshot.invocations.map((record) =>
+        record.invocation_id === 'inv-index-lookup'
+          ? { ...record, status: 'running' as const, outcome: null }
+          : record,
+      ),
+    };
+    const restored = new AgentFabricHost({ authority, store: FabricStore.restore(running) });
+    const originalSnapshot = restored.store.snapshot;
+    let snapshots = 0;
+    restored.store.snapshot = () => {
+      snapshots += 1;
+      return originalSnapshot.call(restored.store);
+    };
+    try {
+      const lookupGrant = publishGrant(authority, source, destination, 'a:index:2', 3);
+      assert.equal(restored.canonicalResource(alias), source);
+      assert.equal(restored.canonicalResource('ref_missing'), 'ref_missing');
+      const found = restored.lookup('inv-index-lookup', lookupGrant);
+      assert.equal('status' in found && found.status, 'committed');
+      const missing = restored.lookup('inv-missing', lookupGrant);
+      assert.equal('status' in missing && missing.status, 'unresolved');
+      assert.equal(snapshots, 0);
+    } finally {
+      restored.store.snapshot = originalSnapshot;
+    }
+
+    const uncommittedWithoutPublication = {
+      ...running,
+      resources: running.resources.map((resource) => ({ ...resource, publication: null })),
+    };
+    const absent = new AgentFabricHost({
+      authority,
+      store: FabricStore.restore(uncommittedWithoutPublication),
+    });
+    const stopped = absent.lookup(
+      'inv-index-lookup',
+      publishGrant(authority, source, destination, 'a:index:2', 4),
+    );
+    assert.equal('status' in stopped && stopped.status, 'stopped');
+  });
+
+  it('does not leave a stale publication owner when the prior result was unpersisted', async () => {
+    const authority = createGrantAuthority();
+    const host = new AgentFabricHost({ authority });
+    const source = host.registerSource('mem:index-replaced', 'line');
+    const destination = host.registerDestination('mem:index-replaced-outbox');
+
+    host.store.persistResult = false;
+    const firstGrant = publishGrant(authority, source, destination, 'a:replaced:1', 1);
+    const first = host.invoke(firstGrant, REPORT_PUBLISH.id, publishInput(source, destination), {
+      invocation_id: 'inv-replaced-a',
+    });
+    assert.equal(first.kind, 'handle');
+    host.release('a:replaced:1');
+    const firstOutcome = await (first as { result: Promise<{ outcome: string }> }).result;
+    assert.equal(firstOutcome.outcome, 'uncertain');
+
+    const restarted = new AgentFabricHost({ authority, store: FabricStore.restore(host.snapshot()) });
+    const secondGrant = publishGrant(authority, source, destination, 'a:replaced:2', 2);
+    const second = restarted.invoke(
+      secondGrant,
+      REPORT_PUBLISH.id,
+      { ...publishInput(source, destination), expected_revision: 2 },
+      { invocation_id: 'inv-replaced-b' },
+    );
+    assert.equal(second.kind, 'handle');
+    restarted.release('a:replaced:2');
+    const secondOutcome = await (second as { result: Promise<{ outcome: string }> }).result;
+    assert.equal(secondOutcome.outcome, 'succeeded');
+
+    assert.equal(restarted.store.publishedBy('inv-replaced-a'), undefined);
+    assert.equal(restarted.store.publishedBy('inv-replaced-b')?.publication?.invocation_id, 'inv-replaced-b');
+
+    const lookupGrant = publishGrant(authority, source, destination, 'a:replaced:1', 3);
+    const recovered = restarted.lookup('inv-replaced-a', lookupGrant);
+    assert.equal('status' in recovered && recovered.status, 'stopped');
+
+    const restored = FabricStore.restore(restarted.snapshot());
+    assert.equal(restored.publishedBy('inv-replaced-a'), undefined);
+    assert.equal(restored.publishedBy('inv-replaced-b')?.publication?.invocation_id, 'inv-replaced-b');
+  });
+
+  it('keeps builtin results deduplicated and unchanged in snapshots', () => {
+    const store = FabricStore.restore({
+      next_handle: 1,
+      next_canonical: 1,
+      resources: [],
+      refs: [],
+      invocations: [],
+      builtin_results: [
+        {
+          key: 'inspect:key',
+          operation: SOURCE_INSPECT.id,
+          implementation_id: 'first',
+          outcome: { outcome: 'succeeded', output: { revision: 1 } },
+        },
+      ],
+    });
+    assert.deepEqual(store.cachedResult('inspect:key')?.outcome, { outcome: 'succeeded', output: { revision: 1 } });
+    store.rememberResult({
+      key: 'inspect:key',
+      operation: SOURCE_INSPECT.id,
+      implementation_id: 'second',
+      outcome: { outcome: 'succeeded', output: { revision: 2 } },
+    });
+    const restored = store.snapshot();
+    assert.equal(restored.builtin_results?.length, 1);
+    assert.equal(restored.builtin_results?.[0]?.implementation_id, 'second');
+    assert.deepEqual(store.cachedResult('inspect:key')?.outcome, { outcome: 'succeeded', output: { revision: 2 } });
+    assert.equal(store.cachedResult('missing'), undefined);
   });
 });

@@ -618,8 +618,7 @@ export class AgentFabricHost implements CapabilityHost {
     if (!issued) {
       return ref;
     }
-    const primary = [...this.store.snapshot().refs].find((r) => r.canonical_id === issued.canonical_id);
-    return primary?.handle ?? ref;
+    return this.store.primaryRef(issued.canonical_id) ?? ref;
   }
 
   invoke(
@@ -714,9 +713,7 @@ export class AgentFabricHost implements CapabilityHost {
     const status = record?.status ?? 'running';
     const outcome = record?.outcome ?? open?.outcome;
     if (status !== 'committed') {
-      const published = [...this.store.snapshot().resources].find(
-        (r) => r.publication?.invocation_id === invocation_id,
-      );
+      const published = this.store.publishedBy(invocation_id);
       if (published?.publication) {
         this.coordinator.release(invocation_id);
         return {
@@ -1452,17 +1449,19 @@ export class AgentFabricHost implements CapabilityHost {
         },
       };
     }
-    dest.revision += 1;
     const record: PublicationRecord = {
       invocation_id: open.invocation_id,
       binding_digest,
       report_digest,
       destination: input.destination,
-      committed_revision: dest.revision,
+      committed_revision: dest.revision + 1,
     };
-    dest.publication = record;
-    dest.content = report_digest;
-    this.store.save();
+    this.store.putResource({
+      ...dest,
+      revision: dest.revision + 1,
+      content: report_digest,
+      publication: record,
+    });
     return { kind: 'committed', record };
   }
 
