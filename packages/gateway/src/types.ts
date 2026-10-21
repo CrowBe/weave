@@ -369,6 +369,8 @@ export type RouteTarget =
 export interface ProviderUsage {
   readonly input_tokens: number | undefined;
   readonly output_tokens: number | undefined;
+  /** Provider-reported total charge in micros, including on a failed attempt. */
+  readonly cost?: Micros;
 }
 
 export const PROVIDER_FAILURES = [
@@ -421,6 +423,12 @@ export type GenerationProviderResult =
 
 export interface GenerationAdapter {
   readonly id: AdapterId;
+  /**
+   * With an injected Timer, allow up to 100 ms after abort for final usage.
+   * On expiry usage remains unknown. The interruption still determines
+   * disposition, and no later attempt starts while waiting.
+   */
+  readonly settle_on_abort?: boolean;
   execute(call: GenerationCall): Promise<GenerationProviderResult>;
 }
 

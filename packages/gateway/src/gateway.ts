@@ -124,6 +124,7 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
         terms: request.terms,
         invalid: invalidGeneration(request),
         containsCredentials: containsCredentialContent(request.input),
+        settle_on_abort: unit => generators.get(unit.adapter)?.settle_on_abort === true,
         attempt: async (unit, attemptSignal) => {
           const adapter = generators.get(unit.adapter);
           if (adapter === undefined) return missingAdapter(unit);
@@ -289,6 +290,7 @@ interface Bounded<T> {
 }
 
 interface BoundedParams<T> {
+  readonly settle_on_abort?: (unit: RoutedUnit) => boolean;
   readonly quota: QuotaPort | undefined;
   readonly persist_pause: GatewayConfig['persist_pause'];
   readonly request_id: string;
@@ -515,7 +517,23 @@ async function attemptBeforeDeadline<T>(
     void attempt.then(() => watcher.abort(), () => watcher.abort());
     // The watcher catches its own failures, including cancellation during cleanup.
     void deadline(attempt);
-    return await Promise.race([attempt, interrupted]);
+    const result = await Promise.race([attempt, interrupted]);
+    if (provider.signal.aborted && params.settle_on_abort?.(unit)) {
+      // Cancellation fixes the disposition. Allow final billed usage a short
+      // grace, but a transport ignoring abort must not hold the outcome open.
+      const failure = await interrupted;
+      const grace = new AbortController();
+      try {
+        const usage = await Promise.race([
+          attempt.then(settled => settled.usage, () => failure.usage),
+          params.timer.sleep(100, grace.signal).then(() => failure.usage, () => failure.usage),
+        ]);
+        return { ...failure, usage };
+      } finally {
+        grace.abort();
+      }
+    }
+    return result;
   } finally {
     watcher.abort();
     params.signal?.removeEventListener('abort', cancel);
@@ -658,10 +676,12 @@ function retryDelayMs(failure: ProviderFailure, unit: RoutedUnit): number {
 }
 
 /**
+ * Prefer a reported charge to token pricing, including on failed attempts.
  * Actual cost when the provider reported usage; null when it did not.
  * A missing report stays the cold ceiling. The hit discount is not invented.
  */
 function meteredCost(unit: RoutedUnit, terms: InferenceTerms, usage: ProviderUsage): Micros | null {
+  if (usage.cost !== undefined && Number.isFinite(usage.cost) && usage.cost >= 0) return usage.cost;
   if (usage.input_tokens === undefined || usage.output_tokens === undefined) return null;
   return priceAttempt(unit, terms, { input_tokens: usage.input_tokens, output_tokens: usage.output_tokens }).cost;
 }

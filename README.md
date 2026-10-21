@@ -151,6 +151,25 @@ from Amos failure records. See the [intake contract](packages/weave/src/sites/CO
 Run the opt-in local intake probe after building:
 `AMOS_LIVE=1 node --test packages/gateway/dist/test/amos.test.js`.
 
+### Vercel promotional free example
+
+`npm run example:vercel-free` reads `AI_GATEWAY_API_KEY` only at the composition
+root. It uses the existing AI SDK `createGateway` + `generateText` path, checks a
+fresh key-free `/v1/models` catalogue before each attempt, and requires reported
+zero response cost. The five verified IDs are exported as
+`VERCEL_AI_GATEWAY_FREE_MODELS`; Laguna's known expiry is 2026-10-31T00:00Z.
+Unknown, missing, priced, provider-dependent or expired entries fail closed.
+Callers injecting a catalogue snapshot are responsible for its freshness.
+
+Set `destination: 'vercel-ai-gateway-free'` and
+`destination_training_allowed: true` on these routed units. These models report
+`zdr: none` and `no_training: none`; only explicitly `public` or `non_sensitive`
+content is eligible. The example sets `max_attempts_per_route: 1` so a 429 goes
+straight to the next free unit. Post-call cost failure is nonretryable; checks
+cannot undo a charge caused by a price change during a request. Provider errors
+are recorded without their raw messages. P10 competitor registration remains a
+follow-up; benchmark routes are unchanged.
+
 ### Muse Spark contributor example
 
 `npm run example:muse-spark` reads `MODEL_API_KEY` from the environment and
