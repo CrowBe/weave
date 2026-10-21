@@ -38,8 +38,9 @@ export function amosBody(call: Pick<EvaluationCall, "model" | "state" | "questio
 
 export function amosEvaluator(options: AmosOptions = {}): EvaluationAdapter {
   const baseURL = (options.baseURL ?? AMOS_BASE_URL).replace(/\/+$/, "");
-  const url = new URL(baseURL);
+  const url = parseURL(baseURL);
   if (
+    url === null ||
     !["http:", "https:"].includes(url.protocol) ||
     !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) ||
     url.username ||
@@ -104,6 +105,15 @@ export function amosEvaluator(options: AmosOptions = {}): EvaluationAdapter {
       }
     },
   };
+}
+
+/** An empty or unparseable base URL gets the loopback error, not a bare TypeError. */
+function parseURL(value: string): URL | null {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
 }
 
 function content(value: EvaluationContent | null): string | null {

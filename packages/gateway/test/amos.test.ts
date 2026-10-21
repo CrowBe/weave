@@ -75,10 +75,19 @@ describe("Amos local decision contract", () => {
       "http://localhost?",
       "http://localhost#",
       "file:///tmp/amos",
+      "",
+      " ",
+      "not a url",
+      "127.0.0.1:8766",
     ]) {
       assert.throws(() => amosEvaluator({ baseURL }), /loopback HTTP URL/);
     }
-    for (const baseURL of ["http://127.0.0.1:8766", "http://localhost:8766", "http://[::1]:8766"]) {
+    for (const baseURL of [
+      "http://127.0.0.1:8766",
+      "http://localhost:8766",
+      "http://[::1]:8766",
+      "http://127.0.0.1:8766/",
+    ]) {
       assert.doesNotThrow(() => amosEvaluator({ baseURL }));
     }
   });
