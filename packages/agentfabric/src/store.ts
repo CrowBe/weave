@@ -9,6 +9,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  readSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -403,7 +404,7 @@ export class FabricStore {
     // Serialization can call user-provided toJSON methods. Check again before I/O.
     this.assertWritable();
     const previousBytes = this.fileBytes;
-    const fd = openSync(this.path, 'a');
+    const fd = openSync(this.path, 'a+');
     let written = 0;
     try {
       if (fstatSync(fd).size !== previousBytes) {
@@ -427,6 +428,11 @@ export class FabricStore {
           }
           // Only successful writeSync calls contribute to the rollback range.
           if (written > 0) {
+            const appended = Buffer.alloc(written);
+            if (readSync(fd, appended, 0, written, previousBytes) !== written ||
+                !appended.equals(line.subarray(0, written))) {
+              throw new Error('host store append range changed');
+            }
             ftruncateSync(fd, previousBytes);
           }
         } catch {

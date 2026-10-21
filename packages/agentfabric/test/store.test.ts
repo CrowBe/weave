@@ -695,6 +695,8 @@ describe('FabricStore append-only journal', () => {
     const path = join(dir, 'fabric.json');
     const store = FabricStore.open(path);
     const canonical = store.allocateCanonical();
+    const before = readFileSync(path);
+    const snapshot = store.snapshot();
     const mutableFs = createRequire(import.meta.url)('node:fs') as {
       writeSync: typeof nodeFs.writeSync;
     };
@@ -717,6 +719,8 @@ describe('FabricStore append-only journal', () => {
     syncBuiltinESMExports();
     try {
       assert.throws(() => store.issue(canonical, 'source'), /simulated short write/);
+      assert.deepEqual(readFileSync(path), before, 'partial bytes must be removed before retry');
+      assert.deepEqual(store.snapshot(), snapshot, 'failed append must not change memory');
     } finally {
       mutableFs.writeSync = original;
       syncBuiltinESMExports();
@@ -806,6 +810,50 @@ describe('FabricStore append-only journal', () => {
       mutableFs.appendFileSync = originalAppend;
       mutableFs.writeSync = originalWrite;
       syncBuiltinESMExports();
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves a replaced append range of the same length and poisons further writes', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-store-rollback-replaced-'));
+    const path = join(dir, 'fabric.json');
+    const store = FabricStore.open(path);
+    store.allocateCanonical();
+    const before = readFileSync(path);
+    const snapshot = store.snapshot();
+    const foreign = Buffer.from('other');
+    const mutableFs = createRequire(import.meta.url)('node:fs') as typeof nodeFs;
+    const originalWrite = mutableFs.writeSync;
+    let partial = true;
+    mutableFs.writeSync = ((fd: number, data: Buffer, offset: number) => {
+      if (partial) {
+        partial = false;
+        return originalWrite(fd, data, offset, foreign.length);
+      }
+      const otherFd = nodeFs.openSync(path, 'r+');
+      try {
+        originalWrite(otherFd, foreign, 0, foreign.length, before.length);
+      } finally {
+        nodeFs.closeSync(otherFd);
+      }
+      throw new Error('simulated failed append after range replacement');
+    }) as typeof originalWrite;
+    syncBuiltinESMExports();
+    try {
+      try {
+        assert.throws(() => store.allocateCanonical(), /simulated failed append/);
+        assert.deepEqual(store.snapshot(), snapshot);
+        assert.deepEqual(readFileSync(path), Buffer.concat([before, foreign]), 'foreign bytes must survive rollback');
+      } finally {
+        mutableFs.writeSync = originalWrite;
+        syncBuiltinESMExports();
+      }
+      assert.throws(() => store.allocateCanonical(), /reopened/);
+      assert.throws(() => store.save(), /reopened/);
+      assert.deepEqual(store.snapshot(), snapshot);
+      assert.deepEqual(readFileSync(path), Buffer.concat([before, foreign]));
+    } finally {
       store.close();
       rmSync(dir, { recursive: true, force: true });
     }
