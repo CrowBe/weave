@@ -235,7 +235,8 @@ export class Runtime {
     this.slots = options.executionSlots ?? Number.POSITIVE_INFINITY;
     this.frameProfile = options.frameProfile ?? DEFAULT_FRAME_PROFILE;
     this.replayLog = recorded;
-    this.weft = options.weft ? new LoomWeft(options.weft) : null;
+    // Replay re-derives what the live run already emitted: it emits nothing (WEFT-CONTRACT.md, Emission).
+    this.weft = options.weft && recorded === null ? new LoomWeft(options.weft) : null;
     runtimeLogs.set(this, this.log);
     if (recorded) {
       for (const observation of recorded) {
@@ -1724,6 +1725,7 @@ export class Runtime {
         if (observation.payload_type === 'conclusion.cached') {
           this.importedConclusions.add((observation.payload as { conclusion_id: string }).conclusion_id);
         }
+        this.weft?.loaded(observation);
       }
     }
   }

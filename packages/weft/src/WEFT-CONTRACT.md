@@ -430,7 +430,10 @@ exporter behind `write` never sees an unredacted or invalid record.
 whether or not one is configured. The live run already emitted these records,
 and a replay that diverged would otherwise submit a different record under an
 existing identity. `recover()` loads the journal without emitting; emission
-resumes with the first observation appended after the load. Replay invokes
+resumes with the first observation appended after the load. Loading indexes
+the journaled dispatches, so a dispatch after recovery still supersedes a
+thread opened before the crash, and a queued action that starts after
+recovery is not opened a second time. Replay invokes
 neither the gateway nor the host, so they emit nothing either.
 
 **Identity and order.** Loom's record ids are derived from the log, so a run

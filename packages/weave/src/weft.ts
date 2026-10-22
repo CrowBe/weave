@@ -52,7 +52,6 @@ export class LoomWeft {
   private dispatching: Candidate | null = null;
   /** Latest thread per operation and resources, revisions ignored: the thread a new dispatch supersedes. */
   private readonly latest = new Map<string, ActionId>();
-  private readonly opened = new Set<ActionId>();
 
   constructor(private readonly port: WeftPort) {}
 
@@ -86,9 +85,17 @@ export class LoomWeft {
     });
   }
 
-  /** Called by dispatch just before it records the action. */
+  /** Called by dispatch around recording the action: only a dispatch opens a thread. */
   dispatch(candidate: Candidate | null): void {
     this.dispatching = candidate;
+  }
+
+  /** A journaled dispatch loaded at recovery: indexed for supersession, not reported again. */
+  loaded(observation: Observation): void {
+    if (observation.payload_type === 'action.started' || observation.payload_type === 'action.queued') {
+      const started = observation.payload as ActionStartedPayload;
+      this.latest.set(supersedeKey(started), started.action_id);
+    }
   }
 
   /** An accepted observation, after `applyAccepted`. `goalBefore` is the goal status before it. */
@@ -115,8 +122,8 @@ export class LoomWeft {
         const action_id = started.action_id;
         const candidate = this.dispatching;
         this.dispatching = null;
-        if (!this.opened.has(action_id)) {
-          this.opened.add(action_id);
+        // A queued action that starts later, here or after recovery, was opened when it was dispatched.
+        if (candidate !== null && candidate.candidate_id === started.candidate_id) {
           this.openThread(seq, started, candidate);
         }
         const action = state.actions[action_id];
@@ -128,7 +135,7 @@ export class LoomWeft {
       case 'action.cancel_requested': {
         const { action_id } = observation.payload as { action_id: ActionId };
         const action = state.actions[action_id];
-        if (!action || !this.opened.has(action_id)) {
+        if (!action) {
           break;
         }
         this.send(seq, this.id(`thread:${action_id}:cancelled`), 'thread.transition', action_id, null,
@@ -190,14 +197,14 @@ export class LoomWeft {
     }
   }
 
-  private openThread(seq: Seq, started: ActionStartedPayload, candidate: Candidate | null): void {
+  private openThread(seq: Seq, started: ActionStartedPayload, candidate: Candidate): void {
     const action_id = started.action_id;
     const cycle = /^a:(\d+):/.exec(action_id);
     const opened = this.id(`thread:${action_id}:opened`);
     const evidence = [{ source: 'observation', ref: `seq:${seq}` }];
     this.send(seq, opened, 'thread.transition', action_id, cycle ? this.id(`cycle:${cycle[1]}`) : null, [],
       [...evidence], { transition: 'opened' });
-    if (candidate && candidate.dependencies.length > 0) {
+    if (candidate.dependencies.length > 0) {
       this.send(seq, this.id(`thread:${action_id}:joined`), 'thread.transition', action_id, null,
         candidate.dependencies.map((dep) => ({ rel: 'joins', record_id: this.id(`thread:${dep}:closed`) })),
         [...evidence], { transition: 'joined' });

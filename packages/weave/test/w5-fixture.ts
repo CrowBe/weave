@@ -18,6 +18,7 @@ import {
 import {
   GatewayDecisionLayer,
   LOCAL_DESTINATION,
+  MemoryJournal,
   Runtime,
   stableStringify,
   type ObservationInput,
@@ -112,7 +113,7 @@ export interface W5Sinks {
   readonly fabric?: Sink;
 }
 
-export function w5World(sinks: W5Sinks = {}): W5World {
+export function w5World(sinks: W5Sinks = {}, journal?: MemoryJournal): W5World {
   const authority = createGrantAuthority();
   const host = new AgentFabricHost({
     authority,
@@ -130,6 +131,7 @@ export function w5World(sinks: W5Sinks = {}): W5World {
     decisionLayer: new GatewayDecisionLayer(gateway, [LOCAL_DESTINATION]),
     grantAuthority: authority,
     executionSlots: 2,
+    ...(journal ? { journal } : {}),
     ...(sinks.loom ? { weft: port('loom.main', sinks.loom) } : {}),
   });
   const alpha = host.registerSource('mem:alpha', CONTENT['source:alpha'] as string);
@@ -163,7 +165,7 @@ export function w5World(sinks: W5Sinks = {}): W5World {
       purpose: 'Produce a checked report over three sources',
       sources: [alpha, beta, gamma],
       authority: { read: [alpha, beta, gamma] },
-      budget: { actions: 12, judgments: 12, cost: 1_000_000 },
+      budget: { actions: 12, judgments: 12, recovery: 4, cost: 1_000_000 },
       success_evidence: 'a Report artifact covering every goal source at its current revision',
     },
   };
