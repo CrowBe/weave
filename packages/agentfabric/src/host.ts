@@ -744,28 +744,8 @@ export class AgentFabricHost implements CapabilityHost {
       ? 'uncertain' : record?.status ?? 'running';
     const outcome = open?.phase === 'done' ? open.outcome : record?.outcome;
     if (status !== 'committed') {
-      const published = this.store.publishedBy(invocation_id);
-      if (published?.publication) {
-        const committed: ReconciliationResult = {
-          status: 'committed', outcome: { outcome: 'succeeded', output: this.receiptFrom(published.publication) },
-        };
-        // Legacy stopped results can contradict the host's durable receipt.
-        // They are outside the uncertainty-only reconciliation transition.
-        if (status === 'stopped') return committed;
-        try {
-          // The receipt is host-owned evidence. Use the same durable gate as
-          // explicit reconciliation before releasing an uncertain reservation.
-          if (!open || open.phase === 'done') {
-            return this.reconcile(invocation_id, {
-              resolution: 'committed', evidence: `publication:${digest(published.publication)}`,
-              output: this.receiptFrom(published.publication),
-            });
-          }
-          return committed;
-        } catch {
-          return { status: 'unresolved', reason: 'failed to persist publication reconciliation' };
-        }
-      }
+      const published = this.reconcilePublication(invocation_id, status);
+      if (published) return published;
     }
     if (status === 'running' && !open) {
       return { status: 'unresolved', reason: RECOVERED_UNCERTAINTY };
@@ -782,6 +762,37 @@ export class AgentFabricHost implements CapabilityHost {
       return { status: 'unresolved', reason: outcome.outcome === 'uncertain' ? outcome.reason : 'uncertain' };
     }
     return { status: 'unresolved', reason: `invocation ${invocation_id} is ${status}` };
+  }
+
+  private reconcilePublication(
+    invocation_id: string, status: InvocationRecord['status'],
+  ): ReconciliationResult | { status: 'unresolved'; reason: string } | undefined {
+    const published = this.store.publishedBy(invocation_id);
+    if (!published?.publication) return undefined;
+    const output = this.receiptFrom(published.publication);
+    const committed: ReconciliationResult = { status: 'committed', outcome: { outcome: 'succeeded', output } };
+    // Legacy stopped records are outside the uncertainty-only transition.
+    // Repair them when possible; the durable receipt already proves commit.
+    if (status === 'stopped') {
+      const record = this.store.getInvocation(invocation_id);
+      if (record) {
+        try { this.store.persistInvocationResult({ ...record, status: 'committed', outcome: committed.outcome }); }
+        catch { /* The receipt remains authoritative if result persistence fails. */ }
+      }
+      return committed;
+    }
+    const open = this.open.get(invocation_id);
+    try {
+      // Persist receipt-based reconciliation before releasing an uncertain hold.
+      if (!open || open.phase === 'done') {
+        return this.reconcile(invocation_id, {
+          resolution: 'committed', evidence: `publication:${digest(published.publication)}`, output,
+        });
+      }
+      return committed;
+    } catch {
+      return { status: 'unresolved', reason: 'failed to persist publication reconciliation' };
+    }
   }
 
   /** Trusted host-owner API; resolver contexts cannot reconcile external effects. */
@@ -1217,6 +1228,16 @@ export class AgentFabricHost implements CapabilityHost {
       return { kind: 'replay', handle: this.replayCompleted(existing) };
     }
     const inMemory = this.open.get(invocation_id);
+    if (existing && (!inMemory || inMemory.phase === 'done')) {
+      const published = this.reconcilePublication(invocation_id, existing.status);
+      if (published) {
+        this.authority.markInvoked(grant as Grant);
+        return { kind: 'replay', handle: this.replayCompleted({
+          ...existing, status: published.status === 'committed' ? 'committed' : 'uncertain',
+          outcome: published.status === 'unresolved' ? { outcome: 'uncertain', reason: published.reason } : published.outcome,
+        }) };
+      }
+    }
     if (existing && (existing.status === 'uncertain' ||
         (existing.status === 'running' && (!inMemory || inMemory.phase === 'done')))) {
       this.authority.markInvoked(grant as Grant);
@@ -1592,6 +1613,13 @@ export class AgentFabricHost implements CapabilityHost {
     if (!binding.ok) {
       return { kind: 'outcome', outcome: { outcome: 'failed', failure: 'INVALID_INPUT' }, status: 'stopped' };
     }
+    const published = this.store.publishedBy(open.invocation_id)?.publication;
+    if (published) {
+      if (published.binding_digest !== open.binding_digest) {
+        return { kind: 'outcome', outcome: { outcome: 'failed', failure: 'binding_conflict' }, status: 'stopped' };
+      }
+      return { kind: 'committed', record: published };
+    }
     for (const source of input.sources) {
       const entry = input.read_set.find((item) => this.sameResource(item.resource, source));
       if (!entry) {
@@ -1613,14 +1641,6 @@ export class AgentFabricHost implements CapabilityHost {
     }
     const report_digest = digest(input.report);
     const binding_digest = open.binding_digest;
-    if (dest.publication) {
-      if (dest.publication.invocation_id === open.invocation_id && dest.publication.binding_digest === binding_digest) {
-        return { kind: 'committed', record: dest.publication };
-      }
-      if (dest.publication.invocation_id === open.invocation_id) {
-        return { kind: 'outcome', outcome: { outcome: 'failed', failure: 'binding_conflict' }, status: 'stopped' };
-      }
-    }
     const existingInv = this.store.getInvocation(open.invocation_id);
     if (existingInv?.status === 'committed' && existingInv.outcome?.outcome === 'succeeded') {
       const output = existingInv.outcome.output as PublishReceipt;
