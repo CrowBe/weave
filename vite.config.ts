@@ -10,7 +10,18 @@ export default defineConfig({
     singleQuote: true,
     printWidth: 120,
     // Preserve fixture and golden bytes, including line-delimited trace records.
-    ignorePatterns: ['dist/', 'node_modules/', 'benchmarks/**/*.py', '**/fixtures/**/*.json', '**/fixtures/**/*.jsonl'],
+    ignorePatterns: [
+      'dist/',
+      'node_modules/',
+      'benchmarks/**/*.py',
+      '**/fixtures/**/*.json',
+      '**/fixtures/**/*.jsonl',
+      // Frozen corpus digest and generated report bytes are asserted by the harness.
+      'benchmarks/frontier-weigh/cases.json',
+      'benchmarks/frontier-weigh/REPORT.md',
+      // Wrapping this call separates @ts-expect-error from its expected diagnostic.
+      'packages/weave/test/p5.test.ts',
+    ],
   },
   run: {
     tasks: {
