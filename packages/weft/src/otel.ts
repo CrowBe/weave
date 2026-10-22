@@ -6,6 +6,8 @@ import type { InlinePolicy, Redactor, WeftRecord } from './types.js';
 
 export interface OtlpOptions {
   readonly redact: Redactor;
+  /** Composition-root supplied Unix nanoseconds; no ambient clock is consulted. */
+  readonly baseTimeUnixNano?: bigint | string | undefined;
   readonly inline?: InlinePolicy;
 }
 export type OtlpResult = { readonly ok: true; readonly json: string } |
@@ -29,7 +31,7 @@ function value(v: unknown): Obj {
 function attributes(v: Obj, prefix = ''): Attribute[] {
   return Object.keys(v).sort(compare).filter(k => v[k] !== null).map(k => ({ key: prefix + k, value: value(v[k]) }));
 }
-function span(r: WeftRecord): Obj {
+function span(r: WeftRecord, base: bigint): Obj {
   const fields = r.fields as unknown as Obj;
   const attrs = attributes({ schema: r.schema, trace_id: r.trace_id, record_id: r.record_id,
     emitter: r.emitter, sequence: r.sequence, kind: r.kind, thread_id: r.thread_id,
@@ -44,7 +46,7 @@ function span(r: WeftRecord): Obj {
   attrs.sort((a, b) => compare(a.key, b.key));
   const failed = r.kind === 'error' || ['failed', 'missed', 'uncertain'].includes(String(fields['status'] ?? fields['state'])) ||
     fields['disposition'] === 'failed' || fields['disposition'] === 'unaccepted';
-  const time = (BigInt(r.sequence) + 1n).toString();
+  const time = (base + BigInt(r.sequence) + 1n).toString();
   return {
     traceId: traceId(r.trace_id), spanId: spanId(r.trace_id, r.record_id),
     ...(r.parent_id === null ? {} : { parentSpanId: spanId(r.trace_id, r.parent_id) }),
@@ -59,7 +61,16 @@ function span(r: WeftRecord): Obj {
 
 /** All-or-nothing batch. Only the redacted, validated snapshot is ever mapped. */
 export function exportOtlp(records: unknown, options: OtlpOptions): OtlpResult {
+  let base = 0n;
+  const maxTime = (1n << 64n) - 1n;
   try {
+    const supplied = options?.baseTimeUnixNano;
+    if (supplied !== undefined) {
+      if (typeof supplied !== 'bigint' &&
+          (typeof supplied !== 'string' || !/^[0-9]+$/.test(supplied))) return { ok: false, reason: 'config' };
+      base = BigInt(supplied);
+      if (base < 0n || base > maxTime) return { ok: false, reason: 'config' };
+    }
     if (typeof options?.redact !== 'function') return { ok: false, reason: 'config' };
     if (options.inline !== undefined) assertInlinePolicy(options.inline);
   } catch { return { ok: false, reason: 'config' }; }
@@ -69,6 +80,7 @@ export function exportOtlp(records: unknown, options: OtlpOptions): OtlpResult {
     for (const raw of records) {
       const line = serializeRecord(raw as WeftRecord, options.redact, options.inline);
       const r = JSON.parse(line) as WeftRecord;
+      if (base + BigInt(r.sequence) + 1n > maxTime) return { ok: false, reason: 'config' };
       let group = traces.get(r.trace_id);
       if (group === undefined) { group = new Map(); traces.set(r.trace_id, group); }
       const previous = group.get(r.record_id);
@@ -100,7 +112,7 @@ export function exportOtlp(records: unknown, options: OtlpOptions): OtlpResult {
         for (const id of path) complete.add(id);
       }
       resourceSpans.push({ resource: { attributes: [{ key: 'weft.trace_id', value: { stringValue: trace } }] },
-        scopeSpans: [{ scope: { name: '@weave/weft/otel', version: '1' }, spans: ordered.map(span) }] });
+        scopeSpans: [{ scope: { name: '@weave/weft/otel', version: '1' }, spans: ordered.map(r => span(r, base)) }] });
     }
     return { ok: true, json: JSON.stringify({ resourceSpans }) };
   } catch {
@@ -123,10 +135,10 @@ export interface OtlpExporterOptions extends OtlpOptions {
 export function createOtlpExporter(options: OtlpExporterOptions): {
   readonly export: (records: unknown, signal?: AbortSignal) => Promise<OtlpResult>;
 } {
-  const { redact, inline, write, timer, writeTimeoutMs = 1000 } = options;
+  const { redact, inline, baseTimeUnixNano, write, timer, writeTimeoutMs = 1000 } = options;
   return {
     async export(records: unknown, signal?: AbortSignal): Promise<OtlpResult> {
-      const result = exportOtlp(records, { redact, ...(inline === undefined ? {} : { inline }) });
+      const result = exportOtlp(records, { redact, baseTimeUnixNano, ...(inline === undefined ? {} : { inline }) });
       if (!result.ok) return result;
       if (typeof timer !== 'function' || !Number.isFinite(writeTimeoutMs) || writeTimeoutMs <= 0 ||
           writeTimeoutMs > 2 ** 31 - 1) return { ok: false, reason: 'config' };

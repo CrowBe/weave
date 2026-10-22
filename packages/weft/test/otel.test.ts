@@ -197,3 +197,99 @@ test('timer cleanup and cancellation belong to each concurrent export', async ()
   deadlines.forEach(expire => expire());
   assert.deepEqual(cancelled, [1, 0]);
 });
+
+
+test('injected base shifts only timestamps and preserves sequence ordering and epoch bytes', () => {
+  const records = [record(), { ...record('b'), sequence: Number.MAX_SAFE_INTEGER }];
+  const epoch = json(records);
+  for (const baseTimeUnixNano of [0n, '0', 1700000000000000000n, '1700000000000000000']) {
+    const result = exportOtlp(records, { redact: keep, baseTimeUnixNano });
+    assert.ok(result.ok);
+    const expected = JSON.parse(epoch);
+    for (const span of expected.resourceSpans[0].scopeSpans[0].spans) {
+      span.startTimeUnixNano = (BigInt(span.startTimeUnixNano) + BigInt(baseTimeUnixNano)).toString();
+      span.endTimeUnixNano = span.startTimeUnixNano;
+    }
+    assert.equal(result.json, JSON.stringify(expected));
+    if (BigInt(baseTimeUnixNano) === 0n) assert.equal(result.json, epoch);
+  }
+});
+
+test('base validation fails closed, including empty batches and uint64 endpoint overflow', () => {
+  const max = (1n << 64n) - 1n;
+  for (const baseTimeUnixNano of [-1n, '-1', '', ' ', '1.5', '1e3', '+1', '0x10', 1, NaN,
+    Infinity, null, {}, max + 1n, (max + 1n).toString()]) {
+    for (const records of [[], [record()]]) {
+      assert.deepEqual(exportOtlp(records, { redact: keep, baseTimeUnixNano } as never), { ok: false, reason: 'config' });
+    }
+  }
+  for (const baseTimeUnixNano of [max, max.toString(), max - BigInt(Number.MAX_SAFE_INTEGER)]) {
+    assert.deepEqual(exportOtlp([{ ...record(), sequence: Number.MAX_SAFE_INTEGER }],
+      { redact: keep, baseTimeUnixNano }), { ok: false, reason: 'config' });
+  }
+  const result = exportOtlp([record()], { redact: keep, baseTimeUnixNano: max - 1n });
+  assert.ok(result.ok);
+  assert.equal(JSON.parse(result.json).resourceSpans[0].scopeSpans[0].spans[0].endTimeUnixNano, max.toString());
+});
+
+test('base export reads no ambient clock', () => {
+  const date = Date.now;
+  const performanceNow = Object.getOwnPropertyDescriptor(performance, 'now');
+  const fail = () => { throw Error('ambient clock'); };
+  try {
+    Date.now = fail;
+    Object.defineProperty(performance, 'now', { configurable: true, value: fail });
+    for (const baseTimeUnixNano of [undefined, '1700000000000000000']) {
+      assert.ok(exportOtlp([record()], { redact: keep, baseTimeUnixNano }).ok);
+    }
+  } finally {
+    Date.now = date;
+    if (performanceNow) Object.defineProperty(performance, 'now', performanceNow);
+    else Reflect.deleteProperty(performance, 'now');
+  }
+});
+
+test('base survives concurrent cancellation, writer failure and crash/re-export without disclosure', async () => {
+  const baseTimeUnixNano = '1700000000000000000';
+  const writes: string[] = [];
+  let complete = () => {};
+  const exporter = createOtlpExporter({ redact: keep, baseTimeUnixNano,
+    timer: () => () => {},
+    write: s => { writes.push(s); return new Promise<void>(resolve => { complete = resolve; }); },
+  });
+  const first = exporter.export([record('a', 'one')]);
+  const finishFirst = complete;
+  const controller = new AbortController();
+  const second = exporter.export([record('a', 'two')], controller.signal);
+  controller.abort();
+  assert.deepEqual(await second, { ok: false, reason: 'write' });
+  finishFirst();
+  const result = await first;
+  assert.ok(result.ok);
+  assert.equal(result.json, writes[0]);
+  assert.equal(JSON.parse(result.json).resourceSpans[0].scopeSpans[0].spans[0].startTimeUnixNano,
+    '1700000000000000001');
+  assert.notEqual(writes[0], writes[1]);
+  const crashed = createOtlpExporter({ redact: keep, baseTimeUnixNano, timer,
+    write: () => { throw Error('crash'); } });
+  assert.deepEqual(await crashed.export([record('a', 'one')]), { ok: false, reason: 'write' });
+  assert.deepEqual(exportOtlp([record('a', 'one')], { redact: keep, baseTimeUnixNano }), result);
+  let called = false;
+  const invalid = createOtlpExporter({ redact: keep, baseTimeUnixNano: -1n,
+    timer, write: () => { called = true; } });
+  assert.deepEqual(await invalid.export([record()]), { ok: false, reason: 'config' });
+  assert.equal(called, false);
+  assert.deepEqual(exportOtlp([{ ...record(), grant: 'single-use' }], { redact: keep, baseTimeUnixNano }),
+    { ok: false, reason: 'disclosure' });
+});
+
+test('a base preserves cross-emitter child-before-parent times without inventing chronology', () => {
+  const parent = { ...record('parent'), sequence: 10 };
+  const child = { ...record('child'), emitter: { kind: 'gateway', id: 'other' }, parent_id: 'parent' };
+  const result = exportOtlp([child, parent], { redact: keep, baseTimeUnixNano: '1000' });
+  assert.ok(result.ok);
+  const [p, c] = JSON.parse(result.json).resourceSpans[0].scopeSpans[0].spans;
+  assert.equal(p.startTimeUnixNano, '1011');
+  assert.equal(c.startTimeUnixNano, '1001');
+  assert.equal(c.parentSpanId, p.spanId);
+});

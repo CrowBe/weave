@@ -511,7 +511,7 @@ not removed from Weft.
 
 `@weave/weft/otel` is an optional entry point, with no third-party runtime
 dependency. The core entry point never imports it. `exportOtlp(records,
-{ redact, inline? })` accepts a batch of `weft.record@1` values and returns
+{ redact, inline?, baseTimeUnixNano? })` accepts a batch of `weft.record@1` values and returns
 `{ ok: true, json }` or `{ ok: false, reason }`, without throwing. Every
 record passes through `serializeRecord` before mapping; one rejection rejects
 the entire batch. No raw input, environment, grant, resource detector or ambient
@@ -519,7 +519,7 @@ sink is consulted. Missing or invalid redactors and inline policies return
 the non-sensitive reason `config`, including for empty batches. Redactor throws
 and rejected record content return `disclosure`.
 
-`createOtlpExporter({ redact, inline?, write, timer, writeTimeoutMs? })` adds
+`createOtlpExporter({ redact, inline?, baseTimeUnixNano?, write, timer, writeTimeoutMs? })` adds
 an explicit one-way `export(records, signal?)` method. The composition root
 owns writer liveness: it supplies `timer(ms, expire)`, which must fire within
 the requested delay and return a cancellation function. There is no ambient
@@ -553,11 +553,21 @@ Inference token counts also become `gen_ai.usage.input_tokens` and
 `gen_ai.usage.output_tokens`. A routed unit is not necessarily a model or
 provider, and Weft does not know the GenAI operation: none is invented.
 
-**Time and loss.** Start and end are both `sequence + 1` nanoseconds after the
-Unix epoch, calculated with integer arithmetic. These are synthetic point
+**Time and loss.** Start and end are both `baseTimeUnixNano + sequence + 1`
+nanoseconds after the Unix epoch, calculated with integer arithmetic. The optional
+`baseTimeUnixNano` is injected only by the composition root as a non-negative
+bigint or digits-only decimal string. It and every resulting timestamp must fit
+uint64 (including the `+1`); invalid values or overflow return `config`, including
+invalid bases on empty batches. No clock is read by Weft, Loom or the gateway to
+obtain this base. Without a base, zero is used and output stays byte-identical
+to the original epoch behaviour. These are synthetic point
 spans, not occurrence times; `weft.time_basis = "sequence"` marks them.
-Collectors with retention windows may drop these synthetic 1970 timestamps.
-Sequences from different emitters are incomparable. Measured `latency_ms`
+Without a base, OTLP backends or collectors (for example, ingestion windows)
+may silently drop these 1970-dated spans, so production composition roots should
+inject a base.
+Sequences from different emitters are incomparable. Across emitters a child
+span can start before its parent when the parent has a later sequence; some
+trace UIs flag or reorder these spans. Measured `latency_ms`
 remains a namespaced metric rather than fabricating a start time. Real timing,
 duration and cross-emitter chronology cannot be recovered from this export.
 Null versus absent is lost; native validation, field disclosure classes,
@@ -567,7 +577,7 @@ values in namespaced attributes, but have no standard OTel meaning. Numeric
 safe integers use OTLP decimal int strings; fractional metrics use doubles.
 Truncated hash identities have theoretical collision risk; export is no store
 and provides no exactly-once delivery guarantee. Retrying after a crash produces
-the same bytes and span identities for the same redacted records; the composition
+the same bytes and span identities for the same redacted records and base; the composition
 root must supply a deterministic redactor for reproducible export. Collector
 deduplication is its concern.
 `weave.trace@1` is rejected rather than inventing missing Weft fields.
