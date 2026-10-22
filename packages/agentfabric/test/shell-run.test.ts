@@ -201,6 +201,11 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Blocks this thread, so the host's event loop cannot deliver stdin end-of-file meanwhile. */
+function holdEventLoop(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
 async function waitForPid(file: string): Promise<number> {
   const started = Date.now();
   for (;;) {
@@ -381,6 +386,31 @@ describe('shell.run@1', () => {
       assert.equal(trace?.parentId, null);
       assert.deepEqual(trace?.env_allow, ['CANARY']);
       assert.equal(trace?.argv.join('\0').includes(CANARY), false);
+    } finally {
+      rmSync(world.dir, { recursive: true, force: true });
+    }
+  });
+
+  // A loaded host can deliver stdin end-of-file after the child is already reading it (#301).
+  it('reports the whole stdin when end-of-file arrives after the child starts reading', async () => {
+    const world = hostFor(undefined);
+    try {
+      const issued = grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-late-eof', [
+        'process.spawn',
+        `fs.write:${world.cwd}`,
+      ]);
+      const handle = world.host.invoke(
+        issued,
+        SHELL_RUN.id,
+        shellInputs(world.cwd, [process.execPath, STUB, '--report'], [], 5_000, 'late-body'),
+      );
+      assert.equal(handle.kind, 'handle');
+      if (handle.kind !== 'handle') return;
+      world.host.release(issued.action_id);
+      holdEventLoop(1_000);
+      const output = succeeded(await handle.result);
+      assert.equal(output.exit, 0, output.stderr_tail);
+      assert.equal((JSON.parse(output.stdout_tail) as { stdin: string }).stdin, 'late-body');
     } finally {
       rmSync(world.dir, { recursive: true, force: true });
     }
