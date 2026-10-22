@@ -87,6 +87,9 @@ describe('AgentFabric host authority', () => {
           } else {
             assert.deepEqual(result, { outcome: 'uncertain', reason: 'failed to persist invocation result' });
             assert.deepEqual(readFileSync(path), before);
+            assert.deepEqual(host.lookup('settle-invocation', grant), {
+              status: 'unresolved', reason: result.reason,
+            });
           }
           assert.equal(host.openCount(), 0);
           assert.deepEqual(host.openInvocationIds(), []);
@@ -779,6 +782,67 @@ describe('Fabric store indexes', () => {
     );
     assert.equal('status' in stopped && stopped.status, 'stopped');
   });
+
+  for (const fault of ['closed store', 'replaced lock', 'validation error', 'persistence refusal'] as const) {
+    for (const pathToCommit of ['rejected acknowledgement', 'after_commit release', 'after_commit proceed', 'disconnect'] as const) {
+      it(`settles ${pathToCommit} after ${fault} without escaping and reconciles the publication`, async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'weave-host-note-committed-'));
+        const path = join(dir, 'fabric.json');
+        const store = FabricStore.open(path);
+        const authority = createGrantAuthority();
+        const host = new AgentFabricHost({ authority, store, faults: {
+          rejectPromiseAfterCommit: pathToCommit === 'rejected acknowledgement',
+          disconnectAfterCommit: pathToCommit === 'disconnect',
+          publishGate: pathToCommit === 'after_commit proceed' ? 'before_commit'
+            : pathToCommit === 'after_commit release' ? 'after_commit' : 'none',
+        } });
+        const source = host.registerSource('mem:note-committed', 'line');
+        const destination = host.registerDestination('mem:note-committed-outbox');
+        const issued = publishGrant(authority, source, destination, 'note-action', 1);
+        const handle = host.invoke(issued, REPORT_PUBLISH.id, publishInput(source, destination),
+          { invocation_id: 'note-invocation' });
+        assert.equal(handle.kind, 'handle');
+        if (handle.kind !== 'handle') throw new Error('expected invocation handle');
+        const persistResult = store.persistInvocationResult.bind(store);
+        let before: Buffer | undefined;
+        store.persistInvocationResult = (record) => {
+          assert.ok(store.publishedBy('note-invocation')?.publication, 'fault must follow the publication commit');
+          before ??= readFileSync(path);
+          if (fault === 'closed store') store.close();
+          if (fault === 'replaced lock') nodeFs.writeFileSync(`${path}.lock`, `${process.pid}:replacement`);
+          if (fault === 'validation error') throw new TypeError('injected result validation error');
+          if (fault === 'persistence refusal') store.persistResult = false;
+          persistResult(record);
+        };
+        try {
+          assert.doesNotThrow(() => host.release('note-action'));
+          if (pathToCommit === 'after_commit proceed') {
+            host.faults.publishGate = 'after_commit';
+            assert.doesNotThrow(() => host.proceed('note-action'));
+          }
+          const result = await Promise.race([
+            handle.result,
+            new Promise((resolve) => setImmediate(() => resolve('unsettled'))),
+          ]);
+          assert.deepEqual(result, { outcome: 'uncertain', reason: 'failed to persist invocation result after commit' });
+          assert.equal(host.openCount(), 0);
+          assert.deepEqual(host.openInvocationIds(), []);
+          assert.equal(host.coordinator.held().length, 2);
+          assert.deepEqual(readFileSync(path), before);
+          const reconciled = host.lookup('note-invocation', issued);
+          assert.equal('status' in reconciled && reconciled.status, 'committed');
+          assert.deepEqual(host.coordinator.held(), []);
+          if (fault === 'replaced lock') {
+            store.close();
+            assert.equal(readFileSync(`${path}.lock`, 'utf8'), `${process.pid}:replacement`);
+          }
+        } finally {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+    }
+  }
 
   it('settles a publication after a result validation error and retains reservations for reconciliation', async () => {
     const authority = createGrantAuthority();

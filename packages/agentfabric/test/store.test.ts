@@ -279,7 +279,7 @@ describe('FabricStore append-only journal', () => {
     }
   });
 
-  it('does not give cleanup guidance while a slow reaper remains alive past the retry bound', () => {
+  it('names the blocked claim and conditional cleanup when the reaper pid still looks alive', () => {
     const dir = mkdtempSync(join(tmpdir(), 'weave-store-live-reaper-bound-'));
     const path = join(dir, 'fabric.json');
     const reclaim = `${path}.lock.reclaim`;
@@ -294,7 +294,10 @@ describe('FabricStore append-only journal', () => {
     try {
       assert.throws(() => FabricStore.open(path, { sleep() { sleeps += 1; } }), (error: Error) => {
         assert.match(error.message, /already open/);
-        assert.doesNotMatch(error.message, /remove|clean.?up|claimant/i);
+        assert.ok(error.message.includes(`stale-lock reclaim is blocked by ${claim}`));
+        assert.ok(error.message.includes(`confirm no weave process is using ${path}`));
+        assert.ok(error.message.includes(`then remove ${claim} and retry`));
+        assert.doesNotMatch(error.message, /claimant/);
         return true;
       });
       assert.ok(sleeps >= 8 && sleeps <= 256);

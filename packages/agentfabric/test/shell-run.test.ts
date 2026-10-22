@@ -4,7 +4,7 @@
  * in stored invocations, or in rejection reasons.
  */
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -16,7 +16,7 @@ import {
   type InvocationOutcome,
   type InvocationRejected,
 } from '@weave/agentsop';
-import { AgentFabricHost, REPO_BUILD, REPO_LINT, REPO_TEST, SHELL_RUN, type ShellHostOptions } from '@weave/agentfabric';
+import { AgentFabricHost, FabricStore, REPO_BUILD, REPO_LINT, REPO_TEST, SHELL_RUN, type ShellHostOptions } from '@weave/agentfabric';
 
 const CANARY = 'canary-secret-9f3a2c7b-NOT-ON-ARGV';
 const STUB = fileURLToPath(new URL('../../test/fixtures/stub-cli.mjs', import.meta.url));
@@ -244,6 +244,42 @@ async function within<T>(ms: number, pending: Promise<T>, label: string): Promis
 }
 
 describe('shell.run@1', () => {
+  for (const fault of ['closed store', 'replaced lock'] as const) {
+    it(`keeps lookup unresolved after a completed shell run with ${fault} and releases its reservation`, async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'weave-shell-result-write-'));
+      const path = join(dir, 'fabric.json');
+      const store = FabricStore.open(path);
+      const authority = createGrantAuthority();
+      const time = testTime();
+      const host = new AgentFabricHost({ authority, store, shell: {
+        env: envPort(), clock: time.clock, timer: time.timer,
+      } });
+      try {
+        const cwd = host.registerWorkspace(dir);
+        const issued = grant(authority, SHELL_RUN.id, cwd, 'shell-settle', ['process.spawn', `fs.write:${cwd}`]);
+        const handle = host.invoke(issued, SHELL_RUN.id,
+          shellInputs(cwd, [process.execPath, STUB, '--report']), { invocation_id: 'shell-settle-invocation' });
+        assert.equal(handle.kind, 'handle');
+        if (handle.kind !== 'handle') throw new Error('expected invocation handle');
+        host.release('shell-settle');
+        if (fault === 'closed store') store.close();
+        else writeFileSync(`${path}.lock`, `${process.pid}:replacement`);
+        const before = readFileSync(path);
+        assert.deepEqual(await handle.result, { outcome: 'uncertain', reason: 'failed to persist invocation result' });
+        assert.equal(host.shellTraces()[0]?.exit, 0, 'the shell operation completed');
+        assert.equal(host.openCount(), 0);
+        assert.deepEqual(host.lookup('shell-settle-invocation', issued), {
+          status: 'unresolved', reason: 'failed to persist invocation result',
+        });
+        assert.deepEqual(host.coordinator.held(), []);
+        assert.deepEqual(readFileSync(path), before);
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+
   it('injects env_allow by name and keeps the canary out of argv, traces, and errors', async () => {
     const world = hostFor(undefined);
     try {
