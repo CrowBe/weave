@@ -10,11 +10,13 @@ execution or replace deterministic evidence.
   D1–D8 observation admission, D6 disposition and deterministic stop outcomes.
   D3 `decision.preselect` policies accept only configured `typesafe-jev` or
   `amos` ids; other ids, including `openai-decisions`, are config errors.
-- [Versioned trace ingestion](packages/agentsop/src/TRACE-CONTRACT.md):
-  JSONL tree schema, redaction and idempotent importer port.
 - [Weft records](packages/weft/src/WEFT-CONTRACT.md): `weft.record@1`
   envelope, kinds, links, evidence and fail-closed validation
-  (`@weave/weft`, `validateRecord`).
+  (`@weave/weft`, `validateRecord`); disclosure classes, the scoped inline
+  content policy and the redaction boundary (`serializeRecord`); and the
+  `weave.trace@1` JSONL tree envelope it still supports: redaction and
+  idempotent importer port (`validateTrace`, `serializeTrace`,
+  `importTraceLines`).
 - [Gauge evaluation](packages/gauge/src/GAUGE-CONTRACT.md): criteria sets,
   case sets, evaluation results, comparisons and failure attributions with
   recomputed verdicts (`@weave/gauge`, `validate`).
