@@ -716,6 +716,10 @@ function acquireLock(path: string, sleep: (milliseconds: number) => void): strin
         }
       }
       const owner = readLockContent(lockPath);
+      if (owner === undefined) {
+        // The previous writer may have released its lock after link failed.
+        continue;
+      }
       const pid = lockOwner(owner);
       if (pid === undefined || isAlive(pid)) {
         throw new Error(`host store is already open: ${resolve(path)}`);

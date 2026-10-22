@@ -279,12 +279,13 @@ describe('FabricStore append-only journal', () => {
     }
   });
 
-  it('names the blocked claim under a dead reclaim owner after the retry bound', () => {
+  it('names the blocked claim and conditional cleanup when the reaper pid still looks alive', () => {
     const dir = mkdtempSync(join(tmpdir(), 'weave-store-live-reaper-bound-'));
     const path = join(dir, 'fabric.json');
     const reclaim = `${path}.lock.reclaim`;
     const claim = `${reclaim}/reap`;
     const dead = spawnSync(process.execPath, ['-e', '']);
+    assert.equal(dead.status, 0);
     writeFileSync(`${path}.lock`, String(dead.pid));
     nodeFs.mkdirSync(claim, { recursive: true });
     writeFileSync(`${reclaim}/owner`, String(dead.pid));
@@ -299,9 +300,73 @@ describe('FabricStore append-only journal', () => {
         assert.doesNotMatch(error.message, /claimant/);
         return true;
       });
+      assert.ok(sleeps >= 8 && sleeps <= 256);
+      assert.equal(readFileSync(`${claim}/owner`, 'utf8'), `${process.pid}:claimant`);
+      assert.equal(readFileSync(`${path}.lock`, 'utf8'), String(dead.pid));
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('names the blocked claim under a dead reaper after the retry bound', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-store-dead-reaper-bound-'));
+    const path = join(dir, 'fabric.json');
+    const reclaim = `${path}.lock.reclaim`;
+    const claim = `${reclaim}/reap`;
+    const dead = spawnSync(process.execPath, ['-e', '']);
+    writeFileSync(`${path}.lock`, String(dead.pid));
+    nodeFs.mkdirSync(claim, { recursive: true });
+    writeFileSync(`${reclaim}/owner`, String(dead.pid));
+    writeFileSync(`${claim}/owner`, `${dead.pid}:claimant`);
+    let sleeps = 0;
+    try {
+      assert.throws(() => FabricStore.open(path, { sleep() { sleeps += 1; } }), (error: Error) => {
+        assert.match(error.message, /already open/);
+        assert.ok(error.message.includes(`stale-lock reclaim is blocked by ${claim}`));
+        assert.ok(error.message.includes(`confirm no weave process is using ${path}`));
+        assert.ok(error.message.includes(`then remove ${claim} and retry`));
+        assert.doesNotMatch(error.message, /claimant/);
+        return true;
+      });
       assert.ok(sleeps > 0 && sleeps <= 16);
       assert.ok(existsSync(claim));
     } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('retries acquisition when the writer lock vanishes after link reports EEXIST', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-store-vanished-lock-'));
+    const path = join(dir, 'fabric.json');
+    const lock = `${path}.lock`;
+    writeFileSync(lock, `${process.pid}:departing-owner`);
+    const mutableFs = createRequire(import.meta.url)('node:fs') as typeof nodeFs;
+    const original = mutableFs.linkSync;
+    let attempts = 0;
+    let departed = false;
+    let store: FabricStore | undefined;
+    mutableFs.linkSync = ((...args: Parameters<typeof original>) => {
+      if (String(args[1]) !== lock) return original(...args);
+      attempts += 1;
+      try {
+        return original(...args);
+      } catch (error) {
+        if (!departed && (error as NodeJS.ErrnoException).code === 'EEXIST') {
+          departed = true;
+          nodeFs.unlinkSync(lock);
+        }
+        throw error;
+      }
+    }) as typeof original;
+    syncBuiltinESMExports();
+    try {
+      store = FabricStore.open(path);
+      assert.ok(departed);
+      assert.equal(attempts, 2);
+      store.retainConclusion('successor acquired the lock');
+      assert.throws(() => FabricStore.open(path), /already open/);
+    } finally {
+      mutableFs.linkSync = original;
+      syncBuiltinESMExports();
+      store?.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('refuses append and compaction after close without changing bytes or state', () => {

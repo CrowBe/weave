@@ -25,6 +25,85 @@ function inspectGrant(authority: ReturnType<typeof createGrantAuthority>, source
 }
 
 describe('AgentFabric host authority', () => {
+  for (const fault of ['closed store', 'replaced lock', 'poisoned append', 'validation error', 'persistence refusal',
+    'rejected implementation', 'uncertain implementation', 'cache error']) {
+    it(`settles an admitted implementation after ${fault} without an unhandled rejection`, () => {
+      // Observe unhandled rejections in a child, independently of node:test's hook.
+      const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+        import assert from 'node:assert/strict';
+        import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+        import { tmpdir } from 'node:os';
+        import { join } from 'node:path';
+        import { createGrantAuthority } from '@weave/agentsop';
+        import { AgentFabricHost, FabricStore, SOURCE_INSPECT } from '@weave/agentfabric';
+        const fault = ${JSON.stringify(fault)};
+        const dir = mkdtempSync(join(tmpdir(), 'weave-host-settlement-'));
+        const path = join(dir, 'fabric.json');
+        const store = FabricStore.open(path);
+        const unhandled = [];
+        process.on('unhandledRejection', (error) => unhandled.push(error));
+        try {
+          const authority = createGrantAuthority();
+          const host = new AgentFabricHost({ authority, store });
+          const source = host.registerSource('mem:settlement', 'line');
+          let complete, reject;
+          const running = new Promise((resolve, fail) => { complete = resolve; reject = fail; });
+          host.installAdmitted(SOURCE_INSPECT, () => running);
+          const grant = authority.issue({ action_id: 'settle-action', operation: SOURCE_INSPECT.id,
+            contract_rev: SOURCE_INSPECT.revision, permissions: [{ resource: source, mode: 'read' }],
+            effects: [{ resource: source, mode: 'read' }], issued_at: 1 });
+          const handle = host.invoke(grant, SOURCE_INSPECT.id, { source }, { invocation_id: 'settle-invocation' });
+          assert.equal(handle.kind, 'handle');
+          host.release('settle-action');
+          assert.equal(host.coordinator.held().length, 1);
+          if (fault === 'closed store' || fault === 'rejected implementation') store.close();
+          if (fault === 'replaced lock') {
+            rmSync(path + '.lock');
+            writeFileSync(path + '.lock', 'replacement owner');
+          }
+          if (fault === 'poisoned append') {
+            appendFileSync(path, 'unexpected journal bytes');
+            assert.throws(() => store.retainConclusion('unaccepted'), /unexpected journal length/);
+          }
+          if (fault === 'validation error') {
+            store.persistInvocationResult = () => { throw new TypeError('injected result validation error'); };
+          }
+          if (fault === 'persistence refusal' || fault === 'uncertain implementation') store.persistResult = false;
+          let cacheAttempts = 0;
+          if (fault === 'cache error') {
+            store.rememberResult = () => { cacheAttempts += 1; throw new Error('injected cache error'); };
+          }
+          const before = readFileSync(path);
+          const completed = fault === 'uncertain implementation'
+            ? { outcome: 'uncertain', reason: 'implementation cannot confirm effects' }
+            : { outcome: 'succeeded', output: { revision: 1 } };
+          if (fault === 'rejected implementation') reject(new Error('implementation failed'));
+          else complete(completed);
+          const result = await Promise.race([handle.result, new Promise((resolve) => setImmediate(() => resolve('unsettled')))]);
+          if (fault === 'cache error') {
+            assert.deepEqual(result, completed);
+            assert.equal(cacheAttempts, 1);
+            assert.equal(store.getInvocation('settle-invocation').status, 'committed');
+          } else {
+            assert.deepEqual(result, { outcome: 'uncertain', reason: 'failed to persist invocation result' });
+            assert.deepEqual(readFileSync(path), before);
+            assert.deepEqual(host.lookup('settle-invocation', grant), {
+              status: 'unresolved', reason: result.reason,
+            });
+          }
+          assert.equal(host.openCount(), 0);
+          assert.deepEqual(host.openInvocationIds(), []);
+          assert.equal(host.coordinator.held().length, fault === 'uncertain implementation' ? 1 : 0);
+          store.close();
+          if (fault === 'replaced lock') assert.equal(readFileSync(path + '.lock', 'utf8'), 'replacement owner');
+          await new Promise((resolve) => setImmediate(resolve));
+          assert.deepEqual(unhandled, []);
+        } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+      `], { encoding: 'utf8', timeout: 10_000 });
+      assert.equal(child.status, 0, child.stderr || String(child.error));
+    });
+  }
+
   for (const malformed of ['undefined output', 'non-string failure', 'BigInt output', 'cyclic output', 'invalid serialized outcome']) {
     it(`settles an admitted implementation's ${malformed} without an unhandled rejection`, () => {
       // Isolate rejection observation from node:test's own unhandled-rejection hook.
@@ -113,7 +192,7 @@ describe('AgentFabric host authority', () => {
   });
 
   for (const late of ['completion', 'cancellation'] as const) {
-    it(`refuses late invocation ${late} after store close and preserves successor records`, () => {
+    it(`preserves successor records on late invocation ${late} after store close`, async () => {
       const dir = mkdtempSync(join(tmpdir(), 'weave-host-closed-store-'));
       const path = join(dir, 'fabric.json');
       const store = FabricStore.open(path);
@@ -123,12 +202,20 @@ describe('AgentFabric host authority', () => {
       const handle = host.invoke(inspectGrant(authority, source, 'late-action'), SOURCE_INSPECT.id,
         { source }, { invocation_id: 'late-invocation' });
       assert.equal(handle.kind, 'handle');
+      if (handle.kind !== 'handle') throw new Error('expected invocation handle');
       store.close();
       const successor = FabricStore.open(path);
       try {
         successor.retainConclusion('successor evidence');
         const before = readFileSync(path);
-        assert.throws(() => late === 'completion' ? host.release('late-action') : host.requestCancel('late-invocation'), /closed/);
+        if (late === 'completion') {
+          host.release('late-action');
+          assert.deepEqual(await handle.result, { outcome: 'uncertain', reason: 'failed to persist invocation result' });
+          assert.equal(host.openCount(), 0);
+          assert.deepEqual(host.coordinator.held(), []);
+        } else {
+          assert.throws(() => host.requestCancel('late-invocation'), /closed/);
+        }
         assert.deepEqual(readFileSync(path), before);
         assert.deepEqual(successor.conclusions(), ['successor evidence']);
       } finally {
@@ -694,6 +781,90 @@ describe('Fabric store indexes', () => {
       publishGrant(authority, source, destination, 'a:index:2', 4),
     );
     assert.equal('status' in stopped && stopped.status, 'stopped');
+  });
+
+  for (const fault of ['closed store', 'replaced lock', 'validation error', 'persistence refusal'] as const) {
+    for (const pathToCommit of ['rejected acknowledgement', 'after_commit release', 'after_commit proceed', 'disconnect'] as const) {
+      it(`settles ${pathToCommit} after ${fault} without escaping and reconciles the publication`, async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'weave-host-note-committed-'));
+        const path = join(dir, 'fabric.json');
+        const store = FabricStore.open(path);
+        const authority = createGrantAuthority();
+        const host = new AgentFabricHost({ authority, store, faults: {
+          rejectPromiseAfterCommit: pathToCommit === 'rejected acknowledgement',
+          disconnectAfterCommit: pathToCommit === 'disconnect',
+          publishGate: pathToCommit === 'after_commit proceed' ? 'before_commit'
+            : pathToCommit === 'after_commit release' ? 'after_commit' : 'none',
+        } });
+        const source = host.registerSource('mem:note-committed', 'line');
+        const destination = host.registerDestination('mem:note-committed-outbox');
+        const issued = publishGrant(authority, source, destination, 'note-action', 1);
+        const handle = host.invoke(issued, REPORT_PUBLISH.id, publishInput(source, destination),
+          { invocation_id: 'note-invocation' });
+        assert.equal(handle.kind, 'handle');
+        if (handle.kind !== 'handle') throw new Error('expected invocation handle');
+        const persistResult = store.persistInvocationResult.bind(store);
+        let before: Buffer | undefined;
+        store.persistInvocationResult = (record) => {
+          assert.ok(store.publishedBy('note-invocation')?.publication, 'fault must follow the publication commit');
+          before ??= readFileSync(path);
+          if (fault === 'closed store') store.close();
+          if (fault === 'replaced lock') nodeFs.writeFileSync(`${path}.lock`, `${process.pid}:replacement`);
+          if (fault === 'validation error') throw new TypeError('injected result validation error');
+          if (fault === 'persistence refusal') store.persistResult = false;
+          persistResult(record);
+        };
+        try {
+          assert.doesNotThrow(() => host.release('note-action'));
+          if (pathToCommit === 'after_commit proceed') {
+            host.faults.publishGate = 'after_commit';
+            assert.doesNotThrow(() => host.proceed('note-action'));
+          }
+          const result = await Promise.race([
+            handle.result,
+            new Promise((resolve) => setImmediate(() => resolve('unsettled'))),
+          ]);
+          assert.deepEqual(result, { outcome: 'uncertain', reason: 'failed to persist invocation result after commit' });
+          assert.equal(host.openCount(), 0);
+          assert.deepEqual(host.openInvocationIds(), []);
+          assert.equal(host.coordinator.held().length, 2);
+          assert.deepEqual(readFileSync(path), before);
+          const reconciled = host.lookup('note-invocation', issued);
+          assert.equal('status' in reconciled && reconciled.status, 'committed');
+          assert.deepEqual(host.coordinator.held(), []);
+          if (fault === 'replaced lock') {
+            store.close();
+            assert.equal(readFileSync(`${path}.lock`, 'utf8'), `${process.pid}:replacement`);
+          }
+        } finally {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+    }
+  }
+
+  it('settles a publication after a result validation error and retains reservations for reconciliation', async () => {
+    const authority = createGrantAuthority();
+    const host = new AgentFabricHost({ authority });
+    const source = host.registerSource('mem:unpersisted', 'line');
+    const destination = host.registerDestination('mem:unpersisted-outbox');
+    const handle = host.invoke(publishGrant(authority, source, destination, 'unpersisted-action', 1), REPORT_PUBLISH.id,
+      publishInput(source, destination), { invocation_id: 'unpersisted-invocation' });
+    assert.equal(handle.kind, 'handle');
+    if (handle.kind !== 'handle') throw new Error('expected invocation handle');
+    const persistResult = host.store.persistInvocationResult;
+    host.store.persistInvocationResult = () => { throw new TypeError('injected result validation error'); };
+    try {
+      host.release('unpersisted-action');
+      assert.deepEqual(await handle.result, { outcome: 'uncertain', reason: 'failed to persist invocation result after commit' });
+      assert.equal(host.openCount(), 0);
+      assert.equal(host.coordinator.held().length, 2);
+    } finally { host.store.persistInvocationResult = persistResult; }
+    const reconciled = host.lookup('unpersisted-invocation',
+      publishGrant(authority, source, destination, 'unpersisted-action', 2));
+    assert.equal('status' in reconciled && reconciled.status, 'committed');
+    assert.deepEqual(host.coordinator.held(), []);
   });
 
   it('does not leave a stale publication owner when the prior result was unpersisted', async () => {

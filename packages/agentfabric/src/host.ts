@@ -727,7 +727,8 @@ export class AgentFabricHost implements CapabilityHost {
       return this.reject(covered.code, covered.reason);
     }
     this.lookups.push({ invocation_id, granted: true });
-    const status = record?.status ?? 'running';
+    const status = open?.phase === 'done' && open.outcome?.outcome === 'uncertain'
+      ? 'uncertain' : record?.status ?? 'running';
     const outcome = record?.outcome ?? open?.outcome;
     if (status !== 'committed') {
       const published = this.store.publishedBy(invocation_id);
@@ -913,7 +914,7 @@ export class AgentFabricHost implements CapabilityHost {
     }
     if (open.phase === 'after_commit' && open.committed) {
       if (this.faults.rejectPromiseAfterCommit) {
-        this.noteCommitted(open, open.committed);
+        if (!this.noteCommitted(open, open.committed)) return;
         open.phase = 'done';
         open.resolve({ outcome: 'uncertain', reason: 'acknowledgement rejected after commit' });
         this.open.delete(open.invocation_id);
@@ -924,7 +925,7 @@ export class AgentFabricHost implements CapabilityHost {
     }
   }
 
-  private noteCommitted(open: OpenInvocation, record: PublicationRecord): void {
+  private noteCommitted(open: OpenInvocation, record: PublicationRecord): boolean {
     const outcome: InvocationOutcome = { outcome: 'succeeded', output: this.receiptFrom(record) };
     try {
       this.store.persistInvocationResult({
@@ -938,12 +939,12 @@ export class AgentFabricHost implements CapabilityHost {
         outcome,
         cancel_requested: open.cancel_requested,
       });
-    } catch (error) {
-      if (!(error instanceof PersistFailure)) {
-        throw error;
-      }
+    } catch {
+      this.finishUncertain(open, 'failed to persist invocation result after commit');
+      return false;
     }
     open.outcome = outcome;
+    return true;
   }
 
   private finish(open: OpenInvocation, value: unknown, status?: InvocationRecord['status']): void {
@@ -956,6 +957,8 @@ export class AgentFabricHost implements CapabilityHost {
     }
     const terminal: InvocationRecord['status'] =
       status ?? (outcome.outcome === 'succeeded' ? 'committed' : outcome.outcome === 'uncertain' ? 'uncertain' : 'stopped');
+    let releaseReservation = terminal !== 'uncertain';
+    let persisted = false;
     try {
       this.store.persistInvocationResult({
         invocation_id: open.invocation_id,
@@ -968,34 +971,37 @@ export class AgentFabricHost implements CapabilityHost {
         outcome,
         cancel_requested: open.cancel_requested,
       });
-    } catch (error) {
-      if (error instanceof PersistFailure) {
-        if (terminal === 'committed' || open.committed) {
-          open.outcome = outcome;
-          open.phase = 'done';
-          this.open.delete(open.invocation_id);
-          open.resolve({ outcome: 'uncertain', reason: 'failed to persist invocation result after commit' });
-          return;
-        }
-        throw error;
-      }
-      throw error;
+      persisted = true;
+    } catch {
+      // Store guards and validation can fail as well as append. A completed
+      // implementation must still settle; publications await reconciliation.
+      releaseReservation = releaseReservation && !open.committed;
+      outcome = {
+        outcome: 'uncertain',
+        reason: open.committed ? 'failed to persist invocation result after commit' : 'failed to persist invocation result',
+      };
     }
-    if (terminal !== 'uncertain') {
+    if (releaseReservation) {
       this.coordinator.release(open.invocation_id);
     }
     open.outcome = outcome;
     open.phase = 'done';
-    this.open.delete(open.invocation_id);
+    // A failed result write leaves a running durable record. Retain the
+    // settled uncertainty so lookup cannot mistake completed effects for stopped work.
+    if (persisted) this.open.delete(open.invocation_id);
     if (outcome.outcome === 'succeeded') {
-      const key = this.builtinCacheKey(open.operation, open.inputs);
-      if (key) {
-        this.store.rememberResult({
-          key,
-          operation: open.operation,
-          implementation_id: open.implementation_id,
-          outcome,
-        });
+      try {
+        const key = this.builtinCacheKey(open.operation, open.inputs);
+        if (key) {
+          this.store.rememberResult({
+            key,
+            operation: open.operation,
+            implementation_id: open.implementation_id,
+            outcome,
+          });
+        }
+      } catch {
+        // The invocation result is durable; cache maintenance is optional.
       }
     }
     open.resolve(outcome);
