@@ -603,48 +603,107 @@ describe('CLI generation uncertainty recovery', () => {
     }
   }
 
-  for (const firstEntry of ['bridge', 'caller-supplied identity'] as const) {
-    it(`allocates distinct identities for concurrent CLI runs during inspection (${firstEntry})`, async (t) => {
-      const f = fixture(t);
-      await f.host.cliRecoveryReady;
-      const other = join(f.workspace, '..', 'other');
-      mkdirSync(other);
-      const other_ref = f.host.registerWorkspace(other);
-      const request = f.request([process.execPath, STUB, '--exit', '0']);
-      const first =
-        firstEntry === 'bridge'
-          ? f.spawn().run(request)
-          : (async () => {
-              const grant = f.authority.issue({
-                action_id: 'shell-cli:0',
-                operation: SHELL_RUN.id,
-                contract_rev: SHELL_RUN.revision,
-                permissions: [{ resource: f.cwd_ref, mode: 'write' }],
-                effects: [{ resource: f.cwd_ref, mode: 'write' }],
-                process_effects: ['process.spawn', `fs.write:${f.cwd_ref}`],
-                issued_at: 0,
-              });
-              const handle = await f.host.invokeCliGeneration(grant, request);
-              assert.equal(handle.kind, 'handle');
-              if (handle.kind !== 'handle') throw new Error('expected CLI invocation handle');
-              f.host.release(handle.action_id);
-              assert.equal((await handle.result).outcome, 'succeeded');
-              return { status: 'completed' };
-            })();
-      // The first invocation holds its identity before the snapshot is durable.
-      assert.equal(f.host.coordinator.held().length, 1);
-      assert.equal(f.store.getInvocation('shell-cli:0'), undefined);
-      const second = f.spawn().run({ ...request, cwd_ref: other_ref });
-      const results = await Promise.all([first, second]);
-      assert.deepEqual(
-        results.map((result) => result.status),
-        ['completed', 'completed'],
-      );
-      assert.deepEqual(f.host.invocations.map((entry) => entry.invocation_id).sort(), ['shell-cli:0', 'shell-cli:1']);
-      assert.equal(f.host.spawnRecords().length, 2);
-      assert.equal(f.host.coordinator.held().length, 0);
-    });
+  for (const phase of ['recovery', 'legacy startup check', 'inspection'] as const) {
+    for (const firstEntry of ['bridge', 'caller-supplied identity'] as const) {
+      it(`allocates distinct identities for concurrent CLI runs during ${phase} (${firstEntry})`, async (t) => {
+        const f = fixture(t);
+        if (phase !== 'recovery') await f.host.cliRecoveryReady;
+        if (phase === 'legacy startup check') {
+          f.store.persistInvocationStart({
+            invocation_id: 'legacy',
+            action_id: 'legacy',
+            operation: SHELL_RUN.id,
+            binding_digest: 'legacy',
+            inputs: {},
+            status: 'running',
+            outcome: null,
+            cancel_requested: false,
+          });
+          await f.reopen();
+        }
+        const other = join(f.workspace, '..', 'other');
+        mkdirSync(other);
+        const other_ref = f.host.registerWorkspace(other);
+        const request = f.request([process.execPath, STUB, '--exit', '0']);
+        const first =
+          firstEntry === 'bridge'
+            ? f.spawn().run(request)
+            : (async () => {
+                const grant = f.authority.issue({
+                  action_id: 'shell-cli:0',
+                  operation: SHELL_RUN.id,
+                  contract_rev: SHELL_RUN.revision,
+                  permissions: [{ resource: f.cwd_ref, mode: 'write' }],
+                  effects: [{ resource: f.cwd_ref, mode: 'write' }],
+                  process_effects: ['process.spawn', `fs.write:${f.cwd_ref}`],
+                  issued_at: 0,
+                });
+                const handle = await f.host.invokeCliGeneration(grant, request);
+                assert.equal(handle.kind, 'handle');
+                if (handle.kind !== 'handle') throw new Error('expected CLI invocation handle');
+                f.host.release(handle.action_id);
+                assert.equal((await handle.result).outcome, 'succeeded');
+                return { status: 'completed' };
+              })();
+        // Recovery and the legacy check yield before prepare; inspection yields after it.
+        assert.equal(f.host.coordinator.held().length, phase === 'inspection' ? 1 : 0);
+        assert.equal(f.store.getInvocation('shell-cli:0'), undefined);
+        const duplicateGrant = f.authority.issue({
+          action_id: 'shell-cli:0',
+          operation: SHELL_RUN.id,
+          contract_rev: SHELL_RUN.revision,
+          permissions: [{ resource: other_ref, mode: 'write' }],
+          effects: [{ resource: other_ref, mode: 'write' }],
+          process_effects: ['process.spawn', `fs.write:${other_ref}`],
+          issued_at: 0,
+        });
+        const duplicate = f.host.invoke(duplicateGrant, SHELL_RUN.id, { ...request, cwd_ref: other_ref });
+        assert.equal(duplicate.kind, 'rejected');
+        if (duplicate.kind === 'rejected') assert.equal(duplicate.code, 'DENIED');
+        const duplicateCli = f.host.invokeCliGeneration(duplicateGrant, { ...request, cwd_ref: other_ref });
+        const second = f.spawn().run({ ...request, cwd_ref: other_ref });
+        // Release the legacy operation block while both new calls are waiting for its check.
+        if (phase === 'legacy startup check') f.host.reconcileCliGeneration('legacy', ABSENT);
+        assert.equal((await duplicateCli).kind, 'rejected');
+        const results = await Promise.all([first, second]);
+        assert.deepEqual(
+          results.map((result) => result.status),
+          ['completed', 'completed'],
+        );
+        assert.deepEqual(f.host.invocations.map((entry) => entry.invocation_id).sort(), ['shell-cli:0', 'shell-cli:1']);
+        assert.equal(f.host.spawnRecords().length, 2);
+        assert.equal(f.host.coordinator.held().length, 0);
+      });
+    }
   }
+
+  it('reserves allocated identities against ordinary invocations and releases them when prepare fails', async (t) => {
+    const f = fixture(t);
+    const action_id = f.host.nextCliGenerationId();
+    const grant = () =>
+      f.authority.issue({
+        action_id,
+        operation: SHELL_RUN.id,
+        contract_rev: SHELL_RUN.revision,
+        permissions: [{ resource: f.cwd_ref, mode: 'write' }],
+        effects: [{ resource: f.cwd_ref, mode: 'write' }],
+        process_effects: ['process.spawn', `fs.write:${f.cwd_ref}`],
+        issued_at: 0,
+      });
+    const blocked = f.host.invoke(grant(), SHELL_RUN.id, f.request());
+    assert.equal(blocked.kind, 'rejected');
+    if (blocked.kind === 'rejected') assert.equal(blocked.code, 'DENIED');
+    const invalid = await f.host.invokeCliGeneration(grant(), {});
+    assert.equal(invalid.kind, 'rejected');
+    if (invalid.kind === 'rejected') assert.equal(invalid.code, 'INVALID_INPUT');
+    assert.equal(f.host.coordinator.held().length, 0);
+    const retry = f.host.invoke(grant(), SHELL_RUN.id, f.request());
+    assert.equal(retry.kind, 'handle');
+    if (retry.kind !== 'handle') throw new Error('expected CLI invocation handle');
+    f.host.release(action_id);
+    assert.equal((await retry.result).outcome, 'succeeded');
+    assert.equal(f.host.coordinator.held().length, 0);
+  });
 
   it('protects pending invocation identities and preserves cancellation during asynchronous inspection', async (t) => {
     const f = fixture(t);

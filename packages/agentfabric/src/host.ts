@@ -189,7 +189,8 @@ export class AgentFabricHost implements CapabilityHost {
   faults: HostFaults;
   readonly cliRecoveryReady: Promise<void>;
   private cliRecoveryComplete = false;
-  private readonly preparingCli = new Map<string, OpenInvocation>();
+  private readonly preparingCli = new Map<string, OpenInvocation | undefined>();
+  private readonly reservedCliIds = new Set<string>();
   private readonly cliProcessGroupProbe: (pgid: number) => ProcessGroupState;
   private readonly gateway: InferenceGateway | undefined;
   private readonly shellOptions: ShellHostOptions | undefined;
@@ -260,36 +261,48 @@ export class AgentFabricHost implements CapabilityHost {
     let id: string;
     do {
       id = `shell-cli:${this.cliGenerationSeq++}`;
-    } while (this.store.getInvocation(id) || this.open.has(id) || this.preparingCli.has(id));
+    } while (
+      this.store.getInvocation(id) ||
+      this.open.has(id) ||
+      this.preparingCli.has(id) ||
+      this.reservedCliIds.has(id)
+    );
+    this.reservedCliIds.add(id);
     return id;
   }
 
   /** Composition entry point; the supplied grant still determines all authority. */
   async invokeCliGeneration(grant: Grant, inputs: unknown): Promise<InvocationHandle | CliGenerationRejection> {
-    if (!this.cliRecoveryComplete) await this.cliRecoveryReady;
-    if (isRecord(inputs) && typeof inputs['cwd_ref'] === 'string') {
-      const cwd_ref = inputs['cwd_ref'];
-      const conflict = this.workspaceConflict(cwd_ref);
-      const legacy = [...this.unscopedRecovery.values()].includes(SHELL_RUN.id);
-      if ((conflict?.uncertain || legacy) && !this.reconciling.size) await this.checkUncertainCliGenerations(cwd_ref);
-    }
-    const prepared = this.step(() => this.prepare(grant, SHELL_RUN.id, inputs));
-    if (prepared.kind === 'rejected') {
-      const conflict =
-        prepared.code === 'RESOLVER_ERROR' &&
-        prepared.reason.startsWith('effect conflict on ') &&
-        isRecord(inputs) &&
-        typeof inputs['cwd_ref'] === 'string'
-          ? this.workspaceConflict(inputs['cwd_ref'])
-          : undefined;
-      // Capture the owner before yielding; reconciliation may release it meanwhile.
-      return { ...prepared, ...(conflict ? { workspace_conflict: conflict } : {}) };
-    }
-    if (prepared.kind === 'replay') return prepared.handle;
-    // Keep the identity reserved and cancellation addressable while inspection yields.
-    const { invocation_id } = prepared.open;
-    this.preparingCli.set(invocation_id, prepared.open);
+    const invocation_id = grant.action_id;
+    if (this.preparingCli.has(invocation_id)) return this.reject('DENIED', 'invocation is already active');
+    // Caller-supplied identities also need protection before recovery can yield.
+    this.preparingCli.set(invocation_id, undefined);
+    this.reservedCliIds.add(invocation_id);
+    let preparedOpen = false;
     try {
+      if (!this.cliRecoveryComplete) await this.cliRecoveryReady;
+      if (isRecord(inputs) && typeof inputs['cwd_ref'] === 'string') {
+        const cwd_ref = inputs['cwd_ref'];
+        const conflict = this.workspaceConflict(cwd_ref);
+        const legacy = [...this.unscopedRecovery.values()].includes(SHELL_RUN.id);
+        if ((conflict?.uncertain || legacy) && !this.reconciling.size) await this.checkUncertainCliGenerations(cwd_ref);
+      }
+      const prepared = this.step(() => this.prepare(grant, SHELL_RUN.id, inputs, undefined, invocation_id));
+      if (prepared.kind === 'rejected') {
+        const conflict =
+          prepared.code === 'RESOLVER_ERROR' &&
+          prepared.reason.startsWith('effect conflict on ') &&
+          isRecord(inputs) &&
+          typeof inputs['cwd_ref'] === 'string'
+            ? this.workspaceConflict(inputs['cwd_ref'])
+            : undefined;
+        // Capture the owner before yielding; reconciliation may release it meanwhile.
+        return { ...prepared, ...(conflict ? { workspace_conflict: conflict } : {}) };
+      }
+      if (prepared.kind === 'replay') return prepared.handle;
+      // Keep the identity reserved and cancellation addressable while inspection yields.
+      preparedOpen = true;
+      this.preparingCli.set(grant.action_id, prepared.open);
       const resource = this.resourceFor(prepared.open.shellCwdRef);
       const before_snapshot = resource?.kind === 'workspace' ? await workspaceSnapshot(resource.locator) : null;
       if (!this.authority.isValid(grant)) {
@@ -299,8 +312,9 @@ export class AgentFabricHost implements CapabilityHost {
       prepared.record.cli_generation = { cwd_ref: prepared.open.shellCwdRef, before_snapshot };
       return this.step(() => this.startPrepared(prepared, SHELL_RUN.id));
     } finally {
+      this.reservedCliIds.delete(invocation_id);
       this.preparingCli.delete(invocation_id);
-      if (!this.open.has(invocation_id)) this.coordinator.release(invocation_id);
+      if (preparedOpen && !this.open.has(invocation_id)) this.coordinator.release(invocation_id);
     }
   }
 
@@ -1533,6 +1547,7 @@ export class AgentFabricHost implements CapabilityHost {
     operation: string,
     inputs: unknown,
     options?: InvokeOptions,
+    reservedCliId?: string,
   ):
     | { kind: 'open'; open: OpenInvocation; record: InvocationRecord }
     | { kind: 'replay'; handle: InvocationHandle }
@@ -1634,7 +1649,8 @@ export class AgentFabricHost implements CapabilityHost {
         }),
       };
     }
-    if (inMemory) return this.reject('DENIED', 'invocation is already active');
+    if (inMemory || (this.reservedCliIds.has(invocation_id) && reservedCliId !== invocation_id))
+      return this.reject('DENIED', 'invocation is already active');
     if ([...this.unscopedRecovery.values()].includes(operation)) {
       return this.reject('RESOLVER_ERROR', 'operation requires reconciliation of recovered effect scopes');
     }
