@@ -506,3 +506,52 @@ OTel is an export format (W6, #188), not this schema. Records map to spans,
 links to span links, and `inference.attempt` to the GenAI semantic conventions
 where they fit. Information an export cannot carry is lost from that export,
 not removed from Weft.
+
+### W6 export boundary
+
+`@weave/weft/otel` is an optional entry point, with no third-party runtime
+ dependency. The core entry point never imports it. `exportOtlp(records,
+{ redact, inline? })` accepts a batch of `weft.record@1` values and returns
+`{ ok: true, json }` or `{ ok: false, reason }`, without throwing. Every
+record passes through `serializeRecord` before mapping; one rejection rejects
+the entire batch. No raw input, environment, grant, resource detector or ambient
+sink is consulted. `createOtlpExporter({ redact, inline?, write })` adds an
+explicit one-way `export(records)` method returning a promise of the same result;
+write throws and rejections return `write`, never escape to the run.
+
+Identity uses SHA-256 of JSON arrays: `["weft.otel.trace@1", trace_id]`
+(first 32 hex digits), and `["weft.otel.span@1", trace_id, record_id]`
+(first 16). Identical duplicate records collapse; conflicting identities or
+repeated sequences within one emitter reject. Traces sort by trace id, spans
+by emitter id then sequence then record id, links by relation then target,
+and evidence by source then ref. This is serialization order, not causality.
+A batch must contain all parent and link targets in each trace; missing targets
+reject as `incomplete`, parent cycles as `parent_cycle`. A batch may contain
+several independent traces. There is no retained state between calls.
+
+Each record becomes one INTERNAL span (CLIENT for `inference.attempt`).
+Parent ids become parent span ids; every explicit link becomes a span link
+with `weft.link.rel`. Evidence remains a namespaced attribute, never an inferred
+causal link. All envelope references and kind fields are `weft.*` attributes;
+nested values use OTLP AnyValue arrays and key-value lists. Nulls are omitted.
+`error`, failed/missed/uncertain outcomes and unaccepted/failed attempts set
+ERROR status; cancellation stays a namespaced state without implying failure.
+Inference token counts also become `gen_ai.usage.input_tokens` and
+`gen_ai.usage.output_tokens`. A routed unit is not necessarily a model or
+provider, and Weft does not know the GenAI operation: none is invented.
+
+**Time and loss.** Start and end are both `sequence + 1` nanoseconds after the
+Unix epoch, calculated with integer arithmetic. These are synthetic point
+spans, not occurrence times; `weft.time_basis = "sequence"` marks them.
+Sequences from different emitters are incomparable. Measured `latency_ms`
+remains a namespaced metric rather than fabricating a start time. Real timing,
+duration and cross-emitter chronology cannot be recovered from this export.
+Null versus absent is lost; native validation, field disclosure classes,
+conflict semantics and non-authority are not enforced by OTLP readers.
+Decisions, rejected candidates, policy filtering and evidence retain their
+values in namespaced attributes, but have no standard OTel meaning. Numeric
+safe integers use OTLP decimal int strings; fractional metrics use doubles.
+Truncated hash identities have theoretical collision risk; export is no store
+and provides no exactly-once delivery guarantee. Retrying after a crash produces
+the same bytes and span identities; collector deduplication is its concern.
+`weave.trace@1` is rejected rather than inventing missing Weft fields.
