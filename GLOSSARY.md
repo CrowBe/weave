@@ -212,7 +212,7 @@ A reference-mode record whose resolved model id differs from the pinned id or is
 
 ### Reference run header
 
-The Jev benchmark output's run identity and summary beside its records: reference mode, unique run id, pinned model id, TypeSafe route, date from the injected clock, corpus hash, completion status, and pin mismatch flag/count. The corpus hash is SHA-256 of the selected corpus records serialized as JSON in execution-plan order, including labels. Atomic snapshots bind records to this header; a rerun starts a fresh run and replaces the output rather than appending or mixing generations.
+The Jev benchmark output's run identity and summary beside its records: reference mode, unique run id, pinned model id, TypeSafe route, date from the injected clock, corpus hash, plan hash, completion status, and pin mismatch flag/count. The corpus hash is SHA-256 of the selected corpus records serialized as JSON in execution-plan order, including labels. The plan hash is SHA-256 of the probe's JSON plan settings and computed presentation orders: ordered inference kinds and repeats where configurable, requested permutation count, ordering seed, and each selected case's ordered list of presentation orders. It is fixed before inference, including for incomplete runs. Atomic snapshots bind records to this header; a rerun starts a fresh run and replaces the output rather than appending or mixing generations.
 
 Default output filenames include the run id. A reference run exclusively holds
 its output through a PID sidecar before inference or snapshot replacement;

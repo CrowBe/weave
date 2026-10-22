@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, writeFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,6 +14,48 @@ async function temporary(run: (dir: string) => Promise<void>) {
     await rm(dir, { recursive: true, force: true });
   }
 }
+
+test('reference snapshots bind the seed and computed orders before inference and after failure', async () =>
+  temporary(async (dir) => {
+    const output = join(dir, 'result.json');
+    const base = {
+      permute: 3,
+      order_seed: 20260921,
+      orders: [
+        [
+          [0, 1, 2],
+          [2, 1, 0],
+          [1, 0, 2],
+        ],
+      ],
+    };
+    const hashes: string[] = [];
+    for (const plan of [base, { ...base, order_seed: 42 }, { ...base, orders: [[[0, 1, 2]]] }]) {
+      const expected = createHash('sha256').update(JSON.stringify(plan)).digest('hex');
+      let running: string | undefined;
+      await assert.rejects(
+        runReference({
+          clock: { now: () => 1_000 },
+          corpus: ['same'],
+          plan,
+          output,
+          jobs: [
+            async () => {
+              running = JSON.parse(await readFile(output, 'utf8')).header.plan_hash;
+              throw new Error('simulated failure');
+            },
+          ],
+        }),
+        /simulated failure/,
+      );
+      const saved = JSON.parse(await readFile(output, 'utf8'));
+      assert.equal(running, expected, 'running snapshot must bind the complete plan before inference');
+      assert.equal(saved.header.plan_hash, expected, 'failure must retain the original plan identity');
+      assert.equal(saved.header.status, 'interrupted');
+      hashes.push(saved.header.plan_hash);
+    }
+    assert.equal(new Set(hashes).size, 3, 'seed and computed order changes must each change the plan hash');
+  }));
 
 test('atomic reference replacements never expose partial JSON to a concurrent reader', async () =>
   temporary(async (dir) => {
@@ -33,6 +76,7 @@ test('atomic reference replacements never expose partial JSON to a concurrent re
       await runReference({
         clock: { now: () => 1_000 },
         corpus: ['test'],
+        plan: [],
         output,
         jobs: Array.from({ length: 8 }, () => async () => ({
           pin_mismatch: false,
@@ -51,7 +95,7 @@ test('atomic reference replacements never expose partial JSON to a concurrent re
 test('failed snapshot serialization preserves the previous durable generation', async () =>
   temporary(async (dir) => {
     const output = join(dir, 'result.json');
-    const valid = await runReference({ clock: { now: () => 1_000 }, corpus: ['first'], output, jobs: [] });
+    const valid = await runReference({ clock: { now: () => 1_000 }, corpus: ['first'], plan: [], output, jobs: [] });
     const circular: { self?: unknown } = {};
     circular.self = circular;
     await assert.rejects(writeReferenceOutput(output, { ...valid, records: [circular] }), /circular/i);
@@ -69,6 +113,7 @@ test('replay refuses missing resolved identity even when summary flags claim a m
         pinned_model_id: 'jev-1.14.0',
         run_date: 'fake',
         corpus_hash: 'fake',
+        plan_hash: 'fake',
         route: { adapter: 'typesafe-ai', destination: 'typesafe-ai' },
         status: 'completed',
         pin_mismatch: false,
@@ -93,7 +138,7 @@ test('reference output recovers the sidecar of a process that has exited', async
     });
     assert.equal((await readdir(lock)).length, 1);
     try {
-      const saved = await runReference({ clock: { now: () => 1_000 }, corpus: [], output, jobs: [] });
+      const saved = await runReference({ clock: { now: () => 1_000 }, corpus: [], plan: [], output, jobs: [] });
       assert.equal(saved.header.status, 'completed');
       assert.deepEqual(await readdir(lock), [], 'dead owner markers must be reclaimed');
     } finally {
@@ -108,7 +153,7 @@ test('reference output refuses unknown sidecar owners without replacing prior re
     await mkdir(`${output}.lock`);
     await writeFile(join(`${output}.lock`, 'unknown'), '');
     await assert.rejects(
-      runReference({ clock: { now: () => 1_000 }, corpus: [], output, jobs: [] }),
+      runReference({ clock: { now: () => 1_000 }, corpus: [], plan: [], output, jobs: [] }),
       /output.*in use/i,
     );
     assert.equal(await readFile(output, 'utf8'), 'previous generation');
@@ -125,7 +170,7 @@ test('reference output treats a permission-denied PID check as a live owner', as
     });
     try {
       await assert.rejects(
-        runReference({ clock: { now: () => 1_000 }, corpus: [], output, jobs: [] }),
+        runReference({ clock: { now: () => 1_000 }, corpus: [], plan: [], output, jobs: [] }),
         /output.*in use/i,
       );
       assert.deepEqual(await readdir(lock), ['123-inaccessible-owner']);
@@ -141,14 +186,14 @@ test('snapshot failure releases the output claim and preserves the last complete
     const circular: { pin_mismatch: false; self?: unknown } = { pin_mismatch: false };
     circular.self = circular;
     await assert.rejects(
-      runReference({ clock: { now: () => 1_000 }, corpus: [], output, jobs: [async () => circular] }),
+      runReference({ clock: { now: () => 1_000 }, corpus: [], plan: [], output, jobs: [async () => circular] }),
       /circular/i,
     );
     const saved = JSON.parse(await readFile(output, 'utf8'));
     assert.deepEqual(saved.records, []);
     assert.deepEqual(await readdir(`${output}.lock`), []);
     assert.equal(
-      (await runReference({ clock: { now: () => 1_000 }, corpus: [], output, jobs: [] })).header.status,
+      (await runReference({ clock: { now: () => 1_000 }, corpus: [], plan: [], output, jobs: [] })).header.status,
       'completed',
     );
   }));
