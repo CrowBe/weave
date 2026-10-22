@@ -14,11 +14,27 @@ budget/authority). D2 requires .75, fallback standard. D8 requires .70, fallback
 stalled. Intake requires .80 (provisional, until P10 calibration), fallback
 ask_user / needs_human. Intake state contains a disclosed message and running
 thread summaries; classification grants no authority to interrupt or dispatch.
+The type enforces that shape: for `intake.classify`, `transitionSite` and
+`evaluateSite` take `IntakeSiteInput`, whose state is `IntakeState`. Other choice
+sites take any disclosed evaluation content. A caller that holds a union of
+sites gets the wider input type. The check is compile-time only; there is still
+no channel transport.
 
 An answer from a different revision, or observed before the current state's
 update, is stale. Request id/site must match. Nonaccepted outcomes and exceptions
 fall back; unavailable provider or thrown port pauses dispatch-dependent steps.
 Read-only steps may use deterministic fallback. Cancellation always pauses.
+An outage is classified on the attempts' failure codes, not on the gateway's
+unaccepted reason, because the gateway reports the same failed attempts as
+`attempts_exhausted` at `max_attempts: 1` and as `provider_failed` above it.
+`provider_failed` or `attempts_exhausted` is an outage when a failed attempt
+carries `unavailable`, `unauthorized`, `quota_exhausted`, `rate_limited`,
+`timeout`, or `cancelled`. A refusal (`invalid_request`) or a
+`malformed_response` alone is `no_answer` and takes the fallback at every
+`max_attempts`. `provider_failed` with no failed attempt is an abort before any
+attempt and stays an outage. `budget_exhausted`, `deadline_reached`, a gateway
+pause, and the blocked reasons `provider_unavailable`, `no_route`, `no_budget`,
+`quota_unknown`, `weekly_budget_cap`, and `deadline_passed` are outages.
 No returned transition dispatches or authorizes execution. D2's tier is a ceiling
 for the existing P4 gate.
 
@@ -26,8 +42,21 @@ Records use schema decision-site@1 and fixed keys. Record only closed-vocabulary
 answers, numeric statistics and safe correlation identifiers, never raw state,
 provider error details, arbitrary answers or distribution keys. Questions are
 fixed text. Correlation identifiers are bounded opaque identifiers; recognizable
-credential prefixes are omitted. No generic secret detector can sanitize arbitrary
+credential prefixes are omitted. `Bearer` counts only when whitespace follows
+it, as in the Weft screen, so an id such as `bearer_x` is kept (#158). D3's
+routed-unit id uses the same screen. No generic secret detector can sanitize arbitrary
 operator content, so that content is never copied into the record.
+
+A `stale_answer` record does not say which freshness check failed (#93). The
+check compares the recorded `state_revision` and `observed_at`, the input's
+`state_revision` and `state_updated_at`, and the current reading. Only the
+input's `state_revision` is in the record. No audit consumer needs the cause
+yet, because the `view.audit@1` decisions slice carries no site reason. Adding
+`state_updated_at` and `observed_at` after `state_revision` would change
+decision-site@1's fixed keys, so it needs a new schema version. That waits
+until an audit reads stale causes. Until then, a caller that needs the cause
+persists the recorded answer and the current reading it passes to the pure
+transition, which reproduces the decision.
 
 `stopForNoProgress(history, issues)` stops on the last two stalled/regressing
 choices or a currently reappearing issue with at least two recorded fix attempts.
@@ -49,6 +78,11 @@ removed by k, floor, the cap, or the margin gate. A required id that is not in
 the index is ignored and counted; D3 only narrows. `required_entry_ids` is
 read with `Array.isArray`. A non-array is no required ids. Non-string items are
 dropped and the valid strings are kept. Either case sets `required_ids_invalid`.
+There is no include-if-p >= .5 rule, so a low p(true) alone never drops an
+entry. A nonempty index never yields an empty slice, even when every confident
+answer is below .5 (#96). The result is the kept top-k slice, or the full index
+on any fallback, including `no_candidate` when the floor removes every
+non-required entry. Only an empty disclosed index yields an empty result.
 
 The candidate slice narrows only when every entry has a probability and
 admission succeeds, and then only when the margin gate passes. `top_p` on the
@@ -151,6 +185,37 @@ output introduces effects outside the grant. Both escalate to needs_human for
 p >= .3 or any admission failure, with per-rule reasons. A clean judgment is
 only evidence and contains no grant or dispatch authority.
 
+An approval request names its rule: one of the four D4 rule ids, or
+`out_of_grant_effect` for D7. D7's wire question id stays `decision`, so its
+request and the frozen benchmark sets keep their shape. Neither guard injects a
+grant or scope. D4 judges scope broadening and destructive effect without grant,
+and D7 judges out-of-grant effects, only from what the caller discloses in
+`state`. The caller must therefore disclose the effective grant and authorized
+scope there. A guard that was not shown them cannot judge those rules, and its
+pass is still only evidence. The guards are not yet wired into the loop. Until
+they are, the guarantee that a clean D7 cannot widen a grant is structural: a
+guard transition has exactly `status`, `catalogue_index`, `approval_requests`,
+and `observations`. Fabric checks the grant it is given against the authority
+that issued it. A test feeds a clean D7 into a Fabric invocation to show this.
+Wiring the guards must keep both properties and must supply the disclosure.
+
+Outage outcomes differ by what a site decides, and the split is intentional
+(#100). A P5 choice site proposes a transition and has a deterministic
+fallback, so its outage is a missing observation, not an authority question.
+Read-only work takes the fallback. Dispatch-dependent work pauses, so a
+fallback such as D1's `implement` at the strong tier never dispatches on a
+guess. The pause is resumable without a human, and resumption observes
+availability again. A D4 or D7 guard decides whether a dispatch may proceed.
+An outage leaves that question open, so the guard takes the same outcome as any
+other unestablished judgment: approval requests with reason
+`decision_unavailable` and status `needs_human`, whatever `needs_dispatch`
+says. A guard never returns `transition` or `paused` for an outage. The audit
+loop composes the two. With `needs_dispatch` and `decision_unavailable` it
+records a resumable `decision_unavailable` pause, and resumption asks the guard
+again. The dispatch proceeds only after a clean guard judgment or a human
+approval. On an outage D3 returns the full disclosed index and D5 fails every
+criterion. Neither pauses except on cancellation.
+
 Provisional confidence floors: .75 for a published D3 boundary confidence and
 .90 for D4/D7, pending P10 calibration. A missing D3 confidence is unknown. A
 published D3 confidence outside [0, 1] is `invalid_confidence` for the whole
@@ -252,6 +317,31 @@ stalled/regressing D8 outcomes persist a stop. Authority blocks require a human.
 Round records are appended before loop-back; replay performs no provider calls.
 The journal port requires durable append-before-return and a single writer.
 
+Each round's progress choice comes from recorded evidence before D8 (#202).
+`progressDelta` builds `progress.delta@1` from two consecutive tidy states, in
+this key order: `schema`, `previous_digest`, `current_digest`, `criteria`,
+`removed`, `gained`, `lost`, `rule`. Each digest is SHA-256 over that state's
+checks, evals and artifacts. `criteria` lists `{ criterion_id, before, after }`
+in the current goal's order; `before` is null for a criterion the previous
+state did not list. A criterion is settled when every run of each bound check
+is green (for a check-proven criterion, it needs a run in the current iteration
+and only those runs count), no current D5 eval for it failed, and a judgment
+criterion has a current pass at p >= .8 and confidence >= .9. That is the
+per-criterion part of completion; with every check green, all criteria are
+settled exactly when completion holds. The rule is pure. A changed criterion
+set asks D8. Otherwise an unchanged digest is `stalled`, at least one criterion
+newly settled and none lost is `progressing`, and at least one lost and none
+gained is `regressing`. Anything else, and the first round, asks D8 through
+`evaluateSite('loop.continue', ...)` with its unchanged threshold and
+`stalled` fallback. `decideProgress` returns `progress.record@1`: `schema`,
+`delta`, `decided_by` (`rule` or `site`), `choice`, `status`, and `site` (D8's
+transition, or null when the rule decided). A rule decision makes no provider
+call, so a decision outage cannot turn it into a fallback. `transitionProgress`
+rebuilds the record from its recorded delta and D8 transition without a
+provider; replay uses that. The rule produces only D8's options and adds no stop
+condition. The Observe port supplies `progress` from these records' choices,
+so two consecutive rule-decided `stalled` rounds still stop as `no_progress`.
+
 The journal also checkpoints the detached tidy-state observation before generation
 and its accepted report before D6. Recovery reuses that report instead of
 repeating the strong call; a crash before the report checkpoint may repeat the
@@ -266,3 +356,51 @@ resume reuses that round and its checkpoint, so pauses do not consume the audit
 round cap. An over-budget tidy-state observation is never checkpointed, so a
 resumed budget pause observes the current budget again. Journal entry ids remain unique across repeated pauses. Completion
 rechecks the current revision after D6, including the empty-finding path.
+
+## Live confidence decision (#198, #142)
+
+Recorded from the non-gating P10 run `live-20261015`. No configured provider
+publishes a per-question confidence. jev-1.14.0 and amos-1-2b return only a
+probability for each boolean answer: on the holdout, 12 of 12 `eval.output`,
+64 of 64 `guard.input`, and 18 of 18 `guard.output` confidences were missing
+for each provider. D5 passes a criterion only at p >= .8 with a published
+confidence >= .9, and D4/D7 need a confidence >= .90 on every rule. Live, every
+judgment criterion therefore fails D5 as `missing_confidence`, and every guard
+evaluation, clean or not, is an approval request with that reason. Both fail
+safe. No threshold changes; thresholds change only on tune-split evidence and
+the holdout stays untouched.
+
+D5 (#198) options and the evidence each rests on:
+
+1. Settle check-provable criteria without D5 (#199). Applies; it landed as
+   criterion proof. It rests on structure, not a statistic: a check whose
+   oracle generation cannot write establishes the property, so D5 is not asked.
+   It removes the dependency for those criteria only.
+2. A probability-only D5 rule with a stricter band. Does not apply. The only
+   evidence is the report's descriptive holdout diagnostic: 83.3% violation
+   recall at P(violation) >= .3 for both providers, on 12 holdout items each.
+   About one unsatisfied criterion in six would pass, which is not enough for a
+   completion gate. A holdout figure cannot fit a threshold, and no tune-split
+   fit exists: the 12 tune items per provider ended `minimum_coverage_unmet`.
+3. Per-provider calibration from P10 before any rule change. Deferred; it is a
+   prerequisite of option 2 and needs a tune split with enough judgment
+   criteria per provider. The recorded Brier .070 / .083 and ECE .075 / .096
+   (jev / amos, 12 items) are descriptive only.
+
+Under this rule a live-shaped D5 answer fails its criterion with
+`missing_confidence` and keeps its probability as `verdict_probability`. The
+implementation step retries, escalates once and raises an `open_issue@1` with
+source `eval`. A goal with any judgment criterion ends a clean audit round as
+`evidence_missing`. Check-proven criteria complete on current green checks.
+
+D4/D7 (#142) follow the same record. Every live guard evaluation requests
+approval with reason `missing_confidence`, for clean judgments and violations
+alike. The descriptive holdout diagnostic is mixed. For `guard.input`,
+violation recall is 100% / 75.0% with false-block rates of 34.6% / 28.8%
+(jev / amos). For `guard.output` it is 100% / 100% with 0% / 55.6%. A
+probability-only guard rule would need a tune-split fit per provider, one
+holdout scoring, and the captain's approval before any guard could pass
+without a confidence. Deterministic D4/D7 pre-checks remain an open question
+under #197. `packages/weave/test/live-confidence.test.ts` pins the D5,
+completion and guard outcomes with answers shaped like tune-split rows of that
+run.

@@ -153,8 +153,9 @@ Semantic rule (ARCH §6): each site keeps its own operation. A Jev outage never 
 ### 4c. P5 transition and observation contract
 
 The sites in `packages/weave/src/sites/` use one injected gateway `evaluate`
-port and pure `transitionSite` replay. Intake accepts disclosed inbound content
-and running-thread summaries; it contains no channel transport. Classification
+port and pure `transitionSite` replay. Intake's input type is `IntakeState`: one
+disclosed inbound message and running-thread summaries (#90); it contains no
+channel transport. Classification
 is a proposed transition and grants no authority to dispatch, interrupt or stop
 work. `done_check` requests a deterministic completion check, never completion.
 
@@ -179,6 +180,9 @@ budget and authority gates. D2's accepted/fallback tier is the ceiling for P4;
 the budget gate can downgrade or pause and cannot choose a higher tier.
 An unavailable evaluate port (including a thrown exception) uses deterministic
 fallbacks for read-only work and returns paused for dispatch-dependent work.
+Unavailability is read from the attempts' failure codes, so a refusal
+(`invalid_request`) or a malformed response alone is `no_answer` whether the
+gateway reports it as `attempts_exhausted` or `provider_failed` (#91).
 Cancellation always pauses. ScriptedDecisionLayer and the M0–M6 runtime path
 are unchanged; wiring the full M7 loop is outside P5.
 
@@ -265,9 +269,9 @@ Stop:
 1. **Done**: every success criterion has deterministic evidence (checks green), D5 passes every criterion whose criterion proof is `judgment`, and the audit has no `fix_now`.
 2. **Budget**: the weekly quota gate trips (§8), or the gateway cost ceiling is reached. The loop pauses with state persisted. This is not a failure.
 3. **Iteration cap**: `max_iterations` (default 4 audit rounds).
-4. **No progress**: D8 says `stalled`/`regressing` twice in a row, or the same `issue_id` reappears after two fix attempts.
+4. **No progress**: the round's progress choice is `stalled`/`regressing` twice in a row, or the same `issue_id` reappears after two fix attempts. Each choice comes first from a deterministic rule over `progress.delta@1` (unchanged evidence is `stalled`, criteria only gained is `progressing`, criteria only lost is `regressing`), and D8 answers only when that rule does not decide ([#202](https://github.com/CrowBe/weave/issues/202)).
 5. **Authority**: D4 or D7 block, or a needed approval, goes to `needs_human`.
-6. **Decision outage**: the configured decision provider is unavailable. The loop drops to `ScriptedDecisionLayer` plus deterministic fallbacks for *read-only* steps, and requests approval before any dispatch that needs D4 or D7.
+6. **Decision outage**: the configured decision provider is unavailable. The loop drops to `ScriptedDecisionLayer` plus deterministic fallbacks for *read-only* steps, and requests approval before any dispatch that needs D4 or D7. The outcomes differ by site on purpose ([#100](https://github.com/CrowBe/weave/issues/100)). D1, D2, D8 and intake pause dispatch-dependent steps, because their outage is a missing observation and the pause is resumable. D4 and D7 return approval requests with reason `decision_unavailable` (`needs_human`), because their outage leaves an authority question open. The [sites contract](../packages/weave/src/sites/CONTRACT.md) records the rationale.
 
 ## 7. Phased PR plan
 
@@ -521,7 +525,9 @@ disclosed order. Required entries that are in the index are always kept, in
 addition to the top k of the remaining entries. A required id that is not in
 the index is ignored and counted. A `required_entry_ids` value that is not an
 array, and any non-string item, is not a required id; valid strings in a mixed
-array are kept, and the record flags the invalid value. It evaluates an
+array are kept, and the record flags the invalid value. A low p(true) alone
+never drops an entry: a nonempty index never yields an empty slice, even when
+every confident answer is below .5 (#96). It evaluates an
 explicitly disclosed step string plus id/purpose entries; schemas and general
 state are excluded. Any missing or malformed probability, a wrong kind, a
 stale revision, an outage, or cancellation returns the full index. Unknown
@@ -575,6 +581,9 @@ or expanded tool/scope access; there is no second model gate.
 D7 evaluates out-of-grant output effects. Both guards request approval at
 p >= .3 or on any uncertainty, missing/malformed/stale answer or outage.
 A pass supplies no grant and cannot override Fabric's deterministic enforcement.
+Approval requests name the rule; D7's is `out_of_grant_effect` (#98). The
+guards judge only the caller's disclosed state and inject no grant or scope,
+so the caller must disclose the effective grant and authorized scope (#99).
 
 Provisional confidence floors are .75 for a published D3 boundary confidence
 and .90 for D4/D7, pending P10 calibration. A missing D3 confidence is
@@ -588,6 +597,16 @@ fixed question text identifies guard rules. Raw input and rule payloads are neve
 recorded. Full-loop transport/persistence remain outside these pure sites;
 ScriptedDecisionLayer and M0–M6 behavior are unchanged.
 
+Live, D4 and D7 never pass automatically ([#142](https://github.com/CrowBe/weave/issues/142)).
+In `live-20261015`, neither jev-1.14.0 nor amos-1-2b published a confidence for
+any guard question. Every live guard evaluation, clean or violating, is
+therefore an approval request with reason `missing_confidence`. The floor stays
+at .90. A probability-only guard rule would need a tune-split fit per provider,
+one holdout scoring, and the captain's approval. The descriptive holdout
+diagnostic alone does not support one: `guard.input` false-block rates are
+34.6% / 28.8% (jev / amos), and amos misses one violation in four. The
+[sites contract](../packages/weave/src/sites/CONTRACT.md) records the decision.
+
 Why k = 3. The D3 fine-tune experiment used 24 entries per step, synthetic items, and labels from jev-1.13.0. Recall of needed entries on the Claude test set (72 steps) and the Codex test set (84 steps) for the old rule p ≥ .5, cap 8 was .82 / .73 for the fine-tuned Amos mini and .97 / .98 for TypeSafe 1.13. Top-1 was .87 / .88 and .94 / .93. Top-2 was .94 / .96 and .99 / .98. Top-3 was .98 / .98 for the fine-tuned mini, .92 / .97 for the base mini, and 1.00 / 1.00 for TypeSafe. Top-4 was .98 / .99 for the fine-tuned mini, top-5 was .99 / 1.00, and top-8 was 1.00 / 1.00. A floor of 0.02 changes nothing. A floor of 0.05 costs about one point at k ≥ 5. A floor of 0.10 drops recall to about .95 at every k, because the mini scored some needed entries from .04 to .10. The floor therefore defaults to 0 (off). Most steps have one needed entry (mean 1.04–1.12, maximum 3), so k = 3 is the smallest k where TypeSafe hits 100% and the fine-tuned mini hits 98%. k = 5 is the next jump for the mini, at the cost of a five-entry slice.
 
 Why these margins. The same sets, still at k = 3, were scored with a ceiling on the best excluded probability and a minimum gap from the highest kept non-required probability. TypeSafe 1.13 narrows 78% of the Claude steps and 80% of the Codex steps at ceiling .4 and margin .3, and drops no needed entry when it narrows. The fine-tuned Amos mini narrows 86% and 81%, and drops none; with no margin gate it drops 2 and 2. The base Amos mini narrows 83% and 71%, and drops 2 and 1; with no gate it drops 6 and 3. A looser margin of .2 lets one needed entry through on the fine-tuned mini's Codex set. A ceiling of .5 lets one through on that set and one or two through on the base mini. The defaults are therefore max_excluded = .4 and min_margin = .3.
@@ -598,13 +617,15 @@ P8 runs one implementation step for a unit that already has a D2 tier, has passe
 
 The step calls `generate` once at the routed tier, then each configured check (`repo.test`, `repo.lint`, `repo.build`) through `host.invoke`. Each check carries a held grant the composition root already issued. That grant is single-use, so the step does not invoke it on the next attempt. Before every check on every attempt, including a retry and the escalation, the step calls an injected issuer. The composition root supplies that issuer, outside the decision path. `createEqualGrantIssuer` binds a `GrantAuthority` to those held grant objects and copies scope at bind time. Each call returns a new grant with the same operation, contract revision, permissions, effects, and process effects, and returns null for any other object, so the fresh grant is equally scoped and never wider. The step invokes a result only when its scope still equals the held grant. The held grant is not consumed. A decision answer cannot mint a grant. Check argv stays in host configuration. The step digests configured argv for evidence and does not put it on the invocation. Env names may be passed; env values are not. Process output stays redacted by the host. A credential-shaped stdout tail is dropped rather than copied. Check artifact refs are kept only when they are `ref_` or `gen_` handles.
 
-D5 (`eval.output`) asks one boolean question per success criterion. The observation reuses `decision-site@1` key order, with site `eval.output` and answer `pass`, `fail`, or null. The question text is fixed: "Does the artifact satisfy this success criterion?" Criterion statements are disclosed to the evaluator and are not copied into the observation, the attempt journal, or the step result. Question ids are ordinal (`criterion_N`). A criterion passes only when its answer clears shape admission, `p >= 0.8`, and `confidence >= 0.9` (the existing `confidence_floor`). Missing, non-numeric, low-confidence, stale, unparseable, or unknown-site answers fail that criterion. A provider outage, a thrown evaluate port, or a null outcome uses D5's deterministic fallback: every criterion fails with `decision_unavailable`. D5 does not read another site's answer. The OpenAI probability-only band in §4b stays deferred with that provider. P5 `admissionReason` is unchanged, including `provider_failed` classification.
+D5 (`eval.output`) asks one boolean question per success criterion. The observation reuses `decision-site@1` key order, with site `eval.output` and answer `pass`, `fail`, or null. The question text is fixed: "Does the artifact satisfy this success criterion?" Criterion statements are disclosed to the evaluator and are not copied into the observation, the attempt journal, or the step result. Question ids are ordinal (`criterion_N`). A criterion passes only when its answer clears shape admission, `p >= 0.8`, and `confidence >= 0.9` (the existing `confidence_floor`). Missing, non-numeric, low-confidence, stale, unparseable, or unknown-site answers fail that criterion. A provider outage, a thrown evaluate port, or a null outcome uses D5's deterministic fallback: every criterion fails with `decision_unavailable`. D5 does not read another site's answer. The OpenAI probability-only band in §4b stays deferred with that provider. D5 shares P5 `admissionReason`, which classifies an outage on the attempts' failure codes rather than on `provider_failed` ([#91](https://github.com/CrowBe/weave/issues/91)): a refusal alone is `no_answer`, not `decision_unavailable`, at every `max_attempts`.
 
 A red check fails the attempt whatever D5 would answer, so the step does not ask D5 on that attempt ([#200](https://github.com/CrowBe/weave/issues/200)). It records no D5 observations or evals for it, never fabricates one, and marks the attempt `eval_skipped: 'check_failed'`. A skipped D5 is not an outage. An attempt with green checks asks D5 as before. On failure the step retries the same routed tier up to N times (`retries`, default 2), and the next prompt lists the failing criterion ids and check ids. After a red check those are the failing check ids plus any check-proven criterion the red check fails. Judgment criteria were not evaluated, so they are not listed. It then escalates exactly one tier (`flash` to `standard`, or `standard` to `strong`) once. Escalation cannot pass the D2 ceiling. The budget port can downgrade a same-tier attempt or pause it. A downgrade is not escalation and cannot raise the tier. If the ceiling or the budget port blocks the escalated tier, the step does not generate again. It appends `impl.stop@1` and raises one `open_issue@1` for the audit tier. The issue carries the failing `criterion_id`s and check ids. Its source is `check` when a check failed, otherwise `eval`.
 
 **Criterion proof ([#199](https://github.com/CrowBe/weave/issues/199)).** A criterion may carry `proof` (`check` or `judgment`; absent means `judgment`) and `check_ids`. Before the first attempt the step admits each proposal with the pure `admitCriterionProof`. It admits `check` only when every bound id names a configured check, the input declares `generation_writes` (the resources the generate backend may write, taken from that backend's grant), the composition root supplies the host's `canonical` resource identity, and each bound check declares `oracle_refs` that its held grant may `read` and that share no canonical id with `generation_writes`. Otherwise the criterion stays `judgment` with reason `unbound_check`, `write_scope_unknown`, `no_oracle`, `oracle_not_granted` or `oracle_writable`. The step asks D5 only about `judgment` criteria and discloses only their statements. When none remain it sends no D5 request. A `check` criterion fails when any bound check is red; that failure comes from check evidence and is not recorded as a D5 eval. Every attempt records the admissions as `proofs`, and replay reads them.
 
 The oracle is what decides a check's verdict (held-out tests, fixtures), not the subject under test, which generation is expected to write. With today's CLI wiring the generate backend writes the workspace its checks run in, so a check whose oracle is that workspace stays `judgment`: tests generated in a step never prove a criterion for that step. Canonical identity is atomic, as it is for effect locks; nested resources would need containment before this rule could admit them. That the configured argv actually takes its verdict from the declared oracle is operator configuration, like the argv itself, and the repository cannot verify it.
+
+**Live confidence ([#198](https://github.com/CrowBe/weave/issues/198)).** No configured provider publishes a D5 confidence. In `live-20261015`, all 12 holdout `eval.output` answers from jev-1.14.0 and from amos-1-2b were probability-only, so every judgment criterion fails D5 as `missing_confidence`, and no goal with a judgment criterion can reach `done` live. This fails safe, and the thresholds do not change. Of the three options, settling check-provable criteria without D5 (criterion proof, #199) applies, because it rests on structure rather than a statistic. A probability-only band does not apply. Its only evidence is a descriptive holdout diagnostic (83.3% violation recall, so about one unsatisfied criterion in six would pass), and a holdout figure cannot fit a threshold. Per-provider calibration is deferred until a tune split has enough judgment criteria. The [sites contract](../packages/weave/src/sites/CONTRACT.md) records the evidence, and `live-confidence.test.ts` pins the outcomes of a live-shaped answer.
 
 Crash safety uses one `execution_id` for every attempt and the escalation. Each finished attempt is appended to the attempt journal before the next attempt starts. A restart loads that journal, skips finished attempts, and continues. On load and on append, a torn final JSONL line is repaired: an unparseable tail is truncated to the last complete record, and a complete record missing its newline is terminated. Finished attempts stay in the journal, later appends remain loadable, and a restart does not repeat a finished attempt. Replay of a finished journal calls no provider and no host.
 
@@ -695,8 +716,13 @@ report, D6 disposal, open issues, outcome and `goal_done`. Outcomes distinguish
 `observe`, `done`, `budget`, `iteration_cap`, `no_progress`, `repeated_issue`,
 `authority`, `needs_human`, `cancelled`, `decision_unavailable`, `audit_unavailable` and
 `evidence_missing`; only `done` sets `goal_done`. The cap defaults to four audit
-rounds. Two consecutive stalled/regressing D8 observations stop progress; a
-finding recurring after two fix attempts stops as `repeated_issue`. The
+rounds. Two consecutive stalled/regressing progress choices stop progress; a
+finding recurring after two fix attempts stops as `repeated_issue`. Each choice
+is a `progress.record@1`: the pure `progress.delta@1` rule decides when the
+evidence of two consecutive tidy states does, and D8 is asked otherwise. The
+record says which path decided, and replay rebuilds it without a provider call
+(#202). A decision outage cannot stop a rule decision, so repeated outages alone
+end the loop only when the evidence does not decide progress. The
 Observe port supplies `issue_fix_attempts` attestations; merely seeing the
 same finding again does not count as a fix attempt. Authority
 blocks stop for human review. Unavailable decisions before guarded dispatch

@@ -89,12 +89,14 @@ export {
 } from './task-acceptance-eval.js';
 export {
   SITE_POLICY, evaluateSite, transitionSite, stopForNoProgress,
-  type DecisionSite, type SiteChoice, type SiteState, type SiteInput, type IntakeState,
+  type DecisionSite, type SiteChoice, type SiteState, type SiteInput, type IntakeState, type IntakeSiteInput, type SiteInputFor,
   type RecordedSiteAnswer, type SiteReason, type SiteObservation, type SiteTransition, type ProgressChoice,
 } from './sites/index.js';
 
-export { BOOLEAN_SITE_POLICY, INPUT_RULES, evaluateBooleanSite, transitionBooleanSite,
-  type BooleanSite, type BooleanSiteInput, type CatalogueIndexEntry, type RecordedBooleanAnswer,
+export { progressDelta, progressRule, transitionProgress, decideProgress,
+  type CriterionSettlement, type ProgressDelta, type ProgressRecord } from './progress.js';
+export { BOOLEAN_SITE_POLICY, INPUT_RULES, OUTPUT_RULE, evaluateBooleanSite, transitionBooleanSite,
+  type GuardRule, type BooleanSite, type BooleanSiteInput, type CatalogueIndexEntry, type RecordedBooleanAnswer,
   type BooleanObservation, type BooleanTransition, type PreselectPolicyInput, type PreselectScore,
   type PreselectSelection, type PreselectFallbackReason } from './sites/boolean.js';
 export {

@@ -1,11 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { EvaluationOutcome, InferenceGateway } from '@weave/gateway';
-import { createGrantAuthority, grantCovers } from '@weave/agentsop';
+import { createGrantAuthority, type Grant } from '@weave/agentsop';
 import { AgentFabricHost, SOURCE_INSPECT } from '@weave/agentfabric';
 import { renderFrameView } from '../src/views.js';
 import { scenario } from './fixture.js';
-import { transitionBooleanSite, evaluateBooleanSite, INPUT_RULES } from '../src/sites/boolean.js';
+import { transitionBooleanSite, evaluateBooleanSite, INPUT_RULES, type BooleanTransition } from '../src/sites/boolean.js';
+import { transitionSite } from '../src/sites/index.js';
 const current = { state_revision: 1, state_updated_at: 10 };
 const input = { ...current, request_id: 'r1', state: { text: 'CANARY_SECRET' }, needs_dispatch: true,
   terms: { quality: 'baseline' as const, destinations: ['local'], max_context_tokens: 100,
@@ -38,9 +39,14 @@ for (const site of ['guard.input', 'guard.output'] as const) {
   test(`${site} .29 passes, .30 requests approval, deterministic grants remain required`, () => {
     const pass = transitionBooleanSite(site, input, recorded(site, keys), current);
     assert.equal(pass.status, 'transition');
-    assert.equal(transitionBooleanSite(site, input, recorded(site, keys, .30), current).status, 'needs_human');
-    assert.equal(grantCovers(null, 'write', '1', [{ resource: 'file', mode: 'write' }]).ok, false);
-    assert.equal('grant' in pass, false);
+    const blocked = transitionBooleanSite(site, input, recorded(site, keys, .30), current);
+    assert.equal(blocked.status, 'needs_human');
+    // Approval requests name the rule, not the wire question id (#98).
+    assert.deepEqual(blocked.approval_requests.map(request => request.rule),
+      site === 'guard.input' ? [...INPUT_RULES] : ['out_of_grant_effect']);
+    assert.ok(blocked.approval_requests.every(request => request.reason === 'violation'));
+    // A guard transition has a closed shape: nothing in it can serve as a grant.
+    assert.deepEqual(Object.keys(pass), ['status', 'catalogue_index', 'approval_requests', 'observations']);
   });
   test(`${site} rejects uncertainty, malformed, stale, mismatched, refusal and outage`, () => {
     const good = recorded(site, keys);
@@ -65,6 +71,32 @@ for (const site of ['guard.input', 'guard.output'] as const) {
     assert.deepEqual(result, transitionBooleanSite(site, input, JSON.parse(JSON.stringify(good)), current));
   });
 }
+// #100: P5 choice sites pause dispatch-dependent work on an outage; D4/D7 request approval. Intentional:
+// a P5 outage is a missing observation with a deterministic fallback, a guard outage is an open authority question.
+test('one decision outage: P5 pauses dispatch, guards request approval, D3 widens', () => {
+  const outage = { status: 'blocked' as const, request_id: 'r1', reason: 'provider_unavailable' as const, attempts: [], spent: 0, uncertainty: [] };
+  for (const needs_dispatch of [true, false]) {
+    for (const [site, fallback] of [['loop.triage', 'implement'], ['loop.route', 'standard'], ['loop.continue', 'stalled'], ['intake.classify', 'ask_user']] as const) {
+      const choice = transitionSite(site, { ...input, needs_dispatch, state: { message: 'm', running_threads: [] } },
+        { state_revision: 1, observed_at: 10, outcome: { ...outage, site } }, current);
+      assert.equal(choice.choice, fallback);
+      assert.equal(choice.observation.reason, 'decision_unavailable');
+      assert.equal(choice.status, needs_dispatch ? 'paused' : site === 'intake.classify' ? 'needs_human' : 'transition');
+    }
+    for (const site of ['guard.input', 'guard.output'] as const) {
+      const guard = transitionBooleanSite(site, { ...input, needs_dispatch }, { state_revision: 1, observed_at: 10, outcome: { ...outage, site } }, current);
+      assert.equal(guard.status, 'needs_human');
+      assert.deepEqual(guard.approval_requests.map(request => request.reason),
+        (site === 'guard.input' ? INPUT_RULES : ['out_of_grant_effect']).map(() => 'decision_unavailable'));
+    }
+    const preselect = transitionBooleanSite('loop.preselect', { ...input, needs_dispatch },
+      { state_revision: 1, observed_at: 10, outcome: { ...outage, site: 'loop.preselect' } }, current);
+    assert.equal(preselect.status, 'transition');
+    assert.equal(preselect.preselect?.reason, 'admission');
+    assert.equal(preselect.catalogue_index.length, input.catalogue_index.length);
+  }
+});
+
 test('D3 admission failures return the full index without schemas', () => {
   const good = recorded('loop.preselect', entries, .1);
   assert.equal(good.outcome.status, 'accepted');
@@ -82,10 +114,14 @@ test('D3 admission failures return the full index without schemas', () => {
 test('evaluate uses site semantics once, handles thrown secrets and in-flight revision changes', async () => {
   for (const site of ['loop.preselect', 'guard.input', 'guard.output'] as const) {
     let calls = 0;
-    const port = { evaluate: async (request: { site: string; state: unknown; kind: string }) => {
+    const port = { evaluate: async (request: { site: string; state: unknown; kind: string; questions: Record<string, unknown> }) => {
       calls++;
       assert.equal(request.site, site); assert.equal(request.kind, 'boolean');
       if (site === 'loop.preselect') assert.ok(!JSON.stringify(request).includes('SCHEMA_SECRET'));
+      // D4/D7 judge only the caller's disclosed state; the site injects no grant or scope (#99).
+      else assert.deepEqual(request.state, input.state);
+      // D7 keeps its wire question id; only the approval rule is named out_of_grant_effect (#98).
+      if (site === 'guard.output') assert.deepEqual(Object.keys(request.questions), ['decision']);
       throw new Error('CANARY_SECRET');
     } } as unknown as Pick<InferenceGateway, 'evaluate'>;
     const result = await evaluateBooleanSite(site, input, port, () => ({ ...current, observed_at: 10 }));
@@ -95,20 +131,38 @@ test('evaluate uses site semantics once, handles thrown secrets and in-flight re
   }
 });
 
-test('D7 clean observation cannot bypass Fabric denial for a widened resource', () => {
+// #97: the guards are not wired into the loop yet, so this feeds the clean D7 transition into the Fabric
+// call the way a wired dispatch would: D7 gates whether to call, Fabric decides what the grant reaches.
+test('D7 clean observation cannot bypass Fabric denial for a widened resource', async () => {
   const authority = createGrantAuthority();
   const host = new AgentFabricHost({ authority });
   const alpha = host.registerSource('mem:alpha', 'a');
   const gamma = host.registerSource('mem:gamma', 'g');
-  const grant = authority.issue({ action_id: 'a:1:1', operation: SOURCE_INSPECT.id,
+  const issue = (action_id: string): Grant => authority.issue({ action_id, operation: SOURCE_INSPECT.id,
     contract_rev: SOURCE_INSPECT.revision, permissions: [{ resource: alpha, mode: 'read' }],
     effects: [{ resource: alpha, mode: 'read' }], issued_at: 1 });
   const clean = transitionBooleanSite('guard.output', input, recorded('guard.output', ['decision']), current);
   assert.equal(clean.status, 'transition');
-  const denied = host.invoke(grant, SOURCE_INSPECT.id, { source: gamma });
-  assert.equal(denied.kind, 'rejected');
-  assert.equal((denied as { code: string }).code, 'DENIED');
+  const dispatch = (d7: BooleanTransition, grant: Grant | null, source: string) => {
+    assert.equal(d7.status, 'transition', 'only a clean D7 reaches the Fabric call');
+    return host.invoke(grant, SOURCE_INSPECT.id, { source });
+  };
+  const held = issue('a:1:1');
+  const widened = { ...held, permissions: [{ resource: gamma, mode: 'read' as const }], effects: [{ resource: gamma, mode: 'read' as const }] };
+  // Nothing D7 returns is a grant, and a widened copy of an issued grant was never issued.
+  for (const [grant, source] of [[clean, gamma], [clean.observations[0], gamma], [null, gamma], [widened, gamma], [held, gamma]] as const) {
+    const denied = dispatch(clean, grant as unknown as Grant | null, source);
+    assert.equal(denied.kind, 'rejected');
+    assert.equal((denied as { code: string }).code, 'DENIED');
+  }
   assert.equal(host.resourceAccesses.length, 0);
+  // The same clean D7 with the issued grant on its own resource runs, so the denials above are Fabric's.
+  const allowed = dispatch(clean, held, alpha);
+  assert.equal(allowed.kind, 'handle');
+  if (allowed.kind !== 'handle') return;
+  host.release(allowed.action_id);
+  assert.equal((await allowed.result).outcome, 'succeeded');
+  assert.deepEqual(host.resourceAccesses.map(access => access.handle), [alpha]);
 });
 
 test('D3 consumes the budgeted M6 index rather than the registry or schema slice', () => {
