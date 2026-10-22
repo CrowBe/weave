@@ -81,8 +81,8 @@ export function scoreAnswer(c: Case, label: Label, raw: unknown): Record<string,
   return { expected_score: answer.score, predicted, correct: predicted === label, absolute_error: Math.abs(answer.score - label) };
 }
 
-async function main(): Promise<void> {
-  const arg = (name: string) => { const i = process.argv.indexOf(`--${name}`); return i < 0 ? undefined : process.argv[i + 1]; };
+export async function main(argv: readonly string[] = process.argv, env: NodeJS.ProcessEnv = process.env): Promise<void> {
+  const arg = (name: string) => { const i = argv.indexOf(`--${name}`); return i < 0 ? undefined : argv[i + 1]; };
   const casesPath = arg('cases') ?? `${SAMPLE}/cases.json`;
   const kevPath = arg('kev') ?? new URL('./kev-results.json', import.meta.url).pathname;
   const outPath = arg('output') ?? DEFAULT_OUTPUT.pathname;
@@ -98,8 +98,9 @@ async function main(): Promise<void> {
   for (const c of selected) {
     if (!caseLabels.has(c.id) || caseLabels.get(c.id) !== kevById.get(c.id)?.label) throw new Error(`${c.id}: sample and Kev labels do not match`);
   }
-  const credentials = readCredentials(process.env);
+  const credentials = readCredentials(env);
   if ('error' in credentials) throw new Error(credentials.error);
+  if (credentials.vercel === undefined) throw new Error('AI_GATEWAY_API_KEY is required for the Vercel-only bev sample');
   // Deliberately drop direct credentials so Jev can only route through Vercel.
   const gateway = createJevGateway({ vercel: credentials.vercel, typesafe: undefined }, { now: () => Date.now() }, { preferFree: true });
   const sha = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
