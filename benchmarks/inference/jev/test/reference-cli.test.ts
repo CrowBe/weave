@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, writeFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +9,7 @@ import { Worker } from 'node:worker_threads';
 import type { InferenceGateway, EvaluationOutcome, EvaluationKind, EvaluationRequest } from '@weave/gateway';
 import { CORPUS } from '../corpus.ts';
 import type { SuiteRecord } from '../transfer.ts';
+import { orderingsFor } from '../permutation.ts';
 
 import * as probe from '../probe.ts';
 import * as transferProbe from '../transfer-probe.ts';
@@ -72,6 +74,71 @@ async function temporary(run: (dir: string) => Promise<void>) {
 }
 
 for (const cli of [probe, transferProbe]) {
+  test(`${cli === probe ? 'probe' : 'transfer'} reference plan hash covers settings before any job completes`, async () =>
+    temporary(async (dir) => {
+      const controller = new AbortController();
+      controller.abort();
+      const hashes: string[] = [];
+      const variants =
+        cli === probe
+          ? [
+              { kinds: ['choice'], repeats: 1, permute: 1 },
+              { kinds: ['boolean'], repeats: 1, permute: 1 },
+              { kinds: ['choice', 'boolean'], repeats: 1, permute: 1 },
+              { kinds: ['boolean', 'choice'], repeats: 1, permute: 1 },
+              { kinds: ['choice'], repeats: 2, permute: 1 },
+              { kinds: ['choice'], repeats: 1, permute: 2 },
+            ]
+          : [1, 2, 3].map((permute) => ({ kinds: ['choice'], repeats: 1, permute }));
+      let corpusHash: string | undefined;
+      for (const settings of [...variants, variants[0]!]) {
+        const output = join(dir, 'plan.json');
+        const code = await cli.main({
+          argv: [
+            '--reference',
+            '--all',
+            '--kinds',
+            settings.kinds.join(','),
+            '--repeats',
+            String(settings.repeats),
+            '--permute',
+            String(settings.permute),
+            '--output',
+            output,
+          ],
+          env,
+          clock: { now: () => 1_000 },
+          corpus: [CORPUS[0]!],
+          suite,
+          signal: controller.signal,
+          gateway: fake(PIN, async () => {
+            assert.fail('cancelled plan must issue no inference');
+          }),
+        });
+        assert.equal(code, 1);
+        const saved = JSON.parse(await readFile(output, 'utf8'));
+        const orders = [orderingsFor(cli === probe ? CORPUS[0]!.candidates.length : 2, settings.permute, 20260921)];
+        // Transfer's unpermuted records use an empty ordering to retain corpus order.
+        if (cli === transferProbe && settings.permute === 1) orders[0] = [[]];
+        const plan =
+          cli === probe
+            ? { ...settings, order_seed: 20260921, orders }
+            : { permute: settings.permute, order_seed: 20260921, orders };
+        assert.equal(
+          saved.header.plan_hash,
+          createHash('sha256').update(JSON.stringify(plan)).digest('hex'),
+          'header must hash the complete plan even when no record completes',
+        );
+        assert.equal(saved.header.status, 'cancelled');
+        assert.deepEqual(saved.records, []);
+        corpusHash ??= saved.header.corpus_hash;
+        assert.equal(saved.header.corpus_hash, corpusHash, 'plan settings must not change corpus identity');
+        hashes.push(saved.header.plan_hash);
+      }
+      assert.equal(new Set(hashes.slice(0, -1)).size, variants.length, 'each different plan needs its own hash');
+      assert.equal(hashes.at(-1), hashes[0], 'identical plans must hash identically across new runs');
+    }));
+
   test(`${cli === probe ? 'probe' : 'transfer'} concurrent default outputs include their run ids`, async () =>
     temporary(async (dir) => {
       const previous = process.cwd();
@@ -167,6 +234,7 @@ for (const cli of [probe, transferProbe]) {
         assert.equal(saved.header.pinned_model_id, PIN);
         assert.equal(saved.header.run_date, '1970-01-01T00:00:01.000Z');
         assert.match(saved.header.corpus_hash, /^[a-f0-9]{64}$/);
+        assert.match(saved.header.plan_hash, /^[a-f0-9]{64}$/);
         assert.equal(saved.header.route.adapter, 'typesafe-ai');
         assert.equal(saved.header.status, 'completed');
         assert.equal(saved.header.pin_mismatch, model !== PIN);
@@ -219,6 +287,62 @@ for (const cli of [probe, transferProbe]) {
       assert.equal(calls, 2);
       assert.deepEqual(await readdir(`${output}.lock`), [], 'cancellation releases the output claim');
     }));
+}
+
+for (const script of ['probe.ts', 'transfer-probe.ts']) {
+  for (const first of ['SIGINT', 'SIGTERM'])
+    for (const second of ['SIGINT', 'SIGTERM']) {
+      test(`${script} reference ${first} then ${second} force-quits with 130 when abort hangs`, async (t) => {
+        const worker = new Worker(
+          `
+        const { workerData, parentPort } = require('node:worker_threads');
+        const { pathToFileURL } = require('node:url');
+        const { syncBuiltinESMExports } = require('node:module');
+        const fs = require('node:fs/promises');
+        let aborts = 0;
+        let aborted = false;
+        const NativeAbortController = AbortController;
+        globalThis.AbortController = class extends NativeAbortController {
+          abort() {
+            super.abort();
+            aborts++;
+            aborted = this.signal.aborted;
+          }
+        };
+        // Keep main pending without inference or filesystem effects, even after abort.
+        fs.readFile = () => new Promise(() => {
+          setImmediate(() => {
+            process.emit(workerData.first);
+            parentPort.postMessage({ aborts, aborted });
+            process.emit(workerData.second);
+            process.exit(0); // Reached only if the second signal failed to force-quit.
+          });
+        });
+        syncBuiltinESMExports();
+        process.argv = [process.execPath, workerData.path, '--reference', '--from', 'fake-pending.json'];
+        import(pathToFileURL(workerData.path).href);
+      `,
+          {
+            eval: true,
+            stdout: true,
+            stderr: true,
+            workerData: { path: fileURLToPath(new URL(`../${script}`, import.meta.url)), first, second },
+            env: {},
+          },
+        );
+        t.after(() => worker.terminate());
+        worker.stdout.resume();
+        worker.stderr.resume();
+        const observations: unknown[] = [];
+        worker.on('message', (value) => observations.push(value));
+        const status = await new Promise<number>((resolve, reject) => {
+          worker.on('error', reject);
+          worker.on('exit', resolve);
+        });
+        assert.deepEqual(observations, [{ aborts: 1, aborted: true }], 'first signal must request graceful abort');
+        assert.equal(status, 130, 'second signal must force-quit pending work');
+      });
+    }
 }
 
 for (const script of ['probe.ts', 'transfer-probe.ts'])

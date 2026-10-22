@@ -233,7 +233,15 @@ export async function main(
               );
             }
         }
-      const result = await runReference({ clock, corpus, output, runId, jobs, signal: deps.signal });
+      const result = await runReference({
+        clock,
+        corpus,
+        output,
+        runId,
+        jobs,
+        signal: deps.signal,
+        plan: { kinds, repeats, permute, order_seed: ORDER_SEED, orders: plan.map((entry) => entry.orders) },
+      });
       records = [...result.records];
       exitCode = result.header.pin_mismatch || result.header.status !== 'completed' ? 1 : 0;
     } else {
@@ -272,7 +280,10 @@ export async function main(
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const controller = new AbortController();
-  const cancel = () => controller.abort();
+  const cancel = () => {
+    if (controller.signal.aborted) process.exit(130);
+    controller.abort();
+  };
   if (process.argv.includes('--reference')) {
     process.on('SIGINT', cancel);
     process.on('SIGTERM', cancel);

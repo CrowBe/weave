@@ -31,9 +31,16 @@ Exhausted throttles produce `throttle_exhausted` failure records with no fallbac
 
 Reference output is `{ "header": ..., "records": [...] }`. The reference run
 header contains `mode`, `run_id`, `pinned_model_id`, `route`, `run_date` (from
-the injected clock), `corpus_hash`, `status`, `pin_mismatch` and
+the injected clock), `corpus_hash`, `plan_hash`, `status`, `pin_mismatch` and
 `pin_mismatch_count`. The corpus hash is SHA-256 of `JSON.stringify` applied to
-the selected corpus records in plan order, including labels. Each record
+the selected corpus records in plan order, including labels. The separate plan
+hash is SHA-256 of `JSON.stringify` applied to `{ kinds, repeats, permute,
+order_seed, orders }` for the Weave corpus probe, or `{ permute, order_seed,
+orders }` for transfer (whose kinds come from its corpus and which runs once).
+`orders` contains each selected case's computed presentation orders in corpus
+order. It includes the requested permutation count even when orders are clamped
+to the available permutations. Both hashes are fixed before inference and remain
+unchanged in cancelled or interrupted snapshots. Each record
 captures the routed unit, `resolved_model_id` from the response's `model`,
 `provider_response_id` where available, and `request_params`: actual
 `presentation_order`, `shuffle: false`, and `max_output_tokens: null` to mean

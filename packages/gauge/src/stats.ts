@@ -138,10 +138,19 @@ export function bootstrap(samples: readonly number[], kind: Aggregate, level: nu
   const n = samples.length;
   const next = generator(seed);
   const statistics = new Float64Array(BOOTSTRAP_RESAMPLES);
-  const draw = new Array<number>(n);
+  const draw = kind === 'p95' ? new Float64Array(n) : new Array<number>(n);
+  const rank = Math.ceil(0.95 * n) - 1;
+  // Native numeric sorting distinguishes -0 from +0. Preserve the original
+  // stable comparator's zero ties when a sample contains -0.
+  const compare = kind === 'p95' && samples.some((x) => Object.is(x, -0)) ? (a: number, b: number) => a - b : undefined;
   for (let b = 0; b < BOOTSTRAP_RESAMPLES; b += 1) {
     for (let i = 0; i < n; i += 1) draw[i] = samples[Math.floor(next() * n)]!;
-    statistics[b] = aggregate(kind, draw);
+    if (draw instanceof Float64Array) {
+      draw.sort(compare);
+      statistics[b] = draw[rank]!;
+    } else {
+      statistics[b] = aggregate(kind, draw);
+    }
   }
   statistics.sort();
   const alpha = 1 - level;
