@@ -119,6 +119,195 @@
           }
         ],
         "constraints": []
+      },
+      "decision-sites.criteria@2": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.criteria@2",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "method": {
+          "interval": "bootstrap@1",
+          "level": 0.95,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "accuracy",
+            "source": {
+              "weft_kind": "judgment",
+              "field": "accepted"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.02
+          },
+          {
+            "measure": "cost",
+            "source": {
+              "weft_kind": "inference.attempt",
+              "field": "spent_micros"
+            },
+            "aggregate": "mean",
+            "better": "lower",
+            "min_effect": 5
+          },
+          {
+            "measure": "completion",
+            "source": {
+              "weft_kind": "outcome",
+              "field": "status"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.05
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "measure": "accuracy",
+            "op": "ge",
+            "bound": 0.82,
+            "role": "quality_bar"
+          },
+          {
+            "constraint": "cost_cap",
+            "measure": "cost",
+            "op": "le",
+            "bound": 200,
+            "role": "protected"
+          }
+        ]
+      },
+      "decision-sites.edited@1": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.edited@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "method": {
+          "interval": "bootstrap@1",
+          "level": 0.95,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "accuracy",
+            "source": {
+              "weft_kind": "judgment",
+              "field": "accepted"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.02
+          },
+          {
+            "measure": "cost",
+            "source": {
+              "weft_kind": "inference.attempt",
+              "field": "spent_micros"
+            },
+            "aggregate": "mean",
+            "better": "lower",
+            "min_effect": 5
+          },
+          {
+            "measure": "completion",
+            "source": {
+              "weft_kind": "outcome",
+              "field": "status"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.05
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "measure": "accuracy",
+            "op": "ge",
+            "bound": 0.6,
+            "role": "quality_bar"
+          },
+          {
+            "constraint": "cost_cap",
+            "measure": "cost",
+            "op": "le",
+            "bound": 200,
+            "role": "protected"
+          }
+        ]
+      },
+      "decision-sites.unrecorded@1": {
+        "schema": "gauge.criteria@1",
+        "criteria": "decision-sites.unrecorded@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "method": {
+          "interval": "bootstrap@1",
+          "level": 0.95,
+          "seed": 7,
+          "min_samples": 30
+        },
+        "measures": [
+          {
+            "measure": "accuracy",
+            "source": {
+              "weft_kind": "judgment",
+              "field": "accepted"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.02
+          },
+          {
+            "measure": "cost",
+            "source": {
+              "weft_kind": "inference.attempt",
+              "field": "spent_micros"
+            },
+            "aggregate": "mean",
+            "better": "lower",
+            "min_effect": 5
+          },
+          {
+            "measure": "completion",
+            "source": {
+              "weft_kind": "outcome",
+              "field": "status"
+            },
+            "aggregate": "rate",
+            "better": "higher",
+            "min_effect": 0.05
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "measure": "accuracy",
+            "op": "ge",
+            "bound": 0.8,
+            "role": "quality_bar"
+          },
+          {
+            "constraint": "cost_cap",
+            "measure": "cost",
+            "op": "le",
+            "bound": 200,
+            "role": "protected"
+          }
+        ]
       }
     },
     "casesets": {
@@ -759,6 +948,91 @@
         "constraints": [],
         "verdict": "meets_bar"
       }
+    },
+    "revisions": {
+      "decision-sites.criteria@1": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.criteria@1",
+        "record": "criteria",
+        "digest": "sha256:2b474ea22e4e08f5080764db446f842247da0459db239a25ee38122f9679b22f",
+        "supersedes": null,
+        "issued_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "justification": "initial",
+        "evidence": []
+      },
+      "decision-sites.exact-hi@1": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.exact-hi@1",
+        "record": "criteria",
+        "digest": "sha256:ae482ca0fdaa9b09127465df4f1ae7fbb09bb11e251cac13d68c7198a066c743",
+        "supersedes": null,
+        "issued_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "justification": "initial",
+        "evidence": []
+      },
+      "decision-sites.exact-lo@1": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.exact-lo@1",
+        "record": "criteria",
+        "digest": "sha256:09425f7b17917d786fcae81a1991472a1cc1ead90968649e386d83e0e90faa3d",
+        "supersedes": null,
+        "issued_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "justification": "initial",
+        "evidence": []
+      },
+      "decision-sites.edited@1": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.edited@1",
+        "record": "criteria",
+        "digest": "sha256:f91422323bee6e5202fcb557bba1bc462fcdd60ac556d88c4b104ea2f7d6622d",
+        "supersedes": null,
+        "issued_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "justification": "initial",
+        "evidence": []
+      },
+      "decision-sites.cases@1": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.cases@1",
+        "record": "caseset",
+        "digest": "sha256:5e9107c342ddd79f516d0a5b7719b9f515ddf060e985ff4abdae999fa6c9497f",
+        "supersedes": null,
+        "issued_by": {
+          "kind": "approval",
+          "ref": "appr-41"
+        },
+        "justification": "initial",
+        "evidence": []
+      },
+      "decision-sites.criteria@2": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.criteria@2",
+        "record": "criteria",
+        "digest": "sha256:79db28210eb13d916b2779acc4a459e39f99204798521a63976dbc3c0ba8fab1",
+        "supersedes": "decision-sites.criteria@1",
+        "issued_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "justification": "bar_raised",
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs-review-7"
+          }
+        ]
+      }
     }
   },
   "valid": [
@@ -836,7 +1110,7 @@
         "workload": "decision-sites",
         "governed_by": {
           "kind": "approval",
-          "ref": "appr-41"
+          "ref": "appr-42"
         },
         "splits": [
           {
@@ -848,6 +1122,59 @@
             "split": "holdout",
             "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             "size": 40
+          }
+        ]
+      }
+    },
+    {
+      "name": "a first criteria revision",
+      "record": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.criteria@1",
+        "record": "criteria",
+        "digest": "sha256:2b474ea22e4e08f5080764db446f842247da0459db239a25ee38122f9679b22f",
+        "supersedes": null,
+        "issued_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "justification": "initial",
+        "evidence": []
+      }
+    },
+    {
+      "name": "a first case set revision",
+      "record": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.cases@1",
+        "record": "caseset",
+        "digest": "sha256:5e9107c342ddd79f516d0a5b7719b9f515ddf060e985ff4abdae999fa6c9497f",
+        "supersedes": null,
+        "issued_by": {
+          "kind": "approval",
+          "ref": "appr-41"
+        },
+        "justification": "initial",
+        "evidence": []
+      }
+    },
+    {
+      "name": "a superseding criteria revision with evidence",
+      "record": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.criteria@2",
+        "record": "criteria",
+        "digest": "sha256:79db28210eb13d916b2779acc4a459e39f99204798521a63976dbc3c0ba8fab1",
+        "supersedes": "decision-sites.criteria@1",
+        "issued_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "justification": "bar_raised",
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs-review-7"
           }
         ]
       }
@@ -1885,7 +2212,7 @@
         "workload": "decision-sites",
         "governed_by": {
           "kind": "approval",
-          "ref": "appr-41"
+          "ref": "appr-43"
         },
         "splits": [
           {
@@ -1977,7 +2304,7 @@
         "workload": "decision-sites",
         "governed_by": {
           "kind": "approval",
-          "ref": "appr-41"
+          "ref": "appr-44"
         },
         "splits": [
           {
@@ -2003,7 +2330,7 @@
           "kind": "routed_unit",
           "ref": "boolean.task@jev-1.13.0"
         },
-        "criteria": "decision-sites.criteria@2",
+        "criteria": "decision-sites.criteria@9",
         "caseset": "decision-sites.cases@1",
         "split": "tune",
         "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -3948,6 +4275,361 @@
         "signal": null,
         "confidence": null,
         "evidence": []
+      }
+    },
+    {
+      "name": "a revision with an extra key",
+      "reason": "envelope",
+      "record": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.criteria@2",
+        "record": "criteria",
+        "digest": "sha256:79db28210eb13d916b2779acc4a459e39f99204798521a63976dbc3c0ba8fab1",
+        "supersedes": "decision-sites.criteria@1",
+        "issued_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "justification": "bar_raised",
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs-review-7"
+          }
+        ],
+        "approved": true
+      }
+    },
+    {
+      "name": "a malformed revision digest",
+      "reason": "ref",
+      "record": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.criteria@2",
+        "record": "criteria",
+        "digest": "sha256:abc",
+        "supersedes": "decision-sites.criteria@1",
+        "issued_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "justification": "bar_raised",
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs-review-7"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a revision whose digest is not its set",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.criteria@2",
+        "record": "criteria",
+        "digest": "sha256:2b474ea22e4e08f5080764db446f842247da0459db239a25ee38122f9679b22f",
+        "supersedes": "decision-sites.criteria@1",
+        "issued_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "justification": "bar_raised",
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs-review-7"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a revision of an unknown set",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.other@1",
+        "record": "criteria",
+        "digest": "sha256:2b474ea22e4e08f5080764db446f842247da0459db239a25ee38122f9679b22f",
+        "supersedes": null,
+        "issued_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "justification": "initial",
+        "evidence": []
+      }
+    },
+    {
+      "name": "a revision of a criteria set filed as a case set",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.criteria@1",
+        "record": "caseset",
+        "digest": "sha256:2b474ea22e4e08f5080764db446f842247da0459db239a25ee38122f9679b22f",
+        "supersedes": null,
+        "issued_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "justification": "initial",
+        "evidence": []
+      }
+    },
+    {
+      "name": "a first revision that supersedes another",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.criteria@1",
+        "record": "criteria",
+        "digest": "sha256:2b474ea22e4e08f5080764db446f842247da0459db239a25ee38122f9679b22f",
+        "supersedes": "decision-sites.criteria@0",
+        "issued_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "justification": "initial",
+        "evidence": []
+      }
+    },
+    {
+      "name": "a revision that skips its predecessor",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.criteria@2",
+        "record": "criteria",
+        "digest": "sha256:79db28210eb13d916b2779acc4a459e39f99204798521a63976dbc3c0ba8fab1",
+        "supersedes": "decision-sites.criteria@0",
+        "issued_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "justification": "bar_raised",
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs-review-7"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a revision issued by the candidate under test",
+      "reason": "governance",
+      "record": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.criteria@2",
+        "record": "criteria",
+        "digest": "sha256:79db28210eb13d916b2779acc4a459e39f99204798521a63976dbc3c0ba8fab1",
+        "supersedes": "decision-sites.criteria@1",
+        "issued_by": {
+          "kind": "policy",
+          "ref": "optimiser-2"
+        },
+        "justification": "bar_raised",
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "obs-review-7"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a first revision issued by another authority",
+      "reason": "governance",
+      "record": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.cases@1",
+        "record": "caseset",
+        "digest": "sha256:5e9107c342ddd79f516d0a5b7719b9f515ddf060e985ff4abdae999fa6c9497f",
+        "supersedes": null,
+        "issued_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "justification": "initial",
+        "evidence": []
+      }
+    },
+    {
+      "name": "a superseding revision without justification evidence",
+      "reason": "governance",
+      "record": {
+        "schema": "gauge.revision@1",
+        "revision": "decision-sites.criteria@2",
+        "record": "criteria",
+        "digest": "sha256:79db28210eb13d916b2779acc4a459e39f99204798521a63976dbc3c0ba8fab1",
+        "supersedes": "decision-sites.criteria@1",
+        "issued_by": {
+          "kind": "policy",
+          "ref": "eval-policy-3"
+        },
+        "justification": "bar_raised",
+        "evidence": []
+      }
+    },
+    {
+      "name": "a case set whose holdout repeats its tune split",
+      "reason": "holdout",
+      "record": {
+        "schema": "gauge.caseset@1",
+        "caseset": "decision-sites.cases@1",
+        "workload": "decision-sites",
+        "governed_by": {
+          "kind": "approval",
+          "ref": "appr-45"
+        },
+        "splits": [
+          {
+            "split": "tune",
+            "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 120
+          },
+          {
+            "split": "holdout",
+            "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 40
+          }
+        ]
+      }
+    },
+    {
+      "name": "a result under a criteria set edited after recording",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-edited",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.13.0"
+        },
+        "criteria": "decision-sites.edited@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-base"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.85,
+            "n": 120,
+            "interval": [
+              0.8,
+              0.9
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 150,
+            "n": 120,
+            "interval": [
+              140,
+              160
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 120,
+            "interval": [
+              0.62,
+              0.78
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
+      }
+    },
+    {
+      "name": "a result under an unrecorded criteria set",
+      "reason": "binding",
+      "record": {
+        "schema": "gauge.result@1",
+        "result": "res-unrecorded",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@jev-1.13.0"
+        },
+        "criteria": "decision-sites.unrecorded@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-base"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.85,
+            "n": 120,
+            "interval": [
+              0.8,
+              0.9
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 150,
+            "n": 120,
+            "interval": [
+              140,
+              160
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 120,
+            "interval": [
+              0.62,
+              0.78
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
+        "verdict": "meets_bar"
       }
     }
   ]

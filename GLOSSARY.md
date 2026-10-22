@@ -429,11 +429,15 @@ The evaluation package, namespaced Weave Gauge. It turns Weft traces and other r
 
 ### Criteria set
 
-A governed, versioned record of what counts as success for a workload: measures, quality-bar and protected constraints, and a deterministic statistical method. Its revision cites the authority that issued it. The subject under evaluation cannot author or govern it.
+A governed, versioned record of what counts as success for a workload: measures, quality-bar and protected constraints, and a deterministic statistical method. It cites the authority that governs it, and a governed revision records each revision. The subject under evaluation cannot author or govern it. Both kinds of constraint are pass/fail gates, never terms traded against a score.
 
 ### Case set
 
-A governed, versioned record naming a workload's cases by digest, split into a tune split and a holdout.
+A governed, versioned record naming a workload's cases by digest, split into a tune split and a holdout. The holdout never repeats the tune split.
+
+### Governed revision
+
+Gauge's record (`gauge.revision@1`) that one revision of a criteria set or case set exists: its digest, the revision it supersedes, the authority that issued it and its justification. Only the governor of the superseded set may issue it, and a change cites evidence. An approval issues exactly one revision, so a second revision citing it is refused; a policy is a standing authority. Gauge binds results only to recorded revisions, so editing a set in place unbinds everything that cites it, and an optimiser cannot redefine success for its own candidate.
 
 ### Evaluation result
 

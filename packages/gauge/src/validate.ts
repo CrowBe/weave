@@ -8,6 +8,7 @@
  * an unknown or malformed one is a `binding` failure, never a crash.
  */
 import { KIND_FIELDS, isCode, isCount, isDigest, isId, isKind, isMetric, isRatio } from '@weave/weft';
+import { recordDigest } from './digest.js';
 import type {
   CaseSet,
   ComparisonVerdict,
@@ -19,6 +20,7 @@ import type {
   Interval,
   Rejection,
   ResultVerdict,
+  Revision,
   Verdict,
 } from './types.js';
 
@@ -64,6 +66,8 @@ export function validate(value: unknown, context: Context): Verdict {
       return validateCriteria(value);
     case 'gauge.caseset@1':
       return validateCaseSet(value);
+    case 'gauge.revision@1':
+      return validateRevision(value, context);
     case 'gauge.result@1':
       return validateResult(value, context);
     case 'gauge.comparison@1':
@@ -142,6 +146,112 @@ function validateCaseSet(r: Obj): Verdict {
 
   if (!isRev(r.caseset) || !isId(r.workload) || !isId((r.governed_by as Obj).ref)) return reject('ref');
   if (!splits.every(s => isDigest(s.digest))) return reject('ref');
+  // A holdout that is the tune split is visible to whoever tunes.
+  if (splits.length === 2 && splits[0]!.digest === splits[1]!.digest) return reject('holdout');
+  return OK;
+}
+
+// gauge.revision@1
+
+const REVISION_KEYS = ['schema', 'revision', 'record', 'digest', 'supersedes', 'issued_by', 'justification', 'evidence'];
+type SetKind = Revision['record'];
+
+/** An own entry of a context table, or undefined. A missing table holds nothing. */
+const entryOf = (table: unknown, key: string): unknown =>
+  isObject(table) && Object.hasOwn(table, key) ? table[key] : undefined;
+
+/** A revision number a chain can hold: a positive integer without leading zeros. */
+function revisionNumber(rev: string): number | null {
+  const m = /@([1-9][0-9]*)$/.exec(rev);
+  return m === null ? null : Number(m[1]);
+}
+
+function revisionShape(r: Obj): Verdict {
+  if (!hasExactly(r, REVISION_KEYS)) return reject('envelope');
+  if (typeof r.revision !== 'string' || !oneOf(r.record, 'criteria', 'caseset') || typeof r.digest !== 'string'
+    || !(r.supersedes === null || typeof r.supersedes === 'string') || !isGovernance(r.issued_by)
+    || !isCode(r.justification) || !evidenceShaped(r.evidence, 0, 16)) {
+    return reject('envelope');
+  }
+  if (!isRev(r.revision) || !(r.supersedes === null || isRev(r.supersedes)) || !isDigest(r.digest)
+    || !isId((r.issued_by as Obj).ref) || !r.evidence.every(e => isId(e.ref))) {
+    return reject('ref');
+  }
+  return OK;
+}
+
+/** A criteria set or case set filed under its own name that validates. Recording is checked separately. */
+function governedSet(context: Context, kind: SetKind, name: string): CriteriaSet | CaseSet | null {
+  const set = entryOf(kind === 'criteria' ? context.criteria : context.casesets, name);
+  if (!isObject(set)) return null;
+  const filed = kind === 'criteria'
+    ? set.schema === 'gauge.criteria@1' && set.criteria === name && validateCriteria(set).ok
+    : set.schema === 'gauge.caseset@1' && set.caseset === name && validateCaseSet(set).ok;
+  return filed ? set as unknown as CriteriaSet | CaseSet : null;
+}
+
+/** One link binds: its set is known with this digest, and it names the revision before it. */
+function linkBinds(r: Revision, context: Context): boolean {
+  const set = governedSet(context, r.record, r.revision);
+  const n = revisionNumber(r.revision);
+  if (set === null || n === null || recordDigest(set) !== r.digest) return false;
+  if (n === 1) return r.supersedes === null;
+  return r.supersedes === `${r.revision.slice(0, r.revision.lastIndexOf('@'))}@${n - 1}`
+    && governedSet(context, r.record, r.supersedes) !== null;
+}
+
+/** Only the governor of the superseded set (for @1, of the set itself) issues a link, with evidence for a change. */
+function linkGoverned(r: Revision, context: Context): boolean {
+  const governor = governedSet(context, r.record, r.supersedes ?? r.revision)!.governed_by;
+  return r.issued_by.kind === governor.kind && r.issued_by.ref === governor.ref
+    && (r.supersedes === null || r.evidence.length > 0);
+}
+
+/**
+ * Whether another revision in `context` cites the approval this link was issued
+ * by. An approval is a single-use grant: it issues exactly one revision, so two
+ * distinct revisions citing it both fail, whatever order they arrived in. The
+ * identical revision (same canonical digest) is the link itself, so replaying it
+ * passes. A policy is a standing authority and is never spent.
+ */
+function approvalReused(r: Revision, context: Context): boolean {
+  if (r.issued_by.kind !== 'approval' || !isObject(context.revisions)) return false;
+  const own = recordDigest(r);
+  return Object.values(context.revisions).some(e =>
+    isObject(e) && e.schema === 'gauge.revision@1' && revisionShape(e).ok
+    && (e.issued_by as Obj).kind === 'approval' && (e.issued_by as Obj).ref === r.issued_by.ref
+    && recordDigest(e) !== own);
+}
+
+/**
+ * Whether a revision in `context` records this set: every link back to @1
+ * validates. Walked iteratively, so a long chain cannot exhaust the stack.
+ * `spent: false` checks the chain's structure and governors only, so a
+ * revision can report a reused approval as such rather than as `binding`.
+ */
+function recorded(context: Context, kind: SetKind, name: string, spent = true): boolean {
+  let rev: string | null = name;
+  while (rev !== null) {
+    const r = entryOf(context.revisions, rev);
+    if (!isObject(r) || r.schema !== 'gauge.revision@1' || r.revision !== rev || !revisionShape(r).ok || r.record !== kind) {
+      return false;
+    }
+    const link = r as unknown as Revision;
+    if (!linkBinds(link, context) || !linkGoverned(link, context) || (spent && approvalReused(link, context))) return false;
+    rev = link.supersedes;
+  }
+  return true;
+}
+
+function validateRevision(r: Obj, context: Context): Verdict {
+  const shape = revisionShape(r);
+  if (!shape.ok) return shape;
+  const link = r as unknown as Revision;
+  if (!linkBinds(link, context)) return reject('binding');
+  if (link.supersedes !== null && !recorded(context, link.record, link.supersedes, false)) return reject('binding');
+  if (!linkGoverned(link, context)) return reject('governance');
+  if (approvalReused(link, context)) return reject('approval_reused');
+  if (link.supersedes !== null && !recorded(context, link.record, link.supersedes)) return reject('approval_reused');
   return OK;
 }
 
@@ -152,23 +262,23 @@ const RESULT_KEYS = [
   'mode', 'evidence', 'measures', 'constraints', 'verdict',
 ];
 
+/** A criteria set is known only while a governed revision records it. */
 function boundCriteria(context: Context, name: unknown): CriteriaSet | null {
-  if (typeof name !== 'string' || !Object.hasOwn(context.criteria, name)) return null;
-  const set = context.criteria[name];
-  if (!isObject(set) || set.schema !== 'gauge.criteria@1' || set.criteria !== name || !validateCriteria(set).ok) return null;
-  return set as unknown as CriteriaSet;
+  if (typeof name !== 'string') return null;
+  const set = governedSet(context, 'criteria', name);
+  return set !== null && recorded(context, 'criteria', name) ? set as CriteriaSet : null;
 }
 
+/** A case set is known only while a governed revision records it. */
 function boundCaseSet(context: Context, name: unknown): CaseSet | null {
-  if (typeof name !== 'string' || !Object.hasOwn(context.casesets, name)) return null;
-  const set = context.casesets[name];
-  if (!isObject(set) || set.schema !== 'gauge.caseset@1' || set.caseset !== name || !validateCaseSet(set).ok) return null;
-  return set as unknown as CaseSet;
+  if (typeof name !== 'string') return null;
+  const set = governedSet(context, 'caseset', name);
+  return set !== null && recorded(context, 'caseset', name) ? set as CaseSet : null;
 }
 
 function boundResult(context: Context, id: unknown): EvaluationResult | null {
-  if (typeof id !== 'string' || !Object.hasOwn(context.results, id)) return null;
-  const result = context.results[id];
+  if (typeof id !== 'string') return null;
+  const result = entryOf(context.results, id);
   if (!isObject(result) || result.schema !== 'gauge.result@1' || result.result !== id || !validateResult(result, context).ok) {
     return null;
   }
