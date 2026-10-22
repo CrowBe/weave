@@ -97,7 +97,7 @@ interface OpenInvocation {
   readonly grant: Grant;
   readonly effects: readonly ResourceEffect[];
   readonly binding_digest: string;
-  phase: 'held' | 'before_commit' | 'after_commit' | 'done';
+  phase: 'held' | 'running' | 'before_commit' | 'after_commit' | 'done';
   cancel_requested: boolean;
   /** Aborted by requestCancel. Shell runs observe it and kill the child. */
   readonly abort: AbortController;
@@ -825,6 +825,9 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   private advance(open: OpenInvocation): void {
+    if (open.phase === 'running') {
+      return;
+    }
     if (isShellOperation(open.operation)) {
       if (open.phase !== 'held') {
         return;
@@ -853,15 +856,32 @@ export class AgentFabricHost implements CapabilityHost {
     const selectedId = selectAdmittedImplementation(this.implementationRecords(open.operation));
     const implementation = (this.admitted.get(open.operation) ?? []).find((record) => record.id === selectedId);
     if (implementation) {
+      if (open.phase !== 'held') {
+        return;
+      }
       const contract = this.live.get(open.operation);
       if (!contract) {
         this.finish(open, { outcome: 'failed', failure: 'UNKNOWN_CAPABILITY' });
         return;
       }
-      void Promise.resolve(implementation.run(open.inputs, this.resolverContext(contract))).then(
-        (outcome) => this.finish(open, outcome),
-        (error: unknown) =>
-          this.finish(open, { outcome: 'failed', failure: error instanceof Error ? error.message : 'implementation threw' }),
+      // Consume the release before run can reenter the host. The executor also
+      // turns synchronous throws into the same settlement as rejected promises.
+      open.phase = 'running';
+      void new Promise<InvocationOutcome>((resolve) => {
+        resolve(implementation.run(open.inputs, this.resolverContext(contract)));
+      }).then(
+        (outcome) => {
+          if (open.phase === 'done') {
+            return;
+          }
+          this.finish(open, outcome);
+        },
+        (error: unknown) => {
+          if (open.phase === 'done') {
+            return;
+          }
+          this.finish(open, { outcome: 'failed', failure: error instanceof Error ? error.message : 'implementation threw' });
+        },
       );
       return;
     }

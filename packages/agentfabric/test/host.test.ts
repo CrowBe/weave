@@ -9,9 +9,9 @@ import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, it } from 'node:test';
-import { createGrantAuthority, type Grant, validateCatalogue } from '@weave/agentsop';
-import { AgentFabricHost, FabricStore, REPORT_PUBLISH, SOURCE_INSPECT } from '@weave/agentfabric';
+import { describe, it, type TestContext } from 'node:test';
+import { createGrantAuthority, type Grant, type InvocationOutcome, validateCatalogue } from '@weave/agentsop';
+import { AgentFabricHost, type CapabilityImplementation, FabricStore, REPORT_PUBLISH, SOURCE_INSPECT } from '@weave/agentfabric';
 
 function inspectGrant(authority: ReturnType<typeof createGrantAuthority>, source: string, action_id: string): Grant {
   return authority.issue({
@@ -23,6 +23,174 @@ function inspectGrant(authority: ReturnType<typeof createGrantAuthority>, source
     issued_at: 1,
   });
 }
+
+describe('admitted implementation single-use release', () => {
+  const succeeded: InvocationOutcome = { outcome: 'succeeded', output: { revision: 1 } };
+
+  function deferred() {
+    let resolve!: (outcome: InvocationOutcome) => void;
+    let reject!: (error: Error) => void;
+    const result = new Promise<InvocationOutcome>((yes, no) => { resolve = yes; reject = no; });
+    return { result, resolve, reject };
+  }
+
+  function fixture(t: TestContext, run: CapabilityImplementation) {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-host-single-release-'));
+    const path = join(dir, 'fabric.json');
+    const store = FabricStore.open(path);
+    t.after(() => { store.close(); rmSync(dir, { recursive: true, force: true }); });
+    const authority = createGrantAuthority();
+    const host = new AgentFabricHost({ authority, store });
+    const source = host.registerSource('mem:single-release', 'line');
+    const counts = { runs: 0, finishes: 0, settlements: 0, reservationReleases: 0 };
+    host.installAdmitted(SOURCE_INSPECT, (inputs, context) => {
+      counts.runs += 1;
+      return run(inputs, context);
+    });
+    const persist = store.persistInvocationResult.bind(store);
+    store.persistInvocationResult = (record) => { counts.finishes += 1; persist(record); };
+    const release = host.coordinator.release.bind(host.coordinator);
+    host.coordinator.release = (id) => { counts.reservationReleases += 1; release(id); };
+    const grant = inspectGrant(authority, source, 'single-action');
+    const handle = host.invoke(grant, SOURCE_INSPECT.id, { source }, { invocation_id: 'single-invocation' });
+    assert.equal(handle.kind, 'handle');
+    if (handle.kind !== 'handle') throw new Error('expected invocation handle');
+    const result = handle.result.then((outcome) => { counts.settlements += 1; return outcome; });
+    const records = () => readFileSync(path, 'utf8').trim().split('\n')
+      .map((line) => JSON.parse(line) as { op: string; record?: { invocation_id: string; status: string } })
+      .filter((entry) => entry.op === 'result' && entry.record?.invocation_id === handle.invocation_id);
+    return { path, store, host, source, grant, handle, result, counts, records };
+  }
+
+  for (const second of ['release', 'releaseAll', 'proceed'] as const) {
+    it(`runs once for same-tick release followed by ${second}, including replay`, async (t) => {
+      const pending = deferred();
+      const f = fixture(t, () => pending.result);
+      f.host.release('single-action');
+      if (second === 'release') f.host.release('single-action');
+      else if (second === 'releaseAll') f.host.releaseAll();
+      else f.host.proceed('single-action');
+      const runsWhilePending = f.counts.runs;
+      pending.resolve(succeeded);
+      assert.deepEqual(await f.result, succeeded);
+      assert.equal(runsWhilePending, 1);
+      assert.deepEqual(f.counts, { runs: 1, finishes: 1, settlements: 1, reservationReleases: 1 });
+      assert.equal(f.records().length, 1);
+      f.store.close();
+      const reopened = FabricStore.open(f.path);
+      try {
+        const host = new AgentFabricHost({ authority: f.host.authority, store: reopened });
+        host.installAdmitted(SOURCE_INSPECT, () => { f.counts.runs += 1; return succeeded; });
+        const replay = host.invoke(f.grant, SOURCE_INSPECT.id, { source: f.source },
+          { invocation_id: f.handle.invocation_id });
+        assert.equal(replay.kind, 'handle');
+        if (replay.kind !== 'handle') throw new Error('expected replay handle');
+        assert.deepEqual(await replay.result, succeeded);
+        assert.deepEqual(host.releaseAll(), []);
+        assert.equal(f.counts.runs, 1);
+        assert.equal(f.records().length, 1);
+        assert.deepEqual(reopened.getInvocation(f.handle.invocation_id)?.outcome, succeeded);
+      } finally { reopened.close(); }
+    });
+  }
+
+  for (const fault of ['closed store', 'replaced lock', 'persistence refusal'] as const) {
+    for (const completion of ['resolves', 'rejects'] as const) {
+      it(`ignores late releases and a run that ${completion} after a result write fails: ${fault}`, async (t) => {
+        const first = deferred();
+        const late = deferred();
+        let calls = 0;
+        const f = fixture(t, () => ++calls === 1 ? first.result : late.result);
+        f.host.release('single-action');
+        f.host.releaseAll();
+        if (fault === 'closed store') f.store.close();
+        if (fault === 'replaced lock') nodeFs.writeFileSync(`${f.path}.lock`, `${process.pid}:replacement`);
+        if (fault === 'persistence refusal') f.store.persistResult = false;
+        const before = readFileSync(f.path);
+        first.resolve(succeeded);
+        const uncertain = { outcome: 'uncertain', reason: 'failed to persist invocation result' };
+        assert.deepEqual(await f.result, uncertain);
+        const holds = structuredClone(f.host.coordinator.held());
+        const releases = f.counts.reservationReleases;
+        // A retained terminal entry is still excluded from the public release API.
+        assert.throws(() => f.host.release('single-action'), /no open invocation/);
+        assert.deepEqual(f.host.releaseAll(), []);
+        f.store.persistResult = true;
+        if (completion === 'resolves') late.resolve(succeeded);
+        else {
+          // On the fixed host this promise was never returned by run.
+          void late.result.catch(() => undefined);
+          late.reject(new Error('late implementation failure'));
+        }
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        assert.deepEqual(await f.handle.result, uncertain);
+        assert.equal(f.counts.runs, 1);
+        assert.equal(f.counts.finishes, 1);
+        assert.equal(f.counts.settlements, 1);
+        assert.equal(f.counts.reservationReleases, releases);
+        assert.deepEqual(f.host.coordinator.held(), holds);
+        assert.deepEqual(f.host.lookup(f.handle.invocation_id, f.grant), {
+          status: 'unresolved', reason: uncertain.reason,
+        });
+        assert.equal(f.store.getInvocation(f.handle.invocation_id)?.status, 'running');
+        assert.deepEqual(readFileSync(f.path), before);
+        assert.equal(f.records().length, 0);
+      });
+    }
+  }
+
+  for (const completion of ['resolves', 'rejects', 'throws synchronously'] as const) {
+    it(`settles once when releaseAll is called inside run and the implementation ${completion}`, async (t) => {
+      const pending = deferred();
+      let f: ReturnType<typeof fixture>;
+      f = fixture(t, () => {
+        // Bound recursion on the broken host, so red is a count failure rather than a stack overflow.
+        if (f.counts.runs === 1) f.host.releaseAll();
+        if (completion === 'throws synchronously') throw new Error('implementation failed');
+        return pending.result;
+      });
+      assert.doesNotThrow(() => f.host.release('single-action'));
+      if (completion !== 'throws synchronously') f.host.releaseAll();
+      if (completion === 'resolves') pending.resolve(succeeded);
+      if (completion === 'rejects') pending.reject(new Error('implementation failed'));
+      assert.deepEqual(await f.result, completion === 'resolves'
+        ? succeeded : { outcome: 'failed', failure: 'implementation failed' });
+      assert.deepEqual(f.counts, { runs: 1, finishes: 1, settlements: 1, reservationReleases: 1 });
+      assert.equal(f.records().length, 1);
+    });
+  }
+
+  it('does not start another run after stop requests cancellation of a pending run', async (t) => {
+    const pending = deferred();
+    const f = fixture(t, () => pending.result);
+    f.host.release('single-action');
+    f.handle.requestCancel();
+    f.host.release('single-action');
+    f.host.releaseAll();
+    pending.resolve({ outcome: 'failed', failure: 'cancelled' });
+    assert.deepEqual(await f.result, { outcome: 'failed', failure: 'cancelled' });
+    assert.deepEqual(f.counts, { runs: 1, finishes: 1, settlements: 1, reservationReleases: 1 });
+    assert.equal(f.store.getInvocation(f.handle.invocation_id)?.cancel_requested, true);
+    // Cancellation writes a running record; settlement adds one terminal record.
+    assert.deepEqual(f.records().map((entry) => entry.record?.status), ['running', 'stopped']);
+  });
+
+  it('denies reuse of the invocation grant while its implementation is pending', async (t) => {
+    const pending = deferred();
+    const f = fixture(t, () => pending.result);
+    f.host.release('single-action');
+    const reused = f.host.invoke(f.grant, SOURCE_INSPECT.id, { source: f.source }, { invocation_id: 'second-invocation' });
+    assert.equal(reused.kind, 'rejected');
+    if (reused.kind !== 'rejected') throw new Error('expected grant reuse rejection');
+    assert.equal(reused.code, 'DENIED');
+    f.host.releaseAll();
+    pending.resolve(succeeded);
+    await f.result;
+    assert.deepEqual(f.counts, { runs: 1, finishes: 1, settlements: 1, reservationReleases: 1 });
+    assert.equal(f.host.invocations.length, 1);
+    assert.equal(f.records().length, 1);
+  });
+});
 
 describe('AgentFabric host authority', () => {
   for (const fault of ['closed store', 'replaced lock', 'poisoned append', 'validation error', 'persistence refusal',
