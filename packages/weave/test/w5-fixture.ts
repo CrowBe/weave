@@ -79,7 +79,7 @@ export const WEIGH_UNIT: RoutedUnit = {
 };
 
 /** Fails the first call with a retryable fault, then weighs every candidate 2. */
-export function flakyWeigher(): EvaluationAdapter & { readonly calls: EvaluationCall[] } {
+export function flakyWeigher(canary = ''): EvaluationAdapter & { readonly calls: EvaluationCall[] } {
   const calls: EvaluationCall[] = [];
   return {
     id: 'w5.evaluate',
@@ -87,7 +87,7 @@ export function flakyWeigher(): EvaluationAdapter & { readonly calls: Evaluation
     async evaluate(call): Promise<EvaluationProviderResult> {
       calls.push(call);
       if (calls.length === 1) {
-        return { status: 'failed', failure: { code: 'unavailable', message: 'provider overloaded', retryable: true } };
+        return { status: 'failed', failure: { code: 'unavailable', message: `provider overloaded ${canary}`, retryable: true } };
       }
       return scoreAnswers(Object.fromEntries(Object.keys(call.questions).map((id) => [id, 2])));
     },
@@ -113,13 +113,18 @@ export interface W5Sinks {
   readonly fabric?: Sink;
 }
 
-export function w5World(sinks: W5Sinks = {}, journal?: MemoryJournal): W5World {
+/**
+ * `canary`, when given, is written into the goal purpose, every source's
+ * content and the provider's failure message: text no record may carry.
+ */
+export function w5World(sinks: W5Sinks = {}, journal?: MemoryJournal, canary = ''): W5World {
+  const content = (key: string): string => `${CONTENT[key] as string}${canary ? `\n${canary}` : ''}`;
   const authority = createGrantAuthority();
   const host = new AgentFabricHost({
     authority,
     ...(sinks.fabric ? { weft: port('fabric.host', sinks.fabric) } : {}),
   });
-  const weigher = flakyWeigher();
+  const weigher = flakyWeigher(canary);
   const gateway = createInferenceGateway({
     routes: [WEIGH_UNIT],
     evaluators: [weigher],
@@ -134,9 +139,9 @@ export function w5World(sinks: W5Sinks = {}, journal?: MemoryJournal): W5World {
     ...(journal ? { journal } : {}),
     ...(sinks.loom ? { weft: port('loom.main', sinks.loom) } : {}),
   });
-  const alpha = host.registerSource('mem:alpha', CONTENT['source:alpha'] as string);
-  const beta = host.registerSource('mem:beta', CONTENT['source:beta'] as string);
-  const gamma = host.registerSource('mem:gamma', CONTENT['source:gamma'] as string);
+  const alpha = host.registerSource('mem:alpha', content('source:alpha'));
+  const beta = host.registerSource('mem:beta', content('source:beta'));
+  const gamma = host.registerSource('mem:gamma', content('source:gamma'));
   const world: W5World = { authority, host, gateway, runtime, weigher, alpha, beta, gamma, appended: [] };
   for (const [handle, key] of [
     [alpha, 'source:alpha'],
@@ -149,7 +154,7 @@ export function w5World(sinks: W5Sinks = {}, journal?: MemoryJournal): W5World {
       caused_by: null,
       payload_type: 'source.registered',
       payload_version: 1,
-      payload: { resource: handle, revision: 1, content: CONTENT[key] as string },
+      payload: { resource: handle, revision: 1, content: content(key) },
     };
     world.appended.push(input);
     runtime.observe(input);
@@ -162,7 +167,7 @@ export function w5World(sinks: W5Sinks = {}, journal?: MemoryJournal): W5World {
     payload_version: 1,
     payload: {
       goal_id: TRACE_ID,
-      purpose: 'Produce a checked report over three sources',
+      purpose: `Produce a checked report over three sources ${canary}`.trim(),
       sources: [alpha, beta, gamma],
       authority: { read: [alpha, beta, gamma] },
       budget: { actions: 12, judgments: 12, recovery: 4, cost: 1_000_000 },
