@@ -464,6 +464,10 @@ Gauge's record (`gauge.cost@1`) of what producing one evaluation result cost: ev
 
 Gauge's step-by-step comparison of results for one question in the order they were recorded, so a regression is visible. Unlike a comparison it may follow one subject across re-evaluations. A step is a regression when the later result is worse or misses a bar the earlier one met. A track is evidence, not a record, and promotes nothing.
 
+### Routing preference set
+
+Gauge's versioned record (`gauge.preference@1`) of eval-derived routing evidence: for each routed unit, the measures and verdict copied from its evaluation result on one question, with their uncertainty. The gateway loads it as data without importing Gauge. Applying one is a governed promotion by the composition root; it replaces only the named units' routing evidence, so deterministic policy always filters routes before a preference can order them.
+
 ### Failure attribution
 
 A claim about why one case failed: capability gap, implementation, routing or orchestration, with a deterministic signal or a recorded judgment and its confidence. *Unattributed* is a valid result. An attribution never names a holdout case.

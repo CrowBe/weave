@@ -350,7 +350,12 @@ Routing chooses a versioned routed unit: context profile, prompt template, model
 and settings. Deterministic policy filters by privacy and required quality, then
 uses evaluation evidence to compare expected total cost, latency, and escalation.
 Without enough evidence, use a conservative configured route and record the
-uncertainty. A cheaper model is not presumed adequate.
+uncertainty. A cheaper model is not presumed adequate. Eval-derived evidence
+can arrive as a Gauge routing preference set (`gauge.preference@1`), which the
+gateway loads as data without importing Gauge. Applying one is a governed
+promotion by the composition root; it replaces only the named units' evidence,
+crediting the low end of each accept-rate interval, so policy still filters
+before a preference orders anything.
 
 When the caller supplies a prefix cache, expected cost uses the hit discount or
 one reload at the selected unit's input price. With no record, expected cost

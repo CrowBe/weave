@@ -77,6 +77,8 @@ export function validate(value: unknown, context: Context): Verdict {
       return validateComparison(value, context);
     case 'gauge.cost@1':
       return validateCost(value, context);
+    case 'gauge.preference@1':
+      return validatePreference(value, context);
     case 'gauge.attribution@1':
       return validateAttribution(value, context);
     default:
@@ -262,6 +264,12 @@ function validateRevision(r: Obj, context: Context): Verdict {
 
 // gauge.result@1
 
+/** A result's measure entries, as a result or a preference entry carries them. */
+const measureEntriesShaped = (x: unknown): x is readonly Obj[] =>
+  objects(x, 0, 32, ['measure', 'value', 'n', 'interval'])
+  && x.every(e => isCode(e.measure) && (e.value === null || isNumber(e.value)) && isCount(e.n)
+    && (e.interval === null || isInterval(e.interval)));
+
 const RESULT_KEYS = [
   'schema', 'result', 'subject', 'criteria', 'caseset', 'split', 'caseset_digest',
   'mode', 'evidence', 'measures', 'constraints', 'verdict',
@@ -329,11 +337,7 @@ function validateResult(r: Obj, context: Context): Verdict {
   }
   if (!evidenceShaped(r.evidence, 1, 256)) return reject('envelope');
   const measures = r.measures;
-  if (!objects(measures, 0, 32, ['measure', 'value', 'n', 'interval'])
-    || !measures.every(e => isCode(e.measure) && (e.value === null || isNumber(e.value)) && isCount(e.n)
-      && (e.interval === null || isInterval(e.interval)))) {
-    return reject('envelope');
-  }
+  if (!measureEntriesShaped(measures)) return reject('envelope');
   const constraints = r.constraints;
   if (!objects(constraints, 0, 32, ['constraint', 'status'])
     || !constraints.every(c => isCode(c.constraint) && oneOf(c.status, 'held', 'violated', 'unknown'))) {
@@ -613,5 +617,70 @@ export function costed(comparison: unknown, costs: readonly unknown[], context: 
   const sides = [baseline, candidate].map(id => records.filter(c => c.result === id));
   if (sides.some(side => side.length > 1)) return reject('binding');
   if (sides.some(side => side.length === 0 || side[0]!.total.basis === 'unknown')) return reject('cost_unknown');
+  return OK;
+}
+
+// gauge.preference@1
+
+const PREFERENCE_KEYS = ['schema', 'preference', 'workload', 'criteria', 'caseset', 'split', 'mode', 'accept', 'entries'];
+
+const sameInterval = (a: Interval | null, b: Interval | null): boolean =>
+  a === null || b === null ? a === b : a[0] === b[0] && a[1] === b[1];
+
+function validatePreference(r: Obj, context: Context): Verdict {
+  // 1. envelope: closed keys, so an entry cannot carry a route field.
+  if (!hasExactly(r, PREFERENCE_KEYS)) return reject('envelope');
+  if (typeof r.preference !== 'string' || typeof r.workload !== 'string' || typeof r.criteria !== 'string'
+    || typeof r.caseset !== 'string' || !oneOf(r.split, 'tune', 'holdout') || !oneOf(r.mode, 'replay', 'trial', 'live')
+    || !isCode(r.accept)) {
+    return reject('envelope');
+  }
+  const entries = r.entries;
+  if (!objects(entries, 1, 64, ['routed_unit', 'result', 'verdict', 'measures'])
+    || !entries.every(e => typeof e.routed_unit === 'string' && typeof e.result === 'string'
+      && oneOf(e.verdict, 'meets_bar', 'misses_bar', 'insufficient_evidence') && measureEntriesShaped(e.measures))
+    || !unique(entries, e => e.routed_unit as string)) {
+    return reject('envelope');
+  }
+
+  // 2. ref
+  if (!isRev(r.preference) || !isId(r.workload) || !isRev(r.criteria) || !isRev(r.caseset)
+    || !entries.every(e => isId(e.routed_unit) && isId(e.result))) {
+    return reject('ref');
+  }
+
+  // 3. binding: every entry is a recorded result for its own routed unit on the set's question.
+  const criteria = boundCriteria(context, r.criteria);
+  const caseset = boundCaseSet(context, r.caseset);
+  if (criteria === null || caseset === null || criteria.workload !== r.workload || caseset.workload !== r.workload) {
+    return reject('binding');
+  }
+  const names = criteria.measures.map(d => d.measure);
+  const results: EvaluationResult[] = [];
+  for (const e of entries) {
+    const result = boundResult(context, e.result);
+    if (result === null || result.subject.kind !== 'routed_unit' || result.subject.ref !== e.routed_unit
+      || result.criteria !== r.criteria || result.caseset !== r.caseset || result.split !== r.split || result.mode !== r.mode
+      || !matchesOneToOne(e.measures as readonly Obj[], 'measure', names)) {
+      return reject('binding');
+    }
+    results.push(result);
+  }
+
+  // 7. measure: the accept rate is a higher-is-better rate, and figures are copied, never asserted.
+  const accept = criteria.measures.find(d => d.measure === r.accept);
+  if (accept === undefined || accept.aggregate !== 'rate' || accept.better !== 'higher') return reject('measure');
+  for (const [i, e] of entries.entries()) {
+    for (const m of e.measures as EvaluationResult['measures']) {
+      const own = results[i]!.measures.find(x => x.measure === m.measure)!;
+      if (m.value !== own.value || m.n !== own.n || !sameInterval(m.interval, own.interval)) return reject('measure');
+    }
+    // A zero-width accept interval is insufficient evidence, so a meets_bar entry cannot offer it as routing evidence.
+    const rate = (e.measures as EvaluationResult['measures']).find(m => m.measure === r.accept)!;
+    if (e.verdict === 'meets_bar' && rate.interval !== null && !hasWidth(rate.interval)) return reject('measure');
+  }
+
+  // 9. verdict
+  if (!entries.every((e, i) => e.verdict === results[i]!.verdict)) return reject('verdict');
   return OK;
 }
