@@ -123,6 +123,22 @@ Rules:
   that governs a set can change it, and only the old governor can hand it to a
   new one. A revision that supersedes another cites at least one evidence
   entry, its justification for changing what counts as success.
+- **Single use.** An approval is a single-use grant: an `issued_by` of kind
+  `approval` issues exactly one revision. A policy is a standing authority and
+  may issue many. Two revisions are the same revision when their canonical
+  digests (`recordDigest`) are equal, so replaying the recorded revision, in
+  any key order, still validates. When `context` holds two or more distinct
+  revisions citing the same approval (same kind `approval` and same `ref`),
+  every one of them fails with `approval_reused`, and so does a revision
+  presented beside one it conflicts with. `context` is unordered, so there is
+  no first claimant: the rule depends only on which revisions are present,
+  never on input order, and a conflict is resolved outside Gauge by removing
+  the revision that was not granted. A set whose chain holds a reused approval
+  is not recorded. The same `ref` under kind `policy` is a different authority:
+  it neither satisfies an approval governor nor spends that approval.
+  Because the governor of a set issues its next revision, a set governed by an
+  approval cannot be superseded once that approval has issued its `@1`; govern
+  a set that must change by a policy.
 - **Immutability.** Editing a recorded set in place changes its digest, so the
   set is no longer recorded and nothing binds to it. A change is a new
   revision. A result keeps binding to the revision it cites, and a comparison
@@ -275,15 +291,17 @@ first applicable reason, in this order:
 4. `governance`: a policy subject evaluated under criteria or cases it
    governs; a revision issued by anyone but the governor of the set it
    supersedes, or a superseding revision without evidence
-5. `holdout`: a holdout result with any evidence other than held-out reports,
+5. `approval_reused`: a revision issued by an approval that another, distinct
+   revision in `context` also cites, or one whose chain holds such a revision
+6. `holdout`: a holdout result with any evidence other than held-out reports,
    an attribution on a holdout result, or a case set whose holdout digest
    equals its tune digest
-6. `mode`: the replay rule
-7. `measure`: a bad measure definition (unknown Weft kind or field, a
+7. `mode`: the replay rule
+8. `measure`: a bad measure definition (unknown Weft kind or field, a
    duplicate measure, `wilson@1` on a non-rate aggregate), or a measure entry
    or delta that breaks its rules
-8. `constraint`: a bad constraint definition (a duplicate, or an unknown
+9. `constraint`: a bad constraint definition (a duplicate, or an unknown
    measure), or a status that does not match recomputation
-9. `verdict`: a verdict that does not match recomputation
-10. `attribution`: a basis, signal or confidence that breaks the attribution
+10. `verdict`: a verdict that does not match recomputation
+11. `attribution`: a basis, signal or confidence that breaks the attribution
     rules

@@ -433,7 +433,7 @@ A governed, versioned record naming a workload's cases by digest, split into a t
 
 ### Governed revision
 
-Gauge's record (`gauge.revision@1`) that one revision of a criteria set or case set exists: its digest, the revision it supersedes, the authority that issued it and its justification. Only the governor of the superseded set may issue it, and a change cites evidence. Gauge binds results only to recorded revisions, so editing a set in place unbinds everything that cites it, and an optimiser cannot redefine success for its own candidate.
+Gauge's record (`gauge.revision@1`) that one revision of a criteria set or case set exists: its digest, the revision it supersedes, the authority that issued it and its justification. Only the governor of the superseded set may issue it, and a change cites evidence. An approval issues exactly one revision, so a second revision citing it is refused; a policy is a standing authority. Gauge binds results only to recorded revisions, so editing a set in place unbinds everything that cites it, and an optimiser cannot redefine success for its own candidate.
 
 ### Evaluation result
 

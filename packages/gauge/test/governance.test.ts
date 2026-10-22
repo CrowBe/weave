@@ -124,7 +124,7 @@ test('a revision is recorded only when its whole chain holds', () => {
 
   const tampered = withEntries(context, 'revisions', { [C1]: { ...revision(C1), justification: 'Initial' } });
   assert.equal(reason(revision(C2), tampered), 'binding');
-  const misissued = withEntries(context, 'revisions', { [C1]: { ...revision(C1), issued_by: { kind: 'approval', ref: 'appr-41' } } });
+  const misissued = withEntries(context, 'revisions', { [C1]: { ...revision(C1), issued_by: { kind: 'approval', ref: 'appr-50' } } });
   assert.equal(reason(revision(C2), misissued), 'binding');
 });
 
@@ -147,9 +147,103 @@ test('the candidate side cannot change held-out cases', () => {
     'revisions', { 'decision-sites.cases@2': issued });
   assert.equal(reason(issued, ctx), 'governance');
   assert.equal(reason({ ...holdout, caseset: 'decision-sites.cases@2' }, ctx), 'binding');
-  // Its governor can.
+  // Its governor is approval appr-41, which already issued cases@1: a single-use grant is not issued twice.
   const governed = { ...issued, issued_by: { kind: 'approval', ref: 'appr-41' } };
-  assert.equal(reason(governed, withEntries(ctx, 'revisions', { 'decision-sites.cases@2': governed })), 'ok');
+  assert.equal(reason(governed, withEntries(ctx, 'revisions', { 'decision-sites.cases@2': governed })), 'approval_reused');
+});
+
+// An approval is a single-use grant: it issues exactly one revision. A policy is a standing authority.
+
+/** A fresh case set named `name`, governed by `governor`, and the @1 revision that `governor` issues for it. */
+const freshCaseSet = (name: string, governor: Rec) => {
+  const set = { ...(clone(context.casesets[CASES]) as Rec), caseset: name, governed_by: governor };
+  const issued = { ...revision(CASES), revision: name, digest: recordDigest(set), issued_by: governor };
+  return { set, issued };
+};
+const withCaseSets = (ctx: Context, ...fresh: readonly { set: Rec; issued: Rec }[]): Context =>
+  withEntries(withEntries(ctx, 'casesets', Object.fromEntries(fresh.map(f => [f.set.caseset as string, f.set]))),
+    'revisions', Object.fromEntries(fresh.map(f => [f.issued.revision as string, f.issued])));
+const appr41 = { kind: 'approval', ref: 'appr-41' };
+
+test('an approval ref reused for a second revision of the same set is refused, and unrecords the set', () => {
+  const cases2 = { ...(clone(context.casesets[CASES]) as Rec), caseset: 'decision-sites.cases@2' };
+  const reissued: Rec = {
+    ...revision(CASES), revision: 'decision-sites.cases@2', digest: recordDigest(cases2), supersedes: CASES,
+    justification: 'case_added', evidence: [{ source: 'check', ref: 'chk-cases-2' }],
+  };
+  assert.deepEqual(reissued.issued_by, appr41);
+  const ctx = withEntries(withEntries(context, 'casesets', { 'decision-sites.cases@2': cases2 }),
+    'revisions', { 'decision-sites.cases@2': reissued });
+  assert.deepEqual(validate(reissued, ctx), { ok: false, reason: 'approval_reused' });
+  assert.equal(reason({ ...result('res-hold'), caseset: 'decision-sites.cases@2' }, ctx), 'binding');
+});
+
+test('an approval ref reused across two different sets is refused', () => {
+  const other = freshCaseSet('other-sites.cases@1', appr41);
+  const ctx = withCaseSets(context, other);
+  assert.equal(reason(other.issued, ctx), 'approval_reused');
+  // Presented without being in context, it is refused the same way.
+  assert.equal(reason(other.issued, withEntries(context, 'casesets', { 'other-sites.cases@1': other.set })), 'approval_reused');
+  // A criteria set may not spend it either.
+  const crit = { ...criteria(C1), criteria: 'other-sites.criteria@1', governed_by: appr41 };
+  const critRev = { ...revision(C1), revision: 'other-sites.criteria@1', digest: recordDigest(crit), issued_by: appr41 };
+  const critCtx = withEntries(withEntries(context, 'criteria', { 'other-sites.criteria@1': crit }),
+    'revisions', { 'other-sites.criteria@1': critRev });
+  assert.equal(reason(critRev, critCtx), 'approval_reused');
+});
+
+test('concurrent issuance citing one approval refuses every claimant, whatever the input order', () => {
+  const a = freshCaseSet('alpha.cases@1', { kind: 'approval', ref: 'appr-77' });
+  const b = freshCaseSet('beta.cases@1', { kind: 'approval', ref: 'appr-77' });
+  assert.equal(reason(a.issued, withCaseSets(context, a)), 'ok');
+  assert.equal(reason(b.issued, withCaseSets(context, b)), 'ok');
+  for (const ctx of [withCaseSets(context, a, b), withCaseSets(context, b, a)]) {
+    assert.equal(reason(a.issued, ctx), 'approval_reused');
+    assert.equal(reason(b.issued, ctx), 'approval_reused');
+    assert.equal(reason({ ...result('res-hold'), caseset: 'alpha.cases@1' }, ctx), 'binding');
+    assert.equal(reason({ ...result('res-hold'), caseset: 'beta.cases@1' }, ctx), 'binding');
+  }
+});
+
+test('replay after a crash: the recorded revision re-validates, a re-issue with its approval is refused', () => {
+  // Idempotent replay: the same recorded revision, in any key order, still passes.
+  const recorded = revision(CASES);
+  assert.equal(reason(recorded), 'ok');
+  assert.equal(reason(recorded), 'ok');
+  assert.equal(reason(Object.fromEntries(Object.entries(recorded).reverse())), 'ok');
+  assert.equal(reason(result('res-hold')), 'ok');
+
+  // A re-issued revision beside the recorded one: both refused, and nothing binds to cases@1.
+  const again = freshCaseSet('decision-sites.retry@1', appr41);
+  const ctx = withCaseSets(context, again);
+  assert.equal(reason(again.issued, ctx), 'approval_reused');
+  assert.equal(reason(recorded, ctx), 'approval_reused');
+  assert.equal(reason(result('res-hold'), ctx), 'binding');
+
+  // A re-issue that replaced the recorded entry under its own name is a different revision too.
+  const rewritten = { ...recorded, justification: 'reissued_after_crash' };
+  const rewrittenCtx = withEntries(context, 'revisions', { [CASES]: rewritten });
+  assert.equal(reason(rewritten, rewrittenCtx), 'ok');
+  assert.equal(reason(recorded, rewrittenCtx), 'approval_reused');
+});
+
+test('the same ref under another kind is a different authority', () => {
+  // Approval p-1 governs; policy p-1 does not satisfy it, nor the reverse.
+  const byApproval = freshCaseSet('kinds.cases@1', { kind: 'approval', ref: 'p-1' });
+  const asPolicy = { ...byApproval.issued, issued_by: { kind: 'policy', ref: 'p-1' } };
+  assert.equal(reason(asPolicy, withCaseSets(context, { ...byApproval, issued: asPolicy })), 'governance');
+  const byPolicy = freshCaseSet('kinds.cases@1', { kind: 'policy', ref: 'p-1' });
+  const asApproval = { ...byPolicy.issued, issued_by: { kind: 'approval', ref: 'p-1' } };
+  assert.equal(reason(asApproval, withCaseSets(context, { ...byPolicy, issued: asApproval })), 'governance');
+
+  // A policy is a standing authority: policy appr-41 does not spend approval appr-41, and may issue many revisions.
+  const standing = freshCaseSet('standing.cases@1', { kind: 'policy', ref: 'appr-41' });
+  const standing2 = freshCaseSet('standing-two.cases@1', { kind: 'policy', ref: 'appr-41' });
+  const ctx = withCaseSets(context, standing, standing2);
+  assert.equal(reason(standing.issued, ctx), 'ok');
+  assert.equal(reason(standing2.issued, ctx), 'ok');
+  assert.equal(reason(revision(CASES), ctx), 'ok');
+  assert.equal(reason(revision(C2), ctx), 'ok');
 });
 
 test('a protected constraint is a gate, not a term traded against a score', () => {

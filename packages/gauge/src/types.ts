@@ -147,6 +147,7 @@ export type Rejection =
   | 'ref'
   | 'binding'
   | 'governance'
+  | 'approval_reused'
   | 'holdout'
   | 'mode'
   | 'measure'

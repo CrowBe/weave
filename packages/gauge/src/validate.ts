@@ -208,10 +208,28 @@ function linkGoverned(r: Revision, context: Context): boolean {
 }
 
 /**
+ * Whether another revision in `context` cites the approval this link was issued
+ * by. An approval is a single-use grant: it issues exactly one revision, so two
+ * distinct revisions citing it both fail, whatever order they arrived in. The
+ * identical revision (same canonical digest) is the link itself, so replaying it
+ * passes. A policy is a standing authority and is never spent.
+ */
+function approvalReused(r: Revision, context: Context): boolean {
+  if (r.issued_by.kind !== 'approval' || !isObject(context.revisions)) return false;
+  const own = recordDigest(r);
+  return Object.values(context.revisions).some(e =>
+    isObject(e) && e.schema === 'gauge.revision@1' && revisionShape(e).ok
+    && (e.issued_by as Obj).kind === 'approval' && (e.issued_by as Obj).ref === r.issued_by.ref
+    && recordDigest(e) !== own);
+}
+
+/**
  * Whether a revision in `context` records this set: every link back to @1
  * validates. Walked iteratively, so a long chain cannot exhaust the stack.
+ * `spent: false` checks the chain's structure and governors only, so a
+ * revision can report a reused approval as such rather than as `binding`.
  */
-function recorded(context: Context, kind: SetKind, name: string): boolean {
+function recorded(context: Context, kind: SetKind, name: string, spent = true): boolean {
   let rev: string | null = name;
   while (rev !== null) {
     const r = entryOf(context.revisions, rev);
@@ -219,7 +237,7 @@ function recorded(context: Context, kind: SetKind, name: string): boolean {
       return false;
     }
     const link = r as unknown as Revision;
-    if (!linkBinds(link, context) || !linkGoverned(link, context)) return false;
+    if (!linkBinds(link, context) || !linkGoverned(link, context) || (spent && approvalReused(link, context))) return false;
     rev = link.supersedes;
   }
   return true;
@@ -230,8 +248,10 @@ function validateRevision(r: Obj, context: Context): Verdict {
   if (!shape.ok) return shape;
   const link = r as unknown as Revision;
   if (!linkBinds(link, context)) return reject('binding');
-  if (link.supersedes !== null && !recorded(context, link.record, link.supersedes)) return reject('binding');
+  if (link.supersedes !== null && !recorded(context, link.record, link.supersedes, false)) return reject('binding');
   if (!linkGoverned(link, context)) return reject('governance');
+  if (approvalReused(link, context)) return reject('approval_reused');
+  if (link.supersedes !== null && !recorded(context, link.record, link.supersedes)) return reject('approval_reused');
   return OK;
 }
 
