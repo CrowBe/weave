@@ -72,8 +72,11 @@ export interface CapabilityHost {
   implementationAdmitted?(operation: string, implementationId: string): boolean;
   /**
    * Defensive copies of retained conclusions starting at a zero-based position.
-   * Retention order is append-only for this host's lifetime. Reading grants no
-   * authority to reuse a conclusion. Hosts without retention may omit this port.
+   * The cursor is a non-negative integer offset no greater than the retained
+   * length; any other cursor (negative, non-integer, or past the end) reads
+   * nothing. Retention order is append-only for this host's lifetime. Reading
+   * grants no authority to reuse a conclusion. Hosts without retention may
+   * omit this port.
    */
   conclusionsSince?(cursor: number): readonly unknown[];
 }

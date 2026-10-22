@@ -139,7 +139,22 @@ export async function main(
   const release = acquireLock(dir);
   let tempPath: string | undefined;
   const controller = new AbortController();
-  const abort = () => controller.abort();
+  const cleanup = () => {
+    try {
+      if (tempPath) rmSync(tempPath, { recursive: true, force: true });
+    } finally {
+      release();
+    }
+  };
+  // Journal appends are synchronous, so a force-quit between them cannot tear a record.
+  const abort = () => {
+    if (!controller.signal.aborted) return controller.abort();
+    try {
+      cleanup();
+    } finally {
+      process.exit(130);
+    }
+  };
   process.on('SIGINT', abort);
   process.on('SIGTERM', abort);
   try {
@@ -266,11 +281,7 @@ export async function main(
   } finally {
     process.off('SIGINT', abort);
     process.off('SIGTERM', abort);
-    try {
-      if (tempPath) rmSync(tempPath, { recursive: true, force: true });
-    } finally {
-      release();
-    }
+    cleanup();
   }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href)

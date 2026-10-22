@@ -6,6 +6,7 @@ import {
   bootstrap,
   difference,
   generator,
+  nearestRank,
   normalQuantile,
   wilson,
 } from '../src/stats.js';
@@ -95,6 +96,33 @@ test('aggregates are the mean, sum and nearest-rank p95', () => {
     95,
   );
   assert.equal(aggregate('p95', [42]), 42);
+});
+
+test('the nearest-rank index is ceil(q·n) - 1 and both p95 paths read it', () => {
+  for (let n = 1; n <= 1000; n += 1) {
+    const rank = nearestRank(0.95, n);
+    assert.equal(rank, Math.ceil(0.95 * n) - 1, `n=${n}`);
+    assert.ok(rank >= 0 && rank < n, `n=${n}`);
+  }
+  // Pinned before nearestRank was extracted: p95 values and seeded intervals stay bit-identical.
+  const pinned: [number, number, Interval, Interval][] = [
+    [1, -31, [-31, -31], [-31, -31]],
+    [2, 34.84615384615384, [-31, 34.84615384615384], [-31, 34.84615384615384]],
+    [19, 41.84615384615384, [30.07692307692308, 41.84615384615384], [34.84615384615384, 41.84615384615384]],
+    [20, 37.07692307692308, [25.307692307692307, 41.84615384615384], [25.307692307692307, 41.84615384615384]],
+    [21, 41.84615384615384, [25.307692307692307, 44.07692307692308], [30.07692307692308, 44.07692307692308]],
+    [39, 44.07692307692308, [34.84615384615384, 46.30769230769231], [37.07692307692308, 46.30769230769231]],
+    [40, 41.84615384615384, [34.53846153846153, 46.30769230769231], [34.84615384615384, 46.30769230769231]],
+    [41, 41.84615384615384, [34.53846153846153, 46.30769230769231], [34.84615384615384, 46.30769230769231]],
+    [100, 43.46153846153847, [38.69230769230769, 45.69230769230769], [39, 45.69230769230769]],
+    [257, 42.53846153846153, [40.30769230769231, 44.46153846153847], [40.92307692307692, 44.07692307692308]],
+  ];
+  for (const [n, value, at95, at90] of pinned) {
+    const xs = Array.from({ length: n }, (_, i) => ((i * 7919) % 1009) / 13 - 31);
+    assert.ok(Object.is(aggregate('p95', xs), value), `p95 n=${n}`);
+    assert.deepEqual(bootstrap(xs, 'p95', 0.95, 2026), at95, `bootstrap@0.95 n=${n}`);
+    assert.deepEqual(bootstrap(xs, 'p95', 0.9, 7), at90, `bootstrap@0.9 n=${n}`);
+  }
 });
 
 test('bootstrap@1 is deterministic for a seed', () => {
