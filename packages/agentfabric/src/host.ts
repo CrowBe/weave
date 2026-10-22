@@ -294,8 +294,23 @@ export class AgentFabricHost implements CapabilityHost {
         const legacy = [...this.unscopedRecovery.values()].includes(SHELL_RUN.id);
         if ((conflict?.uncertain || legacy) && !this.reconciling.size) await this.checkUncertainCliGenerations(cwd_ref);
       }
-      if (this.pendingCliCancel.has(invocation_id) && this.store.getInvocation(invocation_id) === undefined)
-        return { kind: 'cancelled', invocation_id };
+      if (this.pendingCliCancel.has(invocation_id) && this.store.getInvocation(invocation_id) === undefined) {
+        const checked = this.validateInvocation(grant, SHELL_RUN.id, inputs);
+        if (checked.kind === 'rejected') return checked;
+        // Mirror preparation's order: pre-consumption gates, consumption, then resource checks.
+        const unresolved = this.resolutionRejection(SHELL_RUN.id);
+        if (unresolved) return unresolved;
+        const preparedShell = this.prepareShell(SHELL_RUN.id, checked.boundInputs);
+        if (!preparedShell.ok) return this.reject(preparedShell.code, preparedShell.reason);
+        // Consume through the ordinary authority gate before releasing the identity.
+        if (!this.authority.markInvoked(grant)) {
+          return this.reject(
+            'DENIED',
+            this.invalidGrantReason(grant) ?? 'grant has already been used for an invocation',
+          );
+        }
+        return this.resourceRejection(SHELL_RUN.id, checked.effects) ?? { kind: 'cancelled', invocation_id };
+      }
       const prepared = this.step(() => this.prepare(grant, SHELL_RUN.id, inputs, undefined, invocation_id));
       if (prepared.kind === 'rejected') {
         const conflict =
@@ -1562,15 +1577,25 @@ export class AgentFabricHost implements CapabilityHost {
     return null;
   }
 
-  private prepare(
+  private invalidGrantReason(grant: Grant | null): string | undefined {
+    if (!this.authority.isIssued(grant)) return 'grant is not issued by this authority';
+    if (!this.authority.isValid(grant)) return 'grant was revoked';
+    return undefined;
+  }
+
+  /** Shared input, issuance, validity and coverage checks; never consumes a grant. */
+  private validateInvocation(
     grant: Grant | null,
     operation: string,
     inputs: unknown,
     options?: InvokeOptions,
-    reservedCliId?: string,
   ):
-    | { kind: 'open'; open: OpenInvocation; record: InvocationRecord }
-    | { kind: 'replay'; handle: InvocationHandle }
+    | {
+        kind: 'validated';
+        boundInputs: Record<string, unknown>;
+        effects: readonly ResourceEffect[];
+        existing: InvocationRecord | undefined;
+      }
     | InvocationRejected {
     let contract = this.live.get(operation);
     if (!contract) {
@@ -1608,9 +1633,8 @@ export class AgentFabricHost implements CapabilityHost {
       }
       processTokens = boundProcess.tokens;
     }
-    if (!this.authority.isIssued(grant) || !this.authority.isValid(grant)) {
-      return this.reject('DENIED', 'grant is not a currently valid issued grant');
-    }
+    const invalid = this.invalidGrantReason(grant);
+    if (invalid) return this.reject('DENIED', invalid);
     const covered =
       processTokens === undefined
         ? grantCovers(grant, operation, contract.revision, required.bound, declared.bound)
@@ -1624,6 +1648,56 @@ export class AgentFabricHost implements CapabilityHost {
         return this.reject('INVALID_INPUT', binding.reason);
       }
     }
+    return { kind: 'validated', boundInputs, effects: declared.bound, existing };
+  }
+
+  /** Shared reconciliation and resolution gates; run before grant consumption. */
+  private resolutionRejection(operation: string): InvocationRejected | undefined {
+    if ([...this.unscopedRecovery.values()].includes(operation)) {
+      return this.reject('RESOLVER_ERROR', 'operation requires reconciliation of recovered effect scopes');
+    }
+    if (this.status.get(operation) !== 'resolved') {
+      return this.reject('UNRESOLVED', `${operation} is ${this.status.get(operation)}`);
+    }
+    return undefined;
+  }
+
+  /** Shared resource existence and kind checks; run after grant consumption. */
+  private resourceRejection(operation: string, effects: readonly ResourceEffect[]): InvocationRejected | undefined {
+    for (const effect of effects) {
+      const issued = this.store.lookupRef(effect.resource);
+      if (!issued) {
+        return this.reject('UNKNOWN_RESOURCE', 'unknown resource');
+      }
+      if (operation === REPORT_PUBLISH.id) {
+        if (effect.mode === 'write' && issued.kind !== 'destination') {
+          return this.reject('KIND_MISMATCH', 'destination reference has the wrong kind');
+        }
+        if (effect.mode === 'read' && issued.kind !== 'source') {
+          return this.reject('KIND_MISMATCH', 'source reference has the wrong kind');
+        }
+      } else if (operation === SOURCE_INSPECT.id && issued.kind !== 'source') {
+        return this.reject('KIND_MISMATCH', 'source reference has the wrong kind');
+      } else if (isShellOperation(operation) && issued.kind !== 'workspace') {
+        return this.reject('KIND_MISMATCH', 'workspace reference has the wrong kind');
+      }
+    }
+    return undefined;
+  }
+
+  private prepare(
+    grant: Grant | null,
+    operation: string,
+    inputs: unknown,
+    options?: InvokeOptions,
+    reservedCliId?: string,
+  ):
+    | { kind: 'open'; open: OpenInvocation; record: InvocationRecord }
+    | { kind: 'replay'; handle: InvocationHandle }
+    | InvocationRejected {
+    const checked = this.validateInvocation(grant, operation, inputs, options);
+    if (checked.kind === 'rejected') return checked;
+    const { boundInputs, effects, existing } = checked;
     const action_id = (grant as Grant).action_id;
     const invocation_id = options?.invocation_id ?? action_id;
     const binding_digest = digest({ operation, inputs: boundInputs });
@@ -1671,12 +1745,8 @@ export class AgentFabricHost implements CapabilityHost {
     }
     if (inMemory || (this.reservedCliIds.has(invocation_id) && reservedCliId !== invocation_id))
       return this.reject('DENIED', 'invocation is already active');
-    if ([...this.unscopedRecovery.values()].includes(operation)) {
-      return this.reject('RESOLVER_ERROR', 'operation requires reconciliation of recovered effect scopes');
-    }
-    if (this.status.get(operation) !== 'resolved') {
-      return this.reject('UNRESOLVED', `${operation} is ${this.status.get(operation)}`);
-    }
+    const unresolved = this.resolutionRejection(operation);
+    if (unresolved) return unresolved;
     const cached = this.cachedBuiltin(operation, boundInputs);
     if (cached && grant) {
       return {
@@ -1706,27 +1776,11 @@ export class AgentFabricHost implements CapabilityHost {
       shellSecrets = preparedShell.secrets;
     }
     if (!this.authority.markInvoked(grant as Grant)) {
-      return this.reject('DENIED', 'grant has already been used for an invocation');
+      return this.reject('DENIED', this.invalidGrantReason(grant) ?? 'grant has already been used for an invocation');
     }
-    for (const effect of declared.bound) {
-      const issued = this.store.lookupRef(effect.resource);
-      if (!issued) {
-        return this.reject('UNKNOWN_RESOURCE', 'unknown resource');
-      }
-      if (operation === REPORT_PUBLISH.id) {
-        if (effect.mode === 'write' && issued.kind !== 'destination') {
-          return this.reject('KIND_MISMATCH', 'destination reference has the wrong kind');
-        }
-        if (effect.mode === 'read' && issued.kind !== 'source') {
-          return this.reject('KIND_MISMATCH', 'source reference has the wrong kind');
-        }
-      } else if (operation === SOURCE_INSPECT.id && issued.kind !== 'source') {
-        return this.reject('KIND_MISMATCH', 'source reference has the wrong kind');
-      } else if (isShellOperation(operation) && issued.kind !== 'workspace') {
-        return this.reject('KIND_MISMATCH', 'workspace reference has the wrong kind');
-      }
-    }
-    const conflict = this.coordinator.acquire(invocation_id, declared.bound, (ref) => {
+    const resource = this.resourceRejection(operation, effects);
+    if (resource) return resource;
+    const conflict = this.coordinator.acquire(invocation_id, effects, (ref) => {
       const issued = this.store.lookupRef(ref);
       return issued?.canonical_id ?? ref;
     });
@@ -1743,7 +1797,7 @@ export class AgentFabricHost implements CapabilityHost {
       implementation_id,
       inputs: boundInputs,
       grant: grant as Grant,
-      effects: declared.bound,
+      effects,
       binding_digest,
       phase: 'held',
       cancel_requested: false,
@@ -1769,7 +1823,7 @@ export class AgentFabricHost implements CapabilityHost {
       status: 'running',
       outcome: null,
       cancel_requested: false,
-      reservation: declared.bound.map((effect) => ({
+      reservation: effects.map((effect) => ({
         resource: this.store.lookupRef(effect.resource)?.canonical_id ?? effect.resource,
         mode: effect.mode,
       })),

@@ -30,6 +30,51 @@ function inspectGrant(authority: ReturnType<typeof createGrantAuthority>, source
   });
 }
 
+describe('ordinary preparation ordering', () => {
+  for (const invalid of ['unknown resource', 'wrong resource kind'] as const) {
+    it(`rejects ${invalid} after consuming the grant`, () => {
+      const authority = createGrantAuthority();
+      const store = new FabricStore();
+      const host = new AgentFabricHost({ authority, store });
+      const source = invalid === 'unknown resource' ? 'ref_missing' : host.registerDestination('mem:destination');
+      const grant = inspectGrant(authority, source, 'ordinary-invalid');
+      assert.deepEqual(host.invoke(grant, SOURCE_INSPECT.id, { source }), {
+        kind: 'rejected',
+        code: invalid === 'unknown resource' ? 'UNKNOWN_RESOURCE' : 'KIND_MISMATCH',
+        reason: invalid === 'unknown resource' ? 'unknown resource' : 'source reference has the wrong kind',
+      });
+      assert.equal(authority.markInvoked(grant), false, 'resource rejection must consume the grant');
+      assert.equal(store.getInvocation(grant.action_id), undefined);
+      assert.deepEqual(host.coordinator.held(), []);
+      assert.deepEqual(host.resourceAccesses, []);
+    });
+  }
+
+  it('replays a cached builtin before kind checks without consuming the grant', async () => {
+    const authority = createGrantAuthority();
+    const store = new FabricStore();
+    const host = new AgentFabricHost({ authority, store });
+    const source = host.registerSource('mem:cached-source', 'cached content');
+    const first = host.invoke(inspectGrant(authority, source, 'cache-fill'), SOURCE_INSPECT.id, { source });
+    assert.equal(first.kind, 'handle');
+    if (first.kind !== 'handle') return;
+    host.release(first.invocation_id);
+    const outcome = await first.result;
+    assert.equal(outcome.outcome, 'succeeded');
+    const wrongKind = store.issue(store.lookupRef(source)!.canonical_id, 'destination');
+    const grant = inspectGrant(authority, wrongKind, 'cache-replay');
+    const accesses = host.resourceAccesses.length;
+    const replay = host.invoke(grant, SOURCE_INSPECT.id, { source: wrongKind });
+    assert.equal(replay.kind, 'handle');
+    if (replay.kind !== 'handle') return;
+    assert.deepEqual(await replay.result, outcome);
+    assert.equal(authority.markInvoked(grant), true, 'cached replay must leave the grant unconsumed');
+    assert.equal(store.getInvocation(grant.action_id), undefined);
+    assert.equal(host.resourceAccesses.length, accesses);
+    assert.deepEqual(host.coordinator.held(), []);
+  });
+});
+
 describe('admitted implementation single-use release', () => {
   const succeeded: InvocationOutcome = { outcome: 'succeeded', output: { revision: 1 } };
 

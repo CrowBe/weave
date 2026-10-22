@@ -200,7 +200,27 @@ reservation; duplicate identities are rejected. Cancellation is also retained fo
 allocated CLI identities and placeholders while awaiting recovery or an uncertain
 startup check. Before preparation, a retained cancellation returns `cancelled`
 without spawning, writing an invocation record, or acquiring a workspace
-reservation. A cancellation for an id with an existing durable record is not
+reservation. It mirrors preparation's order: only after preparation's
+pre-consumption checks (input validation, issued-grant validity, operation,
+contract revision, permissions, effects and process effects coverage,
+recovered-effect-scope reconciliation, resolved status, and shell input
+preparation) does it consume the single-use grant through
+`GrantAuthority.markInvoked`, then it applies preparation's resource existence
+and kind checks, including `cwd_ref`, before releasing the identity reservation.
+A failed check returns the same rejection as preparation, with the grant consumed
+exactly when preparation would consume it (pre-consumption failures leave it
+unconsumed; an unknown or wrong-kind `cwd_ref` consumes it), and without spawning
+or retaining an identity or workspace reservation.
+Reusing a consumed grant is denied, including after reopening the host/store with
+the same authority; a fresh grant for a new id can run. Grant issuance and
+consumption currently live in the in-process authority,
+not the Fabric journal, matching ordinary grant use. Consumption survives reopening
+only with the same authority: a new authority does not recognize a prior grant
+object or its serialized copy. An authority that persists grant use must persist cancellation
+consumption through the same gate. A refused consumption returns `DENIED` with
+the reason (revoked, not issued or already used); a thrown consumption error is
+surfaced. Neither path spawns or retains a reservation.
+A cancellation for an id with an existing durable record is not
 retained as pending: it marks that record `cancel_requested` (unless already
 reconciled), and the invocation continues to prepare/replay. After preparation
 it seeds the ordinary pre-start cancellation path,
