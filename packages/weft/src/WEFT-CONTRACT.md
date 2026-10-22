@@ -622,7 +622,12 @@ evidence, nested candidates and other version-specific fields remain in
 canonical `record_json`; the typed columns are indexes over those validated
 records. No missing operation provenance is invented.
 
-Both envelopes share the identity namespace. Exact canonical bytes are a no-op;
+Both envelopes share the identity namespace. Weft canonical storage sorts links
+by relation then record id and evidence by source then reference, using W6's
+lexical ordering. Optional null fields are omitted; required null parents, threads
+and candidate weights are retained. Native import and re-ingestion from its own
+W6 export therefore share identity. Canonical JSON is stored consistently.
+Exact canonical bytes are a no-op;
 any differing content (including schema) conflicts and leaves the original
 unchanged. All records are snapshotted, redacted and validated before any write.
 Every batch uses one `BEGIN IMMEDIATE` transaction; conflict, write failure or
@@ -670,7 +675,12 @@ provenance is invented. Provider-specific richer mappings remain future work.
 
 `createOtlpListener({ createServer, store, redact, host?, port?, maxBytes? })`
 requires a composition-root HTTP server factory. It defaults to `127.0.0.1`
-and an OS-selected local port; only literal `127.0.0.1` or `::1` are accepted.
+and an OS-selected local port; only `127.0.0.1`, `::1` or `localhost` are accepted.
+After listening, the actual address must be `127.0.0.1` or `::1`; otherwise
+the listener closes and returns a typed `config` error. Every request must carry
+the exact bound Host authority (`127.0.0.1:<port>`, `[::1]:<port>`, or
+`localhost:<port>` only when bound via localhost). Missing or different Host
+headers and any Origin header, including an empty one, receive 403 before intake.
 It exposes only POST `/v1/traces` with JSON, limits bodies (default 1 MiB),
 returns no input or error fragments, disables automatic response dates and
 propagates connection cancellation. Startup and shutdown return typed results.

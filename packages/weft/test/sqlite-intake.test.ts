@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
+import { createServer, request } from 'node:http';
 import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -102,4 +102,78 @@ test('generic multi-span projection remains a valid Weft batch with no invented 
   spans.push({ ...spans[0]!, spanId: 'fedcba9876543210' });
   const mapped = mapOtlp(input, { redact: identity }); assert.ok(mapped.ok); if (!mapped.ok) return;
   assert.ok(exportOtlp(mapped.records, { redact: identity }).ok);
+});
+
+test('listener rejects wrong or missing Host and every Origin before importing', async () => {
+  let writes = 0;
+  const listener = await createOtlpListener({ createServer, redact: identity,
+    store: { importRecords: async () => { writes++; return { ok: true, inserted: 0, torn: false }; } } });
+  assert.ok(listener.ok); if (!listener.ok) return;
+  const authority = new URL(listener.url).host;
+  const post = (headers: Record<string, string>) => new Promise<number>(resolve => {
+    const req = request(listener.url + '/v1/traces', { method: 'POST', setHost: false,
+      headers: { 'Content-Type': 'application/json', ...headers } }, response => {
+      response.resume(); response.once('end', () => resolve(response.statusCode!));
+    });
+    req.end(JSON.stringify(generic));
+  });
+  try {
+    for (const headers of [{ Host: 'attacker.example' }, {}, { Host: authority, Origin: '' },
+      { Host: authority, Origin: listener.url }, { Host: 'localhost:' + new URL(listener.url).port }]) {
+      assert.equal(await post(headers), 403);
+    }
+    assert.equal(writes, 0);
+    assert.equal(await post({ Host: authority }), 200);
+    assert.equal(writes, 1);
+  } finally { await listener.close(); }
+});
+
+test('listener closes a factory server bound outside loopback and returns config', async () => {
+  const store = memory();
+  const server = createServer();
+  const listen = server.listen.bind(server);
+  server.listen = ((_port: number, _host: string, callback: () => void) =>
+    listen(0, '0.0.0.0', callback)) as typeof server.listen;
+  try {
+    assert.deepEqual(await createOtlpListener({ createServer: handler => {
+      server.on('request', handler); return server;
+    }, store, redact: identity }), { ok: false, reason: 'config' });
+    assert.equal(server.listening, false);
+  } finally { if (server.listening) server.close(); store.close(); }
+});
+
+test('canonical identity survives native import, W6 export and intake with nulls and unordered references', async () => {
+  const source: WeftRecord = { ...record, kind: 'action.transition',
+    links: [{ rel: 'joins', record_id: 'target' }, { rel: 'caused_by', record_id: 'target' }],
+    evidence: [{ source: 'observation', ref: 'z' }, { source: 'observation', ref: 'a' }],
+    fields: { action_ref: 'action', operation: 'test', state: 'succeeded', contract_rev: null } };
+  const store = memory();
+  try {
+    assert.ok((await store.importRecords([{ ...record, record_id: 'target', sequence: 1 }])).ok);
+    assert.deepEqual(await store.importRecords([source]), { ok: true, inserted: 1, torn: false });
+    const stored = store.read(); assert.ok(stored.ok); if (!stored.ok) return;
+    const exported = exportOtlp(stored.rows as WeftRecord[], { redact: identity });
+    assert.ok(exported.ok); if (!exported.ok) return;
+    assert.deepEqual(await intakeOtlp(JSON.parse(exported.json), store, { redact: identity }),
+      { ok: true, inserted: 0, torn: false });
+    assert.deepEqual(store.read(), stored);
+    assert.deepEqual(await store.importRecords([{ ...source, fields: { ...source.fields, state: 'failed' } }]),
+      { ok: false, reason: 'conflict' });
+    assert.deepEqual(store.read(), stored);
+  } finally { store.close(); }
+});
+
+test('listener accepts only the configured authority for IPv6 and localhost bindings', async () => {
+  const store = memory();
+  try {
+    for (const host of ['::1', 'localhost']) {
+      const listener = await createOtlpListener({ createServer, store, redact: identity, host });
+      assert.ok(listener.ok); if (!listener.ok) continue;
+      try {
+        const response = await fetch(listener.url + '/v1/traces', { method: 'POST',
+          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(generic) });
+        assert.equal(response.status, 200);
+      } finally { await listener.close(); }
+    }
+  } finally { store.close(); }
 });

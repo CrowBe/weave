@@ -143,11 +143,15 @@ export async function createOtlpListener(options: ListenerOptions): Promise<List
   let server: Server | undefined;
   try {
     const { createServer, store, redact, host = '127.0.0.1', port = 0, maxBytes = 1024 * 1024 } = options;
-    if (!['127.0.0.1', '::1'].includes(host) || !Number.isSafeInteger(port) || port < 0 || port > 65535 ||
+    if (!['127.0.0.1', '::1', 'localhost'].includes(host) || !Number.isSafeInteger(port) || port < 0 || port > 65535 ||
       !Number.isSafeInteger(maxBytes) || maxBytes <= 0 || typeof createServer !== 'function' || typeof redact !== 'function') return failure('config');
+    let authority: string | undefined;
     server = createServer((request, response) => {
       response.sendDate = false;
       const reply = (status: number) => { if (!response.destroyed && !response.writableEnded) { response.writeHead(status); response.end(); } };
+      if (authority === undefined || request.headers.host !== authority || Object.hasOwn(request.headers, 'origin')) {
+        request.resume(); reply(403); return;
+      }
       if (request.method !== 'POST' || request.url !== '/v1/traces') { request.resume(); reply(404); return; }
       if (request.headers['content-type']?.split(';')[0]?.trim().toLowerCase() !== 'application/json') { request.resume(); reply(415); return; }
       const controller = new AbortController();
@@ -172,6 +176,8 @@ export async function createOtlpListener(options: ListenerOptions): Promise<List
         }, () => reply(503));
       });
     });
+    // Let the authority guard return 403 for missing Host rather than Node's early 400.
+    Object.assign(server, { requireHostHeader: false });
     const listening = server;
     const started = await new Promise<boolean>(resolve => {
       const failed = () => resolve(false);
@@ -183,6 +189,11 @@ export async function createOtlpListener(options: ListenerOptions): Promise<List
     if (!started) { try { listening.close(); } catch { /* Never expose transport messages. */ } return failure('storage'); }
     const address = listening.address();
     if (!address || typeof address === 'string') { listening.close(); return failure('storage'); }
+    if (!['127.0.0.1', '::1'].includes(address.address)) {
+      await new Promise<void>(resolve => listening.close(() => resolve()));
+      return failure('config');
+    }
+    authority = `${host === '::1' ? '[::1]' : host}:${address.port}`;
     return { ok: true, url: `http://${host === '::1' ? '[::1]' : host}:${address.port}`,
       close: () => new Promise(resolve => {
         try { listening.close(error => resolve(error ? failure('storage') : { ok: true })); }

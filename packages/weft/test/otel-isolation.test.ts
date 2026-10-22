@@ -13,6 +13,7 @@ test('OTel is an explicit package subpath with no runtime dependencies', () => {
   const manifest = JSON.parse(readFileSync(join(weft, 'package.json'), 'utf8'));
   assert.equal(manifest.exports['./otel'], './dist/src/otel.js');
   assert.equal(manifest.exports['./sqlite'], './dist/src/sqlite.js');
+  assert.equal(manifest.exports['./intake'], './dist/src/sqlite-intake.js');
   assert.deepEqual(Object.keys(manifest.dependencies ?? {}), []);
   assert.deepEqual(Object.keys(manifest.optionalDependencies ?? {}), []);
 });

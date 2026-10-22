@@ -87,7 +87,14 @@ export function openTraceStore(path: string, options: TraceStoreOptions):
         if (!validateTrace(input)) throw new Error('input');
         line = serializeTrace(input, r => structuredClone(redactTrace(r)));
       } else {
-        line = serializeRecord(input as WeftRecord, redact);
+        const validated = JSON.parse(serializeRecord(input as WeftRecord, redact)) as WeftRecord;
+        const compare = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
+        // W6 omits optional null fields, but candidate weights are required nullable values.
+        const fields = Object.fromEntries(Object.entries(validated.fields).filter(([, value]) => value !== null));
+        line = serializeRecord({ ...validated, fields,
+          links: [...validated.links].sort((a, b) => compare(a.rel, b.rel) || compare(a.record_id, b.record_id)),
+          evidence: [...validated.evidence].sort((a, b) => compare(a.source, b.source) || compare(a.ref, b.ref)),
+        } as unknown as WeftRecord, record => record);
       }
       if (hasCredential(line)) throw new Error('disclosure');
       const clean = JSON.parse(line) as TraceRecord | WeftRecord;
