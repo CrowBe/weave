@@ -1035,6 +1035,76 @@ describe('Fabric store indexes', () => {
     }
   }
 
+  for (const gate of ['after_commit', 'disconnect'] as const) {
+    it(`settles committed and releases after the second result write fails (${gate})`, async (t) => {
+      const dir = mkdtempSync(join(tmpdir(), 'weave-second-result-'));
+      const path = join(dir, 'fabric.json');
+      const store = FabricStore.open(path);
+      t.after(() => { store.close(); rmSync(dir, { recursive: true, force: true }); });
+      const authority = createGrantAuthority();
+      const host = new AgentFabricHost({ authority, store, faults: gate === 'after_commit'
+        ? { publishGate: 'after_commit' } : { disconnectAfterCommit: true } });
+      const source = host.registerSource('mem:second-result', 'line');
+      const destination = host.registerDestination('mem:second-result-outbox');
+      const grant = publishGrant(authority, source, destination, 'second-action', 1);
+      const handle = host.invoke(grant, REPORT_PUBLISH.id, publishInput(source, destination),
+        { invocation_id: 'second-invocation' });
+      assert.equal(handle.kind, 'handle');
+      if (handle.kind !== 'handle') throw new Error('expected handle');
+      const persist = store.persistInvocationResult.bind(store);
+      let writes = 0;
+      let markers = 0;
+      store.persistInvocationResult = (record) => {
+        if (++writes === 2) throw new Error('injected second result write failure');
+        persist(record);
+      };
+      const mark = store.persistInvocationUncertain.bind(store);
+      store.persistInvocationUncertain = (record) => { markers += 1; mark(record); };
+      host.release('second-action');
+      const durable = store.getInvocation('second-invocation')!;
+      assert.equal(durable.status, 'committed');
+      const before = readFileSync(path);
+      host.proceed('second-action');
+      assert.equal(writes, 2);
+      assert.deepEqual(await handle.result, durable.outcome);
+      assert.equal(markers, 0);
+      assert.equal(host.openCount(), 0);
+      assert.deepEqual(host.coordinator.held(), []);
+      assert.deepEqual(host.lookup('second-invocation', grant), { status: 'committed', outcome: durable.outcome });
+      assert.deepEqual(readFileSync(path), before);
+      const next = host.invoke(publishGrant(authority, source, destination, 'next-action', 2), REPORT_PUBLISH.id,
+        { ...publishInput(source, destination), expected_revision: 2 });
+      assert.equal(next.kind, 'handle');
+      store.close();
+      const reopened = FabricStore.open(path);
+      try {
+        const recovered = new AgentFabricHost({ authority, store: reopened });
+        assert.deepEqual(recovered.lookup('second-invocation', grant), { status: 'committed', outcome: durable.outcome });
+      } finally { reopened.close(); }
+    });
+  }
+
+  it('looks up a legacy stopped publication as committed from its durable receipt', async () => {
+    const authority = createGrantAuthority();
+    const host = new AgentFabricHost({ authority });
+    const source = host.registerSource('mem:stopped-receipt', 'line');
+    const destination = host.registerDestination('mem:stopped-receipt-outbox');
+    const grant = publishGrant(authority, source, destination, 'stopped-action', 1);
+    const handle = host.invoke(grant, REPORT_PUBLISH.id, publishInput(source, destination),
+      { invocation_id: 'stopped-invocation' });
+    assert.equal(handle.kind, 'handle');
+    if (handle.kind !== 'handle') throw new Error('expected handle');
+    host.release('stopped-action');
+    const outcome = await handle.result;
+    const snapshot = host.snapshot();
+    const store = FabricStore.restore({ ...snapshot, invocations: snapshot.invocations.map((record) => ({
+      ...record, status: 'stopped', outcome: { outcome: 'failed', failure: 'legacy interrupted acknowledgement' },
+    })) });
+    const recovered = new AgentFabricHost({ authority, store });
+    assert.deepEqual(recovered.lookup('stopped-invocation', grant), { status: 'committed', outcome });
+    assert.deepEqual(recovered.coordinator.held(), []);
+  });
+
   it('settles a publication after a result validation error and retains reservations for reconciliation', async () => {
     const authority = createGrantAuthority();
     const host = new AgentFabricHost({ authority });

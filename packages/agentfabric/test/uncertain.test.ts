@@ -246,6 +246,110 @@ describe('uncertain invocation contract', () => {
     reconcile(f.host, absent);
   });
 
+  for (const storedScopes of [false, true]) {
+    for (const first of ['inv', 'orphan']) {
+      it(`recovers conflicting orphans as a union until both reconcile (scopes: ${storedScopes}, first: ${first})`, (t) => {
+        const f = fixture(t);
+        const snapshot = f.store.snapshot();
+        const { reservation, ...record } = snapshot.invocations[0]!;
+        const recovered = storedScopes ? { ...record, reservation } : record;
+        f.store.close();
+        fs.writeFileSync(f.path, JSON.stringify({ ...snapshot,
+          invocations: [recovered, { ...recovered, invocation_id: 'orphan', action_id: 'orphan' }],
+        }) + '\n');
+        f.reopen();
+        for (const id of ['inv', 'orphan']) assert.equal(f.store.getInvocation(id)?.status, 'uncertain');
+        assert.equal(f.host.coordinator.held().length, 2);
+        assert.equal(f.invoke('blocked', f.grant('blocked')).kind, 'rejected');
+        reconcile(f.host, absent, first);
+        assert.equal(f.host.coordinator.held().length, 1);
+        assert.equal(f.invoke('still-blocked', f.grant('still-blocked')).kind, 'rejected');
+        // A restart after resolving just one owner must retain the other hold.
+        f.reopen();
+        assert.equal(f.host.coordinator.held().length, 1);
+        reconcile(f.host, absent, first === 'inv' ? 'orphan' : 'inv');
+        assert.equal(f.host.coordinator.held().length, 0);
+        assert.equal(f.invoke('released', f.grant('released')).kind, 'handle');
+      });
+    }
+  }
+
+  for (const install of ['installAdmitted', 'replaceLiveContract', 'never'] as const) {
+    it(`recovers a legacy orphan with a missing contract (${install}) and permits reconciliation`, async (t) => {
+      const f = fixture(t);
+      const snapshot = f.store.snapshot();
+      const { reservation: _reservation, ...record } = snapshot.invocations[0]!;
+      f.store.close();
+      fs.writeFileSync(f.path, JSON.stringify({ ...snapshot, invocations: [record] }) + '\n');
+      const store = FabricStore.open(f.path);
+      t.after(() => store.close());
+      const host = new AgentFabricHost({ authority: f.host.authority, store, contracts: [] });
+      assert.equal(store.getInvocation('inv')?.status, 'uncertain');
+      if (install !== 'never') {
+        if (install === 'installAdmitted') host.installAdmitted(write, () => succeeded);
+        else host.replaceLiveContract(write);
+        const blocked = host.invoke(f.grant('blocked'), write.id, { target: f.target });
+        assert.equal(blocked.kind, 'rejected');
+        if (blocked.kind === 'rejected') assert.match(blocked.reason, /reconcil/);
+        const replay = host.invoke(f.originalGrant, write.id, { target: f.target }, { invocation_id: 'inv' });
+        assert.equal(replay.kind, 'handle');
+        if (replay.kind === 'handle') assert.equal((await replay.result).outcome, 'uncertain');
+      }
+      // Independent operations remain usable while the missing contract is unresolved.
+      host.installAdmitted(pure, () => succeeded);
+      const grant = host.authority.issue({ action_id: 'pure', operation: pure.id, contract_rev: pure.revision,
+        permissions: [], effects: [], issued_at: 1 });
+      const independent = host.invoke(grant, pure.id, { target: f.target });
+      assert.equal(independent.kind, 'handle');
+      host.release('pure');
+      if (independent.kind === 'handle') assert.deepEqual(await independent.result, succeeded);
+      reconcile(host, absent);
+      host.installAdmitted(write, () => succeeded);
+      const after = host.invoke(f.grant('after'), write.id, { target: f.target });
+      assert.equal(after.kind, 'handle');
+      host.release('after');
+      if (after.kind === 'handle') assert.deepEqual(await after.result, succeeded);
+    });
+  }
+
+  it('keeps every missing-scope barrier through failed marker and reconciliation writes', async (t) => {
+    const f = fixture(t);
+    const snapshot = f.store.snapshot();
+    const { reservation: _reservation, ...record } = snapshot.invocations[0]!;
+    const store = FabricStore.restore({ ...snapshot, invocations: [record,
+      { ...record, invocation_id: 'orphan', action_id: 'orphan' }] });
+    store.persistInvocationUncertain = () => { throw new Error('marker write refused'); };
+    const host = new AgentFabricHost({ authority: f.host.authority, store, contracts: [] });
+    host.installAdmitted(write, () => succeeded);
+    assert.equal(store.getInvocation('inv')?.status, 'running');
+    assert.equal(host.invoke(f.grant('blocked'), write.id, { target: f.target }).kind, 'rejected');
+    const persist = store.persistInvocationReconciliation.bind(store);
+    store.persistInvocationReconciliation = () => { throw new Error('resolution write refused'); };
+    assert.throws(() => reconcile(host, absent), /resolution write refused/);
+    assert.equal(host.invoke(f.grant('still-blocked'), write.id, { target: f.target }).kind, 'rejected');
+    store.persistInvocationReconciliation = persist;
+    reconcile(host, absent);
+    assert.equal(host.invoke(f.grant('other-owner'), write.id, { target: f.target }).kind, 'rejected');
+    reconcile(host, absent, 'orphan');
+    const after = host.invoke(f.grant('after'), write.id, { target: f.target });
+    assert.equal(after.kind, 'handle');
+    host.release('after');
+    if (after.kind === 'handle') assert.deepEqual(await after.result, succeeded);
+  });
+
+  it('blocks a legacy operation whose installed contract cannot rebind its old inputs', (t) => {
+    const f = fixture(t);
+    const snapshot = f.store.snapshot();
+    const { reservation: _reservation, ...record } = snapshot.invocations[0]!;
+    const store = FabricStore.restore({ ...snapshot, invocations: [{ ...record, inputs: {} }] });
+    const host = new AgentFabricHost({ authority: f.host.authority, store, contracts: [write] });
+    host.installAdmitted(write, () => succeeded);
+    assert.equal(store.getInvocation('inv')?.status, 'uncertain');
+    assert.equal(host.invoke(f.grant('blocked'), write.id, { target: f.target }).kind, 'rejected');
+    reconcile(host, absent);
+    assert.equal(host.invoke(f.grant('after'), write.id, { target: f.target }).kind, 'handle');
+  });
+
   it('canonical recovery holds block aliases even with the contract absent', async (t) => {
     const f = fixture(t);
     const alias = f.host.alias(f.target);

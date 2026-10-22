@@ -182,6 +182,8 @@ export class AgentFabricHost implements CapabilityHost {
   private readonly status = new Map<string, ResolutionStatus>();
   private readonly open = new Map<string, OpenInvocation>();
   private readonly reconciling = new Set<string>();
+  /** Legacy invocations whose resource scopes cannot be reconstructed. */
+  private readonly unscopedRecovery = new Map<string, string>();
 
   constructor(options: {
     authority: GrantAuthority;
@@ -744,6 +746,12 @@ export class AgentFabricHost implements CapabilityHost {
     if (status !== 'committed') {
       const published = this.store.publishedBy(invocation_id);
       if (published?.publication) {
+        const committed: ReconciliationResult = {
+          status: 'committed', outcome: { outcome: 'succeeded', output: this.receiptFrom(published.publication) },
+        };
+        // Legacy stopped results can contradict the host's durable receipt.
+        // They are outside the uncertainty-only reconciliation transition.
+        if (status === 'stopped') return committed;
         try {
           // The receipt is host-owned evidence. Use the same durable gate as
           // explicit reconciliation before releasing an uncertain reservation.
@@ -753,7 +761,7 @@ export class AgentFabricHost implements CapabilityHost {
               output: this.receiptFrom(published.publication),
             });
           }
-          return { status: 'committed', outcome: { outcome: 'succeeded', output: this.receiptFrom(published.publication) } };
+          return committed;
         } catch {
           return { status: 'unresolved', reason: 'failed to persist publication reconciliation' };
         }
@@ -813,6 +821,7 @@ export class AgentFabricHost implements CapabilityHost {
         reconciliation: { resolution: resolution.resolution, evidence: resolution.evidence },
       });
       this.coordinator.release(invocation_id);
+      this.unscopedRecovery.delete(invocation_id);
       this.open.delete(invocation_id);
       return { status, outcome };
     } finally {
@@ -1055,19 +1064,27 @@ export class AgentFabricHost implements CapabilityHost {
       else this.store.persistInvocationResult(record);
       persisted = true;
     } catch {
-      // Store guards and validation can fail as well as append. A completed
-      // implementation must still settle; publications await reconciliation.
-      outcome = {
-        outcome: 'uncertain',
-        reason: open.committed ? 'failed to persist invocation result after commit' : 'failed to persist invocation result',
-      };
-      try {
-        this.store.persistInvocationUncertain({ ...record, status: 'uncertain', outcome });
+      const durable = this.store.getInvocation(open.invocation_id);
+      if (durable?.status === 'committed' && durable.outcome) {
+        // noteCommitted may already have recorded the result. A later failed
+        // write cannot downgrade durable evidence or retain an uncertain hold.
+        outcome = durable.outcome;
         persisted = true;
-      } catch {
-        // A closed/poisoned store or lost lock cannot record the marker. Keep
-        // the settled entry; its durable start also recovers as uncertain.
-        outcome = { ...outcome, reason: `${outcome.reason}; uncertain marker was not persisted` };
+      } else {
+        // Store guards and validation can fail as well as append. A completed
+        // implementation must still settle; publications await reconciliation.
+        outcome = {
+          outcome: 'uncertain',
+          reason: open.committed ? 'failed to persist invocation result after commit' : 'failed to persist invocation result',
+        };
+        try {
+          this.store.persistInvocationUncertain({ ...record, status: 'uncertain', outcome });
+          persisted = true;
+        } catch {
+          // A closed/poisoned store or lost lock cannot record the marker. Keep
+          // the settled entry; its durable start also recovers as uncertain.
+          outcome = { ...outcome, reason: `${outcome.reason}; uncertain marker was not persisted` };
+        }
       }
     }
     if (outcome.outcome !== 'uncertain' || !hasDeclaredWrites(open.effects)) {
@@ -1209,6 +1226,9 @@ export class AgentFabricHost implements CapabilityHost {
       }) };
     }
     if (inMemory) return this.reject('DENIED', 'invocation is already active');
+    if ([...this.unscopedRecovery.values()].includes(operation)) {
+      return this.reject('RESOLVER_ERROR', 'operation requires reconciliation of recovered effect scopes');
+    }
     if (this.status.get(operation) !== 'resolved') {
       return this.reject('UNRESOLVED', `${operation} is ${this.status.get(operation)}`);
     }
@@ -1317,19 +1337,30 @@ export class AgentFabricHost implements CapabilityHost {
       if (record.status !== 'running' && record.status !== 'uncertain') continue;
       let effects = record.reservation;
       if (effects === undefined) {
-        // Legacy journals did not retain scopes. Rebind from the historical
-        // contract; missing evidence is a recovery error, never permission.
+        // Legacy journals did not retain scopes. Without a usable contract,
+        // block this operation until reconciliation, even if installed later.
         const contract = this.historical.get(record.operation);
-        if (!contract) throw new Error('cannot recover invocation without its effect contract');
-        const bound = bindSelectors(contract.effects, record.inputs);
-        if (!bound.ok) throw new Error('cannot recover invocation effect reservation');
-        effects = bound.bound.map((effect) => ({
-          resource: this.store.lookupRef(effect.resource)?.canonical_id ?? effect.resource, mode: effect.mode,
-        }));
+        const bound = contract && bindSelectors(contract.effects, record.inputs);
+        if (bound?.ok) {
+          effects = bound.bound.map((effect) => ({
+            resource: this.store.lookupRef(effect.resource)?.canonical_id ?? effect.resource, mode: effect.mode,
+          }));
+        } else {
+          this.unscopedRecovery.set(record.invocation_id, record.operation);
+        }
       }
-      if (!hasDeclaredWrites(effects)) continue;
-      const conflict = this.coordinator.acquire(record.invocation_id, effects, (ref) => ref);
-      if (conflict) throw new Error('conflicting uncertain reservations in recovered store');
+      if (effects && hasDeclaredWrites(effects)) {
+        this.coordinator.restore(record.invocation_id, effects);
+      }
+      if (record.status === 'running') {
+        try {
+          this.store.persistInvocationUncertain({ ...record, ...(effects ? { reservation: effects } : {}),
+            status: 'uncertain', outcome: { outcome: 'uncertain', reason: RECOVERED_UNCERTAINTY } });
+        } catch {
+          // Interrupted starts already replay as uncertain. A failed marker
+          // cannot wedge construction or remove the recovered protection.
+        }
+      }
     }
   }
 
