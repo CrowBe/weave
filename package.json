@@ -12,7 +12,7 @@
   "scripts": {
     "build": "tsc -b",
     "test": "npm run build && node --test \"packages/*/dist/test/**/*.test.js\"",
-    "check": "node checks/import-direction.mjs && node checks/no-ambient-clock.mjs && node checks/no-ambient-entropy.mjs",
+    "check": "node --test scripts/verify-cached.test.mjs && node checks/import-direction.mjs && node checks/no-ambient-clock.mjs && node checks/no-ambient-entropy.mjs",
     "typecheck:examples": "tsc -p tsconfig.examples.json",
     "test:entailment": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s benchmarks/inference/openjev -p 'test_*.py'",
     "test:decision": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s benchmarks/inference/kev -p 'test_*.py'",
@@ -35,6 +35,9 @@
     "example:chatgpt-signin": "npm run build && node --experimental-strip-types examples/chatgpt-signin.ts",
     "example:chatgpt-probe": "npm run build && node --experimental-strip-types examples/chatgpt-probe.ts",
     "test:chatgpt-cli": "node --experimental-strip-types --test examples/chatgpt-local.test.ts examples/quota-local.test.ts",
+    "lint": "vp lint",
+    "fmt:check": "vp fmt --check",
+    "fmt": "vp fmt",
     "lint:report": "vp lint",
     "fmt:report": "vp fmt --check",
     "verify:cached": "node scripts/verify-cached.mjs",

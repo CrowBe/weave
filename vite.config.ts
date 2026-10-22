@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite-plus';
 
-// `lint:report` and `fmt:report` run in CI as soft failures. `verify-cached` runs the same
+// Lint and formatting are required CI gates. `verify-cached` runs the same
 // `npm run verify` command with a cache.
 export default defineConfig({
   lint: {
@@ -9,7 +9,8 @@ export default defineConfig({
   fmt: {
     singleQuote: true,
     printWidth: 120,
-    ignorePatterns: ['dist/', 'node_modules/', 'benchmarks/**/*.py'],
+    // Preserve fixture and golden bytes, including line-delimited trace records.
+    ignorePatterns: ['dist/', 'node_modules/', 'benchmarks/**/*.py', '**/fixtures/**/*.json', '**/fixtures/**/*.jsonl'],
   },
   run: {
     tasks: {
@@ -36,6 +37,8 @@ export default defineConfig({
             '!**/node_modules/**',
             '!**/dist/**',
             '!**/*.tsbuildinfo',
+            // Exclude the directory itself as well as its contents.
+            '!**/__pycache__',
             '!**/__pycache__/**',
             '!**/*.pyc',
           ],
