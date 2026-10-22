@@ -99,7 +99,7 @@ describe('W5 records', () => {
         raw.sink(record);
         sink.emit(record);
       };
-      const world = w5World({ loom: both, gateway: both, fabric: both }, undefined, CANARY);
+      const world = w5World({ loom: both, gateway: both, fabric: both }, { canary: CANARY });
       await runW5(world);
       // The canary did reach the run: the goal, the sources and the provider failure carry it.
       assert.ok(world.runtime.state().goal?.purpose.includes(CANARY));

@@ -97,7 +97,7 @@ describe('W5 crash and replay', () => {
   it('W5-T23 recover() after a crash yields the same state with or without a sink, and emits only for new observations', async () => {
     const live = collector();
     const journal = new MemoryJournal();
-    const world = w5World({ loom: live.sink }, journal);
+    const world = w5World({ loom: live.sink }, { journal });
     await settleAsync(world);
     // Crash with two inspections running and one queued.
     const running = Object.values(world.runtime.state().actions).filter((a) => a.state === 'running');

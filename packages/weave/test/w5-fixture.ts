@@ -113,13 +113,17 @@ export interface W5Sinks {
   readonly fabric?: Sink;
 }
 
-/**
- * `canary`, when given, is written into the goal purpose, every source's
- * content and the provider's failure message: text no record may carry.
- */
-export function w5World(sinks: W5Sinks = {}, journal?: MemoryJournal, canary = ''): W5World {
+export interface W5Options {
+  readonly journal?: MemoryJournal;
+  /** Written into the goal purpose, every source's content and the provider's failure message: text no record may carry. */
+  readonly canary?: string;
+  readonly authority?: GrantAuthority;
+}
+
+export function w5World(sinks: W5Sinks = {}, options: W5Options = {}): W5World {
+  const { journal, canary = '' } = options;
   const content = (key: string): string => `${CONTENT[key] as string}${canary ? `\n${canary}` : ''}`;
-  const authority = createGrantAuthority();
+  const authority = options.authority ?? createGrantAuthority();
   const host = new AgentFabricHost({
     authority,
     ...(sinks.fabric ? { weft: port('fabric.host', sinks.fabric) } : {}),
