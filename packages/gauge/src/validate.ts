@@ -462,6 +462,10 @@ function validateComparison(r: Obj, context: Context): Verdict {
 /** An interval with width. A zero-width one (one sample, or all-equal samples) says nothing about spread. */
 const hasWidth = (interval: Interval | null): boolean => interval !== null && interval[0] < interval[1];
 
+/** A replay leaves outcome measures unmeasured, so those are skipped; no other measure may go unmeasured. */
+const unmeasuredByDesign = (mode: EvaluationResult['mode'], d: CriteriaSet['measures'][number]): boolean =>
+  mode === 'replay' && 'weft_kind' in d.source && OUTCOME_KINDS.has(d.source.weft_kind);
+
 export function comparisonVerdict(
   baseline: EvaluationResult,
   candidate: EvaluationResult,
@@ -477,8 +481,11 @@ export function comparisonVerdict(
     const e = r.measures.find(m => m.measure === d.measure)!;
     return e.n >= criteria.method.min_samples && hasWidth(e.interval);
   }));
+  // A measure with no samples on either side is unweighed, so there is no verdict, outside the replay exemption.
+  const unweighed = criteria.measures.some(d => !unmeasuredByDesign(baseline.mode, d)
+    && [baseline, candidate].some(r => r.measures.find(m => m.measure === d.measure)!.n === 0));
   if (baseline.verdict === 'insufficient_evidence' || candidate.verdict === 'insufficient_evidence'
-    || measured.length === 0 || !evidenced) {
+    || measured.length === 0 || unweighed || !evidenced) {
     return 'insufficient_evidence';
   }
   if (candidate.verdict === 'misses_bar') return 'bar_missed';

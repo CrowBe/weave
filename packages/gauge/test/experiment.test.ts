@@ -277,3 +277,37 @@ test('min_samples applies to an unconstrained measure too, on either side', () =
   const { both } = pair(context, [{ ...full, completion: rates(24, 30) }, { ...gain, completion: rates(25, 30) }]);
   assert.deepEqual(verdicts(both), { compare: 'candidate_better', track: [['candidate_worse', true]] });
 });
+
+test('a compared measure with no samples on either side gives no verdict, constrained or not', () => {
+  const full = { accuracy: rates(108, 120), cost: costs(150, 120) };
+  const gain = { accuracy: rates(116, 120), cost: costs(120, 120) };
+  for (const [completionA, completionB] of [[rates(84, 120), []], [[], rates(86, 120)], [[], []]] as const) {
+    const { a, b, both } = pair(context, [{ ...full, completion: completionA }, { ...gain, completion: completionB }]);
+    // completion carries no constraint, so each result still meets its bar.
+    assert.deepEqual([a.verdict, b.verdict], ['meets_bar', 'meets_bar']);
+    assert.deepEqual(verdicts(both), { compare: 'insufficient_evidence', track: [['insufficient_evidence', false]] });
+  }
+  // Not only outcome kinds: an empty cost measure is no verdict either.
+  const { both } = pair(loose, [{ accuracy: rates(108, 120), cost: [] }, gain], 'decision-sites.loose@1');
+  assert.deepEqual(verdicts(both), { compare: 'insufficient_evidence', track: [['insufficient_evidence', false]] });
+});
+
+test('a replay skips its empty outcome measures and decides from the rest', () => {
+  const replayPair = (samples: readonly [Run['samples'], Run['samples']], ctx: Context = context, criteria = C1) => {
+    const a = produced(run({ result: 'res-pair-a', mode: 'replay', criteria, samples: samples[0] }), ctx);
+    const b = produced(run({ result: 'res-pair-b', mode: 'replay', criteria, subject: { kind: 'routed_unit', ref: 'boolean.task@jev-1.14.0' },
+      evidence: [{ source: 'weft_trace', ref: 'trace-pair-b' }], samples: samples[1] }), ctx);
+    return { a, b, both: { ...ctx, results: { ...ctx.results, [a.result]: a, [b.result]: b } } as Context };
+  };
+  const { a, b, both } = replayPair([
+    { accuracy: rates(108, 120), cost: costs(150, 120), completion: [] },
+    { accuracy: rates(116, 120), cost: costs(120, 120), completion: [] },
+  ]);
+  assert.deepEqual([a.mode, measure(a, 'completion').n, measure(b, 'completion').n], ['replay', 0, 0]);
+  assert.deepEqual(verdicts(both), { compare: 'candidate_better', track: [['candidate_worse', true]] });
+  // The exemption covers outcome measures only: an empty, unconstrained cost measure in a replay is no verdict.
+  const thin = replayPair([{ accuracy: rates(108, 120), cost: [] }, { accuracy: rates(116, 120), cost: costs(120, 120) }],
+    loose, 'decision-sites.loose@1');
+  assert.deepEqual([thin.a.verdict, thin.b.verdict], ['meets_bar', 'meets_bar']);
+  assert.deepEqual(verdicts(thin.both), { compare: 'insufficient_evidence', track: [['insufficient_evidence', false]] });
+});

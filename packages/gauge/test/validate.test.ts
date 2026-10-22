@@ -104,3 +104,33 @@ test('an unconstrained measure below min_samples makes a comparison insufficient
   assert.equal(reason(better, ctx), 'verdict');
   assert.equal(reason({ ...better, verdict: 'insufficient_evidence' }, ctx), 'ok');
 });
+
+test('a comparison cannot claim a verdict over a measure with no samples on either side', () => {
+  const cand = context.results['res-cand'] as { mode: string; measures: readonly { measure: string }[] };
+  assert.equal(cand.mode, 'trial');
+  const unmeasured = { ...cand, measures: cand.measures.map(m => (m.measure === 'completion' ? { ...m, value: null, n: 0, interval: null } : m)) };
+  const ctx = { ...context, results: { ...context.results, 'res-cand': unmeasured } };
+  assert.equal(reason(unmeasured, ctx), 'ok');
+  const deltas = (better.deltas as readonly { measure: string }[])
+    .map(d => (d.measure === 'completion' ? { measure: 'completion', delta: null, interval: null } : d));
+  assert.equal(reason({ ...better, deltas }, ctx), 'verdict');
+  assert.equal(reason({ ...better, deltas, verdict: 'no_difference' }, ctx), 'verdict');
+  assert.equal(reason({ ...better, deltas, verdict: 'insufficient_evidence' }, ctx), 'ok');
+});
+
+test('a replay comparison skips its empty outcome measures and decides from the rest', () => {
+  const replayB = { ...(context.results['res-replay'] as object), result: 'res-replay-b',
+    subject: { kind: 'routed_unit', ref: 'boolean.task@jev-1.13.0' } };
+  const ctx = { ...context, results: { ...context.results, 'res-replay-b': replayB } };
+  const comparison = {
+    ...better, baseline: 'res-replay-b', candidate: 'res-replay',
+    deltas: [
+      { measure: 'accuracy', delta: 0, interval: [-0.05, 0.05] },
+      { measure: 'cost', delta: 0, interval: [-10, 10] },
+      { measure: 'completion', delta: null, interval: null },
+    ],
+    verdict: 'no_difference',
+  };
+  assert.equal(reason(comparison, ctx), 'ok');
+  assert.equal(reason({ ...comparison, verdict: 'insufficient_evidence' }, ctx), 'verdict');
+});

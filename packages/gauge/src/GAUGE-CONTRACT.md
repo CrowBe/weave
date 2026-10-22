@@ -227,7 +227,11 @@ Rules:
      it is insufficient; and a zero-width interval (`lo = hi`, as from one
      sample or all-equal samples) on the delta or on either result's measure,
      or a missing measure interval, says nothing about spread and is
-     insufficient. A measure with a null delta is not compared.
+     insufficient. A measure with `n = 0` on either side is unweighed, so it
+     too is insufficient, constrained or not; the one exemption is a
+     `replay` comparison, where measures sourced from outcome kinds must be
+     empty (the replay rule) and are skipped, so the verdict is decided by
+     the other measures.
   2. `bar_missed` if the candidate result is `misses_bar`.
   3. `candidate_worse` if any measure's interval lies strictly on the worse
      side of zero and at least `min_effect` from it: for higher-is-better,
@@ -350,9 +354,10 @@ record they return has passed `validate`.
   must be the criteria set's and case set's (`binding`): samples from one
   workload never become a result for another. Sample lists match the criteria
   measures one-to-one (`binding`). An empty list is `n = 0` with a null value;
-  a list shorter than `min_samples` leaves its constraints `unknown`, and a
-  comparison or track over it is `insufficient_evidence` whether or not the
-  measure is constrained. Neither is an error, and neither is a pass or a tie. In `replay` mode a non-empty list for a measure
+  a list shorter than `min_samples` leaves its constraints `unknown`. A
+  comparison or track over either is `insufficient_evidence` whether or not the
+  measure is constrained, except for the empty outcome measures of a replay,
+  which are skipped. Neither is an error, and neither is a pass or a tie. In `replay` mode a non-empty list for a measure
   sourced from an outcome kind is `mode`, and a rate sample other than 0 or 1
   is `measure`. Malformed samples are `envelope`. Otherwise the result's own
   rejection, if any, is returned.
@@ -377,6 +382,8 @@ record they return has passed `validate`.
 
 A result states its mode, so a replay result is never read as a trial: replay
 compares decisions on recorded inputs and leaves outcome measures unmeasured.
+A replay comparison or track skips those empty outcome measures and decides
+from the rest; any other empty measure, in any mode, leaves no verdict.
 
 ## Rejection reasons
 
