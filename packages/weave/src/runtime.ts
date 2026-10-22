@@ -219,6 +219,12 @@ export class Runtime {
   private lifecyclePump = false;
   private readonly frameProfile: FrameProfile;
   private readonly replayLog: readonly Observation[] | null;
+  private readonly replayBySeq = new Map<Seq, Observation>();
+  private readonly replayRequests: Observation[] = [];
+  private readonly replayFrameRequests: Observation[] = [];
+  private replayRequestCursor = 0;
+  private replayFrameCursor = 0;
+  private readonly replayCatalogue = new Map<string, Seq>();
   /** A reused conclusion finished inside the cycle; form the next candidates before returning. */
   private reuseFollowUp = false;
   private readonly chargedAssemblies = new Set<string>();
@@ -229,6 +235,11 @@ export class Runtime {
   private readonly preparedForAction = new Map<string, StateView>();
   private readonly diagnostics: Observation[] = [];
   private readonly observationIds = new Set<string>();
+  /** Logged ids include rejected observations, but exclude budget diagnostics. */
+  private readonly emittedIds = new Set<string>();
+  private readonly weightsByRequestId = new Map<string, Observation>();
+  private boundFrame: { profile: string; version: number } | null = null;
+  private recoveryExhausted = false;
   /** First logged request sequence, matching the workspace's historical trace scan. */
   private readonly approvalRequestSequences = new Map<string, Seq>();
   /** Conclusion ids already applied to State, so an import can skip without scanning. */
@@ -249,9 +260,23 @@ export class Runtime {
     runtimeLogs.set(this, this.log);
     if (recorded) {
       for (const observation of recorded) {
+        if (!this.replayBySeq.has(observation.seq)) {
+          this.replayBySeq.set(observation.seq, observation);
+        }
+        if (observation.payload_type === 'inference.requested') {
+          this.replayRequests.push(observation);
+          const payload = observation.payload as InferenceRequestedPayload | null | undefined;
+          // Rejected malformed requests remain inert until a lookup reaches them.
+          if (payload == null || payload.site === 'goal.frame') {
+            this.replayFrameRequests.push(observation);
+          }
+        }
         if (observation.payload_type === 'capability.described' && observation.validation.status === 'accepted') {
           const payload = observation.payload as { operation: string; contract: CapabilityContract };
           this.recordedContracts.set(payload.operation, payload.contract);
+          if (!this.replayCatalogue.has(payload.operation)) {
+            this.replayCatalogue.set(payload.operation, observation.seq);
+          }
         }
       }
     }
@@ -609,9 +634,11 @@ export class Runtime {
       this.indexApprovalRequest(observation);
       this.seqHigh = observation.seq;
       this.observationIds.add(observation.observation_id);
+      this.emittedIds.add(observation.observation_id);
       if (observation.validation.status === 'accepted') {
         const goalBefore = this.weft ? this.current.goal?.status : undefined;
         applyAccepted(this.current, observation);
+        this.indexAccepted(observation);
         if (observation.payload_type === 'conclusion.cached') {
           this.importedConclusions.add((observation.payload as { conclusion_id: string }).conclusion_id);
         }
@@ -1001,12 +1028,7 @@ export class Runtime {
     if (latest.recorded.status !== 'accepted') {
       return { kind: 'finished', reason: latest.recorded.reason ?? latest.recorded.status };
     }
-    const weights = this.log.find(
-      (o) =>
-        o.payload_type === 'weights.recorded' &&
-        o.validation.status === 'accepted' &&
-        (o.payload as WeightsRecordedPayload).request_id === latest.request_id,
-    );
+    const weights = this.weightsByRequestId.get(latest.request_id);
     const evidence = this.evidenceSince(latest.evidence[0] ?? 0);
     if (!weights) {
       return evidence ? { kind: 'needed' } : { kind: 'finished', reason: 'stale judgment' };
@@ -1130,21 +1152,11 @@ export class Runtime {
     if (!this.replayLog) {
       return [];
     }
-    const emitted = new Set(this.log.map((observation) => observation.observation_id));
-    const nextRequest = this.replayLog.find(
-      (observation) => observation.payload_type === 'inference.requested' && !emitted.has(observation.observation_id),
-    );
+    const nextRequest = this.nextReplayRequest(false);
     const horizon = nextRequest?.seq ?? Number.POSITIVE_INFINITY;
     const ids: string[] = [];
-    for (const observation of this.replayLog) {
-      if (observation.payload_type !== 'capability.described' || observation.validation.status !== 'accepted') {
-        continue;
-      }
-      if (observation.seq >= horizon) {
-        continue;
-      }
-      const operation = (observation.payload as { operation: string }).operation;
-      if (!ids.includes(operation)) {
+    for (const [operation, seq] of this.replayCatalogue) {
+      if (seq < horizon) {
         ids.push(operation);
       }
     }
@@ -1472,8 +1484,7 @@ export class Runtime {
   }
 
   private recordRecoveryExhausted(reason: string): void {
-    const already = this.log.some((o) => o.payload_type === 'recovery.exhausted' && o.validation.status === 'accepted');
-    if (already) {
+    if (this.recoveryExhausted) {
       return;
     }
     this.append({
@@ -1652,10 +1663,10 @@ export class Runtime {
         return null;
       }
       const observation_id = `contract:${operation}:${historical.revision}`;
-      if (this.log.some((observation) => observation.observation_id === observation_id)) {
+      if (this.emittedIds.has(observation_id)) {
         return historical;
       }
-      const upcoming = this.replayLog?.find((observation) => observation.seq === this.nextSeq());
+      const upcoming = this.replayBySeq.get(this.nextSeq());
       if (upcoming?.observation_id !== observation_id) {
         return null;
       }
@@ -1840,13 +1851,42 @@ export class Runtime {
       this.indexApprovalRequest(stored);
       this.seqHigh = Math.max(this.seqHigh, stored.seq);
       this.observationIds.add(stored.observation_id);
+      this.emittedIds.add(stored.observation_id);
       if (observation.validation.status === 'accepted') {
         applyAccepted(this.current, observation);
+        this.indexAccepted(stored);
         if (observation.payload_type === 'conclusion.cached') {
           this.importedConclusions.add((observation.payload as { conclusion_id: string }).conclusion_id);
         }
         this.weft?.loaded(observation);
       }
+    }
+  }
+
+  /** Derived only after acceptance and persistence, and rebuilt by load without effects. */
+  private indexAccepted(observation: Observation): void {
+    switch (observation.payload_type) {
+      case 'goal.opened':
+        this.boundFrame = null;
+        break;
+      case 'inference.requested': {
+        const payload = observation.payload as InferenceRequestedPayload;
+        if (payload.site === 'goal.frame') {
+          this.boundFrame = { profile: payload.view.profile, version: payload.view.profile_version };
+        }
+        break;
+      }
+      case 'weights.recorded': {
+        const id = (observation.payload as WeightsRecordedPayload).request_id;
+        // The original find returns the first accepted weights for a request.
+        if (id && !this.weightsByRequestId.has(id)) {
+          this.weightsByRequestId.set(id, observation);
+        }
+        break;
+      }
+      case 'recovery.exhausted':
+        this.recoveryExhausted = true;
+        break;
     }
   }
 
@@ -2035,13 +2075,7 @@ export class Runtime {
     if (!this.replayLog) {
       return null;
     }
-    const emitted = new Set(this.log.map((observation) => observation.observation_id));
-    const next = this.replayLog.find((observation) => {
-      if (observation.payload_type !== 'inference.requested' || emitted.has(observation.observation_id)) {
-        return false;
-      }
-      return (observation.payload as InferenceRequestedPayload).site === 'goal.frame';
-    });
+    const next = this.nextReplayRequest(true);
     if (!next) {
       return null;
     }
@@ -2057,28 +2091,29 @@ export class Runtime {
     return null;
   }
 
+  /** Reading leaves an unseen request in place; cursors advance only over logged ids. */
+  private nextReplayRequest(framing: boolean): Observation | undefined {
+    const requests = framing ? this.replayFrameRequests : this.replayRequests;
+    let cursor = framing ? this.replayFrameCursor : this.replayRequestCursor;
+    while (cursor < requests.length && this.emittedIds.has(requests[cursor]!.observation_id)) {
+      cursor += 1;
+    }
+    if (framing) {
+      this.replayFrameCursor = cursor;
+    } else {
+      this.replayRequestCursor = cursor;
+    }
+    return requests[cursor];
+  }
+
   /** An in-flight goal keeps the profile already written on its framing view. */
   private profileBoundToCurrentGoal(): FrameProfile | null {
     const opened = this.current.goal?.evidence;
     if (!opened) {
       return null;
     }
-    let profileId: string | null = null;
-    let profileVersion = 0;
-    for (const observation of this.log) {
-      if (observation.validation.status !== 'accepted' || observation.seq <= opened) {
-        continue;
-      }
-      if (observation.payload_type !== 'inference.requested') {
-        continue;
-      }
-      const payload = observation.payload as InferenceRequestedPayload;
-      if (payload.site !== 'goal.frame') {
-        continue;
-      }
-      profileId = payload.view.profile;
-      profileVersion = payload.view.profile_version;
-    }
+    const profileId = this.boundFrame?.profile;
+    const profileVersion = this.boundFrame?.version;
     if (!profileId) {
       return null;
     }
@@ -2240,7 +2275,7 @@ export class Runtime {
   }
 
   private maybeRecordBaseline(): void {
-    if (this.log.some((item) => item.payload_type === 'baseline.recorded' && item.validation.status === 'accepted')) {
+    if (this.current.baseline !== null) {
       return;
     }
     const payload = this.baselinePayload();
