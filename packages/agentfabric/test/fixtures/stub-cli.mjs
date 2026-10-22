@@ -3,20 +3,13 @@
  * It never prints environment values except in --leak and --partial, which the host must redact.
  */
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { argv, env, exit, pid, stderr, stdin, stdout } from 'node:process';
+import { existsSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
+import { argv, env, exit, pid } from 'node:process';
 
 const args = argv.slice(2);
 const mode = args[0];
 
-function readStdin() {
-  return new Promise((resolve) => {
-    const chunks = [];
-    stdin.on('data', (chunk) => chunks.push(chunk));
-    stdin.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-  });
-}
-
+// Use synchronous descriptor I/O so process.exit cannot discard fixture data.
 if (mode === '--subprocess') {
   // --subprocess <pidFile> [--escape] [--exit=N]: start a grandchild that inherits stdout and stderr.
   // --escape puts it in its own session and process group. --exit=N exits once the grandchild is up.
@@ -34,7 +27,7 @@ if (mode === '--subprocess') {
     const poll = setInterval(() => {
       if (existsSync(pidFile) && readFileSync(pidFile, 'utf8').trim() !== '') {
         clearInterval(poll);
-        stdout.write('parent-done\n');
+        writeSync(1, 'parent-done\n');
         exit(Number(exitArg.slice('--exit='.length)));
       }
     }, 10);
@@ -47,34 +40,35 @@ if (mode === '--subprocess') {
   setInterval(() => {}, 1 << 30);
 } else if (mode === '--partial') {
   // Output first (pipe writes are synchronous), then the pid file, then wait to be stopped.
-  stdout.write(`partial-out:${env['CANARY'] ?? ''}\n`);
-  stderr.write('partial-err\n');
+  writeSync(1, `partial-out:${env['CANARY'] ?? ''}\n`);
+  writeSync(2, 'partial-err\n');
   writeFileSync(args[1], String(pid));
   setInterval(() => {}, 1 << 30);
 } else if (mode === '--signal') {
-  stderr.write('stub-signalled\n');
+  writeSync(2, 'stub-signalled\n');
   process.kill(pid, 'SIGKILL');
 } else if (mode === '--exit') {
-  stderr.write('stub-failed\n');
+  writeSync(2, 'stub-failed\n');
   exit(Number(args[1] ?? '1'));
 } else if (mode === '--flood') {
   const count = Number(args[1] ?? '20000');
   const chunk = 'y'.repeat(1000);
   for (let i = 0; i < Math.ceil(count / 1000); i += 1) {
-    stdout.write(chunk);
+    writeSync(1, chunk);
   }
-  stderr.write('z'.repeat(count));
+  writeSync(2, 'z'.repeat(count));
   exit(0);
 } else if (mode === '--touch') {
   writeFileSync(args[1] ?? 'artifact.txt', 'artifact');
-  stdout.write('touched\n');
+  writeSync(1, 'touched\n');
   exit(0);
 } else if (mode === '--leak') {
-  stdout.write(env['CANARY'] ?? '');
+  writeSync(1, env['CANARY'] ?? '');
   exit(0);
 } else if (mode === '--report') {
-  const text = await readStdin();
-  stdout.write(
+  const text = readFileSync(0, 'utf8');
+  writeSync(
+    1,
     JSON.stringify({
       argv,
       stdin: text,
@@ -85,6 +79,6 @@ if (mode === '--subprocess') {
   );
   exit(0);
 } else {
-  stderr.write('unknown mode\n');
+  writeSync(2, 'unknown mode\n');
   exit(2);
 }

@@ -21,6 +21,8 @@ export interface ProcessRunRequest {
   readonly clock: ShellClock;
   readonly timer: ShellTimer;
   readonly tail_chars: number;
+  /** Evidence that spawn succeeded, before any execution result or host bookkeeping. */
+  readonly onStarted: (pgid: number | undefined) => void;
 }
 
 export interface ProcessRunSuccess {
@@ -95,48 +97,72 @@ export async function runProcess(request: ProcessRunRequest): Promise<ProcessRun
     child.once('close', () => resolveClose());
   });
 
+  // A timer racing an ENOENT must not turn a genuine spawn failure into a
+  // timeout. Only the spawn event establishes that a process began execution.
+  const spawned = await new Promise<boolean>((resolveSpawn) => {
+    child.once('spawn', () => resolveSpawn(true));
+    child.once('error', () => resolveSpawn(false));
+  });
+  if (!spawned) {
+    return failed('spawn_failed', stdout.value(), stderr.value(), started, request.clock);
+  }
+
   const stop = new AbortController();
+  const abort = (): void => {
+    stop.abort();
+  };
   if (request.signal.aborted) {
     stop.abort();
   } else {
-    request.signal.addEventListener('abort', () => stop.abort(), { once: true });
+    request.signal.addEventListener('abort', abort, { once: true });
   }
 
-  const timed = request.timer.sleep(request.timeout_ms, stop.signal).then(
-    () => 'timeout' as const,
-    () => (request.signal.aborted ? ('cancelled' as const) : ('stopped' as const)),
-  );
-  const winner = await Promise.race([
-    exited.then((info) => ({ kind: 'exit' as const, info })),
-    timed.then((kind) => ({ kind })),
-  ]);
-  stop.abort();
+  try {
+    request.onStarted(process.platform === 'win32' ? undefined : child.pid);
+    const timed = request.timer.sleep(request.timeout_ms, stop.signal).then(
+      () => 'timeout' as const,
+      () => (request.signal.aborted ? ('cancelled' as const) : ('execution_fault' as const)),
+    );
+    const winner = await Promise.race([
+      exited.then((info) => ({ kind: 'exit' as const, info })),
+      timed.then((kind) => ({ kind })),
+    ]);
+    stop.abort();
 
-  if (winner.kind === 'exit') {
-    // Pipes still open after the bounded drain mean a descendant holds them: terminate it as on timeout.
-    const drained = (await ended(closed, request.timer)) || (await terminate(child, closed, request.timer));
-    if (winner.info.failed || winner.info.code === null) {
-      return failed('spawn_failed', stdout.value(), stderr.value(), started, request.clock);
+    if (winner.kind === 'exit') {
+      // Pipes still open after the bounded drain mean a descendant holds them: terminate it as on timeout.
+      const drained = (await ended(closed, request.timer)) || (await terminate(child, closed, request.timer));
+      if (winner.info.failed || winner.info.code === null) {
+        return failed(
+          winner.info.failed ? 'execution_fault' : 'killed',
+          stdout.value(),
+          stderr.value(),
+          started,
+          request.clock,
+        );
+      }
+      return {
+        ok: true,
+        exit: winner.info.code,
+        // Detached before end-of-file: stdout may be incomplete, so it is not reported as whole.
+        stdout_truncated: stdout.truncated || !drained,
+        stdout_tail: stdout.value(),
+        stderr_tail: stderr.value(),
+        duration_ms: elapsed(started, request.clock),
+      };
     }
-    return {
-      ok: true,
-      exit: winner.info.code,
-      // Detached before end-of-file: stdout may be incomplete, so it is not reported as whole.
-      stdout_truncated: stdout.truncated || !drained,
-      stdout_tail: stdout.value(),
-      stderr_tail: stderr.value(),
-      duration_ms: elapsed(started, request.clock),
-    };
-  }
 
-  await terminate(child, closed, request.timer);
-  return failed(
-    winner.kind === 'cancelled' ? 'cancelled' : 'timeout',
-    stdout.value(),
-    stderr.value(),
-    started,
-    request.clock,
-  );
+    await terminate(child, closed, request.timer);
+    return failed(winner.kind, stdout.value(), stderr.value(), started, request.clock);
+  } catch {
+    // A port or execution fault after spawn must still terminate the child and
+    // cannot be described as a failure to spawn.
+    await terminate(child, closed, request.timer).catch(() => undefined);
+    return failed('execution_fault', stdout.value(), stderr.value(), started, request.clock);
+  } finally {
+    stop.abort();
+    request.signal.removeEventListener('abort', abort);
+  }
 }
 
 const KILL_GRACE_MS = 30;
@@ -164,9 +190,18 @@ async function ended(closed: Promise<void>, timer: ShellTimer): Promise<boolean>
  */
 async function terminate(child: ChildProcess, closed: Promise<void>, timer: ShellTimer): Promise<boolean> {
   kill(child, 'SIGTERM');
-  await timer.sleep(KILL_GRACE_MS).catch(() => undefined);
+  try {
+    await timer.sleep(KILL_GRACE_MS);
+  } catch {
+    /* Still send SIGKILL if the timer faults. */
+  }
   kill(child, 'SIGKILL');
-  const drained = await ended(closed, timer);
+  let drained = false;
+  try {
+    drained = await ended(closed, timer);
+  } catch {
+    /* Pipe cleanup is required even if the timer faults. */
+  }
   // A descendant that left the process group is not signalled and can keep inherited pipes open.
   child.stdin?.destroy();
   child.stdout?.destroy();

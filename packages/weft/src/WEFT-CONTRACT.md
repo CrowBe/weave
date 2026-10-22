@@ -186,7 +186,7 @@ One gateway attempt. A retry links to the attempt it repeats with `retry_of`.
 - `request_ref` id, required
 - `routed_unit` id, required
 - `attempt_no` count, required
-- `disposition` code, required: `accepted`, `unaccepted`, `failed`
+- `disposition` code, required: `accepted`, `unaccepted`, `failed`, `uncertain`
 - `input_tokens` count
 - `output_tokens` count
 - `spent_micros` count

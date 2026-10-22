@@ -195,6 +195,7 @@ export {
   type ImplementCriterion,
   type ImplementEval,
   type ImplementPorts,
+  type ImplementReconciliation,
   type ImplementStepInput,
   type ImplementStepResult,
   type ImplementTier,

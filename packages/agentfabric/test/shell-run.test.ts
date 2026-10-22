@@ -136,7 +136,7 @@ function grant(
   return authority.issue({
     action_id: action,
     operation,
-    contract_rev: 'r1',
+    contract_rev: SHELL_RUN.revision,
     permissions: [{ resource: cwd, mode: 'write' }],
     effects: [{ resource: cwd, mode: 'write' }],
     ...(process_effects === undefined ? {} : { process_effects }),
@@ -461,7 +461,7 @@ describe('shell.run@1', () => {
         {
           action_id: 'forged',
           operation: SHELL_RUN.id,
-          contract_rev: 'r1',
+          contract_rev: SHELL_RUN.revision,
           permissions: [{ resource: world.cwd, mode: 'write' }],
           effects: [{ resource: world.cwd, mode: 'write' }],
           process_effects: ['process.spawn', `fs.write:${world.cwd}`],
@@ -653,8 +653,8 @@ describe('shell.run@1', () => {
           shellInputs(world.cwd, [process.execPath, STUB, '--sleep', pidFile], [], 700),
         ),
       );
-      assert.equal(outcome.outcome, 'failed');
-      assert.equal(outcome.failure, 'timeout');
+      assert.deepEqual(outcome, { outcome: 'uncertain', reason: 'timeout' });
+      assert.equal(world.host.coordinator.held().length, 1);
       const pid = await waitForPid(pidFile);
       await waitDead(pid);
       const trace = world.host.shellTraces()[0];
@@ -687,8 +687,8 @@ describe('shell.run@1', () => {
       const pid = await waitForPid(pidFile);
       handle.requestCancel();
       const outcome = await handle.result;
-      assert.equal(outcome.outcome, 'failed');
-      assert.equal(outcome.failure, 'cancelled');
+      assert.deepEqual(outcome, { outcome: 'uncertain', reason: 'cancelled' });
+      assert.equal(world.host.coordinator.held().length, 1);
       await waitDead(pid);
     } finally {
       rmSync(world.dir, { recursive: true, force: true });
@@ -710,7 +710,7 @@ describe('shell.run@1', () => {
     ];
 
     for (const failure of ['timeout', 'cancelled'] as const) {
-      it(`${failure} returns promptly when ${holder} holds stdout open, and releases the lock`, async () => {
+      it(`${failure} returns promptly when ${holder} holds stdout open, and holds the lock until reconciliation`, async () => {
         const TIMEOUT_MS = 60_000;
         const time = expiringTime(TIMEOUT_MS);
         const world = hostFor(undefined, envPort(), time);
@@ -731,8 +731,7 @@ describe('shell.run@1', () => {
           if (failure === 'timeout') time.expire();
           else handle.requestCancel();
           const outcome = await within(2500, handle.result, 'post-kill wait');
-          assert.equal(outcome.outcome, 'failed');
-          assert.equal(outcome.failure, failure);
+          assert.deepEqual(outcome, { outcome: 'uncertain', reason: failure });
           if (escape) {
             assert.equal(
               terminated(grandchild),
@@ -742,6 +741,14 @@ describe('shell.run@1', () => {
           } else {
             await waitDead(grandchild);
           }
+          assert.equal(world.host.coordinator.held().length, 1);
+          const blocked = world.host.invoke(
+            grant(world.authority, SHELL_RUN.id, world.cwd, 'blocked-subprocess', effects),
+            SHELL_RUN.id,
+            shellInputs(world.cwd, [process.execPath, STUB, '--report']),
+          );
+          assert.equal(blocked.kind, 'rejected');
+          world.host.reconcile(handle.invocation_id, { resolution: 'not_committed', evidence: 'external audit' });
           const next = asOutcome(
             await invoke(
               world.host,

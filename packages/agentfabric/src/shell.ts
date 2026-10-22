@@ -54,7 +54,8 @@ export interface ParsedShellCall {
   readonly stdin: string;
 }
 
-export type ShellFailure = 'timeout' | 'denied' | 'spawn_failed' | 'cancelled';
+export const SHELL_FAILURES = ['timeout', 'denied', 'spawn_failed', 'cancelled', 'killed', 'execution_fault'] as const;
+export type ShellFailure = (typeof SHELL_FAILURES)[number];
 
 /**
  * JSONL-tree record. Field order is fixed. `env_allow` is names only.

@@ -396,6 +396,8 @@ export const PROVIDER_FAILURES = [
   'cancelled',
   'timeout',
   'malformed_response',
+  'workspace_held',
+  'effect_conflict',
 ] as const;
 export type ProviderFailureCode = (typeof PROVIDER_FAILURES)[number];
 
@@ -410,6 +412,8 @@ export interface ProviderFailure {
    * declares. Absent means the provider gave no figure, not that zero is safe.
    */
   readonly retry_after_ms?: number;
+  /** Invocation retaining the conflicting workspace reservation. */
+  readonly held_by?: string;
 }
 
 export interface GenerationCall {
@@ -420,7 +424,14 @@ export interface GenerationCall {
   readonly signal: AbortSignal | undefined;
 }
 
+export interface GenerationUncertainty {
+  readonly status: 'uncertain';
+  readonly invocation_id: string;
+  readonly reason: string;
+}
+
 export type GenerationProviderResult =
+  | (GenerationUncertainty & { readonly usage?: ProviderUsage })
   | {
       readonly status: 'completed';
       readonly text: string;
@@ -443,6 +454,11 @@ export interface GenerationAdapter {
    * disposition, and no later attempt starts while waiting.
    */
   readonly settle_on_abort?: boolean;
+  /**
+   * The grant-enforced CLI port owns bounded process stopping. Await its final
+   * result after abort so an invocation retaining effects is always observable.
+   */
+  readonly await_on_abort?: boolean;
   execute(call: GenerationCall): Promise<GenerationProviderResult>;
 }
 
@@ -483,6 +499,7 @@ export interface EvaluationAdapter {
 // ---------------------------------------------------------------------------
 
 export type AttemptDisposition =
+  | GenerationUncertainty
   | { readonly status: 'accepted' }
   | { readonly status: 'unaccepted'; readonly reason: string }
   | { readonly status: 'failed'; readonly failure: ProviderFailure };
@@ -540,6 +557,7 @@ interface OutcomeBase {
  * implicit permission to execute (ARCHITECTURE.md §6).
  */
 export type GenerationOutcome =
+  | (OutcomeBase & GenerationUncertainty)
   | (OutcomeBase & {
       readonly status: 'accepted';
       readonly text: string;

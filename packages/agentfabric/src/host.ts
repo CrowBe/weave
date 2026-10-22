@@ -57,6 +57,8 @@ import {
   type PublicationRecord,
 } from './store.js';
 import { FabricWeft, type WeftPort } from './weft.js';
+import { probeProcessGroup, type ProcessGroupState } from './process-group.js';
+import { workspaceSnapshot } from './workspace-state.js';
 
 export interface PublishInput {
   readonly report: {
@@ -124,12 +126,28 @@ export type CapabilityImplementation = (
 
 export type ReconciliationResolution =
   | { readonly resolution: 'committed'; readonly evidence: string; readonly output: unknown }
-  | { readonly resolution: 'not_committed'; readonly evidence: string };
+  | { readonly resolution: 'not_committed'; readonly evidence: string; readonly force_with_evidence?: boolean };
 
 export type ReconciliationResult = {
   readonly status: 'committed' | 'stopped';
   readonly outcome: InvocationOutcome;
 };
+
+type CliGenerationRejection = InvocationRejected & {
+  readonly workspace_conflict?: { readonly invocation_id: string; readonly uncertain: boolean };
+};
+
+export interface UncertainCliGeneration {
+  readonly invocation_id: string;
+  readonly cwd_ref: string;
+  readonly reason: string;
+  readonly startup_check?:
+    | 'workspace_changed'
+    | 'snapshot_unavailable'
+    | 'check_failed'
+    | 'process_group_alive'
+    | 'process_group_unknown';
+}
 
 export interface ImplementationProfile {
   readonly id: string;
@@ -169,6 +187,10 @@ export class AgentFabricHost implements CapabilityHost {
   readonly resourceAccesses: AccessRecord[] = [];
   readonly lookups: { invocation_id: string; granted: boolean }[] = [];
   faults: HostFaults;
+  readonly cliRecoveryReady: Promise<void>;
+  private cliRecoveryComplete = false;
+  private readonly preparingCli = new Map<string, OpenInvocation>();
+  private readonly cliProcessGroupProbe: (pgid: number) => ProcessGroupState;
   private readonly gateway: InferenceGateway | undefined;
   private readonly shellOptions: ShellHostOptions | undefined;
   private readonly repoCommands: RepoCommands | undefined;
@@ -177,6 +199,8 @@ export class AgentFabricHost implements CapabilityHost {
   /** Cost ceilings already admitted against each contract's max_cost. */
   private readonly inferenceCharged = new Map<string, number>();
   private inferenceSeq = 0;
+  private cliGenerationSeq = 0;
+  private readonly cliStartupChecks = new Map<string, UncertainCliGeneration['startup_check']>();
   /** Written only by admission. A function passed to registerImplementation is not stored here. */
   private readonly admitted = new Map<string, AdmittedImplementation[]>();
   private readonly restored = new IsolateRunner('enforcing');
@@ -197,9 +221,12 @@ export class AgentFabricHost implements CapabilityHost {
     contracts?: readonly CapabilityContract[];
     gateway?: InferenceGateway;
     shell?: ShellHostOptions;
+    /** Host process evidence port. Only gone permits automatic release. */
+    cliProcessGroupProbe?: (pgid: number) => ProcessGroupState;
     /** Weft emission port (WEFT-CONTRACT.md, Emission). Absent: nothing is emitted. */
     weft?: WeftPort;
   }) {
+    this.cliProcessGroupProbe = options.cliProcessGroupProbe ?? probeProcessGroup;
     this.authority = options.authority;
     this.store = options.store ?? new FabricStore();
     this.faults = { ...options.faults };
@@ -223,6 +250,207 @@ export class AgentFabricHost implements CapabilityHost {
     this.restoreReservations();
     // Restored admissions were reported when they happened; emission starts here.
     this.weft = options.weft ? new FabricWeft(options.weft) : null;
+    this.cliRecoveryReady = this.checkUncertainCliGenerations().then(() => {
+      this.cliRecoveryComplete = true;
+    });
+  }
+
+  /** Host-owned identity allocation works across bridge instances and restarts. */
+  nextCliGenerationId(): string {
+    let id: string;
+    do {
+      id = `shell-cli:${this.cliGenerationSeq++}`;
+    } while (this.store.getInvocation(id) || this.open.has(id) || this.preparingCli.has(id));
+    return id;
+  }
+
+  /** Composition entry point; the supplied grant still determines all authority. */
+  async invokeCliGeneration(grant: Grant, inputs: unknown): Promise<InvocationHandle | CliGenerationRejection> {
+    if (!this.cliRecoveryComplete) await this.cliRecoveryReady;
+    if (isRecord(inputs) && typeof inputs['cwd_ref'] === 'string') {
+      const cwd_ref = inputs['cwd_ref'];
+      const conflict = this.workspaceConflict(cwd_ref);
+      const legacy = [...this.unscopedRecovery.values()].includes(SHELL_RUN.id);
+      if ((conflict?.uncertain || legacy) && !this.reconciling.size) await this.checkUncertainCliGenerations(cwd_ref);
+    }
+    const prepared = this.step(() => this.prepare(grant, SHELL_RUN.id, inputs));
+    if (prepared.kind === 'rejected') {
+      const conflict =
+        prepared.code === 'RESOLVER_ERROR' &&
+        prepared.reason.startsWith('effect conflict on ') &&
+        isRecord(inputs) &&
+        typeof inputs['cwd_ref'] === 'string'
+          ? this.workspaceConflict(inputs['cwd_ref'])
+          : undefined;
+      // Capture the owner before yielding; reconciliation may release it meanwhile.
+      return { ...prepared, ...(conflict ? { workspace_conflict: conflict } : {}) };
+    }
+    if (prepared.kind === 'replay') return prepared.handle;
+    // Keep the identity reserved and cancellation addressable while inspection yields.
+    const { invocation_id } = prepared.open;
+    this.preparingCli.set(invocation_id, prepared.open);
+    try {
+      const resource = this.resourceFor(prepared.open.shellCwdRef);
+      const before_snapshot = resource?.kind === 'workspace' ? await workspaceSnapshot(resource.locator) : null;
+      if (!this.authority.isValid(grant)) {
+        return this.reject('DENIED', 'grant was revoked during workspace inspection');
+      }
+      prepared.record.cancel_requested = prepared.open.cancel_requested;
+      prepared.record.cli_generation = { cwd_ref: prepared.open.shellCwdRef, before_snapshot };
+      return this.step(() => this.startPrepared(prepared, SHELL_RUN.id));
+    } finally {
+      this.preparingCli.delete(invocation_id);
+      if (!this.open.has(invocation_id)) this.coordinator.release(invocation_id);
+    }
+  }
+
+  workspaceConflict(cwd_ref: string): { readonly invocation_id: string; readonly uncertain: boolean } | undefined {
+    const canonical_id = this.store.lookupRef(cwd_ref)?.canonical_id ?? cwd_ref;
+    const held = this.coordinator.conflicts([{ canonical_id, mode: 'write' }]);
+    if (!held) return undefined;
+    const open = this.open.get(held.invocation_id);
+    const record = this.store.getInvocation(held.invocation_id);
+    return {
+      invocation_id: held.invocation_id,
+      uncertain:
+        open?.outcome?.outcome === 'uncertain' ||
+        record?.status === 'uncertain' ||
+        (record?.status === 'running' && (!open || open.phase === 'done')),
+    };
+  }
+
+  /** Trusted operator listing: no prompts, argv, environment, or locators. */
+  listUncertainCliGenerations(): readonly UncertainCliGeneration[] {
+    return this.store.invocationRecords().flatMap((record) => {
+      if (!this.blocksCliWorkspace(record)) return [];
+      const open = this.open.get(record.invocation_id);
+      if (open && open.phase !== 'done') return [];
+      if (record.status !== 'uncertain' && record.status !== 'running') return [];
+      const outcome = open?.outcome ?? record.outcome;
+      const cwd_ref =
+        record.cli_generation?.cwd_ref ??
+        (isRecord(record.inputs) && typeof record.inputs['cwd_ref'] === 'string' ? record.inputs['cwd_ref'] : '');
+      const startup_check = this.cliStartupChecks.get(record.invocation_id);
+      return [
+        {
+          invocation_id: record.invocation_id,
+          cwd_ref,
+          reason: outcome?.outcome === 'uncertain' ? outcome.reason : RECOVERED_UNCERTAINTY,
+          ...(startup_check ? { startup_check } : {}),
+        },
+      ];
+    });
+  }
+
+  /** The operator path shares reconciliation's durable append-before-release gate. */
+  reconcileCliGeneration(invocation_id: string, resolution: ReconciliationResolution): ReconciliationResult {
+    const record = this.store.getInvocation(invocation_id);
+    if (!record || !this.blocksCliWorkspace(record)) throw new Error('unknown CLI workspace hold for reconciliation');
+    if (
+      !record.reconciliation &&
+      resolution.resolution === 'not_committed' &&
+      resolution.force_with_evidence !== true
+    ) {
+      if (record.cli_generation?.pgid === undefined)
+        throw new Error('no CLI process evidence exists; explicit evidence and force_with_evidence required');
+      if (this.cliGroupState(record) !== 'gone')
+        throw new Error('CLI process group is alive or unknown; explicit evidence and force_with_evidence required');
+      // Safe defaults settle via the asynchronous snapshot check. A synchronous
+      // operator call cannot establish fresh evidence of an unchanged workspace.
+      throw new Error(
+        'workspace snapshot is changed or unavailable; explicit evidence and force_with_evidence required',
+      );
+    }
+    const result = this.reconcile(invocation_id, resolution);
+    this.cliStartupChecks.delete(invocation_id);
+    return result;
+  }
+
+  private blocksCliWorkspace(record: InvocationRecord): boolean {
+    if (isCliGeneration(record) || this.unscopedRecovery.get(record.invocation_id) === SHELL_RUN.id) return true;
+    return this.coordinator
+      .held()
+      .some(
+        (hold) =>
+          hold.invocation_id === record.invocation_id &&
+          this.store.getResource(hold.canonical_id)?.kind === 'workspace',
+      );
+  }
+
+  private cliGroupState(record: InvocationRecord): ProcessGroupState {
+    const pgid = record.cli_generation?.pgid;
+    if (pgid === undefined) return 'unknown';
+    try {
+      return this.cliProcessGroupProbe(pgid);
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  private async checkUncertainCliGenerations(cwd_ref?: string): Promise<void> {
+    const canonical = cwd_ref === undefined ? undefined : (this.store.lookupRef(cwd_ref)?.canonical_id ?? cwd_ref);
+    await Promise.all(
+      this.listUncertainCliGenerations()
+        .filter(
+          (entry) =>
+            canonical === undefined ||
+            this.unscopedRecovery.get(entry.invocation_id) === SHELL_RUN.id ||
+            this.coordinator
+              .held()
+              .some((hold) => hold.invocation_id === entry.invocation_id && hold.canonical_id === canonical),
+        )
+        .map((entry) => this.checkUncertainCliGeneration(entry.invocation_id)),
+    );
+  }
+
+  private async checkUncertainCliGeneration(invocation_id: string, postTerminate = false): Promise<void> {
+    try {
+      const record = this.store.getInvocation(invocation_id);
+      if (
+        !record ||
+        record.reconciliation ||
+        !this.blocksCliWorkspace(record) ||
+        this.reconciling.has(invocation_id) ||
+        (this.open.has(invocation_id) && this.open.get(invocation_id)!.phase !== 'done') ||
+        (record.status !== 'running' && record.status !== 'uncertain')
+      )
+        return;
+      let group = this.cliGroupState(record);
+      for (let retry = 0; postTerminate && group === 'alive' && retry < 3 && this.shellOptions; retry++) {
+        await this.shellOptions.timer.sleep(25);
+        group = this.cliGroupState(record);
+      }
+      if (group !== 'gone') {
+        this.cliStartupChecks.set(invocation_id, group === 'alive' ? 'process_group_alive' : 'process_group_unknown');
+        return;
+      }
+      const evidence = record.cli_generation;
+      if (!evidence?.before_snapshot) {
+        this.cliStartupChecks.set(invocation_id, 'snapshot_unavailable');
+        return;
+      }
+      const resource = this.resourceFor(evidence.cwd_ref);
+      if (!resource || resource.kind !== 'workspace') throw new Error('workspace unavailable');
+      const after = await workspaceSnapshot(resource.locator);
+      if (after === null) {
+        this.cliStartupChecks.set(invocation_id, 'snapshot_unavailable');
+        return;
+      }
+      if (after !== evidence.before_snapshot) {
+        this.cliStartupChecks.set(invocation_id, 'workspace_changed');
+        return;
+      }
+      // Reconciliation rechecks process evidence after the asynchronous scan.
+      if (this.store.getInvocation(invocation_id)?.reconciliation) return;
+      this.reconcile(invocation_id, {
+        resolution: 'not_committed',
+        evidence: `workspace snapshot unchanged: ${evidence.before_snapshot}; process group confirmed gone`,
+      });
+      this.cliStartupChecks.delete(invocation_id);
+    } catch {
+      // Inspection or a failed durable gate never releases protection.
+      this.cliStartupChecks.set(invocation_id, 'check_failed');
+    }
   }
 
   snapshot(): FabricSnapshot {
@@ -489,6 +717,15 @@ export class AgentFabricHost implements CapabilityHost {
     if (outcome.status === 'accepted') {
       return { status: 'accepted', output: outcome.text, attempts: [...outcome.attempts], spent: outcome.spent };
     }
+    if (outcome.status === 'uncertain') {
+      return {
+        status: 'uncertain',
+        invocation_id: outcome.invocation_id,
+        reason: outcome.reason,
+        attempts: [...outcome.attempts],
+        spent: outcome.spent,
+      };
+    }
     return {
       status: outcome.status,
       reason: outcome.reason,
@@ -620,6 +857,10 @@ export class AgentFabricHost implements CapabilityHost {
 
   private restoreAdmissions(): void {
     for (const admission of this.store.admitted()) {
+      const builtin = trustedBuiltin(admission.contract.id) ? this.live.get(admission.contract.id) : undefined;
+      // A stored revision remains evidence for old invocations, not authority
+      // to replace the trusted builtin shipped by this host.
+      if (builtin && builtin.revision !== admission.contract.revision) continue;
       this.installAdmitted(
         admission.contract,
         this.storedImplementation(admission.contract, admission.source),
@@ -664,6 +905,24 @@ export class AgentFabricHost implements CapabilityHost {
     return this.historical.get(operation);
   }
 
+  private invocationContract(record: InvocationRecord): CapabilityContract | undefined {
+    const current = this.live.get(record.operation) ?? this.historical.get(record.operation);
+    if (!trustedBuiltin(record.operation) || record.implementation_id === undefined) return current;
+    const admissions = this.store
+      .admitted()
+      .filter(
+        (admission) =>
+          admission.operation === record.operation &&
+          admission.contract.id === record.operation &&
+          admission.implementation_id === record.implementation_id,
+      );
+    const first = admissions[0]?.contract;
+    if (first) {
+      return admissions.every(({ contract }) => digest(contract) === digest(first)) ? first : undefined;
+    }
+    return current;
+  }
+
   canonicalResource(ref: ResourceRef): ResourceRef {
     const issued = this.store.lookupRef(ref);
     if (!issued) {
@@ -687,7 +946,13 @@ export class AgentFabricHost implements CapabilityHost {
     inputs: unknown,
     options?: InvokeOptions,
   ): InvocationHandle | InvocationRejected {
-    const prepared = this.prepare(grant, operation, inputs, options);
+    return this.startPrepared(this.prepare(grant, operation, inputs, options), operation);
+  }
+
+  private startPrepared(
+    prepared: ReturnType<AgentFabricHost['prepare']>,
+    operation: string,
+  ): InvocationHandle | InvocationRejected {
     if (prepared.kind === 'rejected') {
       return prepared;
     }
@@ -760,7 +1025,9 @@ export class AgentFabricHost implements CapabilityHost {
       this.lookups.push({ invocation_id, granted: false });
       return this.reject('DENIED', 'grant does not name this invocation');
     }
-    const contract = this.live.get(target.operation) ?? this.historical.get(target.operation);
+    const contract = record
+      ? this.invocationContract(record)
+      : (this.live.get(target.operation) ?? this.historical.get(target.operation));
     if (!contract || grant.contract_rev !== contract.revision) {
       this.lookups.push({ invocation_id, granted: false });
       return this.reject('DENIED', 'grant names a different contract revision');
@@ -858,6 +1125,16 @@ export class AgentFabricHost implements CapabilityHost {
     if (record.status !== 'running' && record.status !== 'uncertain') {
       throw new Error('invocation does not require reconciliation');
     }
+    if (
+      resolution.resolution === 'not_committed' &&
+      isCliGeneration(record) &&
+      this.cliGroupState(record) !== 'gone' &&
+      resolution.force_with_evidence !== true
+    ) {
+      throw new Error(
+        'CLI process group is alive or unknown; not_committed requires force_with_evidence and explicit evidence',
+      );
+    }
     if (resolution.resolution === 'not_committed' && this.store.publishedBy(invocation_id)) {
       throw new Error('invalid not_committed resolution for a durable publication');
     }
@@ -879,7 +1156,13 @@ export class AgentFabricHost implements CapabilityHost {
         status,
         outcome,
         cancel_requested: open?.cancel_requested ?? record.cancel_requested,
-        reconciliation: { resolution: resolution.resolution, evidence: resolution.evidence },
+        reconciliation: {
+          resolution: resolution.resolution,
+          evidence:
+            resolution.resolution === 'not_committed' && resolution.force_with_evidence === true
+              ? `forced process-group override: ${resolution.evidence}`
+              : resolution.evidence,
+        },
       });
       this.coordinator.release(invocation_id);
       this.unscopedRecovery.delete(invocation_id);
@@ -894,7 +1177,7 @@ export class AgentFabricHost implements CapabilityHost {
     // Resolution records facts, not new execution. A reentrant cancellation
     // cannot append an obsolete running record over a reconciliation write.
     if (this.reconciling.has(invocation_id)) return { acknowledged: true };
-    const open = this.open.get(invocation_id);
+    const open = this.open.get(invocation_id) ?? this.preparingCli.get(invocation_id);
     if (open) {
       open.cancel_requested = true;
       open.abort.abort();
@@ -964,6 +1247,20 @@ export class AgentFabricHost implements CapabilityHost {
         return;
       }
       open.phase = 'before_commit';
+      if (this.store.getInvocation(open.invocation_id)?.cli_generation) {
+        const resolve = open.resolve;
+        open.resolve = (outcome) => {
+          // Record uncertainty first, then compare while the reservation is held.
+          void this.checkUncertainCliGeneration(open.invocation_id, true).then(() => {
+            const record = this.store.getInvocation(open.invocation_id);
+            resolve(
+              outcome.outcome === 'uncertain' && record?.reconciliation?.resolution === 'not_committed'
+                ? { outcome: 'failed', failure: outcome.reason }
+                : outcome,
+            );
+          });
+        };
+      }
       void this.performShell(open).then(
         (outcome) => {
           if (open.phase === 'done') {
@@ -975,7 +1272,7 @@ export class AgentFabricHost implements CapabilityHost {
           if (open.phase === 'done') {
             return;
           }
-          this.finish(open, this.implementationFault(open, 'spawn_failed'));
+          this.finish(open, this.implementationFault(open, 'execution_fault'));
         },
       );
       return;
@@ -1240,13 +1537,15 @@ export class AgentFabricHost implements CapabilityHost {
     | { kind: 'open'; open: OpenInvocation; record: InvocationRecord }
     | { kind: 'replay'; handle: InvocationHandle }
     | InvocationRejected {
-    const contract = this.live.get(operation);
+    let contract = this.live.get(operation);
     if (!contract) {
       if (this.historical.has(operation)) {
         return this.reject('UNRESOLVED', `${operation} is not currently resolved`);
       }
       return this.reject('UNKNOWN_CAPABILITY', `unknown operation ${operation}`);
     }
+    const existing = grant ? this.store.getInvocation(options?.invocation_id ?? grant.action_id) : undefined;
+    if (existing?.operation === operation) contract = this.invocationContract(existing) ?? contract;
     if (!isRecord(inputs)) {
       return this.reject('INVALID_INPUT', 'inputs must be a record');
     }
@@ -1292,7 +1591,6 @@ export class AgentFabricHost implements CapabilityHost {
     }
     const action_id = (grant as Grant).action_id;
     const invocation_id = options?.invocation_id ?? action_id;
-    const existing = this.store.getInvocation(invocation_id);
     const binding_digest = digest({ operation, inputs: boundInputs });
     if (existing && existing.action_id !== action_id) {
       return this.reject('DENIED', 'grant does not name this invocation');
@@ -1304,7 +1602,7 @@ export class AgentFabricHost implements CapabilityHost {
       this.authority.markInvoked(grant as Grant);
       return { kind: 'replay', handle: this.replayCompleted(existing) };
     }
-    const inMemory = this.open.get(invocation_id);
+    const inMemory = this.open.get(invocation_id) ?? this.preparingCli.get(invocation_id);
     if (existing && (!inMemory || inMemory.phase === 'done')) {
       const published = this.reconcilePublication(invocation_id, existing.status);
       if (published) {
@@ -1448,9 +1746,32 @@ export class AgentFabricHost implements CapabilityHost {
       if (record.status !== 'running' && record.status !== 'uncertain') continue;
       let effects = record.reservation;
       if (effects === undefined) {
-        // Legacy journals did not retain scopes. Without a usable contract,
-        // block this operation until reconciliation, even if installed later.
-        const contract = this.historical.get(record.operation);
+        // Legacy journals did not retain scopes or a contract revision. Only
+        // the admission of the implementation that ran identifies that revision;
+        // the current contract may have narrowed its effects since execution.
+        const admissions =
+          record.implementation_id === undefined
+            ? []
+            : this.store
+                .admitted()
+                .filter(
+                  (admission) =>
+                    admission.operation === record.operation &&
+                    admission.contract.id === record.operation &&
+                    admission.implementation_id === record.implementation_id,
+                );
+        const first = admissions[0]?.contract;
+        // An implementation id alone cannot identify a revision when a legacy
+        // snapshot contains conflicting admissions. Retain an operation block
+        // instead of guessing the first admission's effect scopes.
+        const contract =
+          first &&
+          admissions.every(
+            ({ contract }) =>
+              contract.revision === first.revision && digest(contract.effects) === digest(first.effects),
+          )
+            ? first
+            : undefined;
         const bound = contract && bindSelectors(contract.effects, record.inputs);
         if (bound?.ok) {
           effects = bound.bound.map((effect) => ({
@@ -1530,8 +1851,12 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   private async performShell(open: OpenInvocation): Promise<InvocationOutcome> {
+    let processStarted = false;
+    let faultReason: ShellFailure = 'execution_fault';
+    let failureBeforeStart: ShellFailure | undefined;
     try {
       if (!this.shellOptions) {
+        failureBeforeStart = 'denied';
         this.pushShellTrace(open, {
           exit: null,
           failure: 'denied',
@@ -1543,6 +1868,7 @@ export class AgentFabricHost implements CapabilityHost {
         return { outcome: 'failed', failure: 'denied' };
       }
       if (open.cancel_requested || open.abort.signal.aborted) {
+        failureBeforeStart = 'cancelled';
         this.pushShellTrace(open, {
           exit: null,
           failure: 'cancelled',
@@ -1555,15 +1881,16 @@ export class AgentFabricHost implements CapabilityHost {
       }
       const resource = this.resourceFor(open.shellCwdRef);
       if (!resource || resource.kind !== 'workspace') {
+        failureBeforeStart = 'denied';
         this.pushShellTrace(open, {
           exit: null,
-          failure: 'spawn_failed',
+          failure: 'denied',
           duration_ms: 0,
           stdout_tail: '',
           stderr_tail: '',
           artifacts: [],
         });
-        return { outcome: 'failed', failure: 'spawn_failed' };
+        return { outcome: 'failed', failure: 'denied' };
       }
       const requested = this.shellOptions.tail_chars;
       const tail_chars =
@@ -1585,10 +1912,18 @@ export class AgentFabricHost implements CapabilityHost {
         clock: this.shellOptions.clock,
         timer: this.shellOptions.timer,
         tail_chars,
+        onStarted: (pgid) => {
+          processStarted = true;
+          if (pgid !== undefined && this.store.getInvocation(open.invocation_id)?.cli_generation) {
+            this.store.persistCliGenerationStarted(open.invocation_id, pgid);
+          }
+        },
       });
       const stdout_tail = redactSecrets(result.stdout_tail, open.shellSecrets);
       const stderr_tail = redactSecrets(result.stderr_tail, open.shellSecrets);
       if (!result.ok) {
+        if (processStarted) faultReason = result.failure;
+        else failureBeforeStart = result.failure;
         this.pushShellTrace(open, {
           exit: null,
           failure: result.failure,
@@ -1597,7 +1932,9 @@ export class AgentFabricHost implements CapabilityHost {
           stderr_tail,
           artifacts: [],
         });
-        return { outcome: 'failed', failure: result.failure };
+        return processStarted && hasDeclaredWrites(open.effects)
+          ? { outcome: 'uncertain', reason: faultReason }
+          : { outcome: 'failed', failure: result.failure };
       }
       const created = newFilesInside(resource.locator, before, snapshotFiles(resource.locator));
       const artifacts = this.issueArtifacts(resource.locator, created);
@@ -1620,6 +1957,11 @@ export class AgentFabricHost implements CapabilityHost {
           artifacts,
         },
       };
+    } catch {
+      // Trace recording cannot invalidate evidence that execution never began.
+      if (failureBeforeStart !== undefined) return { outcome: 'failed', failure: failureBeforeStart };
+      // Snapshot and post-run bookkeeping faults do not prove absence of effects.
+      return this.implementationFault(open, faultReason);
     } finally {
       open.shellEnv = {};
       open.shellSecrets = [];
@@ -1918,6 +2260,13 @@ const RECOVERED_UNCERTAINTY = 'execution outcome requires reconciliation after r
 
 function hasDeclaredWrites(effects: readonly ResourceEffect[]): boolean {
   return effects.some((effect) => effect.mode !== 'read' && effect.mode !== 'discover');
+}
+
+function isCliGeneration(record: InvocationRecord): boolean {
+  return (
+    record.operation === SHELL_RUN.id &&
+    (record.cli_generation !== undefined || record.action_id.startsWith('shell-cli:'))
+  );
 }
 
 const TRUSTED_BUILTINS: ReadonlySet<string> = new Set([

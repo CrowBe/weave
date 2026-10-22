@@ -119,4 +119,20 @@ describe('cli generate adapters', () => {
       assert.equal(refusal.failure.code, 'unauthorized');
     }
   });
+
+  for (const [failure, message] of [
+    ['killed', 'cli generate was killed'],
+    ['execution_fault', 'cli generate execution failed'],
+  ] as const) {
+    it(`reports ${failure} without claiming a spawn failure`, async () => {
+      const port = recording({ status: 'failed', failure, stdout_tail: '', stderr_tail: '', duration_ms: 1 });
+      const result = await codexExecAdapter({ spawn: port.spawn, cwd_ref: 'ref_ws', timeout_ms: 1000 }).execute(call);
+      assert.equal(result.status, 'failed');
+      if (result.status === 'failed') {
+        assert.equal(result.failure.code, 'unavailable');
+        assert.equal(result.failure.message, message);
+        assert.equal(result.failure.retryable, false);
+      }
+    });
+  }
 });

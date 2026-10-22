@@ -136,6 +136,7 @@ function nousProvider(config: ProvidersConfig): Provider {
     };
     // Once the chat request left, cancellation cannot prove it was not served.
     if (external.aborted && chatSent && result.status !== 'completed') throw new Error('unacknowledged_call');
+    if (result.status === 'uncertain') throw new Error('unacknowledged_call');
     if (result.status === 'completed') {
       const answers = parseCompetitorOutput(result.text, request);
       return answers

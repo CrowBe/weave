@@ -413,3 +413,70 @@ for (const operation of ['generate', 'evaluate'] as const) {
     });
   }
 }
+
+for (const immediate of [false, true]) {
+  for (const interruption of ['deadline', 'cancel'] as const) {
+    it(`contains an await_on_abort adapter rejection ${immediate ? 'during' : 'after'} ${interruption}`, async () => {
+      let now = 0;
+      let fire!: () => void;
+      let rejectPort!: (error: Error) => void;
+      const caller = new AbortController();
+      const adapter: GenerationAdapter = {
+        id: 'waiting',
+        await_on_abort: true,
+        execute: (call) =>
+          new Promise((_, reject) => {
+            rejectPort = reject;
+            if (immediate)
+              call.signal?.addEventListener('abort', () => reject(new Error('adapter abort rejected')), { once: true });
+          }),
+      };
+      const gateway = createInferenceGateway({
+        routes: [unit],
+        adapters: [adapter],
+        clock: { now: () => now },
+        timer: {
+          sleep(ms, signal) {
+            return new Promise((resolve) => {
+              fire = () => {
+                now += ms;
+                resolve();
+              };
+              signal?.addEventListener('abort', () => resolve(), { once: true });
+            });
+          },
+        },
+      });
+      const pending = gateway.generate(
+        {
+          request_id: 'reject-on-abort',
+          site: 'test',
+          role: 'working',
+          kind: 'transform',
+          input: { instructions: '', prompt: 'ok' },
+          terms: {
+            quality: 'baseline',
+            destinations: ['test'],
+            max_context_tokens: 10,
+            deadline: 100,
+            cost_ceiling: 0,
+            max_attempts: 1,
+          },
+        },
+        caller.signal,
+      );
+      await setImmediate();
+      if (interruption === 'deadline') fire();
+      else caller.abort();
+      await setImmediate();
+      if (!immediate) rejectPort(new Error('adapter cleanup rejected'));
+      const outcome = await pending;
+      assert.equal(outcome.status, 'unaccepted');
+      assert.equal(outcome.attempts.length, 1);
+      const disposition = outcome.attempts[0]!.disposition;
+      assert.equal(disposition.status, 'failed');
+      if (disposition.status === 'failed')
+        assert.equal(disposition.failure.code, interruption === 'deadline' ? 'timeout' : 'cancelled');
+    });
+  }
+}

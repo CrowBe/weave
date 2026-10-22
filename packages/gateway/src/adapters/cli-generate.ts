@@ -13,7 +13,15 @@ export const CODEX_EXEC_ARGV = ['codex', 'exec'] as const;
 export const CLAUDE_PRINT_ARGV = ['claude', '-p'] as const;
 export const GROK_CLI_ARGV = ['grok'] as const;
 
-export type CliSpawnFailure = 'timeout' | 'denied' | 'spawn_failed' | 'cancelled';
+export type CliSpawnFailure =
+  | 'timeout'
+  | 'denied'
+  | 'spawn_failed'
+  | 'cancelled'
+  | 'killed'
+  | 'execution_fault'
+  | 'workspace_held'
+  | 'effect_conflict';
 
 export interface CliSpawnRequest {
   readonly argv: readonly string[];
@@ -26,6 +34,15 @@ export interface CliSpawnRequest {
 
 export type CliSpawnResult =
   | {
+      readonly status: 'uncertain';
+      readonly invocation_id: string;
+      readonly reason: string;
+      readonly failure: CliSpawnFailure;
+      readonly stdout_tail: string;
+      readonly stderr_tail: string;
+      readonly duration_ms: number;
+    }
+  | {
       readonly status: 'completed';
       readonly exit: number;
       readonly stdout_truncated: boolean;
@@ -36,6 +53,8 @@ export type CliSpawnResult =
   | {
       readonly status: 'failed';
       readonly failure: CliSpawnFailure;
+      readonly held_by?: string;
+      readonly hint?: string;
       readonly stdout_tail: string;
       readonly stderr_tail: string;
       readonly duration_ms: number;
@@ -81,6 +100,7 @@ function cliAdapter(id: string, defaultArgv: readonly string[], options: CliGene
   const env_allow = Object.freeze([...(options.env_allow ?? [])]);
   return {
     id,
+    await_on_abort: true,
     async execute(call: GenerationCall): Promise<GenerationProviderResult> {
       const result = await options.spawn.run({
         argv,
@@ -104,7 +124,25 @@ function promptOnStdin(call: GenerationCall): string {
 }
 
 function toProvider(result: CliSpawnResult): GenerationProviderResult {
+  if (result.status === 'uncertain') {
+    return { status: 'uncertain', invocation_id: result.invocation_id, reason: result.reason };
+  }
   if (result.status === 'failed') {
+    if (result.failure === 'workspace_held' || result.failure === 'effect_conflict') {
+      return {
+        status: 'failed',
+        failure: {
+          code: result.failure,
+          retryable: false,
+          message:
+            result.hint ??
+            (result.failure === 'workspace_held'
+              ? 'cli generate workspace is held by an uncertain invocation; list and reconcile with examples/cli-generations.ts --store JOURNAL list | reconcile'
+              : 'cli generate effects conflict with another invocation'),
+          ...(result.held_by === undefined ? {} : { held_by: result.held_by }),
+        },
+      };
+    }
     if (result.failure === 'timeout') {
       return failed('timeout', 'cli generate timed out');
     }
@@ -113,6 +151,12 @@ function toProvider(result: CliSpawnResult): GenerationProviderResult {
     }
     if (result.failure === 'cancelled') {
       return failed('cancelled', 'cli generate cancelled');
+    }
+    if (result.failure === 'killed') {
+      return failed('unavailable', 'cli generate was killed');
+    }
+    if (result.failure === 'execution_fault') {
+      return failed('unavailable', 'cli generate execution failed');
     }
     return failed('unavailable', 'cli generate failed to spawn');
   }

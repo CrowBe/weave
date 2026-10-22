@@ -39,6 +39,18 @@ test('the base records are valid', () => {
   assert.equal(reason(goal), 'ok');
 });
 
+test('an uncertain inference attempt is a valid explicit disposition', () => {
+  assert.equal(
+    reason({
+      ...judgment,
+      kind: 'inference.attempt',
+      thread_id: null,
+      fields: { request_ref: 'req-9', routed_unit: 'cli.primary', attempt_no: 1, disposition: 'uncertain' },
+    }),
+    'ok',
+  );
+});
+
 test('mistyped envelope values are envelope, not id or sequence', () => {
   assert.equal(reason({ ...judgment, trace_id: 17 }), 'envelope');
   assert.equal(reason({ ...judgment, sequence: '4' }), 'envelope');
