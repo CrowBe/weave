@@ -164,6 +164,12 @@ export const FIELDS: { readonly [K in Kind]: Readonly<Record<string, Field>> } =
     failure: ref(isCode),
     latency_ms: met(isMetric),
   },
+  'capability.lifecycle': {
+    operation: req(ref(isCode)),
+    implementation: ref(isId),
+    event: req(ref(code('selected', 'admitted', 'revoked'))),
+    contract_rev: ref(nullable(isId)),
+  },
   'action.transition': {
     action_ref: req(ref(isId)),
     operation: req(ref(isCode)),

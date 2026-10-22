@@ -115,6 +115,12 @@ export interface KindFields {
     readonly failure?: string;
     readonly latency_ms?: number;
   };
+  readonly 'capability.lifecycle': {
+    readonly operation: string;
+    readonly implementation?: string;
+    readonly event: 'selected' | 'admitted' | 'revoked';
+    readonly contract_rev?: string | null;
+  };
   readonly 'action.transition': {
     readonly action_ref: string;
     readonly operation: string;
