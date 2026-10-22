@@ -24,7 +24,10 @@ import {
   judgeCriteria,
   judgeValidation,
   validationFromFixture,
-  type AcceptanceLine,
+  type AcceptancePredicate,
+  type CommandRecord,
+  type EvidenceRef,
+  type ProposedLine,
   type TaskConstraintDeclaration,
   type CriteriaDecision,
   type NoulFixture,
@@ -40,16 +43,11 @@ export interface FrozenTask {
   readonly id: string;
   readonly split: 'tune' | 'holdout';
   readonly task: string;
-  readonly proposed_lines: readonly AcceptanceLine[];
+  readonly proposed_lines: readonly ProposedLine[];
   readonly label_single_facts: readonly string[];
   readonly label_done: boolean;
   readonly artifacts: readonly { readonly artifact_id: string; readonly body: string }[];
-  readonly commands: readonly {
-    readonly command_id: string;
-    readonly argv: readonly string[];
-    readonly output: string;
-    readonly asked: boolean;
-  }[];
+  readonly commands: readonly CommandRecord[];
   readonly declaration: TaskConstraintDeclaration;
   readonly write_up: string;
   readonly fixture_criteria: NoulFixture;
@@ -68,6 +66,10 @@ export interface TaskScore {
   readonly label_done: boolean;
   readonly agent_stop: 'done' | 'not_done' | null;
   readonly malformed: boolean;
+  /** Acceptance facts that entered validation. */
+  readonly facts: number;
+  /** Of those, the facts whose predicate code decided without a Noul. */
+  readonly facts_decided_in_code: number;
 }
 
 export interface FrozenReport {
@@ -86,7 +88,11 @@ export interface FrozenReport {
     readonly single_facts: number;
     readonly validation_agrees: number;
     readonly disagreements: number;
+    readonly facts: number;
+    readonly facts_decided_in_code: number;
   };
+  /** `facts_decided_in_code / facts`, or null when no fact entered. A measure, not a score. */
+  readonly share_decided_in_code: number | null;
   readonly tasks: readonly TaskScore[];
   readonly disagreements: readonly TaskScore[];
 }
@@ -268,6 +274,7 @@ function offlineView(task: FrozenTask): PipelineView {
   if (criteria.malformed !== null) {
     return {
       entered: [],
+      decidedInCode: 0,
       disposition: 'malformed',
       malformed: true,
       lowConfidence: false,
@@ -288,6 +295,7 @@ function offlineView(task: FrozenTask): PipelineView {
 
 interface PipelineView {
   readonly entered: readonly string[];
+  readonly decidedInCode: number;
   readonly disposition: ValidationDisposition;
   readonly malformed: boolean;
   readonly lowConfidence: boolean;
@@ -296,6 +304,7 @@ interface PipelineView {
 function viewOf(criteria: CriteriaDecision, validation: ValidationDecision): PipelineView {
   return {
     entered: criteria.entered.map((line) => line.line_id),
+    decidedInCode: criteria.entered.filter((line) => line.predicate !== undefined).length,
     disposition: criteria.malformed !== null ? 'malformed' : validation.disposition,
     malformed: criteria.malformed !== null || validation.disposition === 'malformed',
     lowConfidence:
@@ -327,11 +336,15 @@ function scoreTask(task: FrozenTask, view: PipelineView, agentStop: FrozenTask['
     label_done: task.label_done,
     agent_stop: agentStop,
     malformed: view.malformed,
+    facts: view.entered.length,
+    facts_decided_in_code: view.decidedInCode,
   };
 }
 
 function reportOf(tasks: readonly TaskScore[]): FrozenReport {
   const disagreements = tasks.filter((task) => task.disagreement !== null);
+  const facts = tasks.reduce((sum, task) => sum + task.facts, 0);
+  const code = tasks.reduce((sum, task) => sum + task.facts_decided_in_code, 0);
   return {
     scoring_rule: SCORING_RULE,
     contract: ACCEPTANCE_LINE_CONTRACT,
@@ -348,7 +361,10 @@ function reportOf(tasks: readonly TaskScore[]): FrozenReport {
       single_facts: tasks.filter((task) => task.single_facts).length,
       validation_agrees: tasks.filter((task) => task.validation_agrees).length,
       disagreements: disagreements.length,
+      facts,
+      facts_decided_in_code: code,
     },
+    share_decided_in_code: facts === 0 ? null : code / facts,
     tasks,
     disagreements,
   };
@@ -396,30 +412,41 @@ function parseTask(raw: unknown, index: number): FrozenTask {
   };
 }
 
-function parseLine(raw: unknown, taskId: string): AcceptanceLine {
+/**
+ * Structure only. A frozen line may be vague, or carry a predicate on the
+ * wrong evidence kind: admission, not this loader, rejects those.
+ */
+function parseLine(raw: unknown, taskId: string): ProposedLine {
   if (!isRecord(raw)) throw new Error(`${taskId} has a line that is not an object`);
   const line_id = requiredString(raw['line_id'], `${taskId} line id`);
-  const fact = requiredString(raw['fact'], `${taskId} ${line_id} fact`);
   const escape = requiredString(raw['escape'], `${taskId} ${line_id} escape`);
-  const evidence = raw['evidence'];
-  if (!isRecord(evidence)) throw new Error(`${taskId} ${line_id} needs evidence`);
+  const evidence = parseEvidenceRef(raw['evidence'], `${taskId} ${line_id}`);
+  if (raw['predicate'] === undefined) {
+    return { line_id, fact: requiredString(raw['fact'], `${taskId} ${line_id} fact`), escape, evidence };
+  }
+  if (raw['fact'] !== undefined) throw new Error(`${taskId} ${line_id} carries both a fact and a predicate`);
+  return { line_id, predicate: parsePredicateShape(raw['predicate'], `${taskId} ${line_id}`), escape, evidence };
+}
+
+function parseEvidenceRef(evidence: unknown, label: string): EvidenceRef {
+  if (!isRecord(evidence)) throw new Error(`${label} needs evidence`);
   if (evidence['kind'] === 'artifact') {
-    return {
-      line_id,
-      fact,
-      escape,
-      evidence: { kind: 'artifact', artifact_id: requiredString(evidence['artifact_id'], `${taskId} ${line_id} artifact`) },
-    };
+    return { kind: 'artifact', artifact_id: requiredString(evidence['artifact_id'], `${label} artifact`) };
   }
   if (evidence['kind'] === 'command') {
-    return {
-      line_id,
-      fact,
-      escape,
-      evidence: { kind: 'command', command_id: requiredString(evidence['command_id'], `${taskId} ${line_id} command`) },
-    };
+    return { kind: 'command', command_id: requiredString(evidence['command_id'], `${label} command`) };
   }
-  throw new Error(`${taskId} ${line_id} evidence kind is unknown`);
+  throw new Error(`${label} evidence kind is unknown`);
+}
+
+function parsePredicateShape(raw: unknown, label: string): AcceptancePredicate {
+  if (isRecord(raw) && raw['kind'] === 'exit_status' && Number.isSafeInteger(raw['equals'])) {
+    return { kind: 'exit_status', equals: raw['equals'] as number };
+  }
+  if (isRecord(raw) && raw['kind'] === 'contains_literal' && typeof raw['literal'] === 'string') {
+    return { kind: 'contains_literal', literal: raw['literal'] };
+  }
+  throw new Error(`${label} predicate is not exit_status or contains_literal`);
 }
 
 function parseArtifacts(raw: unknown, taskId: string): FrozenTask['artifacts'] {
@@ -440,12 +467,16 @@ function parseCommands(raw: unknown, taskId: string): FrozenTask['commands'] {
       throw new Error(`${taskId} command is not a record`);
     }
     if (typeof item['asked'] !== 'boolean') throw new Error(`${taskId} command asked must be boolean`);
-    return {
+    const command = {
       command_id: requiredString(item['command_id'], `${taskId} command id`),
       argv: item['argv'] as readonly string[],
       output: stringField(item['output'], `${taskId} command output`),
       asked: item['asked'],
     };
+    const exit = item['exit'];
+    if (exit === undefined) return command;
+    if (exit !== null && !Number.isSafeInteger(exit)) throw new Error(`${taskId} command exit must be an integer or null`);
+    return { ...command, exit: exit as number | null };
   });
 }
 
