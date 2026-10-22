@@ -12,7 +12,7 @@ import {
   type ProvenanceRole,
   type WorkspaceView,
 } from '@weave/tapestry';
-import type { ApprovalRecord, Observation, ProvenanceKind, State, Trace, Validation } from '@weave/weave';
+import type { Observation, ProvenanceKind, State, Validation } from '@weave/weave';
 
 /** Most recent observations copied into one workspace view. */
 export const OBSERVATION_WINDOW = 24;
@@ -42,7 +42,8 @@ export interface DisclosurePolicy {
 /** Recorded Loom state. The binding does not accept a host or a locator table. */
 export interface LoomRead {
   state(): State;
-  trace(): Trace;
+  recentObservations(limit: number): { readonly observations: readonly Observation[]; readonly total: number };
+  approvalRequestSeq(request_id: string): number | undefined;
 }
 
 export interface ReadPort {
@@ -94,11 +95,11 @@ function causeOf(caused_by: Observation['caused_by']): number | string | null {
   return null;
 }
 
-function observationsOf(trace: Trace, omission: SliceOmission | undefined): Disclosure<DisclosedObservation> {
+function observationsOf(read: LoomRead, omission: SliceOmission | undefined): Disclosure<DisclosedObservation> {
   if (omission) return { status: 'omitted', reason: omission.reason };
-  const recent = trace.observations.slice(-OBSERVATION_WINDOW);
+  const recent = read.recentObservations(OBSERVATION_WINDOW);
   const items: DisclosedObservation[] = [];
-  for (const observation of recent) {
+  for (const observation of recent.observations) {
     const type = copyToken(observation.payload_type);
     if (!type) continue;
     items.push({
@@ -112,26 +113,11 @@ function observationsOf(trace: Trace, omission: SliceOmission | undefined): Disc
   return {
     status: 'disclosed',
     items,
-    truncated: trace.observations.length > OBSERVATION_WINDOW,
+    truncated: recent.total > OBSERVATION_WINDOW,
   };
 }
 
-function requestId(payload: unknown): string | null {
-  if (payload === null || typeof payload !== 'object' || !('request_id' in payload)) return null;
-  const id = payload.request_id;
-  return typeof id === 'string' ? id : null;
-}
-
-function sequenceFor(record: ApprovalRecord, observations: readonly Observation[]): number {
-  for (const observation of observations) {
-    if (observation.payload_type !== 'approval.requested') continue;
-    if (requestId(observation.payload) !== record.request_id) continue;
-    return observation.seq;
-  }
-  return record.evidence[0] ?? 0;
-}
-
-function approvalsOf(state: State, trace: Trace, omission: SliceOmission | undefined): Disclosure<DisclosedApproval> {
+function approvalsOf(state: State, read: LoomRead, omission: SliceOmission | undefined): Disclosure<DisclosedApproval> {
   if (omission) return { status: 'omitted', reason: omission.reason };
   const items: DisclosedApproval[] = [];
   for (const record of Object.values(state.approvals)) {
@@ -155,7 +141,7 @@ function approvalsOf(state: State, trace: Trace, omission: SliceOmission | undef
     }
     items.push({
       request_id,
-      sequence: sequenceFor(record, trace.observations),
+      sequence: read.approvalRequestSeq(record.request_id) ?? record.evidence[0] ?? 0,
       operation,
       contract_revision,
       destination,
@@ -219,15 +205,14 @@ export function openReadPort(input: {
     project_id: input.project.project_id,
     workspaceView() {
       const state = input.read.state();
-      const trace = input.read.trace();
       const project = availabilityOf(input.project, input.disclosure?.availability);
       const view: WorkspaceView = {
         id: WORKSPACE_VIEW_ID,
         revision: state.state_revision,
         project_name: project.project_name,
         availability: project.availability,
-        observations: observationsOf(trace, input.disclosure?.observations),
-        approvals: approvalsOf(state, trace, input.disclosure?.approvals),
+        observations: observationsOf(input.read, input.disclosure?.observations),
+        approvals: approvalsOf(state, input.read, input.disclosure?.approvals),
       };
       assertNoLocator(view, 'view');
       return view;
