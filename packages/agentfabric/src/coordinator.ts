@@ -40,6 +40,13 @@ export class ResourceCoordinator {
     return null;
   }
 
+  /** Recovery records existing effects; conflicting owners must all retain holds. */
+  restore(invocation_id: string, effects: readonly ResourceEffect[]): void {
+    for (const effect of effects) {
+      this.holds.push({ invocation_id, canonical_id: effect.resource, mode: effect.mode });
+    }
+  }
+
   release(invocation_id: string): void {
     for (let i = this.holds.length - 1; i >= 0; i -= 1) {
       if (this.holds[i]?.invocation_id === invocation_id) {

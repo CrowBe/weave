@@ -245,7 +245,7 @@ async function within<T>(ms: number, pending: Promise<T>, label: string): Promis
 
 describe('shell.run@1', () => {
   for (const fault of ['closed store', 'replaced lock'] as const) {
-    it(`keeps lookup unresolved after a completed shell run with ${fault} and releases its reservation`, async () => {
+    it(`keeps lookup unresolved after a completed shell run with ${fault} and retains its declared-write reservation`, async () => {
       const dir = mkdtempSync(join(tmpdir(), 'weave-shell-result-write-'));
       const path = join(dir, 'fabric.json');
       const store = FabricStore.open(path);
@@ -265,13 +265,13 @@ describe('shell.run@1', () => {
         if (fault === 'closed store') store.close();
         else writeFileSync(`${path}.lock`, `${process.pid}:replacement`);
         const before = readFileSync(path);
-        assert.deepEqual(await handle.result, { outcome: 'uncertain', reason: 'failed to persist invocation result' });
+        assert.deepEqual(await handle.result, { outcome: 'uncertain', reason: 'failed to persist invocation result; uncertain marker was not persisted' });
         assert.equal(host.shellTraces()[0]?.exit, 0, 'the shell operation completed');
         assert.equal(host.openCount(), 0);
         assert.deepEqual(host.lookup('shell-settle-invocation', issued), {
-          status: 'unresolved', reason: 'failed to persist invocation result',
+          status: 'unresolved', reason: 'failed to persist invocation result; uncertain marker was not persisted',
         });
-        assert.deepEqual(host.coordinator.held(), []);
+        assert.equal(host.coordinator.held().length, 1);
         assert.deepEqual(readFileSync(path), before);
       } finally {
         store.close();
