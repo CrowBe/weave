@@ -34,7 +34,7 @@ export class FabricWeft {
 
   private send(record_id: string | null, kind: string, parent_id: string | null, invocation: string | null, fields: Record<string, unknown>): void {
     this.sequence += 1;
-    this.port.emit({
+    deliver(this.port, {
       schema: 'weft.record@1',
       trace_id: this.port.trace_id,
       record_id: record_id ?? `${this.port.emitter_id}:event:${this.sequence}`,
@@ -94,3 +94,23 @@ export class FabricWeft {
     }
   }
 }
+
+/**
+ * Hand one record to the port. Emission is one-way: a throw is swallowed, a
+ * returned promise is never awaited and its rejection is handled.
+ */
+function deliver(port: WeftPort, record: WeftRecordShape): void {
+  try {
+    const result: unknown = port.emit(record);
+    if (result !== null && (typeof result === 'object' || typeof result === 'function')) {
+      const then = (result as { then?: unknown }).then;
+      if (typeof then === 'function') {
+        (then as (resolved: undefined, rejected: () => void) => unknown).call(result, undefined, ignore);
+      }
+    }
+  } catch {
+    // The sink's failure is the sink's: it never reaches state or scheduling.
+  }
+}
+
+function ignore(): void {}

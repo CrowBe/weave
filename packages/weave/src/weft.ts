@@ -71,7 +71,7 @@ export class LoomWeft {
     fields: Record<string, unknown>,
   ): void {
     this.sequence = Math.max(this.sequence + 1, seqHigh * SEQ_STRIDE);
-    this.port.emit({
+    deliver(this.port, {
       schema: 'weft.record@1',
       trace_id: this.port.trace_id,
       record_id,
@@ -269,3 +269,23 @@ function supersedeKey(started: ActionStartedPayload): string {
   }
   return `${started.operation}\u0000${resources.sort().join('\u0000')}`;
 }
+
+/**
+ * Hand one record to the port. Emission is one-way: a throw is swallowed, a
+ * returned promise is never awaited and its rejection is handled.
+ */
+function deliver(port: WeftPort, record: WeftRecordShape): void {
+  try {
+    const result: unknown = port.emit(record);
+    if (result !== null && (typeof result === 'object' || typeof result === 'function')) {
+      const then = (result as { then?: unknown }).then;
+      if (typeof then === 'function') {
+        (then as (resolved: undefined, rejected: () => void) => unknown).call(result, undefined, ignore);
+      }
+    }
+  } catch {
+    // The sink's failure is the sink's: it never reaches state or scheduling.
+  }
+}
+
+function ignore(): void {}
