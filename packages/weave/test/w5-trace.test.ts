@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { ActionResultPayload, ActionStartedPayload, Observation } from '@weave/weave';
-import { collector, runW5, TRACE_ID, w5World, type Rec } from './w5-fixture.js';
+import { collector, runW5, settleAsync, TRACE_ID, w5World, type Rec } from './w5-fixture.js';
 
 function byId(records: readonly Rec[]): Map<string, Rec> {
   const map = new Map<string, Rec>();
@@ -164,6 +164,25 @@ describe('W5 causal trace', () => {
     const superseded = loom.find((r) => r.thread_id === run.cancelled && r.fields['transition'] === 'superseded')!;
     assert.deepEqual(superseded.links, [{ rel: 'supersedes', record_id: `loom.main:thread:${run.superseding}:opened` }]);
     assert.equal(state.actions[run.superseding]?.candidate_id, state.actions[run.cancelled]?.candidate_id);
+  });
+
+  it('W5-T05b a second cancel request for the same thread is a second record, not a conflicting one', async () => {
+    const loom = collector();
+    const world = w5World({ loom: loom.sink });
+    await settleAsync(world);
+    const queued = Object.values(world.runtime.state().actions).find((a) => a.state === 'pending')!;
+    world.runtime.cancel(queued.action_id, 'operator cancel');
+    const again = world.runtime.operator.submit({
+      observation_id: `operator:cancel:${queued.action_id}:again`,
+      caused_by: null,
+      payload_type: 'action.cancel_requested',
+      payload_version: 1,
+      payload: { action_id: queued.action_id, reason: 'operator cancel, repeated' },
+    });
+    assert.equal(again.validation.status, 'accepted');
+    const cancels = loom.records.filter((r) => r.thread_id === queued.action_id && r.fields['transition'] === 'cancelled');
+    assert.equal(cancels.length, 2);
+    byId(loom.records);
   });
 
   it('W5-T06 the report joins every inspection thread it depends on', async () => {

@@ -50,6 +50,8 @@ export class LoomWeft {
   private sequence = 0;
   /** The candidate being dispatched, consumed by the action.queued/started record it produces. */
   private dispatching: Candidate | null = null;
+  /** The running cycle's record id. Loom may reuse a cycle number after recovery, so the id adds the trigger. */
+  private cycleRecord: string | null = null;
   /** Latest thread per operation and resources, revisions ignored: the thread a new dispatch supersedes. */
   private readonly latest = new Map<string, ActionId>();
 
@@ -83,6 +85,11 @@ export class LoomWeft {
       evidence,
       fields,
     });
+  }
+
+  /** A cycle has started; threads it dispatches are its children. */
+  cycleStarted(cycle_no: number, trigger: Seq): void {
+    this.cycleRecord = this.id(`cycle:${cycle_no}:${trigger}`);
   }
 
   /** Called by dispatch around recording the action: only a dispatch opens a thread. */
@@ -138,7 +145,8 @@ export class LoomWeft {
         if (!action) {
           break;
         }
-        this.send(seq, this.id(`thread:${action_id}:cancelled`), 'thread.transition', action_id, null,
+        // Each accepted cancel request is its own record: an operator may repeat one.
+        this.send(seq, this.id(`thread:${action_id}:cancelled:${seq}`), 'thread.transition', action_id, null,
           [{ rel: 'cancels', record_id: this.id(`thread:${action_id}:opened`) }], cite(), { transition: 'cancelled' });
         if (action.state === 'cancelled' && action.finished_at === seq) {
           this.transition(seq, action, 'cancelled');
@@ -199,10 +207,9 @@ export class LoomWeft {
 
   private openThread(seq: Seq, started: ActionStartedPayload, candidate: Candidate): void {
     const action_id = started.action_id;
-    const cycle = /^a:(\d+):/.exec(action_id);
     const opened = this.id(`thread:${action_id}:opened`);
     const evidence = [{ source: 'observation', ref: `seq:${seq}` }];
-    this.send(seq, opened, 'thread.transition', action_id, cycle ? this.id(`cycle:${cycle[1]}`) : null, [],
+    this.send(seq, opened, 'thread.transition', action_id, this.cycleRecord, [],
       [...evidence], { transition: 'opened' });
     if (candidate.dependencies.length > 0) {
       this.send(seq, this.id(`thread:${action_id}:joined`), 'thread.transition', action_id, null,
@@ -238,7 +245,7 @@ export class LoomWeft {
     if (record.weights_ref !== null && record.weights_ref !== trigger) {
       evidence.push({ source: 'observation', ref: `seq:${record.weights_ref}` });
     }
-    this.send(seqHigh, this.id(`cycle:${record.cycle_no}`), 'cycle.weighed', null, null, [], evidence, {
+    this.send(seqHigh, this.id(`cycle:${record.cycle_no}:${trigger}`), 'cycle.weighed', null, null, [], evidence, {
       cycle_no: record.cycle_no,
       state_revision: record.state_revision,
       procedure: record.procedure,

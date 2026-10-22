@@ -603,6 +603,7 @@ export class Runtime {
     const cycle_no = this.nextCycleNo();
     const state_revision = this.current.state_revision;
     const state = this.view();
+    this.weft?.cycleStarted(cycle_no, trigger);
 
     const formation = formCandidates(state, this.describe, (ref) =>
       this.replayMode ? ref : this.options.host.canonicalResource(ref),

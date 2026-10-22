@@ -137,4 +137,31 @@ describe('W5 crash and replay', () => {
     // Restored admissions are not reported again.
     assert.equal(fabric.records.some((r) => r.fields['event'] === 'admitted'), false);
   });
+
+  it('W5-T24 cycles after recovery never reuse a cycle record identity, though Loom may reuse the cycle number', async () => {
+    const live = collector();
+    const journal = new MemoryJournal();
+    const world = w5World({ loom: live.sink }, { journal });
+    await settleAsync(world);
+    for (let n = 1; n <= 3; n += 1) {
+      world.runtime.clock.submit({ observation_id: `clock:tick:${n}`, caused_by: null, payload_type: 'clock.tick', payload_version: 1, payload: { tick: n } });
+    }
+    const after = collector();
+    const recovered = recover(journal.snapshot(), stack({ loom: after.sink }, world.host.snapshot()));
+    for (let n = 4; n <= 6; n += 1) {
+      recovered.clock.submit({ observation_id: `clock:tick:${n}`, caused_by: null, payload_type: 'clock.tick', payload_version: 1, payload: { tick: n } });
+    }
+    const cyclesAfter = after.records.filter((r) => r.kind === 'cycle.weighed');
+    assert.ok(cyclesAfter.length >= 3);
+    const before = new Map(live.records.map((r) => [r.record_id, stableStringify(r)]));
+    for (const record of after.records) {
+      const prior = before.get(record.record_id);
+      assert.ok(prior === undefined || prior === stableStringify(record), `conflicting record ${record.record_id}`);
+    }
+    // Threads opened after recovery still name the cycle record that dispatched them.
+    const ids = new Set(after.records.map((r) => r.record_id));
+    for (const record of after.records) {
+      if (record.parent_id !== null) assert.ok(ids.has(record.parent_id), `${record.record_id} parent ${record.parent_id}`);
+    }
+  });
 });

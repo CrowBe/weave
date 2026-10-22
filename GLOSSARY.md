@@ -432,6 +432,10 @@ The composition root's permission to record content text inline in one Weft trac
 
 The function the composition root must supply before Weft serializes a record. It removes secrets and any content the trace may not hold. Weft validates its output and writes nothing it rejects. A redactor does not grant disclosure, and passing it is not evidence that a record is safe to show anyone.
 
+### Weft port
+
+What Loom, the inference gateway and a Fabric host each receive at composition to emit Weft records: a trace id, an emitter id and an `emit` function. Each package declares the port as its own type, so none imports Weft. Without a port nothing is emitted, and nothing attaches one ambiently. Emitting is one-way: a sink that fails, stalls or mutates what it receives changes no state, scheduling, budget or outcome, and replay emits nothing. Weft's `createWeftSink` redacts and validates every record before anything is written.
+
 ### Gauge
 
 The evaluation package, namespaced Weave Gauge. It turns Weft traces and other recorded evidence into evaluation results, comparisons and failure attributions. It produces evidence; promotion, admission and authority to execute remain separate decisions. It depends on the Weft contract only. The package is `packages/gauge`; its contract is `packages/gauge/src/GAUGE-CONTRACT.md`.

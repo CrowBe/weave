@@ -70,9 +70,12 @@ Weft (`packages/weft`) owns the `weft.record@1` trace contract and its
 fail-closed validator, and the P9 `weave.trace@1` envelope and importer port,
 which moved out of AgentSOP because tracing is not contract-layer meaning.
 A Weft trace is a non-authoritative projection for
-inspection and evaluation; Loom, Fabric and the gateway will emit to it through
-a port each receives at composition (W5), so Weft imports nothing in-repo and
-never reaches back into runtime, scheduling or capability-host concerns. Gauge
+inspection and evaluation; Loom, Fabric and the gateway emit to it through
+a Weft port each receives at composition (W5). Each package declares the port
+as its own type, so Weft imports nothing in-repo, none of them imports Weft,
+and Weft never reaches back into runtime, scheduling or capability-host
+concerns. Emission is one-way and replay emits nothing; Weave's tests may
+import Weft to validate what the stack emits, Weave's source may not. Gauge
 (`packages/gauge`) owns evaluation records and recomputes their verdicts. It
 depends on Weft's public contract only, never on Loom, Fabric, AgentSOP or the
 gateway, so an external consumer such as Agent University can use both without

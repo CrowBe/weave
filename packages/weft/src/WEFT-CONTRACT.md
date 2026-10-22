@@ -437,8 +437,10 @@ recovery is not opened a second time. Replay invokes
 neither the gateway nor the host, so they emit nothing either.
 
 **Identity and order.** Loom's record ids are derived from the log, so a run
-yields the same ids every time: `<emitter>:goal`, `<emitter>:cycle:<cycle_no>`,
-`<emitter>:thread:<action_id>:<transition>`,
+yields the same ids every time: `<emitter>:goal`,
+`<emitter>:cycle:<cycle_no>:<trigger seq>` (Loom may reuse a cycle number after
+recovery; the trigger keeps the id unique), `<emitter>:thread:<action_id>:<transition>`
+(`cancelled` adds the request's seq, since a cancel may be repeated),
 `<emitter>:action:<action_id>:<state>`, `<emitter>:judgment:<ref>` and
 `<emitter>:outcome:goal`. Loom's `sequence` is the highest observation seq
 times 1024 plus an offset, so it keeps increasing across recovery. Gateway and
@@ -453,12 +455,12 @@ of work, and `thread_id` is the action id.
 | Loom event | Records |
 | --- | --- |
 | `goal.opened` | `goal.intent`; `statement` is a `private` reference to the purpose's digest, never its text |
-| A cycle ends | `cycle.weighed` with every formed candidate. A `deferred` candidate (`frontier.weigh@1`) is `not_reached` |
+| A cycle ends | `cycle.weighed` with every formed candidate, cited as its candidate id with `#` written `:`. A `deferred` candidate (`frontier.weigh@1`) is `not_reached` |
 | An action is queued or started | `thread.transition` `opened` (parent: the cycle) and `action.transition` `pending` or `running`. A candidate with dependencies adds `joined`, with a `joins` link to each dependency thread's `closed` record. A thread that supersedes an earlier one adds `superseded` to the earlier thread |
 | A queued action starts | `action.transition` `running` |
 | `action.cancel_requested` | `thread.transition` `cancelled` with a `cancels` link to the thread's `opened` record, and `action.transition` `cancelled` if the action was still queued |
 | `action.result` | `action.transition` with the outcome, and `thread.transition` `closed` caused by it |
-| `weights.recorded` without a request, `inference.recorded` | `judgment` |
+| `weights.recorded` from a scripted decision layer, `inference.recorded` | `judgment`. A scripted weighing has no inference request, so its `request_ref` is the observation id (`weights:c<n>`) |
 | The goal completes or is missed | `outcome` for the goal |
 
 A dispatched action supersedes the latest earlier thread of the same operation
@@ -469,7 +471,8 @@ that took over. Joins, supersession and cancellation are always these links,
 never inferred from order or timing.
 
 **Gateway.** Each time a request routes to a unit other than the one before,
-the gateway emits `route.selected` with the exclusions behind it. An
+the gateway emits `route.selected` with the exclusions behind it (the first
+64, in routing order). An
 escalation `supersedes` the previous route and is `caused_by` the attempt that
 ended it. Every attempt emits `inference.attempt`, child of its route, with
 tokens, `spent_micros` (rounded up), `cost_is_upper_bound` and `latency_ms`
