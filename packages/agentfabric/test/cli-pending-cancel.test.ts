@@ -176,12 +176,70 @@ async function fixture(
     request,
     resume,
     reopen,
-    run: (ref = cwd_ref) => createGrantedCliSpawn({ host, authority }).run(request(ref)),
+    run: (ref = cwd_ref, signal?: AbortSignal) =>
+      createGrantedCliSpawn({ host, authority }).run({ ...request(ref), ...(signal ? { signal } : {}) }),
   };
 }
 
 describe('CLI cancellation before prepare', () => {
   for (const wait of ['recovery', 'startup check'] as const) {
+    it(`retains request.signal abort while awaiting ${wait}, without a durable record or spawn`, async (t) => {
+      const f = await fixture(t, wait);
+      const controller = new AbortController();
+      const pending = f.run(f.cwd_ref, controller.signal);
+      controller.abort();
+      f.resume();
+      const result = await pending;
+      assert.equal(f.spawn.mock.callCount(), 0);
+      assert.equal(result.status, 'failed');
+      if (result.status === 'failed') assert.equal(result.failure, 'cancelled');
+      assert.equal(f.store.getInvocation('shell-cli:0'), undefined);
+      assert.equal(f.host.coordinator.held().length, 0);
+      assert.equal(f.host.openCount(), 0);
+      await f.reopen();
+      assert.equal(f.store.getInvocation('shell-cli:0'), undefined);
+      assert.deepEqual(f.host.listUncertainCliGenerations(), []);
+    });
+
+    it(`keeps a concurrent generation unaffected by request.signal abort during ${wait}`, async (t) => {
+      const f = await fixture(t, wait);
+      const other = join(f.workspace, '..', 'other');
+      mkdirSync(other);
+      const other_ref = f.host.registerWorkspace(other);
+      const controller = new AbortController();
+      const first = f.run(f.cwd_ref, controller.signal);
+      const second = f.run(other_ref);
+      controller.abort();
+      f.resume();
+      const [cancelled, completed] = await Promise.all([first, second]);
+      assert.equal(cancelled.status, 'failed');
+      if (cancelled.status === 'failed') assert.equal(cancelled.failure, 'cancelled');
+      assert.equal(completed.status, 'completed');
+      assert.equal(f.spawn.mock.callCount(), 1);
+      assert.equal(f.store.getInvocation('shell-cli:0'), undefined);
+      assert.equal(f.store.getInvocation('shell-cli:1')?.status, 'committed');
+      assert.equal(f.host.coordinator.held().length, 0);
+    });
+
+    it(`removes the request.signal listener when ${wait} rejects`, async (t) => {
+      const f = await fixture(t, wait);
+      const controller = new AbortController();
+      const add = t.mock.method(controller.signal, 'addEventListener');
+      const remove = t.mock.method(controller.signal, 'removeEventListener');
+      const cancel = t.mock.method(f.host, 'requestCancel');
+      const pending = f.run(f.cwd_ref, controller.signal);
+      const rejected = assert.rejects(pending, /injected startup failure/);
+      f.gate.reject(new Error('injected startup failure'));
+      await rejected;
+      assert.equal(add.mock.callCount(), 1);
+      assert.equal(remove.mock.callCount(), 1);
+      assert.equal(remove.mock.calls[0]!.arguments[1], add.mock.calls[0]!.arguments[1]);
+      controller.abort();
+      assert.equal(cancel.mock.callCount(), 0);
+      assert.equal(f.spawn.mock.callCount(), 0);
+      assert.equal(f.host.coordinator.held().length, 0);
+    });
+
     for (const status of ['uncertain', 'running', 'committed', 'stopped'] as const) {
       it(`replays an existing ${status} record unchanged when cancelled during ${wait}`, async (t) => {
         const f = await fixture(t, wait, status);
@@ -296,6 +354,55 @@ describe('CLI cancellation before prepare', () => {
     });
   }
 
+  it('does not spawn or write a durable record when request.signal is already aborted', async (t) => {
+    const f = await fixture(t);
+    const controller = new AbortController();
+    controller.abort();
+    const result = await f.run(f.cwd_ref, controller.signal);
+    assert.equal(f.spawn.mock.callCount(), 0);
+    assert.equal(result.status, 'failed');
+    if (result.status === 'failed') assert.equal(result.failure, 'cancelled');
+    assert.equal(f.store.getInvocation('shell-cli:0'), undefined);
+    assert.equal(f.host.coordinator.held().length, 0);
+  });
+
+  for (const settlement of ['completed', 'cancelled', 'rejected'] as const) {
+    it(`removes the request.signal listener after ${settlement}, with no late effect on a later generation`, async (t) => {
+      const f = await fixture(t, settlement === 'cancelled' ? 'recovery' : undefined);
+      const controller = new AbortController();
+      const add = t.mock.method(controller.signal, 'addEventListener');
+      const remove = t.mock.method(controller.signal, 'removeEventListener');
+      const cancel = t.mock.method(f.host, 'requestCancel');
+      if (settlement === 'rejected') {
+        t.mock.method(f.authority, 'isValid', () => false, { times: 1 });
+      }
+      const pending = f.run(f.cwd_ref, controller.signal);
+      if (settlement === 'cancelled') {
+        controller.abort();
+        f.resume();
+      }
+      const result = await pending;
+      assert.equal(result.status, settlement === 'completed' ? 'completed' : 'failed');
+      assert.equal(add.mock.callCount(), 1);
+      assert.equal(remove.mock.callCount(), 1);
+      assert.equal(remove.mock.calls[0]!.arguments[1], add.mock.calls[0]!.arguments[1]);
+      const cancellations = cancel.mock.callCount();
+      // A cancelled, non-durable identity can be reused; a stale listener must
+      // not cancel it or mutate the record of an already completed invocation.
+      const id = settlement === 'cancelled' ? 'shell-cli:0' : 'shell-cli:later';
+      const later = await f.host.invokeCliGeneration(f.grant(id), f.request());
+      assert.equal(later.kind, 'handle');
+      if (later.kind !== 'handle') return;
+      const before = f.store.invocationRecords();
+      controller.abort();
+      assert.equal(cancel.mock.callCount(), cancellations);
+      assert.deepEqual(f.store.invocationRecords(), before);
+      f.host.release(id);
+      assert.equal((await later.result).outcome, 'succeeded');
+      assert.equal(f.host.coordinator.held().length, 0);
+    });
+  }
+
   it('retains cancellation of an allocated identity before invokeCliGeneration installs its placeholder', async (t) => {
     const f = await fixture(t);
     const id = f.host.nextCliGenerationId();
@@ -383,6 +490,7 @@ describe('CLI cancellation before prepare', () => {
 
   it('preserves the uncertain write hold when cancellation follows a confirmed spawn', async (t) => {
     const f = await fixture(t);
+    const controller = new AbortController();
     const started = deferred();
     const persist = f.store.persistCliGenerationStarted.bind(f.store);
     t.mock.method(f.store, 'persistCliGenerationStarted', (id: string, pgid: number) => {
@@ -392,10 +500,10 @@ describe('CLI cancellation before prepare', () => {
     const pending = createGrantedCliSpawn({ host: f.host, authority: f.authority }).run({
       ...f.request(),
       argv: [process.execPath, '-e', 'setInterval(() => {}, 1000)'],
+      signal: controller.signal,
     });
     await started.promise;
-    assert.deepEqual(f.host.requestCancel('shell-cli:0'), { acknowledged: true });
-    assert.deepEqual(f.host.requestCancel('shell-cli:0'), { acknowledged: true });
+    controller.abort();
     const result = await pending;
     assert.equal(result.status, 'uncertain');
     if (result.status === 'uncertain') assert.equal(result.reason, 'cancelled');

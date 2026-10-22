@@ -200,7 +200,10 @@ reservation; duplicate identities are rejected. Cancellation is also retained fo
 allocated CLI identities and placeholders while awaiting recovery or an uncertain
 startup check. Before preparation, a retained cancellation returns `cancelled`
 without spawning, writing an invocation record, or acquiring a workspace
-reservation. After preparation it seeds the ordinary pre-start cancellation path,
+reservation. A cancellation for an id with an existing durable record is not
+retained as pending: it marks that record `cancel_requested` (unless already
+reconciled), and the invocation continues to prepare/replay. After preparation
+it seeds the ordinary pre-start cancellation path,
 which settles stopped and releases its reservation without an uncertain marker.
 Completion, rejection and startup failure clear the placeholder, identity
 reservation and pending cancellation; later reuse cannot inherit that request.
