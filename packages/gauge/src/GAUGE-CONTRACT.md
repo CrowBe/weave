@@ -220,7 +220,10 @@ Rules:
 - **Deltas.** `delta` is candidate value minus baseline value, null when
   either is null. A non-null delta must carry an interval that contains it;
   uncertainty is part of the result. A null delta carries a null interval. Recomputation tolerates an absolute error
-  of 1e-9.
+  of 1e-9 on the value and each interval bound. The interval is recomputed
+  from the two bound measure intervals by the MOVER/Newcombe method pinned
+  under Producers; a narrower or wider claim is rejected with `measure`.
+  Non-null values without measure intervals are rejected with `measure`.
 - **Verdict** is recomputed in this order:
   1. `insufficient_evidence` if either result is, or no delta is non-null, or
      any non-null delta lacks evidence: `min_samples` applies to every
@@ -485,7 +488,9 @@ record they return has passed `validate`.
   routed unit or policy across re-evaluations, or change, to follow its
   versions. A step is a regression when its verdict is `candidate_worse`, or
   `bar_missed` after a result that met its bar. A track is evidence, not a
-  record, and promotes nothing.
+  record, and promotes nothing. Interpret `regression` together with the step
+  verdict: with `insufficient_evidence`, `regression: false` does not establish
+  that the subject has not regressed.
 
 `evaluateInfo(run, context)` builds a `gauge.result@2` for an info-only
 criteria set by the same binding, replay and envelope rules, with no interval;
