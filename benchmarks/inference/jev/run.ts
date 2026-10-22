@@ -181,7 +181,7 @@ export function readCredentials(
 export function describeRoutes(credentials: Credentials, options: RouteOptions): string {
   if (options.reference === true) return `routes: TypeSafe direct only (pinned ${JEV_REFERENCE_MODEL}, no fallback)`;
   if (credentials.vercel === undefined) return 'routes: TypeSafe direct only';
-  const free = `; free route ${options.preferFree ? 'preferred, throttles waited out' : 'escalates on throttle'}`;
+  const free = `; free route ${options.preferFree ? 'preferred, throttles waited out' : credentials.typesafe === undefined ? 'has no fallback' : 'escalates on throttle'}`;
   return credentials.typesafe === undefined
     ? `routes: Vercel AI Gateway only${free}`
     : `routes: Vercel AI Gateway first, then TypeSafe direct${free}`;
