@@ -621,3 +621,39 @@ an invalid complete line or conflict rejects that complete-line batch. Re-import
 with the repaired final line is idempotent. Blank complete lines are ignored.
 The legacy generic `importTraceLines` parser still rejects malformed lines;
 with a transactional port it submits all its validated rows as one batch.
+
+### Local OTLP/JSON intake
+
+`@weave/weft/intake` exports pure `mapOtlp(value, { redact })` and
+`intakeOtlp(value, store, { redact }, signal?)`. No listener or SQLite import
+runs in this module. Mapping is all-or-nothing and runs `serializeRecord` with
+no inline policy before returning records. Store admission repeats the boundary;
+composition-root redactors must therefore be deterministic and idempotent.
+SQLite additionally rejects credential markers anywhere in serialized records,
+including code fields. Arbitrary environment values require the composition
+root's redactor; Weft never reads the environment to discover secrets.
+
+W6 namespaced attributes reconstruct the Weft record, including semantic fields,
+links and evidence. Null envelope parents/threads and null candidate weights are
+restored; optional nulls become absent (the W6 loss rule). Native ids are checked
+against W6's derived OTLP identities; inconsistent or malformed attributes reject.
+Other attributes, resources, scopes, names, timing and status do not override
+native semantic fields. Unknown Weft schema versions reject.
+
+Generic OTLP spans require nonzero 32-hex trace and 16-hex span ids and valid
+optional parent ids. They project to `action.transition` with `otlp:`-prefixed
+ids, emitter `external/otlp.import`, operation `otlp.span`, sequence zero and
+state `failed` for OTLP ERROR, otherwise `succeeded`. This is a minimal import
+observation, not a claim about a Loom action or the source operation. Parents
+are retained; names, attributes, timing, resources, scopes, events and generic
+links are discarded. No provider, model, contract, thread or missing semantic
+provenance is invented. Provider-specific richer mappings remain future work.
+
+`createOtlpListener({ createServer, store, redact, host?, port?, maxBytes? })`
+requires a composition-root HTTP server factory. It defaults to `127.0.0.1`
+and an OS-selected local port; only literal `127.0.0.1` or `::1` are accepted.
+It exposes only POST `/v1/traces` with JSON, limits bodies (default 1 MiB),
+returns no input or error fragments, disables automatic response dates and
+propagates connection cancellation. Startup and shutdown return typed results.
+The composition root owns listener lifetime; there is no registration, collector,
+provider connection or ambient intake in core or benchmark routes.

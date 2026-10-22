@@ -7,7 +7,8 @@
   "exports": {
     ".": "./dist/src/index.js",
     "./otel": "./dist/src/otel.js",
-    "./sqlite": "./dist/src/sqlite.js"
+    "./sqlite": "./dist/src/sqlite.js",
+    "./intake": "./dist/src/sqlite-intake.js"
   },
   "files": [
     "dist"

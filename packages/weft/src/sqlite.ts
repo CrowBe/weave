@@ -1,6 +1,7 @@
 /** Optional local inspection store. Never a journal, scheduler or authority store. */
 import { DatabaseSync } from 'node:sqlite';
 import { scheduler } from 'node:timers/promises';
+import { hasCredential } from './credential.js';
 import { serializeRecord } from './serialize.js';
 import { serializeTrace, validateTrace } from './weave-trace.js';
 import type { TraceImportPort, TraceRecord, TraceWriteResult } from './weave-trace.js';
@@ -78,6 +79,7 @@ export function openTraceStore(path: string, options: TraceStoreOptions):
       } else {
         line = serializeRecord(input as WeftRecord, redact);
       }
+      if (hasCredential(line)) throw new Error('disclosure');
       const clean = JSON.parse(line) as TraceRecord | WeftRecord;
       const legacy = clean.schema === 'weave.trace@1';
       return { run: legacy ? clean.run_id : clean.trace_id, id: legacy ? clean.id : clean.record_id,
