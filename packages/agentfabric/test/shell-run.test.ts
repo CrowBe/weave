@@ -244,6 +244,43 @@ async function within<T>(ms: number, pending: Promise<T>, label: string): Promis
 }
 
 describe('shell.run@1', () => {
+  for (const fault of ['throw after execution', 'malformed outcome'] as const) {
+    it(`retains declared-write uncertainty for a shell ${fault}`, async () => {
+      const world = hostFor(undefined);
+      const { host, authority, cwd, dir } = world;
+      try {
+        if (fault === 'throw after execution') {
+          (host as unknown as { pushShellTrace(): void }).pushShellTrace = () => { throw new Error('trace fault'); };
+        } else {
+          (host as unknown as { performShell(): Promise<unknown> }).performShell = async () => undefined;
+        }
+        const inputs = shellInputs(cwd, [process.execPath, STUB, '--report']);
+        const issue = (id: string) => grant(authority, SHELL_RUN.id, cwd, id, ['process.spawn', `fs.write:${cwd}`]);
+        const issued = issue('fault');
+        const handle = host.invoke(issued, SHELL_RUN.id, inputs);
+        if (handle.kind !== 'handle') throw new Error('expected handle');
+        host.release('fault');
+        const result = await handle.result;
+        assert.equal(result.outcome, 'uncertain');
+        assert.equal(host.store.getInvocation('fault')?.status, 'uncertain');
+        assert.equal(host.coordinator.held().length, 1);
+        assert.equal(host.invoke(issue('conflict'), SHELL_RUN.id, inputs).kind, 'rejected');
+        const found = host.lookup('fault', issued);
+        assert.ok('status' in found);
+        assert.equal(found.status, 'unresolved');
+        const replay = host.invoke(issued, SHELL_RUN.id, inputs);
+        assert.equal(replay.kind, 'handle');
+        if (replay.kind === 'handle') assert.deepEqual(await replay.result, result);
+        assert.deepEqual(host.releaseAll(), []);
+        host.reconcile('fault', { resolution: 'not_committed', evidence: 'external audit' });
+        assert.equal(host.coordinator.held().length, 0);
+      } finally {
+        host.store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+
   for (const fault of ['closed store', 'replaced lock'] as const) {
     it(`keeps lookup unresolved after a completed shell run with ${fault} and retains its declared-write reservation`, async () => {
       const dir = mkdtempSync(join(tmpdir(), 'weave-shell-result-write-'));

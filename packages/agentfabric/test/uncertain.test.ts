@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { describe, it, type TestContext } from 'node:test';
 import { createGrantAuthority, type CapabilityContract, type InvocationOutcome } from '@weave/agentsop';
-import { AgentFabricHost, FabricStore, type ReconciliationResolution } from '@weave/agentfabric';
+import { AgentFabricHost, FabricStore, type ReconciliationResolution, type CapabilityImplementation } from '@weave/agentfabric';
 
 const write: CapabilityContract = {
   id: 'test.write', revision: '1', purpose: 'test uncertain effects',
@@ -33,7 +33,7 @@ function lookupStatus(host: AgentFabricHost, id: string, grant: Parameters<Agent
   return found.status;
 }
 
-function fixture(t: TestContext, contract = write) {
+function fixture(t: TestContext, contract = write, run?: CapabilityImplementation) {
   const dir = fs.mkdtempSync(join(tmpdir(), 'weave-uncertain-'));
   const path = join(dir, 'fabric.json');
   let store = FabricStore.open(path);
@@ -43,8 +43,9 @@ function fixture(t: TestContext, contract = write) {
   const target = host.registerDestination('mem:uncertain');
   let runs = 0;
   let complete!: (outcome: InvocationOutcome) => void;
-  const pending = new Promise<InvocationOutcome>((resolve) => { complete = resolve; });
-  host.installAdmitted(contract, () => { runs += 1; return pending; });
+  let reject!: (error: unknown) => void;
+  const pending = new Promise<InvocationOutcome>((resolve, no) => { complete = resolve; reject = no; });
+  host.installAdmitted(contract, (inputs, context) => { runs += 1; return run ? run(inputs, context) : pending; });
   const grant = (action_id = 'action') => authority.issue({ action_id, operation: contract.id,
     contract_rev: contract.revision, permissions: contract.permissions.map((effect) => ({ resource: target, mode: effect.mode })),
     effects: contract.effects.map((effect) => ({ resource: target, mode: effect.mode })), issued_at: 1 });
@@ -60,7 +61,7 @@ function fixture(t: TestContext, contract = write) {
     return host;
   };
   return { get host() { return host; }, get store() { return store; }, path, target, grant, originalGrant,
-    invoke, handle, complete, reopen, runs: () => runs };
+    invoke, handle, complete, reject, reopen, runs: () => runs };
 }
 
 async function assertReplay(f: ReturnType<typeof fixture>, expected: InvocationOutcome) {
@@ -73,6 +74,150 @@ async function assertReplay(f: ReturnType<typeof fixture>, expected: InvocationO
 }
 
 describe('uncertain invocation contract', () => {
+  const faults: Record<string, CapabilityImplementation> = {
+    'sync throw': () => { throw new Error('implementation fault'); },
+    'async throw': async () => { throw new Error('implementation fault'); },
+    'async reject': () => Promise.reject(new Error('implementation fault')),
+    'non-Error throw': () => { throw null; },
+    'malformed outcome': () => undefined as unknown as InvocationOutcome,
+    'malformed success': () => ({ outcome: 'succeeded', output: 1n }) as unknown as InvocationOutcome,
+    'malformed failure': () => ({ outcome: 'failed', failure: 42 }) as unknown as InvocationOutcome,
+  };
+  for (const contract of [write, read, discover, pure]) {
+    for (const [fault, run] of Object.entries(faults)) {
+      it(`${contract.id} ${fault} preserves settlement and reservations across restart`, async (t) => {
+        const f = fixture(t, contract, run);
+        f.host.release('action');
+        const result = await f.handle.result;
+        const writes = contract === write;
+        assert.equal(result.outcome, writes ? 'uncertain' : 'failed');
+        assert.equal(f.store.getInvocation('inv')?.status, writes ? 'uncertain' : 'stopped');
+        assert.equal(f.host.coordinator.held().length, writes ? 1 : 0);
+        assert.equal(lookupStatus(f.host, 'inv', f.originalGrant), writes ? 'unresolved' : 'stopped');
+        if (writes) {
+          assert.equal(f.invoke('conflict', f.grant('conflict')).kind, 'rejected');
+          await assertReplay(f, result);
+        }
+        f.reopen();
+        assert.equal(f.host.coordinator.held().length, writes ? 1 : 0);
+        assert.equal(lookupStatus(f.host, 'inv', f.originalGrant), writes ? 'unresolved' : 'stopped');
+        if (writes) {
+          await assertReplay(f, result);
+          assert.equal(f.invoke('conflict', f.grant('conflict')).kind, 'rejected');
+          reconcile(f.host, absent);
+          assert.equal(f.host.coordinator.held().length, 0);
+        }
+        const after = f.invoke('after', f.grant('after'));
+        assert.equal(after.kind, 'handle');
+        f.host.release('after');
+        if (after.kind === 'handle') assert.deepEqual(await after.result, succeeded);
+      });
+    }
+  }
+
+  for (const mode of ['create', 'append', 'delete', 'write'] as const) {
+    it(`a fault retains the entire read/${mode} reservation until reconciliation`, async (t) => {
+      const effects = [{ input: 'target', mode: 'read' as const }, { input: 'target', mode }];
+      const contract = { ...write, id: `test.read-${mode}`, effects, permissions: effects };
+      const f = fixture(t, contract, faults['async throw']);
+      const holds = structuredClone(f.host.coordinator.held());
+      f.host.release('action');
+      assert.equal((await f.handle.result).outcome, 'uncertain');
+      assert.deepEqual(f.host.coordinator.held(), holds);
+      f.reopen();
+      assert.deepEqual(f.host.coordinator.held(), holds);
+      assert.equal(f.invoke('conflict', f.grant('conflict')).kind, 'rejected');
+      reconcile(f.host, absent);
+      assert.deepEqual(f.host.coordinator.held(), []);
+    });
+  }
+
+  it('keeps a valid explicit failed outcome stopped even with declared writes', async (t) => {
+    const failed: InvocationOutcome = { outcome: 'failed', failure: 'known not committed' };
+    const f = fixture(t, write, () => failed);
+    f.host.release('action');
+    assert.deepEqual(await f.handle.result, failed);
+    assert.equal(f.store.getInvocation('inv')?.status, 'stopped');
+    assert.deepEqual(f.host.coordinator.held(), []);
+    f.reopen();
+    assert.equal(lookupStatus(f.host, 'inv', f.originalGrant), 'stopped');
+    assert.deepEqual(f.host.coordinator.held(), []);
+  });
+
+  for (const terminal of ['committed', 'uncertain', 'reconciled'] as const) {
+    it(`refuses another action before direct ${terminal} replay`, async (t) => {
+      const f = fixture(t);
+      f.host.release('action');
+      f.complete(terminal === 'committed' ? succeeded : uncertain);
+      await f.handle.result;
+      if (terminal === 'reconciled') reconcile(f.host, absent);
+      const other = f.grant('other');
+      const snapshot = f.store.snapshot();
+      const bytes = fs.readFileSync(f.path);
+      const holds = structuredClone(f.host.coordinator.held());
+      const result = f.invoke('inv', other);
+      assert.equal(result.kind, 'rejected');
+      if (result.kind === 'rejected') assert.equal(result.code, 'DENIED');
+      assert.deepEqual(f.store.snapshot(), snapshot);
+      assert.deepEqual(fs.readFileSync(f.path), bytes);
+      assert.deepEqual(f.host.coordinator.held(), holds);
+      assert.equal(f.host.authority.markInvoked(other), true);
+    });
+  }
+
+  for (const cancel of ['before reject', 'after reject', 'inside run'] as const) {
+    it(`settles a declared-write rejection once with concurrent invocations and cancellation ${cancel}`, async (t) => {
+      let f: ReturnType<typeof fixture>;
+      f = fixture(t, write, cancel === 'inside run' ? () => {
+        f.handle.requestCancel();
+        f.host.releaseAll();
+        throw new Error('implementation fault');
+      } : undefined);
+      let settlements = 0;
+      void f.handle.result.then(() => { settlements += 1; });
+      f.host.release('action');
+      f.host.release('action');
+      assert.equal(f.invoke().kind, 'rejected');
+      assert.equal(f.invoke('conflict', f.grant('conflict')).kind, 'rejected');
+      if (cancel === 'before reject') f.handle.requestCancel();
+      if (cancel !== 'inside run') f.reject(new Error('implementation fault'));
+      if (cancel === 'after reject') f.handle.requestCancel();
+      const result = await f.handle.result;
+      assert.equal(result.outcome, 'uncertain');
+      assert.equal(settlements, 1);
+      assert.equal(f.runs(), 1);
+      assert.equal(f.store.getInvocation('inv')?.cancel_requested, true);
+      const markers = fs.readFileSync(f.path, 'utf8').split('\n').filter((line) => line.includes('"op":"uncertain"'));
+      assert.equal(markers.length, 1);
+      assert.equal(f.host.coordinator.held().length, 1);
+      await assertReplay(f, result);
+      reconcile(f.host, absent);
+      assert.equal(f.host.coordinator.held().length, 0);
+    });
+  }
+
+  for (const fault of ['closed', 'lost lock'] as const) {
+    it(`failed reconciliation after a declared-write throw preserves state: ${fault}`, async (t) => {
+      const f = fixture(t, write, faults['sync throw']);
+      f.host.release('action');
+      assert.equal((await f.handle.result).outcome, 'uncertain');
+      const snapshot = f.store.snapshot();
+      const bytes = fs.readFileSync(f.path);
+      const lock = fs.readFileSync(`${f.path}.lock`);
+      if (fault === 'closed') f.store.close();
+      else fs.writeFileSync(`${f.path}.lock`, 'replacement');
+      assert.throws(() => reconcile(f.host, absent), /closed|lock/);
+      assert.deepEqual(f.store.snapshot(), snapshot);
+      assert.deepEqual(fs.readFileSync(f.path), bytes);
+      assert.equal(f.host.coordinator.held().length, 1);
+      assert.equal(f.invoke('conflict', f.grant('conflict')).kind, 'rejected');
+      if (fault === 'lost lock') fs.writeFileSync(`${f.path}.lock`, lock);
+      f.reopen();
+      reconcile(f.host, absent);
+      assert.equal(f.host.coordinator.held().length, 0);
+    });
+  }
+
   it('consumes a fresh replay grant after restart without granting another execution', async (t) => {
     const f = fixture(t);
     f.host.release('action'); f.complete(uncertain); await f.handle.result;
@@ -102,11 +247,13 @@ describe('uncertain invocation contract', () => {
     assert.equal(f.host.coordinator.held().length, 0);
   });
 
-  for (const point of ['marker before', 'marker partial', 'marker after',
+  const crashPoints = ['marker before', 'marker partial', 'marker after',
     'compact temp before', 'compact temp after', 'compact rename before', 'compact rename after',
     'reconcile before', 'reconcile partial', 'reconcile after',
-    'resolved compact rename before', 'resolved compact rename after']) {
-    it(`crash at ${point} recovers uncertainty or the durable resolution, never a rerun`, async (t) => {
+    'resolved compact rename before', 'resolved compact rename after'];
+  for (const [source, point] of ['result write failure', 'sync throw', 'async reject', 'malformed outcome']
+    .flatMap((source) => crashPoints.map((point) => [source, point] as const))) {
+    it(`${source}: crash at ${point} recovers uncertainty or the durable resolution, never a rerun`, async (t) => {
       const dir = fs.mkdtempSync(join(tmpdir(), 'weave-uncertain-crash-'));
       const path = join(dir, 'fabric.json');
       t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -115,13 +262,18 @@ describe('uncertain invocation contract', () => {
         import { createRequire, syncBuiltinESMExports } from 'node:module';
         import { createGrantAuthority } from '@weave/agentsop';
         import { AgentFabricHost, FabricStore } from '@weave/agentfabric';
-        const [path, point, encoded] = process.argv.slice(1);
+        const [path, point, encoded, source] = process.argv.slice(1);
         const contract = JSON.parse(encoded);
         const store = FabricStore.open(path);
         const authority = createGrantAuthority();
         const host = new AgentFabricHost({ authority, store, contracts: [contract] });
         const target = host.registerDestination('mem:crash');
-        host.installAdmitted(contract, () => ({ outcome: 'succeeded', output: { ok: true } }));
+        host.installAdmitted(contract, () => {
+          if (source === 'sync throw') throw new Error('implementation fault');
+          if (source === 'async reject') return Promise.reject(new Error('implementation fault'));
+          if (source === 'malformed outcome') return undefined;
+          return { outcome: 'succeeded', output: { ok: true } };
+        });
         const grant = authority.issue({ action_id: 'action', operation: contract.id, contract_rev: '1',
           permissions: [{ resource: target, mode: 'write' }], effects: [{ resource: target, mode: 'write' }], issued_at: 1 });
         const handle = host.invoke(grant, contract.id, { target }, { invocation_id: 'inv' });
@@ -139,7 +291,7 @@ describe('uncertain invocation contract', () => {
           return originalWrite(...args);
         };
         syncBuiltinESMExports();
-        store.persistResult = false;
+        store.persistResult = source !== 'result write failure';
         host.release('action'); await handle.result;
         if (point.startsWith('reconcile ') || point.startsWith('resolved ')) {
           host.reconcile('inv', { resolution: 'not_committed', evidence: 'external audit' });
@@ -163,7 +315,7 @@ describe('uncertain invocation contract', () => {
         syncBuiltinESMExports();
         store.compact();
         throw new Error('crash injection was not reached');
-      `, path, point, JSON.stringify(write)], { encoding: 'utf8', timeout: 10_000 });
+      `, path, point, JSON.stringify(write), source], { encoding: 'utf8', timeout: 10_000 });
       assert.equal(child.status, 86, child.stderr || String(child.error));
       const store = FabricStore.open(path);
       t.after(() => store.close());
@@ -185,6 +337,7 @@ describe('uncertain invocation contract', () => {
       if (!resolved) reconcile(host, absent);
     });
   }
+
 
   for (const contract of [write, read, discover, pure]) {
     for (const failedResult of [false, true]) {

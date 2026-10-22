@@ -480,7 +480,7 @@ describe('AgentFabric host authority', () => {
     const writes = host.resourceAccesses.filter((a) => a.operation === 'write').length;
 
     const grant2 = authority.issue({
-      action_id: 'a:9:1',
+      action_id: grant.action_id,
       operation: REPORT_PUBLISH.id,
       contract_rev: REPORT_PUBLISH.revision,
       permissions: grant.permissions,
@@ -496,7 +496,7 @@ describe('AgentFabric host authority', () => {
 
     const changed = { ...inputs, expected_revision: 99 };
     const grant3 = authority.issue({
-      action_id: 'a:9:2',
+      action_id: grant.action_id,
       operation: REPORT_PUBLISH.id,
       contract_rev: REPORT_PUBLISH.revision,
       permissions: grant.permissions,
@@ -1140,6 +1140,24 @@ describe('Fabric store indexes', () => {
   }
 
   for (const status of ['stopped', 'uncertain', 'running'] as const) {
+    it(`refuses a different action before ${status} receipt reconciliation or replay`, async (t) => {
+      const f = await publicationReplayFixture(t, status);
+      const other = publishGrant(f.authority, f.inputs.sources[0]!, f.inputs.destination, 'other-action', 1);
+      const snapshot = f.store.snapshot();
+      const bytes = readFileSync(f.path);
+      const holds = structuredClone(f.host.coordinator.held());
+      const result = f.host.invoke(other, REPORT_PUBLISH.id, f.inputs, f.options);
+      assert.equal(result.kind, 'rejected');
+      if (result.kind === 'rejected') assert.equal(result.code, 'DENIED');
+      assert.deepEqual(f.store.snapshot(), snapshot);
+      assert.deepEqual(readFileSync(f.path), bytes);
+      assert.deepEqual(f.host.coordinator.held(), holds);
+      assert.equal(f.runs(), 0);
+      assert.equal(f.authority.markInvoked(other), true, 'denial must not consume the unrelated grant');
+    });
+  }
+
+  for (const status of ['stopped', 'uncertain', 'running'] as const) {
     it(`re-invokes a ${status} publication from its durable receipt without a new grant or run`, async (t) => {
       const f = await publicationReplayFixture(t, status);
       const cost = f.host.measuredCostMicros();
@@ -1350,7 +1368,7 @@ describe('Fabric store indexes', () => {
       assert.equal(restarted.getInvocation('inv-coalesce-restart')?.measured_cost_micros, cost);
       const authority = createGrantAuthority();
       const host = new AgentFabricHost({ authority, store: restarted });
-      const grant = publishGrant(authority, source, destination, 'a:coalesce:3', 2);
+      const grant = publishGrant(authority, source, destination, 'a:coalesce:2', 2);
       const retried = host.invoke(grant, REPORT_PUBLISH.id, publishInput(source, destination), {
         invocation_id: 'inv-coalesce-restart',
       });

@@ -1,4 +1,4 @@
-# Uncertain invocation recovery (WV-035, DEC-015)
+# Uncertain invocation recovery (WV-035, WV-035b, DEC-015)
 
 An invocation that may have produced effects is never inferred stopped from a
 missing result. Start records retain canonical effect scopes before execution.
@@ -6,6 +6,17 @@ An uncertain result, including a failed result write, attempts a validated,
 journalled uncertain mutation. If that append fails, the settled in-memory entry
 remains authoritative for this host; recovery treats the interrupted start as
 uncertain. Neither case permits repeating the invocation id.
+
+When an admitted implementation or shell operation throws synchronously, rejects
+asynchronously, or returns a malformed outcome, declared writes mean the outcome
+is uncertain: execution may already have produced effects. The host attempts the
+same durable uncertain marker and retains the entire reservation until
+reconciliation. An explicit, valid failed outcome keeps its existing stopped
+semantics. With no declared writes, implementation faults and malformed outcomes
+still settle stopped and release the reservation. Cancellation racing a fault
+records the cancellation request but cannot turn uncertainty into stopped or
+settle the invocation twice. Re-invoking an uncertain id, including after restart,
+replays the outcome without running the implementation again.
 
 Uncertainty retains the entire reservation when any declared effect is create,
 write, append or delete. With only read/discover effects, or no effects, it
@@ -45,6 +56,9 @@ API is synchronous, so cancellation requested before reconciliation begins is
 retained; cancellation during reconciliation cannot overwrite the terminal
 resolution or cancel recording an observed fact. Re-invocation only
 replays an uncertain or reconciled outcome and never renews a single-use grant.
+The invocation id belongs to its recorded action: prepare, like lookup, refuses a
+grant naming another action before replay, receipt reconciliation, or consuming
+the grant.
 
 Assumption: evidence and committed output supplied by the trusted host owner
 accurately describe the external outcome; Fabric validates and records them but
