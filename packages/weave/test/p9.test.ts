@@ -336,6 +336,36 @@ test('crash after generate before D6 reuses the paid report and gets a fresh dis
   assert.deepEqual(await runAuditLoop(f.input, ports, f.journal), recovered);
   assert.equal(calls.prompts.length, 1); assert.equal(calls.states.length, 2);
 });
+test('crash after a paid generation but before its report checkpoint does not pay again without explicit resume (#165)', async () => {
+  const f = fixture({ max: 1, ceilings: [1000, 1000] });
+  const { gateway, calls } = replayGateway();
+  const ports: AuditPorts = { ...f.ports, generate: gateway.generate, evaluate: gateway.evaluate };
+  const checkpoint = f.journal.checkpoint.bind(f.journal);
+  f.journal.checkpoint = entry => {
+    if (entry.report) throw new Error('crash before durable report checkpoint');
+    checkpoint(entry);
+  };
+  await assert.rejects(runAuditLoop(f.input, ports, f.journal), /crash before durable report checkpoint/);
+  f.journal.checkpoint = checkpoint;
+  assert.equal(calls.prompts.length, 1);
+  const intent = f.journal.loadCheckpoint('audit1', 1);
+  assert.equal(intent?.report, null);
+  assert.equal(intent?.dispatched, 'audit1:r1:audit');
+  const recovered = await runAuditLoop(f.input, { ...ports,
+    observe: async () => { assert.fail('recovery reuses the checkpointed observation'); } }, f.journal);
+  assert.equal(recovered.outcome, 'audit_unconfirmed');
+  assert.equal(recovered.goal_done, false);
+  assert.equal(recovered.report, null);
+  assert.equal(calls.prompts.length, 1, 'recovery must not repeat a possibly paid generation implicitly');
+  assert.deepEqual(await runAuditLoop(f.input, ports, f.journal), recovered);
+  assert.deepEqual(replayAuditLoop(f.journal.load('audit1')), recovered);
+  assert.equal(calls.prompts.length, 1);
+  const resumed = await runAuditLoop({ ...f.input, resume: true }, ports, f.journal);
+  assert.equal(resumed.outcome, 'done');
+  assert.equal(resumed.round, 1, 'the pause does not consume an audit round');
+  assert.equal(calls.prompts.length, 2, 'explicit resume authorizes the new generation');
+  assert.equal(f.observes(), 2, 'explicit resume captures fresh input');
+});
 test('crash recovery retains checkpoint evidence and rejects a changed live revision before D6', async () => {
   const f = fixture({ gaps: 1 });
   const checkpoint = f.journal.checkpoint.bind(f.journal);
@@ -453,7 +483,7 @@ for (const phase of ['observe', 'generate', 'D6'] as const) {
     assert.equal(evaluates, phase === 'D6' ? 1 : 0);
     assert.equal(f.journal.load(f.input.execution_id).length, 0);
     // Return a fresh defer disposition on recovery, rather than the aborted fix_now.
-    const resumed = await runAuditLoop({ ...f.input, resume: true }, { ...f.ports,
+    const recover = () => runAuditLoop({ ...f.input, resume: true }, { ...f.ports,
       observe: async () => (await fixture().ports.observe([])),
       evaluate: async (request, signal) => {
         const result = await f.ports.evaluate(request, signal);
@@ -461,6 +491,13 @@ for (const phase of ['observe', 'generate', 'D6'] as const) {
         return { ...result, answers: { finding_0: { type: 'choice', choice: 'defer', probabilities: { defer: 1 } } } } as unknown as typeof result;
       },
     }, f.journal);
+    if (phase === 'generate') {
+      // The aborted generation's outcome was never recorded, so it may have been paid (#165).
+      const unconfirmed = await recover();
+      assert.equal(unconfirmed.outcome, 'audit_unconfirmed');
+      assert.equal(f.generates(), 1, 'recovery records the pause before any further spend');
+    }
+    const resumed = await recover();
     assert.equal(resumed.outcome, 'done');
     assert.equal(resumed.round, 1);
     if (phase === 'D6') assert.equal(f.generates(), 1, 'checkpointed generation must not be re-spent');
@@ -623,13 +660,19 @@ test('abort during resume observation, generation or D6 preserves pre-abort evid
     assert.deepEqual(await runAuditLoop(f.input, ports, f.journal), paused);
     assert.deepEqual(f.journal.load('audit1'), before);
     cancelled = false;
-    const recovered = await runAuditLoop({ ...f.input, resume: true }, { ...f.ports,
+    const recover = () => runAuditLoop({ ...f.input, resume: true }, { ...f.ports,
       evaluate: async (request, signal) => {
         const result = await f.ports.evaluate(request, signal);
         assert.equal(result.status, 'accepted');
         return { ...result, answers: { finding_0: { type: 'choice', choice: 'defer', probabilities: { defer: 1 } } } } as unknown as typeof result;
       },
     }, f.journal);
+    if (phase === 'generate') {
+      const unconfirmed = await recover();
+      assert.equal(unconfirmed.outcome, 'audit_unconfirmed'); assert.equal(unconfirmed.round, 1);
+      assert.equal(f.generates(), 1, 'an unrecorded generation is not repeated implicitly (#165)');
+    }
+    const recovered = await recover();
     assert.equal(recovered.outcome, 'done'); assert.equal(recovered.round, 1);
     assert.equal(f.generates(), phase === 'generate' ? 2 : 1);
   }
@@ -933,3 +976,33 @@ test('criterion proof: fresh green checks after an audit fix complete a check-pr
   assert.equal(result.outcome, 'done');
   assert.equal(result.goal_done, true);
 });
+
+// #151: implementation-step open issues are disclosed audit context; completion reads the evidence behind them.
+function implementationIssueObservation(red: boolean, evalPassed: boolean) {
+  return { revision, state: assembleAuditState({ authorized_slices: AUDIT_SLICES, iteration: 2,
+    goal: { goal_id: 'goal1', statement: 'goal', revision: 1, authority_scope: [],
+      success_criteria: [{ criterion_id: 'c1', statement: 'passes', check_ids: ['repo.test'] }] },
+    source_revisions: { goal: 1 },
+    checks: [{ check_id: 'repo.test', argv_digest: 'abc', passed: !red, exit: red ? 1 : 0, tail: '' }],
+    evals: [iterationEval('c1', 2, evalPassed)],
+    open_issues: [
+      { issue_id: 'exec-1:open', source: 'check', text: 'Deterministic checks failed.', severity: 'blocker' },
+      { issue_id: 'exec-2:open', source: 'eval', text: 'Output evaluation failed for the listed criteria.', severity: 'blocker' },
+    ],
+  }) };
+}
+for (const [name, red, evalPassed, expected] of [
+  ['current green evidence completes although an earlier step blocker is still listed', false, true, 'done'],
+  ['a check blocker holds the goal open through its red check evidence', true, true, 'evidence_missing'],
+  ['an eval blocker holds the goal open through its current failing D5 evidence', false, false, 'evidence_missing'],
+] as const) {
+  test(`implementation open issues are not completion predicates (#151): ${name}`, async () => {
+    const f = fixture();
+    const observed = implementationIssueObservation(red, evalPassed);
+    assert.deepEqual(observed.state.open_issues.map(issue => issue.source), ['check', 'eval']);
+    const result = await runAuditLoop(f.input, { ...f.ports, observe: async () => observed }, f.journal);
+    assert.equal(result.outcome, expected);
+    assert.equal(result.goal_done, expected === 'done');
+    assert.deepEqual(result.open_issues, [], 'the loop carries only audit fix_now issues');
+  });
+}

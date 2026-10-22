@@ -26,6 +26,17 @@ records `goal:statement_cap`, `criterion:<id>:statement_cap`,
 `plan:<step_id>:intent_cap`, `decision:<zero-based-index>:<field>_cap`, or
 `issue:<id>:text_cap`, respectively. Omission markers are sorted and
 de-duplicated. The digest is computed after all text bounds and omissions.
+As for check tails, an existing lone surrogate in any of these prefixes (and in
+artifact summaries) is replaced with U+FFFD before measuring, so bounded text
+is well-formed; a repaired field records its cap marker.
+
+A marker names an item by its id (criterion, plan step, issue, check or
+disclosed artifact) only when that id is a bounded identifier: 1 to 128
+characters of `[A-Za-z0-9_.:-]`, starting alphanumeric, without a credential
+prefix. Any other id is named `@<zero-based index>` within its list (disclosed
+artifacts, for artifact markers), for example `criterion:@2:statement_cap`.
+Markers therefore stay bounded and never copy a long or credential-shaped id;
+the item keeps its id unchanged.
 
 Check tails retain the longest suffix of whole code points within 240 UTF-8
 bytes, preserving the end of the output. Existing lone surrogates are replaced
@@ -67,6 +78,20 @@ for `judgment` criteria. Assembly does not admit
 proofs. The goal slice is policy-supplied state like `check_ids`, and the
 observation owner must copy the implementation step's admitted `proofs`
 (`admitCriterionProof`), never a proposed value.
+
+Open issues in the `open_issues` slice are disclosed context for the audit,
+not completion predicates (#151). This is intentional. An implementation-step
+`open_issue@1` (`source: 'check' | 'eval'`) summarizes evidence that the
+completion rule already reads: its red check vetoes through the `checks` slice,
+and its failing criterion vetoes through a current failing eval or a missing
+current pass. Completion therefore never trusts an issue in place of evidence,
+and a blocker from an earlier iteration whose evidence is now current and green
+does not hold the goal open. The audit may raise a finding from a listed issue,
+and D6 decides whether it is `fix_now`. The loop carries only the audit's
+`fix_now` issues. The observation owner must project each step's check and D5
+evidence, with its producing iteration, into `checks` and `evals`; dropping a
+red check from the slice would hide it from completion whether or not its issue
+is listed.
 
 The current iteration is the one in the checkpointed observation, not the
 audit round number. Iteration and evals are captured and recovered together;
@@ -160,6 +185,24 @@ provider guarantee for a crash between provider completion and the durable
 checkpoint: request-id reuse alone cannot prevent another charge. Any external
 reconciliation belongs to the inference port; the current gateway does not
 implement an outcome cache or idempotency protocol.
+
+## Dispatch intent (#165)
+
+Immediately before the strong `audit.generate` call, the loop checkpoints the
+round's capture with `dispatched` set to that call's request id. The accepted
+report checkpoint replaces it. Recovery that loads a capture with `dispatched`
+and no report does not dispatch again: the call may have completed and been
+paid, and its outcome was never recorded. It appends a round with outcome
+`audit_unconfirmed`, keeping the capture's digest and pending open issues,
+with no report or disposal. The outcome is a pause: replay returns it, and only
+an explicit `resume: true` continues, in the same round. Like every pause
+resumption, that captures fresh input under a distinct request id, so the
+re-spend is an explicit decision rather than a side effect of recovery. A
+cancellation, budget, authority, decision-outage or no-progress stop observed
+first still wins, and a new resumption's capture carries no intent. An abort
+after dispatch writes nothing further, so it also recovers as
+`audit_unconfirmed`. The intent cannot recover the lost outcome; only
+request-id reconciliation in the inference port could, and none exists.
 
 ## Pause precedence
 

@@ -258,14 +258,19 @@ generates once at the routed tier, then each configured `repo.test`,
 issuer, supplied by the composition root and not by a decision answer, returns
 a fresh equally-scoped grant per attempt and per check. `createEqualGrantIssuer`
 copies that scope from a `GrantAuthority` grant it holds and refuses any other
-object. The step does not invoke a wider grant and does not consume the
+object. It names each fresh grant `<held action_id>:g<n>` and mints at most
+`limit` per held grant (default `retries + 2` for the default retries), one
+issuer per step run. The step does not invoke a wider grant and does not consume the
 template. A decision answer cannot mint a grant. The step then runs D5. Check
-evidence is `{ check_id, argv_digest, exit, passed, tail, artifacts }`. Eval
+evidence is `{ check_id, argv_digest, exit, passed, tail, artifacts, invocation_id }`. Eval
 evidence is `{ criterion_id, verdict_probability, confidence, passed }`. A red
 check fails the attempt even when D5 passes. The step retries the same tier up
 to N times (default 2), then escalates one tier once, never past the D2 ceiling.
-A budget downgrade stays at or below the requested tier. A budget pause or a
-blocked escalation does not mint a grant and does not complete the goal.
+A budget downgrade stays at or below the requested tier. Escalation is one tier above the
+routed (input) tier, not above a budget-lowered tier. A downgrade of the
+escalated tier stops the step with an open issue; a budget pause, at escalation
+or not, is a resumable paused attempt. A budget pause or a
+blocked escalation does not mint a grant and does not complete the goal. A D5 outage (every judged criterion `decision_unavailable`) pauses the attempt with that reason instead of failing it, so it spends no retry and not the escalation.
 `goal_done` is false. The terminal blocker is `open_issue@1`:
 
 ```text
@@ -275,14 +280,18 @@ blocked escalation does not mint a grant and does not complete the goal.
 
 Finished attempts are `impl.attempt@1` records under one `execution_id`, linked
 by `id` and `parentId`, appended before the next attempt. A stop is
-`impl.stop@1` and carries the open issue. A torn final line is repaired on
-load and append: an unparseable tail is truncated, and a complete record
+`impl.stop@1` and carries the open issue. A torn final line is repaired on the
+first load or append: an unparseable tail is truncated, and a complete record
 missing its newline is terminated, so a finished attempt is not lost and the
-journal stays loadable. Replay reads that journal and does not call a provider.
+journal stays loadable. `FileAttemptJournal` fsyncs each append, reads and
+repairs the file once per instance, and fails closed if another writer changed
+the file since its last read or write. One writer per journal file is assumed;
+the check detects a second writer and is not a lock. Replay reads that journal and does not call a provider. Replay of an unfinished
+journal reports `unfinished` with no open issue, not `failed`.
 Generate text is not stored on the attempt; the step keeps a `gen_` digest ref.
 Env values are not inputs to this step.
 
-Each accepted generation run gets a fresh opaque check-run identity, combined with the full generated-text digest in every check invocation id. Recovery may regenerate an unfinished attempt, but its checks must execute again: neither a different output nor identical text from a workspace-editing backend may reuse committed checks from a prior generation run. The execution id and attempt number remain stable; finished attempts are still skipped. Check evidence belongs to that generation run and its recorded `gen_` artifact. Generate backends are responsible for applying workspace edits; the step does not apply generated text. This assumes a single writer controls the workspace during generation and checks.
+Each generation run takes a fresh opaque value from the injected `runId` port, as time comes from `now`; Loom draws no ambient entropy (`checks/no-ambient-entropy.mjs`). A 128-bit digest over that value and the full generated-text digest is the check-run identity in every check invocation id, `<execution>:a<N>:<check-run>:<check_id>`. Each check record keeps the host's `invocation_id` (null when the host rejected the check or reported an unbounded id). Every step-built id keeps its readable `<execution><suffix>` form within the 128-character correlation limit; a longer one uses a bounded execution prefix plus the full execution digest, as audit request ids do. The port must not repeat a value for one execution, including across restarts, and an invalid value stops the step before generation. Recovery may regenerate an unfinished attempt, but its checks must execute again: neither a different output nor identical text from a workspace-editing backend may reuse committed checks from a prior generation run. The execution id and attempt number remain stable; finished attempts are still skipped. Check evidence belongs to that generation run and its recorded `gen_` artifact. Generate backends are responsible for applying workspace edits; the step does not apply generated text. This assumes a single writer controls the workspace during generation and checks.
 
 ## Local intake provider
 
@@ -344,8 +353,9 @@ so two consecutive rule-decided `stalled` rounds still stop as `no_progress`.
 
 The journal also checkpoints the detached tidy-state observation before generation
 and its accepted report before D6. Recovery reuses that report instead of
-repeating the strong call; a crash before the report checkpoint may repeat the
-read-only call. File durability is supplied through the journal port; the included
+repeating the strong call; after a crash before the report checkpoint, a durable
+dispatch intent stops recovery as a resumable `audit_unconfirmed` pause instead
+of calling again (see AUDIT-CONTRACT.md). File durability is supplied through the journal port; the included
 memory journal is a fixture. Observe owns normal implementation dispatch under
 existing policy and grants, and supplies completed issue fix-attempt counts;
 an issue's repeated appearance alone is not proof that a fix was attempted.
