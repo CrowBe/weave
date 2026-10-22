@@ -58,8 +58,8 @@ function span(r: WeftRecord): Obj {
 
 /** All-or-nothing batch. Only the redacted, validated snapshot is ever mapped. */
 export function exportOtlp(records: unknown, options: OtlpOptions): OtlpResult {
-  if (!Array.isArray(records)) return { ok: false, reason: 'input' };
   try {
+    if (!Array.isArray(records)) return { ok: false, reason: 'input' };
     const traces = new Map<string, Map<string, { record: WeftRecord; line: string }>>();
     for (const raw of records) {
       const line = serializeRecord(raw as WeftRecord, options.redact, options.inline);

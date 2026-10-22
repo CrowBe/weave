@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { exportOtlp, createOtlpExporter } from '../src/otel.js';
 import type { Redactor } from '@weave/weft';
 
@@ -72,4 +73,46 @@ test('one-way writes contain sync throws and async rejections; interleaved trace
   let called = false;
   await createOtlpExporter({ redact: keep, write: () => { called = true; } }).export([{}]);
   assert.equal(called, false);
+});
+
+test('inline export follows the exact W4 trace/class/digest/credential boundary', () => {
+  const text = 'ENV-CONTENT-CANARY-032';
+  const digest = 'sha256:' + createHash('sha256').update(text).digest('hex');
+  const goal = { ...record(), kind: 'goal.intent', fields: {
+    goal_ref: 'goal', statement: { content_class: 'private', digest, text },
+  } };
+  assert.deepEqual(exportOtlp([goal], { redact: keep }), { ok: false, reason: 'disclosure' });
+  const options = { redact: keep, inline: { trace_id: 'trace', classes: ['private'] as const } };
+  const allowed = exportOtlp([goal], options);
+  assert.ok(allowed.ok && allowed.json.includes(text));
+  assert.deepEqual(exportOtlp([{ ...goal, trace_id: 'other' }], options), { ok: false, reason: 'disclosure' });
+  for (const secret of ['sk-secret', 'ghp_secret', 'Bearer private', 'AKIAsecret']) {
+    const value = { ...goal, fields: { ...goal.fields, statement: {
+      content_class: 'private', digest: 'sha256:' + createHash('sha256').update(secret).digest('hex'), text: secret,
+    } } };
+    assert.deepEqual(exportOtlp([value], options), { ok: false, reason: 'disclosure' });
+  }
+  assert.deepEqual(exportOtlp([goal], { ...options, redact: () => { throw Error(text); } }), { ok: false, reason: 'disclosure' });
+});
+
+test('interleaved batches group traces without inferring links from matching evidence', () => {
+  const a = record('same', 'a');
+  const b = record('same', 'b');
+  const second = { ...record('second', 'a'), sequence: 1, parent_id: 'same' };
+  const result = JSON.parse(json([b, second, a]));
+  const groups = result.resourceSpans;
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groups.map((g: { scopeSpans: { spans: unknown[] }[] }) => g.scopeSpans[0]!.spans.length), [2, 1]);
+  assert.ok(groups[0].scopeSpans[0].spans.every((s: { traceId: string }) => s.traceId === groups[0].scopeSpans[0].spans[0].traceId));
+  assert.notEqual(groups[0].scopeSpans[0].spans[0].traceId, groups[1].scopeSpans[0].spans[0].traceId);
+  assert.deepEqual(groups[1].scopeSpans[0].spans[0].links, []);
+  assert.deepEqual(exportOtlp([{ ...b, parent_id: 'second' }, a, second], { redact: keep }), { ok: false, reason: 'incomplete' });
+  const max = JSON.parse(json([{ ...a, sequence: Number.MAX_SAFE_INTEGER }]));
+  assert.equal(max.resourceSpans[0].scopeSpans[0].spans[0].startTimeUnixNano, '9007199254740992');
+});
+
+test('malformed revoked proxy input cannot throw across the export boundary', () => {
+  const { proxy, revoke } = Proxy.revocable([], {});
+  revoke();
+  assert.deepEqual(exportOtlp(proxy, { redact: keep }), { ok: false, reason: 'disclosure' });
 });

@@ -510,7 +510,7 @@ not removed from Weft.
 ### W6 export boundary
 
 `@weave/weft/otel` is an optional entry point, with no third-party runtime
- dependency. The core entry point never imports it. `exportOtlp(records,
+dependency. The core entry point never imports it. `exportOtlp(records,
 { redact, inline? })` accepts a batch of `weft.record@1` values and returns
 `{ ok: true, json }` or `{ ok: false, reason }`, without throwing. Every
 record passes through `serializeRecord` before mapping; one rejection rejects
