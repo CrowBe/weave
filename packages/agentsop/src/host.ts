@@ -91,6 +91,13 @@ export interface InferCall {
 
 export type InferResult =
   | {
+      readonly status: 'uncertain';
+      readonly invocation_id: string;
+      readonly reason: string;
+      readonly attempts: readonly unknown[];
+      readonly spent: number;
+    }
+  | {
       readonly status: 'accepted';
       readonly output: unknown;
       readonly attempts: readonly unknown[];

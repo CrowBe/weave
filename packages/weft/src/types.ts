@@ -99,7 +99,7 @@ export interface KindFields {
     readonly request_ref: string;
     readonly routed_unit: string;
     readonly attempt_no: number;
-    readonly disposition: 'accepted' | 'unaccepted' | 'failed';
+    readonly disposition: 'accepted' | 'unaccepted' | 'failed' | 'uncertain';
     readonly input_tokens?: number;
     readonly output_tokens?: number;
     readonly spent_micros?: number;

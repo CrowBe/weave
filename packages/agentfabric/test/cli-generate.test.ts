@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { createGrantAuthority, type GrantAuthority } from '@weave/agentsop';
+import { createGrantAuthority, type GrantAuthority, type InvocationOutcome } from '@weave/agentsop';
 import { AgentFabricHost, createGrantedCliSpawn } from '@weave/agentfabric';
 import {
   claudePrintAdapter,
@@ -173,17 +173,17 @@ describe('stub CLI generate adapters', () => {
       });
     });
 
-    it(`${name} maps a stub timeout to a typed failure`, async () => {
+    it(`${name} reports a reconciled stub timeout as a failure`, async () => {
       const pidFile = join(tmpdir(), `weave-p7-${name}-${process.pid}.pid`);
       try {
-        await withAdapter(factory, ['--sleep', pidFile], 700, [], async (adapter) => {
+        await withAdapter(factory, ['--sleep', pidFile], 700, [], async (adapter, host) => {
           const result = await adapter.execute(generation());
           assert.equal(result.status, 'failed');
-          if (result.status !== 'failed') {
-            return;
-          }
+          if (result.status !== 'failed') return;
           assert.equal(result.failure.code, 'timeout');
           assert.equal(result.failure.message.includes(PROMPT), false);
+          assert.equal(host.snapshot().invocations[0]?.reconciliation?.resolution, 'not_committed');
+          assert.equal(host.coordinator.held().length, 0);
         });
       } finally {
         rmSync(pidFile, { force: true });
@@ -191,7 +191,7 @@ describe('stub CLI generate adapters', () => {
     });
   }
 
-  it('a failed spawn carries the redacted tails and duration recorded in its trace', async () => {
+  it('a failed execution carries the redacted tails and duration recorded in its trace', async () => {
     await withAdapter(codexExecAdapter, [], 5_000, [], async (_adapter, host, cwd, dir, authority) => {
       const spawn = createGrantedCliSpawn({ host, authority });
       const pidFile = join(dir, 'partial.pid');
@@ -209,7 +209,9 @@ describe('stub CLI generate adapters', () => {
       const cancelled = await pending;
       const cancelledTrace = host.shellTraces().at(-1);
       assert.deepEqual(cancelled, {
-        status: 'failed',
+        status: 'uncertain',
+        invocation_id: cancelledTrace?.id,
+        reason: 'cancelled',
         failure: 'cancelled',
         stdout_tail: 'partial-out:[redacted]\n',
         stderr_tail: 'partial-err\n',
@@ -217,6 +219,14 @@ describe('stub CLI generate adapters', () => {
       });
       assert.ok(cancelled.duration_ms > 0);
       assert.equal(JSON.stringify(cancelled).includes(CANARY), false);
+      assert.ok(cancelledTrace);
+      assert.equal(
+        host.reconcile(cancelledTrace.id, {
+          resolution: 'not_committed',
+          evidence: 'stub completed no workspace writes',
+        }).status,
+        'stopped',
+      );
 
       const signalled = await spawn.run({
         argv: [process.execPath, STUB, '--signal'],
@@ -227,13 +237,49 @@ describe('stub CLI generate adapters', () => {
       });
       assert.deepEqual(signalled, {
         status: 'failed',
-        failure: 'spawn_failed',
+        failure: 'killed',
         stdout_tail: '',
         stderr_tail: 'stub-signalled\n',
         duration_ms: host.shellTraces().at(-1)?.duration_ms,
       });
+      assert.equal(host.snapshot().invocations.at(-1)?.reconciliation?.resolution, 'not_committed');
+      assert.equal(host.coordinator.held().length, 0);
     });
   });
+
+  for (const [reason, failure] of [
+    ['shell_timeout', 'timeout'],
+    ['shell_cancelled', 'cancelled'],
+    ['shell_killed', 'killed'],
+    ['shell_execution_fault', 'execution_fault'],
+  ] as const) {
+    it(`preserves ${reason} when replay has no in-memory shell trace`, async () => {
+      const outcome: InvocationOutcome = { outcome: 'uncertain', reason };
+      const host = {
+        nextCliGenerationId: () => 'shell-replay',
+        invokeCliGeneration: () => ({
+          kind: 'handle',
+          invocation_id: 'shell-replay',
+          result: Promise.resolve(outcome),
+        }),
+        release: () => undefined,
+        shellTraces: () => [],
+      } as unknown as AgentFabricHost;
+      const spawn = createGrantedCliSpawn({ host, authority: createGrantAuthority() });
+      assert.deepEqual(
+        await spawn.run({ argv: ['stub'], cwd_ref: 'ref_ws', env_allow: [], timeout_ms: 1000, stdin: '' }),
+        {
+          status: 'uncertain',
+          invocation_id: 'shell-replay',
+          reason,
+          failure,
+          stdout_tail: '',
+          stderr_tail: '',
+          duration_ms: 0,
+        },
+      );
+    });
+  }
 
   it('redacts a canary injected for the codex adapter', async () => {
     await withAdapter(codexExecAdapter, ['--leak'], 5_000, ['CANARY'], async (adapter, host) => {

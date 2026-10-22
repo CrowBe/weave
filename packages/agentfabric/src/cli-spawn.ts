@@ -4,7 +4,7 @@
  * a grant and cannot be passed here: only GrantAuthority.issue produces one.
  */
 import type { GrantAuthority, InvocationOutcome } from '@weave/agentsop';
-import type { CliSpawn, CliSpawnRequest, CliSpawnResult } from '@weave/gateway/cli-generate';
+import type { CliSpawn, CliSpawnFailure, CliSpawnRequest, CliSpawnResult } from '@weave/gateway/cli-generate';
 import type { AgentFabricHost } from './host.js';
 import { SHELL_RUN } from './shell-contracts.js';
 import type { ShellTraceRecord } from './shell.js';
@@ -14,10 +14,9 @@ export function createGrantedCliSpawn(options: {
   readonly authority: GrantAuthority;
   readonly issued_at?: number;
 }): CliSpawn {
-  let seq = 0;
   return {
     async run(request: CliSpawnRequest): Promise<CliSpawnResult> {
-      const action_id = `shell-cli:${seq++}`;
+      const action_id = options.host.nextCliGenerationId();
       const grant = options.authority.issue({
         action_id,
         operation: SHELL_RUN.id,
@@ -27,7 +26,7 @@ export function createGrantedCliSpawn(options: {
         process_effects: ['process.spawn', `fs.write:${request.cwd_ref}`],
         issued_at: options.issued_at ?? 0,
       });
-      const invoked = options.host.invoke(grant, SHELL_RUN.id, {
+      const invoked = await options.host.invokeCliGeneration(grant, {
         argv: [...request.argv],
         cwd_ref: request.cwd_ref,
         env_allow: [...request.env_allow],
@@ -35,9 +34,26 @@ export function createGrantedCliSpawn(options: {
         stdin: request.stdin,
       });
       if (invoked.kind === 'rejected') {
+        const conflict = invoked.workspace_conflict;
+        const reconciliation =
+          invoked.code === 'RESOLVER_ERROR' && invoked.reason.startsWith('operation requires reconciliation');
         return {
           status: 'failed',
-          failure: invoked.code === 'DENIED' ? 'denied' : 'spawn_failed',
+          failure: reconciliation
+            ? 'workspace_held'
+            : conflict
+              ? conflict.uncertain
+                ? 'workspace_held'
+                : 'effect_conflict'
+              : invoked.code === 'DENIED'
+                ? 'denied'
+                : 'spawn_failed',
+          ...(conflict ? { held_by: conflict.invocation_id } : {}),
+          ...(reconciliation || conflict?.uncertain
+            ? {
+                hint: 'List and reconcile workspace holds with examples/cli-generations.ts --store JOURNAL list | reconcile --invocation ID --resolution not_committed --evidence TEXT [--force-with-evidence].',
+              }
+            : {}),
           stdout_tail: '',
           stderr_tail: '',
           duration_ms: 0,
@@ -56,12 +72,12 @@ export function createGrantedCliSpawn(options: {
       options.host.release(action_id);
       try {
         const outcome = await invoked.result;
-        // A failed outcome carries only its failure; the redacted tails and duration are in the trace.
+        // Failure and uncertainty outcomes carry their reason; redacted tails and duration stay in the trace.
         const trace = options.host
           .shellTraces()
           .filter((record) => record.id === invoked.invocation_id && record.parentId === null)
           .at(-1);
-        return mapShellOutcome(outcome, trace);
+        return mapShellOutcome(outcome, trace, invoked.invocation_id);
       } finally {
         request.signal?.removeEventListener('abort', cancel);
       }
@@ -69,7 +85,11 @@ export function createGrantedCliSpawn(options: {
   };
 }
 
-function mapShellOutcome(outcome: InvocationOutcome, trace: ShellTraceRecord | undefined): CliSpawnResult {
+function mapShellOutcome(
+  outcome: InvocationOutcome,
+  trace: ShellTraceRecord | undefined,
+  invocation_id: string,
+): CliSpawnResult {
   if (outcome.outcome === 'succeeded' && isShellOutput(outcome.output)) {
     return {
       status: 'completed',
@@ -80,17 +100,40 @@ function mapShellOutcome(outcome: InvocationOutcome, trace: ShellTraceRecord | u
       duration_ms: outcome.output.duration_ms,
     };
   }
-  const failure = outcome.outcome === 'failed' ? outcome.failure : null;
+  const failure =
+    outcome.outcome === 'failed' ? outcome.failure : outcome.outcome === 'uncertain' ? outcome.reason : null;
   return {
-    status: 'failed',
-    failure:
-      failure === 'timeout' || failure === 'denied' || failure === 'spawn_failed' || failure === 'cancelled'
-        ? failure
-        : 'spawn_failed',
+    ...(outcome.outcome === 'uncertain'
+      ? { status: 'uncertain' as const, invocation_id, reason: outcome.reason }
+      : { status: 'failed' as const }),
+    failure: shellFailure(failure) ?? shellFailure(trace?.failure ?? null) ?? 'execution_fault',
     stdout_tail: trace?.stdout_tail ?? '',
     stderr_tail: trace?.stderr_tail ?? '',
     duration_ms: trace?.duration_ms ?? 0,
   };
+}
+
+function shellFailure(reason: string | null): CliSpawnFailure | undefined {
+  switch (reason) {
+    case 'shell_timeout':
+    case 'timeout':
+      return 'timeout';
+    case 'shell_cancelled':
+    case 'cancelled':
+      return 'cancelled';
+    case 'shell_killed':
+    case 'killed':
+      return 'killed';
+    case 'shell_execution_fault':
+    case 'execution_fault':
+      return 'execution_fault';
+    case 'denied':
+      return 'denied';
+    case 'spawn_failed':
+      return 'spawn_failed';
+    default:
+      return undefined;
+  }
 }
 
 function isShellOutput(value: unknown): value is {

@@ -15,7 +15,7 @@ issued.
 input    { argv, cwd_ref, env_allow, timeout_ms, stdin? }
 output   { exit, stdout_tail, stdout_truncated, stderr_tail, duration_ms, artifacts }
 effects  process.spawn, fs.write:<cwd_ref>
-failures timeout | denied | spawn_failed | cancelled
+failures timeout | denied | spawn_failed | cancelled | killed | execution_fault
 ```
 
 `argv` is spawned directly (`shell: false`). There is no interpolation.
@@ -62,8 +62,9 @@ Descendant limits:
   still held, which narrows the window in which an emptied group's id could be
   reused.
 
-`cancelled` is the failure when the invocation is cancelled. It is not a
-timeout. A missing executable is `spawn_failed`. A process that runs and
+`cancelled` is the interruption reason when the invocation is cancelled.
+After spawn, declared writes make that outcome uncertain until reconciliation;
+before spawn it is a stopped failure. A missing executable is `spawn_failed`. A process that runs and
 returns a status, including a nonzero status, is a succeeded invocation
 whose `exit` is that status.
 
@@ -88,25 +89,36 @@ fixed vendor argv is the default (`['codex', 'exec']`, `['claude', '-p']`,
 `['grok']`). The prompt, including instructions, is the stdin body. The
 model id is not an argument. The adapter does not spawn. It calls a
 `CliSpawn` port. `createGrantedCliSpawn` is the composition-root
-implementation: one `GrantAuthority.issue` and one `host.invoke` per call.
+implementation: one `GrantAuthority.issue` and one host CLI invocation per call.
+The current shell and derived repo contract revision is `r2`; stored `r1`
+records remain readable.
 
 Exit status and spawn failures map onto the gateway's existing provider
 failures:
 
-| Spawn result             | Provider failure                                                   |
-| ------------------------ | ------------------------------------------------------------------ |
-| `timeout`                | `timeout`                                                          |
-| `cancelled`              | `cancelled`                                                        |
-| `denied`                 | `unauthorized`                                                     |
-| `spawn_failed`           | `unavailable`                                                      |
-| exit nonzero             | `unavailable` (`exited N`)                                         |
-| exit 0, stdout truncated | `unavailable` (`cli generate stdout was truncated`), non-retryable |
-| exit 0, stdout intact    | completed text is the full stdout body, with `stop`                |
+| Spawn result                                                                      | Provider failure                                                                |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| after-start timeout, cancellation, kill, or execution fault with workspace writes | explicit `uncertain` status with invocation id and reason; no retry or fallback |
+| before-start cancellation                                                         | `cancelled`                                                                     |
+| `denied`                                                                          | `unauthorized`                                                                  |
+| `spawn_failed`                                                                    | `unavailable`                                                                   |
+| uncertain workspace reservation                                                   | `workspace_held`, with `held_by` invocation id                                  |
+| active effect conflict                                                            | `effect_conflict`, with `held_by` invocation id                                 |
+| exit nonzero                                                                      | `unavailable` (`exited N`)                                                      |
+| exit 0, stdout truncated                                                          | `unavailable` (`cli generate stdout was truncated`), non-retryable              |
+| exit 0, stdout intact                                                             | completed text is the full stdout body, with `stop`                             |
 
 A failed spawn result carries the redacted tails and `duration_ms` from that
 invocation's `shell.trace@1` record, because a failed invocation outcome
 carries only its failure. A grant rejection before any spawn carries empty
 tails and `duration_ms: 0`.
+
+CLI generations keep the workspace write reservation when uncertain. The host
+records a before-snapshot durably and safely reconciles an unchanged workspace
+at startup; changed or uninspectable workspaces retain uncertainty. Operators can
+list and reconcile through `examples/cli-generations.ts`. See
+[UNCERTAIN-CONTRACT.md](../packages/agentfabric/UNCERTAIN-CONTRACT.md) for the
+durable gate, command syntax and snapshot assumptions.
 
 Tests drive stub scripts. They do not execute the real `codex`, `claude`,
 or `grok` binaries and they do not use the network.

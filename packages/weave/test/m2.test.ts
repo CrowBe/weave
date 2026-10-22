@@ -90,6 +90,26 @@ async function frameThenInspect(s: ReturnType<typeof novelScenario>): Promise<vo
 }
 
 describe('M2 novel request', () => {
+  it('records generation uncertainty with its invocation identity without accepting an answer', async () => {
+    const generate = generateAdapter('fixture.generate', [
+      {
+        status: 'uncertain',
+        invocation_id: 'cli-cancelled-1',
+        reason: 'cancelled',
+      },
+    ]);
+    const s = novelScenario({ generate });
+    await frameThenInspect(s);
+    const recorded = observationsOfType(s.runtime.trace(), 'inference.recorded').find(
+      (observation) => (observation.payload as { status: string }).status === 'uncertain',
+    );
+    assert.ok(recorded);
+    assert.equal(recorded.validation.status, 'accepted');
+    assert.equal((recorded.payload as { invocation_id?: string }).invocation_id, 'cli-cancelled-1');
+    assert.equal(s.runtime.state().proposal, null);
+    assert.equal(generate.calls, 1);
+  });
+
   it('M2-T01 novel goal frames then reports', async () => {
     const s = novelScenario();
     const c1 = lastCycle(s);
@@ -381,6 +401,57 @@ describe('M2 novel request', () => {
 });
 
 describe('M2 resolver inference port', () => {
+  it('preserves uncertainty and invocation identity returned to a resolver', async () => {
+    const authority = createGrantAuthority();
+    const contract: CapabilityContract = {
+      id: 'infer.uncertain',
+      revision: 'r1',
+      purpose: 'infer with effects',
+      input: {},
+      output: {},
+      effects: [],
+      permissions: [],
+      failures: [],
+      depends_on: [],
+      inference: {
+        kind: 'transform',
+        role: 'working',
+        max_cost: 100,
+        destinations: [LOCAL_DESTINATION],
+        max_attempts: 2,
+      },
+    };
+    const host = new AgentFabricHost({
+      authority,
+      contracts: [contract],
+      gateway: {
+        async generate() {
+          return {
+            status: 'uncertain',
+            invocation_id: 'cli-cancelled-1',
+            reason: 'cancelled',
+            request_id: 'r1',
+            site: 'test',
+            attempts: [],
+            spent: 0,
+            uncertainty: [],
+          };
+        },
+        async evaluate() {
+          throw new Error('unused');
+        },
+      },
+    });
+    const result = await host.resolverContext(contract).infer!({
+      kind: 'transform',
+      role: 'working',
+      input: { prompt: 'hello' },
+      terms: { cost_ceiling: 50, destinations: [LOCAL_DESTINATION], max_attempts: 1, deadline: 100 },
+    });
+    assert.equal(result.status, 'uncertain');
+    assert.equal(result.invocation_id, 'cli-cancelled-1');
+  });
+
   it('M2-T11 contract inference limits are enforced', async () => {
     const authority = createGrantAuthority();
     const generate = generateAdapter('fixture.generate', [completedText('ok')]);

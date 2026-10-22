@@ -188,7 +188,7 @@ export const FIELDS: { readonly [K in Kind]: Readonly<Record<string, Field>> } =
     request_ref: req(ref(isId)),
     routed_unit: req(ref(isId)),
     attempt_no: req(met(isCount)),
-    disposition: req(ref(code('accepted', 'unaccepted', 'failed'))),
+    disposition: req(ref(code('accepted', 'unaccepted', 'failed', 'uncertain'))),
     input_tokens: met(isCount),
     output_tokens: met(isCount),
     spent_micros: met(isCount),

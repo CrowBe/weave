@@ -9,6 +9,7 @@ export {
   type PublishReceipt,
   type ReconciliationResolution,
   type ReconciliationResult,
+  type UncertainCliGeneration,
 } from './host.js';
 export { FabricLifecycle } from './lifecycle.js';
 export type { WeftPort, WeftRecordShape } from './weft.js';

@@ -258,7 +258,9 @@ export interface InferenceRecordedPayload {
   readonly request_id: string;
   readonly attempts: readonly InferenceAttemptRecord[];
   readonly spent: number;
-  readonly status: 'accepted' | 'unaccepted' | 'blocked';
+  readonly status: 'accepted' | 'unaccepted' | 'blocked' | 'uncertain';
+  /** Invocation retaining effects when generation did not settle conclusively. */
+  readonly invocation_id?: string;
   readonly reason: string | null;
 }
 

@@ -3,6 +3,7 @@
  * Repo argv is not part of the contract input. The host supplies it from config.
  */
 import type { CapabilityContract, EffectSelector, ProcessEffectSelector } from '@weave/agentsop';
+import { SHELL_FAILURES } from './shell.js';
 
 const WRITE_CWD: readonly EffectSelector[] = [{ input: 'cwd_ref', mode: 'write' }];
 
@@ -20,11 +21,9 @@ const SHELL_OUTPUT: CapabilityContract['output'] = {
   artifacts: 'ResourceRef[]',
 };
 
-const SHELL_FAILURES = ['timeout', 'denied', 'spawn_failed', 'cancelled'] as const;
-
 export const SHELL_RUN: CapabilityContract = {
   id: 'shell.run@1',
-  revision: 'r1',
+  revision: 'r2',
   purpose: 'Spawn one process from an argument vector in a granted workspace, without a shell',
   input: {
     argv: 'string[]',
@@ -50,7 +49,7 @@ const REPO_INPUT: CapabilityContract['input'] = {
 function repoContract(id: string, purpose: string): CapabilityContract {
   return {
     id,
-    revision: 'r1',
+    revision: 'r2',
     purpose,
     input: REPO_INPUT,
     output: SHELL_OUTPUT,

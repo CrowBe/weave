@@ -508,6 +508,184 @@ describe('uncertain invocation contract', () => {
     });
   }
 
+  it('recovers legacy scopes from the recorded implementation admission even after selectors narrow', async (t) => {
+    const f = fixture(t);
+    const snapshot = f.store.snapshot();
+    const { reservation: _reservation, ...record } = snapshot.invocations[0]!;
+    const narrower: CapabilityContract = { ...write, revision: '2', effects: [], permissions: [] };
+    const admissions = [
+      { operation: write.id, implementation_id: 'admitted', contract: write, source: '() => ({ ok: true })' },
+      { operation: write.id, implementation_id: 'newer', contract: narrower, source: '() => ({ ok: true })' },
+    ];
+    f.store.close();
+    fs.writeFileSync(f.path, JSON.stringify({ ...snapshot, admissions, invocations: [record] }) + '\n');
+    for (let restart = 0; restart < 2; restart += 1) {
+      const store = FabricStore.open(f.path);
+      try {
+        const host = new AgentFabricHost({ authority: f.host.authority, store, contracts: [narrower] });
+        assert.equal(host.liveContracts().find((contract) => contract.id === write.id)?.revision, '2');
+        assert.equal(store.getInvocation('inv')?.status, 'uncertain');
+        assert.deepEqual(
+          host.coordinator.held().map(({ canonical_id, mode }) => ({ canonical_id, mode })),
+          [{ canonical_id: store.lookupRef(f.target)!.canonical_id, mode: 'write' }],
+        );
+        host.installAdmitted(read, () => succeeded);
+        const grant = host.authority.issue({
+          action_id: `conflict-${restart}`,
+          operation: read.id,
+          contract_rev: '1',
+          permissions: [{ resource: f.target, mode: 'read' }],
+          effects: [{ resource: f.target, mode: 'read' }],
+          issued_at: 1,
+        });
+        const conflict = host.invoke(grant, read.id, { target: f.target });
+        assert.equal(conflict.kind, 'rejected');
+        if (conflict.kind === 'rejected') assert.match(conflict.reason, /effect conflict/);
+        const replayGrant = host.authority.issue({
+          action_id: 'action',
+          operation: write.id,
+          contract_rev: '2',
+          permissions: [],
+          effects: [],
+          issued_at: 1,
+        });
+        const replay = host.invoke(replayGrant, write.id, { target: f.target }, { invocation_id: 'inv' });
+        assert.equal(replay.kind, 'handle');
+        if (replay.kind === 'handle') assert.equal((await replay.result).outcome, 'uncertain');
+        assert.deepEqual(host.releaseAll(), []);
+        if (restart === 1) {
+          reconcile(host, absent);
+          assert.deepEqual(host.coordinator.held(), []);
+          const afterGrant = host.authority.issue({
+            action_id: 'after',
+            operation: read.id,
+            contract_rev: '1',
+            permissions: [{ resource: f.target, mode: 'read' }],
+            effects: [{ resource: f.target, mode: 'read' }],
+            issued_at: 1,
+          });
+          assert.equal(host.invoke(afterGrant, read.id, { target: f.target }).kind, 'handle');
+        }
+      } finally {
+        store.close();
+      }
+    }
+  });
+
+  for (const ambiguity of ['effects', 'revision'] as const) {
+    for (const status of ['running', 'uncertain'] as const) {
+      it(`blocks ambiguous legacy admission ${ambiguity} across restart (${status})`, (t) => {
+        const f = fixture(t);
+        const snapshot = f.store.snapshot();
+        const { reservation: _reservation, ...record } = snapshot.invocations[0]!;
+        const conflicting =
+          ambiguity === 'effects' ? { ...write, effects: [], permissions: [] } : { ...write, revision: '2' };
+        const admissions = [write, conflicting].map((contract) => ({
+          operation: write.id,
+          implementation_id: 'admitted',
+          contract,
+          source: '() => ({ ok: true })',
+        }));
+        f.store.close();
+        fs.writeFileSync(
+          f.path,
+          JSON.stringify({
+            ...snapshot,
+            admissions,
+            invocations: [{ ...record, status, outcome: status === 'uncertain' ? uncertain : null }],
+          }) + '\n',
+        );
+        for (let restart = 0; restart < 2; restart++) {
+          const store = FabricStore.open(f.path);
+          try {
+            const host = new AgentFabricHost({ authority: f.host.authority, store, contracts: [write] });
+            assert.equal(store.getInvocation('inv')?.status, 'uncertain');
+            assert.equal(store.getInvocation('inv')?.reservation, undefined);
+            assert.deepEqual(host.coordinator.held(), []);
+            host.installAdmitted(write, () => succeeded);
+            const blocked = host.invoke(f.grant(`blocked-${restart}`), write.id, { target: f.target });
+            assert.equal(blocked.kind, 'rejected');
+            if (blocked.kind === 'rejected') assert.match(blocked.reason, /reconcil/);
+            if (restart === 1) {
+              reconcile(host, absent);
+              assert.equal(host.invoke(f.grant('after-ambiguity'), write.id, { target: f.target }).kind, 'handle');
+            }
+          } finally {
+            store.close();
+          }
+        }
+      });
+    }
+  }
+
+  for (const implementation_id of [undefined, 'missing-admission', 'another-operation']) {
+    for (const status of ['running', 'uncertain'] as const) {
+      it(`blocks legacy scopes with unknown revision by operation across restart (${implementation_id}, ${status})`, async (t) => {
+        const f = fixture(t);
+        const snapshot = f.store.snapshot();
+        const { reservation: _reservation, ...record } = snapshot.invocations[0]!;
+        const narrower: CapabilityContract = { ...write, revision: '2', effects: [], permissions: [] };
+        f.store.close();
+        fs.writeFileSync(
+          f.path,
+          JSON.stringify({
+            ...snapshot,
+            admissions: [
+              {
+                operation: read.id,
+                implementation_id: 'another-operation',
+                contract: read,
+                source: '() => ({ ok: true })',
+              },
+              { operation: write.id, implementation_id: 'newer', contract: narrower, source: '() => ({ ok: true })' },
+            ],
+            invocations: [{ ...record, implementation_id, status, outcome: status === 'uncertain' ? uncertain : null }],
+          }) + '\n',
+        );
+        for (let restart = 0; restart < 2; restart += 1) {
+          const store = FabricStore.open(f.path);
+          try {
+            const host = new AgentFabricHost({ authority: f.host.authority, store, contracts: [narrower] });
+            assert.equal(store.getInvocation('inv')?.status, 'uncertain');
+            assert.equal(store.getInvocation('inv')?.reservation, undefined);
+            assert.deepEqual(host.coordinator.held(), []);
+            const grant = host.authority.issue({
+              action_id: `blocked-${restart}`,
+              operation: write.id,
+              contract_rev: '2',
+              permissions: [],
+              effects: [],
+              issued_at: 1,
+            });
+            const blocked = host.invoke(grant, write.id, { target: f.target });
+            assert.equal(blocked.kind, 'rejected');
+            if (blocked.kind === 'rejected') assert.match(blocked.reason, /reconcil/);
+            // The barrier is by operation, so unrelated work remains available.
+            host.installAdmitted(pure, () => succeeded);
+            const independentGrant = host.authority.issue({
+              action_id: `pure-${restart}`,
+              operation: pure.id,
+              contract_rev: '1',
+              permissions: [],
+              effects: [],
+              issued_at: 1,
+            });
+            const independent = host.invoke(independentGrant, pure.id, { target: f.target });
+            assert.equal(independent.kind, 'handle');
+            host.release(`pure-${restart}`);
+            if (independent.kind === 'handle') assert.deepEqual(await independent.result, succeeded);
+            if (restart === 1) {
+              reconcile(host, absent);
+              assert.equal(host.invoke(grant, write.id, { target: f.target }).kind, 'handle');
+            }
+          } finally {
+            store.close();
+          }
+        }
+      });
+    }
+  }
+
   it('loads a legacy journal without marker or stored scopes and requires reconciliation', async (t) => {
     const f = fixture(t);
     f.host.release('action');
@@ -515,6 +693,9 @@ describe('uncertain invocation contract', () => {
     f.store.close();
     const old = {
       ...snapshot,
+      admissions: [
+        { operation: write.id, implementation_id: 'admitted', contract: write, source: '() => ({ ok: true })' },
+      ],
       invocations: snapshot.invocations.map(({ reservation: _reservation, ...record }) => record),
     };
     fs.writeFileSync(f.path, JSON.stringify(old) + '\n');
@@ -539,6 +720,9 @@ describe('uncertain invocation contract', () => {
           f.path,
           JSON.stringify({
             ...snapshot,
+            admissions: [
+              { operation: write.id, implementation_id: 'admitted', contract: write, source: '() => ({ ok: true })' },
+            ],
             invocations: [recovered, { ...recovered, invocation_id: 'orphan', action_id: 'orphan' }],
           }) + '\n',
         );

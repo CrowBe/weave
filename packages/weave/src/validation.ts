@@ -712,8 +712,11 @@ function validateInferenceRecorded(payload: Record<string, unknown>, state: Stat
     return rejected('inference.recorded requires spent');
   }
   const status = payload['status'];
-  if (status !== 'accepted' && status !== 'unaccepted' && status !== 'blocked') {
+  if (status !== 'accepted' && status !== 'unaccepted' && status !== 'blocked' && status !== 'uncertain') {
     return rejected('unknown inference status');
+  }
+  if (status === 'uncertain' && (!isNonEmptyString(payload['invocation_id']) || !isNonEmptyString(payload['reason']))) {
+    return rejected('uncertain inference requires invocation_id and reason');
   }
   return ACCEPTED;
 }

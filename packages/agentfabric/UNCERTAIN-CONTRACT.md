@@ -18,16 +18,58 @@ records the cancellation request but cannot turn uncertainty into stopped or
 settle the invocation twice. Re-invoking an uncertain id, including after restart,
 replays the outcome without running the implementation again.
 
+For shell operations, a successful process spawn establishes that execution
+started. A subsequent timeout, cancellation (including an abort), or signal kill
+with declared writes settles uncertain, persists the same durable marker, and
+retains the entire reservation until `reconcile()`. The recorded reasons are
+`timeout`, `cancelled`, and `killed`. Without declared writes,
+these interruptions remain stopped and release their reservation. Cancellation
+before spawn and genuine spawn failures also remain stopped, including when an
+immediately expiring timer races a spawn failure or trace recording subsequently
+fails. A trace fault cannot invalidate observed evidence that execution never
+began.
+
+Execution and host bookkeeping faults, including snapshotting after the run,
+artifact issuance, and trace recording, use `execution_fault`, never
+`spawn_failed`. Pre-start CLI bridge rejections (including start persistence
+failure and an unavailable implementation) also use `spawn_failed`, since no
+execution began. A trace fault while recording an observed timeout, cancellation,
+or kill retains that interruption's reason. In shell execution, `spawn_failed`
+describes only a genuine failure to spawn. The existing conservative exception remains: a fault
+while taking the initial snapshot before spawn settles uncertain with declared
+writes and retains the reservation, even though no process has started. Shell
+traces distinguish `timeout`, `cancelled`, `killed`, and `execution_fault`;
+durable invocation outcomes carry the uncertainty reasons and replay them after
+restart. A crash before or during the marker append recovers from the durable
+start as uncertain; a complete marker also preserves the specific reason.
+The `shell.run@1` contract revision is `r2`, as are its repo-derived contracts.
+Traces, failed outcomes and new uncertain outcomes share the `SHELL_FAILURES`
+vocabulary. Stored `r1` admissions and outcomes, including old `shell_*`
+uncertainty reasons, remain readable and replay without rewriting evidence.
+
 Uncertainty retains the entire reservation when any declared effect is create,
 write, append or delete. With only read/discover effects, or no effects, it
 releases immediately. Recovery reconstructs the same reservation independently
 of whether the implementation is currently installed. Old records remain
 readable; interrupted old records also require reconciliation.
 
+For a legacy invocation without a saved reservation, recovery uses its saved
+`implementation_id` to find the stored admission for that operation and binds
+the effects from that admission's contract revision. It never substitutes the
+newest live or historical contract. Multiple matching admissions must agree on
+contract revision and effects; otherwise that evidence is ambiguous.
+Missing implementation identity, admission, unambiguous revision/effects,
+or usable selectors leaves the invocation uncertain with an unscoped block on
+that operation until reconciliation. Saved canonical reservations remain the
+preferred recovery evidence, independent of installed contracts.
+
 Recovered reservations are cumulative, even when legacy interrupted invocations
 conflict. Construction retains every hold and treats each invocation as uncertain;
 reconciling one owner cannot release another owner's hold. If an old record has
 neither stored scopes nor a usable effect contract, construction still succeeds.
+This includes legacy interrupted built-in `shell.run@1` and `report.publish`
+records: a built-in's current contract is not recovery evidence. They block the
+whole operation until each invocation is reconciled.
 New invocations of that operation are blocked until all such records are
 reconciled, including when the contract is installed later. Other operations
 remain available. Recovery attempts to persist uncertainty, but a failed marker
@@ -63,3 +105,108 @@ the grant.
 Assumption: evidence and committed output supplied by the trusted host owner
 accurately describe the external outcome; Fabric validates and records them but
 does not independently inspect arbitrary external systems.
+
+Legacy revision assumption: matching admissions identify one contract revision
+and effect declaration. Legacy invocation records have no separate contract
+revision field; ambiguous admissions provide no usable recovery evidence.
+
+## CLI generation recovery (Firstmate option B)
+
+CLI generation retains its declared workspace write. `createGrantedCliSpawn`
+uses the host's CLI generation entry point and host-owned invocation identities,
+which remain unique across bridge instances and restarts. The validated durable
+start record includes `cli_generation`, with `cwd_ref` and `before_snapshot`.
+After spawn, a validated, immutable positive `pgid` is appended before subsequent
+bookkeeping; missing pgid is unknown, never gone. The host captures a bounded
+content digest asynchronously before execution while holding the workspace
+reservation. It includes hidden entries, arbitrary nesting, file bytes, size,
+mode, entry type and symlink targets. Device, inode, ownership and timestamps
+only detect races within one inspection; they do not affect equality across
+inspections. Symlinks are recorded, never followed. `.git` directories exclude
+only objects and logs; refs, config, hooks and other Git state remain included.
+A `.git` file (gitdir indirection, including worktrees and submodules) makes the
+snapshot unavailable (`null`), because the referenced Git state is not inspected.
+Files are hashed in chunks with a default total content limit of
+64 MiB and 10,000 entries (including directories and symlinks). Exceeding either
+limit, special files, or failed inspection records `null`, which cannot authorize
+automatic reconciliation. Large repositories exceeding 10,000 entries or 64 MiB
+therefore need operator reconciliation with `--force-with-evidence` and nonempty
+`--evidence` to release their hold. Snapshot evidence cannot be replaced by result,
+uncertainty, or reconciliation mutations. The pgid is recorded once and cannot
+subsequently be replaced. Failed pgid persistence leaves execution uncertain;
+missing process evidence prevents automatic release.
+
+The spawn result and gateway adapter return explicit `uncertain` status with
+`invocation_id` and reason. The gateway records that disposition and stops without
+retry or fallback, including when cancellation races process settlement. A new
+generation rejected by an uncertain reservation returns a nonretryable
+`workspace_held` failure with `held_by` naming the uncertain invocation. A conflict
+with active execution is `effect_conflict`. Neither is a spawn failure.
+
+On host construction, after recovering reservations, the host inspects each
+uncertain CLI generation. Only a saved process group confirmed gone
+(`process.kill(-pgid, 0)` throws an error with code `ESRCH`) together with equality with its saved
+snapshot reconciles
+as `not_committed` through the ordinary validated durable gate, then releases the
+hold. A changed workspace remains uncertain and is surfaced as `workspace_changed`.
+Missing or incomplete snapshot evidence is `snapshot_unavailable`; other check
+or persistence failure is `check_failed`. Construction continues and retains the hold in all these cases.
+Live or uninspectable groups remain held with `process_group_alive` or
+`process_group_unknown`. The same check runs immediately after an in-process
+termination settles uncertain, before returning its result; a safe unchanged
+workspace is released without restarting. The returned result is a
+failed interruption with its original `cancelled` or `timeout` reason when the
+durable reconciliation confirms `not_committed`. Failed reconciliation retains
+the uncertain result and hold.
+It never infers `committed`. All inspection is in Fabric's host layer; gateway
+and Loom remain pure. Keep the host journal outside the inspected directory if
+automatic equality reconciliation is desired: journal appends are also changes.
+
+The trusted operator uses `host.listUncertainCliGenerations()` and
+`host.reconcileCliGeneration(id, resolution)`. These APIs disclose reference,
+invocation identity, reason and startup-check status, not argv, prompts,
+environment values or locators. They use the same append-before-release gate as
+`reconcile`: failed persistence, lost locks and reentrant reconciliation retain
+state and holds. Reconciliation racing a new generation cannot release an active
+generation's hold. Legacy `shell-cli:` records are also listed and can be
+reconciled, but without saved snapshot evidence require operator resolution.
+
+The local operator command uses these exported host functions:
+
+```sh
+node --experimental-strip-types examples/cli-generations.ts --store /path/to/fabric.jsonl list
+node --experimental-strip-types examples/cli-generations.ts --store /path/to/fabric.jsonl reconcile --invocation shell-cli:0 --resolution not_committed --evidence 'inspected workspace; no committed writes'
+```
+
+For `committed`, supply `--output` as JSON as well as evidence. Close the running
+generation host before opening the same store in this separate command; its
+single-writer lock remains enforced. Opening performs the safe startup check,
+and the command reports if it already reconciled the requested invocation. A
+conflicting requested resolution fails with a nonzero exit and a clear message.
+`not_committed` refuses a live or unknown group unless the operator explicitly
+supplies `--force-with-evidence` and nonempty `--evidence`; this override records
+the evidence through the same durable gate. An operation blocked by legacy
+reconciliation surfaces `workspace_held` with a reconciliation hint.
+
+Assumptions: no concurrent external writers during inspection; descendants do
+not escape the recorded process group or write through symlinks outside the
+declared workspace. ESRCH-based automatic reconciliation assumes descendants
+stay in that process group; descendants that escape with `setsid` are not
+covered by the process-group probe. Excluded Git internals are outside the equality evidence.
+Process group identifiers can be reused, so a live reused group conservatively
+retains the hold. Pending snapshot inspection retains its invocation identity and reservation; duplicate identities are rejected and cancellation is retained before any process starts. Hosts await `cliRecoveryReady` to inspect completed startup
+checks; the CLI bridge and operator command do so automatically. Snapshot equality
+proves only absence of retained changes in the declared workspace; it cannot establish
+arbitrary external outcomes. Unsupported snapshots and changed workspaces always
+require trusted operator evidence. Operators must not treat cancellation alone
+as evidence that a workspace change was not committed.
+
+Loom's implementation step records the invocation id on an uncertain attempt and
+remains paused with uncertainty until its composition-root `lookupReconciliation`
+port observes that invocation's resolution. Missing, failed or unresolved lookups
+do not finish the step or repeat generation. `not_committed` is recorded as a
+resumable paused attempt and consumes no retry or escalation. A `committed`
+lookup supplies the corresponding gateway generation outcome: the step uses it
+for the normal checks and output evaluation without repeating generation.
+Resolution is appended as attempt evidence, preserving the original uncertain
+record; replay uses that evidence without calling the lookup port.

@@ -69,6 +69,33 @@ and a committed output or confirms no committed effect; Fabric records that
 resolution before releasing the reservation. Reconciliation never renews a
 grant or authorizes repeating the invocation id.
 
+CLI generations surface uncertainty with their invocation identity and retain the
+workspace write reservation. A later generation reports `workspace_held` with
+that owner. The host can reconcile an unchanged workspace from a bounded durable
+before-snapshot at startup, after in-process termination, or before another CLI
+generation only when its saved process group is confirmed gone. Changed or uninspectable workspaces and live or
+unknown process groups retain the hold. Snapshot comparison retains content,
+size, mode, entry type and symlink target, excluding Git objects and logs but
+including refs, config, hooks and other Git state. Device, inode, ownership and
+timestamp bookkeeping do not affect comparison across inspections. Snapshot
+versions are not interchangeable; an older snapshot retains its hold until
+explicit reconciliation. Releasing a hold with changed or missing evidence
+requires an explicit operator override with evidence through the same durable
+gate. The operator command covers every uncertain reservation blocking a CLI
+workspace, including shell steps and legacy operation blocks. Loom records an
+uncertain generation's invocation identity in its implementation attempt and
+pauses until a composition-root lookup observes reconciliation. A confirmed
+`not_committed` resumes like a paused attempt without consuming a retry; a
+committed outcome goes through the ordinary checks and evaluation without
+repeating generation. Reconciliation evidence is appended without replacing
+the original uncertain attempt. Process and filesystem inspection remain in
+the host.
+
+A shell process that started with declared writes also requires reconciliation
+after timeout, cancellation, or signal termination. Legacy recovery without saved
+scopes uses the recorded implementation's admission revision; missing revision
+evidence blocks that operation until reconciliation.
+
 ### Action
 
 A typed operation Loom may execute to advance a goal. Retrieval, execution, inference, clarification, approval, communication, waiting, and completion are all actions.

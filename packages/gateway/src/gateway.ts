@@ -45,6 +45,7 @@ import {
   type QuotaSnapshot,
   type LoopPausedRecord,
   type ProviderFailure,
+  type GenerationUncertainty,
   type ProviderUsage,
   type QuestionId,
   type RoutedUnit,
@@ -145,6 +146,7 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
           invalid: invalidGeneration(request),
           containsCredentials: containsCredentialContent(request.input),
           settle_on_abort: (unit) => generators.get(unit.adapter)?.settle_on_abort === true,
+          await_on_abort: (unit) => generators.get(unit.adapter)?.await_on_abort === true,
           attempt: async (unit, attemptSignal) => {
             const adapter = generators.get(unit.adapter);
             if (adapter === undefined) return missingAdapter(unit);
@@ -157,6 +159,11 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
               signal: attemptSignal,
             });
             if (result.status === 'failed') return failedAttempt(result.failure, result.usage);
+            if (result.status === 'uncertain')
+              return {
+                usage: { input_tokens: undefined, output_tokens: undefined },
+                disposition: result,
+              };
 
             const verdict = accept(result.text);
             return {
@@ -271,6 +278,9 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
       );
 
       const base = outcomeBase(request.request_id, request.site, bounded);
+      if (bounded.settled.status === 'uncertain') {
+        throw new Error('evaluation port returned generation uncertainty');
+      }
       if (
         binding?.provider === 'amos' &&
         !signal?.aborted &&
@@ -321,7 +331,8 @@ interface AttemptResult<T> {
   readonly disposition:
     | { readonly status: 'accepted'; readonly value: T; readonly provider_response_id: string | undefined }
     | { readonly status: 'unaccepted'; readonly reason: string }
-    | { readonly status: 'failed'; readonly failure: ProviderFailure };
+    | { readonly status: 'failed'; readonly failure: ProviderFailure }
+    | GenerationUncertainty;
 }
 
 type Settled<T> =
@@ -331,6 +342,7 @@ type Settled<T> =
       readonly routed_unit_id: RoutedUnitId;
       readonly provider_response_id: string | undefined;
     }
+  | GenerationUncertainty
   | { readonly status: 'unaccepted'; readonly reason: UnacceptedReason }
   | { readonly status: 'blocked'; readonly reason: BlockedReason };
 
@@ -345,6 +357,7 @@ interface Bounded<T> {
 interface BoundedParams<T> {
   readonly weft?: RequestWeft | undefined;
   readonly settle_on_abort?: (unit: RoutedUnit) => boolean;
+  readonly await_on_abort?: (unit: RoutedUnit) => boolean;
   readonly quota: QuotaPort | undefined;
   readonly persist_pause: GatewayConfig['persist_pause'];
   readonly request_id: string;
@@ -526,6 +539,12 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
 
     const disposition = result.disposition;
 
+    if (disposition.status === 'uncertain') {
+      attempts.push({ ...base, disposition });
+      params.weft?.attempted(attempts[attempts.length - 1] as AttemptRecord);
+      return finish(disposition);
+    }
+
     if (disposition.status === 'failed') {
       attempts.push({ ...base, disposition: { status: 'failed', failure: disposition.failure } });
       params.weft?.attempted(attempts[attempts.length - 1] as AttemptRecord);
@@ -701,6 +720,12 @@ async function attemptBeforeDeadline<T>(params: BoundedParams<T>, unit: RoutedUn
     // The watcher catches its own failures, including cancellation during cleanup.
     void deadline(attempt);
     const result = await Promise.race([attempt, interrupted]);
+    if (provider.signal.aborted && params.await_on_abort?.(unit)) {
+      // The adapter MUST settle every abort path within its own termination bound
+      // (e.g. runProcess timeout). Return late results truthfully: they reflect real effects.
+      const interruptFailure = await interrupted;
+      return await attempt.catch(() => interruptFailure);
+    }
     if (provider.signal.aborted && params.settle_on_abort?.(unit)) {
       // Cancellation fixes the disposition. Allow final billed usage a short
       // grace, but a transport ignoring abort must not hold the outcome open.

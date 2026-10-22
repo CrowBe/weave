@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createGrantAuthority, type Grant } from '@weave/agentsop';
-import { AgentFabricHost, FabricStore } from '@weave/agentfabric';
+import { AgentFabricHost, FabricStore, REPO_TEST } from '@weave/agentfabric';
 import type {
   EvaluationOutcome,
   EvaluationRequest,
@@ -663,7 +663,7 @@ test('a real host accepts a fresh grant when a green check is retried after D5 f
     const template = authority.issue({
       action_id: 'repo-test',
       operation: 'repo.test',
-      contract_rev: 'r1',
+      contract_rev: REPO_TEST.revision,
       permissions: [{ resource: cwd, mode: 'write' }],
       effects: [{ resource: cwd, mode: 'write' }],
       process_effects: ['process.spawn', `fs.write:${cwd}`],
@@ -757,7 +757,7 @@ for (const sameText of [false, true]) {
       const template = authority.issue({
         action_id: 'repo-test',
         operation: 'repo.test',
-        contract_rev: 'r1',
+        contract_rev: REPO_TEST.revision,
         permissions: [{ resource: cwd, mode: 'write' }],
         effects: [{ resource: cwd, mode: 'write' }],
         process_effects: ['process.spawn', `fs.write:${cwd}`],
@@ -1817,3 +1817,165 @@ test('the equal issuer gives each fresh grant its own action id and stops at its
     assert.throws(() => createEqualGrantIssuer(authority, [held], bad), /limit/);
   }
 });
+
+test('uncertain generation records its invocation and stalls without checks, evaluation, or implicit retry', async () => {
+  const world = driver({});
+  let calls = 0;
+  const ports: ImplementPorts = {
+    ...world.ports,
+    generate: async (request) => {
+      calls += 1;
+      return {
+        status: 'uncertain',
+        invocation_id: 'shell-cli:held',
+        reason: 'cancelled',
+        request_id: request.request_id,
+        site: request.site,
+        attempts: [],
+        spent: 0,
+        uncertainty: [],
+      };
+    },
+  };
+  const result = await runImplementationStep(world.input, ports, world.journal);
+  assert.equal(result.status, 'paused');
+  assert.equal(result.attempts.length, 1);
+  assert.equal(result.attempts[0]?.status, 'uncertain');
+  assert.equal(Reflect.get(result.attempts[0]!, 'invocation_id'), 'shell-cli:held');
+  assert.equal(world.invokes.length, 0);
+  assert.equal(world.evalSites.length, 0);
+  assert.equal(result.open_issue, null);
+  assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), result);
+  assert.deepEqual(await runImplementationStep(world.input, ports, world.journal), result);
+  assert.equal(calls, 1);
+});
+
+async function uncertainStep(world: Driver) {
+  return runImplementationStep(
+    world.input,
+    {
+      ...world.ports,
+      generate: async (request) => ({
+        status: 'uncertain',
+        invocation_id: 'shell-cli:held',
+        reason: 'cancelled',
+        request_id: request.request_id,
+        site: request.site,
+        attempts: [],
+        spent: 0,
+        uncertainty: [],
+      }),
+    },
+    world.journal,
+  );
+}
+
+test('uncertain attempts resume after not_committed without spending a retry or escalation, including after restart', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'impl-reconciled-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const path = join(dir, 'attempts.jsonl');
+  const world = driver({ input: input({ retries: 0, ceiling: 'flash' }), journal: new FileAttemptJournal(path) });
+  await uncertainStep(world);
+  const looked: string[] = [];
+  const ports = {
+    ...world.ports,
+    lookupReconciliation: async (id: string) => {
+      looked.push(id);
+      return { status: 'not_committed' as const };
+    },
+  };
+  const result = await runImplementationStep(world.input, ports, new FileAttemptJournal(path));
+  assert.equal(result.status, 'passed');
+  assert.deepEqual(looked, ['shell-cli:held']);
+  assert.deepEqual(world.tiers, ['flash']);
+  assert.equal(result.escalated, false);
+  assert.equal(result.attempts[0]?.status, 'uncertain', 'original evidence is retained');
+  const entries = new FileAttemptJournal(path).load(world.input.execution_id);
+  assert.deepEqual(replayImplementationStep(entries, world.input), result);
+  assert.deepEqual(await runImplementationStep(world.input, ports, new FileAttemptJournal(path)), result);
+  assert.equal(looked.length, 1, 'durable resolution prevents another lookup');
+  assert.equal(world.generateIds.length, 1);
+});
+
+test('unresolved or failed reconciliation lookup stays paused with uncertainty and does not execute', async () => {
+  const world = driver({});
+  const paused = await uncertainStep(world);
+  for (const lookupReconciliation of [
+    async (_id: string) => ({ status: 'unresolved' as const }),
+    async (_id: string): Promise<never> => {
+      throw new Error('lookup unavailable');
+    },
+  ]) {
+    let calls = 0;
+    const ports = {
+      ...world.ports,
+      lookupReconciliation: (id: string) => {
+        assert.equal(id, 'shell-cli:held');
+        calls++;
+        return lookupReconciliation(id);
+      },
+    };
+    assert.deepEqual(await runImplementationStep(world.input, ports, world.journal), paused);
+    assert.equal(calls, 1);
+    assert.deepEqual(world.generateIds, []);
+    assert.deepEqual(world.invokes, []);
+    assert.deepEqual(world.evalSites, []);
+  }
+});
+
+test('uncertain attempt without an invocation identity stays paused without execution', async () => {
+  const world = driver({});
+  const first = await uncertainStep(world);
+  const journal = new MemoryAttemptJournal();
+  const legacy = { ...first.attempts[0]! };
+  delete legacy.invocation_id;
+  journal.append(legacy);
+  const result = await runImplementationStep(world.input, world.ports, journal);
+  assert.equal(result.status, 'paused');
+  assert.equal(result.attempts.length, 1);
+  assert.equal(result.attempts[0]?.status, 'uncertain');
+  assert.deepEqual(world.generateIds, []);
+  assert.deepEqual(world.invokes, []);
+});
+
+for (const accepted of [true, false]) {
+  test(`committed reconciliation uses its ${accepted ? 'accepted' : 'unaccepted'} result without repeating generation`, async () => {
+    const world = driver({ input: input({ retries: 0, ceiling: 'flash' }) });
+    await uncertainStep(world);
+    const outcome: GenerationOutcome = accepted
+      ? {
+          status: 'accepted',
+          text: 'reconciled change',
+          request_id: 'exec-1:a1:gen',
+          site: 'impl.generate',
+          routed_unit_id: 'fixture',
+          provider_response_id: 'reconciled',
+          attempts: [],
+          spent: 0,
+          uncertainty: [],
+        }
+      : {
+          status: 'unaccepted',
+          reason: 'provider_failed',
+          request_id: 'exec-1:a1:gen',
+          site: 'impl.generate',
+          attempts: [],
+          spent: 0,
+          uncertainty: [],
+        };
+    const ports = {
+      ...world.ports,
+      lookupReconciliation: async (id: string) => {
+        assert.equal(id, 'shell-cli:held');
+        return { status: 'committed' as const, outcome };
+      },
+    };
+    const result = await runImplementationStep(world.input, ports, world.journal);
+    assert.equal(result.status, accepted ? 'passed' : 'failed');
+    assert.equal(world.generateIds.length, 0);
+    assert.equal(world.invokes.length, accepted ? 1 : 0);
+    assert.equal(world.evalSites.length, accepted ? 1 : 0);
+    assert.deepEqual(replayImplementationStep(world.journal.load(world.input.execution_id), world.input), result);
+    assert.deepEqual(await runImplementationStep(world.input, world.ports, world.journal), result);
+  });
+}

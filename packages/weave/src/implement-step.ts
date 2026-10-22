@@ -147,6 +147,11 @@ export type ImplementBudgetDecision =
 export interface EqualGrantIssuer {
   issue(held: Grant): Grant | null;
 }
+/** Composition-root lookup of an existing generation; never repeats its effect. */
+export type ImplementReconciliation =
+  | { readonly status: 'unresolved' }
+  | { readonly status: 'not_committed' }
+  | { readonly status: 'committed'; readonly outcome: Exclude<GenerationOutcome, { readonly status: 'uncertain' }> };
 export interface ImplementPorts {
   readonly generate: InferenceGateway['generate'];
   readonly evaluate: InferenceGateway['evaluate'];
@@ -167,6 +172,8 @@ export interface ImplementPorts {
   readonly budget?: (request: ImplementBudgetRequest) => ImplementBudgetDecision;
   /** Host canonical resource identity; aliases share one id. Absent admits no `check` proof. */
   readonly canonical?: (ref: string) => string;
+  /** Authorized lookup for the named invocation. Missing or failed lookup retains uncertainty. */
+  readonly lookupReconciliation?: (invocation_id: string) => ImplementReconciliation | Promise<ImplementReconciliation>;
 }
 export interface ImplementPause {
   readonly reason: ImplementPauseReason;
@@ -212,7 +219,14 @@ export interface AttemptRecord {
   readonly requested_tier: ImplementTier;
   readonly effective_tier: ImplementTier | null;
   readonly escalated: boolean;
-  readonly status: 'passed' | 'failed' | 'paused';
+  readonly status: 'passed' | 'failed' | 'paused' | 'uncertain';
+  /** Existing external invocation requiring reconciliation before further generation. */
+  readonly invocation_id?: string;
+  /** Resolution observed for an earlier uncertain attempt; preserves its original evidence. */
+  readonly reconciliation?: {
+    readonly invocation_id: string;
+    readonly resolution: 'committed' | 'not_committed';
+  };
   readonly generate_request_id: string | null;
   readonly artifact_refs: readonly string[];
   readonly checks: readonly CheckEvidence[];
@@ -270,6 +284,7 @@ interface Normalized extends ImplementStepInput {
 }
 type Action =
   | { readonly type: 'finished' }
+  | { readonly type: 'reconcile'; readonly pending: AttemptRecord }
   | { readonly type: 'stop'; readonly blocked_by: 'ceiling' | 'budget' | null }
   | {
       readonly type: 'generate';
@@ -431,12 +446,18 @@ function lastFailure(attempts: readonly AttemptRecord[]): AttemptRecord | null {
 }
 function actionFor(attempts: readonly AttemptRecord[], input: Normalized, stopped: boolean): Action {
   if (stopped || attempts.some((attempt) => attempt.status === 'passed')) return { type: 'finished' };
+  const pending = attempts.find(
+    (attempt) =>
+      attempt.status === 'uncertain' &&
+      !attempts.some((later) => later.reconciliation && later.reconciliation.invocation_id === attempt.invocation_id),
+  );
+  if (pending) return { type: 'reconcile', pending };
   let fails = 0;
   let sawEscalation = false;
   let parentId: string | null = null;
   for (const attempt of attempts) {
     parentId = attempt.id;
-    if (attempt.status === 'paused') continue;
+    if (attempt.status === 'paused' || attempt.status === 'uncertain') continue;
     if (attempt.escalated) sawEscalation = true;
     else fails += 1;
   }
@@ -485,7 +506,8 @@ function project(entries: readonly JournalEntry[], input: Normalized, cancelled:
   } else if (action.type === 'stop') {
     status = 'failed';
     open_issue = openIssue(input, lastFailure(attempts), action.blocked_by);
-  } else if (last?.status === 'paused') status = 'paused';
+  } else if (action.type === 'reconcile' || last?.status === 'paused' || last?.status === 'uncertain')
+    status = 'paused';
   // Another attempt is due: not terminal, and no open issue is raised yet.
   else status = 'unfinished';
   return {
@@ -577,6 +599,8 @@ function attemptRecord(fields: AttemptRecord): AttemptRecord {
     effective_tier: fields.effective_tier,
     escalated: fields.escalated,
     status: fields.status,
+    ...(fields.invocation_id === undefined ? {} : { invocation_id: fields.invocation_id }),
+    ...(fields.reconciliation === undefined ? {} : { reconciliation: fields.reconciliation }),
     generate_request_id: fields.generate_request_id,
     artifact_refs: fields.artifact_refs,
     checks: fields.checks,
@@ -755,24 +779,65 @@ export async function runImplementationStep(
   const finish = (): ImplementStepResult => project(history, normalized, false);
   const proofs = admitProofs(normalized, ports.canonical);
   const judged = normalized.criteria.filter((_, index) => proofs[index]?.proof !== 'check');
-  // One iteration per attempt, plus the stop that follows the last failure.
+  // One iteration per attempt, plus reconciliation and the final stop.
   // Earlier pauses do not consume this bound.
-  for (let guard = 0; guard <= normalized.retries + 2; guard += 1) {
+  for (let guard = 0; guard <= normalized.retries + 3; guard += 1) {
     const attempts = history.filter(isAttempt);
     const stopped = history.some((entry) => entry.schema === IMPLEMENT_STOP_SCHEMA);
-    const action = actionFor(attempts, normalized, stopped);
+    let action = actionFor(attempts, normalized, stopped);
     if (action.type === 'finished') return finish();
+    let reconciled: Extract<ImplementReconciliation, { status: 'committed' }> | null = null;
+    let reconciliation: AttemptRecord['reconciliation'];
+    if (action.type === 'reconcile') {
+      if (signal?.aborted) return project(history, normalized, true);
+      const pending = action.pending;
+      if (!pending.invocation_id || !ports.lookupReconciliation) return finish();
+      let resolution: ImplementReconciliation;
+      try {
+        resolution = await ports.lookupReconciliation(pending.invocation_id);
+      } catch {
+        return finish();
+      }
+      if (resolution.status === 'unresolved') return finish();
+      reconciliation = { invocation_id: pending.invocation_id, resolution: resolution.status };
+      if (resolution.status === 'not_committed') {
+        history.push(
+          remember(
+            journal,
+            attemptRecord({
+              ...pending,
+              id: stepId(normalized.execution_id, `:a${attempts.length + 1}`),
+              parentId: pending.id,
+              attempt: attempts.length + 1,
+              status: 'paused',
+              reconciliation,
+            }),
+          ),
+        );
+        continue;
+      }
+      reconciled = resolution;
+      action = {
+        type: 'generate',
+        attempt: attempts.length + 1,
+        requested: pending.requested_tier,
+        escalation: pending.escalated,
+        parentId: pending.id,
+        feedback: lastFailure(attempts),
+      };
+    }
     if (action.type === 'stop') {
       if (!stopped) history.push(remember(journal, stopRecord(normalized, attempts, action.blocked_by)));
       return finish();
     }
     if (signal?.aborted) return project(history, normalized, true);
     const attemptId = stepId(normalized.execution_id, `:a${action.attempt}`);
-    const decision = ports.budget?.({
-      requested: action.requested,
-      escalation: action.escalation,
-      attempt: action.attempt,
-    }) ?? { status: 'allow' as const, tier: action.requested };
+    const decision = reconciled
+      ? { status: 'allow' as const, tier: attempts.at(-1)?.effective_tier ?? action.requested }
+      : (ports.budget?.({ requested: action.requested, escalation: action.escalation, attempt: action.attempt }) ?? {
+          status: 'allow' as const,
+          tier: action.requested,
+        });
     const allowed = decision.status === 'allow' && isTier(decision.tier) ? decision.tier : null;
     // Escalation is exactly one tier, so a downgrade there stops the step. A pause
     // is temporary at either tier: it is recorded and a later run resumes (#128).
@@ -814,24 +879,28 @@ export async function runImplementationStep(
     const effective = action.escalation
       ? action.requested
       : IMPLEMENT_TIERS[Math.min(rank(allowed), rank(action.requested), rank(normalized.ceiling))]!;
-    const generateId = stepId(normalized.execution_id, `:a${action.attempt}:gen`);
+    const generateId = reconciled
+      ? reconciled.outcome.request_id
+      : stepId(normalized.execution_id, `:a${action.attempt}:gen`);
     // Taken before the paid call, so a broken port fails before anything is spent.
     const run = ports.runId();
     if (typeof run !== 'string' || run.length === 0) throw new Error('Invalid implementation run id');
-    const outcome = await ports.generate(
-      {
-        request_id: generateId,
-        site: 'impl.generate',
-        role: 'working',
-        kind: normalized.kind,
-        input: { instructions: normalized.instructions, prompt: feedbackPrompt(normalized.prompt, action.feedback) },
-        terms: generateTerms(normalized.terms, effective),
-        accept: nonEmptyText,
-      },
-      signal,
-    );
+    const outcome =
+      reconciled?.outcome ??
+      (await ports.generate(
+        {
+          request_id: generateId,
+          site: 'impl.generate',
+          role: 'working',
+          kind: normalized.kind,
+          input: { instructions: normalized.instructions, prompt: feedbackPrompt(normalized.prompt, action.feedback) },
+          terms: generateTerms(normalized.terms, effective),
+          accept: nonEmptyText,
+        },
+        signal,
+      ));
     const held = generatePaused(outcome);
-    if (held || signal?.aborted) {
+    if (outcome.status === 'uncertain' || held || signal?.aborted) {
       history.push(
         remember(
           journal,
@@ -844,7 +913,9 @@ export async function runImplementationStep(
             requested_tier: action.requested,
             effective_tier: effective,
             escalated: action.escalation,
-            status: 'paused',
+            status: outcome.status === 'uncertain' ? 'uncertain' : 'paused',
+            ...(reconciliation === undefined ? {} : { reconciliation }),
+            ...(outcome.status === 'uncertain' ? { invocation_id: outcome.invocation_id } : {}),
             generate_request_id: generateId,
             artifact_refs: [],
             checks: [],
@@ -852,7 +923,7 @@ export async function runImplementationStep(
             observations: [],
             failing_criterion_ids: [],
             failing_check_ids: [],
-            pause: held ?? pauseOf('cancelled', null),
+            pause: outcome.status === 'uncertain' ? null : (held ?? pauseOf('cancelled', null)),
             proofs,
           }),
         ),
@@ -892,6 +963,7 @@ export async function runImplementationStep(
               effective_tier: effective,
               escalated: action.escalation,
               status: 'paused',
+              ...(reconciliation === undefined ? {} : { reconciliation }),
               generate_request_id: generateId,
               artifact_refs: artifactRefs,
               checks,
@@ -974,6 +1046,7 @@ export async function runImplementationStep(
               effective_tier: effective,
               escalated: action.escalation,
               status: 'paused',
+              ...(reconciliation === undefined ? {} : { reconciliation }),
               generate_request_id: generateId,
               artifact_refs: [...artifactRefs, ...checks.flatMap((check) => check.artifacts)],
               checks,
@@ -1007,6 +1080,7 @@ export async function runImplementationStep(
           effective_tier: effective,
           escalated: action.escalation,
           status: failed ? 'failed' : 'passed',
+          ...(reconciliation === undefined ? {} : { reconciliation }),
           generate_request_id: generateId,
           artifact_refs: artifactRefs,
           checks,

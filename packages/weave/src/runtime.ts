@@ -1258,9 +1258,12 @@ export class Runtime {
                 spent: toMicros(outcome.spent),
                 status: outcome.status === 'accepted' ? 'accepted' : outcome.status,
                 reason: outcome.status === 'accepted' ? null : outcome.reason,
+                ...(outcome.status === 'uncertain' ? { invocation_id: outcome.invocation_id } : {}),
               } satisfies InferenceRecordedPayload,
             });
             if (outcome.status !== 'accepted') {
+              // Framing produced no accepted answer. External CLI uncertainty is
+              // retained above; its invocation is reconciled by the host owner.
               this.recordResult(started.action_id, { outcome: 'failed', failure: outcome.reason }, GATEWAY_SOURCE);
               return;
             }

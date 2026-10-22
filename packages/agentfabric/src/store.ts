@@ -75,6 +75,8 @@ export interface InvocationRecord {
   measured_cost_micros?: number;
   /** Canonical effect scopes persisted before execution; absent in old journals. */
   reservation?: readonly ResourceEffect[];
+  /** Host-owned snapshot captured before spawn; pgid appended once after spawn. */
+  cli_generation?: { readonly cwd_ref: string; readonly before_snapshot: string | null; readonly pgid?: number };
   reconciliation?: InvocationReconciliation;
 }
 
@@ -125,6 +127,7 @@ type FabricMutation =
   | { readonly op: 'issue'; readonly ref: IssuedRef }
   | { readonly op: 'put'; readonly resource: StoredResource }
   | { readonly op: 'start'; readonly record: InvocationRecord; readonly measured_cost_micros: number }
+  | { readonly op: 'cli_started'; readonly invocation_id: string; readonly pgid: number }
   | { readonly op: 'result'; readonly record: InvocationRecord }
   | { readonly op: 'uncertain'; readonly record: InvocationRecord }
   | { readonly op: 'reconcile'; readonly record: InvocationRecord }
@@ -251,10 +254,7 @@ export class FabricStore {
       next_canonical: this.next_canonical,
       resources: [...this.resources.values()].map((r) => ({ ...r })),
       refs: [...this.refs.values()].map((r) => ({ ...r })),
-      invocations: [...this.invocations.values()].map((r) => ({
-        ...r,
-        inputs: structuredClone(r.inputs),
-      })),
+      invocations: [...this.invocations.values()].map((record) => structuredClone(record)),
       admissions: this.admissions.map((admission) => ({ ...admission, contract: { ...admission.contract } })),
       conclusions: this.conclusionRecords.map((conclusion) => structuredClone(conclusion)),
       workload: this.workloadRecords.map((item) => ({ ...item })),
@@ -313,7 +313,8 @@ export class FabricStore {
   }
 
   getInvocation(id: string): InvocationRecord | undefined {
-    return this.invocations.get(id);
+    const record = this.invocations.get(id);
+    return record === undefined ? undefined : structuredClone(record);
   }
 
   invocationRecords(): readonly InvocationRecord[] {
@@ -325,6 +326,11 @@ export class FabricStore {
       throw new PersistFailure('invocation start');
     }
     this.mutate({ op: 'start', record, measured_cost_micros: measuredCostMicros });
+    this.save();
+  }
+
+  persistCliGenerationStarted(invocation_id: string, pgid: number): void {
+    this.mutate({ op: 'cli_started', invocation_id, pgid });
     this.save();
   }
 
@@ -436,6 +442,9 @@ export class FabricStore {
     if (mutation.op === 'cost') cost += mutation.micros;
     if (mutation.op === 'start') {
       const previous = this.invocations.get(mutation.record.invocation_id);
+      if (mutation.op === 'start' && previous?.cli_generation !== undefined) {
+        throw new Error('invalid host store CLI generation evidence transition');
+      }
       const previousCost = previous ? (previous.measured_cost_micros ?? mutation.measured_cost_micros) : 0;
       cost += mutation.measured_cost_micros - previousCost;
     }
@@ -564,6 +573,11 @@ export class FabricStore {
       case 'start':
         this.applyStart(mutation.record, mutation.measured_cost_micros);
         return;
+      case 'cli_started': {
+        const record = this.invocations.get(mutation.invocation_id)!;
+        this.setInvocation({ ...record, cli_generation: { ...record.cli_generation!, pgid: mutation.pgid } });
+        return;
+      }
       case 'result':
       case 'uncertain':
       case 'reconcile':
@@ -588,6 +602,29 @@ export class FabricStore {
   }
 
   private validateTransition(mutation: FabricMutation): void {
+    if (mutation.op === 'cli_started') {
+      const previous = this.invocations.get(mutation.invocation_id);
+      if (
+        !previous?.cli_generation ||
+        previous.status !== 'running' ||
+        previous.reconciliation ||
+        previous.cli_generation.pgid !== undefined
+      )
+        throw new Error('invalid host store CLI process group transition');
+    }
+    if ('record' in mutation && ['start', 'result', 'uncertain', 'reconcile'].includes(mutation.op)) {
+      const previous = this.invocations.get(mutation.record.invocation_id);
+      if (
+        mutation.record.cli_generation !== undefined &&
+        (previous
+          ? previous.cli_generation?.cwd_ref !== mutation.record.cli_generation.cwd_ref ||
+            previous.cli_generation.before_snapshot !== mutation.record.cli_generation.before_snapshot ||
+            previous.cli_generation.pgid !== mutation.record.cli_generation.pgid
+          : mutation.op !== 'start')
+      ) {
+        throw new Error('invalid host store CLI generation evidence transition');
+      }
+    }
     if (mutation.op !== 'uncertain' && mutation.op !== 'reconcile') return;
     const previous = this.invocations.get(mutation.record.invocation_id);
     if (
@@ -627,7 +664,7 @@ export class FabricStore {
     }
     this.invocations.clear();
     for (const record of snapshot?.invocations ?? []) {
-      this.invocations.set(record.invocation_id, { ...record });
+      this.invocations.set(record.invocation_id, structuredClone(record));
     }
     this.admissions = (snapshot?.admissions ?? []).map((admission) => ({
       ...admission,
@@ -716,6 +753,9 @@ export class FabricStore {
     }
     if (stored.reservation === undefined && previous?.reservation !== undefined) {
       stored.reservation = structuredClone(previous.reservation);
+    }
+    if (stored.cli_generation === undefined && previous?.cli_generation !== undefined) {
+      stored.cli_generation = structuredClone(previous.cli_generation);
     }
     this.invocations.set(record.invocation_id, stored);
   }
@@ -1090,6 +1130,8 @@ function isMutation(value: unknown): value is FabricMutation {
       return isResource(value.resource);
     case 'start':
       return isInvocation(value.record) && isNonNegativeNumber(value.measured_cost_micros);
+    case 'cli_started':
+      return isString(value.invocation_id) && isPgid(value.pgid);
     case 'result':
       return isInvocation(value.record);
     case 'uncertain':
@@ -1219,6 +1261,17 @@ function isInvocation(value: unknown): boolean {
         (effect) =>
           isRecord(effect) && isString(effect.resource) && effect.resource.length > 0 && isEffect(effect.mode),
       )) &&
+    (value.cli_generation === undefined ||
+      (value.operation === 'shell.run@1' &&
+        isRecord(value.cli_generation) &&
+        (value.cli_generation.pgid === undefined || isPgid(value.cli_generation.pgid)) &&
+        isString(value.cli_generation.cwd_ref) &&
+        value.cli_generation.cwd_ref.length > 0 &&
+        isRecord(value.inputs) &&
+        value.inputs.cwd_ref === value.cli_generation.cwd_ref &&
+        (value.cli_generation.before_snapshot === null ||
+          (typeof value.cli_generation.before_snapshot === 'string' &&
+            /^[a-f0-9]{64}$/.test(value.cli_generation.before_snapshot))))) &&
     (value.reconciliation === undefined ||
       (isReconciliation(value.reconciliation) &&
         isRecord(value.outcome) &&
@@ -1306,4 +1359,8 @@ function isSnapshot(value: unknown): value is FabricSnapshot {
     (value.measured_cost_micros === undefined || isNonNegativeNumber(value.measured_cost_micros)) &&
     (value.builtin_results === undefined || arrayOf(value.builtin_results, isBuiltinResult))
   );
+}
+
+function isPgid(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 }
