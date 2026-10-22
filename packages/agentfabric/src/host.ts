@@ -297,8 +297,8 @@ export class AgentFabricHost implements CapabilityHost {
       if (this.pendingCliCancel.has(invocation_id) && this.store.getInvocation(invocation_id) === undefined) {
         const checked = this.validateInvocation(grant, SHELL_RUN.id, inputs);
         if (checked.kind === 'rejected') return checked;
-        const shell = this.prepareShell(SHELL_RUN.id, checked.boundInputs);
-        if (!shell.ok) return this.reject(shell.code, shell.reason);
+        const preparation = this.validatePreparation(SHELL_RUN.id, checked.boundInputs, checked.effects);
+        if (preparation.kind === 'rejected') return preparation;
         // Consume through the ordinary authority gate before releasing the identity.
         if (!this.authority.markInvoked(grant)) {
           return this.reject(
@@ -1648,6 +1648,58 @@ export class AgentFabricHost implements CapabilityHost {
     return { kind: 'validated', boundInputs, effects: declared.bound, existing };
   }
 
+  /** Shared pre-consumption gates for new execution and pending cancellation. */
+  private validatePreparation(
+    operation: string,
+    boundInputs: Record<string, unknown>,
+    effects: readonly ResourceEffect[],
+  ):
+    | {
+        kind: 'validated';
+        shellCall: ParsedShellCall | null;
+        shellEnv: Record<string, string>;
+        shellSecrets: string[];
+      }
+    | InvocationRejected {
+    if ([...this.unscopedRecovery.values()].includes(operation)) {
+      return this.reject('RESOLVER_ERROR', 'operation requires reconciliation of recovered effect scopes');
+    }
+    if (this.status.get(operation) !== 'resolved') {
+      return this.reject('UNRESOLVED', `${operation} is ${this.status.get(operation)}`);
+    }
+    let shellCall: ParsedShellCall | null = null;
+    let shellEnv: Record<string, string> = {};
+    let shellSecrets: string[] = [];
+    if (isShellOperation(operation)) {
+      const preparedShell = this.prepareShell(operation, boundInputs);
+      if (!preparedShell.ok) {
+        return this.reject(preparedShell.code, preparedShell.reason);
+      }
+      shellCall = preparedShell.call;
+      shellEnv = preparedShell.env;
+      shellSecrets = preparedShell.secrets;
+    }
+    for (const effect of effects) {
+      const issued = this.store.lookupRef(effect.resource);
+      if (!issued) {
+        return this.reject('UNKNOWN_RESOURCE', 'unknown resource');
+      }
+      if (operation === REPORT_PUBLISH.id) {
+        if (effect.mode === 'write' && issued.kind !== 'destination') {
+          return this.reject('KIND_MISMATCH', 'destination reference has the wrong kind');
+        }
+        if (effect.mode === 'read' && issued.kind !== 'source') {
+          return this.reject('KIND_MISMATCH', 'source reference has the wrong kind');
+        }
+      } else if (operation === SOURCE_INSPECT.id && issued.kind !== 'source') {
+        return this.reject('KIND_MISMATCH', 'source reference has the wrong kind');
+      } else if (isShellOperation(operation) && issued.kind !== 'workspace') {
+        return this.reject('KIND_MISMATCH', 'workspace reference has the wrong kind');
+      }
+    }
+    return { kind: 'validated', shellCall, shellEnv, shellSecrets };
+  }
+
   private prepare(
     grant: Grant | null,
     operation: string,
@@ -1708,12 +1760,8 @@ export class AgentFabricHost implements CapabilityHost {
     }
     if (inMemory || (this.reservedCliIds.has(invocation_id) && reservedCliId !== invocation_id))
       return this.reject('DENIED', 'invocation is already active');
-    if ([...this.unscopedRecovery.values()].includes(operation)) {
-      return this.reject('RESOLVER_ERROR', 'operation requires reconciliation of recovered effect scopes');
-    }
-    if (this.status.get(operation) !== 'resolved') {
-      return this.reject('UNRESOLVED', `${operation} is ${this.status.get(operation)}`);
-    }
+    const preparation = this.validatePreparation(operation, boundInputs, effects);
+    if (preparation.kind === 'rejected') return preparation;
     const cached = this.cachedBuiltin(operation, boundInputs);
     if (cached && grant) {
       return {
@@ -1730,38 +1778,9 @@ export class AgentFabricHost implements CapabilityHost {
         },
       };
     }
-    let shellCall: ParsedShellCall | null = null;
-    let shellEnv: Record<string, string> = {};
-    let shellSecrets: string[] = [];
-    if (isShellOperation(operation)) {
-      const preparedShell = this.prepareShell(operation, boundInputs);
-      if (!preparedShell.ok) {
-        return this.reject(preparedShell.code, preparedShell.reason);
-      }
-      shellCall = preparedShell.call;
-      shellEnv = preparedShell.env;
-      shellSecrets = preparedShell.secrets;
-    }
+    const { shellCall, shellEnv, shellSecrets } = preparation;
     if (!this.authority.markInvoked(grant as Grant)) {
       return this.reject('DENIED', this.invalidGrantReason(grant) ?? 'grant has already been used for an invocation');
-    }
-    for (const effect of effects) {
-      const issued = this.store.lookupRef(effect.resource);
-      if (!issued) {
-        return this.reject('UNKNOWN_RESOURCE', 'unknown resource');
-      }
-      if (operation === REPORT_PUBLISH.id) {
-        if (effect.mode === 'write' && issued.kind !== 'destination') {
-          return this.reject('KIND_MISMATCH', 'destination reference has the wrong kind');
-        }
-        if (effect.mode === 'read' && issued.kind !== 'source') {
-          return this.reject('KIND_MISMATCH', 'source reference has the wrong kind');
-        }
-      } else if (operation === SOURCE_INSPECT.id && issued.kind !== 'source') {
-        return this.reject('KIND_MISMATCH', 'source reference has the wrong kind');
-      } else if (isShellOperation(operation) && issued.kind !== 'workspace') {
-        return this.reject('KIND_MISMATCH', 'workspace reference has the wrong kind');
-      }
     }
     const conflict = this.coordinator.acquire(invocation_id, effects, (ref) => {
       const issued = this.store.lookupRef(ref);

@@ -200,11 +200,14 @@ reservation; duplicate identities are rejected. Cancellation is also retained fo
 allocated CLI identities and placeholders while awaiting recovery or an uncertain
 startup check. Before preparation, a retained cancellation returns `cancelled`
 without spawning, writing an invocation record, or acquiring a workspace
-reservation. Only after the same input validation, issued-grant validity and
-coverage checks as ordinary preparation (operation, contract revision, permissions,
-effects and process effects) does it consume the single-use grant through
+reservation. Only after all of preparation's pre-consumption checks (input
+validation, issued-grant validity, operation, contract revision, permissions,
+effects and process effects coverage, recovered-effect-scope reconciliation,
+resolved status, shell input preparation, and resource existence and kind checks,
+including `cwd_ref`) does it consume the single-use grant through
 `GrantAuthority.markInvoked` before releasing the identity reservation. Failed
-checks return the same rejection as preparation without consuming the grant.
+checks return the same rejection as preparation without consuming the grant,
+spawning, or retaining an identity or workspace reservation.
 Reusing a consumed grant is denied, including after reopening the host/store with
 the same authority; a fresh grant for a new id can run. Grant issuance and
 consumption currently live in the in-process authority,

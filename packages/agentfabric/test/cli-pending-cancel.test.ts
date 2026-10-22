@@ -182,6 +182,57 @@ async function fixture(
 }
 
 describe('CLI cancellation before prepare', () => {
+  for (const invalid of ['legacy reconciliation', 'unresolved', 'unknown cwd_ref', 'wrong cwd_ref kind'] as const) {
+    it(`rejects ${invalid} before consuming a grant with pending cancellation`, async (t) => {
+      const f = await fixture(t, invalid === 'legacy reconciliation' ? 'startup check' : 'recovery');
+      const status = (f.host as unknown as { status: Map<string, string> }).status;
+      if (invalid === 'unresolved') status.set(SHELL_RUN.id, 'unresolved');
+      const ref =
+        invalid === 'unknown cwd_ref'
+          ? 'workspace:unknown'
+          : invalid === 'wrong cwd_ref kind'
+            ? f.host.registerSource('mem:source', 'source content')
+            : f.cwd_ref;
+      const inputs = f.request(ref);
+      const consume = t.mock.method(f.authority, 'markInvoked');
+      const expected = f.host.invoke(f.grant('shell-cli:ordinary-validation', ref), SHELL_RUN.id, inputs);
+      assert.equal(expected.kind, 'rejected');
+      if (expected.kind !== 'rejected') return;
+      assert.equal(
+        expected.code,
+        invalid === 'legacy reconciliation'
+          ? 'RESOLVER_ERROR'
+          : invalid === 'unresolved'
+            ? 'UNRESOLVED'
+            : invalid === 'unknown cwd_ref'
+              ? 'UNKNOWN_RESOURCE'
+              : 'KIND_MISMATCH',
+      );
+      const id = 'shell-cli:preparation-validation';
+      const grant = f.grant(id, ref);
+      assert.equal(consume.mock.callCount(), 0, 'ordinary rejection must precede consumption too');
+      const pending = f.host.invokeCliGeneration(grant, inputs);
+      assert.deepEqual(f.host.requestCancel(id), { acknowledged: true });
+      // Keep the legacy reconciliation gate closed when the startup check returns.
+      f.gate.resolve();
+      assert.deepEqual(await pending, expected);
+      assert.equal(consume.mock.callCount(), 0);
+      assert.equal(f.authority.markInvoked(grant), true, 'rejection must not consume the grant');
+      assert.equal(f.spawn.mock.callCount(), 0);
+      assert.equal(f.store.getInvocation(id), undefined);
+      assert.equal(f.host.coordinator.held().length, 0);
+      assert.equal(f.host.openCount(), 0);
+      status.set(SHELL_RUN.id, 'resolved');
+      f.resume();
+      const fresh = await f.host.invokeCliGeneration(f.grant(id), f.request());
+      assert.equal(fresh.kind, 'handle', 'rejection must release the identity reservation');
+      if (fresh.kind !== 'handle') return;
+      f.host.release(id);
+      assert.equal((await fresh.result).outcome, 'succeeded');
+      assert.equal(f.store.getInvocation(id)?.cancel_requested, false);
+    });
+  }
+
   for (const invalid of [
     'operation',
     'contract revision',
