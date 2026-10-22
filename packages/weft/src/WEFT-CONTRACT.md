@@ -553,5 +553,7 @@ values in namespaced attributes, but have no standard OTel meaning. Numeric
 safe integers use OTLP decimal int strings; fractional metrics use doubles.
 Truncated hash identities have theoretical collision risk; export is no store
 and provides no exactly-once delivery guarantee. Retrying after a crash produces
-the same bytes and span identities; collector deduplication is its concern.
+the same bytes and span identities for the same redacted records; the composition
+root must supply a deterministic redactor for reproducible export. Collector
+deduplication is its concern.
 `weave.trace@1` is rejected rather than inventing missing Weft fields.
