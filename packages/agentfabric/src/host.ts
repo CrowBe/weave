@@ -857,6 +857,10 @@ export class AgentFabricHost implements CapabilityHost {
     return this.retainedConclusions.map((conclusion) => structuredClone(conclusion));
   }
 
+  conclusionsSince(cursor: number): readonly unknown[] {
+    return this.retainedConclusions.slice(cursor).map((conclusion) => structuredClone(conclusion));
+  }
+
   noteWorkload(goal_id: string, quality: 'held' | 'missed'): void {
     this.store.noteWorkload({ goal_id, quality });
   }
