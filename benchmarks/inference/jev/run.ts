@@ -2,8 +2,9 @@
  * Executing the corpus against hosted Jev and recording what happened.
  *
  * The route table lists the Vercel AI Gateway first and TypeSafe direct
- * second. Both destinations are named in the terms, which is what permits the
- * escalation at all — drop one and that route is excluded at routing rather
+ * second, omitting routes without credentials. Every configured destination
+ * is named in the terms, which permits escalation — drop one and that route
+ * is excluded at routing rather
  * than silently used. A timer is supplied, so a throttle that names a delay is
  * waited out and recorded in `waited_ms` instead of escalating past the
  * preferred route on first refusal.
@@ -81,7 +82,7 @@ export interface RouteOptions {
   readonly local?: boolean;
 }
 
-function jevRoutes(kind: EvaluationKind, includeDirect: boolean, options: RouteOptions): RoutedUnit[] {
+function jevRoutes(kind: EvaluationKind, credentials: Credentials, options: RouteOptions): RoutedUnit[] {
   const shared = {
     operation: 'evaluate',
     kind,
@@ -95,17 +96,18 @@ function jevRoutes(kind: EvaluationKind, includeDirect: boolean, options: RouteO
     price: JEV_PRICE,
   } as const;
 
-  const routes: RoutedUnit[] = options.reference === true ? [] : [
-    {
+  const routes: RoutedUnit[] = [];
+  if (options.reference !== true && credentials.vercel !== undefined) {
+    routes.push({
       ...shared,
       routed_unit_id: `${kind}@vercel`,
       adapter: VERCEL_AI_GATEWAY_ADAPTER,
       model: 'typesafe-ai/jev',
       destination: VERCEL_AI_GATEWAY_DESTINATION,
       ...(options.preferFree ? { rate_limits: [VERCEL_DECLARED_LIMIT] } : {}),
-    },
-  ];
-  if (includeDirect) {
+    });
+  }
+  if (credentials.typesafe !== undefined) {
     routes.push({
       ...shared,
       routed_unit_id: `${kind}@typesafe`,
@@ -120,7 +122,7 @@ function jevRoutes(kind: EvaluationKind, includeDirect: boolean, options: RouteO
 }
 
 export interface Credentials {
-  readonly vercel: string;
+  readonly vercel: string | undefined;
   readonly typesafe: string | undefined;
 }
 
@@ -130,8 +132,7 @@ export function jevRouteTable(credentials: Credentials, options: RouteOptions): 
   if (options.reference === true && !credentials.typesafe?.trim()) {
     throw new ProbeConfigurationError('reference mode requires a TypeSafe API key (TYPESAFE_API_KEY or TYPESAFE_AI_API_KEY)');
   }
-  const includeDirect = credentials.typesafe !== undefined;
-  return EVALUATION_KINDS.flatMap((kind) => jevRoutes(kind, includeDirect, options));
+  return EVALUATION_KINDS.flatMap((kind) => jevRoutes(kind, credentials, options));
 }
 
 /** Reject conflicting programmatic reference settings without echoing their values. */
@@ -162,11 +163,25 @@ export function readCredentials(env: NodeJS.ProcessEnv, options?: RouteOptions):
       ? { error: 'reference mode requires a TypeSafe API key (TYPESAFE_API_KEY or TYPESAFE_AI_API_KEY)' }
       : { vercel: '', typesafe };
   }
-  const vercel = env['AI_GATEWAY_API_KEY'];
-  if (vercel === undefined || vercel.trim().length === 0) {
-    return { error: 'AI_GATEWAY_API_KEY is not set. Put it in .env.local (git-ignored) and rerun.' };
+  const vercel = env['AI_GATEWAY_API_KEY']?.trim() || undefined;
+  const typesafe = resolveTypesafeApiKey(env);
+  if (vercel === undefined && typesafe === undefined) {
+    return {
+      error:
+        'Set TYPESAFE_API_KEY (preferred; TYPESAFE_AI_API_KEY is the legacy fallback) or AI_GATEWAY_API_KEY in .env.local (git-ignored) and rerun.',
+    };
   }
-  return { vercel, typesafe: resolveTypesafeApiKey(env) };
+  return { vercel, typesafe };
+}
+
+/** One line for the run log: which routes exist and which is tried first. Names no secret. */
+export function describeRoutes(credentials: Credentials, options: RouteOptions): string {
+  if (options.reference === true) return `routes: TypeSafe direct only (pinned ${JEV_REFERENCE_MODEL}, no fallback)`;
+  if (credentials.vercel === undefined) return 'routes: TypeSafe direct only';
+  const free = `; free route ${options.preferFree ? 'preferred, throttles waited out' : 'escalates on throttle'}`;
+  return credentials.typesafe === undefined
+    ? `routes: Vercel AI Gateway only${free}`
+    : `routes: Vercel AI Gateway first, then TypeSafe direct${free}`;
 }
 
 /**
@@ -221,7 +236,9 @@ export function createJevGateway(
   return createInferenceGateway({
     routes: jevRouteTable(credentials, options),
     evaluators: [
-      ...(options.reference === true ? [] : [vercelAiGatewayEvaluator({ apiKey: credentials.vercel })]),
+      ...(options.reference === true || credentials.vercel === undefined
+        ? []
+        : [vercelAiGatewayEvaluator({ apiKey: credentials.vercel })]),
       ...(credentials.typesafe === undefined ? [] : [typesafeAiEvaluator({
         apiKey: credentials.typesafe,
         shuffle: TYPESAFE_REQUEST_PARAMS.shuffle,
@@ -246,10 +263,10 @@ export function probeTerms(
   if (options.local === true) return kevTerms(clock);
   return {
     quality: 'baseline',
-    destinations:
-      credentials.typesafe === undefined
-        ? [VERCEL_AI_GATEWAY_DESTINATION]
-        : [VERCEL_AI_GATEWAY_DESTINATION, TYPESAFE_AI_DESTINATION],
+    destinations: [
+      ...(credentials.vercel === undefined ? [] : [VERCEL_AI_GATEWAY_DESTINATION]),
+      ...(credentials.typesafe === undefined ? [] : [TYPESAFE_AI_DESTINATION]),
+    ],
     max_context_tokens: 8_000,
     deadline: clock.now() + 120_000,
     cost_ceiling: 5_000,

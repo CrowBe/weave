@@ -11,7 +11,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Clock, InferenceGateway } from '@weave/gateway';
-import { createJevGateway, readCredentials, validateReferenceArgs, ProbeConfigurationError } from './run.ts';
+import { createJevGateway, describeRoutes, readCredentials, validateReferenceArgs, ProbeConfigurationError } from './run.ts';
 import { runReference, readProbeOutput } from './reference.ts';
 import { formatProbeError } from './probe-error.ts';
 import {
@@ -148,13 +148,14 @@ export async function main(deps: {
       preferFree: has('prefer-free'),
       ...(jevModel === undefined ? {} : { model: jevModel }),
     };
+    console.log(describeRoutes(credentials, options));
     const suite = deps.suite ?? await loadSuite(flag('split') ?? 'development');
     const chosen = await selectRecords(suite, has('all'));
     const limit = flag('limit');
     const selected = limit === undefined ? chosen : chosen.slice(0, Number(limit));
     console.log(
       `${selected.length} records from transfer-v4 (${has('all') ? 'full split' : 'paired with Kev’s run'})` +
-        (reference ? '; pinned TypeSafe direct, no fallback' : `; free route ${options.preferFree ? 'preferred, throttles waited out' : 'escalates on throttle'}`),
+        (reference ? '; pinned TypeSafe direct, no fallback' : ''),
     );
 
     const gateway = deps.gateway ?? createJevGateway(credentials, clock, options);

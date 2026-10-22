@@ -213,11 +213,23 @@ latency and accuracy at that budget.
 
 ## Route
 
-Vercel AI Gateway first, TypeSafe direct second, both destinations named in the
-request terms — which is what permits the escalation at all. A timer is
+Either `AI_GATEWAY_API_KEY` or `TYPESAFE_API_KEY` (legacy fallback:
+`TYPESAFE_AI_API_KEY`) is enough to run either hosted probe outside reference
+mode, which always needs the TypeSafe key. Only routes with credentials are
+configured. With both keys, Vercel AI Gateway stays first and
+TypeSafe direct second. `--prefer-free` keeps that order and waits out throttles
+on the free route using its declared rate limit and higher attempt bounds.
+When neither key is usable, the probe reports a configuration error.
+
+Every configured destination is named in the request terms — which is what
+permits the escalation at all. A timer is
 supplied, so a throttle that names a delay is waited out and recorded in
 `waited_ms` rather than escalating silently. Which unit answered is recorded
 per request, so fallback frequency is data rather than an impression.
+The run log's `routes:` line names the configured routes in order, and, when
+the free Vercel route is configured, whether `--prefer-free` waits out its
+throttles or escalates on them. It never includes credential or environment
+values.
 
 Jev is free through the Vercel AI Gateway during the measurement window, which
 is why the volume experiments run there and now.

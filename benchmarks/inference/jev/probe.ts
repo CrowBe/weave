@@ -24,6 +24,7 @@ import {
   createJevGateway,
   createKevGateway,
   describeKevService,
+  describeRoutes,
   readCredentials,
   readKevBaseURL,
   runCase,
@@ -170,12 +171,6 @@ export async function main(deps: {
     if ('error' in credentials) {
       throw new ProbeConfigurationError(credentials.error);
     }
-    if (!reference) console.log(
-      `credentials: AI_GATEWAY_API_KEY present; TYPESAFE_API_KEY (preferred) / TYPESAFE_AI_API_KEY (legacy fallback) ${
-        credentials.typesafe === undefined ? 'absent — no fallback route' : 'present — fallback route enabled'
-      }`,
-    );
-
     const repeats = Number(flag('repeats') ?? 1);
     const permute = Math.max(1, Number(flag('permute') ?? 1));
     const local = (flag('model') ?? 'jev') === 'kev';
@@ -187,6 +182,7 @@ export async function main(deps: {
       local,
       ...(jevModel === undefined ? {} : { model: jevModel }),
     };
+    if (!local) console.log(describeRoutes(credentials, options));
     const kevBaseURL = readKevBaseURL(env);
     const gateway = deps.gateway ?? (local ? createKevGateway(clock, kevBaseURL) : createJevGateway(credentials, clock, options));
     console.log(
