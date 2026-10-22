@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Weft: the weft.record@1 trace contract and its fail-closed validator, plus the weave.trace@1 envelope and importer port it still supports. Imports nothing in-repo; a Weft trace is a non-authoritative projection.",
   "exports": {
-    ".": "./dist/src/index.js"
+    ".": "./dist/src/index.js",
+    "./otel": "./dist/src/otel.js"
   },
   "files": [
     "dist"

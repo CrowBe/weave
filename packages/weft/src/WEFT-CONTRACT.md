@@ -506,3 +506,78 @@ OTel is an export format (W6, #188), not this schema. Records map to spans,
 links to span links, and `inference.attempt` to the GenAI semantic conventions
 where they fit. Information an export cannot carry is lost from that export,
 not removed from Weft.
+
+### W6 export boundary
+
+`@weave/weft/otel` is an optional entry point, with no third-party runtime
+dependency. The core entry point never imports it. `exportOtlp(records,
+{ redact, inline?, baseTimeUnixNano? })` accepts a batch of `weft.record@1` values and returns
+`{ ok: true, json }` or `{ ok: false, reason }`, without throwing. Every
+record passes through `serializeRecord` before mapping; one rejection rejects
+the entire batch. No raw input, environment, grant, resource detector or ambient
+sink is consulted. Missing or invalid redactors and inline policies return
+the non-sensitive reason `config`, including for empty batches. Redactor throws
+and rejected record content return `disclosure`.
+
+`createOtlpExporter({ redact, inline?, baseTimeUnixNano?, write, timer, writeTimeoutMs? })` adds
+an explicit one-way `export(records, signal?)` method. The composition root
+owns writer liveness: it supplies `timer(ms, expire)`, which must fire within
+the requested delay and return a cancellation function. There is no ambient
+clock. The write timeout defaults to 1000 ms; overrides must be finite,
+positive and at most 2147483647 ms (otherwise `config`). Writer throws,
+rejections, timeout and abort resolve as `write`; a pre-aborted signal skips
+the writer. Each call cleans up its timer and abort listener. Abandoned writes
+retain rejection handlers, so late rejection cannot escape to the run.
+Abandonment cannot undo delivery or stop the writer's own effects. The
+composition root must isolate synchronous blocking writers: JavaScript timers
+and abort cannot interrupt synchronous work.
+
+Identity uses SHA-256 of JSON arrays: `["weft.otel.trace@1", trace_id]`
+(first 32 hex digits), and `["weft.otel.span@1", trace_id, record_id]`
+(first 16). Identical duplicate records collapse; conflicting identities or
+repeated sequences within one emitter reject. Traces sort by trace id, spans
+by emitter id then sequence then record id, links by relation then target,
+and evidence by source then ref. This is serialization order, not causality.
+A batch must contain all parent and link targets in each trace; missing targets
+reject as `incomplete`, parent cycles as `parent_cycle`. A batch may contain
+several independent traces. There is no retained state between calls.
+
+Each record becomes one INTERNAL span (CLIENT for `inference.attempt`).
+Parent ids become parent span ids; every explicit link becomes a span link
+with `weft.link.rel`. Evidence remains a namespaced attribute, never an inferred
+causal link. All envelope references and kind fields are `weft.*` attributes;
+nested values use OTLP AnyValue arrays and key-value lists. Nulls are omitted.
+`error`, failed/missed/uncertain outcomes and unaccepted/failed attempts set
+ERROR status; cancellation stays a namespaced state without implying failure.
+Inference token counts also become `gen_ai.usage.input_tokens` and
+`gen_ai.usage.output_tokens`. A routed unit is not necessarily a model or
+provider, and Weft does not know the GenAI operation: none is invented.
+
+**Time and loss.** Start and end are both `baseTimeUnixNano + sequence + 1`
+nanoseconds after the Unix epoch, calculated with integer arithmetic. The optional
+`baseTimeUnixNano` is injected only by the composition root as a non-negative
+bigint or digits-only decimal string. It and every resulting timestamp must fit
+uint64 (including the `+1`); invalid values or overflow return `config`, including
+invalid bases on empty batches. No clock is read by Weft, Loom or the gateway to
+obtain this base. Without a base, zero is used and output stays byte-identical
+to the original epoch behaviour. These are synthetic point
+spans, not occurrence times; `weft.time_basis = "sequence"` marks them.
+Without a base, OTLP backends or collectors (for example, ingestion windows)
+may silently drop these 1970-dated spans, so production composition roots should
+inject a base.
+Sequences from different emitters are incomparable. Across emitters a child
+span can start before its parent when the parent has a later sequence; some
+trace UIs flag or reorder these spans. Measured `latency_ms`
+remains a namespaced metric rather than fabricating a start time. Real timing,
+duration and cross-emitter chronology cannot be recovered from this export.
+Null versus absent is lost; native validation, field disclosure classes,
+conflict semantics and non-authority are not enforced by OTLP readers.
+Decisions, rejected candidates, policy filtering and evidence retain their
+values in namespaced attributes, but have no standard OTel meaning. Numeric
+safe integers use OTLP decimal int strings; fractional metrics use doubles.
+Truncated hash identities have theoretical collision risk; export is no store
+and provides no exactly-once delivery guarantee. Retrying after a crash produces
+the same bytes and span identities for the same redacted records and base; the composition
+root must supply a deterministic redactor for reproducible export. Collector
+deduplication is its concern.
+`weave.trace@1` is rejected rather than inventing missing Weft fields.

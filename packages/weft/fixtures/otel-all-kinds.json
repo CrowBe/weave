@@ -1,0 +1,3137 @@
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "weft.trace_id",
+            "value": {
+              "stringValue": "all-kinds"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "@weave/weft/otel",
+            "version": "1"
+          },
+          "spans": [
+            {
+              "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+              "spanId": "d986a3066ff5cfb0",
+              "name": "goal.intent",
+              "kind": 1,
+              "startTimeUnixNano": "1",
+              "endTimeUnixNano": "1",
+              "attributes": [
+                {
+                  "key": "weft.emitter",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "id",
+                          "value": {
+                            "stringValue": "all-kinds-emitter"
+                          }
+                        },
+                        {
+                          "key": "kind",
+                          "value": {
+                            "stringValue": "external"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.evidence",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-check"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "check"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-external"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "external"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-inference_request"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "inference_request"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-invocation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "invocation"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-observation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "observation"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.fields",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "criteria",
+                          "value": {
+                            "arrayValue": {
+                              "values": [
+                                {
+                                  "stringValue": "c1"
+                                },
+                                {
+                                  "stringValue": "c2"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "key": "goal_ref",
+                          "value": {
+                            "stringValue": "goal-17"
+                          }
+                        },
+                        {
+                          "key": "statement",
+                          "value": {
+                            "kvlistValue": {
+                              "values": [
+                                {
+                                  "key": "content_class",
+                                  "value": {
+                                    "stringValue": "private"
+                                  }
+                                },
+                                {
+                                  "key": "digest",
+                                  "value": {
+                                    "stringValue": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.kind",
+                  "value": {
+                    "stringValue": "goal.intent"
+                  }
+                },
+                {
+                  "key": "weft.record_id",
+                  "value": {
+                    "stringValue": "kind-0"
+                  }
+                },
+                {
+                  "key": "weft.schema",
+                  "value": {
+                    "stringValue": "weft.record@1"
+                  }
+                },
+                {
+                  "key": "weft.sequence",
+                  "value": {
+                    "intValue": "0"
+                  }
+                },
+                {
+                  "key": "weft.time_basis",
+                  "value": {
+                    "stringValue": "sequence"
+                  }
+                },
+                {
+                  "key": "weft.trace_id",
+                  "value": {
+                    "stringValue": "all-kinds"
+                  }
+                }
+              ],
+              "links": [],
+              "status": {
+                "code": 0
+              }
+            },
+            {
+              "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+              "spanId": "550067241d511080",
+              "name": "thread.transition",
+              "kind": 1,
+              "startTimeUnixNano": "2",
+              "endTimeUnixNano": "2",
+              "attributes": [
+                {
+                  "key": "weft.emitter",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "id",
+                          "value": {
+                            "stringValue": "all-kinds-emitter"
+                          }
+                        },
+                        {
+                          "key": "kind",
+                          "value": {
+                            "stringValue": "external"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.evidence",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-check"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "check"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-external"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "external"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-inference_request"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "inference_request"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-invocation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "invocation"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-observation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "observation"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.fields",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "transition",
+                          "value": {
+                            "stringValue": "cancelled"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.kind",
+                  "value": {
+                    "stringValue": "thread.transition"
+                  }
+                },
+                {
+                  "key": "weft.parent_id",
+                  "value": {
+                    "stringValue": "kind-0"
+                  }
+                },
+                {
+                  "key": "weft.record_id",
+                  "value": {
+                    "stringValue": "kind-1"
+                  }
+                },
+                {
+                  "key": "weft.schema",
+                  "value": {
+                    "stringValue": "weft.record@1"
+                  }
+                },
+                {
+                  "key": "weft.sequence",
+                  "value": {
+                    "intValue": "1"
+                  }
+                },
+                {
+                  "key": "weft.thread_id",
+                  "value": {
+                    "stringValue": "t1"
+                  }
+                },
+                {
+                  "key": "weft.time_basis",
+                  "value": {
+                    "stringValue": "sequence"
+                  }
+                },
+                {
+                  "key": "weft.trace_id",
+                  "value": {
+                    "stringValue": "all-kinds"
+                  }
+                }
+              ],
+              "links": [
+                {
+                  "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+                  "spanId": "d986a3066ff5cfb0",
+                  "attributes": [
+                    {
+                      "key": "weft.link.rel",
+                      "value": {
+                        "stringValue": "cancels"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+                  "spanId": "d986a3066ff5cfb0",
+                  "attributes": [
+                    {
+                      "key": "weft.link.rel",
+                      "value": {
+                        "stringValue": "caused_by"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+                  "spanId": "d986a3066ff5cfb0",
+                  "attributes": [
+                    {
+                      "key": "weft.link.rel",
+                      "value": {
+                        "stringValue": "handoff"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+                  "spanId": "d986a3066ff5cfb0",
+                  "attributes": [
+                    {
+                      "key": "weft.link.rel",
+                      "value": {
+                        "stringValue": "joins"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+                  "spanId": "d986a3066ff5cfb0",
+                  "attributes": [
+                    {
+                      "key": "weft.link.rel",
+                      "value": {
+                        "stringValue": "retry_of"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+                  "spanId": "d986a3066ff5cfb0",
+                  "attributes": [
+                    {
+                      "key": "weft.link.rel",
+                      "value": {
+                        "stringValue": "supersedes"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "status": {
+                "code": 0
+              },
+              "parentSpanId": "d986a3066ff5cfb0"
+            },
+            {
+              "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+              "spanId": "1265c49685876c29",
+              "name": "cycle.weighed",
+              "kind": 1,
+              "startTimeUnixNano": "3",
+              "endTimeUnixNano": "3",
+              "attributes": [
+                {
+                  "key": "weft.emitter",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "id",
+                          "value": {
+                            "stringValue": "all-kinds-emitter"
+                          }
+                        },
+                        {
+                          "key": "kind",
+                          "value": {
+                            "stringValue": "external"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.evidence",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-check"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "check"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-external"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "external"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-inference_request"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "inference_request"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-invocation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "invocation"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-observation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "observation"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.fields",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "candidates",
+                          "value": {
+                            "arrayValue": {
+                              "values": [
+                                {
+                                  "kvlistValue": {
+                                    "values": [
+                                      {
+                                        "key": "candidate_ref",
+                                        "value": {
+                                          "stringValue": "cand-a"
+                                        }
+                                      },
+                                      {
+                                        "key": "disposition",
+                                        "value": {
+                                          "stringValue": "selected"
+                                        }
+                                      },
+                                      {
+                                        "key": "eligibility",
+                                        "value": {
+                                          "stringValue": "allowed"
+                                        }
+                                      },
+                                      {
+                                        "key": "operation",
+                                        "value": {
+                                          "stringValue": "repo.read"
+                                        }
+                                      },
+                                      {
+                                        "key": "weight",
+                                        "value": {
+                                          "doubleValue": 0.7
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "kvlistValue": {
+                                    "values": [
+                                      {
+                                        "key": "candidate_ref",
+                                        "value": {
+                                          "stringValue": "cand-b"
+                                        }
+                                      },
+                                      {
+                                        "key": "disposition",
+                                        "value": {
+                                          "stringValue": "conflict"
+                                        }
+                                      },
+                                      {
+                                        "key": "eligibility",
+                                        "value": {
+                                          "stringValue": "allowed"
+                                        }
+                                      },
+                                      {
+                                        "key": "operation",
+                                        "value": {
+                                          "stringValue": "repo.write"
+                                        }
+                                      },
+                                      {
+                                        "key": "weight",
+                                        "value": {
+                                          "doubleValue": 0.2
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "kvlistValue": {
+                                    "values": [
+                                      {
+                                        "key": "candidate_ref",
+                                        "value": {
+                                          "stringValue": "cand-c"
+                                        }
+                                      },
+                                      {
+                                        "key": "disposition",
+                                        "value": {
+                                          "stringValue": "policy_filtered"
+                                        }
+                                      },
+                                      {
+                                        "key": "eligibility",
+                                        "value": {
+                                          "stringValue": "approval_required"
+                                        }
+                                      },
+                                      {
+                                        "key": "operation",
+                                        "value": {
+                                          "stringValue": "repo.publish"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "kvlistValue": {
+                                    "values": [
+                                      {
+                                        "key": "candidate_ref",
+                                        "value": {
+                                          "stringValue": "cand-d"
+                                        }
+                                      },
+                                      {
+                                        "key": "disposition",
+                                        "value": {
+                                          "stringValue": "policy_filtered"
+                                        }
+                                      },
+                                      {
+                                        "key": "eligibility",
+                                        "value": {
+                                          "stringValue": "prohibited"
+                                        }
+                                      },
+                                      {
+                                        "key": "operation",
+                                        "value": {
+                                          "stringValue": "repo.delete"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "key": "cost_micros",
+                          "value": {
+                            "intValue": "40"
+                          }
+                        },
+                        {
+                          "key": "cycle_no",
+                          "value": {
+                            "intValue": "3"
+                          }
+                        },
+                        {
+                          "key": "procedure",
+                          "value": {
+                            "stringValue": "inspect_and_report@1"
+                          }
+                        },
+                        {
+                          "key": "state_revision",
+                          "value": {
+                            "intValue": "12"
+                          }
+                        },
+                        {
+                          "key": "weights_ref",
+                          "value": {
+                            "stringValue": "obs:11"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.kind",
+                  "value": {
+                    "stringValue": "cycle.weighed"
+                  }
+                },
+                {
+                  "key": "weft.parent_id",
+                  "value": {
+                    "stringValue": "kind-0"
+                  }
+                },
+                {
+                  "key": "weft.record_id",
+                  "value": {
+                    "stringValue": "kind-2"
+                  }
+                },
+                {
+                  "key": "weft.schema",
+                  "value": {
+                    "stringValue": "weft.record@1"
+                  }
+                },
+                {
+                  "key": "weft.sequence",
+                  "value": {
+                    "intValue": "2"
+                  }
+                },
+                {
+                  "key": "weft.thread_id",
+                  "value": {
+                    "stringValue": "t1"
+                  }
+                },
+                {
+                  "key": "weft.time_basis",
+                  "value": {
+                    "stringValue": "sequence"
+                  }
+                },
+                {
+                  "key": "weft.trace_id",
+                  "value": {
+                    "stringValue": "all-kinds"
+                  }
+                }
+              ],
+              "links": [],
+              "status": {
+                "code": 0
+              },
+              "parentSpanId": "d986a3066ff5cfb0"
+            },
+            {
+              "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+              "spanId": "d0c46ec0145183f4",
+              "name": "judgment",
+              "kind": 1,
+              "startTimeUnixNano": "4",
+              "endTimeUnixNano": "4",
+              "attributes": [
+                {
+                  "key": "weft.emitter",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "id",
+                          "value": {
+                            "stringValue": "all-kinds-emitter"
+                          }
+                        },
+                        {
+                          "key": "kind",
+                          "value": {
+                            "stringValue": "external"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.evidence",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-check"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "check"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-external"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "external"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-inference_request"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "inference_request"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-invocation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "invocation"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-observation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "observation"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.fields",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "accepted",
+                          "value": {
+                            "boolValue": true
+                          }
+                        },
+                        {
+                          "key": "confidence",
+                          "value": {
+                            "doubleValue": 0.92
+                          }
+                        },
+                        {
+                          "key": "request_ref",
+                          "value": {
+                            "stringValue": "req-9"
+                          }
+                        },
+                        {
+                          "key": "routed_unit",
+                          "value": {
+                            "stringValue": "jev-1.14.0"
+                          }
+                        },
+                        {
+                          "key": "site",
+                          "value": {
+                            "stringValue": "frontier.weigh"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.kind",
+                  "value": {
+                    "stringValue": "judgment"
+                  }
+                },
+                {
+                  "key": "weft.parent_id",
+                  "value": {
+                    "stringValue": "kind-0"
+                  }
+                },
+                {
+                  "key": "weft.record_id",
+                  "value": {
+                    "stringValue": "kind-3"
+                  }
+                },
+                {
+                  "key": "weft.schema",
+                  "value": {
+                    "stringValue": "weft.record@1"
+                  }
+                },
+                {
+                  "key": "weft.sequence",
+                  "value": {
+                    "intValue": "3"
+                  }
+                },
+                {
+                  "key": "weft.thread_id",
+                  "value": {
+                    "stringValue": "t1"
+                  }
+                },
+                {
+                  "key": "weft.time_basis",
+                  "value": {
+                    "stringValue": "sequence"
+                  }
+                },
+                {
+                  "key": "weft.trace_id",
+                  "value": {
+                    "stringValue": "all-kinds"
+                  }
+                }
+              ],
+              "links": [],
+              "status": {
+                "code": 0
+              },
+              "parentSpanId": "d986a3066ff5cfb0"
+            },
+            {
+              "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+              "spanId": "62633ff3a37e4ea6",
+              "name": "route.selected",
+              "kind": 1,
+              "startTimeUnixNano": "5",
+              "endTimeUnixNano": "5",
+              "attributes": [
+                {
+                  "key": "weft.emitter",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "id",
+                          "value": {
+                            "stringValue": "all-kinds-emitter"
+                          }
+                        },
+                        {
+                          "key": "kind",
+                          "value": {
+                            "stringValue": "external"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.evidence",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-check"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "check"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-external"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "external"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-inference_request"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "inference_request"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-invocation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "invocation"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-observation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "observation"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.fields",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "excluded",
+                          "value": {
+                            "arrayValue": {
+                              "values": [
+                                {
+                                  "kvlistValue": {
+                                    "values": [
+                                      {
+                                        "key": "reason",
+                                        "value": {
+                                          "stringValue": "credential_content"
+                                        }
+                                      },
+                                      {
+                                        "key": "routed_unit",
+                                        "value": {
+                                          "stringValue": "muse-spark-1.3"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "key": "request_ref",
+                          "value": {
+                            "stringValue": "req-9"
+                          }
+                        },
+                        {
+                          "key": "routed_unit",
+                          "value": {
+                            "stringValue": "jev-1.14.0"
+                          }
+                        },
+                        {
+                          "key": "tier",
+                          "value": {
+                            "stringValue": "decision"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.kind",
+                  "value": {
+                    "stringValue": "route.selected"
+                  }
+                },
+                {
+                  "key": "weft.parent_id",
+                  "value": {
+                    "stringValue": "kind-0"
+                  }
+                },
+                {
+                  "key": "weft.record_id",
+                  "value": {
+                    "stringValue": "kind-4"
+                  }
+                },
+                {
+                  "key": "weft.schema",
+                  "value": {
+                    "stringValue": "weft.record@1"
+                  }
+                },
+                {
+                  "key": "weft.sequence",
+                  "value": {
+                    "intValue": "4"
+                  }
+                },
+                {
+                  "key": "weft.thread_id",
+                  "value": {
+                    "stringValue": "t1"
+                  }
+                },
+                {
+                  "key": "weft.time_basis",
+                  "value": {
+                    "stringValue": "sequence"
+                  }
+                },
+                {
+                  "key": "weft.trace_id",
+                  "value": {
+                    "stringValue": "all-kinds"
+                  }
+                }
+              ],
+              "links": [],
+              "status": {
+                "code": 0
+              },
+              "parentSpanId": "d986a3066ff5cfb0"
+            },
+            {
+              "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+              "spanId": "6f5872c4954d6fce",
+              "name": "inference.attempt",
+              "kind": 3,
+              "startTimeUnixNano": "6",
+              "endTimeUnixNano": "6",
+              "attributes": [
+                {
+                  "key": "gen_ai.usage.input_tokens",
+                  "value": {
+                    "intValue": "812"
+                  }
+                },
+                {
+                  "key": "gen_ai.usage.output_tokens",
+                  "value": {
+                    "intValue": "40"
+                  }
+                },
+                {
+                  "key": "weft.emitter",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "id",
+                          "value": {
+                            "stringValue": "all-kinds-emitter"
+                          }
+                        },
+                        {
+                          "key": "kind",
+                          "value": {
+                            "stringValue": "external"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.evidence",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-check"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "check"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-external"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "external"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-inference_request"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "inference_request"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-invocation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "invocation"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-observation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "observation"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.fields",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "attempt_no",
+                          "value": {
+                            "intValue": "1"
+                          }
+                        },
+                        {
+                          "key": "cost_is_upper_bound",
+                          "value": {
+                            "boolValue": false
+                          }
+                        },
+                        {
+                          "key": "disposition",
+                          "value": {
+                            "stringValue": "accepted"
+                          }
+                        },
+                        {
+                          "key": "input_tokens",
+                          "value": {
+                            "intValue": "812"
+                          }
+                        },
+                        {
+                          "key": "latency_ms",
+                          "value": {
+                            "doubleValue": 310.5
+                          }
+                        },
+                        {
+                          "key": "output_tokens",
+                          "value": {
+                            "intValue": "40"
+                          }
+                        },
+                        {
+                          "key": "request_ref",
+                          "value": {
+                            "stringValue": "req-9"
+                          }
+                        },
+                        {
+                          "key": "routed_unit",
+                          "value": {
+                            "stringValue": "jev-1.14.0"
+                          }
+                        },
+                        {
+                          "key": "spent_micros",
+                          "value": {
+                            "intValue": "90"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.kind",
+                  "value": {
+                    "stringValue": "inference.attempt"
+                  }
+                },
+                {
+                  "key": "weft.parent_id",
+                  "value": {
+                    "stringValue": "kind-0"
+                  }
+                },
+                {
+                  "key": "weft.record_id",
+                  "value": {
+                    "stringValue": "kind-5"
+                  }
+                },
+                {
+                  "key": "weft.schema",
+                  "value": {
+                    "stringValue": "weft.record@1"
+                  }
+                },
+                {
+                  "key": "weft.sequence",
+                  "value": {
+                    "intValue": "5"
+                  }
+                },
+                {
+                  "key": "weft.thread_id",
+                  "value": {
+                    "stringValue": "t1"
+                  }
+                },
+                {
+                  "key": "weft.time_basis",
+                  "value": {
+                    "stringValue": "sequence"
+                  }
+                },
+                {
+                  "key": "weft.trace_id",
+                  "value": {
+                    "stringValue": "all-kinds"
+                  }
+                }
+              ],
+              "links": [],
+              "status": {
+                "code": 0
+              },
+              "parentSpanId": "d986a3066ff5cfb0"
+            },
+            {
+              "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+              "spanId": "201e2054512c73c6",
+              "name": "capability.invoked",
+              "kind": 1,
+              "startTimeUnixNano": "7",
+              "endTimeUnixNano": "7",
+              "attributes": [
+                {
+                  "key": "weft.emitter",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "id",
+                          "value": {
+                            "stringValue": "all-kinds-emitter"
+                          }
+                        },
+                        {
+                          "key": "kind",
+                          "value": {
+                            "stringValue": "external"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.evidence",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-check"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "check"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-external"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "external"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-inference_request"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "inference_request"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-invocation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "invocation"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-observation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "observation"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.fields",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "contract_rev",
+                          "value": {
+                            "stringValue": "repo.read@2"
+                          }
+                        },
+                        {
+                          "key": "execution_tier",
+                          "value": {
+                            "stringValue": "trusted"
+                          }
+                        },
+                        {
+                          "key": "failure",
+                          "value": {
+                            "stringValue": "not_found"
+                          }
+                        },
+                        {
+                          "key": "implementation",
+                          "value": {
+                            "stringValue": "impl-7"
+                          }
+                        },
+                        {
+                          "key": "invocation_ref",
+                          "value": {
+                            "stringValue": "inv-3"
+                          }
+                        },
+                        {
+                          "key": "latency_ms",
+                          "value": {
+                            "intValue": "12"
+                          }
+                        },
+                        {
+                          "key": "status",
+                          "value": {
+                            "stringValue": "failed"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.kind",
+                  "value": {
+                    "stringValue": "capability.invoked"
+                  }
+                },
+                {
+                  "key": "weft.parent_id",
+                  "value": {
+                    "stringValue": "kind-0"
+                  }
+                },
+                {
+                  "key": "weft.record_id",
+                  "value": {
+                    "stringValue": "kind-6"
+                  }
+                },
+                {
+                  "key": "weft.schema",
+                  "value": {
+                    "stringValue": "weft.record@1"
+                  }
+                },
+                {
+                  "key": "weft.sequence",
+                  "value": {
+                    "intValue": "6"
+                  }
+                },
+                {
+                  "key": "weft.thread_id",
+                  "value": {
+                    "stringValue": "t1"
+                  }
+                },
+                {
+                  "key": "weft.time_basis",
+                  "value": {
+                    "stringValue": "sequence"
+                  }
+                },
+                {
+                  "key": "weft.trace_id",
+                  "value": {
+                    "stringValue": "all-kinds"
+                  }
+                }
+              ],
+              "links": [],
+              "status": {
+                "code": 2
+              },
+              "parentSpanId": "d986a3066ff5cfb0"
+            },
+            {
+              "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+              "spanId": "00495e9a9a7bb698",
+              "name": "action.transition",
+              "kind": 1,
+              "startTimeUnixNano": "8",
+              "endTimeUnixNano": "8",
+              "attributes": [
+                {
+                  "key": "weft.emitter",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "id",
+                          "value": {
+                            "stringValue": "all-kinds-emitter"
+                          }
+                        },
+                        {
+                          "key": "kind",
+                          "value": {
+                            "stringValue": "external"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.evidence",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-check"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "check"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-external"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "external"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-inference_request"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "inference_request"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-invocation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "invocation"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-observation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "observation"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.fields",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "action_ref",
+                          "value": {
+                            "stringValue": "act-1"
+                          }
+                        },
+                        {
+                          "key": "operation",
+                          "value": {
+                            "stringValue": "repo.read"
+                          }
+                        },
+                        {
+                          "key": "state",
+                          "value": {
+                            "stringValue": "cancelled"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.kind",
+                  "value": {
+                    "stringValue": "action.transition"
+                  }
+                },
+                {
+                  "key": "weft.parent_id",
+                  "value": {
+                    "stringValue": "kind-0"
+                  }
+                },
+                {
+                  "key": "weft.record_id",
+                  "value": {
+                    "stringValue": "kind-7"
+                  }
+                },
+                {
+                  "key": "weft.schema",
+                  "value": {
+                    "stringValue": "weft.record@1"
+                  }
+                },
+                {
+                  "key": "weft.sequence",
+                  "value": {
+                    "intValue": "7"
+                  }
+                },
+                {
+                  "key": "weft.thread_id",
+                  "value": {
+                    "stringValue": "t1"
+                  }
+                },
+                {
+                  "key": "weft.time_basis",
+                  "value": {
+                    "stringValue": "sequence"
+                  }
+                },
+                {
+                  "key": "weft.trace_id",
+                  "value": {
+                    "stringValue": "all-kinds"
+                  }
+                }
+              ],
+              "links": [],
+              "status": {
+                "code": 0
+              },
+              "parentSpanId": "d986a3066ff5cfb0"
+            },
+            {
+              "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+              "spanId": "e908c39a37422437",
+              "name": "context.assembled",
+              "kind": 1,
+              "startTimeUnixNano": "9",
+              "endTimeUnixNano": "9",
+              "attributes": [
+                {
+                  "key": "weft.emitter",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "id",
+                          "value": {
+                            "stringValue": "all-kinds-emitter"
+                          }
+                        },
+                        {
+                          "key": "kind",
+                          "value": {
+                            "stringValue": "external"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.evidence",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-check"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "check"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-external"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "external"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-inference_request"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "inference_request"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-invocation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "invocation"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-observation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "observation"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.fields",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "assembly_ref",
+                          "value": {
+                            "stringValue": "asm-4"
+                          }
+                        },
+                        {
+                          "key": "consumer",
+                          "value": {
+                            "stringValue": "frontier.weigh"
+                          }
+                        },
+                        {
+                          "key": "cost_micros",
+                          "value": {
+                            "intValue": "5"
+                          }
+                        },
+                        {
+                          "key": "disclosed_bytes",
+                          "value": {
+                            "intValue": "2048"
+                          }
+                        },
+                        {
+                          "key": "omissions",
+                          "value": {
+                            "intValue": "1"
+                          }
+                        },
+                        {
+                          "key": "slices",
+                          "value": {
+                            "arrayValue": {
+                              "values": [
+                                {
+                                  "stringValue": "goal"
+                                },
+                                {
+                                  "stringValue": "catalogue"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "key": "source_revision",
+                          "value": {
+                            "intValue": "12"
+                          }
+                        },
+                        {
+                          "key": "view_ref",
+                          "value": {
+                            "stringValue": "view-4"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.kind",
+                  "value": {
+                    "stringValue": "context.assembled"
+                  }
+                },
+                {
+                  "key": "weft.parent_id",
+                  "value": {
+                    "stringValue": "kind-0"
+                  }
+                },
+                {
+                  "key": "weft.record_id",
+                  "value": {
+                    "stringValue": "kind-8"
+                  }
+                },
+                {
+                  "key": "weft.schema",
+                  "value": {
+                    "stringValue": "weft.record@1"
+                  }
+                },
+                {
+                  "key": "weft.sequence",
+                  "value": {
+                    "intValue": "8"
+                  }
+                },
+                {
+                  "key": "weft.thread_id",
+                  "value": {
+                    "stringValue": "t1"
+                  }
+                },
+                {
+                  "key": "weft.time_basis",
+                  "value": {
+                    "stringValue": "sequence"
+                  }
+                },
+                {
+                  "key": "weft.trace_id",
+                  "value": {
+                    "stringValue": "all-kinds"
+                  }
+                }
+              ],
+              "links": [],
+              "status": {
+                "code": 0
+              },
+              "parentSpanId": "d986a3066ff5cfb0"
+            },
+            {
+              "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+              "spanId": "c72f2df39e09ef92",
+              "name": "budget",
+              "kind": 1,
+              "startTimeUnixNano": "10",
+              "endTimeUnixNano": "10",
+              "attributes": [
+                {
+                  "key": "weft.emitter",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "id",
+                          "value": {
+                            "stringValue": "all-kinds-emitter"
+                          }
+                        },
+                        {
+                          "key": "kind",
+                          "value": {
+                            "stringValue": "external"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.evidence",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-check"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "check"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-external"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "external"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-inference_request"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "inference_request"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-invocation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "invocation"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-observation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "observation"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.fields",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "limit",
+                          "value": {
+                            "intValue": "2000000"
+                          }
+                        },
+                        {
+                          "key": "line",
+                          "value": {
+                            "stringValue": "cost"
+                          }
+                        },
+                        {
+                          "key": "reserved",
+                          "value": {
+                            "intValue": "90"
+                          }
+                        },
+                        {
+                          "key": "spent",
+                          "value": {
+                            "intValue": "40"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.kind",
+                  "value": {
+                    "stringValue": "budget"
+                  }
+                },
+                {
+                  "key": "weft.parent_id",
+                  "value": {
+                    "stringValue": "kind-0"
+                  }
+                },
+                {
+                  "key": "weft.record_id",
+                  "value": {
+                    "stringValue": "kind-9"
+                  }
+                },
+                {
+                  "key": "weft.schema",
+                  "value": {
+                    "stringValue": "weft.record@1"
+                  }
+                },
+                {
+                  "key": "weft.sequence",
+                  "value": {
+                    "intValue": "9"
+                  }
+                },
+                {
+                  "key": "weft.thread_id",
+                  "value": {
+                    "stringValue": "t1"
+                  }
+                },
+                {
+                  "key": "weft.time_basis",
+                  "value": {
+                    "stringValue": "sequence"
+                  }
+                },
+                {
+                  "key": "weft.trace_id",
+                  "value": {
+                    "stringValue": "all-kinds"
+                  }
+                }
+              ],
+              "links": [],
+              "status": {
+                "code": 0
+              },
+              "parentSpanId": "d986a3066ff5cfb0"
+            },
+            {
+              "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+              "spanId": "98debcadd1777697",
+              "name": "outcome",
+              "kind": 1,
+              "startTimeUnixNano": "11",
+              "endTimeUnixNano": "11",
+              "attributes": [
+                {
+                  "key": "weft.emitter",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "id",
+                          "value": {
+                            "stringValue": "all-kinds-emitter"
+                          }
+                        },
+                        {
+                          "key": "kind",
+                          "value": {
+                            "stringValue": "external"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.evidence",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-check"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "check"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-external"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "external"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-inference_request"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "inference_request"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-invocation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "invocation"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-observation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "observation"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.fields",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "criteria_met",
+                          "value": {
+                            "intValue": "2"
+                          }
+                        },
+                        {
+                          "key": "criteria_total",
+                          "value": {
+                            "intValue": "2"
+                          }
+                        },
+                        {
+                          "key": "status",
+                          "value": {
+                            "stringValue": "complete"
+                          }
+                        },
+                        {
+                          "key": "subject",
+                          "value": {
+                            "stringValue": "goal"
+                          }
+                        },
+                        {
+                          "key": "subject_ref",
+                          "value": {
+                            "stringValue": "goal-17"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.kind",
+                  "value": {
+                    "stringValue": "outcome"
+                  }
+                },
+                {
+                  "key": "weft.parent_id",
+                  "value": {
+                    "stringValue": "kind-0"
+                  }
+                },
+                {
+                  "key": "weft.record_id",
+                  "value": {
+                    "stringValue": "kind-10"
+                  }
+                },
+                {
+                  "key": "weft.schema",
+                  "value": {
+                    "stringValue": "weft.record@1"
+                  }
+                },
+                {
+                  "key": "weft.sequence",
+                  "value": {
+                    "intValue": "10"
+                  }
+                },
+                {
+                  "key": "weft.time_basis",
+                  "value": {
+                    "stringValue": "sequence"
+                  }
+                },
+                {
+                  "key": "weft.trace_id",
+                  "value": {
+                    "stringValue": "all-kinds"
+                  }
+                }
+              ],
+              "links": [],
+              "status": {
+                "code": 0
+              },
+              "parentSpanId": "d986a3066ff5cfb0"
+            },
+            {
+              "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+              "spanId": "b2e1879f357b740a",
+              "name": "error",
+              "kind": 1,
+              "startTimeUnixNano": "12",
+              "endTimeUnixNano": "12",
+              "attributes": [
+                {
+                  "key": "weft.emitter",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "id",
+                          "value": {
+                            "stringValue": "all-kinds-emitter"
+                          }
+                        },
+                        {
+                          "key": "kind",
+                          "value": {
+                            "stringValue": "external"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.evidence",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-check"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "check"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-external"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "external"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-inference_request"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "inference_request"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-invocation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "invocation"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-observation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "observation"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.fields",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "code",
+                          "value": {
+                            "stringValue": "rate_limited"
+                          }
+                        },
+                        {
+                          "key": "retryable",
+                          "value": {
+                            "boolValue": true
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.kind",
+                  "value": {
+                    "stringValue": "error"
+                  }
+                },
+                {
+                  "key": "weft.parent_id",
+                  "value": {
+                    "stringValue": "kind-0"
+                  }
+                },
+                {
+                  "key": "weft.record_id",
+                  "value": {
+                    "stringValue": "kind-11"
+                  }
+                },
+                {
+                  "key": "weft.schema",
+                  "value": {
+                    "stringValue": "weft.record@1"
+                  }
+                },
+                {
+                  "key": "weft.sequence",
+                  "value": {
+                    "intValue": "11"
+                  }
+                },
+                {
+                  "key": "weft.thread_id",
+                  "value": {
+                    "stringValue": "t1"
+                  }
+                },
+                {
+                  "key": "weft.time_basis",
+                  "value": {
+                    "stringValue": "sequence"
+                  }
+                },
+                {
+                  "key": "weft.trace_id",
+                  "value": {
+                    "stringValue": "all-kinds"
+                  }
+                }
+              ],
+              "links": [],
+              "status": {
+                "code": 2
+              },
+              "parentSpanId": "d986a3066ff5cfb0"
+            },
+            {
+              "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+              "spanId": "f5e59583bc1aec78",
+              "name": "capability.lifecycle",
+              "kind": 1,
+              "startTimeUnixNano": "13",
+              "endTimeUnixNano": "13",
+              "attributes": [
+                {
+                  "key": "weft.emitter",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "id",
+                          "value": {
+                            "stringValue": "all-kinds-emitter"
+                          }
+                        },
+                        {
+                          "key": "kind",
+                          "value": {
+                            "stringValue": "external"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.evidence",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-check"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "check"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-external"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "external"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-inference_request"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "inference_request"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-invocation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "invocation"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-observation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "observation"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.fields",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "contract_rev",
+                          "value": {
+                            "stringValue": "report.fold@2"
+                          }
+                        },
+                        {
+                          "key": "event",
+                          "value": {
+                            "stringValue": "admitted"
+                          }
+                        },
+                        {
+                          "key": "implementation",
+                          "value": {
+                            "stringValue": "impl-2"
+                          }
+                        },
+                        {
+                          "key": "operation",
+                          "value": {
+                            "stringValue": "report.fold"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.kind",
+                  "value": {
+                    "stringValue": "capability.lifecycle"
+                  }
+                },
+                {
+                  "key": "weft.parent_id",
+                  "value": {
+                    "stringValue": "kind-0"
+                  }
+                },
+                {
+                  "key": "weft.record_id",
+                  "value": {
+                    "stringValue": "kind-12"
+                  }
+                },
+                {
+                  "key": "weft.schema",
+                  "value": {
+                    "stringValue": "weft.record@1"
+                  }
+                },
+                {
+                  "key": "weft.sequence",
+                  "value": {
+                    "intValue": "12"
+                  }
+                },
+                {
+                  "key": "weft.time_basis",
+                  "value": {
+                    "stringValue": "sequence"
+                  }
+                },
+                {
+                  "key": "weft.trace_id",
+                  "value": {
+                    "stringValue": "all-kinds"
+                  }
+                }
+              ],
+              "links": [],
+              "status": {
+                "code": 0
+              },
+              "parentSpanId": "d986a3066ff5cfb0"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
