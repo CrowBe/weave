@@ -19,6 +19,7 @@ const SCANNED = [
   'packages/auth-chatgpt/src',
   'packages/gateway/src',
   'packages/weave/src',
+  'packages/weft/src',
 ];
 
 const FORBIDDEN = [

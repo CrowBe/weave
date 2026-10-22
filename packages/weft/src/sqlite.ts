@@ -19,22 +19,32 @@ function storageFailure(error: unknown): Failure {
   return fail(typeof code === 'number' && [5, 6].includes(code & 255) ? 'busy' : 'storage');
 }
 type Snapshot = { run: string; id: string; schema: string; parent: string | null; thread: string | null;
-  kind: string; sequence: number; line: string; fields: string; table: string | undefined };
+  kind: string; sequence: number; line: string; fields: Record<string, unknown>; emitterKind: string | null; emitterId: string | null; table: string | undefined };
 const subtypes: Readonly<Record<string, string>> = {
   decision: 'decisions', audit: 'decisions', 'cycle.weighed': 'decisions', judgment: 'decisions', 'route.selected': 'decisions',
   'inference.attempt': 'model_calls', shell: 'tool_calls', 'capability.invoked': 'tool_calls',
   error: 'errors', budget: 'budget_events',
 };
-const tables = ['decisions', 'model_calls', 'tool_calls', 'errors', 'budget_events'] as const;
+// Column order is part of schema v1. Nested fields remain in the canonical record.
+const details = {
+  decisions: { site: 'TEXT', request_ref: 'TEXT', accepted: 'INTEGER', confidence: 'REAL', passed: 'INTEGER',
+    procedure: 'TEXT', cycle_no: 'INTEGER', state_revision: 'INTEGER', weights_ref: 'TEXT', cost_micros: 'INTEGER', routed_unit: 'TEXT', tier: 'TEXT' },
+  model_calls: { request_ref: 'TEXT', routed_unit: 'TEXT', attempt_no: 'INTEGER', disposition: 'TEXT', input_tokens: 'INTEGER', output_tokens: 'INTEGER',
+    spent_micros: 'INTEGER', cost_is_upper_bound: 'INTEGER', latency_ms: 'REAL' },
+  tool_calls: { contract_rev: 'TEXT', implementation: 'TEXT', status: 'TEXT', invocation_ref: 'TEXT', execution_tier: 'TEXT', failure: 'TEXT', latency_ms: 'REAL', spent_micros: 'REAL' },
+  errors: { code: 'TEXT', retryable: 'INTEGER' },
+  budget_events: { line: 'TEXT', budget_limit: 'INTEGER', reserved: 'INTEGER', spent: 'INTEGER', spent_micros: 'REAL' },
+} as const;
+const tables = Object.keys(details) as (keyof typeof details)[];
 const schema = `
 CREATE TABLE runs (run_id TEXT PRIMARY KEY) STRICT;
 CREATE TABLE threads (run_id TEXT NOT NULL REFERENCES runs(run_id), thread_id TEXT NOT NULL,
  PRIMARY KEY (run_id, thread_id)) STRICT;
 CREATE TABLE spans (run_id TEXT NOT NULL REFERENCES runs(run_id), id TEXT NOT NULL,
  schema TEXT NOT NULL, parent_id TEXT, thread_id TEXT, kind TEXT NOT NULL,
- sequence INTEGER NOT NULL CHECK(sequence >= 0), record_json TEXT NOT NULL,
+ sequence INTEGER NOT NULL CHECK(sequence >= 0), emitter_kind TEXT, emitter_id TEXT, record_json TEXT NOT NULL,
  PRIMARY KEY (run_id, id), FOREIGN KEY (run_id, thread_id) REFERENCES threads(run_id, thread_id)) STRICT;
-${tables.map(table => `CREATE TABLE ${table} (run_id TEXT NOT NULL, id TEXT NOT NULL, fields_json TEXT NOT NULL,
+${tables.map(table => `CREATE TABLE ${table} (run_id TEXT NOT NULL, id TEXT NOT NULL, ${Object.entries(details[table]).map(([name, type]) => `${name} ${type}`).join(", ")},
  PRIMARY KEY (run_id, id), FOREIGN KEY (run_id, id) REFERENCES spans(run_id, id)) STRICT;`).join('\n')}
 PRAGMA user_version = 1;`;
 
@@ -85,7 +95,8 @@ export function openTraceStore(path: string, options: TraceStoreOptions):
       return { run: legacy ? clean.run_id : clean.trace_id, id: legacy ? clean.id : clean.record_id,
         schema: clean.schema, parent: legacy ? clean.parentId : clean.parent_id,
         thread: legacy ? null : clean.thread_id, kind: clean.kind, sequence: clean.sequence,
-        line, fields: JSON.stringify(legacy ? clean.payload : clean.fields), table: subtypes[clean.kind] };
+        line, fields: { ...(legacy ? clean.payload : clean.fields) },
+        emitterKind: legacy ? null : clean.emitter.kind, emitterId: legacy ? null : clean.emitter.id, table: subtypes[clean.kind] };
     }
     async function write(records: readonly unknown[], signal?: AbortSignal, torn = false): Promise<TraceWriteResult> {
       if (closed) return fail('storage');
@@ -105,7 +116,7 @@ export function openTraceStore(path: string, options: TraceStoreOptions):
         const find = database.prepare('SELECT record_json FROM spans WHERE run_id = ? AND id = ?');
         const run = database.prepare('INSERT OR IGNORE INTO runs(run_id) VALUES (?)');
         const thread = database.prepare('INSERT OR IGNORE INTO threads(run_id, thread_id) VALUES (?, ?)');
-        const span = database.prepare('INSERT INTO spans VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+        const span = database.prepare('INSERT INTO spans VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         for (const row of rows) {
           if (signal?.aborted) return fail('cancelled');
           const previous = find.get(row.run, row.id);
@@ -114,8 +125,15 @@ export function openTraceStore(path: string, options: TraceStoreOptions):
           } else {
             run.run(row.run);
             if (row.thread !== null) thread.run(row.run, row.thread);
-            span.run(row.run, row.id, row.schema, row.parent, row.thread, row.kind, row.sequence, row.line);
-            if (row.table) database.prepare(`INSERT INTO ${row.table} VALUES (?, ?, ?)`).run(row.run, row.id, row.fields);
+            span.run(row.run, row.id, row.schema, row.parent, row.thread, row.kind, row.sequence, row.emitterKind, row.emitterId, row.line);
+            if (row.table) {
+              const columns = Object.keys(details[row.table as keyof typeof details]);
+              const values = columns.map(column => {
+                const value = row.fields[column === 'budget_limit' ? 'limit' : column];
+                return typeof value === 'boolean' ? Number(value) : typeof value === 'string' || typeof value === 'number' ? value : null;
+              });
+              database.prepare(`INSERT INTO ${row.table} VALUES (?, ?, ${columns.map(() => '?').join(', ')})`).run(row.run, row.id, ...values);
+            }
             inserted++;
           }
           // Yield to pending abort handlers and other importer calls, retaining the lock.

@@ -598,11 +598,29 @@ SQLite message or input fragment crosses the port. Reads sort by `(run_id, id)`.
 Schema version 1 uses `PRAGMA user_version`. Unknown versions are rejected,
 never migrated implicitly. `runs(run_id)` and `threads(run_id, thread_id)`
 index scopes. `spans(run_id, id, schema, parent_id, thread_id, kind, sequence,
-record_json)` has primary key `(run_id, id)` and references the run and optional
+emitter_kind, emitter_id, record_json)` has primary key `(run_id, id)` and references the run and optional
 thread. `decisions`, `model_calls`, `tool_calls`, `errors`, `budget_events`
-each have `(run_id, id, fields_json)` with a composite foreign key to spans.
-Subtype fields retain the validated version's semantics; no missing provenance
-is invented. Links and evidence remain in canonical `record_json`.
+each have primary key `(run_id, id)` and a composite foreign key to spans.
+Their remaining columns, in schema order, are:
+
+- `decisions`: site, request_ref, accepted, confidence, passed, procedure,
+  cycle_no, state_revision, weights_ref, cost_micros, routed_unit, tier.
+- `model_calls`: request_ref, routed_unit, attempt_no, disposition, input_tokens,
+  output_tokens, spent_micros, cost_is_upper_bound, latency_ms.
+- `tool_calls`: contract_rev, implementation, status, invocation_ref,
+  execution_tier, failure, latency_ms, spent_micros.
+- `errors`: code, retryable.
+- `budget_events`: line, budget_limit (the envelope's `limit`), reserved, spent,
+  spent_micros.
+
+Flags store as 0/1. Missing fields are SQL NULL, not invented values. Counts
+use INTEGER, fractional metrics REAL, references TEXT. Legacy decision/audit,
+shell, error and budget records fill only the metrics they actually carry.
+Weft cycle/judgment/route, inference attempt, invocation, error and budget
+records fill their respective tables. Other kinds remain spans. Links,
+evidence, nested candidates and other version-specific fields remain in
+canonical `record_json`; the typed columns are indexes over those validated
+records. No missing operation provenance is invented.
 
 Both envelopes share the identity namespace. Exact canonical bytes are a no-op;
 any differing content (including schema) conflicts and leaves the original
@@ -642,7 +660,8 @@ native semantic fields. Unknown Weft schema versions reject.
 
 Generic OTLP spans require nonzero 32-hex trace and 16-hex span ids and valid
 optional parent ids. They project to `action.transition` with `otlp:`-prefixed
-ids, emitter `external/otlp.import`, operation `otlp.span`, sequence zero and
+ids, a synthetic per-span emitter `external/otlp.import:<spanId>`, operation
+`otlp.span`, sequence zero and
 state `failed` for OTLP ERROR, otherwise `succeeded`. This is a minimal import
 observation, not a claim about a Loom action or the source operation. Parents
 are retained; names, attributes, timing, resources, scopes, events and generic

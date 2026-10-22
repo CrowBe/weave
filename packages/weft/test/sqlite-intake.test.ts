@@ -49,7 +49,7 @@ test('generic OTLP keeps only derived identity, parents and status; raw secrets 
   try {
     assert.ok((await intakeOtlp(generic, result.store, { redact: identity })).ok);
     assert.deepEqual(result.store.read(), { ok: true, rows: [{ schema: 'weft.record@1', trace_id: 'otlp:0123456789abcdef0123456789abcdef',
-      record_id: 'otlp:0123456789abcdef', emitter: { kind: 'external', id: 'otlp.import' }, sequence: 0,
+      record_id: 'otlp:0123456789abcdef', emitter: { kind: 'external', id: 'otlp.import:0123456789abcdef' }, sequence: 0,
       kind: 'action.transition', thread_id: null, parent_id: null, links: [], evidence: [],
       fields: { action_ref: 'otlp:0123456789abcdef', operation: 'otlp.span', state: 'failed' } }] });
   } finally { result.store.close(); }
@@ -95,4 +95,11 @@ test('loopback listener is explicit, bounded, and rejects non-loopback before cr
       assert.equal((await fetch(`${listener.url}/v1/traces`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{' })).status, 400);
     } finally { assert.deepEqual(await listener.close(), { ok: true }); }
   } finally { store.close(); }
+});
+test('generic multi-span projection remains a valid Weft batch with no invented cross-span sequence', () => {
+  const input = structuredClone(generic);
+  const spans = input.resourceSpans[0]!.scopeSpans[0]!.spans;
+  spans.push({ ...spans[0]!, spanId: 'fedcba9876543210' });
+  const mapped = mapOtlp(input, { redact: identity }); assert.ok(mapped.ok); if (!mapped.ok) return;
+  assert.ok(exportOtlp(mapped.records, { redact: identity }).ok);
 });

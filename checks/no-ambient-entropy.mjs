@@ -5,14 +5,14 @@
  * Loom runtime code does not draw random values itself. Fresh identities enter
  * through injected ports (for example the implementation step's `runId`), as
  * time enters through `now` and `clock.tick` (M0-C2), so a run can be replayed
- * from its inputs. The check scans Loom source (not tests) for entropy APIs.
+ * from its inputs. The check scans Loom and Weft source (not tests) for entropy APIs.
  * Composition roots, tests and other packages may still use them.
  */
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
 const root = resolve(new URL('..', import.meta.url).pathname);
-const SCANNED = ['packages/weave/src'];
+const SCANNED = ['packages/weave/src', 'packages/weft/src'];
 
 const FORBIDDEN = [
   [/\brandomUUID\b/, 'randomUUID'],

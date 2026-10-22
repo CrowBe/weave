@@ -92,3 +92,63 @@ test('SQLite failure after a write rolls back all tables; no raw error escapes',
     assert.doesNotMatch(readFileSync(path).toString(), /disk-canary.*confidence/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+test('normalized model/tool/error/budget columns preserve semantic provenance without JSON queries', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weft-columns-')); const path = join(dir, 'trace.db');
+  try {
+    const result = openTraceStore(path, options); assert.ok(result.ok); if (!result.ok) return;
+    const fixtures = JSON.parse(readFileSync(new URL('../../fixtures/records.json', import.meta.url), 'utf8')) as { valid: { record: import('../src/types.js').WeftRecord }[] };
+    const kinds = ['inference.attempt', 'capability.invoked', 'error', 'budget', 'cycle.weighed'];
+    const records = kinds.map(kind => fixtures.valid.find(item => item.record.kind === kind)!.record);
+    assert.ok((await result.store.importRecords(records)).ok);
+    assert.ok((await result.store.importJsonl(line({ ...row, kind: 'audit', payload: { passed: true } }))).ok);
+    const raw = new DatabaseSync(path);
+    assert.equal(raw.prepare('SELECT routed_unit FROM model_calls').get()!.routed_unit, 'jev-1.14.0');
+    assert.equal(raw.prepare('SELECT contract_rev FROM tool_calls').get()!.contract_rev, 'repo.read@2');
+    assert.equal(typeof raw.prepare('SELECT code FROM errors').get()!.code, 'string');
+    assert.equal(typeof raw.prepare('SELECT line FROM budget_events').get()!.line, 'string');
+    assert.equal(raw.prepare('SELECT passed FROM decisions WHERE run_id = ?').get('run')!.passed, 1);
+    assert.equal(raw.prepare('SELECT emitter_id FROM spans WHERE kind = ?').get('inference.attempt')!.emitter_id, 'gateway.local');
+    assert.equal(raw.prepare('SELECT count(*) AS n FROM threads').get()!.n, 1);
+    raw.close(); result.store.close();
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+test('process death during an uncommitted batch recovers; replay yields identical canonical rows', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const dir = mkdtempSync(join(tmpdir(), 'weft-crash-')); const path = join(dir, 'trace.db');
+  const jsonl = line() + line({ ...row, id: 'second' });
+  try {
+    const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      import { openTraceStore } from ${JSON.stringify(new URL('../src/sqlite.js', import.meta.url).href)};
+      const result = openTraceStore(process.argv[1], { redact: r => r, redactTrace: r => r });
+      if (!result.ok) process.exit(1);
+      void result.store.importJsonl(process.argv[2]);
+      // importJsonl has inserted its first row and yielded with BEGIN IMMEDIATE open.
+      process.exit(73);
+    `, path, jsonl], { encoding: 'utf8' });
+    assert.equal(child.status, 73, child.stderr);
+    const result = openTraceStore(path, options); assert.ok(result.ok); if (!result.ok) return;
+    assert.deepEqual(result.store.read(), { ok: true, rows: [] });
+    assert.deepEqual(await result.store.importJsonl(jsonl), { ok: true, inserted: 2, torn: false });
+    const baseline = memory(); await baseline.importJsonl(jsonl);
+    assert.deepEqual(result.store.read(), baseline.read());
+    const snapshot = result.store.read();
+    assert.deepEqual(await result.store.importJsonl(jsonl), { ok: true, inserted: 0, torn: false });
+    assert.deepEqual(result.store.read(), snapshot);
+    baseline.close(); result.store.close();
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+test('existing TraceImportPort parser uses one transaction and canonical identity ignores object key order', async () => {
+  const { importTraceLines } = await import('../src/weave-trace.js');
+  const store = memory();
+  try {
+    await importTraceLines(line(), store);
+    const reordered = JSON.stringify(Object.fromEntries(Object.entries(row).reverse())) + '\n';
+    assert.deepEqual(await store.importJsonl(reordered), { ok: true, inserted: 0, torn: false });
+    await assert.rejects(importTraceLines(line({ ...row, id: 'new' }) + line({ ...row, sequence: 2 }), store), /conflict/);
+    assert.deepEqual(store.read(), { ok: true, rows: [row] });
+    const pending = store.upsert({ ...row, id: 'other', run_id: 'other-run' });
+    assert.deepEqual(store.close(), { ok: false, reason: 'busy' });
+    assert.ok((await pending).ok);
+    assert.deepEqual(await store.upsertBatch([row], AbortSignal.abort()), { ok: false, reason: 'cancelled' });
+  } finally { store.close(); }
+});

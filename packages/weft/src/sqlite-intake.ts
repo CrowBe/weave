@@ -107,7 +107,7 @@ export function mapOtlp(value: unknown, options: IntakeOptions): IntakeResult {
       const status = span['status'] === undefined ? {} : obj(span['status']);
       if (status['code'] !== undefined && ![0, 1, 2].includes(status['code'] as number)) throw new Error('input');
       return { schema: 'weft.record@1', trace_id: `otlp:${traceId}`, record_id: `otlp:${spanId}`,
-        emitter: { kind: 'external', id: 'otlp.import' }, sequence: 0, kind: 'action.transition', thread_id: null,
+        emitter: { kind: 'external', id: `otlp.import:${spanId}` }, sequence: 0, kind: 'action.transition', thread_id: null,
         parent_id: span['parentSpanId'] === undefined ? null : `otlp:${hex(span['parentSpanId'], 16)}`,
         links: [], evidence: [], fields: { action_ref: `otlp:${spanId}`, operation: 'otlp.span',
           state: status['code'] === 2 ? 'failed' : 'succeeded' } } satisfies WeftRecord;
