@@ -445,11 +445,11 @@ Gauge's record of one subject on one split of a case set under one criteria set,
 
 ### Comparison
 
-Gauge's recomputed verdict on a baseline and a candidate evaluation result for the same criteria set, case set, split and mode. Every delta carries an interval; *insufficient evidence* is a valid verdict, never a tie broken by default. A candidate that misses its bar is never better. A comparison is evidence an experiment may cite; it is not a promotion.
+Gauge's recomputed verdict on a baseline and a candidate evaluation result for the same criteria set, case set, split and mode. Every delta carries an interval; *insufficient evidence* is a valid verdict, never a tie broken by default. It is the verdict whenever a compared measure has fewer than `min_samples` samples on either side or a zero-width interval. A candidate that misses its bar is never better. A comparison is evidence an experiment may cite; it is not a promotion.
 
 ### Evaluation cost
 
-Gauge's record (`gauge.cost@1`) of what producing one evaluation result cost: every trial with failed trials counted, evaluation and human review, and their recomputed total. An experiment weighs its benefit against this whole cost, not against its successful trials alone.
+Gauge's record (`gauge.cost@1`) of what producing one evaluation result cost: every trial with failed trials counted, evaluation and human review, and their recomputed total. Each line is measured, estimated or unknown; an unknown line is never zero, and any unknown line makes the total unknown. Its trials less its failed trials equal the result's sample count. An experiment weighs its benefit against this whole cost, not against its successful trials alone, and cannot weigh or promote while either side's cost is unknown (`costed`).
 
 ### Track
 

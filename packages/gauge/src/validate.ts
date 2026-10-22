@@ -14,7 +14,9 @@ import type {
   ComparisonVerdict,
   ConstraintDefinition,
   ConstraintStatus,
+  Comparison,
   Context,
+  CostLine,
   CriteriaSet,
   EvaluationCost,
   EvaluationResult,
@@ -457,6 +459,9 @@ function validateComparison(r: Obj, context: Context): Verdict {
   return OK;
 }
 
+/** An interval with width. A zero-width one (one sample, or all-equal samples) says nothing about spread. */
+const hasWidth = (interval: Interval | null): boolean => interval !== null && interval[0] < interval[1];
+
 export function comparisonVerdict(
   baseline: EvaluationResult,
   candidate: EvaluationResult,
@@ -467,7 +472,13 @@ export function comparisonVerdict(
     const { delta, interval } = deltas.get(d.measure)!;
     return delta === null || interval === null ? [] : [{ d, lo: interval[0], hi: interval[1] }];
   });
-  if (baseline.verdict === 'insufficient_evidence' || candidate.verdict === 'insufficient_evidence' || measured.length === 0) {
+  // min_samples applies to every compared measure, constrained or not, and every interval needs width.
+  const evidenced = measured.every(({ d, lo, hi }) => lo < hi && [baseline, candidate].every(r => {
+    const e = r.measures.find(m => m.measure === d.measure)!;
+    return e.n >= criteria.method.min_samples && hasWidth(e.interval);
+  }));
+  if (baseline.verdict === 'insufficient_evidence' || candidate.verdict === 'insufficient_evidence'
+    || measured.length === 0 || !evidenced) {
     return 'insufficient_evidence';
   }
   if (candidate.verdict === 'misses_bar') return 'bar_missed';
@@ -529,13 +540,23 @@ function validateAttribution(r: Obj, context: Context): Verdict {
 
 // gauge.cost@1
 
-const COST_LINES = ['trial_micros', 'evaluation_micros', 'review_micros', 'total_micros'] as const;
+const COST_LINES = ['trial', 'evaluation', 'review'] as const;
+
+const isCostLine = (x: unknown): boolean =>
+  isObject(x) && hasExactly(x, ['basis', 'micros']) && oneOf(x.basis, 'measured', 'estimated', 'unknown')
+  && (x.micros === null || isMetric(x.micros));
+
+/** A total is unknown if any line is, else estimated if any line is, else measured. */
+function totalBasis(lines: readonly CostLine[]): CostLine['basis'] {
+  if (lines.some(l => l.basis === 'unknown')) return 'unknown';
+  return lines.some(l => l.basis === 'estimated') ? 'estimated' : 'measured';
+}
 
 function validateCost(r: Obj, context: Context): Verdict {
   // 1. envelope: every line is required, so none can be left out.
-  if (!hasExactly(r, ['schema', 'cost', 'result', 'trials', 'failed_trials', ...COST_LINES])) return reject('envelope');
+  if (!hasExactly(r, ['schema', 'cost', 'result', 'trials', 'failed_trials', ...COST_LINES, 'total'])) return reject('envelope');
   if (typeof r.cost !== 'string' || typeof r.result !== 'string' || !isCount(r.trials) || !isCount(r.failed_trials)
-    || !COST_LINES.every(line => isMetric(r[line]))) {
+    || ![...COST_LINES, 'total'].every(line => isCostLine(r[line]))) {
     return reject('envelope');
   }
 
@@ -543,12 +564,47 @@ function validateCost(r: Obj, context: Context): Verdict {
   if (!isId(r.cost) || !isId(r.result)) return reject('ref');
 
   // 3. binding
-  if (boundResult(context, r.result) === null) return reject('binding');
+  const result = boundResult(context, r.result);
+  if (result === null) return reject('binding');
 
-  // 11. cost: failed trials are among the trials, and the total is every line.
+  // 11. cost: failed trials are among the trials, an unknown line has no amount
+  // (never zero), and the total is every line, as known as its least-known line.
   const cost = r as unknown as EvaluationCost;
   if (cost.failed_trials > cost.trials) return reject('cost');
-  const lines = cost.trial_micros + cost.evaluation_micros + cost.review_micros;
-  if (Math.abs(cost.total_micros - lines) > EPSILON * Math.max(1, cost.total_micros)) return reject('cost');
+  const lines = COST_LINES.map(line => cost[line]);
+  if (![...lines, cost.total].every(l => (l.basis === 'unknown') === (l.micros === null))) return reject('cost');
+  if (cost.total.basis !== totalBasis(lines)) return reject('cost');
+  if (cost.total.micros !== null) {
+    const sum = lines.reduce((total, l) => total + l.micros!, 0);
+    if (Math.abs(cost.total.micros - sum) > EPSILON * Math.max(1, cost.total.micros)) return reject('cost');
+  }
+
+  // 12. trial_count: every trial that did not fail gave the result one sample.
+  const samples = Math.max(0, ...result.measures.map(m => m.n));
+  if (cost.trials - cost.failed_trials !== samples) return reject('trial_count');
+  return OK;
+}
+
+/**
+ * Whether a comparison can be weighed against what its results cost, the path
+ * to a promotion decision. It cannot while either result's cost is unknown or
+ * missing (`cost_unknown`); an estimated cost may be weighed, as an estimate.
+ * Gauge weighs and promotes nothing itself.
+ */
+export function costed(comparison: unknown, costs: readonly unknown[], context: Context): Verdict {
+  if (!isObject(comparison) || comparison.schema !== 'gauge.comparison@1' || !Array.isArray(costs)) return reject('envelope');
+  const compared = validate(comparison, context);
+  if (!compared.ok) return compared;
+  for (const cost of costs) {
+    if (!isObject(cost) || cost.schema !== 'gauge.cost@1') return reject('envelope');
+    const verdict = validate(cost, context);
+    if (!verdict.ok) return verdict;
+  }
+  const { baseline, candidate } = comparison as unknown as Comparison;
+  const records = costs as readonly EvaluationCost[];
+  if (!records.every(c => c.result === baseline || c.result === candidate)) return reject('binding');
+  const sides = [baseline, candidate].map(id => records.filter(c => c.result === id));
+  if (sides.some(side => side.length > 1)) return reject('binding');
+  if (sides.some(side => side.length === 0 || side[0]!.total.basis === 'unknown')) return reject('cost_unknown');
   return OK;
 }

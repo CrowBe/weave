@@ -24,7 +24,7 @@ execution or replace deterministic evidence.
   case sets and their governed revisions, evaluation results, comparisons,
   evaluation costs and failure attributions with recomputed verdicts, plus
   seeded statistics (`@weave/gauge`: `validate`, `evaluate`, `compare`,
-  `track`).
+  `track`, `costed`).
 - [M7 decision loop](docs/m7-decision-loop.md): audit report, loop-back,
   deterministic completion evidence, budget and authority boundaries.
 

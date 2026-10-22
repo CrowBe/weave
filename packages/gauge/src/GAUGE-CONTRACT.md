@@ -1,7 +1,8 @@
 # Gauge evaluation contract v1
 
 Status: contract (G1, #189), validator (G2, #190), governed revisions
-(G3, #191), and statistics, producers and evaluation cost (G5, #193).
+(G3, #191), and statistics, producers, evaluation cost and the cost gate
+(G5, #193).
 `validate` in
 `src/validate.ts` implements this contract; `test/contract.test.ts` runs the
 fixtures in `fixtures/records.json` against the compiled package as part of
@@ -220,7 +221,13 @@ Rules:
   uncertainty is part of the result. A null delta carries a null interval. Recomputation tolerates an absolute error
   of 1e-9.
 - **Verdict** is recomputed in this order:
-  1. `insufficient_evidence` if either result is, or no delta is non-null.
+  1. `insufficient_evidence` if either result is, or no delta is non-null, or
+     any non-null delta lacks evidence: `min_samples` applies to every
+     compared measure, constrained or not, so either result having `n` below
+     it is insufficient; and a zero-width interval (`lo = hi`, as from one
+     sample or all-equal samples) on the delta or on either result's measure,
+     or a missing measure interval, says nothing about spread and is
+     insufficient. A measure with a null delta is not compared.
   2. `bar_missed` if the candidate result is `misses_bar`.
   3. `candidate_worse` if any measure's interval lies strictly on the worse
      side of zero and at least `min_effect` from it: for higher-is-better,
@@ -233,8 +240,9 @@ Rules:
   5. Otherwise `no_difference`.
 
   The strict comparison with zero matters when `min_effect` is 0: an
-  unchanged measure, `delta: 0` with interval `[0, 0]`, is `no_difference`
-  in either direction, never worse or better.
+  unchanged measure, `delta: 0` with an interval that touches zero such as
+  `[-0.04, 0]` or `[0, 4]`, is `no_difference` in either direction, never
+  worse or better. With interval `[0, 0]` it is `insufficient_evidence`.
 
 A `candidate_better` comparison is evidence for a promotion decision. It is not
 one.
@@ -278,17 +286,40 @@ only its successful trials.
 - `cost`: id; `result`: id
 - `trials`: count, every trial run for the result, failed ones included
 - `failed_trials`: count
-- `trial_micros`: metric, the cost of every trial, failed ones included
-- `evaluation_micros`: metric, scoring and judging the trials
-- `review_micros`: metric, human review
-- `total_micros`: metric
+- `trial`: line, the cost of every trial, failed ones included
+- `evaluation`: line, scoring and judging the trials
+- `review`: line, human review
+- `total`: line
+
+A line is exactly `{ "basis": "measured" | "estimated" | "unknown", "micros": metric | null }`.
+`measured` is metered usage, `estimated` is a computed figure such as tokens
+times a price, and `unknown` is a cost that was incurred but not established.
 
 Rules:
 
 - **Binding.** The result is known.
-- **Cost.** `failed_trials` is at most `trials`, and `total_micros` equals
-  `trial_micros + evaluation_micros + review_micros` within a relative error of
-  1e-9. Every line is required: a zero is stated, never left out.
+- **Cost.** `failed_trials` is at most `trials`. `micros` is null exactly
+  when `basis` is `unknown`: an unknown line is never zero, and a measured
+  zero is a valid, distinct line. The total's basis is `unknown` if any line
+  is, else `estimated` if any line is, else `measured`; a known total equals
+  `trial + evaluation + review` within a relative error of 1e-9. Partial usage
+  is an unknown total, never the sum of the known lines. Every line is
+  required: a zero or an unknown is stated, never left out.
+- **Trial count.** `trials - failed_trials` equals the bound result's
+  sample count, the largest `n` among its measures: every trial that did not
+  fail gave the result one sample. A mismatch is `trial_count`.
+
+## Weighing cost
+
+`costed(comparison, costs, context)` says whether a comparison may be weighed
+against what its results cost, the input to a promotion decision or any other
+benefit-against-cost decision. It returns `{ "ok": true }` or the first
+rejection: a comparison or cost that fails `validate` gives that reason (one
+of another schema, or `costs` not a list, is `envelope`); a cost for neither
+result, or two costs for one result, is `binding`; and a result with no cost,
+or one whose total is `unknown`, is `cost_unknown`. An `estimated` total may
+be weighed, as an estimate. Whatever decides promotion must have `costed`
+pass first; Gauge itself weighs and promotes nothing.
 
 ## Statistics
 
@@ -319,9 +350,9 @@ record they return has passed `validate`.
   must be the criteria set's and case set's (`binding`): samples from one
   workload never become a result for another. Sample lists match the criteria
   measures one-to-one (`binding`). An empty list is `n = 0` with a null value;
-  a list shorter than `min_samples` leaves its constraints `unknown`. Neither
-  is an error, and neither is a pass or a tie: the verdict says
-  `insufficient_evidence`. In `replay` mode a non-empty list for a measure
+  a list shorter than `min_samples` leaves its constraints `unknown`, and a
+  comparison or track over it is `insufficient_evidence` whether or not the
+  measure is constrained. Neither is an error, and neither is a pass or a tie. In `replay` mode a non-empty list for a measure
   sourced from an outcome kind is `mode`, and a rate sample other than 0 or 1
   is `measure`. Malformed samples are `envelope`. Otherwise the result's own
   rejection, if any, is returned.
@@ -384,5 +415,10 @@ first applicable reason, in this order:
 10. `verdict`: a verdict that does not match recomputation
 11. `attribution`: a basis, signal or confidence that breaks the attribution
     rules
-11. `cost`: more failed trials than trials, or a total that is not the sum of
-    its lines
+12. `cost`: more failed trials than trials, an unknown line with an amount or
+    a known line without one, or a total whose basis or amount does not
+    match its lines
+13. `trial_count`: trials that did not fail differ from the bound result's
+    sample count
+14. `cost_unknown` (`costed` only): a compared result with no cost or an
+    unknown total

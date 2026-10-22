@@ -78,3 +78,29 @@ test('envelope rejects mistyped scalars and a reversed interval', () => {
 test('unattributed with a judgment basis is rejected', () => {
   assert.equal(reason({ ...routing, category: 'unattributed', basis: 'judgment', signal: null, confidence: 0.5 }), 'attribution');
 });
+
+test('a zero-width delta interval is insufficient evidence, never no difference', () => {
+  const unchanged = { ...record('an unchanged higher-is-better measure at a zero threshold'),
+    deltas: [{ measure: 'accuracy', delta: 0, interval: [0, 0] }] };
+  assert.equal(reason({ ...unchanged, verdict: 'no_difference' }), 'verdict');
+  assert.equal(reason({ ...unchanged, verdict: 'insufficient_evidence' }), 'ok');
+});
+
+test('a zero-width measure interval in either result is insufficient evidence', () => {
+  const pinned = { ...(context.results['res-lo-a'] as object), measures: [{ measure: 'cost', value: 150, n: 120, interval: [150, 150] }] };
+  const ctx = { ...context, results: { ...context.results, 'res-lo-a': pinned } };
+  assert.equal(reason(pinned, ctx), 'ok');
+  const improvement = record('a strict improvement at a zero threshold');
+  assert.equal(reason(improvement), 'ok');
+  assert.equal(reason(improvement, ctx), 'verdict');
+  assert.equal(reason({ ...improvement, verdict: 'insufficient_evidence' }, ctx), 'ok');
+});
+
+test('an unconstrained measure below min_samples makes a comparison insufficient evidence', () => {
+  const cand = context.results['res-cand'] as { measures: readonly { measure: string }[] };
+  const thin = { ...cand, measures: cand.measures.map(m => (m.measure === 'completion' ? { ...m, n: 12 } : m)) };
+  const ctx = { ...context, results: { ...context.results, 'res-cand': thin } };
+  assert.equal(reason(thin, ctx), 'ok');
+  assert.equal(reason(better, ctx), 'verdict');
+  assert.equal(reason({ ...better, verdict: 'insufficient_evidence' }, ctx), 'ok');
+});

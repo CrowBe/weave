@@ -139,6 +139,13 @@ export interface FailureAttribution {
   readonly evidence: readonly EvidenceRef[];
 }
 
+/** How a cost line is known. An unknown line has no amount: it is never zero. */
+export type CostBasis = 'measured' | 'estimated' | 'unknown';
+
+export type CostLine =
+  | { readonly basis: 'measured' | 'estimated'; readonly micros: number }
+  | { readonly basis: 'unknown'; readonly micros: null };
+
 /** What producing one result cost, failed trials, evaluation and review included. */
 export interface EvaluationCost {
   readonly schema: 'gauge.cost@1';
@@ -146,10 +153,10 @@ export interface EvaluationCost {
   readonly result: string;
   readonly trials: number;
   readonly failed_trials: number;
-  readonly trial_micros: number;
-  readonly evaluation_micros: number;
-  readonly review_micros: number;
-  readonly total_micros: number;
+  readonly trial: CostLine;
+  readonly evaluation: CostLine;
+  readonly review: CostLine;
+  readonly total: CostLine;
 }
 
 export type GaugeRecord =
@@ -174,7 +181,9 @@ export type Rejection =
   | 'constraint'
   | 'verdict'
   | 'attribution'
-  | 'cost';
+  | 'cost'
+  | 'trial_count'
+  | 'cost_unknown';
 
 export type Verdict = { readonly ok: true } | { readonly ok: false; readonly reason: Rejection };
 

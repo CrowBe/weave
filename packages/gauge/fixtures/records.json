@@ -1834,7 +1834,7 @@
             "measure": "accuracy",
             "delta": 0,
             "interval": [
-              0,
+              -0.04,
               0
             ]
           }
@@ -1856,7 +1856,7 @@
             "delta": 0,
             "interval": [
               0,
-              0
+              4
             ]
           }
         ],
@@ -1944,10 +1944,22 @@
         "result": "res-cand",
         "trials": 130,
         "failed_trials": 10,
-        "trial_micros": 15600,
-        "evaluation_micros": 2400,
-        "review_micros": 9000,
-        "total_micros": 27000
+        "trial": {
+          "basis": "measured",
+          "micros": 15600
+        },
+        "evaluation": {
+          "basis": "measured",
+          "micros": 2400
+        },
+        "review": {
+          "basis": "measured",
+          "micros": 9000
+        },
+        "total": {
+          "basis": "measured",
+          "micros": 27000
+        }
       }
     },
     {
@@ -1956,12 +1968,102 @@
         "schema": "gauge.cost@1",
         "cost": "cost-res-base",
         "result": "res-base",
-        "trials": 130,
+        "trials": 120,
         "failed_trials": 0,
-        "trial_micros": 15600,
-        "evaluation_micros": 2400,
-        "review_micros": 0,
-        "total_micros": 18000
+        "trial": {
+          "basis": "measured",
+          "micros": 15600
+        },
+        "evaluation": {
+          "basis": "measured",
+          "micros": 2400
+        },
+        "review": {
+          "basis": "measured",
+          "micros": 0
+        },
+        "total": {
+          "basis": "measured",
+          "micros": 18000
+        }
+      }
+    },
+    {
+      "name": "an evaluation cost with an estimated review line",
+      "record": {
+        "schema": "gauge.cost@1",
+        "cost": "cost-res-cand-est",
+        "result": "res-cand",
+        "trials": 130,
+        "failed_trials": 10,
+        "trial": {
+          "basis": "measured",
+          "micros": 15600
+        },
+        "evaluation": {
+          "basis": "measured",
+          "micros": 2400
+        },
+        "review": {
+          "basis": "estimated",
+          "micros": 9000
+        },
+        "total": {
+          "basis": "estimated",
+          "micros": 27000
+        }
+      }
+    },
+    {
+      "name": "an evaluation cost with an unknown review line and so an unknown total",
+      "record": {
+        "schema": "gauge.cost@1",
+        "cost": "cost-res-cand-partial",
+        "result": "res-cand",
+        "trials": 130,
+        "failed_trials": 10,
+        "trial": {
+          "basis": "measured",
+          "micros": 15600
+        },
+        "evaluation": {
+          "basis": "measured",
+          "micros": 2400
+        },
+        "review": {
+          "basis": "unknown",
+          "micros": null
+        },
+        "total": {
+          "basis": "unknown",
+          "micros": null
+        }
+      }
+    },
+    {
+      "name": "an evaluation cost measured at zero",
+      "record": {
+        "schema": "gauge.cost@1",
+        "cost": "cost-res-cand-zero",
+        "result": "res-cand",
+        "trials": 130,
+        "failed_trials": 10,
+        "trial": {
+          "basis": "measured",
+          "micros": 0
+        },
+        "evaluation": {
+          "basis": "measured",
+          "micros": 0
+        },
+        "review": {
+          "basis": "measured",
+          "micros": 0
+        },
+        "total": {
+          "basis": "measured",
+          "micros": 0
+        }
       }
     }
   ],
@@ -4090,7 +4192,7 @@
             "measure": "accuracy",
             "delta": 0,
             "interval": [
-              0,
+              -0.04,
               0
             ]
           }
@@ -4113,7 +4215,7 @@
             "delta": 0,
             "interval": [
               0,
-              0
+              4
             ]
           }
         ],
@@ -4135,7 +4237,7 @@
             "delta": 0,
             "interval": [
               0,
-              0
+              0.04
             ]
           }
         ],
@@ -4669,9 +4771,18 @@
         "result": "res-cand",
         "trials": 130,
         "failed_trials": 10,
-        "trial_micros": 15600,
-        "evaluation_micros": 2400,
-        "total_micros": 27000
+        "trial": {
+          "basis": "measured",
+          "micros": 15600
+        },
+        "evaluation": {
+          "basis": "measured",
+          "micros": 2400
+        },
+        "total": {
+          "basis": "measured",
+          "micros": 27000
+        }
       }
     },
     {
@@ -4683,10 +4794,22 @@
         "result": "res-cand",
         "trials": 130,
         "failed_trials": 10,
-        "trial_micros": 15600,
-        "evaluation_micros": -1,
-        "review_micros": 9000,
-        "total_micros": 24599
+        "trial": {
+          "basis": "measured",
+          "micros": 15600
+        },
+        "evaluation": {
+          "basis": "measured",
+          "micros": -1
+        },
+        "review": {
+          "basis": "measured",
+          "micros": 9000
+        },
+        "total": {
+          "basis": "measured",
+          "micros": 24599
+        }
       }
     },
     {
@@ -4698,10 +4821,22 @@
         "result": "res-cand",
         "trials": 130,
         "failed_trials": 10,
-        "trial_micros": 15600,
-        "evaluation_micros": 2400,
-        "review_micros": 9000,
-        "total_micros": 27000
+        "trial": {
+          "basis": "measured",
+          "micros": 15600
+        },
+        "evaluation": {
+          "basis": "measured",
+          "micros": 2400
+        },
+        "review": {
+          "basis": "measured",
+          "micros": 9000
+        },
+        "total": {
+          "basis": "measured",
+          "micros": 27000
+        }
       }
     },
     {
@@ -4713,10 +4848,22 @@
         "result": "res-nowhere",
         "trials": 130,
         "failed_trials": 10,
-        "trial_micros": 15600,
-        "evaluation_micros": 2400,
-        "review_micros": 9000,
-        "total_micros": 27000
+        "trial": {
+          "basis": "measured",
+          "micros": 15600
+        },
+        "evaluation": {
+          "basis": "measured",
+          "micros": 2400
+        },
+        "review": {
+          "basis": "measured",
+          "micros": 9000
+        },
+        "total": {
+          "basis": "measured",
+          "micros": 27000
+        }
       }
     },
     {
@@ -4728,10 +4875,22 @@
         "result": "res-cand",
         "trials": 130,
         "failed_trials": 131,
-        "trial_micros": 15600,
-        "evaluation_micros": 2400,
-        "review_micros": 9000,
-        "total_micros": 27000
+        "trial": {
+          "basis": "measured",
+          "micros": 15600
+        },
+        "evaluation": {
+          "basis": "measured",
+          "micros": 2400
+        },
+        "review": {
+          "basis": "measured",
+          "micros": 9000
+        },
+        "total": {
+          "basis": "measured",
+          "micros": 27000
+        }
       }
     },
     {
@@ -4743,10 +4902,211 @@
         "result": "res-cand",
         "trials": 130,
         "failed_trials": 10,
-        "trial_micros": 15600,
-        "evaluation_micros": 2400,
-        "review_micros": 9000,
-        "total_micros": 25800
+        "trial": {
+          "basis": "measured",
+          "micros": 15600
+        },
+        "evaluation": {
+          "basis": "measured",
+          "micros": 2400
+        },
+        "review": {
+          "basis": "measured",
+          "micros": 9000
+        },
+        "total": {
+          "basis": "measured",
+          "micros": 25800
+        }
+      }
+    },
+    {
+      "name": "a cost line with an unrecognised basis",
+      "reason": "envelope",
+      "record": {
+        "schema": "gauge.cost@1",
+        "cost": "cost-res-cand",
+        "result": "res-cand",
+        "trials": 130,
+        "failed_trials": 10,
+        "trial": {
+          "basis": "measured",
+          "micros": 15600
+        },
+        "evaluation": {
+          "basis": "measured",
+          "micros": 2400
+        },
+        "review": {
+          "basis": "guessed",
+          "micros": 9000
+        },
+        "total": {
+          "basis": "measured",
+          "micros": 27000
+        }
+      }
+    },
+    {
+      "name": "an unknown cost line stated as zero",
+      "reason": "cost",
+      "record": {
+        "schema": "gauge.cost@1",
+        "cost": "cost-res-cand",
+        "result": "res-cand",
+        "trials": 130,
+        "failed_trials": 10,
+        "trial": {
+          "basis": "measured",
+          "micros": 15600
+        },
+        "evaluation": {
+          "basis": "measured",
+          "micros": 2400
+        },
+        "review": {
+          "basis": "unknown",
+          "micros": 0
+        },
+        "total": {
+          "basis": "unknown",
+          "micros": null
+        }
+      }
+    },
+    {
+      "name": "a measured cost line without a value",
+      "reason": "cost",
+      "record": {
+        "schema": "gauge.cost@1",
+        "cost": "cost-res-cand",
+        "result": "res-cand",
+        "trials": 130,
+        "failed_trials": 10,
+        "trial": {
+          "basis": "measured",
+          "micros": 15600
+        },
+        "evaluation": {
+          "basis": "measured",
+          "micros": 2400
+        },
+        "review": {
+          "basis": "measured",
+          "micros": null
+        },
+        "total": {
+          "basis": "unknown",
+          "micros": null
+        }
+      }
+    },
+    {
+      "name": "a partial total summing only the known lines",
+      "reason": "cost",
+      "record": {
+        "schema": "gauge.cost@1",
+        "cost": "cost-res-cand",
+        "result": "res-cand",
+        "trials": 130,
+        "failed_trials": 10,
+        "trial": {
+          "basis": "measured",
+          "micros": 15600
+        },
+        "evaluation": {
+          "basis": "measured",
+          "micros": 2400
+        },
+        "review": {
+          "basis": "unknown",
+          "micros": null
+        },
+        "total": {
+          "basis": "unknown",
+          "micros": 18000
+        }
+      }
+    },
+    {
+      "name": "a total measured although a line is unknown",
+      "reason": "cost",
+      "record": {
+        "schema": "gauge.cost@1",
+        "cost": "cost-res-cand",
+        "result": "res-cand",
+        "trials": 130,
+        "failed_trials": 10,
+        "trial": {
+          "basis": "measured",
+          "micros": 15600
+        },
+        "evaluation": {
+          "basis": "measured",
+          "micros": 2400
+        },
+        "review": {
+          "basis": "unknown",
+          "micros": null
+        },
+        "total": {
+          "basis": "measured",
+          "micros": 18000
+        }
+      }
+    },
+    {
+      "name": "a total measured although a line is estimated",
+      "reason": "cost",
+      "record": {
+        "schema": "gauge.cost@1",
+        "cost": "cost-res-cand",
+        "result": "res-cand",
+        "trials": 130,
+        "failed_trials": 10,
+        "trial": {
+          "basis": "measured",
+          "micros": 15600
+        },
+        "evaluation": {
+          "basis": "measured",
+          "micros": 2400
+        },
+        "review": {
+          "basis": "estimated",
+          "micros": 9000
+        },
+        "total": {
+          "basis": "measured",
+          "micros": 27000
+        }
+      }
+    },
+    {
+      "name": "a trial count that does not match the result's samples",
+      "reason": "trial_count",
+      "record": {
+        "schema": "gauge.cost@1",
+        "cost": "cost-res-cand",
+        "result": "res-cand",
+        "trials": 130,
+        "failed_trials": 0,
+        "trial": {
+          "basis": "measured",
+          "micros": 15600
+        },
+        "evaluation": {
+          "basis": "measured",
+          "micros": 2400
+        },
+        "review": {
+          "basis": "measured",
+          "micros": 9000
+        },
+        "total": {
+          "basis": "measured",
+          "micros": 27000
+        }
       }
     }
   ]

@@ -215,3 +215,65 @@ test('track refuses results that answer different questions', () => {
   assert.deepEqual(track([], context), { ok: true, steps: [] });
   assert.deepEqual(track(['res-base'], context), { ok: true, steps: [] });
 });
+
+/** A criteria set recorded by its first revision, so runs can bind to it. */
+const withCriteria = (set: { readonly criteria: string; readonly governed_by: unknown; readonly [key: string]: unknown }): Context => ({
+  ...context,
+  criteria: { ...context.criteria, [set.criteria]: set },
+  revisions: { ...context.revisions, [set.criteria]: {
+    schema: 'gauge.revision@1', revision: set.criteria, record: 'criteria', digest: recordDigest(set), supersedes: null,
+    issued_by: set.governed_by, justification: 'initial', evidence: [],
+  } },
+});
+/** One unconstrained cost measure, a zero threshold and the smallest min_samples, so only the interval decides. */
+const loose = withCriteria({
+  schema: 'gauge.criteria@1', criteria: 'decision-sites.loose@1', workload: 'decision-sites',
+  governed_by: { kind: 'policy', ref: 'eval-policy-3' },
+  method: { interval: 'bootstrap@1', level: 0.95, seed: 7, min_samples: 1 },
+  measures: [
+    { measure: 'accuracy', source: { weft_kind: 'judgment', field: 'accepted' }, aggregate: 'rate', better: 'higher', min_effect: 0 },
+    { measure: 'cost', source: { weft_kind: 'inference.attempt', field: 'spent_micros' }, aggregate: 'mean', better: 'lower', min_effect: 0 },
+  ],
+  constraints: [],
+});
+const pair = (ctx: Context, samples: readonly [Run['samples'], Run['samples']], criteriaName = C1) => {
+  const a = produced(run({ result: 'res-pair-a', criteria: criteriaName, samples: samples[0] }), ctx);
+  const b = produced(run({ result: 'res-pair-b', criteria: criteriaName, subject: { kind: 'routed_unit', ref: 'boolean.task@jev-1.14.0' },
+    evidence: [{ source: 'weft_trace', ref: 'trace-pair-b' }], samples: samples[1] }), ctx);
+  const both: Context = { ...ctx, results: { ...ctx.results, [a.result]: a, [b.result]: b } };
+  return { a, b, both };
+};
+const verdicts = (ctx: Context) => {
+  const cmp = compare({ comparison: 'cmp-pair', experiment: null, baseline: 'res-pair-a', candidate: 'res-pair-b' }, ctx);
+  const back = track(['res-pair-b', 'res-pair-a'], ctx);
+  assert.ok(cmp.ok && back.ok);
+  return { compare: cmp.record.verdict, track: back.steps.map(s => [s.verdict, s.regression]) };
+};
+
+test('one sample has a zero-width interval, which is insufficient evidence for compare and track', () => {
+  const { a, both } = pair(loose, [{ accuracy: [0], cost: [150] }, { accuracy: [1], cost: [100] }], 'decision-sites.loose@1');
+  assert.deepEqual(measure(a, 'cost').interval, [150, 150]);
+  assert.equal(a.verdict, 'meets_bar');
+  assert.deepEqual(verdicts(both), { compare: 'insufficient_evidence', track: [['insufficient_evidence', false]] });
+});
+
+test('all-equal samples have a zero-width interval, which is insufficient evidence however many there are', () => {
+  const same = (x: number) => Array.from({ length: 200 }, () => x);
+  const { b, both } = pair(loose, [{ accuracy: same(0), cost: same(150) }, { accuracy: same(1), cost: same(100) }], 'decision-sites.loose@1');
+  assert.deepEqual(measure(b, 'accuracy').interval, [1, 1]);
+  assert.deepEqual(verdicts(both), { compare: 'insufficient_evidence', track: [['insufficient_evidence', false]] });
+});
+
+test('min_samples applies to an unconstrained measure too, on either side', () => {
+  const full = { accuracy: rates(108, 120), cost: costs(150, 120) };
+  const gain = { accuracy: rates(116, 120), cost: costs(120, 120) };
+  for (const [completionA, completionB] of [[rates(8, 12), rates(9, 12)], [rates(84, 120), rates(9, 12)], [rates(8, 12), rates(86, 120)]] as const) {
+    const { a, b, both } = pair(context, [{ ...full, completion: completionA }, { ...gain, completion: completionB }]);
+    // completion carries no constraint, so each result still meets its bar.
+    assert.deepEqual([a.verdict, b.verdict], ['meets_bar', 'meets_bar']);
+    assert.deepEqual(verdicts(both), { compare: 'insufficient_evidence', track: [['insufficient_evidence', false]] });
+  }
+  // With every measure at min_samples the same gain is visible.
+  const { both } = pair(context, [{ ...full, completion: rates(24, 30) }, { ...gain, completion: rates(25, 30) }]);
+  assert.deepEqual(verdicts(both), { compare: 'candidate_better', track: [['candidate_worse', true]] });
+});
