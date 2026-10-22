@@ -32,6 +32,7 @@ import {
   type ImplementPorts,
   type ImplementStepInput,
   type ImplementTier,
+  type JournalEntry,
 } from '../src/implement-step.js';
 
 const terms: InferenceTerms = {
@@ -537,29 +538,35 @@ test('implementation requests preserve the caller content class for generation a
   }
 });
 
-test('a D5 failure retries with a fresh grant and passes when the checks stay green', async () => {
-  const world = driver({ evaluations: [{ c1: { p: 0.2, conf: 0.95 } }, { c1: { p: 0.95, conf: 0.95 } }] });
-  const result = await runImplementationStep(world.input, world.ports, world.journal);
-  assert.equal(result.status, 'passed');
-  assert.equal(result.goal_done, false);
-  assert.equal(result.attempts.length, 2);
-  assert.equal(result.attempts[0]?.status, 'failed');
-  assert.deepEqual(result.attempts[0]?.failing_criterion_ids, ['c1']);
-  assert.equal(result.attempts[0]?.checks[0]?.passed, true);
-  assert.equal(result.attempts[0]?.checks[0]?.exit, 0);
-  assert.equal(result.attempts[1]?.status, 'passed');
-  assert.equal(result.attempts[1]?.checks[0]?.passed, true);
-  assert.equal(result.attempts[1]?.checks[0]?.exit, 0);
-  assert.equal(world.invokes.length, 2);
-  assert.notEqual(world.invokes[0]?.grant, world.invokes[1]?.grant);
-  assert.notEqual(world.invokes[0]?.grant, grant);
-  assert.notEqual(world.invokes[1]?.grant, grant);
-  assert.deepEqual(grantScope(world.invokes[0]?.grant), grantScope(grant));
-  assert.deepEqual(grantScope(world.invokes[1]?.grant), grantScope(grant));
-  const reused = world.ports.invoke(world.invokes[0]?.grant ?? null, 'repo.test', {}, { invocation_id: 'reuse' });
-  assert.equal(reused.kind, 'rejected');
-  if (reused.kind === 'rejected') assert.equal(reused.reason, 'grant has already been used for an invocation');
-});
+for (const storage of ['memory', 'file'] as const) {
+  test(`a D5 failure retries with a fresh grant and passes when the checks stay green (${storage})`, async (t) => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-p8-grants-'));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    const journal =
+      storage === 'file' ? new FileAttemptJournal(join(dir, 'attempts.jsonl')) : new MemoryAttemptJournal();
+    const world = driver({ journal, evaluations: [{ c1: { p: 0.2, conf: 0.95 } }, { c1: { p: 0.95, conf: 0.95 } }] });
+    const result = await runImplementationStep(world.input, world.ports, world.journal);
+    assert.equal(result.status, 'passed');
+    assert.equal(result.goal_done, false);
+    assert.equal(result.attempts.length, 2);
+    assert.equal(result.attempts[0]?.status, 'failed');
+    assert.deepEqual(result.attempts[0]?.failing_criterion_ids, ['c1']);
+    assert.equal(result.attempts[0]?.checks[0]?.passed, true);
+    assert.equal(result.attempts[0]?.checks[0]?.exit, 0);
+    assert.equal(result.attempts[1]?.status, 'passed');
+    assert.equal(result.attempts[1]?.checks[0]?.passed, true);
+    assert.equal(result.attempts[1]?.checks[0]?.exit, 0);
+    assert.equal(world.invokes.length, 2);
+    assert.notEqual(world.invokes[0]?.grant, world.invokes[1]?.grant);
+    assert.notEqual(world.invokes[0]?.grant, grant);
+    assert.notEqual(world.invokes[1]?.grant, grant);
+    assert.deepEqual(grantScope(world.invokes[0]?.grant), grantScope(grant));
+    assert.deepEqual(grantScope(world.invokes[1]?.grant), grantScope(grant));
+    const reused = world.ports.invoke(world.invokes[0]?.grant ?? null, 'repo.test', {}, { invocation_id: 'reuse' });
+    assert.equal(reused.kind, 'rejected');
+    if (reused.kind === 'rejected') assert.equal(reused.reason, 'grant has already been used for an invocation');
+  });
+}
 
 test('the equal issuer refuses a wider grant and the step does not invoke one', async () => {
   const authority = createGrantAuthority();
@@ -1526,46 +1533,57 @@ test('step-built ids stay within the 128-character correlation limit and stay di
 });
 
 // #123: cancelling the step cancels the check in flight instead of leaving it running.
-test('cancelling the step requests cancellation of the in-flight check and pauses (#123)', async () => {
-  type Outcome = { outcome: 'failed'; failure: string } | { outcome: 'succeeded'; output: unknown };
-  const world = driver({});
-  const controller = new AbortController();
-  let cancels = 0;
-  const ports: ImplementPorts = {
-    ...world.ports,
-    invoke: (token, operation, inputs, options) => {
-      const handle = world.ports.invoke(token, operation, inputs, options);
-      if (handle.kind !== 'handle') return handle;
-      let settle: (outcome: Outcome) => void = () => {};
-      const result = new Promise<Outcome>((resolve) => {
-        settle = resolve;
-      });
-      // A host that ends a long check only when asked to cancel; the fallback keeps a red run finite.
-      const fallback = setTimeout(
-        () => settle({ outcome: 'succeeded', output: { exit: 0, stdout_tail: '', artifacts: [] } }),
-        500,
-      );
-      queueMicrotask(() => controller.abort());
-      return {
-        ...handle,
-        result,
-        requestCancel() {
-          cancels += 1;
-          clearTimeout(fallback);
-          settle({ outcome: 'failed', failure: 'cancelled' });
-        },
-      };
-    },
-  };
-  const result = await runImplementationStep(world.input, ports, world.journal, controller.signal);
-  assert.equal(cancels, 1, 'the in-flight check is asked to cancel');
-  assert.equal(result.status, 'paused');
-  assert.equal(result.attempts[0]?.pause?.reason, 'cancelled');
-  assert.equal(result.attempts[0]?.checks[0]?.passed, false);
-  assert.equal(result.attempts[0]?.checks[0]?.exit, null);
-  assert.deepEqual(world.evalSites, [], 'no D5 after cancellation');
-  assert.equal(result.goal_done, false);
-});
+for (const storage of ['memory', 'file'] as const) {
+  test(`cancelling the step requests cancellation of the in-flight check and pauses (#123, ${storage})`, async (t) => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-p8-cancel-'));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    const path = join(dir, 'attempts.jsonl');
+    const journal = storage === 'file' ? new FileAttemptJournal(path) : new MemoryAttemptJournal();
+    type Outcome = { outcome: 'failed'; failure: string } | { outcome: 'succeeded'; output: unknown };
+    const world = driver({ journal });
+    const controller = new AbortController();
+    let cancels = 0;
+    const ports: ImplementPorts = {
+      ...world.ports,
+      invoke: (token, operation, inputs, options) => {
+        const handle = world.ports.invoke(token, operation, inputs, options);
+        if (handle.kind !== 'handle') return handle;
+        let settle: (outcome: Outcome) => void = () => {};
+        const result = new Promise<Outcome>((resolve) => {
+          settle = resolve;
+        });
+        // A host that ends a long check only when asked to cancel; the fallback keeps a red run finite.
+        const fallback = setTimeout(
+          () => settle({ outcome: 'succeeded', output: { exit: 0, stdout_tail: '', artifacts: [] } }),
+          500,
+        );
+        queueMicrotask(() => controller.abort());
+        return {
+          ...handle,
+          result,
+          requestCancel() {
+            cancels += 1;
+            clearTimeout(fallback);
+            settle({ outcome: 'failed', failure: 'cancelled' });
+          },
+        };
+      },
+    };
+    const result = await runImplementationStep(world.input, ports, world.journal, controller.signal);
+    assert.equal(cancels, 1, 'the in-flight check is asked to cancel');
+    assert.equal(result.status, 'paused');
+    assert.equal(result.attempts[0]?.pause?.reason, 'cancelled');
+    assert.equal(result.attempts[0]?.checks[0]?.passed, false);
+    assert.equal(result.attempts[0]?.checks[0]?.exit, null);
+    assert.deepEqual(world.evalSites, [], 'no D5 after cancellation');
+    assert.equal(result.goal_done, false);
+    if (storage === 'file') {
+      const recovered = new FileAttemptJournal(path);
+      assert.deepEqual(recovered.load('exec-1'), journal.load('exec-1'));
+      assert.deepEqual(replayImplementationStep(recovered.load('exec-1'), world.input), result);
+    }
+  });
+}
 
 // #128: a budget pause is temporary at escalation too.
 test('a budget pause at escalation pauses the step and resumes into the escalation (#128)', async () => {
@@ -1709,6 +1727,7 @@ test('a second writer on one attempt journal is detected and refused (#131)', as
     );
     intruder.append(second);
     assert.throws(() => owner.append(third), /another writer/);
+    assert.throws(() => owner.append(first), /another writer/, 'even a duplicate must check for another writer');
     assert.throws(() => owner.load('exec-1'), /another writer/);
     assert.deepEqual(
       new FileAttemptJournal(path).load('exec-1').map((entry) => entry.id),
@@ -1717,6 +1736,132 @@ test('a second writer on one attempt journal is detected and refused (#131)', as
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// #277: steady-state queries must not inspect entries belonging to other executions.
+for (const operation of ['load', 'append'] as const) {
+  test(`file journal ${operation} does not scan unrelated entries (#277)`, async (t) => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-p8-index-'));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    const source = driver({});
+    await runImplementationStep(source.input, source.ports, source.journal);
+    const seed = source.journal.load('exec-1')[0]!;
+    const path = join(dir, 'attempts.jsonl');
+    const unrelated = Array.from({ length: 256 }, (_, i) => ({
+      ...seed,
+      id: `other-${i}`,
+      execution_id: `other-${i}`,
+    }));
+    writeFileSync(path, [...unrelated, seed].map((entry) => `${JSON.stringify(entry)}\n`).join(''));
+    const journal = new FileAttemptJournal(path);
+    const parse = JSON.parse;
+    let reads = 0;
+    try {
+      // Count property reads on parsed records, including scans through helpers.
+      // Accessors still allow structuredClone; no timing or private fields needed.
+      JSON.parse = (text: string) => {
+        const value = parse(text) as JournalEntry;
+        if (value.execution_id?.startsWith('other-')) {
+          for (const key of ['id', 'execution_id'] as const) {
+            const field = value[key];
+            Object.defineProperty(value, key, {
+              enumerable: true,
+              get: () => {
+                reads += 1;
+                return field;
+              },
+            });
+          }
+        }
+        return value;
+      };
+      journal.load('exec-1');
+    } finally {
+      JSON.parse = parse;
+    }
+    reads = 0;
+    if (operation === 'load') assert.deepEqual(journal.load('exec-1'), [seed]);
+    else journal.append({ ...seed, id: 'new-attempt' });
+    assert.equal(reads, 0, `${operation} must not read unrelated journal entries`);
+  });
+}
+
+test('file journal indexes preserve log order, duplicate records, replay and defensive copies after recovery (#277)', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-p8-index-replay-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const first = driver({ evaluations: [{ c1: { p: 0.2, conf: 1 } }, { c1: { p: 1, conf: 1 } }] });
+  const second = driver({ input: input({ execution_id: 'exec-2', retries: 0, ceiling: 'flash' }), exits: [1] });
+  const results = await Promise.all([
+    runImplementationStep(first.input, first.ports, first.journal),
+    runImplementationStep(second.input, second.ports, second.journal),
+  ]);
+  const a = first.journal.load('exec-1');
+  const b = second.journal.load('exec-2');
+  assert.equal(b.at(-1)?.schema, 'impl.stop@1');
+  const log = [a[0]!, b[0]!, ...a.slice(1), ...b.slice(1)];
+  const path = join(dir, 'attempts.jsonl');
+  const journal = new FileAttemptJournal(path);
+  for (const entry of log) journal.append(entry);
+  const original = readFileSync(path, 'utf8');
+  journal.append({ ...log[0]!, execution_id: 'exec-2' });
+  assert.equal(readFileSync(path, 'utf8'), original, 'ids are unique across executions');
+  for (const loaded of [journal, new FileAttemptJournal(path)]) {
+    for (const [i, world] of [first, second].entries()) {
+      const expected = log.filter((entry) => entry.execution_id === world.input.execution_id);
+      assert.deepEqual(loaded.load(world.input.execution_id), expected);
+      assert.deepEqual(replayImplementationStep(loaded.load(world.input.execution_id), world.input), results[i]);
+    }
+    assert.deepEqual(loaded.load('missing'), []);
+    const copy = loaded.load('exec-1');
+    const attempt = copy[0]!;
+    assert.equal(attempt.schema, 'impl.attempt@1');
+    if (attempt.schema === 'impl.attempt@1') (attempt.artifact_refs as string[]).push('mutated');
+    copy.pop();
+    assert.deepEqual(loaded.load('exec-1'), a, 'nested values and arrays are defensive copies');
+  }
+  const snapshot = structuredClone(a);
+  if (a[0]!.schema === 'impl.attempt@1') (a[0]!.artifact_refs as string[]).push('caller-mutation');
+  assert.deepEqual(journal.load('exec-1'), snapshot, 'append owns a defensive copy');
+
+  // Historical logs can contain repeated ids: reconstruction must keep every record.
+  appendFileSync(path, `${JSON.stringify(snapshot[0])}\n{"schema":"impl.att`);
+  const recovered = new FileAttemptJournal(path);
+  const expected = [...snapshot, snapshot[0]!];
+  assert.deepEqual(recovered.load('exec-1'), expected);
+  const repaired = readFileSync(path, 'utf8');
+  recovered.append(snapshot[0]!);
+  assert.equal(readFileSync(path, 'utf8'), repaired, 'recovery rebuilds duplicate detection');
+  recovered.append({ ...snapshot[0]!, id: 'after-recovery' });
+  assert.deepEqual(new FileAttemptJournal(path).load('exec-1'), recovered.load('exec-1'));
+});
+
+test('a rejected file journal write leaves indexes unchanged and can be retried (#277)', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-p8-index-failure-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const source = driver({});
+  await runImplementationStep(source.input, source.ports, source.journal);
+  const entry = source.journal.load('exec-1')[0]!;
+  const path = join(dir, 'attempts.jsonl');
+  const journal = new FileAttemptJournal(path);
+  journal.load('exec-1');
+  const fsModule = createRequire(import.meta.url)('node:fs') as typeof import('node:fs');
+  const write = fsModule.writeSync;
+  try {
+    fsModule.writeSync = () => {
+      throw new Error('injected write failure');
+    };
+    syncBuiltinESMExports();
+    assert.throws(() => journal.append(entry), /injected write failure/);
+    assert.deepEqual(journal.load('exec-1'), []);
+    assert.equal(readFileSync(path, 'utf8'), '');
+  } finally {
+    fsModule.writeSync = write;
+    syncBuiltinESMExports();
+  }
+  journal.append(entry);
+  journal.append(entry);
+  assert.deepEqual(journal.load('exec-1'), [entry]);
+  assert.deepEqual(new FileAttemptJournal(path).load('exec-1'), [entry]);
 });
 
 // #130: escalation is relative to the D2-routed tier; the budget gate re-checks it.
