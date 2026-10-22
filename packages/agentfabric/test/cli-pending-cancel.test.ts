@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, type TestContext } from 'node:test';
 import { createGrantAuthority, type Grant } from '@weave/agentsop';
-import { AgentFabricHost, FabricStore, SHELL_RUN, createGrantedCliSpawn } from '@weave/agentfabric';
+import { AgentFabricHost, FabricStore, SHELL_RUN, createGrantedCliSpawn, type WeftPort } from '@weave/agentfabric';
 import { digest } from '../src/digest.js';
 
 type Wait = 'recovery' | 'startup check';
@@ -26,6 +26,7 @@ async function fixture(
   t: TestContext,
   wait?: Wait,
   existingStatus?: 'running' | 'uncertain' | 'committed' | 'stopped',
+  weft?: WeftPort,
 ) {
   const dir = mkdtempSync(join(tmpdir(), 'weave-cli-pending-cancel-'));
   const workspace = join(dir, 'workspace');
@@ -55,7 +56,13 @@ async function fixture(
         )
       : undefined;
   let store = new FabricStore(undefined, path);
-  let host = new AgentFabricHost({ authority, store, shell, cliProcessGroupProbe: () => 'unknown' });
+  let host = new AgentFabricHost({
+    authority,
+    store,
+    shell,
+    cliProcessGroupProbe: () => 'unknown',
+    ...(weft ? { weft } : {}),
+  });
   const cwd_ref = host.registerWorkspace(workspace);
   const request = (ref = cwd_ref) => ({
     argv: [process.execPath, '-e', 'void 0'],
@@ -100,7 +107,13 @@ async function fixture(
     }
     store.close();
     store = new FabricStore(undefined, path);
-    host = new AgentFabricHost({ authority, store, shell, cliProcessGroupProbe: () => 'unknown' });
+    host = new AgentFabricHost({
+      authority,
+      store,
+      shell,
+      cliProcessGroupProbe: () => 'unknown',
+      ...(weft ? { weft } : {}),
+    });
   }
   if (wait !== 'recovery') await host.cliRecoveryReady;
   if (wait === 'startup check') {
@@ -116,7 +129,13 @@ async function fixture(
     });
     store.close();
     store = new FabricStore(undefined, path);
-    host = new AgentFabricHost({ authority, store, shell, cliProcessGroupProbe: () => 'unknown' });
+    host = new AgentFabricHost({
+      authority,
+      store,
+      shell,
+      cliProcessGroupProbe: () => 'unknown',
+      ...(weft ? { weft } : {}),
+    });
     await host.cliRecoveryReady;
     t.mock.method(host as unknown as RecoveryChecks, 'checkUncertainCliGenerations', () => gate.promise);
   }
@@ -157,7 +176,13 @@ async function fixture(
     clearLegacy();
     store.close();
     store = new FabricStore(undefined, path);
-    host = new AgentFabricHost({ authority, store, shell, cliProcessGroupProbe: () => 'unknown' });
+    host = new AgentFabricHost({
+      authority,
+      store,
+      shell,
+      cliProcessGroupProbe: () => 'unknown',
+      ...(weft ? { weft } : {}),
+    });
     await host.cliRecoveryReady;
   };
   return {
@@ -803,6 +828,120 @@ describe('CLI cancellation before prepare', () => {
       });
       assert.deepEqual(f.host.listUncertainCliGenerations(), []);
       assert.equal(f.host.coordinator.held().length, 0);
+    });
+  }
+});
+
+describe('CLI cancellation follow-ups (#296)', () => {
+  // Note 1: only a durable record can carry a cancel_requested written before the
+  // start record, and the store refuses a CLI generation start over any record.
+  it('never overwrites a durable cancellation written during prepare: the start is refused', async (t) => {
+    const f = await fixture(t);
+    const id = 'shell-cli:spawn-failed';
+    const inputs = { ...f.request(), argv: [join(f.workspace, 'missing-binary')] };
+    const first = await f.host.invokeCliGeneration(f.grant(id), inputs);
+    assert.equal(first.kind, 'handle');
+    if (first.kind !== 'handle') return;
+    f.host.release(id);
+    assert.deepEqual(await first.result, { outcome: 'failed', failure: 'spawn_failed' });
+    const before = f.store.getInvocation(id)!;
+    assert.equal(before.status, 'stopped');
+    assert.equal(before.reconciliation, undefined);
+    assert.equal(before.cancel_requested, false);
+    const spawns = f.spawn.mock.callCount();
+    const markInvoked = f.authority.markInvoked.bind(f.authority);
+    t.mock.method(
+      f.authority,
+      'markInvoked',
+      (grant: Grant) => {
+        assert.deepEqual(f.host.requestCancel(id), { acknowledged: true });
+        assert.equal(f.store.getInvocation(id)?.cancel_requested, true, 'cancellation is durable during prepare');
+        return markInvoked(grant);
+      },
+      { times: 1 },
+    );
+    await assert.rejects(
+      f.host.invokeCliGeneration(f.grant(id), inputs),
+      /invalid host store CLI generation evidence transition/,
+    );
+    assert.equal(f.spawn.mock.callCount(), spawns);
+    assert.deepEqual(f.store.getInvocation(id), { ...before, cancel_requested: true });
+    assert.equal(f.host.coordinator.held().length, 0);
+    assert.equal(f.host.openCount(), 0);
+    await f.reopen();
+    assert.deepEqual(f.store.getInvocation(id), { ...before, cancel_requested: true });
+  });
+
+  it('keeps a durable cancellation from a host callback after the start record persists', async (t) => {
+    const id = 'shell-cli:weft-callback';
+    let host: AgentFabricHost | undefined;
+    const weft: WeftPort = {
+      trace_id: 'trace',
+      emitter_id: 'fabric',
+      emit: (record) => {
+        if (record.fields['event'] === 'selected' && record.evidence[0]?.ref === id) host?.requestCancel(id);
+      },
+    };
+    const f = await fixture(t, undefined, undefined, weft);
+    host = f.host;
+    const handle = await f.host.invokeCliGeneration(f.grant(id), f.request());
+    assert.equal(handle.kind, 'handle');
+    if (handle.kind !== 'handle') return;
+    assert.equal(f.store.getInvocation(id)?.cancel_requested, true);
+    f.host.release(id);
+    assert.deepEqual(await handle.result, { outcome: 'failed', failure: 'cancelled' });
+    assert.equal(f.spawn.mock.callCount(), 0);
+    assert.equal(f.store.getInvocation(id)?.status, 'stopped');
+    assert.equal(f.store.getInvocation(id)?.cancel_requested, true);
+    assert.equal(f.host.coordinator.held().length, 0);
+    await f.reopen();
+    assert.equal(f.store.getInvocation(id)?.cancel_requested, true);
+  });
+
+  // Note 2: a recovery failure is a pre-consumption failure; it wins over a pending cancellation.
+  for (const wait of ['recovery', 'startup check'] as const) {
+    it(`surfaces a ${wait} failure over a pending cancellation without consuming the grant`, async (t) => {
+      const f = await fixture(t, wait);
+      const id = 'shell-cli:recovery-failure';
+      const grant = f.grant(id);
+      const consume = t.mock.method(f.authority, 'markInvoked');
+      const pending = f.host.invokeCliGeneration(grant, f.request());
+      assert.deepEqual(f.host.requestCancel(id), { acknowledged: true });
+      const rejected = assert.rejects(pending, /injected recovery failure/);
+      f.gate.reject(new Error('injected recovery failure'));
+      await rejected;
+      assert.equal(consume.mock.callCount(), 0);
+      assert.equal(f.spawn.mock.callCount(), 0);
+      assert.equal(f.store.getInvocation(id), undefined);
+      assert.equal(f.host.coordinator.held().length, 0);
+      assert.equal(f.host.openCount(), 0);
+      consume.mock.restore();
+      assert.equal(f.authority.markInvoked(grant), true, 'a recovery failure must not consume the grant');
+    });
+  }
+
+  // Note 3: an identity with a durable record replays; the bridge must not release it.
+  for (const status of ['uncertain', 'running', 'committed', 'stopped'] as const) {
+    it(`returns a replayed ${status} record through the bridge without releasing or spawning`, async (t) => {
+      const f = await fixture(t, undefined, status);
+      const id = 'shell-cli:existing';
+      const before = f.store.getInvocation(id)!;
+      t.mock.method(f.host, 'nextCliGenerationId', () => id);
+      const result = await f.run();
+      if (status === 'uncertain' || status === 'running') {
+        assert.equal(result.status, 'uncertain');
+        if (result.status === 'uncertain') assert.equal(result.invocation_id, id);
+      } else {
+        assert.equal(result.status, 'failed');
+      }
+      assert.deepEqual(f.store.getInvocation(id), before);
+      assert.equal(f.spawn.mock.callCount(), 0);
+      assert.equal(f.host.invocations.length, 0, 'replay must not start an invocation');
+      assert.equal(f.host.openCount(), 0);
+      assert.deepEqual(
+        f.host.coordinator.held().map((hold) => hold.invocation_id),
+        status === 'uncertain' || status === 'running' ? [id] : [],
+      );
     });
   }
 });

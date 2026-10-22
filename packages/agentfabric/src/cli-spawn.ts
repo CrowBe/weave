@@ -71,7 +71,8 @@ export function createGrantedCliSpawn(options: {
             duration_ms: 0,
           };
         }
-        options.host.release(action_id);
+        // A replayed handle has no open invocation to advance; its result is already settled.
+        if (options.host.openActionIds().includes(action_id)) options.host.release(action_id);
         const outcome = await invoked.result;
         // Failure and uncertainty outcomes carry their reason; redacted tails and duration stay in the trace.
         const trace = options.host
