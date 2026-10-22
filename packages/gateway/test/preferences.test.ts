@@ -123,6 +123,17 @@ test('applying a set replaces evidence on the units it names and changes nothing
   assert.deepEqual(ids(applyPreferences(TABLE.filter(u => u.routed_unit_id !== PREFERRED), SET)), [MISSES, SECOND, LOCAL]);
 });
 
+test('an entry without a decided verdict earns no preference, whatever its interval', () => {
+  // The insufficient_evidence entry has an accept interval whose low end (0.6 of 12) would otherwise earn 7.
+  const UNDECIDED = 'boolean.task@jev-1.15.0';
+  const entry = SET.entries.find(e => e.routed_unit === UNDECIDED)!;
+  assert.equal(entry.verdict, 'insufficient_evidence');
+  const table: RouteTable = [unit(UNDECIDED, 'vendor', { evidence: { attempts: 100, accepted: 100 } }), unit(SECOND, 'vendor')];
+  const [undecided] = applyPreferences(table, SET);
+  assert.equal(undecided!.evidence, undefined, 'insufficient_evidence never becomes routing evidence');
+  assert.deepEqual(ids(route(applyPreferences(table, SET), TARGET, terms(), 20).order), [SECOND, UNDECIDED]);
+});
+
 test('among admitted units, a preference orders by expected cost', () => {
   // Configured evidence alone: the stale perfect record leads, unevidenced units follow in table order.
   assert.deepEqual(ids(route(TABLE, TARGET, terms(), 20).order), [MISSES, LOCAL, SECOND, PREFERRED]);
