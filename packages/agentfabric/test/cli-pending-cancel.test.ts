@@ -331,26 +331,130 @@ describe('CLI cancellation before prepare', () => {
       assert.equal(f.host.coordinator.held().length, 0);
     });
 
-    it(`retains cancellation in the same tick as ${wait} completion and allows clean identity reuse`, async (t) => {
+    it(`consumes the grant when cancellation races ${wait} completion, including across reopen`, async (t) => {
       const f = await fixture(t, wait);
       const id = 'shell-cli:reuse';
-      const pending = f.host.invokeCliGeneration(f.grant(id), f.request());
+      const grant = f.grant(id);
+      const pending = f.host.invokeCliGeneration(grant, f.request());
       f.resume();
       assert.deepEqual(f.host.requestCancel(id), { acknowledged: true });
       const first = await pending;
-      // Drive the old path too, so the red test observes a real unwanted spawn.
-      if (first.kind === 'handle') {
-        f.host.release(id);
-        await first.result;
+      assert.deepEqual(first, { kind: 'cancelled', invocation_id: id });
+      for (const reopened of [false, true]) {
+        if (reopened) await f.reopen();
+        const retry = await f.host.invokeCliGeneration(grant, f.request());
+        // Drive a wrongly accepted retry to expose an actual unwanted spawn.
+        if (retry.kind === 'handle') {
+          f.host.release(id);
+          await retry.result;
+        }
+        assert.equal(retry.kind, 'rejected');
+        if (retry.kind === 'rejected') {
+          assert.equal(retry.code, 'DENIED');
+          assert.match(retry.reason, /grant.*(used|consumed)/);
+        }
+        const ordinary = f.host.invoke(grant, SHELL_RUN.id, f.request());
+        assert.equal(ordinary.kind, 'rejected');
+        if (ordinary.kind === 'rejected') assert.equal(ordinary.code, 'DENIED');
+        assert.equal(f.spawn.mock.callCount(), 0);
+        assert.equal(f.store.getInvocation(id), undefined);
+        assert.equal(f.host.coordinator.held().length, 0);
+        assert.equal(f.host.openCount(), 0);
+      }
+      const freshId = 'shell-cli:fresh';
+      const fresh = await f.host.invokeCliGeneration(f.grant(freshId), f.request());
+      assert.equal(fresh.kind, 'handle');
+      if (fresh.kind !== 'handle') return;
+      f.host.release(freshId);
+      assert.equal((await fresh.result).outcome, 'succeeded');
+      assert.equal(f.store.getInvocation(freshId)?.cancel_requested, false);
+      assert.equal(f.spawn.mock.callCount(), 1);
+    });
+
+    it(`refuses concurrent reuse of the cancelled grant while awaiting ${wait}`, async (t) => {
+      const f = await fixture(t, wait);
+      const grant = f.grant('shell-cli:race');
+      const pending = f.host.invokeCliGeneration(grant, f.request());
+      assert.deepEqual(f.host.requestCancel(grant.action_id), { acknowledged: true });
+      const duplicate = await f.host.invokeCliGeneration(grant, f.request());
+      assert.equal(duplicate.kind, 'rejected');
+      if (duplicate.kind === 'rejected') assert.equal(duplicate.code, 'DENIED');
+      f.resume();
+      assert.deepEqual(await pending, { kind: 'cancelled', invocation_id: grant.action_id });
+      const reuse = await f.host.invokeCliGeneration(grant, f.request());
+      if (reuse.kind === 'handle') {
+        f.host.release(grant.action_id);
+        await reuse.result;
+      }
+      assert.equal(reuse.kind, 'rejected');
+      if (reuse.kind === 'rejected') assert.equal(reuse.code, 'DENIED');
+      assert.equal(f.spawn.mock.callCount(), 0);
+      assert.equal(f.store.getInvocation(grant.action_id), undefined);
+      assert.equal(f.host.coordinator.held().length, 0);
+      assert.equal(f.host.openCount(), 0);
+    });
+  }
+
+  it('consumes before releasing the pending identity reservation', async (t) => {
+    const f = await fixture(t, 'recovery');
+    const grant = f.grant('shell-cli:consume');
+    const markInvoked = f.authority.markInvoked.bind(f.authority);
+    const consume = t.mock.method(f.authority, 'markInvoked', (issued: Grant) => {
+      const duplicate = f.host.invoke(issued, SHELL_RUN.id, f.request());
+      assert.equal(duplicate.kind, 'rejected');
+      if (duplicate.kind === 'rejected') assert.match(duplicate.reason, /already active/);
+      return markInvoked(issued);
+    });
+    const pending = f.host.invokeCliGeneration(grant, f.request());
+    f.host.requestCancel(grant.action_id);
+    f.resume();
+    assert.deepEqual(await pending, { kind: 'cancelled', invocation_id: grant.action_id });
+    assert.equal(consume.mock.callCount(), 1);
+    assert.equal(markInvoked(grant), false);
+    assert.equal(f.host.coordinator.held().length, 0);
+    assert.equal(f.spawn.mock.callCount(), 0);
+  });
+
+  for (const fault of ['already consumed', 'consume throws', 'persist throws after consume'] as const) {
+    it(`fails closed and releases the pending reservation when ${fault}`, async (t) => {
+      const f = await fixture(t, 'recovery');
+      const id = 'shell-cli:consume-failure';
+      const grant = f.grant(id);
+      const markInvoked = f.authority.markInvoked.bind(f.authority);
+      if (fault === 'already consumed') assert.equal(markInvoked(grant), true);
+      else {
+        t.mock.method(
+          f.authority,
+          'markInvoked',
+          (issued: Grant) => {
+            if (fault === 'persist throws after consume') markInvoked(issued);
+            throw new Error('injected grant consumption failure');
+          },
+          { times: 1 },
+        );
+      }
+      const pending = f.host.invokeCliGeneration(grant, f.request());
+      f.host.requestCancel(id);
+      const failed =
+        fault === 'already consumed' ? undefined : assert.rejects(pending, /injected grant consumption failure/);
+      f.resume();
+      if (failed) await failed;
+      else {
+        const result = await pending;
+        assert.equal(result.kind, 'rejected');
+        if (result.kind === 'rejected') assert.equal(result.code, 'DENIED');
       }
       assert.equal(f.spawn.mock.callCount(), 0);
-      const retry = await f.host.invokeCliGeneration(f.grant(id), f.request());
-      assert.equal(retry.kind, 'handle');
-      if (retry.kind !== 'handle') return;
+      assert.equal(f.store.getInvocation(id), undefined);
+      assert.equal(f.host.coordinator.held().length, 0);
+      assert.equal(f.host.openCount(), 0);
+      // A new grant at the same identity proves that cleanup released the reservation.
+      const fresh = await f.host.invokeCliGeneration(f.grant(id), f.request());
+      assert.equal(fresh.kind, 'handle');
+      if (fresh.kind !== 'handle') return;
       f.host.release(id);
-      assert.equal((await retry.result).outcome, 'succeeded');
-      assert.equal(f.store.getInvocation(id)?.cancel_requested, false);
-      assert.equal(f.spawn.mock.callCount(), 1);
+      assert.equal((await fresh.result).outcome, 'succeeded');
+      assert.equal(f.host.coordinator.held().length, 0);
     });
   }
 

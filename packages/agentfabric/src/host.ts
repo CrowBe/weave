@@ -294,8 +294,13 @@ export class AgentFabricHost implements CapabilityHost {
         const legacy = [...this.unscopedRecovery.values()].includes(SHELL_RUN.id);
         if ((conflict?.uncertain || legacy) && !this.reconciling.size) await this.checkUncertainCliGenerations(cwd_ref);
       }
-      if (this.pendingCliCancel.has(invocation_id) && this.store.getInvocation(invocation_id) === undefined)
+      if (this.pendingCliCancel.has(invocation_id) && this.store.getInvocation(invocation_id) === undefined) {
+        // Consume through the ordinary authority gate before releasing the identity.
+        if (!this.authority.markInvoked(grant)) {
+          return this.reject('DENIED', 'grant has already been used for an invocation');
+        }
         return { kind: 'cancelled', invocation_id };
+      }
       const prepared = this.step(() => this.prepare(grant, SHELL_RUN.id, inputs, undefined, invocation_id));
       if (prepared.kind === 'rejected') {
         const conflict =
