@@ -1,5 +1,6 @@
 /** Optional OTLP/HTTP JSON projection. No registration, clock, transport or SDK. */
 import { createHash } from 'node:crypto';
+import { assertInlinePolicy } from './validate.js';
 import { serializeRecord } from './serialize.js';
 import type { InlinePolicy, Redactor, WeftRecord } from './types.js';
 
@@ -8,7 +9,7 @@ export interface OtlpOptions {
   readonly inline?: InlinePolicy;
 }
 export type OtlpResult = { readonly ok: true; readonly json: string } |
-  { readonly ok: false; readonly reason: 'input' | 'disclosure' | 'conflict' | 'sequence' | 'incomplete' | 'parent_cycle' | 'write' };
+  { readonly ok: false; readonly reason: 'input' | 'config' | 'disclosure' | 'conflict' | 'sequence' | 'incomplete' | 'parent_cycle' | 'write' };
 type Obj = Record<string, unknown>;
 type Attribute = { key: string; value: Obj };
 const compare = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
@@ -59,6 +60,10 @@ function span(r: WeftRecord): Obj {
 /** All-or-nothing batch. Only the redacted, validated snapshot is ever mapped. */
 export function exportOtlp(records: unknown, options: OtlpOptions): OtlpResult {
   try {
+    if (typeof options?.redact !== 'function') return { ok: false, reason: 'config' };
+    if (options.inline !== undefined) assertInlinePolicy(options.inline);
+  } catch { return { ok: false, reason: 'config' }; }
+  try {
     if (!Array.isArray(records)) return { ok: false, reason: 'input' };
     const traces = new Map<string, Map<string, { record: WeftRecord; line: string }>>();
     for (const raw of records) {
@@ -104,18 +109,49 @@ export function exportOtlp(records: unknown, options: OtlpOptions): OtlpResult {
   }
 }
 
+/**
+ * The composition root owns writer liveness and supplies a cancellable timer.
+ * The timer must fire within the requested delay, even when the writer hangs.
+ */
+export interface OtlpExporterOptions extends OtlpOptions {
+  readonly write: (json: string) => unknown;
+  readonly timer: (ms: number, expire: () => void) => () => void;
+  readonly writeTimeoutMs?: number;
+}
+
 /** Explicit composition only. Transport failure is observational, never control. */
-export function createOtlpExporter(options: OtlpOptions & { readonly write: (json: string) => unknown }): {
-  readonly export: (records: unknown) => Promise<OtlpResult>;
+export function createOtlpExporter(options: OtlpExporterOptions): {
+  readonly export: (records: unknown, signal?: AbortSignal) => Promise<OtlpResult>;
 } {
-  // Snapshot configuration so concurrent calls cannot replace each other's writer.
-  const { redact, inline, write } = options;
+  const { redact, inline, write, timer, writeTimeoutMs = 1000 } = options;
   return {
-    async export(records: unknown): Promise<OtlpResult> {
+    async export(records: unknown, signal?: AbortSignal): Promise<OtlpResult> {
       const result = exportOtlp(records, { redact, ...(inline === undefined ? {} : { inline }) });
       if (!result.ok) return result;
-      try { await write(result.json); return result; }
-      catch { return { ok: false, reason: 'write' }; }
+      if (typeof timer !== 'function' || !Number.isFinite(writeTimeoutMs) || writeTimeoutMs <= 0 ||
+          writeTimeoutMs > 2 ** 31 - 1) return { ok: false, reason: 'config' };
+      if (signal?.aborted) return { ok: false, reason: 'write' };
+      return new Promise<OtlpResult>(resolve => {
+        let settled = false;
+        let cancel: (() => void) | undefined;
+        const finish = (outcome: OtlpResult) => {
+          if (settled) return;
+          settled = true;
+          signal?.removeEventListener('abort', failed);
+          try { cancel?.(); } catch { /* Cleanup cannot escape to the run. */ }
+          resolve(outcome);
+        };
+        const failed = () => finish({ ok: false, reason: 'write' });
+        signal?.addEventListener('abort', failed, { once: true });
+        try {
+          cancel = timer(writeTimeoutMs, failed);
+          // Injected timers may fire synchronously.
+          if (settled) { try { cancel(); } catch { /* Already settled. */ } return; }
+          if (signal?.aborted) { failed(); return; }
+          // Both handlers stay attached after abandonment, including to thenables.
+          Promise.resolve(write(result.json)).then(() => finish(result), failed);
+        } catch { failed(); }
+      });
     },
   };
 }

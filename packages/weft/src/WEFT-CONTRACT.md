@@ -515,9 +515,22 @@ dependency. The core entry point never imports it. `exportOtlp(records,
 `{ ok: true, json }` or `{ ok: false, reason }`, without throwing. Every
 record passes through `serializeRecord` before mapping; one rejection rejects
 the entire batch. No raw input, environment, grant, resource detector or ambient
-sink is consulted. `createOtlpExporter({ redact, inline?, write })` adds an
-explicit one-way `export(records)` method returning a promise of the same result;
-write throws and rejections return `write`, never escape to the run.
+sink is consulted. Missing or invalid redactors and inline policies return
+the non-sensitive reason `config`, including for empty batches. Redactor throws
+and rejected record content return `disclosure`.
+
+`createOtlpExporter({ redact, inline?, write, timer, writeTimeoutMs? })` adds
+an explicit one-way `export(records, signal?)` method. The composition root
+owns writer liveness: it supplies `timer(ms, expire)`, which must fire within
+the requested delay and return a cancellation function. There is no ambient
+clock. The write timeout defaults to 1000 ms; overrides must be finite,
+positive and at most 2147483647 ms (otherwise `config`). Writer throws,
+rejections, timeout and abort resolve as `write`; a pre-aborted signal skips
+the writer. Each call cleans up its timer and abort listener. Abandoned writes
+retain rejection handlers, so late rejection cannot escape to the run.
+Abandonment cannot undo delivery or stop the writer's own effects. The
+composition root must isolate synchronous blocking writers: JavaScript timers
+and abort cannot interrupt synchronous work.
 
 Identity uses SHA-256 of JSON arrays: `["weft.otel.trace@1", trace_id]`
 (first 32 hex digits), and `["weft.otel.span@1", trace_id, record_id]`
@@ -543,6 +556,7 @@ provider, and Weft does not know the GenAI operation: none is invented.
 **Time and loss.** Start and end are both `sequence + 1` nanoseconds after the
 Unix epoch, calculated with integer arithmetic. These are synthetic point
 spans, not occurrence times; `weft.time_basis = "sequence"` marks them.
+Collectors with retention windows may drop these synthetic 1970 timestamps.
 Sequences from different emitters are incomparable. Measured `latency_ms`
 remains a namespaced metric rather than fabricating a start time. Real timing,
 duration and cross-emitter chronology cannot be recovered from this export.

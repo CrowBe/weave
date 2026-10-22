@@ -5,6 +5,10 @@ import { createHash } from 'node:crypto';
 import { exportOtlp, createOtlpExporter } from '../src/otel.js';
 import type { Redactor } from '@weave/weft';
 
+const timer = (ms: number, expire: () => void) => {
+  const handle = setTimeout(expire, ms);
+  return () => clearTimeout(handle);
+};
 const keep: Redactor = r => r;
 const record = (record_id = 'a', trace_id = 'trace') => ({
   schema: 'weft.record@1', trace_id, record_id,
@@ -59,19 +63,19 @@ test('W4 canaries: environment, credential strings and single-use grants never c
 
 test('one-way writes contain sync throws and async rejections; interleaved traces and crash retry are isolated', async () => {
   for (const write of [() => { throw Error('failure'); }, async () => { throw Error('failure'); }]) {
-    assert.deepEqual(await createOtlpExporter({ redact: keep, write }).export([record()]), { ok: false, reason: 'write' });
+    assert.deepEqual(await createOtlpExporter({ timer, redact: keep, write }).export([record()]), { ok: false, reason: 'write' });
   }
   const writes: string[] = [];
-  const exporter = createOtlpExporter({ redact: keep, write: async (s: string) => { await Promise.resolve(); writes.push(s); } });
+  const exporter = createOtlpExporter({ timer, redact: keep, write: async (s: string) => { await Promise.resolve(); writes.push(s); } });
   const inputs = [[record('a', 'one')], [record('a', 'two')]];
   await Promise.all(inputs.map(r => exporter.export(r)));
   assert.deepEqual(writes, inputs.map(json));
   assert.ok(!writes[0]!.includes('two'));
-  const crashed = createOtlpExporter({ redact: keep, write: () => { throw Error(); } });
+  const crashed = createOtlpExporter({ timer, redact: keep, write: () => { throw Error(); } });
   await crashed.export(inputs[0]);
   assert.equal(json(inputs[0]), writes[0]);
   let called = false;
-  await createOtlpExporter({ redact: keep, write: () => { called = true; } }).export([{}]);
+  await createOtlpExporter({ timer, redact: keep, write: () => { called = true; } }).export([{}]);
   assert.equal(called, false);
 });
 
@@ -115,4 +119,81 @@ test('malformed revoked proxy input cannot throw across the export boundary', ()
   const { proxy, revoke } = Proxy.revocable([], {});
   revoke();
   assert.deepEqual(exportOtlp(proxy, { redact: keep }), { ok: false, reason: 'disclosure' });
+});
+
+for (const mode of ['timeout', 'abort', 'late rejection'] as const) {
+  test(`writer liveness: ${mode} releases an awaiting run`, async () => {
+    let expire = () => {};
+    let rejectWrite = (_error: Error) => {};
+    let cancelled = 0;
+    let delay = 0;
+    const controller = new AbortController();
+    const unhandled: unknown[] = [];
+    const onUnhandled = (error: unknown) => { unhandled.push(error); };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const exporter = createOtlpExporter({ redact: keep,
+        write: () => new Promise((_resolve, reject) => { rejectWrite = reject; }),
+        ...(mode === 'timeout' ? { writeTimeoutMs: 17 } : {}),
+        timer: (ms, callback) => { delay = ms; expire = callback; return () => { cancelled++; }; },
+      });
+      let settled: unknown;
+      const pending = exporter.export([record()], controller.signal).then(result => { settled = result; });
+      if (mode === 'abort') controller.abort(); else expire();
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+      assert.deepEqual(settled, { ok: false, reason: 'write' });
+      await pending;
+      assert.equal(delay, mode === 'timeout' ? 17 : 1000);
+      assert.equal(cancelled, 1);
+      rejectWrite(Error('secret late failure'));
+      await new Promise(resolve => setImmediate(resolve));
+      assert.deepEqual(unhandled, []);
+    } finally { process.off('unhandledRejection', onUnhandled); }
+  });
+}
+
+test('export configuration failures are distinct from disclosure, including empty batches', () => {
+  for (const records of [[], [record()]]) {
+    for (const options of [undefined, {}, { redact: null }, { redact: keep, inline: {} },
+      { redact: keep, inline: { trace_id: 'trace', classes: ['unknown'] } }]) {
+      assert.deepEqual(exportOtlp(records, options as never), { ok: false, reason: 'config' });
+    }
+  }
+  assert.deepEqual(exportOtlp([record()], { redact: () => { throw Error('secret'); } }),
+    { ok: false, reason: 'disclosure' });
+});
+
+test('write bounds reject invalid configuration and pre-abort without delivery', async () => {
+  let writes = 0;
+  const write = () => { writes++; };
+  for (const writeTimeoutMs of [0, -1, Infinity, NaN, 2 ** 31]) {
+    assert.deepEqual(await createOtlpExporter({ redact: keep, write, timer, writeTimeoutMs }).export([record()]),
+      { ok: false, reason: 'config' });
+  }
+  const controller = new AbortController();
+  controller.abort();
+  assert.deepEqual(await createOtlpExporter({ redact: keep, write, timer }).export([record()], controller.signal),
+    { ok: false, reason: 'write' });
+  assert.equal(writes, 0);
+});
+
+test('timer cleanup and cancellation belong to each concurrent export', async () => {
+  const deadlines: (() => void)[] = [];
+  const cancelled: number[] = [];
+  let complete = () => {};
+  let calls = 0;
+  const exporter = createOtlpExporter({ redact: keep,
+    timer: (_ms, expire) => { const id = deadlines.length; deadlines.push(expire); return () => { cancelled.push(id); }; },
+    write: () => ++calls === 1 ? new Promise<void>(resolve => { complete = resolve; }) : new Promise(() => {}),
+  });
+  const first = exporter.export([record()]);
+  const controller = new AbortController();
+  const second = exporter.export([record()], controller.signal);
+  controller.abort();
+  assert.deepEqual(await second, { ok: false, reason: 'write' });
+  complete();
+  assert.equal((await first).ok, true);
+  assert.deepEqual(cancelled, [1, 0]);
+  deadlines.forEach(expire => expire());
+  assert.deepEqual(cancelled, [1, 0]);
 });
