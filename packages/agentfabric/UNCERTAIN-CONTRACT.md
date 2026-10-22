@@ -114,7 +114,8 @@ revision field; ambiguous admissions provide no usable recovery evidence.
 
 CLI generation retains its declared workspace write. `createGrantedCliSpawn`
 uses the host's CLI generation entry point and host-owned invocation identities,
-which remain unique across bridge instances and restarts. The validated durable
+which remain distinct across bridge instances and avoid recorded identities
+after restart. The validated durable
 start record includes `cli_generation`, with `cwd_ref` and `before_snapshot`.
 After spawn, a validated, immutable positive `pgid` is appended before subsequent
 bookkeeping; missing pgid is unknown, never gone. The host captures a bounded
@@ -194,7 +195,17 @@ declared workspace. ESRCH-based automatic reconciliation assumes descendants
 stay in that process group; descendants that escape with `setsid` are not
 covered by the process-group probe. Excluded Git internals are outside the equality evidence.
 Process group identifiers can be reused, so a live reused group conservatively
-retains the hold. Pending snapshot inspection retains its invocation identity and reservation; duplicate identities are rejected and cancellation is retained before any process starts. Hosts await `cliRecoveryReady` to inspect completed startup
+retains the hold. Pending snapshot inspection retains its invocation identity and
+reservation; duplicate identities are rejected. Cancellation is also retained for
+allocated CLI identities and placeholders while awaiting recovery or an uncertain
+startup check. Before preparation, a retained cancellation returns `cancelled`
+without spawning, writing an invocation record, or acquiring a workspace
+reservation. After preparation it seeds the ordinary pre-start cancellation path,
+which settles stopped and releases its reservation without an uncertain marker.
+Completion, rejection and startup failure clear the placeholder, identity
+reservation and pending cancellation; later reuse cannot inherit that request.
+Unknown-id cancellation keeps its existing acknowledgement behavior and retains
+no request for future execution. Hosts await `cliRecoveryReady` to inspect completed startup
 checks; the CLI bridge and operator command do so automatically. Snapshot equality
 proves only absence of retained changes in the declared workspace; it cannot establish
 arbitrary external outcomes. Unsupported snapshots and changed workspaces always

@@ -33,6 +33,9 @@ export function createGrantedCliSpawn(options: {
         timeout_ms: request.timeout_ms,
         stdin: request.stdin,
       });
+      if (invoked.kind === 'cancelled') {
+        return mapShellOutcome({ outcome: 'failed', failure: 'cancelled' }, undefined, invoked.invocation_id);
+      }
       if (invoked.kind === 'rejected') {
         const conflict = invoked.workspace_conflict;
         const reconciliation =

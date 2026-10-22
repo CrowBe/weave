@@ -137,6 +137,9 @@ type CliGenerationRejection = InvocationRejected & {
   readonly workspace_conflict?: { readonly invocation_id: string; readonly uncertain: boolean };
 };
 
+/** Cancelled before preparation: no invocation or effect reservation was created. */
+type CliGenerationCancelled = { readonly kind: 'cancelled'; readonly invocation_id: string };
+
 export interface UncertainCliGeneration {
   readonly invocation_id: string;
   readonly cwd_ref: string;
@@ -191,6 +194,7 @@ export class AgentFabricHost implements CapabilityHost {
   private cliRecoveryComplete = false;
   private readonly preparingCli = new Map<string, OpenInvocation | undefined>();
   private readonly reservedCliIds = new Set<string>();
+  private readonly pendingCliCancel = new Set<string>();
   private readonly cliProcessGroupProbe: (pgid: number) => ProcessGroupState;
   private readonly gateway: InferenceGateway | undefined;
   private readonly shellOptions: ShellHostOptions | undefined;
@@ -272,7 +276,10 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   /** Composition entry point; the supplied grant still determines all authority. */
-  async invokeCliGeneration(grant: Grant, inputs: unknown): Promise<InvocationHandle | CliGenerationRejection> {
+  async invokeCliGeneration(
+    grant: Grant,
+    inputs: unknown,
+  ): Promise<InvocationHandle | CliGenerationRejection | CliGenerationCancelled> {
     const invocation_id = grant.action_id;
     if (this.preparingCli.has(invocation_id)) return this.reject('DENIED', 'invocation is already active');
     // Caller-supplied identities also need protection before recovery can yield.
@@ -287,6 +294,7 @@ export class AgentFabricHost implements CapabilityHost {
         const legacy = [...this.unscopedRecovery.values()].includes(SHELL_RUN.id);
         if ((conflict?.uncertain || legacy) && !this.reconciling.size) await this.checkUncertainCliGenerations(cwd_ref);
       }
+      if (this.pendingCliCancel.has(invocation_id)) return { kind: 'cancelled', invocation_id };
       const prepared = this.step(() => this.prepare(grant, SHELL_RUN.id, inputs, undefined, invocation_id));
       if (prepared.kind === 'rejected') {
         const conflict =
@@ -303,6 +311,11 @@ export class AgentFabricHost implements CapabilityHost {
       // Keep the identity reserved and cancellation addressable while inspection yields.
       preparedOpen = true;
       this.preparingCli.set(grant.action_id, prepared.open);
+      // A synchronous host callback during prepare may have cancelled the placeholder.
+      if (this.pendingCliCancel.has(invocation_id)) {
+        prepared.open.cancel_requested = true;
+        prepared.open.abort.abort();
+      }
       const resource = this.resourceFor(prepared.open.shellCwdRef);
       const before_snapshot = resource?.kind === 'workspace' ? await workspaceSnapshot(resource.locator) : null;
       if (!this.authority.isValid(grant)) {
@@ -314,6 +327,7 @@ export class AgentFabricHost implements CapabilityHost {
     } finally {
       this.reservedCliIds.delete(invocation_id);
       this.preparingCli.delete(invocation_id);
+      this.pendingCliCancel.delete(invocation_id);
       if (preparedOpen && !this.open.has(invocation_id)) this.coordinator.release(invocation_id);
     }
   }
@@ -1195,6 +1209,8 @@ export class AgentFabricHost implements CapabilityHost {
     if (open) {
       open.cancel_requested = true;
       open.abort.abort();
+    } else if (this.reservedCliIds.has(invocation_id) || this.preparingCli.has(invocation_id)) {
+      this.pendingCliCancel.add(invocation_id);
     }
     const record = this.store.getInvocation(invocation_id);
     if (record && !record.reconciliation) {
