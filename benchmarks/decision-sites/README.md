@@ -182,8 +182,10 @@ headline from its legacy records. New live runs bind answers to the serialized
 wire body or prompt as well as the other recorded bindings.
 SIGINT/SIGTERM request cancellation and wait for the in-flight call to settle
 (up to 30 seconds for HTTP, 120 seconds for competitors), then record cancellation,
-render partial results and exit nonzero. A second Ctrl-C does not force-exit;
-this is deliberate for journal safety. Returned results are journalled before
+render partial results and exit nonzero. A second SIGINT/SIGTERM force-quits
+with exit 130 after removing the temp directory and releasing the run lock;
+journal appends are synchronous, so it lands between whole records and the run
+stays resumable with `--resume`. Returned results are journalled before
 stopping: an acknowledged answer and
 its actual usage survive cancellation. Only cancellation before inference dispatch
 produces a retryable cancelled/not-sent result: a nonterminal failure that costs zero
