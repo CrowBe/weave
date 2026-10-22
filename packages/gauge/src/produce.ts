@@ -274,7 +274,9 @@ export function compare(request: ComparisonRequest, context: Context): Produced<
 /**
  * Results in the order recorded, each compared with the one before it. The
  * subject may repeat, so one implementation can be followed across
- * re-evaluations as well as across versions.
+ * re-evaluations as well as across versions. Interpret regression with the
+ * step verdict: insufficient_evidence with regression:false does not establish
+ * that the subject has not regressed.
  */
 export function track(results: readonly string[], context: Context): Track {
   if (!Array.isArray(results)) return refuse('envelope');

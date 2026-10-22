@@ -937,15 +937,78 @@
         "measures": [
           {
             "measure": "cost",
-            "value": 147,
+            "value": 120,
             "n": 120,
             "interval": [
-              139,
-              156
+              110,
+              130
             ]
           }
         ],
         "constraints": [],
+        "verdict": "meets_bar"
+      },
+      "res-flat": {
+        "schema": "gauge.result@1",
+        "result": "res-flat",
+        "subject": {
+          "kind": "routed_unit",
+          "ref": "boolean.task@flat"
+        },
+        "criteria": "decision-sites.criteria@1",
+        "caseset": "decision-sites.cases@1",
+        "split": "tune",
+        "caseset_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "trial",
+        "evidence": [
+          {
+            "source": "weft_trace",
+            "ref": "trace-res-base"
+          },
+          {
+            "source": "check",
+            "ref": "decision-sites.score"
+          }
+        ],
+        "measures": [
+          {
+            "measure": "accuracy",
+            "value": 0.85,
+            "n": 120,
+            "interval": [
+              0.8,
+              0.9
+            ]
+          },
+          {
+            "measure": "cost",
+            "value": 133,
+            "n": 120,
+            "interval": [
+              123,
+              143
+            ]
+          },
+          {
+            "measure": "completion",
+            "value": 0.7,
+            "n": 120,
+            "interval": [
+              0.62,
+              0.78
+            ]
+          }
+        ],
+        "constraints": [
+          {
+            "constraint": "accuracy_bar",
+            "status": "held"
+          },
+          {
+            "constraint": "cost_cap",
+            "status": "held"
+          }
+        ],
         "verdict": "meets_bar"
       }
     },
@@ -1579,26 +1642,26 @@
         "deltas": [
           {
             "measure": "accuracy",
-            "delta": 0.06,
+            "delta": 0.06000000000000005,
             "interval": [
-              0.03,
-              0.09
+              -0.004031242374328489,
+              0.12403124237432844
             ]
           },
           {
             "measure": "cost",
             "delta": -30,
             "interval": [
-              -42,
-              -18
+              -44.14213562373095,
+              -15.857864376269049
             ]
           },
           {
             "measure": "completion",
-            "delta": 0.02,
+            "delta": 0.020000000000000018,
             "interval": [
-              -0.06,
-              0.1
+              -0.09313708498984762,
+              0.13313708498984766
             ]
           }
         ],
@@ -1616,26 +1679,26 @@
         "deltas": [
           {
             "measure": "accuracy",
-            "delta": -0.15,
+            "delta": -0.15000000000000002,
             "interval": [
-              -0.22,
-              -0.08
+              -0.24433981132056604,
+              -0.07189750324093348
             ]
           },
           {
             "measure": "cost",
             "delta": -90,
             "interval": [
-              -102,
-              -78
+              -104.14213562373095,
+              -75.85786437626905
             ]
           },
           {
             "measure": "completion",
-            "delta": -0.1,
+            "delta": -0.09999999999999998,
             "interval": [
-              -0.2,
-              0
+              -0.22041594578792295,
+              0.020415945787922926
             ]
           }
         ],
@@ -1655,24 +1718,24 @@
             "measure": "accuracy",
             "delta": 0,
             "interval": [
-              -0.05,
-              0.05
+              -0.06403124237432847,
+              0.06403124237432846
             ]
           },
           {
             "measure": "cost",
             "delta": 40,
             "interval": [
-              30,
-              50
+              25.85786437626905,
+              52.8062484748657
             ]
           },
           {
             "measure": "completion",
             "delta": 0,
             "interval": [
-              -0.08,
-              0.08
+              -0.11313708498984763,
+              0.11313708498984763
             ]
           }
         ],
@@ -1690,26 +1753,26 @@
         "deltas": [
           {
             "measure": "accuracy",
-            "delta": 0.05,
+            "delta": 0.050000000000000044,
             "interval": [
-              -0.2,
-              0.2
+              -0.25413812651491097,
+              0.16180339887498948
             ]
           },
           {
             "measure": "cost",
             "delta": -50,
             "interval": [
-              -80,
-              -20
+              -81.6227766016838,
+              -18.377223398316207
             ]
           },
           {
             "measure": "completion",
-            "delta": 0.05,
+            "delta": 0.050000000000000044,
             "interval": [
-              -0.25,
-              0.25
+              -0.2604834939252004,
+              0.26540659228538016
             ]
           }
         ],
@@ -1727,26 +1790,26 @@
         "deltas": [
           {
             "measure": "accuracy",
-            "delta": -0.06,
+            "delta": -0.06000000000000005,
             "interval": [
-              -0.1,
-              -0.01
+              -0.11656854249492375,
+              -0.003431457505076202
             ]
           },
           {
             "measure": "cost",
             "delta": 70,
             "interval": [
-              55,
-              85
+              55.85786437626905,
+              82.8062484748657
             ]
           },
           {
             "measure": "completion",
-            "delta": -0.02,
+            "delta": -0.020000000000000018,
             "interval": [
-              -0.1,
-              0.06
+              -0.13313708498984766,
+              0.09313708498984762
             ]
           }
         ],
@@ -1759,31 +1822,31 @@
         "schema": "gauge.comparison@1",
         "comparison": "cmp-flat",
         "experiment": "exp-12",
-        "baseline": "res-worse",
-        "candidate": "res-base",
+        "baseline": "res-base",
+        "candidate": "res-flat",
         "deltas": [
           {
             "measure": "accuracy",
             "delta": 0,
             "interval": [
-              -0.05,
-              0.05
+              -0.07071067811865474,
+              0.07071067811865474
             ]
           },
           {
             "measure": "cost",
-            "delta": -40,
+            "delta": -17,
             "interval": [
-              -50,
-              -2
+              -31.14213562373095,
+              -2.857864376269049
             ]
           },
           {
             "measure": "completion",
             "delta": 0,
             "interval": [
-              -0.08,
-              0.08
+              -0.11313708498984763,
+              0.11313708498984763
             ]
           }
         ],
@@ -1834,8 +1897,8 @@
             "measure": "accuracy",
             "delta": 0,
             "interval": [
-              -0.04,
-              0
+              -0.07071067811865474,
+              0.07071067811865474
             ]
           }
         ],
@@ -1855,8 +1918,8 @@
             "measure": "cost",
             "delta": 0,
             "interval": [
-              0,
-              4
+              -14.142135623730951,
+              14.142135623730951
             ]
           }
         ],
@@ -1874,10 +1937,10 @@
         "deltas": [
           {
             "measure": "cost",
-            "delta": -3,
+            "delta": -30,
             "interval": [
-              -5,
-              -1
+              -44.14213562373095,
+              -15.857864376269049
             ]
           }
         ],
@@ -3821,24 +3884,24 @@
             "measure": "accuracy",
             "delta": 0.06,
             "interval": [
-              0.03,
-              0.09
+              -0.004031242374328489,
+              0.12403124237432844
             ]
           },
           {
             "measure": "cost",
             "delta": -20,
             "interval": [
-              -42,
-              -18
+              -44.14213562373095,
+              -15.857864376269049
             ]
           },
           {
             "measure": "completion",
             "delta": 0.02,
             "interval": [
-              -0.06,
-              0.1
+              -0.09313708498984762,
+              0.13313708498984766
             ]
           }
         ],
@@ -3864,16 +3927,16 @@
             "measure": "cost",
             "delta": -30,
             "interval": [
-              -42,
-              -18
+              -44.14213562373095,
+              -15.857864376269049
             ]
           },
           {
             "measure": "completion",
             "delta": 0.02,
             "interval": [
-              -0.06,
-              0.1
+              -0.09313708498984762,
+              0.13313708498984766
             ]
           }
         ],
@@ -4227,26 +4290,26 @@
         "deltas": [
           {
             "measure": "accuracy",
-            "delta": -0.15,
+            "delta": -0.15000000000000002,
             "interval": [
-              -0.22,
-              -0.08
+              -0.24433981132056604,
+              -0.07189750324093348
             ]
           },
           {
             "measure": "cost",
             "delta": -90,
             "interval": [
-              -102,
-              -78
+              -104.14213562373095,
+              -75.85786437626905
             ]
           },
           {
             "measure": "completion",
-            "delta": -0.1,
+            "delta": -0.09999999999999998,
             "interval": [
-              -0.2,
-              0
+              -0.22041594578792295,
+              0.020415945787922926
             ]
           }
         ],
@@ -4265,26 +4328,26 @@
         "deltas": [
           {
             "measure": "accuracy",
-            "delta": 0.05,
+            "delta": 0.050000000000000044,
             "interval": [
-              -0.2,
-              0.2
+              -0.25413812651491097,
+              0.16180339887498948
             ]
           },
           {
             "measure": "cost",
             "delta": -50,
             "interval": [
-              -80,
-              -20
+              -81.6227766016838,
+              -18.377223398316207
             ]
           },
           {
             "measure": "completion",
-            "delta": 0.05,
+            "delta": 0.050000000000000044,
             "interval": [
-              -0.25,
-              0.25
+              -0.2604834939252004,
+              0.26540659228538016
             ]
           }
         ],
@@ -4298,31 +4361,31 @@
         "schema": "gauge.comparison@1",
         "comparison": "cmp-flat",
         "experiment": "exp-12",
-        "baseline": "res-worse",
-        "candidate": "res-base",
+        "baseline": "res-base",
+        "candidate": "res-flat",
         "deltas": [
           {
             "measure": "accuracy",
             "delta": 0,
             "interval": [
-              -0.05,
-              0.05
+              -0.07071067811865474,
+              0.07071067811865474
             ]
           },
           {
             "measure": "cost",
-            "delta": -40,
+            "delta": -17,
             "interval": [
-              -50,
-              -2
+              -31.14213562373095,
+              -2.857864376269049
             ]
           },
           {
             "measure": "completion",
             "delta": 0,
             "interval": [
-              -0.08,
-              0.08
+              -0.11313708498984763,
+              0.11313708498984763
             ]
           }
         ],
@@ -4343,8 +4406,8 @@
             "measure": "accuracy",
             "delta": 0,
             "interval": [
-              -0.04,
-              0
+              -0.07071067811865474,
+              0.07071067811865474
             ]
           }
         ],
@@ -4365,8 +4428,8 @@
             "measure": "cost",
             "delta": 0,
             "interval": [
-              0,
-              4
+              -14.142135623730951,
+              14.142135623730951
             ]
           }
         ],
@@ -4387,8 +4450,8 @@
             "measure": "accuracy",
             "delta": 0,
             "interval": [
-              0,
-              0.04
+              -0.07071067811865474,
+              0.07071067811865474
             ]
           }
         ],
@@ -4409,24 +4472,24 @@
             "measure": "accuracy",
             "delta": 0,
             "interval": [
-              -0.05,
-              0.05
+              -0.06403124237432847,
+              0.06403124237432846
             ]
           },
           {
             "measure": "cost",
             "delta": 40,
             "interval": [
-              30,
-              50
+              25.85786437626905,
+              52.8062484748657
             ]
           },
           {
             "measure": "completion",
             "delta": 0,
             "interval": [
-              -0.08,
-              0.08
+              -0.11313708498984763,
+              0.11313708498984763
             ]
           }
         ],
