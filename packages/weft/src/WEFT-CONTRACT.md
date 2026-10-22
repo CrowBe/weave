@@ -373,12 +373,12 @@ write an invalid one. It writes payload keys in the order listed above. In
 disclosure terms its ids and `kind` are `reference`, its payload is `metric`,
 and it has no `content` field, so no inline content policy applies to it.
 
-**Import.** `importTraceLines` validates every line of a batch before the port
-sees any of them; one invalid or unparseable line rejects the whole batch. The
-port upserts by `(run_id, id)`, so importing the same JSONL again is
-idempotent. A changed record under the same identity replaces the stored one.
-That is P9's behaviour, kept; the `weft.record@1` conflict rule does not apply
-to this version. A database adapter is not part of this package (#132).
+**Import.** `importTraceLines` validates every line before calling the port.
+Identical canonical content under `(run_id, id)` is a no-op; different content
+is rejected, never overwritten. Transactional ports supply `upsertBatch` so
+all rows commit atomically. Legacy `upsert`-only ports cannot promise rollback
+and remain responsible for their own storage semantics. SQLite's typed JSONL
+import and torn-line policy are specified below.
 
 **Why it is not converted.** The W1 sketch mapped `run_id` → `trace_id`, `id`
 → `record_id`, `parentId` → `parent_id`, `sequence` → `sequence`, and each kind
@@ -581,3 +581,43 @@ the same bytes and span identities for the same redacted records and base; the c
 root must supply a deterministic redactor for reproducible export. Collector
 deduplication is its concern.
 `weave.trace@1` is rejected rather than inventing missing Weft fields.
+
+## SQLite intake (WV-032 R3, #132)
+
+`@weave/weft/sqlite` is an optional Node 22 `node:sqlite` adapter, with no
+runtime dependencies. Core imports neither SQLite nor a listener. The existing
+subsystem journals remain the only replay source. This store grants no authority.
+
+`openTraceStore(path, { redactTrace, redact })` returns a typed result; both
+redactors are mandatory, including for empty batches. The store provides
+`upsert`/`upsertBatch` (TraceImportPort), `importJsonl`, `importRecords`, `read`
+and `close`. Operational failures return only a reason: `input`, `disclosure`,
+`conflict`, `cancelled`, `busy`, `storage`, `schema` or `config`. No exception,
+SQLite message or input fragment crosses the port. Reads sort by `(run_id, id)`.
+
+Schema version 1 uses `PRAGMA user_version`. Unknown versions are rejected,
+never migrated implicitly. `runs(run_id)` and `threads(run_id, thread_id)`
+index scopes. `spans(run_id, id, schema, parent_id, thread_id, kind, sequence,
+record_json)` has primary key `(run_id, id)` and references the run and optional
+thread. `decisions`, `model_calls`, `tool_calls`, `errors`, `budget_events`
+each have `(run_id, id, fields_json)` with a composite foreign key to spans.
+Subtype fields retain the validated version's semantics; no missing provenance
+is invented. Links and evidence remain in canonical `record_json`.
+
+Both envelopes share the identity namespace. Exact canonical bytes are a no-op;
+any differing content (including schema) conflicts and leaves the original
+unchanged. All records are snapshotted, redacted and validated before any write.
+Every batch uses one `BEGIN IMMEDIATE` transaction; conflict, write failure or
+abort rolls back every table. Concurrent calls on one adapter return `busy`;
+independent connections serialize through SQLite's write lock or return `busy`
+without waiting. Cancellation is checked between rows with an asynchronous yield;
+JavaScript cannot interrupt one synchronous SQLite statement. Closing an active
+adapter returns `busy`. Durable SQLite transactions recover after process death.
+
+`importJsonl` accepts only newline-terminated complete records. A nonempty final
+unterminated fragment is skipped, even if valid JSON, and success reports
+`torn: true`. Earlier complete lines commit as one batch only if all validate;
+an invalid complete line or conflict rejects that complete-line batch. Re-import
+with the repaired final line is idempotent. Blank complete lines are ignored.
+The legacy generic `importTraceLines` parser still rejects malformed lines;
+with a transactional port it submits all its validated rows as one batch.
