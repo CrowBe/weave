@@ -26,51 +26,52 @@ export function createGrantedCliSpawn(options: {
         process_effects: ['process.spawn', `fs.write:${request.cwd_ref}`],
         issued_at: options.issued_at ?? 0,
       });
-      const invoked = await options.host.invokeCliGeneration(grant, {
-        argv: [...request.argv],
-        cwd_ref: request.cwd_ref,
-        env_allow: [...request.env_allow],
-        timeout_ms: request.timeout_ms,
-        stdin: request.stdin,
-      });
-      if (invoked.kind === 'rejected') {
-        const conflict = invoked.workspace_conflict;
-        const reconciliation =
-          invoked.code === 'RESOLVER_ERROR' && invoked.reason.startsWith('operation requires reconciliation');
-        return {
-          status: 'failed',
-          failure: reconciliation
-            ? 'workspace_held'
-            : conflict
-              ? conflict.uncertain
-                ? 'workspace_held'
-                : 'effect_conflict'
-              : invoked.code === 'DENIED'
-                ? 'denied'
-                : 'spawn_failed',
-          ...(conflict ? { held_by: conflict.invocation_id } : {}),
-          ...(reconciliation || conflict?.uncertain
-            ? {
-                hint: 'List and reconcile workspace holds with examples/cli-generations.ts --store JOURNAL list | reconcile --invocation ID --resolution not_committed --evidence TEXT [--force-with-evidence].',
-              }
-            : {}),
-          stdout_tail: '',
-          stderr_tail: '',
-          duration_ms: 0,
-        };
-      }
       const cancel = (): void => {
-        options.host.requestCancel(invoked.invocation_id);
+        options.host.requestCancel(action_id);
       };
-      if (request.signal !== undefined) {
-        if (request.signal.aborted) {
+      try {
+        if (request.signal?.aborted) {
           cancel();
         } else {
-          request.signal.addEventListener('abort', cancel, { once: true });
+          request.signal?.addEventListener('abort', cancel, { once: true });
         }
-      }
-      options.host.release(action_id);
-      try {
+        const invoked = await options.host.invokeCliGeneration(grant, {
+          argv: [...request.argv],
+          cwd_ref: request.cwd_ref,
+          env_allow: [...request.env_allow],
+          timeout_ms: request.timeout_ms,
+          stdin: request.stdin,
+        });
+        if (invoked.kind === 'cancelled') {
+          return mapShellOutcome({ outcome: 'failed', failure: 'cancelled' }, undefined, invoked.invocation_id);
+        }
+        if (invoked.kind === 'rejected') {
+          const conflict = invoked.workspace_conflict;
+          const reconciliation =
+            invoked.code === 'RESOLVER_ERROR' && invoked.reason.startsWith('operation requires reconciliation');
+          return {
+            status: 'failed',
+            failure: reconciliation
+              ? 'workspace_held'
+              : conflict
+                ? conflict.uncertain
+                  ? 'workspace_held'
+                  : 'effect_conflict'
+                : invoked.code === 'DENIED'
+                  ? 'denied'
+                  : 'spawn_failed',
+            ...(conflict ? { held_by: conflict.invocation_id } : {}),
+            ...(reconciliation || conflict?.uncertain
+              ? {
+                  hint: 'List and reconcile workspace holds with examples/cli-generations.ts --store JOURNAL list | reconcile --invocation ID --resolution not_committed --evidence TEXT [--force-with-evidence].',
+                }
+              : {}),
+            stdout_tail: '',
+            stderr_tail: '',
+            duration_ms: 0,
+          };
+        }
+        options.host.release(action_id);
         const outcome = await invoked.result;
         // Failure and uncertainty outcomes carry their reason; redacted tails and duration stay in the trace.
         const trace = options.host
