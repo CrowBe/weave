@@ -132,6 +132,7 @@ const HOST_SOURCE = { kind: 'host', id: 'capability-host' } as const;
 const OPERATOR_SOURCE = { kind: 'operator', id: 'operator' } as const;
 const CLOCK_SOURCE = { kind: 'clock', id: 'clock' } as const;
 const GATEWAY_SOURCE = { kind: 'gateway', id: 'inference-gateway' } as const;
+const ABANDONED_WEIGH = 'abandoned at recovery: no inference.recorded before the restart';
 
 /** Cost envelope reserved for one gateway weigh; framing must still have remaining budget. */
 const GATEWAY_WEIGH_COST = 10_000;
@@ -189,6 +190,8 @@ const runtimeLogs = new WeakMap<Runtime, readonly Observation[]>();
 
 export class Runtime {
   private readonly log: Observation[] = [];
+  /** Highest seq in the log. A loaded journal holds only accepted observations, so its length is not a seq. */
+  private seqHigh: Seq = 0;
   private readonly cycles: CycleRecord[] = [];
   private readonly current: MutableState = initialState();
   private readonly settled = new Map<ActionId, Promise<void>>();
@@ -478,7 +481,7 @@ export class Runtime {
   }
 
   private nextSeq(): Seq {
-    return this.log.length + 1;
+    return this.seqHigh + 1;
   }
 
   private append(
@@ -538,6 +541,7 @@ export class Runtime {
         }
       }
       this.log.push(observation);
+      this.seqHigh = observation.seq;
       this.observationIds.add(observation.observation_id);
       if (observation.validation.status === 'accepted') {
         applyAccepted(this.current, observation);
@@ -911,6 +915,9 @@ export class Runtime {
     }
     const latest = weighs.filter((record) => record.request.candidate_set === candidate_set).at(-1);
     if (!latest?.recorded) {
+      return { kind: 'needed' };
+    }
+    if (latest.recorded.reason === ABANDONED_WEIGH) {
       return { kind: 'needed' };
     }
     if (latest.recorded.status !== 'accepted') {
@@ -1469,6 +1476,13 @@ export class Runtime {
         max = Math.max(max, Number(match[1]));
       }
     }
+    // A recovered run has no cycle records; its weighings still name their cycle.
+    for (const request_id of Object.keys(this.current.inferences)) {
+      const match = /^inf:c(\d+):weigh$/.exec(request_id);
+      if (match) {
+        max = Math.max(max, Number(match[1]));
+      }
+    }
     return max + 1;
   }
 
@@ -1616,6 +1630,7 @@ export class Runtime {
   }
 
   reconcile(): void {
+    this.abandonUnrecordedWeighs();
     const unfinished = Object.values(this.current.actions).filter(
       (a) => a.state === 'running' || a.state === 'pending' || (a.state === 'uncertain' && !a.reconciled),
     );
@@ -1661,10 +1676,37 @@ export class Runtime {
     this.drainQueue();
   }
 
+  /**
+   * A frontier weighing requested before a restart has no live gateway call
+   * left to record it. Record it as abandoned so its slot and reservation are
+   * freed; the whole reservation is charged, since the provider may have spent it.
+   */
+  private abandonUnrecordedWeighs(): void {
+    for (const record of Object.values(this.current.inferences)) {
+      if (record.request.site !== 'frontier.weigh' || record.recorded || this.inferAbort.has(record.request_id)) {
+        continue;
+      }
+      this.gatewayIngress.submit({
+        observation_id: `inference:recorded:${record.request_id}`,
+        caused_by: null,
+        payload_type: 'inference.recorded',
+        payload_version: 1,
+        payload: {
+          request_id: record.request_id,
+          attempts: [],
+          spent: record.request.reservation.cost,
+          status: 'unaccepted',
+          reason: ABANDONED_WEIGH,
+        } satisfies InferenceRecordedPayload,
+      });
+    }
+  }
+
   load(observations: readonly Observation[]): void {
     for (const observation of observations) {
       const stored = structuredClone(observation);
       this.log.push(stored);
+      this.seqHigh = Math.max(this.seqHigh, stored.seq);
       this.observationIds.add(stored.observation_id);
       if (observation.validation.status === 'accepted') {
         applyAccepted(this.current, observation);

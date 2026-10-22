@@ -16,6 +16,7 @@ import {
   frontierWeighInstructions,
   GatewayDecisionLayer,
   LOCAL_DESTINATION,
+  MemoryJournal,
   replay,
   Runtime,
   ScriptedDecisionLayer,
@@ -98,6 +99,9 @@ function fwScenario(
     held?: Promise<void>;
     decisionLayer?: DecisionLayer;
     proposal?: readonly string[];
+    journal?: MemoryJournal;
+    /** Recover from this journal snapshot instead of opening a fresh run. */
+    recorded?: readonly Observation[];
   } = {},
 ): FwScenario {
   const environment = new FixtureEnvironment();
@@ -110,7 +114,13 @@ function fwScenario(
   const gateway = fixtureGateway({ clock, generate, ...(evaluate ? { evaluate } : {}) });
   const decisionLayer =
     options.decisionLayer ?? (evaluate ? new GatewayDecisionLayer(gateway, [LOCAL_DESTINATION]) : new ScriptedDecisionLayer());
-  runtime = new Runtime({ host, decisionLayer, gateway });
+  const runtimeOptions = { host, decisionLayer, gateway, ...(options.journal ? { journal: options.journal } : {}) };
+  runtime = new Runtime(runtimeOptions);
+  if (options.recorded) {
+    // recover(), with the runtime bound first: reconcile may weigh, and the gateway clock reads it.
+    runtime.load(options.recorded);
+    runtime.reconcile();
+  }
   const appended: Observation[] = [];
   const s: FwScenario = {
     environment,
@@ -133,7 +143,12 @@ function fwScenario(
   ];
   for (const [resource, content] of sources) {
     environment.register(resource, content);
-    s.observe(registered(resource, content));
+    if (!options.recorded) {
+      s.observe(registered(resource, content));
+    }
+  }
+  if (options.recorded) {
+    return s;
   }
   runtime.operator.submit(goalOpened(options.goal ?? fwGoal()));
   return s;
@@ -414,5 +429,69 @@ describe('frontier.weigh@1', () => {
     assert.equal(host.invocations.length, 0);
     assert.equal(JSON.stringify(result.trace.cycles), JSON.stringify(s.runtime.trace().cycles));
     assert.equal(result.state.goal?.status, 'complete');
+  });
+
+  it('FW-T08 a crash mid-weighing frees the in-flight slot on recovery instead of wedging the frontier', async () => {
+    const journal = new MemoryJournal();
+    const s = fwScenario({ judge: goalJudge, held: new Promise<void>(() => {}), journal });
+    await macrotask();
+    assert.equal(s.calls.length, 1);
+    const [abandoned] = weighRequests(s);
+    assert.ok(abandoned);
+    const request_id = (abandoned.payload as InferenceRequestedPayload).request_id;
+    assert.deepEqual(lastCycle(s).outcome, { status: 'waiting' });
+
+    const r = fwScenario({ judge: goalJudge, recorded: journal.snapshot() });
+    await drive(r);
+    const recorded = observationsOfType(r.runtime.trace(), 'inference.recorded').filter(
+      (o) => (o.payload as { request_id: string }).request_id === request_id,
+    );
+    assert.equal(recorded.length, 1, 'recovery records the abandoned weighing as an observation');
+    assert.equal(recorded[0]?.validation.status, 'accepted');
+    assert.equal((recorded[0]?.payload as { status: string }).status, 'unaccepted');
+    const candidate_set = (abandoned.payload as InferenceRequestedPayload).candidate_set;
+    const sameSet = weighRequests(r).filter((o) => (o.payload as InferenceRequestedPayload).candidate_set === candidate_set);
+    assert.equal(sameSet.length, 2, 'one fresh weighing of the abandoned frontier, not a wedge');
+    let open: string | null = null;
+    for (const o of r.runtime.trace().observations) {
+      const id = (o.payload as { request_id?: string }).request_id;
+      if (o.payload_type === 'inference.requested' && (o.payload as InferenceRequestedPayload).site === 'frontier.weigh') {
+        assert.equal(open, null, `${id} was requested while ${open} was still in flight`);
+        open = id ?? null;
+      } else if (o.payload_type === 'inference.recorded' && id === open) {
+        open = null;
+      }
+    }
+    assert.equal(r.calls.length, weighRequests(r).length - 1, 'the abandoned weighing is not re-sent');
+    assert.equal(r.runtime.state().budget.judgments.reserved, 0);
+    assert.equal(r.runtime.state().goal?.status, 'complete');
+  });
+
+  it('FW-T09 seqs stay strictly increasing after recovery over a log with gaps, so new evidence lifts a deferral', async () => {
+    const journal = new MemoryJournal();
+    const s = fwScenario({ judge: constantJudge(0), journal });
+    for (let i = 0; i < 12; i += 1) {
+      const gap = s.observe({ ...changed(ALPHA, 2, 'unsupported'), observation_id: `test:gap:${i}`, payload_version: 2 });
+      assert.equal(gap.validation.status, 'rejected');
+    }
+    await drive(s);
+    assert.deepEqual(lastCycle(s).outcome, { status: 'blocked', reason: DEFERRED_REASON });
+    assert.equal(weighRequests(s).length, 1);
+    const loaded = journal.snapshot();
+    const high = Math.max(...loaded.map((o) => o.seq));
+    assert.ok(loaded.length < high, 'the journal holds a gap left by rejected observations');
+
+    const r = fwScenario({ judge: constantJudge(0), recorded: loaded });
+    await drive(r);
+    assert.equal(weighRequests(r).length, 1, 'recovery alone is not new evidence');
+    const evidence = r.observe(changed(ALPHA, 2, 'alpha revised'));
+    assert.equal(evidence.validation.status, 'accepted');
+    assert.ok(evidence.seq > high, `seq ${evidence.seq} must follow the loaded high-water mark ${high}`);
+    await drive(r);
+    const seqs = r.runtime.trace().observations.map((o) => o.seq);
+    assert.deepEqual(seqs, [...seqs].sort((a, b) => a - b));
+    assert.equal(new Set(seqs).size, seqs.length);
+    assert.equal(weighRequests(r).length, 2, 'new evidence earns one more weighing');
+    assert.deepEqual(lastCycle(r).outcome, { status: 'blocked', reason: DEFERRED_REASON });
   });
 });
