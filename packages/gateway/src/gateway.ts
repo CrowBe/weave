@@ -721,6 +721,8 @@ async function attemptBeforeDeadline<T>(params: BoundedParams<T>, unit: RoutedUn
     void deadline(attempt);
     const result = await Promise.race([attempt, interrupted]);
     if (provider.signal.aborted && params.await_on_abort?.(unit)) {
+      // The adapter MUST settle every abort path within its own termination bound
+      // (e.g. runProcess timeout). Return late results truthfully: they reflect real effects.
       const interruptFailure = await interrupted;
       return await attempt.catch(() => interruptFailure);
     }

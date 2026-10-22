@@ -414,6 +414,99 @@ for (const operation of ['generate', 'evaluate'] as const) {
   }
 }
 
+for (const interruption of ['deadline', 'cancel'] as const) {
+  it(`returns a late accepted result as-is from an await_on_abort adapter after ${interruption}`, async () => {
+    let now = 0;
+    let fire!: () => void;
+    let observed: AbortSignal | undefined;
+    let complete!: (result: Awaited<ReturnType<GenerationAdapter['execute']>>) => void;
+    let calls = 0;
+    const result = {
+      status: 'completed' as const,
+      text: 'effects completed after abort',
+      usage: { input_tokens: 3, output_tokens: 4 },
+      finish_reason: 'stop',
+      provider_response_id: 'late-response',
+    };
+    const adapter: GenerationAdapter = {
+      id: 'waiting',
+      await_on_abort: true,
+      execute(call) {
+        calls += 1;
+        observed = call.signal;
+        return new Promise((resolve) => {
+          complete = resolve;
+        });
+      },
+    };
+    const caller = new AbortController();
+    const gateway = createInferenceGateway({
+      routes: [unit, { ...unit, routed_unit_id: 'fallback' }],
+      adapters: [adapter],
+      clock: { now: () => now },
+      timer: {
+        sleep(ms, signal) {
+          return new Promise((resolve) => {
+            fire = () => {
+              now += ms;
+              resolve();
+            };
+            signal?.addEventListener('abort', () => resolve(), { once: true });
+          });
+        },
+      },
+    });
+    const pending = gateway.generate(
+      {
+        request_id: 'accepted-after-abort',
+        site: 'test',
+        role: 'working',
+        kind: 'transform',
+        input: { instructions: '', prompt: 'ok' },
+        terms: {
+          quality: 'baseline',
+          destinations: ['test'],
+          max_context_tokens: 10,
+          deadline: 100,
+          cost_ceiling: 0,
+          max_attempts: 2,
+        },
+      },
+      caller.signal,
+    );
+    let settled = false;
+    void pending.then(() => {
+      settled = true;
+    });
+    try {
+      await setImmediate();
+      if (interruption === 'deadline') fire();
+      else caller.abort();
+      await setImmediate();
+      assert.equal(observed?.aborted, true);
+      assert.equal(settled, false, 'the gateway must await the adapter after abort');
+      now = 150;
+      complete(result);
+      const outcome = await pending;
+      assert.equal(outcome.status, 'accepted');
+      if (outcome.status === 'accepted') {
+        assert.equal(outcome.text, result.text);
+        assert.equal(outcome.provider_response_id, result.provider_response_id);
+        assert.equal(outcome.routed_unit_id, unit.routed_unit_id);
+      }
+      assert.equal(calls, 1, 'no fallback starts while awaiting the final result');
+      assert.equal(outcome.attempts.length, 1);
+      assert.deepEqual(outcome.attempts[0]?.disposition, { status: 'accepted' });
+      assert.deepEqual(outcome.attempts[0]?.usage, result.usage);
+      assert.equal(outcome.attempts[0]?.ended_at, 150);
+    } finally {
+      caller.abort();
+      complete(result);
+      await pending;
+    }
+  });
+}
+
 for (const immediate of [false, true]) {
   for (const interruption of ['deadline', 'cancel'] as const) {
     it(`contains an await_on_abort adapter rejection ${immediate ? 'during' : 'after'} ${interruption}`, async () => {

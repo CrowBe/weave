@@ -457,6 +457,11 @@ export interface GenerationAdapter {
   /**
    * The grant-enforced CLI port owns bounded process stopping. Await its final
    * result after abort so an invocation retaining effects is always observable.
+   * An adapter opting in MUST settle its promise on every path after the abort
+   * signal, bounded by its own termination (e.g. a runProcess timeout); the
+   * gateway adds no further timeout. A result settled after deadline or cancel
+   * is returned truthfully, including an accepted result, because it reflects
+   * real effects.
    */
   readonly await_on_abort?: boolean;
   execute(call: GenerationCall): Promise<GenerationProviderResult>;
