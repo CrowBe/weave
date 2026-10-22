@@ -925,7 +925,7 @@ export class AgentFabricHost implements CapabilityHost {
           if (open.phase === 'done') {
             return;
           }
-          this.finish(open, { outcome: 'failed', failure: 'spawn_failed' });
+          this.finish(open, this.implementationFault(open, 'spawn_failed'));
         },
       );
       return;
@@ -961,7 +961,7 @@ export class AgentFabricHost implements CapabilityHost {
           if (open.phase === 'done') {
             return;
           }
-          this.finish(open, { outcome: 'failed', failure: error instanceof Error ? error.message : 'implementation threw' });
+          this.finish(open, this.implementationFault(open, error instanceof Error ? error.message : 'implementation threw'));
         },
       );
       return;
@@ -1048,13 +1048,20 @@ export class AgentFabricHost implements CapabilityHost {
     return true;
   }
 
+  private implementationFault(open: OpenInvocation, reason: string): InvocationOutcome {
+    // A fault does not establish whether execution already produced effects.
+    return hasDeclaredWrites(open.effects)
+      ? { outcome: 'uncertain', reason }
+      : { outcome: 'failed', failure: reason };
+  }
+
   private finish(open: OpenInvocation, value: unknown, status?: InvocationRecord['status']): void {
     let outcome: InvocationOutcome;
     try {
       outcome = normalizeInvocationOutcome(value);
     } catch {
-      outcome = { outcome: 'failed', failure: 'implementation returned an invalid outcome' };
-      status = 'stopped';
+      outcome = this.implementationFault(open, 'implementation returned an invalid outcome');
+      status = outcome.outcome === 'uncertain' ? 'uncertain' : 'stopped';
     }
     const terminal: InvocationRecord['status'] =
       status ?? (outcome.outcome === 'succeeded' ? 'committed' : outcome.outcome === 'uncertain' ? 'uncertain' : 'stopped');
@@ -1220,6 +1227,9 @@ export class AgentFabricHost implements CapabilityHost {
     const invocation_id = options?.invocation_id ?? action_id;
     const existing = this.store.getInvocation(invocation_id);
     const binding_digest = digest({ operation, inputs: boundInputs });
+    if (existing && existing.action_id !== action_id) {
+      return this.reject('DENIED', 'grant does not name this invocation');
+    }
     if (existing && existing.binding_digest !== binding_digest) {
       return this.reject('DENIED', 'invocation identity is bound to a different input');
     }
