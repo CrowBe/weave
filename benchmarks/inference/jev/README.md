@@ -234,9 +234,10 @@ supplied, so a throttle that names a delay is waited out and recorded in
 `waited_ms` rather than escalating silently. Which unit answered is recorded
 per request, so fallback frequency is data rather than an impression.
 The run log's `routes:` line names the configured routes in order, and, when
-the free Vercel route is configured, whether `--prefer-free` waits out its
-throttles or escalates on them. It never includes credential or environment
-values.
+the free Vercel route is configured, how its throttles are handled: waited out
+under `--prefer-free`, otherwise escalated to TypeSafe direct, or, with no
+TypeSafe key, reported as having no fallback. It never includes credential or
+environment values.
 
 Jev is free through the Vercel AI Gateway during the measurement window, which
 is why the volume experiments run there and now.

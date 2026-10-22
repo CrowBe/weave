@@ -61,9 +61,14 @@ export function aggregate(kind: Aggregate, samples: readonly number[]): number {
       return sum(samples);
     case 'p95': {
       const sorted = [...samples].sort((a, b) => a - b);
-      return sorted[Math.ceil(0.95 * sorted.length) - 1]!;
+      return sorted[nearestRank(0.95, sorted.length)]!;
     }
   }
+}
+
+/** The zero-based nearest-rank index `ceil(q·n) - 1` of quantile `q` in a sorted sample of `n ≥ 1`. */
+export function nearestRank(q: number, n: number): number {
+  return Math.ceil(q * n) - 1;
 }
 
 /** `sorted[floor(q·(n - 1))]` over a non-empty sample sorted ascending. */
@@ -139,7 +144,7 @@ export function bootstrap(samples: readonly number[], kind: Aggregate, level: nu
   const next = generator(seed);
   const statistics = new Float64Array(BOOTSTRAP_RESAMPLES);
   const draw = kind === 'p95' ? new Float64Array(n) : new Array<number>(n);
-  const rank = Math.ceil(0.95 * n) - 1;
+  const rank = nearestRank(0.95, n);
   // Native numeric sorting distinguishes -0 from +0. Preserve the original
   // stable comparator's zero ties when a sample contains -0.
   const compare = kind === 'p95' && samples.some((x) => Object.is(x, -0)) ? (a: number, b: number) => a - b : undefined;
