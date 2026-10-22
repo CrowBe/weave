@@ -294,7 +294,8 @@ export class AgentFabricHost implements CapabilityHost {
         const legacy = [...this.unscopedRecovery.values()].includes(SHELL_RUN.id);
         if ((conflict?.uncertain || legacy) && !this.reconciling.size) await this.checkUncertainCliGenerations(cwd_ref);
       }
-      if (this.pendingCliCancel.has(invocation_id)) return { kind: 'cancelled', invocation_id };
+      if (this.pendingCliCancel.has(invocation_id) && this.store.getInvocation(invocation_id) === undefined)
+        return { kind: 'cancelled', invocation_id };
       const prepared = this.step(() => this.prepare(grant, SHELL_RUN.id, inputs, undefined, invocation_id));
       if (prepared.kind === 'rejected') {
         const conflict =
@@ -1209,7 +1210,10 @@ export class AgentFabricHost implements CapabilityHost {
     if (open) {
       open.cancel_requested = true;
       open.abort.abort();
-    } else if (this.reservedCliIds.has(invocation_id) || this.preparingCli.has(invocation_id)) {
+    } else if (
+      this.store.getInvocation(invocation_id) === undefined &&
+      (this.reservedCliIds.has(invocation_id) || this.preparingCli.has(invocation_id))
+    ) {
       this.pendingCliCancel.add(invocation_id);
     }
     const record = this.store.getInvocation(invocation_id);

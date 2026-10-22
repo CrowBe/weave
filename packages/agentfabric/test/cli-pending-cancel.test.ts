@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { describe, it, type TestContext } from 'node:test';
 import { createGrantAuthority, type Grant } from '@weave/agentsop';
 import { AgentFabricHost, FabricStore, SHELL_RUN, createGrantedCliSpawn } from '@weave/agentfabric';
+import { digest } from '../src/digest.js';
 
 type Wait = 'recovery' | 'startup check';
 type RecoveryChecks = { checkUncertainCliGenerations(cwd_ref?: string): Promise<void> };
@@ -21,7 +22,11 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-async function fixture(t: TestContext, wait?: Wait) {
+async function fixture(
+  t: TestContext,
+  wait?: Wait,
+  existingStatus?: 'running' | 'uncertain' | 'committed' | 'stopped',
+) {
   const dir = mkdtempSync(join(tmpdir(), 'weave-cli-pending-cancel-'));
   const workspace = join(dir, 'workspace');
   mkdirSync(workspace);
@@ -52,6 +57,51 @@ async function fixture(t: TestContext, wait?: Wait) {
   let store = new FabricStore(undefined, path);
   let host = new AgentFabricHost({ authority, store, shell, cliProcessGroupProbe: () => 'unknown' });
   const cwd_ref = host.registerWorkspace(workspace);
+  const request = (ref = cwd_ref) => ({
+    argv: [process.execPath, '-e', 'void 0'],
+    cwd_ref: ref,
+    env_allow: [],
+    timeout_ms: 60_000,
+    stdin: '',
+  });
+  if (existingStatus) {
+    const record = {
+      invocation_id: 'shell-cli:existing',
+      action_id: 'shell-cli:existing',
+      operation: SHELL_RUN.id,
+      binding_digest: digest({ operation: SHELL_RUN.id, inputs: request() }),
+      inputs: request(),
+      status: 'running' as const,
+      outcome: null,
+      cancel_requested: false,
+      reservation: [{ resource: store.lookupRef(cwd_ref)!.canonical_id, mode: 'write' as const }],
+      cli_generation: { cwd_ref, before_snapshot: null },
+    };
+    store.persistInvocationStart(record);
+    if (existingStatus === 'uncertain') {
+      store.persistInvocationUncertain({
+        ...record,
+        status: 'uncertain',
+        outcome: { outcome: 'uncertain', reason: 'existing effects require reconciliation' },
+      });
+    } else if (existingStatus === 'committed') {
+      store.persistInvocationResult({
+        ...record,
+        status: 'committed',
+        outcome: { outcome: 'succeeded', output: { receipt: 'existing effect' } },
+      });
+    } else if (existingStatus === 'stopped') {
+      store.persistInvocationReconciliation({
+        ...record,
+        status: 'stopped',
+        outcome: { outcome: 'failed', failure: 'reconciled: not committed' },
+        reconciliation: { resolution: 'not_committed', evidence: 'existing execution confirmed stopped' },
+      });
+    }
+    store.close();
+    store = new FabricStore(undefined, path);
+    host = new AgentFabricHost({ authority, store, shell, cliProcessGroupProbe: () => 'unknown' });
+  }
   if (wait !== 'recovery') await host.cliRecoveryReady;
   if (wait === 'startup check') {
     store.persistInvocationStart({
@@ -89,13 +139,6 @@ async function fixture(t: TestContext, wait?: Wait) {
       process_effects: ['process.spawn', `fs.write:${ref}`],
       issued_at: 0,
     });
-  const request = (ref = cwd_ref) => ({
-    argv: [process.execPath, '-e', 'void 0'],
-    cwd_ref: ref,
-    env_allow: [],
-    timeout_ms: 60_000,
-    stdin: '',
-  });
   const clearLegacy = () => {
     if (wait === 'startup check' && !store.getInvocation('legacy')?.reconciliation) {
       host.reconcileCliGeneration('legacy', {
@@ -139,6 +182,33 @@ async function fixture(t: TestContext, wait?: Wait) {
 
 describe('CLI cancellation before prepare', () => {
   for (const wait of ['recovery', 'startup check'] as const) {
+    for (const status of ['uncertain', 'running', 'committed', 'stopped'] as const) {
+      it(`replays an existing ${status} record unchanged when cancelled during ${wait}`, async (t) => {
+        const f = await fixture(t, wait, status);
+        const id = 'shell-cli:existing';
+        const before = f.store.getInvocation(id)!;
+        assert.equal(before.status, status === 'running' ? 'uncertain' : status);
+        const pending = f.host.invokeCliGeneration(f.grant(id), f.request());
+        assert.deepEqual(f.host.requestCancel(id), { acknowledged: true });
+        f.resume();
+        const replay = await pending;
+        assert.equal(replay.kind, 'handle');
+        if (replay.kind !== 'handle') return;
+        assert.deepEqual(await replay.result, before.outcome);
+        assert.deepEqual(f.store.getInvocation(id), {
+          ...before,
+          cancel_requested: status !== 'stopped',
+        });
+        assert.equal(f.spawn.mock.callCount(), 0);
+        assert.equal(f.host.invocations.length, 0, 'replay must not start an invocation');
+        assert.equal(f.host.openCount(), 0);
+        assert.deepEqual(
+          f.host.coordinator.held().map((hold) => hold.invocation_id),
+          status === 'uncertain' || status === 'running' ? [id] : [],
+        );
+      });
+    }
+
     it(`retains double cancellation while awaiting ${wait}, without a durable record or spawn`, async (t) => {
       const f = await fixture(t, wait);
       const pending = f.run();
