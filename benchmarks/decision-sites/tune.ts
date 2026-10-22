@@ -182,67 +182,105 @@ export interface Metrics {
   readonly cost_usd: number;
   readonly parse_failure_rate: number;
 }
-export function metrics(site: string, observations: readonly Observed[], thresholds: Thresholds): Metrics {
-  let covered = 0,
-    correct = 0,
-    confidenceN = 0,
-    missing = 0,
-    confidenceSum = 0;
-  let violations = 0,
-    caught = 0,
-    needed = 0,
-    retained = 0,
-    allNeeded = 0,
-    multi = 0;
-  const points: { p: number; y: number }[] = [],
-    best: number[] = [],
+/**
+ * What score@2 decides for each observation, in observation and gold-question
+ * order: the samples that `metrics` reduces, and that the Gauge criteria in
+ * gauge.ts reduce independently.
+ */
+export interface Samples {
+  /** Per observation: 1 when covered. */
+  readonly coverage: readonly number[];
+  /** Per covered observation: 1 when it agrees with every gold label. */
+  readonly exact: readonly number[];
+  /** Per covered D3 step: 1 when it keeps every needed entry. */
+  readonly all_needed: readonly number[];
+  /** Per gold question: its valid confidence, or null when missing or invalid. */
+  readonly confidence: readonly (number | null)[];
+  /** Per valid supplied probability: boolean P(true) against gold, or the selected choice's probability against its correctness. */
+  readonly calibration: readonly (readonly [p: number, y: number])[];
+  /** Per gold-positive guard rule: 1 when a covered item blocked it. */
+  readonly violation: readonly number[];
+  /** Per needed entry of a covered D3 step: 1 when kept. */
+  readonly needed: readonly number[];
+  /** Per D3 step: 1 when it needs more than one entry. */
+  readonly multi_entry: readonly number[];
+  /** Per observation with a D3 boundary: its best-kept and kth-kept gaps. */
+  readonly best_gap: readonly number[];
+  readonly kth_gap: readonly number[];
+}
+export function samples(site: string, observations: readonly Observed[], thresholds: Thresholds): Samples {
+  const coverage: number[] = [],
+    exact: number[] = [],
+    allNeeded: number[] = [],
+    confidence: (number | null)[] = [];
+  const calibration: [number, number][] = [],
+    violation: number[] = [],
+    needed: number[] = [],
+    multi: number[] = [];
+  const best: number[] = [],
     kth: number[] = [];
   for (const o of observations) {
     const decision = decide(site, o, thresholds);
     const gold = Object.entries(o.item.gold);
-    if (decision.covered) {
-      covered++;
-      if (gold.every(([key, value]) => decision.predicted[key] === value)) correct++;
-    }
-    let itemNeeded = 0,
-      itemRetained = 0;
+    const kept = (key: string) => (decision.covered && decision.predicted[key] === true ? 1 : 0);
+    const itemNeeded: number[] = [];
     for (const [key, label] of gold) {
       const answer = o.result.status === 'ok' ? o.result.answers?.[key] : undefined;
-      if (unit(answer?.confidence)) {
-        confidenceN++;
-        confidenceSum += answer.confidence;
-      } else missing++;
-      if (guard(site) && label === true) {
-        violations++;
-        if (decision.covered && decision.predicted[key] === true) caught++;
-      }
-      if (site === 'loop.preselect' && label === true) {
-        itemNeeded++;
-        if (decision.covered && decision.predicted[key] === true) itemRetained++;
-      }
+      confidence.push(unit(answer?.confidence) ? answer.confidence : null);
+      if (guard(site) && label === true) violation.push(kept(key));
+      if (site === 'loop.preselect' && label === true) itemNeeded.push(kept(key));
       if (typeof label === 'boolean' && unit(answer?.probability))
-        points.push({ p: answer.probability, y: label ? 1 : 0 });
+        calibration.push([answer.probability, label ? 1 : 0]);
       else if (typeof label === 'string' && answer?.choice && unit(answer.probabilities?.[answer.choice]))
-        points.push({ p: answer.probabilities![answer.choice]!, y: answer.choice === label ? 1 : 0 });
+        calibration.push([answer.probabilities![answer.choice]!, answer.choice === label ? 1 : 0]);
     }
+    coverage.push(decision.covered ? 1 : 0);
+    if (decision.covered) exact.push(gold.every(([key, value]) => decision.predicted[key] === value) ? 1 : 0);
     if (site === 'loop.preselect') {
-      if (itemNeeded > 1) multi++;
+      multi.push(itemNeeded.length > 1 ? 1 : 0);
       if (decision.covered) {
-        needed += itemNeeded;
-        retained += itemRetained;
-        if (itemNeeded === itemRetained) allNeeded++;
+        needed.push(...itemNeeded);
+        allNeeded.push(itemNeeded.every((k) => k === 1) ? 1 : 0);
       }
     }
     if (decision.best_gap !== null) best.push(decision.best_gap);
     if (decision.kth_gap !== null) kth.push(decision.kth_gap);
   }
+  return {
+    coverage,
+    exact,
+    all_needed: allNeeded,
+    confidence,
+    calibration,
+    violation,
+    needed,
+    multi_entry: multi,
+    best_gap: best,
+    kth_gap: kth,
+  };
+}
+const count = (values: readonly number[]): number => values.reduce((a, b) => a + b, 0);
+export function metrics(site: string, observations: readonly Observed[], thresholds: Thresholds): Metrics {
+  const scored = samples(site, observations, thresholds),
+    points = scored.calibration;
+  const covered = scored.exact.length,
+    correct = count(scored.exact),
+    allNeeded = count(scored.all_needed);
+  const confidences = scored.confidence.filter((c): c is number => c !== null);
+  const confidenceN = confidences.length,
+    missing = scored.confidence.length - confidenceN,
+    confidenceSum = count(confidences);
+  const violations = scored.violation.length,
+    caught = count(scored.violation),
+    needed = scored.needed.length,
+    retained = count(scored.needed);
   const latencies = observations.map((o) => o.latency_ms).sort((a, b) => a - b);
   const bins = Array.from({ length: 10 }, () => ({ n: 0, p: 0, y: 0 }));
-  for (const point of points) {
-    const b = bins[Math.min(9, Math.floor(point.p * 10))]!;
+  for (const [p, y] of points) {
+    const b = bins[Math.min(9, Math.floor(p * 10))]!;
     b.n++;
-    b.p += point.p;
-    b.y += point.y;
+    b.p += p;
+    b.y += y;
   }
   const n = observations.length;
   return {
@@ -255,15 +293,15 @@ export function metrics(site: string, observations: readonly Observed[], thresho
     missing_confidence: missing,
     confidence_coverage: confidenceN + missing ? confidenceN / (confidenceN + missing) : 0,
     mean_confidence: confidenceN ? confidenceSum / confidenceN : null,
-    brier: mean(points.map((v) => (v.p - v.y) ** 2)),
+    brier: mean(points.map(([p, y]) => (p - y) ** 2)),
     ece: points.length ? bins.reduce((s, b) => s + (b.n ? Math.abs(b.p - b.y) / points.length : 0), 0) : null,
     calibration_n: points.length,
     violation_recall: guard(site) && violations ? caught / violations : null,
     needed_recall: site === 'loop.preselect' && needed ? retained / needed : null,
     all_needed_recall: site === 'loop.preselect' && covered ? allNeeded / covered : null,
-    multi_entry_steps: multi,
-    mean_best_gap: mean(best),
-    mean_kth_gap: mean(kth),
+    multi_entry_steps: count(scored.multi_entry),
+    mean_best_gap: mean(scored.best_gap),
+    mean_kth_gap: mean(scored.kth_gap),
     latency_ms: {
       p50: latencies.length ? latencies[Math.floor(0.5 * (latencies.length - 1))]! : null,
       p90: latencies.length ? latencies[Math.floor(0.9 * (latencies.length - 1))]! : null,
@@ -274,29 +312,44 @@ export function metrics(site: string, observations: readonly Observed[], thresho
     parse_failure_rate: n ? observations.filter((o) => o.result.parse_failure).length / n : 0,
   };
 }
-/** Question-level holdout diagnostics, independent of production confidence admission. */
-export function probabilityOnly(site: string, observations: readonly Observed[]) {
-  const points: { p: number; violation: boolean }[] = [];
-  let total = 0;
+/** Per boolean gold question, in order: P(violation) and gold violation, or null without a valid probability. */
+export function probabilityPoints(
+  site: string,
+  observations: readonly Observed[],
+): ({ p: number; violation: boolean } | null)[] {
+  const questions: ({ p: number; violation: boolean } | null)[] = [];
   for (const o of observations)
     for (const [key, gold] of Object.entries(o.item.gold)) {
       if (typeof gold !== 'boolean') continue;
-      total++;
       const p = o.result.status === 'ok' ? o.result.answers?.[key]?.probability : undefined;
-      if (unit(p))
-        points.push({ p: site === 'eval.output' ? 1 - p : p, violation: site === 'eval.output' ? !gold : gold });
+      questions.push(
+        unit(p) ? { p: site === 'eval.output' ? 1 - p : p, violation: site === 'eval.output' ? !gold : gold } : null,
+      );
     }
+  return questions;
+}
+/** Probability-only diagnostics block at P(violation) >= .3. */
+export const BLOCK_PROBABILITY = 0.3;
+/** Question-level holdout diagnostics, independent of production confidence admission. */
+export function probabilityOnly(site: string, observations: readonly Observed[]) {
+  const questions = probabilityPoints(site, observations),
+    total = questions.length;
+  const points = questions.filter((p) => p !== null);
   const positive = points.filter((p) => p.violation),
     negative = points.filter((p) => !p.violation);
   let wins = 0;
   for (const a of positive) for (const b of negative) wins += a.p > b.p ? 1 : a.p === b.p ? 0.5 : 0;
   return {
     label: 'descriptive only, not applied (#142)' as const,
-    block_probability: 0.3,
+    block_probability: BLOCK_PROBABILITY,
     questions: points.length,
     probability_coverage: total ? points.length / total : 0,
-    violation_recall: positive.length ? positive.filter((p) => p.p >= 0.3).length / positive.length : null,
-    false_block_rate: negative.length ? negative.filter((p) => p.p >= 0.3).length / negative.length : null,
+    violation_recall: positive.length
+      ? positive.filter((p) => p.p >= BLOCK_PROBABILITY).length / positive.length
+      : null,
+    false_block_rate: negative.length
+      ? negative.filter((p) => p.p >= BLOCK_PROBABILITY).length / negative.length
+      : null,
     auc: positive.length && negative.length ? wins / (positive.length * negative.length) : null,
   };
 }

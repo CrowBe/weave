@@ -29,7 +29,8 @@ export function providerSkip(result: Result): boolean {
 export function persistentProviderSkip(result: Result): boolean {
   return providerSkip(result) && result.reason !== 'quota_unavailable_or_weekly_cap';
 }
-function retryableCancellation(result: Result): boolean {
+/** Cancelled before dispatch: nothing reached the provider, so it costs nothing and is retried. */
+export function retryableCancellation(result: Result): boolean {
   return result.status !== 'ok' && (result.reason === 'cancelled' || result.reason === 'not_sent');
 }
 export function countCompetitorCalls(records: readonly JournalRecord[], provider: string): number {

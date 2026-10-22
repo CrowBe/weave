@@ -2,7 +2,8 @@
 
 Status: contract (G1, #189), validator (G2, #190), governed revisions
 (G3, #191), statistics, producers, evaluation cost and the cost gate
-(G5, #193), and routing preference sets (G6, #194).
+(G5, #193), routing preference sets (G6, #194), and info-only criteria sets
+and results (G4, #192).
 `validate` in
 `src/validate.ts` implements this contract; `test/contract.test.ts` runs the
 fixtures in `fixtures/records.json` against the compiled package as part of
@@ -367,6 +368,52 @@ named unit no evidence, so routing falls back to its configured order and
 records the uncertainty. It refuses to load a set with a zero-width `meets_bar`
 accept interval, and credits no evidence from one if handed such a set.
 
+## `gauge.criteria@2`: info-only criteria set
+
+What a workload's report records without weighing it. Every measure in it is
+an **info-only measure**: recorded so a report's numbers can be reproduced and
+inspected, never weighed. Nothing may gate, compare, track, cost, attribute or
+route on it (see `info_only` below). @2 does not supersede @1: a measure that
+may be weighed or gated stays in a `gauge.criteria@1` set, and every @1 rule
+and record is unchanged.
+
+- `schema`: `"gauge.criteria@2"`
+- `criteria`: rev; `workload`: id; `governed_by`: governance, as in @1
+- `measures`: 1–32, unique by `measure`. Each is exactly
+  `{ "measure": code, "source": source, "aggregate": info_aggregate, "empty": number | null }`.
+  A source is as in @1. An info aggregate is `rate`, `mean`, `sum`, `p95`,
+  `p50_floor`, `p90_floor`, `ece10` or `auc` (see Statistics). `empty` is the
+  value the measure has with no samples, fixed by the set rather than chosen
+  per result: a report that prints 0 for an empty count or rate declares 0, and
+  one that prints nothing declares null. A `rate`, `ece10` or `auc` empty value
+  lies in [0, 1].
+
+It has no `method` and no `constraints`. Nothing in it is weighed, so it fixes
+no interval; nothing is gated, so it declares no bar. A governed revision
+records it as a `criteria` set, exactly as it records @1.
+
+## `gauge.result@2`: info-only result
+
+One subject evaluated on one split of a case set under an info-only criteria
+set.
+
+- `schema`: `"gauge.result@2"`
+- `result`, `subject`, `criteria`, `caseset`, `split`, `caseset_digest`, `mode`
+  and `evidence`: as in `gauge.result@1`, except that `criteria` names a
+  `gauge.criteria@2` set
+- `measures`: exactly one entry per criteria measure. Each is
+  `{ "measure": code, "value": number | null, "n": count }`. There is no
+  interval: an info-only measure is never weighed.
+- `verdict`: `"info_only"`
+
+Rules:
+
+- **Binding, governance, holdout and replay** are those of `gauge.result@1`.
+- **Measures.** An entry with `n = 0` has its measure's `empty` value. An entry
+  with `n > 0` has a number. A `rate`, `ece10` or `auc` value lies in [0, 1].
+- **Verdict** is `info_only`. An info-only result declares no bar, so it
+  neither meets nor misses one: a set with no bar never yields `meets_bar`.
+
 ## Statistics
 
 `method` fixes how a producer computes intervals, so anyone holding the
@@ -384,6 +431,24 @@ normal quantile at `1 - α/2` (Acklam's rational approximation).
   `sorted[ceil(0.95·n) - 1]`.
 - A computed interval is widened to contain its value and, for a rate, clamped
   to [0, 1], so rounding cannot put a value outside its own interval.
+
+Info aggregates are computed in IEEE-754 double arithmetic, summing in sample
+order from 0, so the same samples in the same order give the same bits. `n` is
+the number of samples except for `auc`.
+
+- `rate`, `mean`, `sum` and `p95` are as above.
+- `p50_floor` and `p90_floor` are `sorted[floor(q·(n - 1))]` over the samples
+  sorted ascending, q = 0.5 or 0.9. Unlike `p95` they round the rank down.
+- `ece10` takes `[p, y]` samples, p in [0, 1] and y 0 or 1: the expected
+  calibration error over ten equal-width bins. A sample falls in bin
+  `min(9, floor(10·p))`; each bin sums its p and its y in sample order. The value
+  is the sum, over bins 0 to 9 in order and skipping empty bins, of
+  `|Σp - Σy| / n`.
+- `auc` takes `[s, y]` samples, y 1 for a positive and 0 for a negative: the
+  area under the ROC curve. Each (positive, negative) pair scores 1 when the
+  positive's s is greater, ½ when equal and 0 otherwise, and the value is the
+  total over the number of pairs. `n` is that number of pairs, so a sample with
+  only one class has `n = 0` and the empty value.
 
 ## Producers
 
@@ -422,6 +487,15 @@ record they return has passed `validate`.
   `bar_missed` after a result that met its bar. A track is evidence, not a
   record, and promotes nothing.
 
+`evaluateInfo(run, context)` builds a `gauge.result@2` for an info-only
+criteria set by the same binding, replay and envelope rules, with no interval;
+`evaluate` refuses an info-only set with `info_only`. Sample lists are
+numbers, except `ece10` and `auc`, whose samples are `[x, y]` pairs with y 0
+or 1 and, for `ece10`, x in [0, 1]; anything else is `envelope`. A rate sample
+other than 0 or 1 is `measure`. An empty list, or an `auc` list with one class,
+has `n = 0` and the measure's `empty` value. `compare`, `track` and `costed`
+refuse a `gauge.result@2` with `info_only`.
+
 A result states its mode, so a replay result is never read as a trial: replay
 compares decisions on recorded inputs and leaves outcome measures unmeasured.
 A replay comparison or track skips those empty outcome measures and decides
@@ -439,38 +513,47 @@ so a record bound to it fails with `binding`. The
 first applicable reason, in this order:
 
 1. `envelope`: not an object, unknown `schema`, missing, extra or mistyped
-   keys, an out-of-range scalar (`level`, `min_samples`, `size`), an exceeded
-   list bound, or a duplicate split or evidence entry
+   keys (an aggregate outside its schema's list among them), an out-of-range
+   scalar (`level`, `min_samples`, `size`), an exceeded list bound, or a
+   duplicate split or evidence entry
 2. `ref`: an id, rev or digest that fails its pattern
-3. `binding`: an unknown, unrecorded or mismatched criteria set, case set,
+3. `info_only`: a record that would gate, compare, cost, attribute or route an
+   info-only measure: a `gauge.result@1` whose criteria set is a recorded
+   `gauge.criteria@2`; a comparison, cost or attribution of a valid
+   `gauge.result@2`; a preference set naming a recorded `gauge.criteria@2` or
+   an entry whose result is a valid `gauge.result@2`
+4. `binding`: an unknown, unrecorded or mismatched criteria set, case set,
    split, digest or result; measure or constraint entries that do not match
    the criteria set one-to-one; a comparison across different questions or of
    a result with itself; a revision whose set is unknown or has another
    digest, or whose chain is broken; a preference entry whose result is for
    another routed unit or question
-4. `governance`: a policy subject evaluated under criteria or cases it
+5. `governance`: a policy subject evaluated under criteria or cases it
    governs; a revision issued by anyone but the governor of the set it
    supersedes, or a superseding revision without evidence
-5. `approval_reused`: a revision issued by an approval that another, distinct
+6. `approval_reused`: a revision issued by an approval that another, distinct
    revision in `context` also cites, or one whose chain holds such a revision
-6. `holdout`: a holdout result with any evidence other than held-out reports,
+7. `holdout`: a holdout result with any evidence other than held-out reports,
    an attribution on a holdout result, or a case set whose holdout digest
    equals its tune digest
-7. `mode`: the replay rule
-8. `measure`: a bad measure definition (unknown Weft kind or field, a
+8. `mode`: the replay rule
+9. `measure`: a bad measure definition (unknown Weft kind or field, a
    duplicate measure, `wilson@1` on a non-rate aggregate), or a measure entry
    or delta that breaks its rules; a preference `accept` that is not a
    higher-is-better rate, an entry measure that differs from its result's, or
-   a `meets_bar` entry whose accept interval has zero width
-9. `constraint`: a bad constraint definition (a duplicate, or an unknown
-   measure), or a status that does not match recomputation
-10. `verdict`: a verdict that does not match recomputation
-11. `attribution`: a basis, signal or confidence that breaks the attribution
+   a `meets_bar` entry whose accept interval has zero width; an info-only
+   `empty` value out of range, or an info-only entry whose value does not
+   match its `n` or lies out of range
+10. `constraint`: a bad constraint definition (a duplicate, or an unknown
+    measure), or a status that does not match recomputation
+11. `verdict`: a verdict that does not match recomputation, including any
+    info-only result verdict other than `info_only`
+12. `attribution`: a basis, signal or confidence that breaks the attribution
     rules
-12. `cost`: more failed trials than trials, an unknown line with an amount or
+13. `cost`: more failed trials than trials, an unknown line with an amount or
     a known line without one, or a total whose basis or amount does not
     match its lines
-13. `trial_count`: trials that did not fail differ from the bound result's
+14. `trial_count`: trials that did not fail differ from the bound result's
     sample count
-14. `cost_unknown` (`costed` only): a compared result with no cost or an
+15. `cost_unknown` (`costed` only): a compared result with no cost or an
     unknown total

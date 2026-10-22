@@ -64,6 +64,22 @@ function thresholdText(t: Thresholds): string {
   if (t.not_applied) fields.push(`not_applied: ${t.not_applied}`);
   return fields.join('; ');
 }
+/** Retry records count towards spend, but a logical item has only its last terminal answer. */
+export function finalObservations(records: readonly BoundCall[]): BoundCall[] {
+  const latest = new Map<string, BoundCall>();
+  for (const r of records)
+    if (r.terminal !== false)
+      latest.set(JSON.stringify([r.provider, r.site, r.split, r.item_id, r.set_digest, r.question_digest]), r);
+  return [...latest.values()];
+}
+export const isCompetitor = (provider: string): boolean =>
+  provider === 'pi' || provider === 'fx-ask' || provider === 'nous-portal';
+/** Competitors are scored without a gate, on holdout calls that were not provider-level skips. */
+export const COMPETITOR_THRESHOLDS: Thresholds = { confidence: 0, ungated: true };
+export const competitorCalls = (holdout: readonly BoundCall[]): BoundCall[] =>
+  holdout.filter((r) => r.result.status !== 'skipped');
+/** Sites whose rows also carry probability-only diagnostics. */
+export const PROBABILITY_SITES: readonly string[] = ['guard.input', 'guard.output', 'eval.output'];
 export function makeReport(metadata: ReportMetadata, records: readonly BoundCall[]) {
   const ordered = [...records].sort(
     (a, b) =>
@@ -73,12 +89,7 @@ export function makeReport(metadata: ReportMetadata, records: readonly BoundCall
       a.item_id.localeCompare(b.item_id) ||
       a.call_id.localeCompare(b.call_id),
   );
-  // Retry records count towards spend, but a logical item has only its last terminal answer.
-  const latest = new Map<string, BoundCall>();
-  for (const r of records)
-    if (r.terminal !== false)
-      latest.set(JSON.stringify([r.provider, r.site, r.split, r.item_id, r.set_digest, r.question_digest]), r);
-  const observations = [...latest.values()];
+  const observations = finalObservations(records);
   const providers = [...new Set([...(metadata.providers ?? []), ...records.map((r) => r.provider)])].sort();
   const sites = [...new Set([...(metadata.sites ?? []), ...records.map((r) => r.site)])].sort();
   const rows: SiteRow[] = [],
@@ -87,7 +98,7 @@ export function makeReport(metadata: ReportMetadata, records: readonly BoundCall
     for (const provider of providers) {
       const subset = observations.filter((r) => r.site === site && r.provider === provider);
       const holdout = subset.filter((r) => r.split === 'holdout');
-      if (provider === 'pi' || provider === 'fx-ask' || provider === 'nous-portal') {
+      if (isCompetitor(provider)) {
         let skip_reason = subset.find((r) => r.result.status === 'skipped')?.result.reason ?? null;
         for (const raw of metadata.statuses ?? []) {
           const status = raw as { provider?: string; result?: { status?: string; reason?: string } } | null;
@@ -98,11 +109,7 @@ export function makeReport(metadata: ReportMetadata, records: readonly BoundCall
           site,
           provider,
           skip_reason,
-          holdout: metrics(
-            site,
-            holdout.filter((r) => r.result.status !== 'skipped'),
-            { confidence: 0, ungated: true },
-          ),
+          holdout: metrics(site, competitorCalls(holdout), COMPETITOR_THRESHOLDS),
         });
         continue;
       }
@@ -117,9 +124,7 @@ export function makeReport(metadata: ReportMetadata, records: readonly BoundCall
         production: metrics(site, holdout, production),
         tune_items: subset.filter((r) => r.split === 'tune').length,
         holdout_items: holdout.length,
-        ...(['guard.input', 'guard.output', 'eval.output'].includes(site)
-          ? { probability_only: probabilityOnly(site, holdout) }
-          : {}),
+        ...(PROBABILITY_SITES.includes(site) ? { probability_only: probabilityOnly(site, holdout) } : {}),
       });
     }
   const models = [
