@@ -181,6 +181,46 @@ export interface PreferenceSet {
   }[];
 }
 
+/** An info-only measure's aggregate: v1's, plus the report statistics that are never weighed. */
+export type InfoAggregate = Aggregate | 'p50_floor' | 'p90_floor' | 'ece10' | 'auc';
+
+/** A measure recorded to reproduce a report, never weighed: no direction, no effect size, no interval. */
+export interface InfoMeasureDefinition {
+  readonly measure: string;
+  readonly source: MeasureSource;
+  readonly aggregate: InfoAggregate;
+  /** The value with no samples, fixed by the set: 0 where a report prints 0, null where it prints nothing. */
+  readonly empty: number | null;
+}
+
+/**
+ * An info-only criteria set (`gauge.criteria@2`). It declares no bar and no
+ * statistical method, and nothing may gate, compare, track, cost, attribute
+ * or route on its measures.
+ */
+export interface InfoCriteriaSet {
+  readonly schema: 'gauge.criteria@2';
+  readonly criteria: string;
+  readonly workload: string;
+  readonly governed_by: Governance;
+  readonly measures: readonly InfoMeasureDefinition[];
+}
+
+/** A subject's info-only measures (`gauge.result@2`). Its verdict is always `info_only`, never a bar verdict. */
+export interface InfoResult {
+  readonly schema: 'gauge.result@2';
+  readonly result: string;
+  readonly subject: EvaluationResult['subject'];
+  readonly criteria: string;
+  readonly caseset: string;
+  readonly split: Split;
+  readonly caseset_digest: string;
+  readonly mode: EvaluationResult['mode'];
+  readonly evidence: readonly EvidenceRef[];
+  readonly measures: readonly { readonly measure: string; readonly value: number | null; readonly n: number }[];
+  readonly verdict: 'info_only';
+}
+
 export type GaugeRecord =
   | CriteriaSet
   | CaseSet
@@ -189,12 +229,15 @@ export type GaugeRecord =
   | Comparison
   | FailureAttribution
   | EvaluationCost
-  | PreferenceSet;
+  | PreferenceSet
+  | InfoCriteriaSet
+  | InfoResult;
 
 /** First applicable rejection reason, in the contract's order. */
 export type Rejection =
   | 'envelope'
   | 'ref'
+  | 'info_only'
   | 'binding'
   | 'governance'
   | 'approval_reused'
@@ -224,9 +267,15 @@ export interface Run {
   readonly split: Split;
   readonly mode: EvaluationResult['mode'];
   readonly evidence: readonly EvidenceRef[];
-  /** Keyed by measure. A rate sample is 0 or 1; an empty list is no evidence. */
-  readonly samples: Readonly<Record<string, readonly number[]>>;
+  /**
+   * Keyed by measure. A rate sample is 0 or 1; an empty list is no evidence.
+   * Only an info-only `ece10` or `auc` measure takes `[x, y]` pairs.
+   */
+  readonly samples: Readonly<Record<string, readonly number[] | readonly Pair[]>>;
 }
+
+/** An `ece10` sample `[p, y]` or an `auc` sample `[score, y]`, y 0 or 1. */
+export type Pair = readonly [x: number, y: number];
 
 export interface ComparisonRequest {
   readonly comparison: string;
@@ -249,7 +298,8 @@ export type Track = { readonly ok: true; readonly steps: readonly TrackStep[] } 
 /**
  * Known criteria sets, case sets, results and revisions, keyed by `criteria`,
  * `caseset`, `result` and `revision`. A criteria set or case set is known only
- * while a revision records it.
+ * while a revision records it. Info-only criteria sets and results file in the
+ * same tables as their @1 counterparts.
  */
 export interface Context {
   readonly criteria: Readonly<Record<string, unknown>>;

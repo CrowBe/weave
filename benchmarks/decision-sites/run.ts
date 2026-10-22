@@ -8,10 +8,10 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { buildProviders } from './providers.ts';
 import { buildCompetitors, quotaAllowsCompetitors } from './competitors.ts';
 import type { ProcessRunner } from './competitors.ts';
-import { Journal, acquireLock, replayKey } from './journal.ts';
-import { bindingFor } from './binding.ts';
-import { SITES, buildRequest } from './questions.ts';
-import { countCompetitorCalls, execute, persistentProviderSkip } from './engine.ts';
+import { Journal, acquireLock } from './journal.ts';
+import { SITES } from './questions.ts';
+import { countCompetitorCalls, execute } from './engine.ts';
+import { bindObservations } from './observations.ts';
 import { loadSets } from './sets.ts';
 import { makeReport } from './report.ts';
 import type { Provider } from './types.ts';
@@ -87,26 +87,11 @@ export async function main(args=process.argv.slice(2), injected?:{providers:read
   }));
   const providers=[...(injected?.providers??[...buildProviders(configs),...competitors,fakeProvider()])].filter(p=>options.providers.includes(p.id));
   if(!options.renderOnly)await execute({entries,providers,journal,maxSpend:options.maxSpend,now:Date.now,sleep:async(ms,signal)=>{await delay(ms,undefined,signal?{signal}:{});},signal:controller.signal});
-  const records=journal.read();const bound=[];
-  const invocationStart=records.map(r=>r.type).lastIndexOf('run');
-  const statuses=records.filter((r,i)=>['provider_status','budget_stop','cancelled','uncertain'].includes(r.type)&&
-   (r.type!=='provider_status'||(r.persistent!==false&&persistentProviderSkip(r.result))||i>invocationStart));
-  const skipped=new Set(statuses.filter(r=>r.type==='provider_status'&&r.result&&persistentProviderSkip(r.result)).map(r=>r.provider));
-  let publish=!options.providers.includes('fake')&&DEFAULT_PROVIDERS.every(p=>options.providers.includes(p))&&options.split==='all'&&options.sites.length===SITES.length;
-  for(const provider of providers)for(const entry of entries) {
-   const request=await buildRequest(entry.item);
-   const binding=bindingFor(provider,entry,request);
-   const matches=records.filter(r=>replayKey(r)===replayKey(binding)||
-    // Legacy records have no wire-body evidence: display them only in a non-executing render.
-    (options.renderOnly&&r.request_digest===undefined&&replayKey(r)===replayKey({...binding,request_digest:undefined})));
-   const calls=matches.filter(r=>r.type==='call');const last=calls.at(-1);
-   const pending=matches.filter(r=>r.type==='intent'&&!calls.some(c=>c.call_id===r.call_id)).at(-1);
-   if(pending||(!calls.some(r=>r.terminal)&&!skipped.has(provider.id)))publish=false;
-   if(pending)bound.push({...binding,...pending,request_digest:pending.request_digest,type:'call',call_id:pending.call_id,split:entry.split,item:entry.item,result:{status:'failed',reason:'unacknowledged_call'},terminal:true,latency_ms:0,cost_usd:0});
-   else if(last)bound.push({...last,item:entry.item,terminal:true});
-  }
+  const records=journal.read();
+  const {bound,statuses,complete}=await bindObservations(records,providers,entries,options.renderOnly);
+  const publish=complete&&!options.providers.includes('fake')&&DEFAULT_PROVIDERS.every(p=>options.providers.includes(p))&&options.split==='all'&&options.sites.length===SITES.length;
   const callCost=records.filter(r=>r.type==='call').reduce((sum,r)=>sum+(r.cost_usd??0),0);
-  const reportRecords=bound as Parameters<typeof makeReport>[1];
+  const reportRecords=bound;
   const report=makeReport({run_id:options.runId,node_version:process.version,max_spend_usd:options.maxSpend,set_digests:digests,providers:options.providers,sites:options.sites,
    statuses,spent_usd:journal.spent(),
    input_tokens:records.filter(r=>r.type==='call').reduce((sum,r)=>sum+(r.result.input_tokens??0),0),

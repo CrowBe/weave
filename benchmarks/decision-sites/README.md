@@ -33,8 +33,8 @@ ChatGPT sign-in is discovered through their local authentication configuration.
 All providers dispatch sequentially.
 No grants, guardrail middleware, shuffle, routing tiers, or gateway budget
 downgrades participate. Requests are captured from the actual production site
-builders through a port, then sent directly to adapters. There are no trace
-payloads; integration with the AgentSOP trace envelope remains a follow-up.
+builders through a port, then sent directly to adapters. Dispatch emits no
+trace; the journal can be read as a Weft trace afterwards (see Gauge and Weft below).
 
 `typesafe-jev` pins `jev-1.14.0`, sets `shuffle:false`, batches every item's
 questions, and rejects a different served model. OpenAI uses `/v1/decisions`,
@@ -216,3 +216,38 @@ confidence gates and thresholds remain unchanged.
 Generated artifacts from fake runs are explicitly labelled `fake` /
 `offline-fake` and are not live provider evidence. The crewmate records live
 results after the offline implementation is reviewed.
+
+## Gauge and Weft (G4, #192)
+
+The scoring rule is also expressed as Gauge records (`gauge.ts`), and a run's
+journal can be read as Weft records (`weft.ts`). Both read the journal and
+write nothing: dispatch, budgets, the ledger, resume, render-only and the
+report are unchanged.
+
+- **Weft.** Each dispatched call is one `inference.attempt` in the run's
+  trace: question digest as `request_ref`, provider as `routed_unit`, attempt
+  number and `retry_of` by replay binding, `accepted` or `failed`, tokens and
+  latency. Skips, cancellations before dispatch and unacknowledged intents are
+  not attempts. `spent_micros` is left out: journal cost is fractional USD.
+- **Criteria and cases.** Per site, the info-only criteria sets
+  `decision-sites.<site>.report@1` (every row metric) and, for guards and D5,
+  `decision-sites.<site>.probability-only@1`, governed by the scoring rule, and
+  the case set `decision-sites.<site>.cases@1` (the frozen tune and holdout
+  files by SHA-256). A governed revision records each at @1.
+- **Results.** Each report row is one `gauge.result@2` on the holdout in
+  `replay` mode, citing only the run's held-out report: tuned and production
+  rows (subject kind `policy`), competitor rows and probability-only
+  diagnostics (`routed_unit`). Its verdict is `info_only`.
+
+On `live-20261015`, Gauge reproduces every number of every row exactly
+(`recorded.test.ts`): all `Metrics` fields of the tuned, production and
+competitor rows (attempted, covered, coverage, accuracy / D3 all-needed recall,
+exact-set accuracy, failures, missing confidence, confidence coverage, mean
+confidence, Brier, ECE, calibration n, violation recall, needed and all-needed
+recall, multi-entry steps, best and kth gaps, p50 and p90 latency, input and
+output tokens, cost and parse-failure rate), holdout n, and the probability-only
+questions, probability coverage, violation recall, false-block rate and AUC.
+Empty populations keep the report's convention (coverage 0, accuracy null).
+Every measure is info-only: Gauge refuses to gate, compare, track, cost or route
+on any of them. Thresholds stay the subject, not a measure, and spend,
+reservations and run-wide tokens stay the journal ledger's.

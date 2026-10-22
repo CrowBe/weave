@@ -492,6 +492,10 @@ Gauge's step-by-step comparison of results for one question in the order they we
 
 Gauge's versioned record (`gauge.preference@1`) of eval-derived routing evidence: for each routed unit, the measures and verdict copied from its evaluation result on one question, with their uncertainty. The gateway loads it as data without importing Gauge. Applying one is a governed promotion by the composition root; it replaces only the named units' routing evidence, so deterministic policy always filters routes before a preference can order them.
 
+### Info-only measure
+
+A Gauge measure recorded so a report's numbers can be reproduced and inspected, never weighed. It belongs to an info-only criteria set (`gauge.criteria@2`), which declares each measure's value with no samples and has no bar and no statistical method. Its evaluation result (`gauge.result@2`) carries no interval and the verdict `info_only`, so a set with no bar never reads as having met one. No gate, comparison, track, cost gate, failure attribution or routing preference accepts an info-only measure. Weighing one needs a `gauge.criteria@1` set under its own governance.
+
 ### Failure attribution
 
 A claim about why one case failed: capability gap, implementation, routing or orchestration, with a deterministic signal or a recorded judgment and its confidence. *Unattributed* is a valid result. An attribution never names a holdout case.
