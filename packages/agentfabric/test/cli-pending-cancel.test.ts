@@ -412,7 +412,7 @@ describe('CLI cancellation before prepare', () => {
       assert.equal(f.host.coordinator.held().length, 0);
     });
 
-    for (const status of ['uncertain', 'running', 'committed', 'stopped'] as const) {
+    for (const status of ['uncertain', 'running', 'committed'] as const) {
       it(`replays an existing ${status} record unchanged when cancelled during ${wait}`, async (t) => {
         const f = await fixture(t, wait, status);
         const id = 'shell-cli:existing';
@@ -425,10 +425,7 @@ describe('CLI cancellation before prepare', () => {
         assert.equal(replay.kind, 'handle');
         if (replay.kind !== 'handle') return;
         assert.deepEqual(await replay.result, before.outcome);
-        assert.deepEqual(f.store.getInvocation(id), {
-          ...before,
-          cancel_requested: status !== 'stopped',
-        });
+        assert.deepEqual(f.store.getInvocation(id), { ...before, cancel_requested: true });
         assert.equal(f.spawn.mock.callCount(), 0);
         assert.equal(f.host.invocations.length, 0, 'replay must not start an invocation');
         assert.equal(f.host.openCount(), 0);
@@ -438,6 +435,25 @@ describe('CLI cancellation before prepare', () => {
         );
       });
     }
+
+    it(`cancels a re-run of an existing stopped record during ${wait}, leaving that record unchanged`, async (t) => {
+      const f = await fixture(t, wait, 'stopped');
+      const id = 'shell-cli:existing';
+      const before = f.store.getInvocation(id)!;
+      const grant = f.grant(id);
+      const pending = f.host.invokeCliGeneration(grant, f.request());
+      assert.deepEqual(f.host.requestCancel(id), { acknowledged: true });
+      f.resume();
+      // WV-040: a stopped record is superseded rather than replayed; pending cancellation wins first.
+      assert.deepEqual(await pending, { kind: 'cancelled', invocation_id: id });
+      assert.deepEqual(f.store.getInvocation(id), before);
+      assert.deepEqual(f.store.supersededInvocations(id), []);
+      assert.equal(f.authority.markInvoked(grant), false);
+      assert.equal(f.spawn.mock.callCount(), 0);
+      assert.equal(f.host.invocations.length, 0);
+      assert.equal(f.host.openCount(), 0);
+      assert.equal(f.host.coordinator.held().length, 0);
+    });
 
     it(`retains double cancellation while awaiting ${wait}, without a durable record or spawn`, async (t) => {
       const f = await fixture(t, wait);
@@ -833,9 +849,9 @@ describe('CLI cancellation before prepare', () => {
 });
 
 describe('CLI cancellation follow-ups (#296)', () => {
-  // Note 1: only a durable record can carry a cancel_requested written before the
-  // start record, and the store refuses a CLI generation start over any record.
-  it('never overwrites a durable cancellation written during prepare: the start is refused', async (t) => {
+  // Note 1 (revised by WV-040): a re-run supersedes a stopped record rather than
+  // writing over it. Cancellation during prepare seeds the fresh attempt only.
+  it('applies cancellation during prepare of a stopped re-run to the fresh attempt only', async (t) => {
     const f = await fixture(t);
     const id = 'shell-cli:spawn-failed';
     const inputs = { ...f.request(), argv: [join(f.workspace, 'missing-binary')] };
@@ -855,21 +871,29 @@ describe('CLI cancellation follow-ups (#296)', () => {
       'markInvoked',
       (grant: Grant) => {
         assert.deepEqual(f.host.requestCancel(id), { acknowledged: true });
-        assert.equal(f.store.getInvocation(id)?.cancel_requested, true, 'cancellation is durable during prepare');
+        assert.deepEqual(f.store.getInvocation(id), before, 'the earlier attempt is not marked');
         return markInvoked(grant);
       },
       { times: 1 },
     );
-    await assert.rejects(
-      f.host.invokeCliGeneration(f.grant(id), inputs),
-      /invalid host store CLI generation evidence transition/,
-    );
+    const handle = await f.host.invokeCliGeneration(f.grant(id), inputs);
+    assert.equal(handle.kind, 'handle');
+    if (handle.kind !== 'handle') return;
+    f.host.release(id);
+    assert.deepEqual(await handle.result, { outcome: 'failed', failure: 'cancelled' });
     assert.equal(f.spawn.mock.callCount(), spawns);
-    assert.deepEqual(f.store.getInvocation(id), { ...before, cancel_requested: true });
+    const [superseded] = f.store.supersededInvocations(id);
+    assert.equal(superseded?.cancel_requested, false);
+    assert.match(superseded?.reconciliation?.evidence ?? '', /automatic reconciliation on re-run/);
+    const current = f.store.getInvocation(id)!;
+    assert.equal(current.attempt, 2);
+    assert.equal(current.status, 'stopped');
+    assert.equal(current.cancel_requested, true);
     assert.equal(f.host.coordinator.held().length, 0);
     assert.equal(f.host.openCount(), 0);
     await f.reopen();
-    assert.deepEqual(f.store.getInvocation(id), { ...before, cancel_requested: true });
+    assert.deepEqual(f.store.getInvocation(id), current);
+    assert.deepEqual(f.store.supersededInvocations(id), [superseded]);
   });
 
   it('keeps a durable cancellation from a host callback after the start record persists', async (t) => {
@@ -921,7 +945,7 @@ describe('CLI cancellation follow-ups (#296)', () => {
   }
 
   // Note 3: an identity with a durable record replays; the bridge must not release it.
-  for (const status of ['uncertain', 'running', 'committed', 'stopped'] as const) {
+  for (const status of ['uncertain', 'running', 'committed'] as const) {
     it(`returns a replayed ${status} record through the bridge without releasing or spawning`, async (t) => {
       const f = await fixture(t, undefined, status);
       const id = 'shell-cli:existing';
@@ -944,4 +968,20 @@ describe('CLI cancellation follow-ups (#296)', () => {
       );
     });
   }
+
+  it('starts a fresh attempt through the bridge over a reconciled stopped record', async (t) => {
+    const f = await fixture(t, undefined, 'stopped');
+    const id = 'shell-cli:existing';
+    const before = f.store.getInvocation(id)!;
+    t.mock.method(f.host, 'nextCliGenerationId', () => id);
+    const reconcile = t.mock.method(f.store, 'persistInvocationReconciliation');
+    const result = await f.run();
+    assert.equal(result.status, 'completed');
+    assert.equal(reconcile.mock.callCount(), 0, 'already reconciled');
+    assert.deepEqual(f.store.supersededInvocations(id), [before]);
+    assert.equal(f.store.getInvocation(id)?.attempt, 2);
+    assert.equal(f.store.getInvocation(id)?.status, 'committed');
+    assert.equal(f.spawn.mock.callCount(), 1);
+    assert.equal(f.host.coordinator.held().length, 0);
+  });
 });

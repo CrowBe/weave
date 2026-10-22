@@ -98,6 +98,8 @@ API is synchronous, so cancellation requested before reconciliation begins is
 retained; cancellation during reconciliation cannot overwrite the terminal
 resolution or cancel recording an observed fact. Re-invocation only
 replays an uncertain or reconciled outcome and never renews a single-use grant.
+The one exception is a CLI generation re-run of a stopped record with a fresh
+grant (WV-040, below): it starts a new attempt rather than replaying.
 The invocation id belongs to its recorded action: prepare, like lookup, refuses a
 grant naming another action before replay, receipt reconciliation, or consuming
 the grant.
@@ -230,8 +232,10 @@ Before the prepared invocation is installed, a cancellation for an id without a
 record is retained as pending and copied into the start record; after it is
 installed, the same call sets the in-memory flag the start record is built from.
 A durable cancellation on an existing record cannot be replaced either: the store
-refuses a CLI generation start over any existing record, so such a re-invocation
-fails with that guard's error, spawns nothing and releases its reservation.
+refuses a CLI generation start over any existing record other than a superseded
+stopped attempt (WV-040). A re-run of a stopped record treats that record like a
+missing one for cancellation: the request is retained for the re-run and the
+earlier attempt's record is not marked.
 If awaiting `cliRecoveryReady` or the uncertain startup check rejects while a
 cancellation is pending, the recovery error wins: `invokeCliGeneration` rejects
 with it rather than returning `cancelled`. Like any pre-consumption failure, the
@@ -239,8 +243,9 @@ grant stays unconsumed, and nothing is spawned or recorded. No reservation is
 retained either.
 Completion, rejection and startup failure clear the placeholder, identity
 reservation and pending cancellation; later reuse cannot inherit that request.
-When an invocation id names a durable record, `invokeCliGeneration` returns a
-handle that replays the recorded outcome, with no open invocation. `host.release` still throws for an id
+When an invocation id names a durable running, uncertain or committed record,
+`invokeCliGeneration` returns a handle that replays the recorded outcome, with no
+open invocation; a stopped record is superseded instead (below). `host.release` still throws for an id
 without an open invocation, so callers release only open handles. The CLI bridge
 releases only when the action is open, and otherwise returns the replayed outcome.
 Unknown-id cancellation keeps its existing acknowledgement behavior and retains
@@ -260,3 +265,75 @@ lookup supplies the corresponding gateway generation outcome: the step uses it
 for the normal checks and output evaluation without repeating generation.
 Resolution is appended as attempt evidence, preserving the original uncertain
 record; replay uses that evidence without calling the lookup port.
+
+## CLI generation re-run of a stopped record (WV-040)
+
+`invokeCliGeneration` with a fresh, valid grant for an id whose current durable
+record is `stopped` starts a fresh attempt instead of replaying, throwing, or
+returning `DENIED`. Before WV-040, an unreconciled stopped record passed
+preparation, consumed the fresh grant, then the store's CLI evidence guard threw
+`invalid host store CLI generation evidence transition` at the start append; a
+reconciled stopped record replayed its outcome. Running and uncertain records
+still replay as uncertain and keep their holds; they are never reconciled here.
+Committed records replay unchanged.
+
+Order: recovery waits, then preparation's ordinary gates (input, issuance and
+validity, coverage, identity: the same action and binding digest, resolution,
+shell input), then grant consumption, resource checks and the fresh workspace
+reservation, then the asynchronous before-snapshot. Immediately before the
+fresh start record, in the same synchronous step, an unreconciled stopped
+record is reconciled through the durable gate shared with `reconcile`: a
+validated `reconcile` append under the reentrancy guard. The resolution is
+`not_committed`; the host copies the record unchanged apart from the
+reconciliation, whose evidence reads `automatic reconciliation on re-run: attempt N settled stopped
+(<failure>)`. A stopped run retains no reservation, so nothing is released; the
+id's only hold belongs to the fresh attempt. The store accepts a reconciliation
+of a `stopped` record only as `not_committed` evidence that keeps its `stopped`
+status and outcome, and only once. The public `reconcile`/`reconcileCliGeneration` APIs still refuse
+stopped records. An already reconciled stopped record (for example, an
+uncertain run reconciled `not_committed`) is not reconciled again.
+
+Identity: an invocation id holds one current record. A start with `attempt`
+N + 1 supersedes the current record only if that record is `stopped` with a
+`not_committed` reconciliation, has attempt N (absent means 1), and shares the
+action, operation and binding digest; the fresh start carries CLI evidence and no
+reconciliation. Any other start with an attempt, or a CLI start without one over
+a CLI record, is refused. The superseded record moves unchanged to an ordered
+history, `store.supersededInvocations(id)`, which is journalled through the start
+mutation and kept by compaction and snapshots as `superseded_invocations`
+(omitted when empty). Its measured cost remains counted. Later mutations of the
+current record keep its attempt. A re-run with different inputs remains `DENIED`
+(identity bound to a different input) before consuming the grant.
+
+Grants: the old run's grant stays consumed, so reusing it is `DENIED` before any
+reconciliation. The fresh grant is consumed once, by preparation. A failed
+automatic reconciliation fails closed: there is no interface to test a grant's
+use without consuming it, and consumption precedes any durable change so a
+reused or invalid grant can never reconcile a run. The fresh grant is therefore
+consumed; the re-run returns `RESOLVER_ERROR` (`failed to persist automatic
+reconciliation of the stopped run`), spawns nothing, writes no fresh record,
+releases its reservation and leaves the old record unchanged. Another fresh
+grant can retry.
+
+Cancellation: a request while the re-run awaits recovery or startup checks is
+retained as pending (#286/#297). The re-run then returns `cancelled` after the
+same gates and consumption, without reconciling, writing a record, or spawning; a
+pre-consumption failure leaves the grant unconsumed, and a recovery failure
+still wins. A request after preparation, including one reentrant during the
+automatic reconciliation, seeds the fresh attempt's pre-start cancellation: the
+old attempt is reconciled and superseded, and the fresh attempt settles
+`stopped`/`cancelled` without spawning. A `lookup` of the stopped record during
+the inspection does not release the fresh attempt's reservation.
+
+Concurrency: the identity placeholder is installed synchronously, so a second
+re-run of the same id while the first is preparing is `DENIED` (`invocation is
+already active`) before consuming its grant. Once the first has started, the
+second sees an active or later record. There is never more than one
+reconciliation or spawn for the race.
+
+Crash: a crash after the reconciliation append and before the start append
+reopens with the old record reconciled as current, no history, no hold and no
+uncertain listing; a later re-run supersedes it once without reconciling again.
+A crash after the start append recovers the fresh attempt like any interrupted
+CLI generation (uncertain, hold retained, listed for reconciliation), with the
+old attempt in history exactly once.
