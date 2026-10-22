@@ -1,3 +1,4 @@
 export type * from './types.js';
 export { recordDigest } from './digest.js';
-export { constraintStatus, resultVerdict, validate } from './validate.js';
+export { compare, evaluate, track } from './produce.js';
+export { constraintStatus, costed, resultVerdict, validate } from './validate.js';

@@ -14,8 +14,11 @@ import type {
   ComparisonVerdict,
   ConstraintDefinition,
   ConstraintStatus,
+  Comparison,
   Context,
+  CostLine,
   CriteriaSet,
+  EvaluationCost,
   EvaluationResult,
   Interval,
   Rejection,
@@ -55,7 +58,7 @@ const evidenceShaped = (x: unknown, min: number, max: number): x is readonly Obj
   && unique(x, evidenceKey);
 
 /** Weft kinds a replay cannot measure: it never takes the actions they report. */
-const OUTCOME_KINDS = new Set(['outcome', 'capability.invoked', 'action.transition']);
+export const OUTCOME_KINDS: ReadonlySet<string> = new Set(['outcome', 'capability.invoked', 'action.transition']);
 /** Recomputation tolerance for deltas. */
 const EPSILON = 1e-9;
 
@@ -72,6 +75,8 @@ export function validate(value: unknown, context: Context): Verdict {
       return validateResult(value, context);
     case 'gauge.comparison@1':
       return validateComparison(value, context);
+    case 'gauge.cost@1':
+      return validateCost(value, context);
     case 'gauge.attribution@1':
       return validateAttribution(value, context);
     default:
@@ -263,20 +268,20 @@ const RESULT_KEYS = [
 ];
 
 /** A criteria set is known only while a governed revision records it. */
-function boundCriteria(context: Context, name: unknown): CriteriaSet | null {
+export function boundCriteria(context: Context, name: unknown): CriteriaSet | null {
   if (typeof name !== 'string') return null;
   const set = governedSet(context, 'criteria', name);
   return set !== null && recorded(context, 'criteria', name) ? set as CriteriaSet : null;
 }
 
 /** A case set is known only while a governed revision records it. */
-function boundCaseSet(context: Context, name: unknown): CaseSet | null {
+export function boundCaseSet(context: Context, name: unknown): CaseSet | null {
   if (typeof name !== 'string') return null;
   const set = governedSet(context, 'caseset', name);
   return set !== null && recorded(context, 'caseset', name) ? set as CaseSet : null;
 }
 
-function boundResult(context: Context, id: unknown): EvaluationResult | null {
+export function boundResult(context: Context, id: unknown): EvaluationResult | null {
   if (typeof id !== 'string') return null;
   const result = entryOf(context.results, id);
   if (!isObject(result) || result.schema !== 'gauge.result@1' || result.result !== id || !validateResult(result, context).ok) {
@@ -395,6 +400,11 @@ function validateResult(r: Obj, context: Context): Verdict {
 
 // gauge.comparison@1
 
+/** Two results answer the same question: criteria set, case set, split, mode and subject kind. */
+export const sameQuestion = (a: EvaluationResult, b: EvaluationResult): boolean =>
+  a.criteria === b.criteria && a.caseset === b.caseset && a.split === b.split && a.mode === b.mode
+  && a.subject.kind === b.subject.kind;
+
 function validateComparison(r: Obj, context: Context): Verdict {
   // 1. envelope
   if (!hasExactly(r, ['schema', 'comparison', 'experiment', 'baseline', 'candidate', 'deltas', 'verdict'])) {
@@ -422,11 +432,7 @@ function validateComparison(r: Obj, context: Context): Verdict {
   const baseline = boundResult(context, r.baseline);
   const candidate = boundResult(context, r.candidate);
   if (baseline === null || candidate === null) return reject('binding');
-  if (baseline.criteria !== candidate.criteria || baseline.caseset !== candidate.caseset
-    || baseline.split !== candidate.split || baseline.mode !== candidate.mode
-    || baseline.subject.kind !== candidate.subject.kind || baseline.subject.ref === candidate.subject.ref) {
-    return reject('binding');
-  }
+  if (!sameQuestion(baseline, candidate) || baseline.subject.ref === candidate.subject.ref) return reject('binding');
   // A bound result validated, so its criteria set is known and valid.
   const criteria = boundCriteria(context, baseline.criteria)!;
   if (!matchesOneToOne(deltas, 'measure', criteria.measures.map(d => d.measure))) return reject('binding');
@@ -453,7 +459,14 @@ function validateComparison(r: Obj, context: Context): Verdict {
   return OK;
 }
 
-function comparisonVerdict(
+/** An interval with width. A zero-width one (one sample, or all-equal samples) says nothing about spread. */
+const hasWidth = (interval: Interval | null): boolean => interval !== null && interval[0] < interval[1];
+
+/** A replay leaves outcome measures unmeasured, so those are skipped; no other measure may go unmeasured. */
+const unmeasuredByDesign = (mode: EvaluationResult['mode'], d: CriteriaSet['measures'][number]): boolean =>
+  mode === 'replay' && 'weft_kind' in d.source && OUTCOME_KINDS.has(d.source.weft_kind);
+
+export function comparisonVerdict(
   baseline: EvaluationResult,
   candidate: EvaluationResult,
   criteria: CriteriaSet,
@@ -463,7 +476,16 @@ function comparisonVerdict(
     const { delta, interval } = deltas.get(d.measure)!;
     return delta === null || interval === null ? [] : [{ d, lo: interval[0], hi: interval[1] }];
   });
-  if (baseline.verdict === 'insufficient_evidence' || candidate.verdict === 'insufficient_evidence' || measured.length === 0) {
+  // min_samples applies to every compared measure, constrained or not, and every interval needs width.
+  const evidenced = measured.every(({ d, lo, hi }) => lo < hi && [baseline, candidate].every(r => {
+    const e = r.measures.find(m => m.measure === d.measure)!;
+    return e.n >= criteria.method.min_samples && hasWidth(e.interval);
+  }));
+  // A measure with no samples on either side is unweighed, so there is no verdict, outside the replay exemption.
+  const unweighed = criteria.measures.some(d => !unmeasuredByDesign(baseline.mode, d)
+    && [baseline, candidate].some(r => r.measures.find(m => m.measure === d.measure)!.n === 0));
+  if (baseline.verdict === 'insufficient_evidence' || candidate.verdict === 'insufficient_evidence'
+    || measured.length === 0 || unweighed || !evidenced) {
     return 'insufficient_evidence';
   }
   if (candidate.verdict === 'misses_bar') return 'bar_missed';
@@ -521,4 +543,75 @@ function validateAttribution(r: Obj, context: Context): Verdict {
       if (r.category !== 'unattributed' || r.signal !== null || r.confidence !== null) return reject('attribution');
       return OK;
   }
+}
+
+// gauge.cost@1
+
+const COST_LINES = ['trial', 'evaluation', 'review'] as const;
+
+const isCostLine = (x: unknown): boolean =>
+  isObject(x) && hasExactly(x, ['basis', 'micros']) && oneOf(x.basis, 'measured', 'estimated', 'unknown')
+  && (x.micros === null || isMetric(x.micros));
+
+/** A total is unknown if any line is, else estimated if any line is, else measured. */
+function totalBasis(lines: readonly CostLine[]): CostLine['basis'] {
+  if (lines.some(l => l.basis === 'unknown')) return 'unknown';
+  return lines.some(l => l.basis === 'estimated') ? 'estimated' : 'measured';
+}
+
+function validateCost(r: Obj, context: Context): Verdict {
+  // 1. envelope: every line is required, so none can be left out.
+  if (!hasExactly(r, ['schema', 'cost', 'result', 'trials', 'failed_trials', ...COST_LINES, 'total'])) return reject('envelope');
+  if (typeof r.cost !== 'string' || typeof r.result !== 'string' || !isCount(r.trials) || !isCount(r.failed_trials)
+    || ![...COST_LINES, 'total'].every(line => isCostLine(r[line]))) {
+    return reject('envelope');
+  }
+
+  // 2. ref
+  if (!isId(r.cost) || !isId(r.result)) return reject('ref');
+
+  // 3. binding
+  const result = boundResult(context, r.result);
+  if (result === null) return reject('binding');
+
+  // 11. cost: failed trials are among the trials, an unknown line has no amount
+  // (never zero), and the total is every line, as known as its least-known line.
+  const cost = r as unknown as EvaluationCost;
+  if (cost.failed_trials > cost.trials) return reject('cost');
+  const lines = COST_LINES.map(line => cost[line]);
+  if (![...lines, cost.total].every(l => (l.basis === 'unknown') === (l.micros === null))) return reject('cost');
+  if (cost.total.basis !== totalBasis(lines)) return reject('cost');
+  if (cost.total.micros !== null) {
+    const sum = lines.reduce((total, l) => total + l.micros!, 0);
+    if (Math.abs(cost.total.micros - sum) > EPSILON * Math.max(1, cost.total.micros)) return reject('cost');
+  }
+
+  // 12. trial_count: every trial that did not fail gave the result one sample.
+  const samples = Math.max(0, ...result.measures.map(m => m.n));
+  if (cost.trials - cost.failed_trials !== samples) return reject('trial_count');
+  return OK;
+}
+
+/**
+ * Whether a comparison can be weighed against what its results cost, the path
+ * to a promotion decision. It cannot while either result's cost is unknown or
+ * missing (`cost_unknown`); an estimated cost may be weighed, as an estimate.
+ * Gauge weighs and promotes nothing itself.
+ */
+export function costed(comparison: unknown, costs: readonly unknown[], context: Context): Verdict {
+  if (!isObject(comparison) || comparison.schema !== 'gauge.comparison@1' || !Array.isArray(costs)) return reject('envelope');
+  const compared = validate(comparison, context);
+  if (!compared.ok) return compared;
+  for (const cost of costs) {
+    if (!isObject(cost) || cost.schema !== 'gauge.cost@1') return reject('envelope');
+    const verdict = validate(cost, context);
+    if (!verdict.ok) return verdict;
+  }
+  const { baseline, candidate } = comparison as unknown as Comparison;
+  const records = costs as readonly EvaluationCost[];
+  if (!records.every(c => c.result === baseline || c.result === candidate)) return reject('binding');
+  const sides = [baseline, candidate].map(id => records.filter(c => c.result === id));
+  if (sides.some(side => side.length > 1)) return reject('binding');
+  if (sides.some(side => side.length === 0 || side[0]!.total.basis === 'unknown')) return reject('cost_unknown');
+  return OK;
 }

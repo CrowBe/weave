@@ -1,7 +1,9 @@
 # Gauge evaluation contract v1
 
-Status: contract (G1, #189), validator (G2, #190) and governed revisions
-(G3, #191). `validate` in
+Status: contract (G1, #189), validator (G2, #190), governed revisions
+(G3, #191), and statistics, producers, evaluation cost and the cost gate
+(G5, #193).
+`validate` in
 `src/validate.ts` implements this contract; `test/contract.test.ts` runs the
 fixtures in `fixtures/records.json` against the compiled package as part of
 `npm test` (`npm run test:gauge-contract` alone). `@weave/gauge` imports
@@ -219,7 +221,17 @@ Rules:
   uncertainty is part of the result. A null delta carries a null interval. Recomputation tolerates an absolute error
   of 1e-9.
 - **Verdict** is recomputed in this order:
-  1. `insufficient_evidence` if either result is, or no delta is non-null.
+  1. `insufficient_evidence` if either result is, or no delta is non-null, or
+     any non-null delta lacks evidence: `min_samples` applies to every
+     compared measure, constrained or not, so either result having `n` below
+     it is insufficient; and a zero-width interval (`lo = hi`, as from one
+     sample or all-equal samples) on the delta or on either result's measure,
+     or a missing measure interval, says nothing about spread and is
+     insufficient. A measure with `n = 0` on either side is unweighed, so it
+     too is insufficient, constrained or not; the one exemption is a
+     `replay` comparison, where measures sourced from outcome kinds must be
+     empty (the replay rule) and are skipped, so the verdict is decided by
+     the other measures.
   2. `bar_missed` if the candidate result is `misses_bar`.
   3. `candidate_worse` if any measure's interval lies strictly on the worse
      side of zero and at least `min_effect` from it: for higher-is-better,
@@ -232,8 +244,9 @@ Rules:
   5. Otherwise `no_difference`.
 
   The strict comparison with zero matters when `min_effect` is 0: an
-  unchanged measure, `delta: 0` with interval `[0, 0]`, is `no_difference`
-  in either direction, never worse or better.
+  unchanged measure, `delta: 0` with an interval that touches zero such as
+  `[-0.04, 0]` or `[0, 4]`, is `no_difference` in either direction, never
+  worse or better. With interval `[0, 0]` it is `insufficient_evidence`.
 
 A `candidate_better` comparison is evidence for a promotion decision. It is not
 one.
@@ -267,6 +280,110 @@ Rules:
   entry. Use it only where deterministic signals are inconclusive (G7, #195).
 - `unattributed` is a valid result. It requires basis `none`, a null signal
   and a null confidence. Any other category forbids basis `none`.
+
+## `gauge.cost@1`: evaluation cost
+
+What producing one result cost, so an Experiment counts its whole cost and not
+only its successful trials.
+
+- `schema`: `"gauge.cost@1"`
+- `cost`: id; `result`: id
+- `trials`: count, every trial run for the result, failed ones included
+- `failed_trials`: count
+- `trial`: line, the cost of every trial, failed ones included
+- `evaluation`: line, scoring and judging the trials
+- `review`: line, human review
+- `total`: line
+
+A line is exactly `{ "basis": "measured" | "estimated" | "unknown", "micros": metric | null }`.
+`measured` is metered usage, `estimated` is a computed figure such as tokens
+times a price, and `unknown` is a cost that was incurred but not established.
+
+Rules:
+
+- **Binding.** The result is known.
+- **Cost.** `failed_trials` is at most `trials`. `micros` is null exactly
+  when `basis` is `unknown`: an unknown line is never zero, and a measured
+  zero is a valid, distinct line. The total's basis is `unknown` if any line
+  is, else `estimated` if any line is, else `measured`; a known total equals
+  `trial + evaluation + review` within a relative error of 1e-9. Partial usage
+  is an unknown total, never the sum of the known lines. Every line is
+  required: a zero or an unknown is stated, never left out.
+- **Trial count.** `trials - failed_trials` equals the bound result's
+  sample count, the largest `n` among its measures: every trial that did not
+  fail gave the result one sample. A mismatch is `trial_count`.
+
+## Weighing cost
+
+`costed(comparison, costs, context)` says whether a comparison may be weighed
+against what its results cost, the input to a promotion decision or any other
+benefit-against-cost decision. It returns `{ "ok": true }` or the first
+rejection: a comparison or cost that fails `validate` gives that reason (one
+of another schema, or `costs` not a list, is `envelope`); a cost for neither
+result, or two costs for one result, is `binding`; and a result with no cost,
+or one whose total is `unknown`, is `cost_unknown`. An `estimated` total may
+be weighed, as an estimate. Whatever decides promotion must have `costed`
+pass first; Gauge itself weighs and promotes nothing.
+
+## Statistics
+
+`method` fixes how a producer computes intervals, so anyone holding the
+samples recomputes the same result. α is `1 - level` and z is the standard
+normal quantile at `1 - α/2` (Acklam's rational approximation).
+
+- `wilson@1`: for k successes in n samples and p = k/n, the Wilson score
+  interval `(p + z²/2n ± z·sqrt(p(1-p)/n + z²/4n²)) / (1 + z²/n)`.
+- `bootstrap@1`: 2000 resamples of n draws with replacement. A draw takes
+  sample `floor(u·n)`, where u comes from mulberry32 seeded with `seed` modulo
+  2³² and restarted for each measure. The interval is the sorted resample
+  statistics at indices `floor(2000·α/2)` and `ceil(2000·(1 - α/2)) - 1`.
+- Aggregates: `rate` and `mean` are the arithmetic mean (a rate sample is 0 or
+  1), `sum` is the sum, and `p95` is the nearest-rank percentile
+  `sorted[ceil(0.95·n) - 1]`.
+- A computed interval is widened to contain its value and, for a rate, clamped
+  to [0, 1], so rounding cannot put a value outside its own interval.
+
+## Producers
+
+`evaluate`, `compare` and `track` build what the rules above describe. They
+return `{ "ok": true, ... }` or `{ "ok": false, "reason": reason }`, and a
+record they return has passed `validate`.
+
+- `evaluate(run, context)` builds a `gauge.result@1` from one sample list per
+  criteria measure. The run names the workload its samples came from, which
+  must be the criteria set's and case set's (`binding`): samples from one
+  workload never become a result for another. Sample lists match the criteria
+  measures one-to-one (`binding`). An empty list is `n = 0` with a null value;
+  a list shorter than `min_samples` leaves its constraints `unknown`. A
+  comparison or track over either is `insufficient_evidence` whether or not the
+  measure is constrained, except for the empty outcome measures of a replay,
+  which are skipped. Neither is an error, and neither is a pass or a tie. In `replay` mode a non-empty list for a measure
+  sourced from an outcome kind is `mode`, and a rate sample other than 0 or 1
+  is `measure`. Malformed samples are `envelope`. Otherwise the result's own
+  rejection, if any, is returned.
+- `compare(request, context)` builds a `gauge.comparison@1` from two recorded
+  results. A delta's interval combines theirs by the method of variance
+  estimates recovery, which is Newcombe's hybrid score interval when both are
+  Wilson intervals: for candidate c in [l₁, u₁] and baseline b in [l₂, u₂],
+  d = c - b and the interval is
+  `[d - sqrt((c - l₁)² + (u₂ - b)²), d + sqrt((u₁ - c)² + (b - l₂)²)]`. It
+  treats the results as independent, which is conservative when both ran on
+  the same cases. A value without an interval has unknown uncertainty, so
+  `compare` refuses it with `measure` rather than invent one.
+- `track(results, context)` takes results in the order recorded (Gauge reads
+  no clock) and compares each with the one before it by the same deltas and
+  verdict rules, so a regression is visible step by step. Every result
+  answers the same question: criteria set, case set, split, mode and subject
+  kind (`binding`). The subject may repeat, to follow one implementation,
+  routed unit or policy across re-evaluations, or change, to follow its
+  versions. A step is a regression when its verdict is `candidate_worse`, or
+  `bar_missed` after a result that met its bar. A track is evidence, not a
+  record, and promotes nothing.
+
+A result states its mode, so a replay result is never read as a trial: replay
+compares decisions on recorded inputs and leaves outcome measures unmeasured.
+A replay comparison or track skips those empty outcome measures and decides
+from the rest; any other empty measure, in any mode, leaves no verdict.
 
 ## Rejection reasons
 
@@ -305,3 +422,10 @@ first applicable reason, in this order:
 10. `verdict`: a verdict that does not match recomputation
 11. `attribution`: a basis, signal or confidence that breaks the attribution
     rules
+12. `cost`: more failed trials than trials, an unknown line with an amount or
+    a known line without one, or a total whose basis or amount does not
+    match its lines
+13. `trial_count`: trials that did not fail differ from the bound result's
+    sample count
+14. `cost_unknown` (`costed` only): a compared result with no cost or an
+    unknown total
