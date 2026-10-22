@@ -18,6 +18,7 @@ import { bindDecisionProvider, type DecisionConfig } from './config.js';
 import { budgetRoute } from './budget.js';
 import { priceAttempt, worstCaseCost, type RouteExclusion } from './routing.js';
 import { containsCredentialContent, trainingAllowedDestinations } from './privacy.js';
+import { GatewayWeft, type RequestWeft, type WeftPort } from './weft.js';
 import {
   answersMatchQuestions,
   nonEmptyText,
@@ -86,6 +87,8 @@ export interface GatewayConfig {
   readonly timer?: Timer;
   /** Attempts a routed unit needs before its evidence may reorder routing. */
   readonly min_evidence_attempts?: number;
+  /** Weft emission port (WEFT-CONTRACT.md, Emission). Absent: nothing is emitted. */
+  readonly weft?: WeftPort;
 }
 
 const DEFAULT_MIN_EVIDENCE_ATTEMPTS = 20;
@@ -118,12 +121,14 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
   // Paced limits are the one state shared across calls: concurrent callers
   // must see each other's requests to be spaced at all.
   const pacing: PaceHistory = new Map();
+  const weft = config.weft ? new GatewayWeft(config.weft) : undefined;
 
   return {
     async generate(request: GenerationRequest, signal?: AbortSignal): Promise<GenerationOutcome> {
       const accept = request.accept ?? nonEmptyText;
 
-      const bounded = await runBounded<GenerationValue>({
+      const bounded = await traced(weft, request.request_id, (trace) => runBounded<GenerationValue>({
+        weft: trace,
         clock: config.clock,
         timer: config.timer,
         signal,
@@ -166,7 +171,7 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
                 : { status: 'unaccepted', reason: verdict.reason },
           };
         },
-      });
+      }));
 
       const base = outcomeBase(request.request_id, request.site, bounded);
       return bounded.settled.status === 'accepted'
@@ -187,7 +192,8 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
       const accept = request.accept;
       const binding = config.decision ? bindDecisionProvider(config.decision, request.site) : undefined;
 
-      const bounded = await runBounded<EvaluationValue>({
+      const bounded = await traced(weft, request.request_id, (trace) => runBounded<EvaluationValue>({
+        weft: trace,
         clock: config.clock,
         timer: config.timer,
         signal,
@@ -241,7 +247,7 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
                 : { status: 'unaccepted', reason: verdict.reason },
           };
         },
-      });
+      }));
 
       const base = outcomeBase(request.request_id, request.site, bounded);
       if (binding?.provider === 'amos' && !signal?.aborted &&
@@ -306,6 +312,7 @@ interface Bounded<T> {
 }
 
 interface BoundedParams<T> {
+  readonly weft?: RequestWeft | undefined;
   readonly settle_on_abort?: (unit: RoutedUnit) => boolean;
   readonly quota: QuotaPort | undefined;
   readonly persist_pause: GatewayConfig['persist_pause'];
@@ -325,6 +332,21 @@ interface BoundedParams<T> {
   /** Credential screening is request-wide; training permission is destination-wide. */
   readonly containsCredentials: boolean;
   readonly attempt: (unit: RoutedUnit, signal?: AbortSignal) => Promise<AttemptResult<T>>;
+}
+
+/** Run one request, handing its Weft records to the port once it has settled. */
+async function traced<T>(
+  weft: GatewayWeft | undefined,
+  request_id: string,
+  run: (trace: RequestWeft | undefined) => Promise<T>,
+): Promise<T> {
+  if (weft === undefined) return run(undefined);
+  const trace = weft.request(request_id);
+  try {
+    return await run(trace);
+  } finally {
+    weft.flush(trace);
+  }
 }
 
 async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
@@ -403,6 +425,7 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
     const worstCase = worstCaseCost(unit, terms);
     consumed.set(unit.routed_unit_id, (consumed.get(unit.routed_unit_id) ?? 0) + 1);
 
+    params.weft?.routed(unit, decision.excluded);
     const started_at = clock.now();
     const result = await attemptBeforeDeadline(params, unit);
     const ended_at = clock.now();
@@ -440,6 +463,7 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
 
     if (disposition.status === 'failed') {
       attempts.push({ ...base, disposition: { status: 'failed', failure: disposition.failure } });
+      params.weft?.attempted(attempts[attempts.length - 1] as AttemptRecord);
       lastFailed = true;
       if (disposition.failure.code === 'timeout' && clock.now() >= terms.deadline) {
         return finish({ status: 'unaccepted', reason: 'deadline_reached' });
@@ -487,6 +511,7 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
 
     if (disposition.status === 'accepted') {
       attempts.push({ ...base, disposition: { status: 'accepted' } });
+      params.weft?.attempted(attempts[attempts.length - 1] as AttemptRecord);
       return finish({
         status: 'accepted',
         value: disposition.value,
@@ -496,6 +521,7 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
     }
 
     attempts.push({ ...base, disposition: { status: 'unaccepted', reason: disposition.reason } });
+    params.weft?.attempted(attempts[attempts.length - 1] as AttemptRecord);
     lastFailed = false;
     // Acceptance is the caller's bar and the gateway may not lower it:
     // retrying the same routed unit is unlikely to clear it, so escalate.

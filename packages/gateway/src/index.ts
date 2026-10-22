@@ -6,6 +6,7 @@
  * gateway never pulls a provider SDK into the importer's dependency graph.
  */
 export { createInferenceGateway, type GatewayConfig } from './gateway.js';
+export type { WeftPort, WeftRecordShape } from './weft.js';
 export {
   priceAttempt,
   route,

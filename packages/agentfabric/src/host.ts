@@ -56,6 +56,7 @@ import {
   type InvocationRecord,
   type PublicationRecord,
 } from './store.js';
+import { FabricWeft, type WeftPort } from './weft.js';
 
 export interface PublishInput {
   readonly report: { readonly entries: readonly unknown[]; readonly read_set: readonly { resource: string; revision: number }[] };
@@ -184,6 +185,7 @@ export class AgentFabricHost implements CapabilityHost {
   private readonly reconciling = new Set<string>();
   /** Legacy invocations whose resource scopes cannot be reconstructed. */
   private readonly unscopedRecovery = new Map<string, string>();
+  private readonly weft: FabricWeft | null;
 
   constructor(options: {
     authority: GrantAuthority;
@@ -192,6 +194,8 @@ export class AgentFabricHost implements CapabilityHost {
     contracts?: readonly CapabilityContract[];
     gateway?: InferenceGateway;
     shell?: ShellHostOptions;
+    /** Weft emission port (WEFT-CONTRACT.md, Emission). Absent: nothing is emitted. */
+    weft?: WeftPort;
   }) {
     this.authority = options.authority;
     this.store = options.store ?? new FabricStore();
@@ -214,6 +218,8 @@ export class AgentFabricHost implements CapabilityHost {
     }
     this.restoreAdmissions();
     this.restoreReservations();
+    // Restored admissions were reported when they happened; emission starts here.
+    this.weft = options.weft ? new FabricWeft(options.weft) : null;
   }
 
   snapshot(): FabricSnapshot {
@@ -488,6 +494,7 @@ export class AgentFabricHost implements CapabilityHost {
 
   revoke(operation: string, reason = 'revoked'): void {
     void reason;
+    this.weft?.revoked(operation, (this.admitted.get(operation) ?? []).map((record) => record.id));
     this.live.delete(operation);
     this.admitted.delete(operation);
     this.status.set(operation, 'unavailable');
@@ -539,6 +546,7 @@ export class AgentFabricHost implements CapabilityHost {
       records.push(fresh);
     }
     this.admitted.set(contract.id, records);
+    this.weft?.admitted(contract.id, implementationId, contract.revision);
   }
 
   implementationRecords(operation: string): ImplementationProfile[] {
@@ -682,6 +690,7 @@ export class AgentFabricHost implements CapabilityHost {
       implementation_id: open.implementation_id,
       inputs: open.inputs,
     });
+    this.weft?.selected(open.invocation_id, operation, open.implementation_id, open.grant.contract_rev);
     this.open.set(open.invocation_id, open);
     const result = new Promise<InvocationOutcome>((resolve) => {
       open.resolve = resolve;
@@ -1110,6 +1119,12 @@ export class AgentFabricHost implements CapabilityHost {
     }
     open.outcome = outcome;
     open.phase = 'done';
+    this.weft?.invoked(
+      open.invocation_id,
+      open.implementation_id,
+      open.grant.contract_rev,
+      open.cancel_requested && outcome.outcome !== 'succeeded' ? 'cancelled' : outcome.outcome,
+    );
     // A failed marker write leaves a running durable record. Retain the
     // settled uncertainty until durable reconciliation removes it.
     if (persisted) this.open.delete(open.invocation_id);
@@ -1719,6 +1734,7 @@ export class AgentFabricHost implements CapabilityHost {
   private reject(code: FailureCode, reason: string): InvocationRejected {
     const rejection: InvocationRejected = { kind: 'rejected', code, reason };
     this.rejections.push(rejection);
+    this.weft?.rejected(code);
     return rejection;
   }
 

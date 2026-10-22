@@ -75,6 +75,7 @@ import type {
 } from './types.js';
 import { hasMidValue, payloadBytes, type TraceRetention } from './log-bound.js';
 import { validate } from './validation.js';
+import { LoomWeft, type WeftPort } from './weft.js';
 
 export { ScriptedDecisionLayer } from './decision.js';
 export { GatewayDecisionLayer, fixtureGateway, HOSTED_DESTINATION, LOCAL_DESTINATION } from './gateway-decision.js';
@@ -125,6 +126,8 @@ export interface RuntimeOptions {
   /** Canonical payload bound. An observation over it is rejected before it is durable. */
   readonly logBound?: { readonly max_observation_bytes: number };
   readonly traceRetention?: TraceRetention;
+  /** Weft emission port (WEFT-CONTRACT.md, Emission). Absent: nothing is emitted. */
+  readonly weft?: WeftPort;
 }
 
 const RUNTIME_SOURCE = { kind: 'runtime', id: 'weave' } as const;
@@ -222,6 +225,7 @@ export class Runtime {
   /** Conclusion ids already applied to State, so an import can skip without scanning. */
   private readonly importedConclusions = new Set<string>();
   private transitionLock = false;
+  private readonly weft: LoomWeft | null;
 
   constructor(
     private readonly options: RuntimeOptions,
@@ -231,6 +235,7 @@ export class Runtime {
     this.slots = options.executionSlots ?? Number.POSITIVE_INFINITY;
     this.frameProfile = options.frameProfile ?? DEFAULT_FRAME_PROFILE;
     this.replayLog = recorded;
+    this.weft = options.weft ? new LoomWeft(options.weft) : null;
     runtimeLogs.set(this, this.log);
     if (recorded) {
       for (const observation of recorded) {
@@ -544,10 +549,12 @@ export class Runtime {
       this.seqHigh = observation.seq;
       this.observationIds.add(observation.observation_id);
       if (observation.validation.status === 'accepted') {
+        const goalBefore = this.weft ? this.current.goal?.status : undefined;
         applyAccepted(this.current, observation);
         if (observation.payload_type === 'conclusion.cached') {
           this.importedConclusions.add((observation.payload as { conclusion_id: string }).conclusion_id);
         }
+        this.weft?.observed(observation, this.view(), goalBefore);
         this.followAccepted(observation);
       } else {
         this.noteRejectedAmendment(observation);
@@ -643,7 +650,7 @@ export class Runtime {
       outcome = { status: 'blocked', reason: 'profile record missing' };
     }
 
-    this.cycles.push({
+    const record: CycleRecord = {
       cycle_no,
       state_revision,
       procedure: formation.procedure,
@@ -653,7 +660,9 @@ export class Runtime {
       not_selected: selection.not_selected,
       outcome,
       cost_micros: this.cycleAssemblyCost,
-    });
+    };
+    this.cycles.push(record);
+    this.weft?.cycle(record, trigger, this.seqHigh);
     this.cycleAssemblyCost = 0;
     this.preparedViews.clear();
   }
@@ -1245,6 +1254,7 @@ export class Runtime {
     }
     const running = Object.values(this.current.actions).filter((a) => a.state === 'running').length;
     const queued = running >= this.slots;
+    this.weft?.dispatch(candidate);
     const recorded = this.append({
       observation_id: `${queued ? 'queued' : 'started'}:${action_id}`,
       source: RUNTIME_SOURCE,
@@ -1253,6 +1263,7 @@ export class Runtime {
       payload_version: 1,
       payload: started,
     });
+    this.weft?.dispatch(null);
     if (recorded.validation.status !== 'accepted') {
       if (recorded.payload_type === 'action.started') {
         return null;

@@ -11,6 +11,7 @@ export {
   type ReconciliationResult,
 } from './host.js';
 export { FabricLifecycle } from './lifecycle.js';
+export type { WeftPort, WeftRecordShape } from './weft.js';
 export { IsolateRunner, isolatedCall, type IsolationMode } from './isolate.js';
 export { FIXTURE_CONTRACTS, REPORT_ASSEMBLE, REPORT_PUBLISH, SOURCE_INSPECT, TEXT_NORMALIZE, collapseWhitespace } from './contracts.js';
 export { REPO_BUILD, REPO_LINT, REPO_TEST, SHELL_RUN } from './shell-contracts.js';
