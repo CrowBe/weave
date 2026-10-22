@@ -697,3 +697,33 @@ describe('TypeSafe decision contract', () => {
     }
   });
 });
+
+describe('reference provenance and throttling', () => {
+  it('surfaces the response model without substituting the requested alias', async () => {
+    const { fetch } = stubFetch(LIVE_BODY);
+    const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
+    assert.equal(result.status, 'completed');
+    if (result.status === 'completed') assert.equal(result.resolved_model_id, 'jev-1.13.0');
+  });
+  it('keeps a missing response model absent and redacts credentials from model metadata', async () => {
+    for (const model of [undefined, 'model-test-key']) {
+      const { fetch } = stubFetch({ ...LIVE_BODY, model });
+      const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
+      assert.equal(result.status, 'completed');
+      if (result.status === 'completed') assert.equal(result.resolved_model_id, model === undefined ? undefined : 'model-[redacted]');
+    }
+  });
+  it('honours numeric retry-after on a TypeSafe throttle', async () => {
+    const { fetch } = stubFetch({}, { status: 429, headers: { 'retry-after': '1.5' } });
+    const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
+    assert.equal(result.status, 'failed');
+    if (result.status === 'failed') assert.equal(result.failure.retry_after_ms, 1500);
+  });
+});
+
+it('preserves a redacted provider response id on throttle failures', async () => {
+  const { fetch } = stubFetch({}, { status: 429, headers: { 'x-typesafe-request-id': 'req-test-key' } });
+  const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
+  assert.equal(result.status, 'failed');
+  assert.equal(result.provider_response_id, 'req-[redacted]');
+});

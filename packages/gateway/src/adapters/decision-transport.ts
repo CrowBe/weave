@@ -34,6 +34,7 @@ export interface DecisionWireProfile {
 export type DecisionParse =
   | {
       readonly status: 'completed';
+      readonly resolved_model_id?: string;
       readonly answers: EvaluationAnswers;
       readonly confidence: Readonly<Record<QuestionId, number>> | undefined;
       readonly usage: ProviderUsage;
@@ -85,12 +86,19 @@ export function evaluationTransport(
       }
 
       const requestId = response.headers.get(profile.requestIdHeader) ?? undefined;
+      const provenance = requestId === undefined ? {} : { provider_response_id: safe(requestId) };
       const withId = (message: string) => safe(requestId === undefined ? message : `${message} (request ${requestId})`);
 
       if (!response.ok) {
+        const retry = response.headers.get('retry-after');
+        const delay = retry === null || retry.trim() === '' ? NaN : Number(retry) * 1000;
         return {
           status: 'failed',
-          failure: classifyStatus(profile.id, response.status, await textOf(response), withId),
+          ...provenance,
+          failure: {
+            ...classifyStatus(profile.id, response.status, await textOf(response), withId),
+            ...(Number.isFinite(delay) && delay >= 0 ? { retry_after_ms: delay } : {}),
+          },
         };
       }
 
@@ -99,19 +107,19 @@ export function evaluationTransport(
         raw = await response.text();
       } catch (error: unknown) {
         // The body never arrived whole: a transport fault or cancellation, not a provider answer.
-        return { status: 'failed', failure: classifyTransport(error, withId) };
+        return { status: 'failed', ...provenance, failure: classifyTransport(error, withId) };
       }
 
       let body: unknown;
       try {
         body = JSON.parse(raw);
       } catch {
-        return { status: 'failed', failure: malformed(withId('response body was not JSON')) };
+        return { status: 'failed', ...provenance, failure: malformed(withId('response body was not JSON')) };
       }
 
       const parsed = profile.parse(body, call);
       if (parsed.status === 'malformed') {
-        return { status: 'failed', failure: malformed(withId(parsed.detail)) };
+        return { status: 'failed', ...provenance, failure: malformed(withId(parsed.detail)) };
       }
 
       return {
@@ -120,6 +128,7 @@ export function evaluationTransport(
         usage: parsed.usage,
         provider_response_id: requestId === undefined ? undefined : safe(requestId),
         confidence: parsed.confidence,
+        ...(parsed.resolved_model_id === undefined ? {} : { resolved_model_id: safe(parsed.resolved_model_id) }),
       };
     },
   };

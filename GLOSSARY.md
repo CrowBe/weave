@@ -171,6 +171,22 @@ The module that performs bounded model work under explicit scope, acceptance, au
 
 A versioned context profile, prompt template, model, and settings selected together for inference. Evaluation evidence attaches to that combination.
 
+### Reference mode
+
+The Jev benchmark mode that permits exactly one TypeSafe direct routed unit per inference kind, pinned to `jev-1.14.0`. It requires TypeSafe credentials, bounds retries on that unit, disables adapter option shuffling, and permits no fallback. It is a benchmark setting, not a workspace mode or a grant.
+
+### Resolved model id
+
+The model identity a provider reports in its response, recorded as `resolved_model_id` independently of the requested model or alias. It is provider-reported provenance, not an authority decision or proof of the provider's internals.
+
+### Pin mismatch
+
+A reference-mode record whose resolved model id differs from the pinned id or is missing. A failed request without a resolved id also counts. A recorded different identity on an earlier completed attempt cannot be hidden by a later matching response. The reference run header records the flag and count; any pin mismatch makes the CLI exit non-zero after writing results.
+
+### Reference run header
+
+The Jev benchmark output's run identity and summary beside its records: reference mode, unique run id, pinned model id, TypeSafe route, date from the injected clock, corpus hash, completion status, and pin mismatch flag/count. The corpus hash is SHA-256 of the selected corpus records serialized as JSON in execution-plan order, including labels. Atomic snapshots bind records to this header; a rerun starts a fresh run and replaces the output rather than appending or mixing generations.
+
 ### Training-allowed destination
 
 A data destination whose provider may train on disclosed content. A routed unit marks it with `destination_training_allowed: true`; the mark applies to every unit sharing that destination. Routing excludes it unless the caller explicitly classifies the request as `public` or `non_sensitive`, even when the destination is otherwise permitted. Before routing the gateway screens content for the repository's credential markers at token starts. A match excludes every unit at that destination with reason `credential_content`, also recorded as a content-free note in outcome `uncertainty`, without consuming attempts. A permitted non-training destination may still receive the original content. When only excluded training destinations remain, the outcome is blocked with `no_route` and nothing is dispatched. Screening is a final safeguard, not permission to send sensitive or private material.

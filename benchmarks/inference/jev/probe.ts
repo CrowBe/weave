@@ -13,10 +13,13 @@
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import type { Clock, EvaluationKind } from '@weave/gateway';
+import { pathToFileURL } from 'node:url';
+import type { Clock, EvaluationKind, InferenceGateway } from '@weave/gateway';
 import { CORPUS, type DecisionCase } from './corpus.ts';
 import {
   EVALUATION_KINDS,
+  validateReferenceArgs,
+  ProbeConfigurationError,
   createJevGateway,
   createKevGateway,
   describeKevService,
@@ -25,20 +28,12 @@ import {
   runCase,
   type ProbeRecord,
 } from './run.ts';
+import { runReference, readProbeOutput } from './reference.ts';
 import { scoreShape, type ShapeReport } from './score.ts';
 import { applyOrdering, orderingsFor, scorePermutation, type PermutationRecordView } from './permutation.ts';
 
 /** Fixed so a recorded run replays with the same presentation orders. */
 const ORDER_SEED = 20260921;
-
-function flag(name: string): string | undefined {
-  const index = process.argv.indexOf(`--${name}`);
-  return index === -1 ? undefined : process.argv[index + 1];
-}
-
-function present(name: string): boolean {
-  return process.argv.includes(`--${name}`);
-}
 
 /** Records grouped into the view the permutation scorer reads. */
 function permutationViews(records: readonly ProbeRecord[], kind: string): PermutationRecordView[] {
@@ -85,16 +80,11 @@ function printPermutation(kind: string, records: readonly ProbeRecord[]): void {
   );
 }
 
-const clock: Clock = { now: () => Date.now() };
-
-/** Set once in main so the report printer can reach the raw records. */
-let PRINT_RECORDS: readonly ProbeRecord[] = [];
-
 function pct(value: number): string {
   return (value * 100).toFixed(1).padStart(5) + '%';
 }
 
-function printReport(report: ShapeReport): void {
+function printReport(report: ShapeReport, records: readonly ProbeRecord[]): void {
   const f = report.floors;
   console.log(`\n── ${report.kind} ${'─'.repeat(Math.max(0, 58 - report.kind.length))}`);
   console.log(`  accepted        ${report.accepted}/${report.attempted}`);
@@ -117,7 +107,7 @@ function printReport(report: ShapeReport): void {
   console.log(
     `  contrast        must-move ${c.relevant_flipped_both_correct}/${c.relevant_groups}   must-hold ${c.irrelevant_held}/${c.irrelevant_groups}`,
   );
-  printPermutation(report.kind, PRINT_RECORDS);
+  printPermutation(report.kind, records);
   const d = report.determinism;
   console.log(
     `  determinism     ${d.unanimous_top}/${d.groups} cases unanimous across repeats   max top-value spread ${d.max_top_value_spread.toFixed(
@@ -142,24 +132,43 @@ function printReport(report: ShapeReport): void {
   }
 }
 
-async function main(): Promise<void> {
+export async function main(deps: {
+  readonly argv?: readonly string[];
+  readonly env?: NodeJS.ProcessEnv;
+  readonly clock?: Clock;
+  readonly gateway?: InferenceGateway;
+  readonly corpus?: readonly DecisionCase[];
+  readonly signal?: AbortSignal;
+} = {}): Promise<number> {
+  const argv = deps.argv ?? process.argv;
+  const env = deps.env ?? process.env;
+  const clock: Clock = deps.clock ?? { now: () => Date.now() };
+  const flag = (name: string): string | undefined => {
+    const i = argv.indexOf(`--${name}`);
+    return i === -1 ? undefined : argv[i + 1];
+  };
+  const present = (name: string): boolean => argv.includes(`--${name}`);
+  const reference = present('reference');
+  validateReferenceArgs(argv);
+  let exitCode = 0;
   const from = flag('from');
   const kinds = (flag('kinds')?.split(',') ?? EVALUATION_KINDS) as EvaluationKind[];
   const only = flag('cases')?.split(',');
-  const corpus: readonly DecisionCase[] = only === undefined ? CORPUS : CORPUS.filter((c) => only.includes(c.id));
+  const corpus: readonly DecisionCase[] = (deps.corpus ?? CORPUS).filter(c => only === undefined || only.includes(c.id));
 
   let records: ProbeRecord[];
 
   if (from !== undefined) {
-    records = JSON.parse(await readFile(from, 'utf8')) as ProbeRecord[];
+    const replay = readProbeOutput<ProbeRecord>(JSON.parse(await readFile(from, 'utf8')));
+    records = replay.records;
+    exitCode = replay.exitCode;
     console.log(`rescoring ${records.length} recorded results from ${from}; no inference issued`);
   } else {
-    const credentials = readCredentials(process.env);
+    const credentials = readCredentials(env, { preferFree: false, reference });
     if ('error' in credentials) {
-      console.error(credentials.error);
-      process.exit(1);
+      throw new ProbeConfigurationError(credentials.error);
     }
-    console.log(
+    if (!reference) console.log(
       `credentials: AI_GATEWAY_API_KEY present; TYPESAFE_API_KEY (preferred) / TYPESAFE_AI_API_KEY (legacy fallback) ${
         credentials.typesafe === undefined ? 'absent — no fallback route' : 'present — fallback route enabled'
       }`,
@@ -169,14 +178,15 @@ async function main(): Promise<void> {
     const permute = Math.max(1, Number(flag('permute') ?? 1));
     const local = (flag('model') ?? 'jev') === 'kev';
     // The composition root reads the direct-route model; run.ts reads no env.
-    const jevModel = process.env['JEV_MODEL'];
+    const jevModel = reference ? flag('model') : env['JEV_MODEL'];
     const options = {
+      reference,
       preferFree: present('prefer-free'),
       local,
       ...(jevModel === undefined ? {} : { model: jevModel }),
     };
-    const kevBaseURL = readKevBaseURL(process.env);
-    const gateway = local ? createKevGateway(clock, kevBaseURL) : createJevGateway(credentials, clock, options);
+    const kevBaseURL = readKevBaseURL(env);
+    const gateway = deps.gateway ?? (local ? createKevGateway(clock, kevBaseURL) : createJevGateway(credentials, clock, options));
     console.log(
       local
         ? `model: local Kev 4B (single route, no fallback)\nservice: ${await describeKevService(kevBaseURL)}`
@@ -195,42 +205,67 @@ async function main(): Promise<void> {
     console.log(
       `plan: ${corpus.length} cases × ${kinds.length} shape(s) × ${repeats} repeat(s), ` +
         `${permute} ordering(s) requested → ${total} requests` +
-        (options.preferFree ? '; preferring the free route (will wait on throttle)' : ''),
+        (reference ? '; pinned TypeSafe direct, no fallback' : options.preferFree ? '; preferring the free route (will wait on throttle)' : ''),
     );
 
-    let done = 0;
-    for (let repeat = 0; repeat < repeats; repeat += 1) {
-      for (const kind of kinds) {
-        for (const { decision, orders } of plan) {
-          for (let o = 0; o < orders.length; o += 1) {
-            const presented = applyOrdering(decision, orders[o]!);
-            const record = await runCase(gateway, clock, credentials, presented, kind, repeat, options, o);
-            records.push(record);
-            done += 1;
-            const mark = record.status === 'accepted' ? (record.ranking?.top === record.label ? '·' : '✗') : '!';
-            process.stdout.write(mark);
-            if (done % 60 === 0) process.stdout.write(` ${done}/${total}\n`);
+    const output = flag('output') ?? (reference ? '.local/jev/reference-results.json' : '.local/jev/results.json');
+    if (reference) {
+      const jobs: (() => Promise<ProbeRecord>)[] = [];
+      for (let repeat = 0; repeat < repeats; repeat++) for (const kind of kinds) {
+        for (const { decision, orders } of plan) for (let o = 0; o < orders.length; o++) {
+          jobs.push(() => runCase(gateway, clock, credentials, applyOrdering(decision, orders[o]!), kind, repeat, options, o, deps.signal));
+        }
+      }
+      const result = await runReference({ clock, corpus, output, jobs, signal: deps.signal });
+      records = [...result.records];
+      exitCode = result.header.pin_mismatch || result.header.status !== 'completed' ? 1 : 0;
+    } else {
+      let done = 0;
+      for (let repeat = 0; repeat < repeats; repeat += 1) {
+        for (const kind of kinds) {
+          for (const { decision, orders } of plan) {
+            for (let o = 0; o < orders.length; o += 1) {
+              const presented = applyOrdering(decision, orders[o]!);
+              const record = await runCase(gateway, clock, credentials, presented, kind, repeat, options, o);
+              records.push(record);
+              done += 1;
+              const mark = record.status === 'accepted' ? (record.ranking?.top === record.label ? '·' : '✗') : '!';
+              process.stdout.write(mark);
+              if (done % 60 === 0) process.stdout.write(` ${done}/${total}\n`);
+            }
           }
         }
       }
-    }
-    process.stdout.write(`\n`);
+      process.stdout.write(`\n`);
 
-    const output = flag('output') ?? '.local/jev/results.json';
-    await mkdir(dirname(output), { recursive: true });
-    await writeFile(output, JSON.stringify(records, null, 2));
+      await mkdir(dirname(output), { recursive: true });
+      await writeFile(output, JSON.stringify(records, null, 2));
+    }
     console.log(`\n${records.length} records written to ${output}`);
   }
 
-  PRINT_RECORDS = records;
   for (const kind of kinds) {
     if (!records.some((r) => r.kind === kind)) continue;
-    printReport(scoreShape(kind, records, CORPUS));
+    printReport(scoreShape(kind, records, reference ? corpus : CORPUS), records);
   }
   console.log(
     '\nLegend: · correct, ✗ wrong, ! not accepted. Accuracy means nothing without its floor;',
   );
   console.log('the floors are printed above every accuracy for that reason.');
+  return exitCode;
 }
 
-await main();
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  if (process.argv.includes('--reference')) {
+    process.on('SIGINT', cancel);
+    process.on('SIGTERM', cancel);
+  }
+  try { process.exitCode = await main({ signal: controller.signal }); }
+  catch (error) {
+    console.error(error instanceof ProbeConfigurationError ? error.message : 'Jev probe failed; check output and recorded results.');
+    process.exitCode = 1;
+  }
+  finally { process.off('SIGINT', cancel); process.off('SIGTERM', cancel); }
+}
