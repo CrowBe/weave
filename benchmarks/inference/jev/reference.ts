@@ -11,6 +11,7 @@ export interface ReferenceHeader {
   readonly pinned_model_id: typeof JEV_REFERENCE_MODEL;
   readonly run_date: string;
   readonly corpus_hash: string;
+  readonly plan_hash: string;
   readonly route: { readonly adapter: 'typesafe-ai'; readonly destination: 'typesafe-ai' };
   readonly status: 'running' | 'completed' | 'cancelled' | 'interrupted';
   readonly pin_mismatch: boolean;
@@ -95,6 +96,8 @@ export async function writeReferenceOutput<T>(output: string, snapshot: Referenc
 export async function runReference<T extends ReferenceProvenance>(config: {
   readonly clock: Clock;
   readonly corpus: unknown;
+  /** JSON plan data from the composition root, including settings and computed orders. */
+  readonly plan: unknown;
   readonly output: string;
   readonly runId?: string | undefined;
   readonly jobs: readonly (() => Promise<T>)[];
@@ -106,6 +109,7 @@ export async function runReference<T extends ReferenceProvenance>(config: {
     pinned_model_id: JEV_REFERENCE_MODEL,
     run_date: new Date(config.clock.now()).toISOString(),
     corpus_hash: createHash('sha256').update(JSON.stringify(config.corpus)).digest('hex'),
+    plan_hash: createHash('sha256').update(JSON.stringify(config.plan)).digest('hex'),
     route: { adapter: 'typesafe-ai', destination: 'typesafe-ai' },
   } as const;
   const records: T[] = [];

@@ -233,7 +233,15 @@ export async function main(
               );
             }
         }
-      const result = await runReference({ clock, corpus, output, runId, jobs, signal: deps.signal });
+      const result = await runReference({
+        clock,
+        corpus,
+        output,
+        runId,
+        jobs,
+        signal: deps.signal,
+        plan: { kinds, repeats, permute, order_seed: ORDER_SEED, orders: plan.map((entry) => entry.orders) },
+      });
       records = [...result.records];
       exitCode = result.header.pin_mismatch || result.header.status !== 'completed' ? 1 : 0;
     } else {
