@@ -1,3 +1,4 @@
+import { difference } from '../src/stats.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -316,11 +317,17 @@ test('a protected constraint is a gate, not a term traded against a score', () =
     experiment: 'exp-12',
     baseline: 'res-base',
     candidate: 'res-costly',
-    deltas: [
-      { measure: 'accuracy', delta: 0.97 - 0.85, interval: [0.06, 0.18] },
-      { measure: 'cost', delta: 100, interval: [82, 118] },
-      { measure: 'completion', delta: 0.9 - 0.7, interval: [0.1, 0.3] },
-    ],
+    deltas: costly.measures.map((c) => {
+      const b = (result('res-base').measures as typeof costly.measures).find((m) => m.measure === c.measure)!;
+      return {
+        measure: c.measure,
+        delta: c.value - b.value,
+        interval: difference(
+          { value: b.value, interval: b.interval as [number, number] },
+          { value: c.value, interval: c.interval as [number, number] },
+        ),
+      };
+    }),
     verdict: 'bar_missed',
   };
   assert.equal(reason(comparison, ctx), 'ok');

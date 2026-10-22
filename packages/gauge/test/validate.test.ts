@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { validate, type Context } from '@weave/gauge';
+import { compare, validate, type Context } from '@weave/gauge';
 
 /** Fail-closed paths the contract fixtures do not exercise. */
 
@@ -20,6 +20,20 @@ const record = (name: string) => {
 const base = record('a baseline that meets its bar');
 const better = record('a comparison where the candidate is better');
 const routing = record('a deterministic routing attribution');
+
+const derived = (r: Record<string, unknown>, ctx: Context = context) => {
+  const out = compare(
+    {
+      comparison: r.comparison as string,
+      experiment: null,
+      baseline: r.baseline as string,
+      candidate: r.candidate as string,
+    },
+    ctx,
+  );
+  assert.ok(out.ok);
+  return { ...r, deltas: out.record.deltas };
+};
 
 const reason = (value: unknown, ctx: Context = context) => {
   const verdict = validate(value, ctx);
@@ -71,10 +85,10 @@ test('a null delta carries a null interval', () => {
     ],
     verdict: 'no_difference',
   };
-  assert.equal(reason(comparison, ctx), 'ok');
+  assert.equal(reason(derived(comparison, ctx), ctx), 'ok');
   const claimed = {
     ...comparison,
-    deltas: [...comparison.deltas.slice(0, 2), { measure: 'completion', delta: null, interval: [0, 0] }],
+    deltas: [...derived(comparison, ctx).deltas.slice(0, 2), { measure: 'completion', delta: null, interval: [0, 0] }],
   };
   assert.equal(reason(claimed, ctx), 'measure');
 });
@@ -101,8 +115,17 @@ test('a zero-width delta interval is insufficient evidence, never no difference'
     ...record('an unchanged higher-is-better measure at a zero threshold'),
     deltas: [{ measure: 'accuracy', delta: 0, interval: [0, 0] }],
   };
-  assert.equal(reason({ ...unchanged, verdict: 'no_difference' }), 'verdict');
-  assert.equal(reason({ ...unchanged, verdict: 'insufficient_evidence' }), 'ok');
+  const original = context.results['res-hi-a'] as { measures: readonly { value: number }[] };
+  const pinned = (id: string) => ({
+    ...(context.results[id] as object),
+    measures: original.measures.map((m) => ({ ...m, interval: [m.value, m.value] })),
+  });
+  const ctx = {
+    ...context,
+    results: { ...context.results, 'res-hi-a': pinned('res-hi-a'), 'res-hi-b': pinned('res-hi-b') },
+  };
+  assert.equal(reason({ ...unchanged, verdict: 'no_difference' }, ctx), 'verdict');
+  assert.equal(reason({ ...unchanged, verdict: 'insufficient_evidence' }, ctx), 'ok');
 });
 
 test('a zero-width measure interval in either result is insufficient evidence', () => {
@@ -114,8 +137,8 @@ test('a zero-width measure interval in either result is insufficient evidence', 
   assert.equal(reason(pinned, ctx), 'ok');
   const improvement = record('a strict improvement at a zero threshold');
   assert.equal(reason(improvement), 'ok');
-  assert.equal(reason(improvement, ctx), 'verdict');
-  assert.equal(reason({ ...improvement, verdict: 'insufficient_evidence' }, ctx), 'ok');
+  assert.equal(reason(derived(improvement, ctx), ctx), 'verdict');
+  assert.equal(reason({ ...derived(improvement, ctx), verdict: 'insufficient_evidence' }, ctx), 'ok');
 });
 
 test('a preference entry cannot carry a meets_bar result with a zero-width accept interval', () => {
@@ -178,6 +201,6 @@ test('a replay comparison skips its empty outcome measures and decides from the 
     ],
     verdict: 'no_difference',
   };
-  assert.equal(reason(comparison, ctx), 'ok');
-  assert.equal(reason({ ...comparison, verdict: 'insufficient_evidence' }, ctx), 'verdict');
+  assert.equal(reason(derived(comparison, ctx), ctx), 'ok');
+  assert.equal(reason({ ...derived(comparison, ctx), verdict: 'insufficient_evidence' }, ctx), 'verdict');
 });

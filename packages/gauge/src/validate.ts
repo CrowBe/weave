@@ -9,6 +9,7 @@
  */
 import { KIND_FIELDS, isCode, isCount, isDigest, isId, isKind, isMetric, isRatio } from '@weave/weft';
 import { recordDigest } from './digest.js';
+import { difference } from './stats.js';
 import type {
   CaseSet,
   ComparisonVerdict,
@@ -752,7 +753,7 @@ function validateComparison(r: Obj, context: Context): Verdict {
     return reject('binding');
 
   // 8. measure
-  const valueOf = (result: EvaluationResult, name: string) => result.measures.find((e) => e.measure === name)!.value;
+  const measureOf = (result: EvaluationResult, name: string) => result.measures.find((e) => e.measure === name)!;
   const byName = new Map(
     (deltas as unknown as { measure: string; delta: number | null; interval: Interval | null }[]).map(
       (d) => [d.measure, d] as const,
@@ -760,14 +761,21 @@ function validateComparison(r: Obj, context: Context): Verdict {
   );
   for (const d of criteria.measures) {
     const { delta, interval } = byName.get(d.measure)!;
-    const base = valueOf(baseline, d.measure);
-    const cand = valueOf(candidate, d.measure);
-    if (base === null || cand === null) {
+    const base = measureOf(baseline, d.measure);
+    const cand = measureOf(candidate, d.measure);
+    if (base.value === null || cand.value === null) {
       if (delta !== null || interval !== null) return reject('measure');
       continue;
     }
-    if (delta === null || Math.abs(delta - (cand - base)) > EPSILON) return reject('measure');
+    if (delta === null || Math.abs(delta - (cand.value - base.value)) > EPSILON) return reject('measure');
     if (interval === null || delta < interval[0] || delta > interval[1]) return reject('measure');
+    if (base.interval === null || cand.interval === null) return reject('measure');
+    const expected = difference(
+      { value: base.value, interval: base.interval },
+      { value: cand.value, interval: cand.interval },
+    );
+    if (expected.some((bound, i) => !Number.isFinite(bound) || Math.abs(interval[i]! - bound) > EPSILON))
+      return reject('measure');
   }
 
   // 10. verdict
