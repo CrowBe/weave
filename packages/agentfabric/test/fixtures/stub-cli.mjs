@@ -66,8 +66,8 @@ if (mode === '--subprocess') {
   writeSync(1, env['CANARY'] ?? '');
   exit(0);
 } else if (mode === '--report') {
-  // Importing node:process opens stdin as a non-blocking pipe. A synchronous read
-  // fails with EAGAIN if the host's end-of-file has not arrived yet, so wait for it.
+  // The spawned child's fd 0 is a non-blocking pipe (libuv spawn stdio). A synchronous
+  // read fails with EAGAIN if the host's end-of-file has not arrived yet, so wait for it.
   const chunks = [];
   for await (const chunk of stdin) {
     chunks.push(chunk);
