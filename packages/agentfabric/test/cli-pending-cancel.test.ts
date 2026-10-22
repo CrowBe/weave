@@ -183,7 +183,8 @@ async function fixture(
 
 describe('CLI cancellation before prepare', () => {
   for (const invalid of ['legacy reconciliation', 'unresolved', 'unknown cwd_ref', 'wrong cwd_ref kind'] as const) {
-    it(`rejects ${invalid} before consuming a grant with pending cancellation`, async (t) => {
+    const consumes = invalid === 'unknown cwd_ref' || invalid === 'wrong cwd_ref kind';
+    it(`rejects ${invalid} ${consumes ? 'after' : 'before'} consuming a grant with pending cancellation`, async (t) => {
       const f = await fixture(t, invalid === 'legacy reconciliation' ? 'startup check' : 'recovery');
       const status = (f.host as unknown as { status: Map<string, string> }).status;
       if (invalid === 'unresolved') status.set(SHELL_RUN.id, 'unresolved');
@@ -210,14 +211,14 @@ describe('CLI cancellation before prepare', () => {
       );
       const id = 'shell-cli:preparation-validation';
       const grant = f.grant(id, ref);
-      assert.equal(consume.mock.callCount(), 0, 'ordinary rejection must precede consumption too');
+      assert.equal(consume.mock.callCount(), consumes ? 1 : 0, 'ordinary preparation pins consumption order');
       const pending = f.host.invokeCliGeneration(grant, inputs);
       assert.deepEqual(f.host.requestCancel(id), { acknowledged: true });
       // Keep the legacy reconciliation gate closed when the startup check returns.
       f.gate.resolve();
       assert.deepEqual(await pending, expected);
-      assert.equal(consume.mock.callCount(), 0);
-      assert.equal(f.authority.markInvoked(grant), true, 'rejection must not consume the grant');
+      assert.equal(consume.mock.callCount(), consumes ? 2 : 0);
+      assert.equal(f.authority.markInvoked(grant), !consumes, 'rejection must mirror preparation consumption');
       assert.equal(f.spawn.mock.callCount(), 0);
       assert.equal(f.store.getInvocation(id), undefined);
       assert.equal(f.host.coordinator.held().length, 0);
