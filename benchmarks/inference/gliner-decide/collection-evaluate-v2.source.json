@@ -39,15 +39,8 @@
       "eval2.write-readback",
       "eval2.readback-fields"
     ],
-    "failure-and-uncertainty": [
-      "eval2.failed-before-effect",
-      "eval2.failure-some-steps"
-    ],
-    "retry-and-identity": [
-      "eval2.retry-idempotency",
-      "eval2.retry-dedup-key",
-      "eval2.retry-no-claim"
-    ],
+    "failure-and-uncertainty": ["eval2.failed-before-effect", "eval2.failure-some-steps"],
+    "retry-and-identity": ["eval2.retry-idempotency", "eval2.retry-dedup-key", "eval2.retry-no-claim"],
     "approval-and-scope": [
       "eval2.approval-bound",
       "eval2.approval-record",
@@ -55,61 +48,22 @@
       "eval2.approval-revoked",
       "eval2.approval-principal"
     ],
-    "cancellation-and-ordering": [
-      "eval2.cancel-before-commit",
-      "eval2.cancel-after-commit",
-      "eval2.late-result"
-    ],
-    "concurrency-and-coverage": [
-      "eval2.parallel-independent",
-      "eval2.parallel-one-failed"
-    ],
-    "recovery-and-budget": [
-      "eval2.recovery-budget",
-      "eval2.recovery-restart",
-      "eval2.budget-reservation"
-    ],
-    "queued-dispatch": [
-      "eval2.concurrent-cancel-slot"
-    ],
-    "terminal-outcome-classification": [
-      "eval2.uncertain-vs-failed"
-    ],
-    "accepted-state-transition": [
-      "eval2.state-transition"
-    ],
-    "observation-provenance": [
-      "eval2.provenance-source"
-    ],
-    "payload-validation": [
-      "eval2.result-validation"
-    ],
-    "coverage-and-denominators": [
-      "eval2.evidence-omission"
-    ],
-    "evidence-strength": [
-      "eval2.contradictory-claim"
-    ],
-    "authority-and-outcome": [
-      "eval2.authority-scope",
-      "eval2.approval-binding-revision"
-    ],
-    "ordering-and-races": [
-      "eval2.evidence-order"
-    ],
-    "composed-outcomes": [
-      "eval2.multi-effect-partial",
-      "eval2.partial-goal-criteria"
-    ],
-    "revision-and-invalidation": [
-      "eval2.source-change-after-read"
-    ],
-    "state-and-provenance": [
-      "eval2.state-snapshot-truncation"
-    ],
-    "effect-identity": [
-      "eval2.effect-identity"
-    ]
+    "cancellation-and-ordering": ["eval2.cancel-before-commit", "eval2.cancel-after-commit", "eval2.late-result"],
+    "concurrency-and-coverage": ["eval2.parallel-independent", "eval2.parallel-one-failed"],
+    "recovery-and-budget": ["eval2.recovery-budget", "eval2.recovery-restart", "eval2.budget-reservation"],
+    "queued-dispatch": ["eval2.concurrent-cancel-slot"],
+    "terminal-outcome-classification": ["eval2.uncertain-vs-failed"],
+    "accepted-state-transition": ["eval2.state-transition"],
+    "observation-provenance": ["eval2.provenance-source"],
+    "payload-validation": ["eval2.result-validation"],
+    "coverage-and-denominators": ["eval2.evidence-omission"],
+    "evidence-strength": ["eval2.contradictory-claim"],
+    "authority-and-outcome": ["eval2.authority-scope", "eval2.approval-binding-revision"],
+    "ordering-and-races": ["eval2.evidence-order"],
+    "composed-outcomes": ["eval2.multi-effect-partial", "eval2.partial-goal-criteria"],
+    "revision-and-invalidation": ["eval2.source-change-after-read"],
+    "state-and-provenance": ["eval2.state-snapshot-truncation"],
+    "effect-identity": ["eval2.effect-identity"]
   },
   "semantic_overlap_with_v1": [
     {

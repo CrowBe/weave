@@ -17,7 +17,9 @@ test('compaction triggers at 80%, retains last 5% exactly and caps summary at 10
 });
 test('below threshold leaves original context and never summarizes', async () => {
   const input = tokens.slice(0, 79);
-  const result = await compactContext(input, 100, async () => { throw new Error('unexpected'); });
+  const result = await compactContext(input, 100, async () => {
+    throw new Error('unexpected');
+  });
   assert.equal(result.status, 'unchanged');
   assert.deepEqual(result.tokens, input);
 });
@@ -28,5 +30,8 @@ test('without summarizer reports pending work and preserves original tokens', as
   assert.deepEqual(result.tail, tokens.slice(-5));
 });
 test('oversized summary fails without publishing replacement context', async () => {
-  await assert.rejects(compactContext(tokens, 100, async () => Array(11).fill('x')), /summary exceeds/);
+  await assert.rejects(
+    compactContext(tokens, 100, async () => Array(11).fill('x')),
+    /summary exceeds/,
+  );
 });

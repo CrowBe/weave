@@ -3,12 +3,7 @@
  * to argv. This module does not spawn: `spawn` is the grant-enforced port
  * supplied by the composition root (`createGrantedCliSpawn`).
  */
-import type {
-  GenerationAdapter,
-  GenerationCall,
-  GenerationProviderResult,
-  ProviderFailure,
-} from '../types.js';
+import type { GenerationAdapter, GenerationCall, GenerationProviderResult, ProviderFailure } from '../types.js';
 
 export const CODEX_EXEC_ADAPTER = 'codex-exec';
 export const CLAUDE_PRINT_ADAPTER = 'claude-print';

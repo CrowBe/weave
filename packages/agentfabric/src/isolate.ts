@@ -126,10 +126,14 @@ export class IsolateRunner {
 
   private spawnWorker(message: Serializable): Promise<unknown> {
     return new Promise((resolve, reject) => {
-      const child = spawn(process.execPath, ['--permission', `--allow-fs-read=${WORKER}`, '--max-old-space-size=32', WORKER], {
-        stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
-        env: {},
-      });
+      const child = spawn(
+        process.execPath,
+        ['--permission', `--allow-fs-read=${WORKER}`, '--max-old-space-size=32', WORKER],
+        {
+          stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+          env: {},
+        },
+      );
       let settled = false;
       const finish = (error: Error | null, value?: unknown): void => {
         if (settled) {

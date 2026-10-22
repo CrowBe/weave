@@ -61,9 +61,7 @@ function printPermutation(kind: string, records: readonly ProbeRecord[]): void {
   if (views.length === 0) return;
   const report = scorePermutation(views);
   if (report.orderings_seen < 2) {
-    console.log(
-      `  order           1 ordering only — stability here is repeat-stability, not order-stability`,
-    );
+    console.log(`  order           1 ordering only — stability here is repeat-stability, not order-stability`);
     return;
   }
   console.log(
@@ -91,9 +89,7 @@ function printReport(report: ShapeReport, records: readonly ProbeRecord[]): void
   const f = report.floors;
   console.log(`\n── ${report.kind} ${'─'.repeat(Math.max(0, 58 - report.kind.length))}`);
   console.log(`  accepted        ${report.accepted}/${report.attempted}`);
-  console.log(
-    `  accuracy        ${pct(report.accuracy)}  ± ${(report.standard_error * 100).toFixed(1)} (1 s.e.)`,
-  );
+  console.log(`  accuracy        ${pct(report.accuracy)}  ± ${(report.standard_error * 100).toFixed(1)} (1 s.e.)`);
   console.log(
     `  floors          always-first ${pct(f.always_first)}   uniform ${pct(f.uniform)}   best-constant ${pct(
       f.majority_operation,
@@ -120,9 +116,7 @@ function printReport(report: ShapeReport, records: readonly ProbeRecord[]): void
   const l = report.latency_ms;
   console.log(`  latency (ms)    median ${l.median}   p90 ${l.p90}   p95 ${l.p95}   max ${l.max}`);
   console.log(`  answered by     ${JSON.stringify(report.answered_by)}`);
-  console.log(
-    `  routing         ${report.escalated} request(s) took more than one attempt, ${report.waits} wait(s)`,
-  );
+  console.log(`  routing         ${report.escalated} request(s) took more than one attempt, ${report.waits} wait(s)`);
   if (Object.keys(report.failures).length > 0) console.log(`  failures        ${JSON.stringify(report.failures)}`);
   console.log(`  spent           ${report.spent_micros.toFixed(1)} micros (accounting, not a bill)`);
   console.log('  per source');
@@ -135,14 +129,16 @@ function printReport(report: ShapeReport, records: readonly ProbeRecord[]): void
   }
 }
 
-export async function main(deps: {
-  readonly argv?: readonly string[];
-  readonly env?: NodeJS.ProcessEnv;
-  readonly clock?: Clock;
-  readonly gateway?: InferenceGateway;
-  readonly corpus?: readonly DecisionCase[];
-  readonly signal?: AbortSignal;
-} = {}): Promise<number> {
+export async function main(
+  deps: {
+    readonly argv?: readonly string[];
+    readonly env?: NodeJS.ProcessEnv;
+    readonly clock?: Clock;
+    readonly gateway?: InferenceGateway;
+    readonly corpus?: readonly DecisionCase[];
+    readonly signal?: AbortSignal;
+  } = {},
+): Promise<number> {
   const argv = deps.argv ?? process.argv;
   const env = deps.env ?? process.env;
   const clock: Clock = deps.clock ?? { now: () => Date.now() };
@@ -157,7 +153,9 @@ export async function main(deps: {
   const from = flag('from');
   const kinds = (flag('kinds')?.split(',') ?? EVALUATION_KINDS) as EvaluationKind[];
   const only = flag('cases')?.split(',');
-  const corpus: readonly DecisionCase[] = (deps.corpus ?? CORPUS).filter(c => only === undefined || only.includes(c.id));
+  const corpus: readonly DecisionCase[] = (deps.corpus ?? CORPUS).filter(
+    (c) => only === undefined || only.includes(c.id),
+  );
 
   let records: ProbeRecord[];
 
@@ -184,7 +182,8 @@ export async function main(deps: {
     };
     if (!local) console.log(describeRoutes(credentials, options));
     const kevBaseURL = readKevBaseURL(env);
-    const gateway = deps.gateway ?? (local ? createKevGateway(clock, kevBaseURL) : createJevGateway(credentials, clock, options));
+    const gateway =
+      deps.gateway ?? (local ? createKevGateway(clock, kevBaseURL) : createJevGateway(credentials, clock, options));
     console.log(
       local
         ? `model: local Kev 4B (single route, no fallback)\nservice: ${await describeKevService(kevBaseURL)}`
@@ -203,18 +202,37 @@ export async function main(deps: {
     console.log(
       `plan: ${corpus.length} cases × ${kinds.length} shape(s) × ${repeats} repeat(s), ` +
         `${permute} ordering(s) requested → ${total} requests` +
-        (reference ? '; pinned TypeSafe direct, no fallback' : options.preferFree ? '; preferring the free route (will wait on throttle)' : ''),
+        (reference
+          ? '; pinned TypeSafe direct, no fallback'
+          : options.preferFree
+            ? '; preferring the free route (will wait on throttle)'
+            : ''),
     );
 
     const runId = reference ? randomUUID() : undefined;
-    const output = flag('output') ?? (reference ? `.local/jev/reference-results-${runId}.json` : '.local/jev/results.json');
+    const output =
+      flag('output') ?? (reference ? `.local/jev/reference-results-${runId}.json` : '.local/jev/results.json');
     if (reference) {
       const jobs: (() => Promise<ProbeRecord>)[] = [];
-      for (let repeat = 0; repeat < repeats; repeat++) for (const kind of kinds) {
-        for (const { decision, orders } of plan) for (let o = 0; o < orders.length; o++) {
-          jobs.push(() => runCase(gateway, clock, credentials, applyOrdering(decision, orders[o]!), kind, repeat, options, o, deps.signal));
+      for (let repeat = 0; repeat < repeats; repeat++)
+        for (const kind of kinds) {
+          for (const { decision, orders } of plan)
+            for (let o = 0; o < orders.length; o++) {
+              jobs.push(() =>
+                runCase(
+                  gateway,
+                  clock,
+                  credentials,
+                  applyOrdering(decision, orders[o]!),
+                  kind,
+                  repeat,
+                  options,
+                  o,
+                  deps.signal,
+                ),
+              );
+            }
         }
-      }
       const result = await runReference({ clock, corpus, output, runId, jobs, signal: deps.signal });
       records = [...result.records];
       exitCode = result.header.pin_mismatch || result.header.status !== 'completed' ? 1 : 0;
@@ -247,9 +265,7 @@ export async function main(deps: {
     if (!records.some((r) => r.kind === kind)) continue;
     printReport(scoreShape(kind, records, reference ? corpus : CORPUS), records);
   }
-  console.log(
-    '\nLegend: · correct, ✗ wrong, ! not accepted. Accuracy means nothing without its floor;',
-  );
+  console.log('\nLegend: · correct, ✗ wrong, ! not accepted. Accuracy means nothing without its floor;');
   console.log('the floors are printed above every accuracy for that reason.');
   return exitCode;
 }
@@ -261,10 +277,13 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.a
     process.on('SIGINT', cancel);
     process.on('SIGTERM', cancel);
   }
-  try { process.exitCode = await main({ signal: controller.signal }); }
-  catch (error) {
+  try {
+    process.exitCode = await main({ signal: controller.signal });
+  } catch (error) {
     console.error(`Jev probe failed: ${formatProbeError(error)}`);
     process.exitCode = 1;
+  } finally {
+    process.off('SIGINT', cancel);
+    process.off('SIGTERM', cancel);
   }
-  finally { process.off('SIGINT', cancel); process.off('SIGTERM', cancel); }
 }

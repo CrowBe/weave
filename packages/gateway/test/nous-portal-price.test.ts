@@ -15,8 +15,15 @@ import {
 } from '@weave/gateway/nous-portal';
 import type { GenerationCall, GenerationProviderResult, ProviderFailure } from '@weave/gateway';
 import {
-  CHAT_URL, MODELS_URL, LIVE_CATALOGUE_ENTRIES, catalogueWith, catalogueWithout, completionBody,
-  deferred, json, nousEndpoint,
+  CHAT_URL,
+  MODELS_URL,
+  LIVE_CATALOGUE_ENTRIES,
+  catalogueWith,
+  catalogueWithout,
+  completionBody,
+  deferred,
+  json,
+  nousEndpoint,
 } from './nous-portal-fixtures.js';
 
 const KEY = 'sk-test-SENTINEL-nous-portal-credential';
@@ -48,10 +55,19 @@ describe('nous-portal request shape and credential', () => {
     const endpoint = nousEndpoint({ chat: () => json(completionBody('ok')) });
     const result = await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL);
     assert.deepEqual(result, {
-      status: 'completed', text: 'ok', usage: { input_tokens: 12, output_tokens: 1 },
-      finish_reason: 'stop', provider_response_id: 'gen-1',
+      status: 'completed',
+      text: 'ok',
+      usage: { input_tokens: 12, output_tokens: 1 },
+      finish_reason: 'stop',
+      provider_response_id: 'gen-1',
     });
-    assert.deepEqual(endpoint.sent.map(s => [s.method, s.url]), [['GET', MODELS_URL], ['POST', CHAT_URL]]);
+    assert.deepEqual(
+      endpoint.sent.map((s) => [s.method, s.url]),
+      [
+        ['GET', MODELS_URL],
+        ['POST', CHAT_URL],
+      ],
+    );
     for (const sent of endpoint.sent) {
       assert.equal(sent.headers.get('authorization'), `Bearer ${KEY}`);
       assert.ok(!sent.url.includes(KEY));
@@ -65,7 +81,14 @@ describe('nous-portal request shape and credential', () => {
       { role: 'system', content: CALL.instructions },
       { role: 'user', content: CALL.prompt },
     ]);
-    for (const key of ['reasoning', 'reasoning_effort', 'include_reasoning', 'stream', 'stream_options', 'temperature']) {
+    for (const key of [
+      'reasoning',
+      'reasoning_effort',
+      'include_reasoning',
+      'stream',
+      'stream_options',
+      'temperature',
+    ]) {
       assert.ok(!(key in body), `${key} must not be sent`);
     }
   });
@@ -79,8 +102,11 @@ describe('nous-portal request shape and credential', () => {
       body = JSON.parse(String(init?.body));
       return json(completionBody());
     };
-    const result = await nousPortalAdapter({ apiKey: KEY, fetch, baseURL: 'http://mock.invalid/v1/' })
-      .execute({ ...CALL, instructions: '  ', settings: { max_output_tokens: 64, temperature: 0.2 } });
+    const result = await nousPortalAdapter({ apiKey: KEY, fetch, baseURL: 'http://mock.invalid/v1/' }).execute({
+      ...CALL,
+      instructions: '  ',
+      settings: { max_output_tokens: 64, temperature: 0.2 },
+    });
     assert.equal(result.status, 'completed');
     assert.deepEqual(urls, ['http://mock.invalid/v1/models', 'http://mock.invalid/v1/chat/completions']);
     assert.equal(body['temperature'], 0.2);
@@ -89,21 +115,32 @@ describe('nous-portal request shape and credential', () => {
 
   it('rejects missing, blank and header-breaking credentials at construction without disclosing them', () => {
     for (const apiKey of ['', '   ', undefined, `${KEY}\r\nx: y`, `${KEY}\n`, `${KEY}\r`]) {
-      assert.throws(() => nousPortalAdapter({ apiKey: apiKey as string }), (error: unknown) => {
-        assert.ok(error instanceof Error);
-        assert.match(error.message, /nousPortalAdapter requires an apiKey/);
-        assert.ok(!error.message.includes(KEY));
-        return true;
-      });
+      assert.throws(
+        () => nousPortalAdapter({ apiKey: apiKey as string }),
+        (error: unknown) => {
+          assert.ok(error instanceof Error);
+          assert.match(error.message, /nousPortalAdapter requires an apiKey/);
+          assert.ok(!error.message.includes(KEY));
+          return true;
+        },
+      );
     }
   });
 
   it('refuses content carrying its own credential before any request', async () => {
     for (const field of ['prompt', 'instructions'] as const) {
       const endpoint = nousEndpoint();
-      const failure = failureOf(await nousPortalAdapter({ apiKey: ` ${KEY} `, fetch: endpoint.fetch })
-        .execute({ ...CALL, [field]: `echo ${KEY}` }));
-      assert.deepEqual(failure, { code: 'invalid_request', message: 'nous-portal: request content contains the adapter credential', retryable: false });
+      const failure = failureOf(
+        await nousPortalAdapter({ apiKey: ` ${KEY} `, fetch: endpoint.fetch }).execute({
+          ...CALL,
+          [field]: `echo ${KEY}`,
+        }),
+      );
+      assert.deepEqual(failure, {
+        code: 'invalid_request',
+        message: 'nous-portal: request content contains the adapter credential',
+        retryable: false,
+      });
       assert.equal(endpoint.sent.length, 0);
     }
   });
@@ -122,20 +159,39 @@ describe('nous-portal free-model allowlist', () => {
       assert.equal(isNousPortalFreeModel(id), true);
       assert.equal(isNousPortalFreeModel(id.replace(/:free$/, '')), false, `${id} paid twin`);
     }
-    for (const id of ['', 'upstage/solar-mini4:FREE', ' upstage/solar-mini4:free', 'upstage/solar-pro4:free', 'meituan/longcat-2.5-preview:free', 'reflection/beam-1.0-501b-a23b:free', 'stealth/space-bunny-alpha', 'toString', '__proto__', 7, null]) {
+    for (const id of [
+      '',
+      'upstage/solar-mini4:FREE',
+      ' upstage/solar-mini4:free',
+      'upstage/solar-pro4:free',
+      'meituan/longcat-2.5-preview:free',
+      'reflection/beam-1.0-501b-a23b:free',
+      'stealth/space-bunny-alpha',
+      'toString',
+      '__proto__',
+      7,
+      null,
+    ]) {
       assert.equal(isNousPortalFreeModel(id), false, String(id));
     }
   });
 
   it('refuses every paid twin and any non-allowlisted ID with no request sent', async () => {
     const models = [
-      ...Object.values(NOUS_PORTAL_FREE_MODELS).map(id => id.replace(/:free$/, '')),
-      'z-ai/glm-5.3-flash', 'inclusionai/ling-3.0-flash-fin:free', 'stealth/space-bunny-alpha', 'toString',
+      ...Object.values(NOUS_PORTAL_FREE_MODELS).map((id) => id.replace(/:free$/, '')),
+      'z-ai/glm-5.3-flash',
+      'inclusionai/ling-3.0-flash-fin:free',
+      'stealth/space-bunny-alpha',
+      'toString',
     ];
     for (const model of models) {
       const endpoint = nousEndpoint();
       const result = await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute({ ...CALL, model });
-      assert.deepEqual(failureOf(result), { code: 'invalid_request', message: NOT_ALLOWLISTED, retryable: false }, model);
+      assert.deepEqual(
+        failureOf(result),
+        { code: 'invalid_request', message: NOT_ALLOWLISTED, retryable: false },
+        model,
+      );
       assert.deepEqual(result.status === 'failed' ? result.usage : undefined, { input_tokens: 0, output_tokens: 0 });
       assert.equal(endpoint.sent.length, 0, model);
     }
@@ -145,24 +201,37 @@ describe('nous-portal free-model allowlist', () => {
 describe('nous-portal mandatory-reasoning output budget', () => {
   it('names the mandatory-reasoning free models and a 1024-token minimum', () => {
     assert.equal(NOUS_PORTAL_MIN_REASONING_OUTPUT_TOKENS, 1024);
-    assert.deepEqual([...NOUS_PORTAL_REASONING_MODELS].sort(), [
-      NOUS_PORTAL_FREE_MODELS.stepFlash, NOUS_PORTAL_FREE_MODELS.stepPreview,
-    ].sort());
+    assert.deepEqual(
+      [...NOUS_PORTAL_REASONING_MODELS].sort(),
+      [NOUS_PORTAL_FREE_MODELS.stepFlash, NOUS_PORTAL_FREE_MODELS.stepPreview].sort(),
+    );
   });
 
   it('rejects an insufficient budget for a reasoning model without sending, and allows it for a non-reasoning one', async () => {
     for (const model of NOUS_PORTAL_REASONING_MODELS) {
       for (const max_output_tokens of [64, 1023, 0, 1024.5, NaN]) {
         const endpoint = nousEndpoint();
-        const failure = failureOf(await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch })
-          .execute({ ...CALL, model, settings: { max_output_tokens } }));
-        assert.deepEqual(failure, { code: 'invalid_request', retryable: false,
-          message: 'nous-portal: settings.max_output_tokens must be an integer at least 1024 for a mandatory-reasoning model' });
+        const failure = failureOf(
+          await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute({
+            ...CALL,
+            model,
+            settings: { max_output_tokens },
+          }),
+        );
+        assert.deepEqual(failure, {
+          code: 'invalid_request',
+          retryable: false,
+          message:
+            'nous-portal: settings.max_output_tokens must be an integer at least 1024 for a mandatory-reasoning model',
+        });
         assert.equal(endpoint.sent.length, 0);
       }
       const endpoint = nousEndpoint();
-      const ok = await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch })
-        .execute({ ...CALL, model, settings: { max_output_tokens: 1024 } });
+      const ok = await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute({
+        ...CALL,
+        model,
+        settings: { max_output_tokens: 1024 },
+      });
       assert.equal(ok.status, 'completed');
     }
     const endpoint = nousEndpoint();
@@ -229,9 +298,12 @@ describe('nous-portal catalogue price check', () => {
         if (price === undefined) delete (pricing as Partial<typeof pricing>)[field];
         const catalogue = catalogueWith(SOLAR, pricing);
         // Preserve numeric -0, NaN and Infinity instead of JSON normalizing them.
-        const endpoint = nousEndpoint({ catalogue: () => Object.assign(json(catalogue), {
-          json: async () => catalogue,
-        }) });
+        const endpoint = nousEndpoint({
+          catalogue: () =>
+            Object.assign(json(catalogue), {
+              json: async () => catalogue,
+            }),
+        });
         const result = await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL);
         assert.equal(endpoint.chatRequests.length, free ? 1 : 0);
         assert.equal(endpoint.catalogueRequests.length, 1);
@@ -242,14 +314,20 @@ describe('nous-portal catalogue price check', () => {
   }
 
   it('refuses mixed decimal zero and nonzero prices without chat', async () => {
-    const endpoint = nousEndpoint({ catalogue: () => json(catalogueWith(SOLAR, { prompt: '0.0', completion: '0.0000000001' })) });
+    const endpoint = nousEndpoint({
+      catalogue: () => json(catalogueWith(SOLAR, { prompt: '0.0', completion: '0.0000000001' })),
+    });
     const result = await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL);
     assert.equal(endpoint.chatRequests.length, 0);
     assert.equal(failureOf(result).message, PRICE_REFUSED);
   });
 
   it('accepts decimal zero prices in an override tier', async () => {
-    const pricing = { prompt: '0', completion: '0', overrides: [{ min_prompt_tokens: 100000, prompt: '0.0', completion: '0.0' }] };
+    const pricing = {
+      prompt: '0',
+      completion: '0',
+      overrides: [{ min_prompt_tokens: 100000, prompt: '0.0', completion: '0.0' }],
+    };
     const endpoint = nousEndpoint({ catalogue: () => json(catalogueWith(SOLAR, pricing)) });
     const result = await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL);
     assert.equal(endpoint.chatRequests.length, 1);
@@ -257,11 +335,23 @@ describe('nous-portal catalogue price check', () => {
   });
 
   it('recursively checks nested override prices', async () => {
-    for (const [price, free] of [['0e0', true], ['0.01', false], ['1e-400', false]] as const) {
-      const pricing = { prompt: '0', completion: '0', overrides: [{
-        min_prompt_tokens: 100000, prompt: '0', completion: '0',
-        original: { pricing: { prompt: price, completion: '0' } },
-      }] };
+    for (const [price, free] of [
+      ['0e0', true],
+      ['0.01', false],
+      ['1e-400', false],
+    ] as const) {
+      const pricing = {
+        prompt: '0',
+        completion: '0',
+        overrides: [
+          {
+            min_prompt_tokens: 100000,
+            prompt: '0',
+            completion: '0',
+            original: { pricing: { prompt: price, completion: '0' } },
+          },
+        ],
+      };
       const endpoint = nousEndpoint({ catalogue: () => json(catalogueWith(SOLAR, pricing)) });
       const result = await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL);
       assert.equal(endpoint.chatRequests.length, free ? 1 : 0);
@@ -273,18 +363,20 @@ describe('nous-portal catalogue price check', () => {
   it('keeps concurrent and subsequent calls refused without chat after one priced check', async () => {
     const started = deferred();
     const release = deferred();
-    const endpoint = nousEndpoint({ catalogue: async () => {
-      started.resolve();
-      await release.promise;
-      return json(catalogueWith(SOLAR, { prompt: '0.0', completion: '0.0000000001' }));
-    } });
+    const endpoint = nousEndpoint({
+      catalogue: async () => {
+        started.resolve();
+        await release.promise;
+        return json(catalogueWith(SOLAR, { prompt: '0.0', completion: '0.0000000001' }));
+      },
+    });
     const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
     const pending = [adapter.execute(CALL), adapter.execute(CALL)];
     await started.promise;
     assert.equal(endpoint.chatRequests.length, 0);
     assert.equal(endpoint.catalogueRequests.length, 1);
     release.resolve();
-    const results = [...await Promise.all(pending), await adapter.execute(CALL)];
+    const results = [...(await Promise.all(pending)), await adapter.execute(CALL)];
     assert.equal(endpoint.chatRequests.length, 0);
     assert.equal(endpoint.catalogueRequests.length, 1);
     for (const result of results) {
@@ -303,8 +395,22 @@ describe('nous-portal catalogue price check', () => {
     ['internal_reasoning', { prompt: '0', completion: '0', internal_reasoning: '0.0000001' }],
     ['numeric field', { prompt: 0, completion: 0.0000001 }],
     ['nested original', { prompt: '0', completion: '0', original: { prompt: '0.0000001', completion: '0' } }],
-    ['override tier prompt', { prompt: '0', completion: '0', overrides: [{ min_prompt_tokens: 100000, prompt: '0.00000025', completion: '0' }] }],
-    ['override tier other field', { prompt: '0', completion: '0', overrides: [{ min_prompt_tokens: 0, prompt: '0', completion: '0', input_cache_write_1h: '0.0000005' }] }],
+    [
+      'override tier prompt',
+      {
+        prompt: '0',
+        completion: '0',
+        overrides: [{ min_prompt_tokens: 100000, prompt: '0.00000025', completion: '0' }],
+      },
+    ],
+    [
+      'override tier other field',
+      {
+        prompt: '0',
+        completion: '0',
+        overrides: [{ min_prompt_tokens: 0, prompt: '0', completion: '0', input_cache_write_1h: '0.0000005' }],
+      },
+    ],
     ['negative price', { prompt: '-0.0000001', completion: '0' }],
   ];
   const unreadable: readonly [string, unknown][] = [
@@ -343,24 +449,41 @@ describe('nous-portal catalogue price check', () => {
   it('accepts allowlisted catalogue IDs with exact string or numeric zero prices', async () => {
     for (const model of Object.values(NOUS_PORTAL_FREE_MODELS)) {
       const endpoint = nousEndpoint();
-      const result = await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch })
-        .execute({ ...CALL, model, settings: { max_output_tokens: 1024 } });
+      const result = await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute({
+        ...CALL,
+        model,
+        settings: { max_output_tokens: 1024 },
+      });
       assert.equal(result.status, 'completed', model);
     }
-    const zeroes = { prompt: '0', completion: 0, input_cache_read: 0, overrides: [{ min_prompt_tokens: 100000, utc_start: 1, utc_end: 2, prompt: '0', completion: '0' }] };
+    const zeroes = {
+      prompt: '0',
+      completion: 0,
+      input_cache_read: 0,
+      overrides: [{ min_prompt_tokens: 100000, utc_start: 1, utc_end: 2, prompt: '0', completion: '0' }],
+    };
     const endpoint = nousEndpoint({ catalogue: () => json(catalogueWith(SOLAR, zeroes)) });
     assert.equal((await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL)).status, 'completed');
   });
 
   it('refuses when a duplicate catalogue entry for the same ID is priced', async () => {
-    const endpoint = nousEndpoint({ catalogue: () => json({ data: [...LIVE_CATALOGUE_ENTRIES, { id: SOLAR, pricing: { prompt: '0.1', completion: '0' } }] }) });
-    assert.equal(failureOf(await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL)).message, PRICE_REFUSED);
+    const endpoint = nousEndpoint({
+      catalogue: () =>
+        json({ data: [...LIVE_CATALOGUE_ENTRIES, { id: SOLAR, pricing: { prompt: '0.1', completion: '0' } }] }),
+    });
+    assert.equal(
+      failureOf(await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL)).message,
+      PRICE_REFUSED,
+    );
     assert.equal(endpoint.chatRequests.length, 0);
   });
 
   it('keeps a priced model refused for the adapter instance, with no further requests', async () => {
     let priced = true;
-    const endpoint = nousEndpoint({ catalogue: () => json(priced ? catalogueWith(SOLAR, { prompt: '1', completion: '1' }) : { data: LIVE_CATALOGUE_ENTRIES }) });
+    const endpoint = nousEndpoint({
+      catalogue: () =>
+        json(priced ? catalogueWith(SOLAR, { prompt: '1', completion: '1' }) : { data: LIVE_CATALOGUE_ENTRIES }),
+    });
     const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
     assert.equal(failureOf(await adapter.execute(CALL)).message, PRICE_REFUSED);
     priced = false;
@@ -372,9 +495,15 @@ describe('nous-portal catalogue price check', () => {
 
   it('treats a model missing from the catalogue as unavailable for fallback, without caching the absence', async () => {
     let listed = false;
-    const endpoint = nousEndpoint({ catalogue: () => json(listed ? { data: LIVE_CATALOGUE_ENTRIES } : catalogueWithout(SOLAR)) });
+    const endpoint = nousEndpoint({
+      catalogue: () => json(listed ? { data: LIVE_CATALOGUE_ENTRIES } : catalogueWithout(SOLAR)),
+    });
     const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
-    assert.deepEqual(failureOf(await adapter.execute(CALL)), { code: 'unavailable', message: NOT_LISTED, retryable: true });
+    assert.deepEqual(failureOf(await adapter.execute(CALL)), {
+      code: 'unavailable',
+      message: NOT_LISTED,
+      retryable: true,
+    });
     assert.equal(endpoint.chatRequests.length, 0);
     listed = true;
     assert.equal((await adapter.execute(CALL)).status, 'completed');
@@ -382,7 +511,12 @@ describe('nous-portal catalogue price check', () => {
   });
 
   const checkFailures: readonly [string, (sent: unknown) => Response | Promise<Response>][] = [
-    ['network error', async () => { throw new TypeError(`fetch failed ${KEY}`); }],
+    [
+      'network error',
+      async () => {
+        throw new TypeError(`fetch failed ${KEY}`);
+      },
+    ],
     ['500', () => json({ error: KEY }, 500)],
     ['non-JSON body', () => new Response(`<html>${KEY}</html>`, { status: 200 })],
     ['body without a model list', () => json({ models: LIVE_CATALOGUE_ENTRIES })],
@@ -391,9 +525,15 @@ describe('nous-portal catalogue price check', () => {
   for (const [label, catalogue] of checkFailures) {
     it(`fails closed and retryable with no chat request when the catalogue check meets ${label}, and does not cache it`, async () => {
       let broken = true;
-      const endpoint = nousEndpoint({ catalogue: (sent) => broken ? catalogue(sent) : json({ data: LIVE_CATALOGUE_ENTRIES }) });
+      const endpoint = nousEndpoint({
+        catalogue: (sent) => (broken ? catalogue(sent) : json({ data: LIVE_CATALOGUE_ENTRIES })),
+      });
       const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
-      assert.deepEqual(failureOf(await adapter.execute(CALL)), { code: 'unavailable', message: CHECK_FAILED, retryable: true });
+      assert.deepEqual(failureOf(await adapter.execute(CALL)), {
+        code: 'unavailable',
+        message: CHECK_FAILED,
+        retryable: true,
+      });
       assert.equal(endpoint.chatRequests.length, 0);
       broken = false;
       assert.equal((await adapter.execute(CALL)).status, 'completed');
@@ -402,8 +542,14 @@ describe('nous-portal catalogue price check', () => {
   }
 
   it('maps a refused catalogue credential to unauthorized and a throttled catalogue to rate_limited', async () => {
-    for (const [status, code, retryable] of [[401, 'unauthorized', false], [403, 'unauthorized', false], [429, 'rate_limited', true]] as const) {
-      const endpoint = nousEndpoint({ catalogue: () => json({ error: KEY }, status, { 'x-ratelimit-reset-requests': '12.5' }) });
+    for (const [status, code, retryable] of [
+      [401, 'unauthorized', false],
+      [403, 'unauthorized', false],
+      [429, 'rate_limited', true],
+    ] as const) {
+      const endpoint = nousEndpoint({
+        catalogue: () => json({ error: KEY }, status, { 'x-ratelimit-reset-requests': '12.5' }),
+      });
       const failure = failureOf(await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL));
       assert.equal(failure.code, code);
       assert.equal(failure.retryable, retryable);
@@ -431,13 +577,22 @@ describe('nous-portal catalogue price check', () => {
       let paid = false;
       let chatStatus = 200;
       const endpoint = nousEndpoint({
-        catalogue: () => json(paid ? catalogueWith(SOLAR, { prompt: '0.00000005', completion: '0.0000002' }) : { data: LIVE_CATALOGUE_ENTRIES }),
-        chat: () => chatStatus === 200 ? json(completionBody()) : json(body, chatStatus),
+        catalogue: () =>
+          json(
+            paid
+              ? catalogueWith(SOLAR, { prompt: '0.00000005', completion: '0.0000002' })
+              : { data: LIVE_CATALOGUE_ENTRIES },
+          ),
+        chat: () => (chatStatus === 200 ? json(completionBody()) : json(body, chatStatus)),
       });
       const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
       assert.equal((await adapter.execute(CALL)).status, 'completed');
       chatStatus = status;
-      assert.deepEqual(failureOf(await adapter.execute(CALL)), { code: 'unavailable', message: NO_LONGER_FREE, retryable: true });
+      assert.deepEqual(failureOf(await adapter.execute(CALL)), {
+        code: 'unavailable',
+        message: NO_LONGER_FREE,
+        retryable: true,
+      });
       paid = true;
       chatStatus = 200;
       assert.equal(failureOf(await adapter.execute(CALL)).message, PRICE_REFUSED);
@@ -449,11 +604,25 @@ describe('nous-portal catalogue price check', () => {
 });
 
 describe('nous-portal response cost', () => {
-  for (const [label, cost] of [['positive', 0.00001], ['string', '0'], ['null', null], ['negative', -1], ['object', { total: 0 }]] as const) {
+  for (const [label, cost] of [
+    ['positive', 0.00001],
+    ['string', '0'],
+    ['null', null],
+    ['negative', -1],
+    ['object', { total: 0 }],
+  ] as const) {
     it(`fails a ${label} usage.cost, keeps the usage, and refuses the model from then on`, async () => {
-      const endpoint = nousEndpoint({ chat: (body) => json(completionBody('ok', body['model'] === SOLAR
-        ? { prompt_tokens: 12, completion_tokens: 1, total_tokens: 13, cost }
-        : { prompt_tokens: 12, completion_tokens: 1, total_tokens: 13, cost: 0 })) });
+      const endpoint = nousEndpoint({
+        chat: (body) =>
+          json(
+            completionBody(
+              'ok',
+              body['model'] === SOLAR
+                ? { prompt_tokens: 12, completion_tokens: 1, total_tokens: 13, cost }
+                : { prompt_tokens: 12, completion_tokens: 1, total_tokens: 13, cost: 0 },
+            ),
+          ),
+      });
       const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
       const result = await adapter.execute(CALL);
       assert.deepEqual(failureOf(result), { code: 'invalid_request', message: COST_REPORTED, retryable: false });
@@ -465,7 +634,10 @@ describe('nous-portal response cost', () => {
   }
 
   it('accepts a zero or absent usage.cost', async () => {
-    for (const usage of [{ prompt_tokens: 3, completion_tokens: 1, cost: 0 }, { prompt_tokens: 3, completion_tokens: 1 }]) {
+    for (const usage of [
+      { prompt_tokens: 3, completion_tokens: 1, cost: 0 },
+      { prompt_tokens: 3, completion_tokens: 1 },
+    ]) {
       const endpoint = nousEndpoint({ chat: () => json(completionBody('ok', usage)) });
       assert.equal((await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL)).status, 'completed');
     }
@@ -474,8 +646,13 @@ describe('nous-portal response cost', () => {
 
 describe('nous-portal refusals and faults', () => {
   for (const [status, code, retryable] of [
-    [401, 'unauthorized', false], [403, 'unauthorized', false], [429, 'rate_limited', true],
-    [500, 'unavailable', true], [503, 'unavailable', true], [400, 'invalid_request', false], [408, 'timeout', false],
+    [401, 'unauthorized', false],
+    [403, 'unauthorized', false],
+    [429, 'rate_limited', true],
+    [500, 'unavailable', true],
+    [503, 'unavailable', true],
+    [400, 'invalid_request', false],
+    [408, 'timeout', false],
   ] as const) {
     it(`maps HTTP ${status} to ${code} with one request and no credential disclosure`, async () => {
       const endpoint = nousEndpoint({ chat: () => json({ error: { message: `rejected ${KEY}` } }, status) });
@@ -489,7 +666,11 @@ describe('nous-portal refusals and faults', () => {
 
   for (const [label, headers, delay] of [
     ['the larger relative reset', { 'x-ratelimit-reset-requests': '2', 'x-ratelimit-reset-tokens': '45.5' }, 45_500],
-    ['the requests reset when it is later', { 'x-ratelimit-reset-requests': '59.999', 'x-ratelimit-reset-tokens': '58.399' }, 59_999],
+    [
+      'the requests reset when it is later',
+      { 'x-ratelimit-reset-requests': '59.999', 'x-ratelimit-reset-tokens': '58.399' },
+      59_999,
+    ],
     ['Retry-After over vendor headers', { 'retry-after': '3', 'x-ratelimit-reset-requests': '59.999' }, 3_000],
     ['no delay without headers', {}, undefined],
     ['no delay from an absolute date', { 'retry-after': 'Wed, 21 Oct 2026 07:28:00 GMT' }, undefined],
@@ -503,7 +684,9 @@ describe('nous-portal refusals and faults', () => {
   }
 
   it('keeps a 429 retryable with its delay even when the body mentions credit requirements', async () => {
-    const endpoint = nousEndpoint({ chat: () => json({ error: { message: `requires available credits ${KEY}` } }, 429, { 'retry-after': '7' }) });
+    const endpoint = nousEndpoint({
+      chat: () => json({ error: { message: `requires available credits ${KEY}` } }, 429, { 'retry-after': '7' }),
+    });
     const result = failureOf(await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL));
     assert.equal(result.code, 'rate_limited');
     assert.equal(result.retryable, true);
@@ -525,7 +708,13 @@ describe('nous-portal refusals and faults', () => {
   });
 
   it('keeps SDK usage on an empty completion', async () => {
-    const endpoint = nousEndpoint({ chat: () => json({ ...completionBody(''), choices: [{ index: 0, finish_reason: 'length', message: { role: 'assistant', content: '' } }] }) });
+    const endpoint = nousEndpoint({
+      chat: () =>
+        json({
+          ...completionBody(''),
+          choices: [{ index: 0, finish_reason: 'length', message: { role: 'assistant', content: '' } }],
+        }),
+    });
     const result = await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL);
     assert.equal(failureOf(result).code, 'malformed_response');
     assert.deepEqual(result.status === 'failed' ? result.usage : undefined, { input_tokens: 12, output_tokens: 1 });
@@ -534,9 +723,15 @@ describe('nous-portal refusals and faults', () => {
   it('reports a chat network fault as retryable unavailable without throwing or logging the key', async (t) => {
     const logs: unknown[][] = [];
     for (const method of ['log', 'warn', 'error', 'debug', 'info'] as const) {
-      t.mock.method(console, method, (...args: unknown[]) => { logs.push(args); });
+      t.mock.method(console, method, (...args: unknown[]) => {
+        logs.push(args);
+      });
     }
-    const endpoint = nousEndpoint({ chat: async () => { throw new TypeError(`network failed ${KEY}`); } });
+    const endpoint = nousEndpoint({
+      chat: async () => {
+        throw new TypeError(`network failed ${KEY}`);
+      },
+    });
     const failure = failureOf(await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute(CALL));
     assert.equal(failure.code, 'unavailable');
     assert.equal(failure.retryable, true);
@@ -552,16 +747,20 @@ describe('nous-portal cancellation', () => {
         it(`handles ${waiterCount} waiters aborting as a catalogue pass settles, survivor: ${keepWaiter}, after delivery: ${afterDelivery}`, async () => {
           const started = deferred();
           const parsed = deferred<unknown>();
-          const endpoint = nousEndpoint({ catalogue: () => {
-            if (endpoint.catalogueRequests.length > 1) return json({ data: LIVE_CATALOGUE_ENTRIES });
-            return Object.assign(json({}), { json: () => {
-              started.resolve();
-              return parsed.promise;
-            } });
-          } });
+          const endpoint = nousEndpoint({
+            catalogue: () => {
+              if (endpoint.catalogueRequests.length > 1) return json({ data: LIVE_CATALOGUE_ENTRIES });
+              return Object.assign(json({}), {
+                json: () => {
+                  started.resolve();
+                  return parsed.promise;
+                },
+              });
+            },
+          });
           const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
           const controllers = Array.from({ length: waiterCount }, () => new AbortController());
-          const leaving = controllers.map(controller => adapter.execute({ ...CALL, signal: controller.signal }));
+          const leaving = controllers.map((controller) => adapter.execute({ ...CALL, signal: controller.signal }));
           const staying = keepWaiter ? adapter.execute(CALL) : undefined;
           await started.promise;
           // Lookup reads the body first. Abort after it returns its verdict, before
@@ -569,10 +768,12 @@ describe('nous-portal cancellation', () => {
           const abort = () => {
             for (const controller of controllers) controller.abort();
           };
-          void parsed.promise.then(() => queueMicrotask(() => {
-            if (afterDelivery) queueMicrotask(abort);
-            else abort();
-          }));
+          void parsed.promise.then(() =>
+            queueMicrotask(() => {
+              if (afterDelivery) queueMicrotask(abort);
+              else abort();
+            }),
+          );
           parsed.resolve({ data: LIVE_CATALOGUE_ENTRIES });
           for (const result of await Promise.all(leaving)) assert.equal(failureOf(result).code, 'cancelled');
           if (staying !== undefined) assert.equal((await staying).status, 'completed');
@@ -597,18 +798,26 @@ describe('nous-portal cancellation', () => {
     assert.equal(endpoint.chatRequests.length, 2);
   });
 
-  for (const [name, code] of [['AbortError', 'cancelled'], ['TimeoutError', 'timeout']] as const) {
+  for (const [name, code] of [
+    ['AbortError', 'cancelled'],
+    ['TimeoutError', 'timeout'],
+  ] as const) {
     it(`propagates ${name} to the in-flight chat request without another request`, async () => {
       const controller = new AbortController();
       const started = deferred();
-      const endpoint = nousEndpoint({ chat: (_body, sent) => {
-        started.resolve();
-        return new Promise<Response>((_resolve, reject) => {
-          void sent;
-          controller.signal.addEventListener('abort', () => reject(controller.signal.reason), { once: true });
-        });
-      } });
-      const pending = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute({ ...CALL, signal: controller.signal });
+      const endpoint = nousEndpoint({
+        chat: (_body, sent) => {
+          started.resolve();
+          return new Promise<Response>((_resolve, reject) => {
+            void sent;
+            controller.signal.addEventListener('abort', () => reject(controller.signal.reason), { once: true });
+          });
+        },
+      });
+      const pending = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute({
+        ...CALL,
+        signal: controller.signal,
+      });
       await started.promise;
       controller.abort(new DOMException(`stop ${KEY}`, name));
       const failure = failureOf(await pending);
@@ -622,12 +831,14 @@ describe('nous-portal cancellation', () => {
       const started = deferred();
       const release = deferred<Response>();
       let first = true;
-      const endpoint = nousEndpoint({ catalogue: () => {
-        if (!first) return json({ data: LIVE_CATALOGUE_ENTRIES });
-        first = false;
-        started.resolve();
-        return release.promise;
-      } });
+      const endpoint = nousEndpoint({
+        catalogue: () => {
+          if (!first) return json({ data: LIVE_CATALOGUE_ENTRIES });
+          first = false;
+          started.resolve();
+          return release.promise;
+        },
+      });
       const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
       const pending = adapter.execute({ ...CALL, signal: controller.signal });
       await started.promise;
@@ -635,7 +846,7 @@ describe('nous-portal cancellation', () => {
       const failure = failureOf(await pending);
       assert.equal(failure.code, code);
       release.resolve(json({ data: LIVE_CATALOGUE_ENTRIES }));
-      await new Promise(resolve => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
       assert.equal(endpoint.chatRequests.length, 0);
       // An abandoned check is not a pass: the next call checks again.
       assert.equal((await adapter.execute(CALL)).status, 'completed');
@@ -645,7 +856,9 @@ describe('nous-portal cancellation', () => {
 
   it('does not send when the caller signal is already aborted', async () => {
     const endpoint = nousEndpoint();
-    const failure = failureOf(await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute({ ...CALL, signal: AbortSignal.abort() }));
+    const failure = failureOf(
+      await nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch }).execute({ ...CALL, signal: AbortSignal.abort() }),
+    );
     assert.equal(failure.code, 'cancelled');
     assert.equal(endpoint.chatRequests.length, 0);
   });
@@ -653,7 +866,12 @@ describe('nous-portal cancellation', () => {
   it('one waiter aborting a shared check does not cancel another waiter', async () => {
     const started = deferred();
     const release = deferred<Response>();
-    const endpoint = nousEndpoint({ catalogue: () => { started.resolve(); return release.promise; } });
+    const endpoint = nousEndpoint({
+      catalogue: () => {
+        started.resolve();
+        return release.promise;
+      },
+    });
     const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
     const controller = new AbortController();
     const leaving = adapter.execute({ ...CALL, signal: controller.signal });
@@ -673,29 +891,43 @@ describe('nous-portal concurrency', () => {
   it('shares one in-flight catalogue check per model; every call sends its own chat request', async () => {
     const release = deferred();
     let catalogue = 0;
-    const endpoint = nousEndpoint({ catalogue: async () => { catalogue++; await release.promise; return json({ data: LIVE_CATALOGUE_ENTRIES }); } });
+    const endpoint = nousEndpoint({
+      catalogue: async () => {
+        catalogue++;
+        await release.promise;
+        return json({ data: LIVE_CATALOGUE_ENTRIES });
+      },
+    });
     const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
-    const models = [NOUS_PORTAL_FREE_MODELS.solarMini, NOUS_PORTAL_FREE_MODELS.longcat, NOUS_PORTAL_FREE_MODELS.lagunaS];
-    const pending = Array.from({ length: 9 }, (_, i) => adapter.execute({ ...CALL, model: models[i % 3]!, prompt: `public ${i}` }));
-    await new Promise(resolve => setImmediate(resolve));
+    const models = [
+      NOUS_PORTAL_FREE_MODELS.solarMini,
+      NOUS_PORTAL_FREE_MODELS.longcat,
+      NOUS_PORTAL_FREE_MODELS.lagunaS,
+    ];
+    const pending = Array.from({ length: 9 }, (_, i) =>
+      adapter.execute({ ...CALL, model: models[i % 3]!, prompt: `public ${i}` }),
+    );
+    await new Promise((resolve) => setImmediate(resolve));
     assert.equal(endpoint.chatRequests.length, 0, 'no chat request may precede its model check');
     release.resolve();
     const results = await Promise.all(pending);
-    assert.ok(results.every(result => result.status === 'completed'));
+    assert.ok(results.every((result) => result.status === 'completed'));
     assert.equal(catalogue, 3);
     assert.equal(endpoint.chatRequests.length, 9);
-    assert.equal(new Set(endpoint.chatRequests.map(s => JSON.stringify(s.body))).size, 9);
-    for (const model of models) assert.equal(endpoint.chatRequests.filter(s => s.body!['model'] === model).length, 3);
+    assert.equal(new Set(endpoint.chatRequests.map((s) => JSON.stringify(s.body))).size, 9);
+    for (const model of models) assert.equal(endpoint.chatRequests.filter((s) => s.body!['model'] === model).length, 3);
   });
 
   it('a failed shared check fails each waiter closed and is not cached as a pass', async () => {
     const release = deferred();
     let broken = true;
-    const endpoint = nousEndpoint({ catalogue: async () => {
-      await release.promise;
-      if (broken) throw new TypeError('down');
-      return json({ data: LIVE_CATALOGUE_ENTRIES });
-    } });
+    const endpoint = nousEndpoint({
+      catalogue: async () => {
+        await release.promise;
+        if (broken) throw new TypeError('down');
+        return json({ data: LIVE_CATALOGUE_ENTRIES });
+      },
+    });
     const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
     const pending = Array.from({ length: 4 }, () => adapter.execute(CALL));
     release.resolve();
@@ -708,13 +940,18 @@ describe('nous-portal concurrency', () => {
   });
 
   it("one call's rate-limit refusal does not change another call's result or delay", async () => {
-    const endpoint = nousEndpoint({ chat: (body) => {
-      const prompt = (body['messages'] as { content: string }[]).at(-1)!.content;
-      return prompt === 'throttled' ? json({}, 429, { 'x-ratelimit-reset-requests': '30' }) : json(completionBody(prompt));
-    } });
+    const endpoint = nousEndpoint({
+      chat: (body) => {
+        const prompt = (body['messages'] as { content: string }[]).at(-1)!.content;
+        return prompt === 'throttled'
+          ? json({}, 429, { 'x-ratelimit-reset-requests': '30' })
+          : json(completionBody(prompt));
+      },
+    });
     const adapter = nousPortalAdapter({ apiKey: KEY, fetch: endpoint.fetch });
     const [throttled, other] = await Promise.all([
-      adapter.execute({ ...CALL, prompt: 'throttled' }), adapter.execute({ ...CALL, prompt: 'other' }),
+      adapter.execute({ ...CALL, prompt: 'throttled' }),
+      adapter.execute({ ...CALL, prompt: 'other' }),
     ]);
     assert.equal(failureOf(throttled).retry_after_ms, 30_000);
     assert.equal(other.status === 'completed' ? other.text : '', 'other');
@@ -722,7 +959,9 @@ describe('nous-portal concurrency', () => {
 
   it('isolates credentials across concurrent adapter instances', async () => {
     const endpoints = Array.from({ length: 4 }, () => nousEndpoint());
-    await Promise.all(endpoints.map((endpoint, i) => nousPortalAdapter({ apiKey: `${KEY}-${i}`, fetch: endpoint.fetch }).execute(CALL)));
+    await Promise.all(
+      endpoints.map((endpoint, i) => nousPortalAdapter({ apiKey: `${KEY}-${i}`, fetch: endpoint.fetch }).execute(CALL)),
+    );
     for (const [i, endpoint] of endpoints.entries()) {
       assert.equal(endpoint.sent.length, 2);
       for (const sent of endpoint.sent) assert.equal(sent.headers.get('authorization'), `Bearer ${KEY}-${i}`);

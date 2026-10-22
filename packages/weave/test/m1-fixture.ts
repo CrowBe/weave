@@ -110,7 +110,10 @@ export function m1World(
     payload_version: 1,
     payload: { resource: dest, revision: 1, content: '' },
   });
-  const goal = m1Goal(world, options.includeGamma ? { sources: [alpha, beta, gamma], authority: { read: [alpha, beta] } } : {});
+  const goal = m1Goal(
+    world,
+    options.includeGamma ? { sources: [alpha, beta, gamma], authority: { read: [alpha, beta] } } : {},
+  );
   const budget = options.recovery !== undefined ? { ...goal.budget, recovery: options.recovery } : goal.budget;
   runtime.operator.submit({
     observation_id: 'operator:goal.opened:g-report',

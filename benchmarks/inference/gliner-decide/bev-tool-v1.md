@@ -12,13 +12,13 @@ The BEV mixture should be divided by **question purpose and upstream source
 family**, rather than trained as one multi-purpose corpus. Counts below are
 question counts from the pinned local Parquet files, before filtering:
 
-| BEV question | train / test | Possible bounded purpose | Decision |
-| --- | ---: | --- | --- |
-| Tool `should_call_available_tool` (NOUL) | 444 / 109 | Is an offered tool suitable for a request? | **Pilot here**; a proxy for one part of `capability.match`, not its contract. |
-| Tool `service_tool` + `tool_selection` (Choice) | 5,040 + 2,836 / 960 + 779 | Choose an offered service/tool | Separate later slice; audit option sets, source groups and no-tool cases first. |
-| Support `support_intent` (Choice) | 1,120 / 280 | Route a support message | Separate domain specialist, not Weave capability matching. |
-| Contract `claim_status` (Choice) | 1,680 / 320 | Supported, contradicted, or absent claim | Possible evidence evaluation specialist; long contracts and source rights need review. |
-| Response `preferred_response` (Choice) | 4,567 / 691 | Pairwise response preference | Separate preference model; does not supervise Weave `result.evaluate`. |
+| BEV question                                    |              train / test | Possible bounded purpose                   | Decision                                                                               |
+| ----------------------------------------------- | ------------------------: | ------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Tool `should_call_available_tool` (NOUL)        |                 444 / 109 | Is an offered tool suitable for a request? | **Pilot here**; a proxy for one part of `capability.match`, not its contract.          |
+| Tool `service_tool` + `tool_selection` (Choice) | 5,040 + 2,836 / 960 + 779 | Choose an offered service/tool             | Separate later slice; audit option sets, source groups and no-tool cases first.        |
+| Support `support_intent` (Choice)               |               1,120 / 280 | Route a support message                    | Separate domain specialist, not Weave capability matching.                             |
+| Contract `claim_status` (Choice)                |               1,680 / 320 | Supported, contradicted, or absent claim   | Possible evidence evaluation specialist; long contracts and source rights need review. |
+| Response `preferred_response` (Choice)          |               4,567 / 691 | Pairwise response preference               | Separate preference model; does not supervise Weave `result.evaluate`.                 |
 
 The mixed BEV release has `license: unknown`, lacks row-level source IDs, and
 asserts no blanket license. Its card identifies Glaive Function Calling v2
@@ -45,11 +45,11 @@ at least 0.60; median maximum 0.583). This is a rough surface-overlap warning,
 not proof of identical task examples. Report the lower-overlap subset as a
 sensitivity check without choosing a threshold from model outcomes.
 
-| partition | rows | distinct request groups | call / skip | SHA-256 of GLiNER JSONL |
-| --- | ---: | ---: | ---: | --- |
-| train | 336 | 240 | 175 / 161 | `9eb391a2b2042ec1071ffb8881f101af954b937932921489830a1f5610e2ab5b` |
-| validation | 92 | 62 | 41 / 51 | `fbe9fa05e99dbbd184eb79c113a276d59f84a7cce617c44b47c69ce8a22de61f` |
-| test | 105 | 72 | 45 / 60 | `9f2876b789690765f31f50f672def7e6e64927d7cec1d669c8f917d45cecf089` |
+| partition  | rows | distinct request groups | call / skip | SHA-256 of GLiNER JSONL                                            |
+| ---------- | ---: | ----------------------: | ----------: | ------------------------------------------------------------------ |
+| train      |  336 |                     240 |   175 / 161 | `9eb391a2b2042ec1071ffb8881f101af954b937932921489830a1f5610e2ab5b` |
+| validation |   92 |                      62 |     41 / 51 | `fbe9fa05e99dbbd184eb79c113a276d59f84a7cce617c44b47c69ce8a22de61f` |
+| test       |  105 |                      72 |     45 / 60 | `9f2876b789690765f31f50f672def7e6e64927d7cec1d669c8f917d45cecf089` |
 
 The pinned checkpoint is marketed as 340M, but its downloaded weight metadata
 reports 486,444,053 F32 parameters; the training process reports 487,230,485
@@ -71,10 +71,10 @@ HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 .local/gliner-decide/venv/bin/python ben
 
 ## Baseline before tuning
 
-| partition | GLiNER correct | majority floor | median CPU latency | prediction mix |
-| --- | ---: | ---: | ---: | --- |
-| validation | 54/92 (58.7%) | 51/92 (55.4%) | 1,056 ms | 77 call, 15 skip |
-| test | 56/105 (53.3%) | 60/105 (57.1%) | 1,000 ms | 80 call, 25 skip |
+| partition  | GLiNER correct | majority floor | median CPU latency | prediction mix   |
+| ---------- | -------------: | -------------: | -----------------: | ---------------- |
+| validation |  54/92 (58.7%) |  51/92 (55.4%) |           1,056 ms | 77 call, 15 skip |
+| test       | 56/105 (53.3%) | 60/105 (57.1%) |           1,000 ms | 80 call, 25 skip |
 
 ## After tuning
 
@@ -83,10 +83,10 @@ Training completed 336 steps in 737.21 seconds (12.3 minutes), reached
 5,866,896 KiB peak RSS, and saved a 3 MB adapter with SHA-256
 `b5230429defa9b801b0ee11b750b1e7b204bf5195e9e9bdc731139c938dcca0d`.
 
-| partition | base → adapter correct | majority floor | paired corrections / regressions | adapter median CPU latency |
-| --- | ---: | ---: | ---: | ---: |
-| validation | **54/92 → 92/92** | 51/92 | 38 / 0 | 1,218 ms |
-| test | **56/105 → 103/105** | 60/105 | 47 / 0 | 1,109 ms |
+| partition  | base → adapter correct | majority floor | paired corrections / regressions | adapter median CPU latency |
+| ---------- | ---------------------: | -------------: | -------------------------------: | -------------------------: |
+| validation |      **54/92 → 92/92** |          51/92 |                           38 / 0 |                   1,218 ms |
+| test       |   **56/105 → 103/105** |         60/105 |                           47 / 0 |                   1,109 ms |
 
 On test, `call` recall moved **38/45 → 45/45** and `skip` recall
 **18/60 → 58/60**. Complete request groups moved **41/72 → 70/72**. The
@@ -102,11 +102,11 @@ reported score; do not re-label after seeing outcomes.
 
 Sensitivity checks using thresholds declared before the adapter's test result:
 
-| Test subset | rows | base → adapter correct |
-| --- | ---: | ---: |
-| Tool name unseen in training | 26 | 15 → 25 |
-| Maximum request token-trigram similarity to training < 0.80 | 80 | 44 → 79 |
-| Maximum request token-trigram similarity to training < 0.60 | 57 | 36 → 56 |
+| Test subset                                                 | rows | base → adapter correct |
+| ----------------------------------------------------------- | ---: | ---------------------: |
+| Tool name unseen in training                                |   26 |                15 → 25 |
+| Maximum request token-trigram similarity to training < 0.80 |   80 |                44 → 79 |
+| Maximum request token-trigram similarity to training < 0.60 |   57 |                36 → 56 |
 
 The result demonstrates that a small LoRA adapter can teach this local model
 the **narrow BEV tool-suitability task**. It does not establish performance on

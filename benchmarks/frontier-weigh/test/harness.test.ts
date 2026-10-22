@@ -49,9 +49,15 @@ describe('frontier.weigh@1 case set', () => {
     assert.equal(tune.length, 8);
     assert.equal(holdout.length, 15);
     const tuneSpecs = new Set(tune.map((c) => JSON.stringify(c.spec)));
-    assert.ok(holdout.every((c) => !tuneSpecs.has(JSON.stringify(c.spec))), 'a scenario crosses splits');
+    assert.ok(
+      holdout.every((c) => !tuneSpecs.has(JSON.stringify(c.spec))),
+      'a scenario crosses splits',
+    );
     for (const kind of ['gather', 'act', 'hold'] as const) {
-      assert.ok(holdout.some((c) => c.label.kind === kind), `holdout lacks a ${kind} case`);
+      assert.ok(
+        holdout.some((c) => c.label.kind === kind),
+        `holdout lacks a ${kind} case`,
+      );
     }
   });
 
@@ -95,7 +101,11 @@ describe('frontier.weigh@1 promotion rule', () => {
   });
 
   it('promotes only a weigher that clears every predeclared check', async () => {
-    const results = await rows([scriptedWeigher(), labelWeigher('label-oracle', false), labelWeigher('label-inverted', true)]);
+    const results = await rows([
+      scriptedWeigher(),
+      labelWeigher('label-oracle', false),
+      labelWeigher('label-inverted', true),
+    ]);
     const oracle = promotion(results, 'label-oracle');
     assert.equal(oracle.verdict, 'promote', JSON.stringify(oracle.checks));
     assert.equal(summarize(results, 'label-oracle', 'holdout').agreement, 1);
@@ -118,7 +128,16 @@ describe('frontier.weigh@1 promotion rule', () => {
       id: 'failing',
       kind: 'fixture',
       async weigh() {
-        return { status: 'failed', reason: 'unavailable', weights: [], contract: undefined, implementation: 'failing', spent: 3, attempts: 1, latency_ms: null };
+        return {
+          status: 'failed',
+          reason: 'unavailable',
+          weights: [],
+          contract: undefined,
+          implementation: 'failing',
+          spent: 3,
+          attempts: 1,
+          latency_ms: null,
+        };
       },
     };
     const results = await rows([scriptedWeigher(), failing]);
@@ -134,7 +153,9 @@ describe('frontier.weigh@1 paired report', () => {
   });
 
   it('binds the live path to the route table score unit without calling it', () => {
-    const local = ['weave.routes.json', 'weave.routes.local.json'].some((name) => existsSync(new URL(`../../../${name}`, import.meta.url)));
+    const local = ['weave.routes.json', 'weave.routes.local.json'].some((name) =>
+      existsSync(new URL(`../../../${name}`, import.meta.url)),
+    );
     if (local) {
       return; // a local route table may legitimately differ from the example
     }
@@ -158,7 +179,10 @@ describe('frontier.weigh@1 paired report', () => {
     for (const { weigher } of OFFLINE_WEIGHERS) {
       const id = weigher().id;
       for (const split of ['tune', 'holdout'] as const) {
-        assert.ok(committed.includes(summaryRow(summarize(comparison.results, id, split))), `${id} ${split} row drifted`);
+        assert.ok(
+          committed.includes(summaryRow(summarize(comparison.results, id, split))),
+          `${id} ${split} row drifted`,
+        );
       }
     }
     for (const verdict of comparison.verdicts) {

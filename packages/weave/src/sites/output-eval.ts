@@ -55,14 +55,17 @@ export function criterionKey(index: number): string {
   return `criterion_${index}`;
 }
 
-function observe(input: OutputEvalInput, fields: {
-  readonly answer: OutputEvalObservation['answer'];
-  readonly confidence: number | null;
-  readonly top_p: number | null;
-  readonly accepted: boolean;
-  readonly reason: OutputEvalReason;
-  readonly provider_request_id: string | null;
-}): OutputEvalObservation {
+function observe(
+  input: OutputEvalInput,
+  fields: {
+    readonly answer: OutputEvalObservation['answer'];
+    readonly confidence: number | null;
+    readonly top_p: number | null;
+    readonly accepted: boolean;
+    readonly reason: OutputEvalReason;
+    readonly provider_request_id: string | null;
+  },
+): OutputEvalObservation {
   return {
     schema: 'decision-site@1',
     site: OUTPUT_EVAL_SITE,
@@ -80,20 +83,31 @@ function observe(input: OutputEvalInput, fields: {
 }
 
 /** Pure threshold rule. An outage fails every criterion; it does not read another site. */
-export function transitionOutputEval(input: OutputEvalInput, recorded: RecordedOutputEval,
-  current: SiteState): OutputEvalTransition {
-  const criteria = input.criteria.map(criterion => ({ criterion_id: criterion.criterion_id, statement: criterion.statement }));
+export function transitionOutputEval(
+  input: OutputEvalInput,
+  recorded: RecordedOutputEval,
+  current: SiteState,
+): OutputEvalTransition {
+  const criteria = input.criteria.map((criterion) => ({
+    criterion_id: criterion.criterion_id,
+    statement: criterion.statement,
+  }));
   const metadata = admissionReason(OUTPUT_EVAL_SITE, input, recorded, current);
   const answered = recorded.outcome?.status === 'accepted' ? recorded.outcome : null;
   const provider_request_id = correlation(answered?.provider_response_id);
   const observations: OutputEvalObservation[] = [];
   const evals: OutputCriterionEval[] = [];
   if (criteria.length === 0) {
-    observations.push(observe(input, {
-      answer: null, confidence: null, top_p: null, accepted: false,
-      reason: metadata && metadata !== 'decision_unavailable' ? metadata : 'empty_criteria',
-      provider_request_id,
-    }));
+    observations.push(
+      observe(input, {
+        answer: null,
+        confidence: null,
+        top_p: null,
+        accepted: false,
+        reason: metadata && metadata !== 'decision_unavailable' ? metadata : 'empty_criteria',
+        provider_request_id,
+      }),
+    );
   }
   for (const [index, criterion] of criteria.entries()) {
     const key = criterionKey(index);
@@ -122,8 +136,12 @@ export function transitionOutputEval(input: OutputEvalInput, recorded: RecordedO
       accepted = true;
     }
     const observation = observe(input, {
-      answer, confidence: metadata || !safeId ? null : confidence, top_p: metadata || !safeId ? null : probability,
-      accepted, reason, provider_request_id,
+      answer,
+      confidence: metadata || !safeId ? null : confidence,
+      top_p: metadata || !safeId ? null : probability,
+      accepted,
+      reason,
+      provider_request_id,
     });
     const passed = accepted && answer === 'pass' && safeId !== null;
     observations.push(observation);
@@ -137,22 +155,43 @@ export function transitionOutputEval(input: OutputEvalInput, recorded: RecordedO
   }
   const expected = new Set(criteria.map((_, index) => criterionKey(index)));
   for (const key of Object.keys(answered?.answers ?? {})) {
-    if (!expected.has(key)) observations.push(observe(input, {
-      answer: null, confidence: null, top_p: null, accepted: false, reason: 'unknown_answer', provider_request_id,
-    }));
+    if (!expected.has(key))
+      observations.push(
+        observe(input, {
+          answer: null,
+          confidence: null,
+          top_p: null,
+          accepted: false,
+          reason: 'unknown_answer',
+          provider_request_id,
+        }),
+      );
   }
-  const failing_criterion_ids = evals.filter(item => !item.passed).map(item => item.criterion_id);
-  const status = recorded.cancelled || metadata === 'cancelled' ? 'paused' :
-    criteria.length > 0 && failing_criterion_ids.length === 0 ? 'pass' : 'fail';
+  const failing_criterion_ids = evals.filter((item) => !item.passed).map((item) => item.criterion_id);
+  const status =
+    recorded.cancelled || metadata === 'cancelled'
+      ? 'paused'
+      : criteria.length > 0 && failing_criterion_ids.length === 0
+        ? 'pass'
+        : 'fail';
   return { status, evals, observations, failing_criterion_ids };
 }
 
 /** One boolean question per criterion. `current` is read after the await. */
-export async function evaluateOutputEval(input: OutputEvalInput, port: Pick<InferenceGateway, 'evaluate'>,
-  current: () => SiteState & { readonly observed_at: number }, signal?: AbortSignal): Promise<OutputEvalTransition> {
-  const criteria = Object.freeze(input.criteria.map(criterion => Object.freeze({
-    criterion_id: criterion.criterion_id, statement: criterion.statement,
-  })));
+export async function evaluateOutputEval(
+  input: OutputEvalInput,
+  port: Pick<InferenceGateway, 'evaluate'>,
+  current: () => SiteState & { readonly observed_at: number },
+  signal?: AbortSignal,
+): Promise<OutputEvalTransition> {
+  const criteria = Object.freeze(
+    input.criteria.map((criterion) =>
+      Object.freeze({
+        criterion_id: criterion.criterion_id,
+        statement: criterion.statement,
+      }),
+    ),
+  );
   const captured: OutputEvalInput = { ...input, criteria };
   let outcome: EvaluationOutcome<'boolean'> | null = null;
   if (!signal?.aborted && criteria.length > 0) {
@@ -161,22 +200,38 @@ export async function evaluateOutputEval(input: OutputEvalInput, port: Pick<Infe
       for (const [index, criterion] of criteria.entries()) {
         questions[criterionKey(index)] = {
           type: 'boolean',
-          instructions: { question: OUTPUT_EVAL_QUESTION, criterion_id: criterion.criterion_id, statement: criterion.statement },
+          instructions: {
+            question: OUTPUT_EVAL_QUESTION,
+            criterion_id: criterion.criterion_id,
+            statement: criterion.statement,
+          },
         };
       }
-      outcome = await port.evaluate({
-        request_id: captured.request_id,
-        site: OUTPUT_EVAL_SITE,
-        role: 'working',
-        kind: 'boolean',
-        state: captured.state,
-        questions,
-        terms: { ...captured.terms, tier: 'decision' },
-      }, signal);
-    } catch { /* Exception text may contain credentials; never record it. */ }
+      outcome = await port.evaluate(
+        {
+          request_id: captured.request_id,
+          site: OUTPUT_EVAL_SITE,
+          role: 'working',
+          kind: 'boolean',
+          state: captured.state,
+          questions,
+          terms: { ...captured.terms, tier: 'decision' },
+        },
+        signal,
+      );
+    } catch {
+      /* Exception text may contain credentials; never record it. */
+    }
   }
   const now = current();
-  return transitionOutputEval(captured, {
-    outcome, state_revision: captured.state_revision, observed_at: now.observed_at, cancelled: signal?.aborted ?? false,
-  }, now);
+  return transitionOutputEval(
+    captured,
+    {
+      outcome,
+      state_revision: captured.state_revision,
+      observed_at: now.observed_at,
+      cancelled: signal?.aborted ?? false,
+    },
+    now,
+  );
 }

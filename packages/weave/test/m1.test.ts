@@ -12,13 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { createGrantAuthority } from '@weave/agentsop';
 import { AgentFabricHost, FabricStore } from '@weave/agentfabric';
 import { FailingDecisionLayer } from './fixture.js';
-import {
-  FileJournal,
-  replay,
-  recover,
-  ScriptedDecisionLayer,
-  traceCompletenessViolations,
-} from '@weave/weave';
+import { FileJournal, replay, recover, ScriptedDecisionLayer, traceCompletenessViolations } from '@weave/weave';
 import {
   actionIdFor,
   assembleReport,
@@ -168,7 +162,9 @@ describe('M1 publish under authority', () => {
       decision: 'revoked',
       authority_revision: 2,
     });
-    const restored = restoreWorld(queuedWorld, queuedWorld.host.snapshot(), queuedWorld.runtime.trace().observations, { slots: 1 });
+    const restored = restoreWorld(queuedWorld, queuedWorld.host.snapshot(), queuedWorld.runtime.trace().observations, {
+      slots: 1,
+    });
     const publish = Object.values(restored.runtime.state().actions).filter((a) => a.operation === 'report.publish');
     assert.ok(publish.every((a) => a.state !== 'running'));
     assert.equal(restored.host.publication(world.dest), null);
@@ -219,7 +215,9 @@ describe('M1 publish under authority', () => {
       decision: 'approved',
       authority_revision: 1,
     });
-    const publish = Object.values(world.runtime.state().actions).find((a) => a.operation === 'report.publish' && a.state === 'running');
+    const publish = Object.values(world.runtime.state().actions).find(
+      (a) => a.operation === 'report.publish' && a.state === 'running',
+    );
     assert.ok(publish);
     const conflict = world.host.tryWriteSource(world.alpha, 'blocked');
     assert.equal(conflict.ok, false);
@@ -278,7 +276,10 @@ describe('M1 publish under authority', () => {
     world.runtime.cancel(queuedId, 'operator cancel');
     await release(world, running[0]!.action_id);
     assert.equal(world.runtime.state().actions[queuedId]?.state, 'cancelled');
-    assert.equal(world.host.invocations.some((i) => i.action_id === queuedId), false);
+    assert.equal(
+      world.host.invocations.some((i) => i.action_id === queuedId),
+      false,
+    );
   });
 
   it('M1-T11 cancel before commit stops; late receipt after commit is kept', async () => {
@@ -365,7 +366,9 @@ describe('M1 publish under authority', () => {
     const journal = new FileJournal(join(dir, 'journal.jsonl'));
     const observations = journal.snapshot();
     assert.ok(observations.some((o) => o.payload_type === 'action.started'));
-    const started = observations.find((o) => o.payload_type === 'action.started' && (o.payload as { operation: string }).operation === 'report.publish');
+    const started = observations.find(
+      (o) => o.payload_type === 'action.started' && (o.payload as { operation: string }).operation === 'report.publish',
+    );
     assert.ok(started);
     const publishId = (started.payload as { action_id: string }).action_id;
     assert.equal(
@@ -482,12 +485,11 @@ describe('M1 publish under authority', () => {
       decision: 'approved',
       authority_revision: 1,
     });
-    const started = Object.values(world.runtime.state().actions).some((a) => a.operation === 'report.publish' && a.state === 'running');
-    assert.equal(started, false);
-    assert.equal(
-      world.host.invocations.filter((i) => i.operation === 'report.publish').length,
-      0,
+    const started = Object.values(world.runtime.state().actions).some(
+      (a) => a.operation === 'report.publish' && a.state === 'running',
     );
+    assert.equal(started, false);
+    assert.equal(world.host.invocations.filter((i) => i.operation === 'report.publish').length, 0);
 
     const resultWorld = m1World();
     await assembleReport(resultWorld);
@@ -512,7 +514,11 @@ describe('M1 publish under authority', () => {
       grantAuthority: resultWorld.authority,
     });
     recovered.reconcile();
-    assert.ok(recovered.state().publication || recovered.state().actions[publish.action_id]?.state === 'succeeded' || recovered.state().actions[publish.action_id]?.state === 'uncertain');
+    assert.ok(
+      recovered.state().publication ||
+        recovered.state().actions[publish.action_id]?.state === 'succeeded' ||
+        recovered.state().actions[publish.action_id]?.state === 'uncertain',
+    );
   });
 
   it('M1-T19 recovery denial and exhausted allowance keep uncertainty', async () => {

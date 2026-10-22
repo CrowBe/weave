@@ -6,7 +6,7 @@ This file defines Weave's ubiquitous language. Use these terms consistently in c
 
 ### Weave
 
-The composable system. Loom, Fabric, and Tapestry are its reference runtime, capability subsystem, and presentation layer; a composition may replace any of them through a bounded interface. Do not use *Weave* to mean the runtime, a model, an agent persona, or an individual capability.
+The composable system. Loom, Fabric, and Tapestry are its reference runtime, capability subsystem, and presentation layer; a composition may replace any of them through a bounded interface. Do not use _Weave_ to mean the runtime, a model, an agent persona, or an individual capability.
 
 ### Loom
 
@@ -46,7 +46,7 @@ Evidence and artifacts retained beyond a goal, including capabilities, reliabili
 
 ### Cycle
 
-One passage through observing state, weighing actions, applying policy, executing viable actions, and incorporating resulting observations. Avoid *turn* unless referring specifically to a conversational interface.
+One passage through observing state, weighing actions, applying policy, executing viable actions, and incorporating resulting observations. Avoid _turn_ unless referring specifically to a conversational interface.
 
 ### Replay
 
@@ -75,7 +75,7 @@ A typed operation Loom may execute to advance a goal. Retrieval, execution, infe
 
 ### Action frontier
 
-The currently viable set of weighted actions. It may contain several independent actions that can execute concurrently. Avoid *next action* when multiple actions may be viable.
+The currently viable set of weighted actions. It may contain several independent actions that can execute concurrently. Avoid _next action_ when multiple actions may be viable.
 
 ### Thread
 
@@ -330,7 +330,7 @@ The contract layer within Fabric, defining capability meaning, typed inputs and 
 
 ### Fabric
 
-The reference capability subsystem, namespaced Weave Fabric. It owns contracts through AgentSOP and governs construction evidence, invocation, admission, revocation, and audit. It ships with the reference Weave stack and stays independent of Loom’s goals, state, and scheduling. The package is `packages/agentfabric`. Say *Fabric* in architecture vocabulary. *AgentFabric* names that package and the external conceptual reference, not a second subsystem.
+The reference capability subsystem, namespaced Weave Fabric. It owns contracts through AgentSOP and governs construction evidence, invocation, admission, revocation, and audit. It ships with the reference Weave stack and stays independent of Loom’s goals, state, and scheduling. The package is `packages/agentfabric`. Say _Fabric_ in architecture vocabulary. _AgentFabric_ names that package and the external conceptual reference, not a second subsystem.
 
 ### Resource reference
 
@@ -424,7 +424,7 @@ The governed decision to make an evaluated change active within a specified scop
 
 ### Milestone
 
-One vertical increment of the build plan (M0, M1, …): a demonstrable goal outcome with checks across every module it touches. A milestone is a unit of delivery; it is not a *slice*, which is a query over state.
+One vertical increment of the build plan (M0, M1, …): a demonstrable goal outcome with checks across every module it touches. A milestone is a unit of delivery; it is not a _slice_, which is a query over state.
 
 ## Tracing and evaluation
 
@@ -478,7 +478,7 @@ Gauge's record of one subject on one split of a case set under one criteria set,
 
 ### Comparison
 
-Gauge's recomputed verdict on a baseline and a candidate evaluation result for the same criteria set, case set, split and mode. Every delta carries an interval; *insufficient evidence* is a valid verdict, never a tie broken by default. It is the verdict whenever a compared measure has fewer than `min_samples` samples on either side or a zero-width interval. A candidate that misses its bar is never better. A comparison is evidence an experiment may cite; it is not a promotion.
+Gauge's recomputed verdict on a baseline and a candidate evaluation result for the same criteria set, case set, split and mode. Every delta carries an interval; _insufficient evidence_ is a valid verdict, never a tie broken by default. It is the verdict whenever a compared measure has fewer than `min_samples` samples on either side or a zero-width interval. A candidate that misses its bar is never better. A comparison is evidence an experiment may cite; it is not a promotion.
 
 ### Evaluation cost
 
@@ -494,7 +494,7 @@ Gauge's versioned record (`gauge.preference@1`) of eval-derived routing evidence
 
 ### Failure attribution
 
-A claim about why one case failed: capability gap, implementation, routing or orchestration, with a deterministic signal or a recorded judgment and its confidence. *Unattributed* is a valid result. An attribution never names a holdout case.
+A claim about why one case failed: capability gap, implementation, routing or orchestration, with a deterministic signal or a recorded judgment and its confidence. _Unattributed_ is a valid result. An attribution never names a holdout case.
 
 ## Real-time TDD
 
@@ -646,61 +646,61 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 
 ## Language constraints
 
-- Say **Loom**, not *runtime* as a product name and not *LLM agent*, for the goal-directed loop. *Runtime* remains the ordinary word for that loop. Weave is the system, not the runtime.
-- Say **Fabric**, not *AgentFabric*, in architecture vocabulary. *AgentFabric* is the package name `packages/agentfabric` and the external conceptual reference.
+- Say **Loom**, not _runtime_ as a product name and not _LLM agent_, for the goal-directed loop. _Runtime_ remains the ordinary word for that loop. Weave is the system, not the runtime.
+- Say **Fabric**, not _AgentFabric_, in architecture vocabulary. _AgentFabric_ is the package name `packages/agentfabric` and the external conceptual reference.
 - Say **Tapestry** for the visual presentation layer. The package, when it exists, is `packages/tapestry`.
-- Say **observation**, not *message*, for a general state input.
-- Say **action frontier**, not *next action*, when concurrency is possible.
-- Say **capability**, not *tool*, for an operation governed by a Fabric contract.
-- Say **implementation**, not *capability*, for replaceable executable code.
-- Say **implementation**, not *resolver*, for code that satisfies a contract; *resolver context* remains the name of the interface it receives.
-- Say **resource reference**, not *path*, *URL*, or *locator*, for what a capability input names. Locators stay inside the host.
-- Say **crystallization**, not *learning*, for the admission of new executable capability.
-- Say **weight**, not *confidence*, unless the value is explicitly calibrated as confidence.
-- Say **admit**, not *save*, when a capability passes into the registry.
-- Say **opportunity notice**, not *alert* or *notification*, for an operator observation that a lifecycle fact is ready for a decision.
-- Say **state view**, not *prompt* or *context*, for what the decision layer receives.
-- Say **judgment site**, not *Jev*, for a place the runtime asks for judgment. Jev is a model type.
-- Say **routed unit**, not *model*, for what routing selects.
-- Say **prefix cache**, not *KV cache* or *cached conclusion*, for recorded reuse of a view prefix by one routed unit.
-- Say **slice assembly**, not *shared context*, for one recorded fill of slices at a revision.
+- Say **observation**, not _message_, for a general state input.
+- Say **action frontier**, not _next action_, when concurrency is possible.
+- Say **capability**, not _tool_, for an operation governed by a Fabric contract.
+- Say **implementation**, not _capability_, for replaceable executable code.
+- Say **implementation**, not _resolver_, for code that satisfies a contract; _resolver context_ remains the name of the interface it receives.
+- Say **resource reference**, not _path_, _URL_, or _locator_, for what a capability input names. Locators stay inside the host.
+- Say **crystallization**, not _learning_, for the admission of new executable capability.
+- Say **weight**, not _confidence_, unless the value is explicitly calibrated as confidence.
+- Say **admit**, not _save_, when a capability passes into the registry.
+- Say **opportunity notice**, not _alert_ or _notification_, for an operator observation that a lifecycle fact is ready for a decision.
+- Say **state view**, not _prompt_ or _context_, for what the decision layer receives.
+- Say **judgment site**, not _Jev_, for a place the runtime asks for judgment. Jev is a model type.
+- Say **routed unit**, not _model_, for what routing selects.
+- Say **prefix cache**, not _KV cache_ or _cached conclusion_, for recorded reuse of a view prefix by one routed unit.
+- Say **slice assembly**, not _shared context_, for one recorded fill of slices at a revision.
 - Say **inference role** for why an inference was requested, and **inference kind** for what was asked of the model. They are not interchangeable.
 - Name a capability for its operation, never for the inference kind behind it: `text.classify`, not `request_text_classification`.
-- Say **action candidate**, not *option*, for a validated, bound action.
-- Say **milestone**, not *slice*, for an M-numbered increment of the plan. A slice is a query over state.
-- Say **trusted ingress**, not *authenticated client*, for the in-process handle that may submit privileged observations.
-- Say **execution tier**, not *sandbox*, for where an implementation runs. A label is not containment.
+- Say **action candidate**, not _option_, for a validated, bound action.
+- Say **milestone**, not _slice_, for an M-numbered increment of the plan. A slice is a query over state.
+- Say **trusted ingress**, not _authenticated client_, for the in-process handle that may submit privileged observations.
+- Say **execution tier**, not _sandbox_, for where an implementation runs. A label is not containment.
 - Say **tier** for the routed-unit class; say **execution tier** for trusted/untrusted placement.
-- Say **held-out report**, not *test output*, for what protected evaluation returns to an implementer.
+- Say **held-out report**, not _test output_, for what protected evaluation returns to an implementer.
 - Never use **deterministic** to describe generated tests; their execution is deterministic, while their authorship and correctness require evidence.
-- Say **operator**, not *user*, for the principal that configures Weave and decides pending requests through an operator surface.
+- Say **operator**, not _user_, for the principal that configures Weave and decides pending requests through an operator surface.
 - Say **Weave** for the system. Say **Loom** for its runtime, **Fabric** for its capability subsystem, and **Tapestry** for its presentation layer. A project record belongs to Loom. A session record belongs to Tapestry.
-- Say **operator surface**, not *client* or *UI*, for a Tapestry presentation over runtime state.
+- Say **operator surface**, not _client_ or _UI_, for a Tapestry presentation over runtime state.
 - Say **project** for the durable container. A repository may be attached to a project. The npm workspace is the package layout, not a project.
-- Say **workspace**, not *dashboard* or *mode*, for the adaptive operator surface. There is no chat, code, research, or agent mode.
-- Say **shell**, not *frame* or *chrome*, for the fixed structure of a workspace. *Frame* remains the name of framing: `profile.frame@1`, the `goal.frame` site, and the `framing` role.
-- Say **region**, not *slot* or *coordinate*, for a semantic place in the shell. An execution slot is scheduler capacity.
+- Say **workspace**, not _dashboard_ or _mode_, for the adaptive operator surface. There is no chat, code, research, or agent mode.
+- Say **shell**, not _frame_ or _chrome_, for the fixed structure of a workspace. _Frame_ remains the name of framing: `profile.frame@1`, the `goal.frame` site, and the `framing` role.
+- Say **region**, not _slot_ or _coordinate_, for a semantic place in the shell. An execution slot is scheduler capacity.
 - Say **placement** for an operator's session-scoped assignment of a component to a region, and **pin** when that assignment is a hard constraint.
-- Say **cut-through**, not *modal*, for the region where a pending authority request stays visible.
-- Say **arrangement**, not *composition* or *layout*, for an admitted assignment of components to adaptive regions. A composition is a capability assembled from capabilities.
-- Say **component**, not *widget* or *capability*, for trusted presentation code in the component vocabulary.
-- Say **conversational surface**, not *chat*, for the component that presents and accepts operator input.
-- Say **artifact**, not *file*, for what the editor opens. A locator stays in the host.
-- Say **editor**, not *IDE* or *mode*, for the workspace component that opens an artifact. The editor is not a capability.
+- Say **cut-through**, not _modal_, for the region where a pending authority request stays visible.
+- Say **arrangement**, not _composition_ or _layout_, for an admitted assignment of components to adaptive regions. A composition is a capability assembled from capabilities.
+- Say **component**, not _widget_ or _capability_, for trusted presentation code in the component vocabulary.
+- Say **conversational surface**, not _chat_, for the component that presents and accepts operator input.
+- Say **artifact**, not _file_, for what the editor opens. A locator stays in the host.
+- Say **editor**, not _IDE_ or _mode_, for the workspace component that opens an artifact. The editor is not a capability.
 - Say **view contract**, **view handler**, and **runner** for the semantic presentation requirement, its binding, and its implementation. A view handler is not a capability.
 - Say **session** for a workspace's attachment to a project on a running runtime. A session is not a transcript, a compaction unit, a scheduler lane, or a restart boundary.
-- Say **session record**, not *journal* or *log*, for the workspace's ephemeral record. The journal is the observation log.
-- Say **workspace view**, not *screen* or *prompt*, for the state view a workspace renders.
-- Say **indicator**, not *notice* or *alert*, for a shell status mark. An opportunity notice is an operator observation.
-- Say **`workspace.arrange`**, not *Jev*, for the judgment site that proposes an arrangement. Jev is a model type that may answer `choice`.
+- Say **session record**, not _journal_ or _log_, for the workspace's ephemeral record. The journal is the observation log.
+- Say **workspace view**, not _screen_ or _prompt_, for the state view a workspace renders.
+- Say **indicator**, not _notice_ or _alert_, for a shell status mark. An opportunity notice is an operator observation.
+- Say **`workspace.arrange`**, not _Jev_, for the judgment site that proposes an arrangement. Jev is a model type that may answer `choice`.
 - Say **acceptance line** for a proposal and **acceptance fact** for a line code has admitted. On the System One wire a boolean question is a Noul. The request kind remains `boolean`.
 - Say **criteria gate** for `task.criteria` and **task validation** for `task.validate`. Jev may answer either site. Neither site is the decision layer, and neither is `frontier.weigh`.
 - Say **confidence** for the provider statistic published beside a typed evaluation answer. It is not a weight and not a quality score.
-- Say **Weft trace**, not *trace*, when the observation log or Loom's cycle trace could be meant. Neither is a Weft trace.
+- Say **Weft trace**, not _trace_, when the observation log or Loom's cycle trace could be meant. Neither is a Weft trace.
 - Say **disclosure class** for what a Weft field can reveal and **content class** for how sensitive content is. They are not interchangeable.
-- Say **experiment**, not *swatch*, for a comparison of a baseline with a candidate.
-- Say **constraint** in a criteria set or **test corpus** case, not *pattern*, for an expected behaviour.
-- Say **evaluation result**, not *score*, for what Gauge records about a subject. A measure is one value within it.
+- Say **experiment**, not _swatch_, for a comparison of a baseline with a candidate.
+- Say **constraint** in a criteria set or **test corpus** case, not _pattern_, for an expected behaviour.
+- Say **evaluation result**, not _score_, for what Gauge records about a subject. A measure is one value within it.
 
 ### Tune split
 

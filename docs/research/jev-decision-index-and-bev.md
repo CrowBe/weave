@@ -16,16 +16,16 @@ entrant latency is local GPU time on one RTX PRO 6000 and is not comparable to
 this machine's CPU. Treat model scores as discovery evidence, then test the
 particular Weave judgment purpose on a protected local set.
 
-| Candidate | Index / Jev 51.7 | Size shown | Reason to inspect |
-| --- | ---: | ---: | --- |
-| AutoJev-27B | 50.9 | 28B | Strongest open overall; full fine-tune, impractical for routine local use here. |
-| Winnow-12B | 45.0 | 12B | Best smaller-than-27B headline, but Q8 format and RAM/runtime need checking. |
-| Decision 1.0 Lux | 39.0 | 9.7B | Trained head/adapter with 99.6% answer coverage. |
-| Hopper | 37.0 | 4.7B | 100% answer coverage; good small-model follow-up. |
-| Decider 4B | 36.6 | 4.7B | Same family as our 2B run; distinct checkpoint, worth paired local testing. |
-| Kev 4B | 31.3 | 4.7B | Already measured locally; helps anchor site versus Weave-specific results. |
-| Decider 2B | 26.1 | 2.3B | Site agrees that size trades away broad decision quality. |
-| GLiNER2.5-Decide | 10.0 | 486M | Likely purpose-specific after tuning; not a broad Jev substitute. |
+| Candidate        | Index / Jev 51.7 | Size shown | Reason to inspect                                                               |
+| ---------------- | ---------------: | ---------: | ------------------------------------------------------------------------------- |
+| AutoJev-27B      |             50.9 |        28B | Strongest open overall; full fine-tune, impractical for routine local use here. |
+| Winnow-12B       |             45.0 |        12B | Best smaller-than-27B headline, but Q8 format and RAM/runtime need checking.    |
+| Decision 1.0 Lux |             39.0 |       9.7B | Trained head/adapter with 99.6% answer coverage.                                |
+| Hopper           |             37.0 |       4.7B | 100% answer coverage; good small-model follow-up.                               |
+| Decider 4B       |             36.6 |       4.7B | Same family as our 2B run; distinct checkpoint, worth paired local testing.     |
+| Kev 4B           |             31.3 |       4.7B | Already measured locally; helps anchor site versus Weave-specific results.      |
+| Decider 2B       |             26.1 |       2.3B | Site agrees that size trades away broad decision quality.                       |
+| GLiNER2.5-Decide |             10.0 |       486M | Likely purpose-specific after tuning; not a broad Jev substitute.               |
 
 The index's reported `Decider 2B` is a Qwen3.5-2B-base FP8 checkpoint, while
 our paired local test used `Mapika/decider-2b` v11 at 1.9B. Do not equate those

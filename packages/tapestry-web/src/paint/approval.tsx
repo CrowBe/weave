@@ -21,7 +21,9 @@ function Digest({ label, value }: { readonly label: string; readonly value: stri
         <div className="text-[12px] leading-4 font-medium" style={{ color: 'var(--text-muted)' }}>
           {label}
         </div>
-        <div className="mt-1 font-mono text-[12px] leading-4 font-normal whitespace-nowrap text-[var(--text)]">{value}</div>
+        <div className="mt-1 font-mono text-[12px] leading-4 font-normal whitespace-nowrap text-[var(--text)]">
+          {value}
+        </div>
       </div>
     );
   }
@@ -119,20 +121,24 @@ function ApprovalCard({ approval, theme }: { readonly approval: DisclosedApprova
           </Fact>
         </Rows>
         <div className="border-t border-[var(--hairline-soft)]">
-        <Rows>
-          <Fact label="Reservation">
-            <span className="text-[var(--text)]">
-              <span className="whitespace-nowrap">{countLabel(approval.reservation.actions, 'action', 'actions')}</span>
-              {' · '}
-              <span className="whitespace-nowrap">{countLabel(approval.reservation.judgments, 'judgment', 'judgments')}</span>
-            </span>
-          </Fact>
-          <Fact label="Valid ticks">
-            <span className="font-mono font-normal whitespace-nowrap text-[var(--text)] tabular-nums">
-              {approval.valid_from_tick}–{approval.valid_until_tick}
-            </span>
-          </Fact>
-        </Rows>
+          <Rows>
+            <Fact label="Reservation">
+              <span className="text-[var(--text)]">
+                <span className="whitespace-nowrap">
+                  {countLabel(approval.reservation.actions, 'action', 'actions')}
+                </span>
+                {' · '}
+                <span className="whitespace-nowrap">
+                  {countLabel(approval.reservation.judgments, 'judgment', 'judgments')}
+                </span>
+              </span>
+            </Fact>
+            <Fact label="Valid ticks">
+              <span className="font-mono font-normal whitespace-nowrap text-[var(--text)] tabular-nums">
+                {approval.valid_from_tick}–{approval.valid_until_tick}
+              </span>
+            </Fact>
+          </Rows>
         </div>
         <div className="flex flex-col gap-3 border-t border-[var(--hairline-soft)] px-[var(--pad)] py-3 pl-[calc(var(--pad)+8px)] xl:px-4 xl:pl-5">
           <Digest label="Binding digest" value={approval.binding_digest} />
@@ -165,7 +171,12 @@ function ApprovalCard({ approval, theme }: { readonly approval: DisclosedApprova
               Deny
             </Button>
           </div>
-          <p id={describedBy} data-testid="decision-unavailable" className="mt-2 text-[12px] leading-4" style={{ color: 'var(--text-muted)' }}>
+          <p
+            id={describedBy}
+            data-testid="decision-unavailable"
+            className="mt-2 text-[12px] leading-4"
+            style={{ color: 'var(--text-muted)' }}
+          >
             Decision controls are unavailable. This component has no bound submission path.
           </p>
         </div>

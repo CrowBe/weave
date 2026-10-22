@@ -22,12 +22,7 @@
  *   npm run example:free
  */
 import { localBudgetGate } from './quota-local.ts';
-import {
-  createInferenceGateway,
-  type GenerationRequest,
-  type RoutedUnit,
-  type Timer,
-} from '@weave/gateway';
+import { createInferenceGateway, type GenerationRequest, type RoutedUnit, type Timer } from '@weave/gateway';
 import {
   NOUS_PORTAL_ADAPTER,
   NOUS_PORTAL_DESTINATION,
@@ -50,9 +45,7 @@ import {
 const nousKey = process.env.NOUS_PORTAL_API_KEY;
 const openRouterKey = process.env.OPEN_ROUTER_API_KEY;
 if (!nousKey && !openRouterKey) {
-  console.error(
-    'Set NOUS_PORTAL_API_KEY or OPEN_ROUTER_API_KEY in .env.local (git-ignored) and rerun.',
-  );
+  console.error('Set NOUS_PORTAL_API_KEY or OPEN_ROUTER_API_KEY in .env.local (git-ignored) and rerun.');
   process.exit(1);
 }
 const vercelKey = process.env.AI_GATEWAY_API_KEY;

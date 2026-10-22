@@ -75,7 +75,9 @@ const SOURCES: Readonly<Record<string, string>> = {
   aliased: ALIASED_SOURCE,
 };
 
-export function canonicalFold(inspections: readonly { source?: unknown; digest?: unknown }[]): { fold: string } | { failure: string } {
+export function canonicalFold(
+  inspections: readonly { source?: unknown; digest?: unknown }[],
+): { fold: string } | { failure: string } {
   if (inspections.length === 0) {
     return { failure: 'empty_input' };
   }
@@ -96,10 +98,17 @@ export function visibleFoldCases(): TestCase[] {
     { source: 'source:alpha', digest: 'vis-digest-alpha' },
   ]);
   return [
-    caseOf('vis-pair', 'visible', { inspections: [
-      { source: 'source:beta', digest: 'vis-digest-beta' },
-      { source: 'source:alpha', digest: 'vis-digest-alpha' },
-    ] }, pair),
+    caseOf(
+      'vis-pair',
+      'visible',
+      {
+        inspections: [
+          { source: 'source:beta', digest: 'vis-digest-beta' },
+          { source: 'source:alpha', digest: 'vis-digest-alpha' },
+        ],
+      },
+      pair,
+    ),
     caseOf('vis-empty', 'visible', { inspections: [] }, { failure: 'empty_input' }),
     caseOf('vis-bad', 'visible', { inspections: [{ source: 'source:alpha' }] }, { failure: 'invalid_inspection' }),
   ];
@@ -113,13 +122,25 @@ export function heldOutFoldCases(): TestCase[] {
   ]);
   const one = canonicalFold([{ source: 'source:held', digest: HELD_OUT_MARKER }]);
   return [
-    caseOf('hold-three', 'held_out', { inspections: [
-      { source: 'source:gamma', digest: 'vis-digest-gamma' },
-      { source: 'source:held', digest: HELD_OUT_MARKER },
-      { source: 'source:alpha', digest: 'vis-digest-alpha' },
-    ] }, three),
+    caseOf(
+      'hold-three',
+      'held_out',
+      {
+        inspections: [
+          { source: 'source:gamma', digest: 'vis-digest-gamma' },
+          { source: 'source:held', digest: HELD_OUT_MARKER },
+          { source: 'source:alpha', digest: 'vis-digest-alpha' },
+        ],
+      },
+      three,
+    ),
     caseOf('hold-one', 'held_out', { inspections: [{ source: 'source:held', digest: HELD_OUT_MARKER }] }, one),
-    caseOf('hold-blank', 'held_out', { inspections: [{ source: 'source:held', digest: '' }] }, { failure: 'invalid_inspection' }),
+    caseOf(
+      'hold-blank',
+      'held_out',
+      { inspections: [{ source: 'source:held', digest: '' }] },
+      { failure: 'invalid_inspection' },
+    ),
   ];
 }
 

@@ -33,7 +33,7 @@ Each entry names the concept, why it supports Weave, and where it lands.
 
 - **The contract is durable; the implementation is disposable.** A capability
   document has a stable id and meaning; the code behind it can be replaced
-  freely. This is CONTEXT's *capability* / *implementation* split and the basis
+  freely. This is CONTEXT's _capability_ / _implementation_ split and the basis
   for several implementations per contract. → `agentsop`
 - **Name the operation, never the implementation.** `text.word_count`, not
   `run_wc`. Weave already requires this for inference-backed capabilities
@@ -137,7 +137,7 @@ of it (§4). → `agentfabric`
 - **Machine-readable opportunity notices.** Unresolved invocations, fallback
   use, and repeated implementation-level work are recorded with a stable
   signature, deduplicated, and closed when the capability resolves. This is the
-  seed of Weave's *capability gap* records: evidence of recurring need that the
+  seed of Weave's _capability gap_ records: evidence of recurring need that the
   extension workflow consumes rather than rediscovers. → `agentfabric`
 - **Capability / skill / fallback is a useful triage.** "If deciding the output
   needs a paragraph of reasoning, it is not a capability." Weave keeps the
@@ -278,16 +278,16 @@ creates the packages (M0-C1).
 
 ## 6. Milestone mapping
 
-| Milestone | `agentsop` | `agentfabric` |
-| --- | --- | --- |
-| M0 | Capability document, reference and effect shapes, grant shape, failure codes, host interface | None. The fake host in Weave's tests satisfies the interface. |
-| M1 | Authority selectors, effect-set equality, failure precedence, catalogue graph rules; invocation outcome/cancellation/reconciliation contract | Registry, resolution status, trusted grant validation, reference issuance, enforcing trusted tier, durable invocation identity and receipts, bounded outcome lookup, historical contract access, `uncertain` outcome |
-| M2 | Inference declared as a dependency with limits | Resolver context supplies the gateway ([contract](m2-handle-a-novel-request.md)) |
-| M3 | Test-case shape; contract revision rules; held-out report | Lifecycle with evidence, untrusted tier, held-out access separation, revocation, opportunity notices. The host store is the single writer of admission. [Contract](m3-fill-a-capability-gap.md). |
-| M4 | — | Several implementations per contract; reliability and cost recorded per implementation. [Contract](m4-measure-reuse.md). |
-| M5 | — | — (promotion is Weave's; the host reports which implementation ran). [Contract](m5-improve-an-operating-strategy.md). |
-| M6 | — | — (routing, views, and destination narrowing are Weave's; the gateway does not see the read set). [Contract](m6-route-a-reconstructed-view.md). |
-| H1 | — | Refuse a second runtime attaching to the same store. The log bound itself is Weave's. [Contract](h1-bound-the-log.md). |
+| Milestone | `agentsop`                                                                                                                                   | `agentfabric`                                                                                                                                                                                                        |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0        | Capability document, reference and effect shapes, grant shape, failure codes, host interface                                                 | None. The fake host in Weave's tests satisfies the interface.                                                                                                                                                        |
+| M1        | Authority selectors, effect-set equality, failure precedence, catalogue graph rules; invocation outcome/cancellation/reconciliation contract | Registry, resolution status, trusted grant validation, reference issuance, enforcing trusted tier, durable invocation identity and receipts, bounded outcome lookup, historical contract access, `uncertain` outcome |
+| M2        | Inference declared as a dependency with limits                                                                                               | Resolver context supplies the gateway ([contract](m2-handle-a-novel-request.md))                                                                                                                                     |
+| M3        | Test-case shape; contract revision rules; held-out report                                                                                    | Lifecycle with evidence, untrusted tier, held-out access separation, revocation, opportunity notices. The host store is the single writer of admission. [Contract](m3-fill-a-capability-gap.md).                     |
+| M4        | —                                                                                                                                            | Several implementations per contract; reliability and cost recorded per implementation. [Contract](m4-measure-reuse.md).                                                                                             |
+| M5        | —                                                                                                                                            | — (promotion is Weave's; the host reports which implementation ran). [Contract](m5-improve-an-operating-strategy.md).                                                                                                |
+| M6        | —                                                                                                                                            | — (routing, views, and destination narrowing are Weave's; the gateway does not see the read set). [Contract](m6-route-a-reconstructed-view.md).                                                                      |
+| H1        | —                                                                                                                                            | Refuse a second runtime attaching to the same store. The log bound itself is Weave's. [Contract](h1-bound-the-log.md).                                                                                               |
 
 [M1's contract](m1-publish-under-authority.md) fixes the publication adapter and
 authority fixture. Its lookup/receipt support is distinct from Weave's recovery

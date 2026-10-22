@@ -7,24 +7,49 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createGrantAuthority, type Grant } from '@weave/agentsop';
 import { AgentFabricHost, FabricStore } from '@weave/agentfabric';
-import type { EvaluationOutcome, EvaluationRequest, GenerationOutcome, GenerationRequest, InferenceTerms } from '@weave/gateway';
+import type {
+  EvaluationOutcome,
+  EvaluationRequest,
+  GenerationOutcome,
+  GenerationRequest,
+  InferenceTerms,
+} from '@weave/gateway';
 import { DECLARED_TASK_POLICY } from '../src/task-acceptance.js';
 import { transitionOutputEval, OUTPUT_EVAL_POLICY, OUTPUT_EVAL_QUESTION } from '../src/sites/output-eval.js';
 import { correlation } from '../src/sites/index.js';
 import { digest } from '../src/digest.js';
 import {
-  DEFAULT_IMPLEMENT_RETRIES, FileAttemptJournal, MemoryAttemptJournal, createEqualGrantIssuer,
-  replayImplementationStep, runImplementationStep,
-  type AttemptJournal, type ImplementBudgetDecision, type ImplementBudgetRequest, type ImplementCheck, type ImplementPorts, type ImplementStepInput,
+  DEFAULT_IMPLEMENT_RETRIES,
+  FileAttemptJournal,
+  MemoryAttemptJournal,
+  createEqualGrantIssuer,
+  replayImplementationStep,
+  runImplementationStep,
+  type AttemptJournal,
+  type ImplementBudgetDecision,
+  type ImplementBudgetRequest,
+  type ImplementCheck,
+  type ImplementPorts,
+  type ImplementStepInput,
   type ImplementTier,
 } from '../src/implement-step.js';
 
 const terms: InferenceTerms = {
-  quality: 'baseline', destinations: ['local'], max_context_tokens: 100, deadline: 100, cost_ceiling: 10, max_attempts: 1,
+  quality: 'baseline',
+  destinations: ['local'],
+  max_context_tokens: 100,
+  deadline: 100,
+  cost_ceiling: 10,
+  max_attempts: 1,
 };
 const grant = {
-  action_id: 'act-1', operation: 'repo.test', contract_rev: 'r1', permissions: [{ resource: 'workspace-1', mode: 'write' }],
-  effects: [{ resource: 'workspace-1', mode: 'write' }], process_effects: ['process.spawn', 'fs.write:workspace-1'], issued_at: 1,
+  action_id: 'act-1',
+  operation: 'repo.test',
+  contract_rev: 'r1',
+  permissions: [{ resource: 'workspace-1', mode: 'write' }],
+  effects: [{ resource: 'workspace-1', mode: 'write' }],
+  process_effects: ['process.spawn', 'fs.write:workspace-1'],
+  issued_at: 1,
 } as Grant;
 const state = { state_revision: 1, state_updated_at: 10 };
 function issued(operation: ImplementCheck['operation']): Grant {
@@ -43,17 +68,33 @@ function grantScope(token: Grant | null | undefined) {
 }
 function input(overrides: Partial<ImplementStepInput> = {}): ImplementStepInput {
   const check: ImplementCheck = {
-    operation: 'repo.test', grant, cwd_ref: 'workspace-1', env_allow: ['PUBLIC_NAME'], timeout_ms: 1000, argv: ['node', 'stub'],
+    operation: 'repo.test',
+    grant,
+    cwd_ref: 'workspace-1',
+    env_allow: ['PUBLIC_NAME'],
+    timeout_ms: 1000,
+    argv: ['node', 'stub'],
   };
   return {
-    execution_id: 'exec-1', request_id: 'req-1', tier: 'flash', ceiling: 'strong', criteria: [
-      { criterion_id: 'c1', statement: 'the toy change meets the criterion' },
-    ], instructions: 'implement the toy goal', prompt: 'make the tests pass', kind: 'transform', terms,
-    checks: [check], ...overrides,
+    execution_id: 'exec-1',
+    request_id: 'req-1',
+    tier: 'flash',
+    ceiling: 'strong',
+    criteria: [{ criterion_id: 'c1', statement: 'the toy change meets the criterion' }],
+    instructions: 'implement the toy goal',
+    prompt: 'make the tests pass',
+    kind: 'transform',
+    terms,
+    checks: [check],
+    ...overrides,
   };
 }
-function booleanOutcome(site: string, requestId: string, scores: Record<string, { p: number; conf?: number | null }>,
-  confidenceOmitted = false): EvaluationOutcome<'boolean'> {
+function booleanOutcome(
+  site: string,
+  requestId: string,
+  scores: Record<string, { p: number; conf?: number | null }>,
+  confidenceOmitted = false,
+): EvaluationOutcome<'boolean'> {
   const confidence: Record<string, number> = {};
   let includeConfidence = !confidenceOmitted;
   for (const [key, score] of Object.entries(scores)) {
@@ -61,33 +102,73 @@ function booleanOutcome(site: string, requestId: string, scores: Record<string, 
     else if (score.conf !== null) confidence[key] = score.conf;
   }
   return {
-    status: 'accepted', kind: 'boolean', site, request_id: requestId,
-    answers: Object.fromEntries(Object.entries(scores).map(([key, score]) => [key, { type: 'boolean' as const, probability: score.p }])),
+    status: 'accepted',
+    kind: 'boolean',
+    site,
+    request_id: requestId,
+    answers: Object.fromEntries(
+      Object.entries(scores).map(([key, score]) => [key, { type: 'boolean' as const, probability: score.p }]),
+    ),
     confidence: includeConfidence ? confidence : undefined,
-    provider_response_id: 'provider-1', routed_unit_id: 'fixture', attempts: [], spent: 0, uncertainty: [],
+    provider_response_id: 'provider-1',
+    routed_unit_id: 'fixture',
+    attempts: [],
+    spent: 0,
+    uncertainty: [],
   };
 }
 function recorded(scores: Record<string, { p: number; conf?: number | null }>, confidenceOmitted = false) {
-  return { state_revision: 1, observed_at: 10, outcome: booleanOutcome('eval.output', 'r1', scores, confidenceOmitted) };
+  return {
+    state_revision: 1,
+    observed_at: 10,
+    outcome: booleanOutcome('eval.output', 'r1', scores, confidenceOmitted),
+  };
 }
 const d5Input = {
-  ...state, request_id: 'r1', state: { note: 'CANARY_STATE' }, needs_dispatch: false, terms,
-  criteria: [{ criterion_id: 'c1', statement: 'CANARY_STATEMENT' }, { criterion_id: 'c2', statement: 'second' }],
+  ...state,
+  request_id: 'r1',
+  state: { note: 'CANARY_STATE' },
+  needs_dispatch: false,
+  terms,
+  criteria: [
+    { criterion_id: 'c1', statement: 'CANARY_STATEMENT' },
+    { criterion_id: 'c2', statement: 'second' },
+  ],
 };
 
 test('D5 passes only at p >= .8 and confidence >= .9, and keeps decision-site key order', () => {
   assert.equal(OUTPUT_EVAL_POLICY.confidence, DECLARED_TASK_POLICY.confidence_floor);
   assert.equal(OUTPUT_EVAL_POLICY.probability, DECLARED_TASK_POLICY.probability_threshold);
-  const pass = transitionOutputEval(d5Input, recorded({ criterion_0: { p: .8, conf: .9 }, criterion_1: { p: .95, conf: 1 } }), state);
+  const pass = transitionOutputEval(
+    d5Input,
+    recorded({ criterion_0: { p: 0.8, conf: 0.9 }, criterion_1: { p: 0.95, conf: 1 } }),
+    state,
+  );
   assert.equal(pass.status, 'pass');
   assert.deepEqual(pass.failing_criterion_ids, []);
   assert.equal(pass.observations[0]?.answer, 'pass');
-  assert.deepEqual(Object.keys(pass.observations[0]!), ['schema', 'site', 'question', 'request_id', 'state_revision',
-    'answer', 'confidence', 'top_p', 'accepted', 'fallback_used', 'reason', 'provider_request_id']);
+  assert.deepEqual(Object.keys(pass.observations[0]!), [
+    'schema',
+    'site',
+    'question',
+    'request_id',
+    'state_revision',
+    'answer',
+    'confidence',
+    'top_p',
+    'accepted',
+    'fallback_used',
+    'reason',
+    'provider_request_id',
+  ]);
   assert.equal(pass.observations[0]?.question, OUTPUT_EVAL_QUESTION);
   assert.equal(pass.observations[0]?.provider_request_id, 'provider-1');
   assert.ok(!JSON.stringify(pass).includes('CANARY'));
-  const lowP = transitionOutputEval(d5Input, recorded({ criterion_0: { p: .799, conf: 1 }, criterion_1: { p: 1, conf: 1 } }), state);
+  const lowP = transitionOutputEval(
+    d5Input,
+    recorded({ criterion_0: { p: 0.799, conf: 1 }, criterion_1: { p: 1, conf: 1 } }),
+    state,
+  );
   assert.equal(lowP.status, 'fail');
   assert.deepEqual(lowP.failing_criterion_ids, ['c1']);
   assert.equal(lowP.observations[0]?.reason, 'below_probability');
@@ -96,39 +177,77 @@ test('D5 passes only at p >= .8 and confidence >= .9, and keeps decision-site ke
 });
 
 test('D5 low confidence, missing confidence, stale, unparseable and outage each fail that criterion', () => {
-  const low = transitionOutputEval(d5Input, recorded({ criterion_0: { p: .95, conf: .899 }, criterion_1: { p: 1, conf: 1 } }), state);
+  const low = transitionOutputEval(
+    d5Input,
+    recorded({ criterion_0: { p: 0.95, conf: 0.899 }, criterion_1: { p: 1, conf: 1 } }),
+    state,
+  );
   assert.equal(low.observations[0]?.reason, 'low_confidence');
   assert.equal(low.evals[0]?.passed, false);
   assert.equal(low.observations[0]?.answer, null);
-  const missing = transitionOutputEval(d5Input, recorded({ criterion_0: { p: .95 }, criterion_1: { p: 1, conf: 1 } }, true), state);
+  const missing = transitionOutputEval(
+    d5Input,
+    recorded({ criterion_0: { p: 0.95 }, criterion_1: { p: 1, conf: 1 } }, true),
+    state,
+  );
   assert.equal(missing.observations[0]?.reason, 'missing_confidence');
   assert.equal(missing.evals[0]?.passed, false);
-  const stale = transitionOutputEval(d5Input, { ...recorded({ criterion_0: { p: 1, conf: 1 }, criterion_1: { p: 1, conf: 1 } }), observed_at: 9 }, state);
+  const stale = transitionOutputEval(
+    d5Input,
+    { ...recorded({ criterion_0: { p: 1, conf: 1 }, criterion_1: { p: 1, conf: 1 } }), observed_at: 9 },
+    state,
+  );
   assert.equal(stale.status, 'fail');
-  assert.ok(stale.observations.every(item => item.reason === 'stale_answer' && item.fallback_used && !item.accepted));
+  assert.ok(stale.observations.every((item) => item.reason === 'stale_answer' && item.fallback_used && !item.accepted));
   const good = recorded({ criterion_0: { p: 1, conf: 1 }, criterion_1: { p: 1, conf: 1 } });
   assert.equal(good.outcome.status, 'accepted');
-  const malformed = good.outcome.status === 'accepted' ? {
-    ...good,
-    outcome: { ...good.outcome, answers: { ...good.outcome.answers, criterion_0: { type: 'boolean' as const, probability: Number.NaN } } },
-  } : good;
+  const malformed =
+    good.outcome.status === 'accepted'
+      ? {
+          ...good,
+          outcome: {
+            ...good.outcome,
+            answers: { ...good.outcome.answers, criterion_0: { type: 'boolean' as const, probability: Number.NaN } },
+          },
+        }
+      : good;
   assert.equal(transitionOutputEval(d5Input, malformed, state).observations[0]?.reason, 'invalid_answer');
   const outage = transitionOutputEval(d5Input, { state_revision: 1, observed_at: 10, outcome: null }, state);
   assert.equal(outage.status, 'fail');
-  assert.ok(outage.observations.every(item => item.reason === 'decision_unavailable' && item.fallback_used));
+  assert.ok(outage.observations.every((item) => item.reason === 'decision_unavailable' && item.fallback_used));
   assert.deepEqual(outage.failing_criterion_ids, ['c1', 'c2']);
-  assert.deepEqual(outage, transitionOutputEval(d5Input, JSON.parse(JSON.stringify({ state_revision: 1, observed_at: 10, outcome: null })), state));
+  assert.deepEqual(
+    outage,
+    transitionOutputEval(
+      d5Input,
+      JSON.parse(JSON.stringify({ state_revision: 1, observed_at: 10, outcome: null })),
+      state,
+    ),
+  );
 });
 
 test('D5 does not accept an answer from another semantic operation', () => {
-  const foreign = booleanOutcome('guard.output', 'r1', { criterion_0: { p: 1, conf: 1 }, criterion_1: { p: 1, conf: 1 } });
+  const foreign = booleanOutcome('guard.output', 'r1', {
+    criterion_0: { p: 1, conf: 1 },
+    criterion_1: { p: 1, conf: 1 },
+  });
   const result = transitionOutputEval(d5Input, { state_revision: 1, observed_at: 10, outcome: foreign }, state);
   assert.equal(result.status, 'fail');
-  assert.ok(result.observations.every(item => item.reason === 'mismatched_answer'));
-  assert.ok(result.evals.every(item => !item.passed));
-  const replay = transitionOutputEval(d5Input, JSON.parse(JSON.stringify(recorded({
-    criterion_0: { p: .8, conf: .9 }, criterion_1: { p: 1, conf: 1 }, CANARY_UNKNOWN: { p: 1, conf: 1 },
-  }))), state);
+  assert.ok(result.observations.every((item) => item.reason === 'mismatched_answer'));
+  assert.ok(result.evals.every((item) => !item.passed));
+  const replay = transitionOutputEval(
+    d5Input,
+    JSON.parse(
+      JSON.stringify(
+        recorded({
+          criterion_0: { p: 0.8, conf: 0.9 },
+          criterion_1: { p: 1, conf: 1 },
+          CANARY_UNKNOWN: { p: 1, conf: 1 },
+        }),
+      ),
+    ),
+    state,
+  );
   assert.equal(replay.status, 'pass');
   assert.equal(replay.observations.at(-1)?.reason, 'unknown_answer');
   assert.ok(!JSON.stringify(replay).includes('CANARY'));
@@ -150,7 +269,12 @@ interface Driver {
 function driver(options: {
   readonly input?: ImplementStepInput;
   readonly exits?: readonly number[];
-  readonly evaluations?: readonly (Record<string, { p: number; conf?: number | null }> | 'outage' | 'throw' | 'stale')[];
+  readonly evaluations?: readonly (
+    | Record<string, { p: number; conf?: number | null }>
+    | 'outage'
+    | 'throw'
+    | 'stale'
+  )[];
   readonly budget?: ImplementPorts['budget'];
   readonly journal?: AttemptJournal;
   readonly tail?: string;
@@ -172,7 +296,14 @@ function driver(options: {
   const usedGrants = new WeakSet<object>();
   const live = { ...state };
   const found: Driver = {
-    input: work, generateIds, evalIds, tiers, prompts, evalSites, evalStates, invokes,
+    input: work,
+    generateIds,
+    evalIds,
+    tiers,
+    prompts,
+    evalSites,
+    evalStates,
+    invokes,
     journal: options.journal ?? new MemoryAttemptJournal(),
     ports: {
       now: () => 10,
@@ -187,8 +318,15 @@ function driver(options: {
         assert.equal(request.site, 'impl.generate');
         if (found.crashesAt === generates) throw new Error('simulated-crash');
         return {
-          status: 'accepted', text: options.text ?? `change-${generates}`, request_id: request.request_id, site: request.site,
-          routed_unit_id: `unit-${request.terms.tier}`, provider_response_id: 'gen-provider', attempts: [], spent: 0, uncertainty: [],
+          status: 'accepted',
+          text: options.text ?? `change-${generates}`,
+          request_id: request.request_id,
+          site: request.site,
+          routed_unit_id: `unit-${request.terms.tier}`,
+          provider_response_id: 'gen-provider',
+          attempts: [],
+          spent: 0,
+          uncertainty: [],
         };
       },
       evaluate: (async (request: EvaluationRequest<'boolean'>): Promise<EvaluationOutcome<'boolean'>> => {
@@ -198,33 +336,45 @@ function driver(options: {
         evalStates.push(request.state);
         assert.equal(request.kind, 'boolean');
         assert.equal(request.terms.tier, 'decision');
-        const script = options.evaluations?.[evals - 1] ?? { criterion_0: { p: 1, conf: 1 }, criterion_1: { p: 1, conf: 1 } };
+        const script = options.evaluations?.[evals - 1] ?? {
+          criterion_0: { p: 1, conf: 1 },
+          criterion_1: { p: 1, conf: 1 },
+        };
         if (script === 'throw') throw new Error('CANARY_PROVIDER');
         if (script === 'stale') {
           live.state_revision = 2;
           live.state_updated_at = 11;
         }
         if (script === 'outage') {
-          return { status: 'blocked', site: request.site, request_id: request.request_id, reason: 'provider_unavailable', attempts: [], spent: 0, uncertainty: [] };
+          return {
+            status: 'blocked',
+            site: request.site,
+            request_id: request.request_id,
+            reason: 'provider_unavailable',
+            attempts: [],
+            spent: 0,
+            uncertainty: [],
+          };
         }
-        if (script === 'stale') return booleanOutcome(request.site, request.request_id, { criterion_0: { p: 1, conf: 1 } });
+        if (script === 'stale')
+          return booleanOutcome(request.site, request.request_id, { criterion_0: { p: 1, conf: 1 } });
         const scores: Record<string, { p: number; conf?: number | null }> = {};
         for (const [key, question] of Object.entries(request.questions)) {
           const criterionId = (question.instructions as { criterion_id?: string }).criterion_id ?? key;
           scores[key] = script[criterionId] ?? script[key] ?? { p: 1, conf: 1 };
         }
-        const omit = Object.values(scores).some(score => score.conf === undefined);
+        const omit = Object.values(scores).some((score) => score.conf === undefined);
         return booleanOutcome(request.site, request.request_id, scores, omit);
       }) as ImplementPorts['evaluate'],
       issueCheckGrant(held) {
-        const known = work.checks.some(check => check.grant === held);
+        const known = work.checks.some((check) => check.grant === held);
         if (!known) return null;
         return {
           action_id: held.action_id,
           operation: held.operation,
           contract_rev: held.contract_rev,
-          permissions: held.permissions.map(effect => ({ resource: effect.resource, mode: effect.mode })),
-          effects: held.effects.map(effect => ({ resource: effect.resource, mode: effect.mode })),
+          permissions: held.permissions.map((effect) => ({ resource: effect.resource, mode: effect.mode })),
+          effects: held.effects.map((effect) => ({ resource: effect.resource, mode: effect.mode })),
           issued_at: held.issued_at,
           ...(held.process_effects === undefined ? {} : { process_effects: [...held.process_effects] }),
         };
@@ -232,20 +382,31 @@ function driver(options: {
       invoke(token, operation, inputs, invokeOptions) {
         checks += 1;
         invokes.push({
-          grant: token, operation, inputs,
+          grant: token,
+          operation,
+          inputs,
           ...(invokeOptions?.invocation_id === undefined ? {} : { invocation_id: invokeOptions.invocation_id }),
         });
-        if (token === null || token.operation !== operation) return { kind: 'rejected', code: 'DENIED', reason: 'no grant' };
-        if (usedGrants.has(token)) return { kind: 'rejected', code: 'DENIED', reason: 'grant has already been used for an invocation' };
+        if (token === null || token.operation !== operation)
+          return { kind: 'rejected', code: 'DENIED', reason: 'no grant' };
+        if (usedGrants.has(token))
+          return { kind: 'rejected', code: 'DENIED', reason: 'grant has already been used for an invocation' };
         usedGrants.add(token);
         const exit = options.exits?.[checks - 1] ?? 0;
         return {
-          kind: 'handle', action_id: token.action_id, invocation_id: invokeOptions?.invocation_id ?? token.action_id,
-          implementation_id: 'fake', requestCancel() {},
+          kind: 'handle',
+          action_id: token.action_id,
+          invocation_id: invokeOptions?.invocation_id ?? token.action_id,
+          implementation_id: 'fake',
+          requestCancel() {},
           result: Promise.resolve({
             outcome: 'succeeded',
             output: {
-              exit, stdout_tail: options.tail ?? 'ok', stdout_truncated: false, stderr_tail: '', duration_ms: 1,
+              exit,
+              stdout_tail: options.tail ?? 'ok',
+              stdout_truncated: false,
+              stderr_tail: '',
+              duration_ms: 1,
               artifacts: options.artifacts ?? ['ref_1'],
             },
           }),
@@ -263,9 +424,13 @@ test('a passing toy goal records evidence and does not complete the goal', async
     tail: 'sk-SECRETVALUE',
     input: input({
       criteria: [{ criterion_id: 'c1', statement: 'CANARY_STATEMENT' }],
-      checks: (['repo.test', 'repo.lint', 'repo.build'] as const).map(operation => ({
-        operation, grant: operation === 'repo.test' ? grant : issued(operation), cwd_ref: 'workspace-1',
-        env_allow: ['PUBLIC_NAME'], timeout_ms: 1000, argv: ['node', operation],
+      checks: (['repo.test', 'repo.lint', 'repo.build'] as const).map((operation) => ({
+        operation,
+        grant: operation === 'repo.test' ? grant : issued(operation),
+        cwd_ref: 'workspace-1',
+        env_allow: ['PUBLIC_NAME'],
+        timeout_ms: 1000,
+        argv: ['node', operation],
       })),
     }),
   });
@@ -274,13 +439,49 @@ test('a passing toy goal records evidence and does not complete the goal', async
   assert.equal(result.goal_done, false);
   assert.equal(result.open_issue, null);
   assert.equal(result.execution_id, 'exec-1');
-  assert.deepEqual(Object.keys(result), ['schema', 'execution_id', 'status', 'goal_done', 'reason', 'tier', 'ceiling',
-    'effective_tier', 'escalated', 'attempts', 'artifact_refs', 'checks', 'evals', 'observations', 'open_issue', 'proofs']);
+  assert.deepEqual(Object.keys(result), [
+    'schema',
+    'execution_id',
+    'status',
+    'goal_done',
+    'reason',
+    'tier',
+    'ceiling',
+    'effective_tier',
+    'escalated',
+    'attempts',
+    'artifact_refs',
+    'checks',
+    'evals',
+    'observations',
+    'open_issue',
+    'proofs',
+  ]);
   assert.equal(result.attempts.length, 1);
-  assert.deepEqual(Object.keys(result.attempts[0]!), ['schema', 'id', 'parentId', 'execution_id', 'attempt',
-    'requested_tier', 'effective_tier', 'escalated', 'status', 'generate_request_id', 'artifact_refs', 'checks',
-    'evals', 'observations', 'failing_criterion_ids', 'failing_check_ids', 'pause', 'proofs']);
-  assert.deepEqual(world.invokes.map(call => call.operation), ['repo.test', 'repo.lint', 'repo.build']);
+  assert.deepEqual(Object.keys(result.attempts[0]!), [
+    'schema',
+    'id',
+    'parentId',
+    'execution_id',
+    'attempt',
+    'requested_tier',
+    'effective_tier',
+    'escalated',
+    'status',
+    'generate_request_id',
+    'artifact_refs',
+    'checks',
+    'evals',
+    'observations',
+    'failing_criterion_ids',
+    'failing_check_ids',
+    'pause',
+    'proofs',
+  ]);
+  assert.deepEqual(
+    world.invokes.map((call) => call.operation),
+    ['repo.test', 'repo.lint', 'repo.build'],
+  );
   assert.equal(result.attempts[0]?.execution_id, 'exec-1');
   assert.equal(result.checks[0]?.passed, true);
   assert.equal(result.checks[0]?.exit, 0);
@@ -308,20 +509,36 @@ test('a passing toy goal records evidence and does not complete the goal', async
 
 test('implementation requests preserve the caller content class for generation and evaluation', async () => {
   for (const content_class of ['public', 'non_sensitive', 'sensitive', 'private', undefined] as const) {
-    const world = driver({ input: input({ terms: { ...terms, ...(content_class === undefined ? {} : { content_class }) } }) });
-    const seen: (InferenceTerms['content_class'])[] = [];
-    const result = await runImplementationStep(world.input, {
-      ...world.ports,
-      generate: async request => { seen.push(request.terms.content_class); return world.ports.generate(request); },
-      evaluate: (async request => { seen.push(request.terms.content_class); return world.ports.evaluate(request); }) as ImplementPorts['evaluate'],
-    }, world.journal);
+    const world = driver({
+      input: input({ terms: { ...terms, ...(content_class === undefined ? {} : { content_class }) } }),
+    });
+    const seen: InferenceTerms['content_class'][] = [];
+    const result = await runImplementationStep(
+      world.input,
+      {
+        ...world.ports,
+        generate: async (request) => {
+          seen.push(request.terms.content_class);
+          return world.ports.generate(request);
+        },
+        evaluate: (async (request) => {
+          seen.push(request.terms.content_class);
+          return world.ports.evaluate(request);
+        }) as ImplementPorts['evaluate'],
+      },
+      world.journal,
+    );
     assert.equal(result.status, 'passed');
-    assert.deepEqual(seen, [content_class, content_class], 'classification must survive terms reconstruction without being upgraded');
+    assert.deepEqual(
+      seen,
+      [content_class, content_class],
+      'classification must survive terms reconstruction without being upgraded',
+    );
   }
 });
 
 test('a D5 failure retries with a fresh grant and passes when the checks stay green', async () => {
-  const world = driver({ evaluations: [{ c1: { p: .2, conf: .95 } }, { c1: { p: .95, conf: .95 } }] });
+  const world = driver({ evaluations: [{ c1: { p: 0.2, conf: 0.95 } }, { c1: { p: 0.95, conf: 0.95 } }] });
   const result = await runImplementationStep(world.input, world.ports, world.journal);
   assert.equal(result.status, 'passed');
   assert.equal(result.goal_done, false);
@@ -347,10 +564,13 @@ test('a D5 failure retries with a fresh grant and passes when the checks stay gr
 test('the equal issuer refuses a wider grant and the step does not invoke one', async () => {
   const authority = createGrantAuthority();
   const held = authority.issue({
-    action_id: 'act-1', operation: 'repo.test', contract_rev: 'r1',
+    action_id: 'act-1',
+    operation: 'repo.test',
+    contract_rev: 'r1',
     permissions: [{ resource: 'workspace-1', mode: 'write' }],
     effects: [{ resource: 'workspace-1', mode: 'write' }],
-    process_effects: ['process.spawn', 'fs.write:workspace-1'], issued_at: 1,
+    process_effects: ['process.spawn', 'fs.write:workspace-1'],
+    issued_at: 1,
   });
   const issuer = createEqualGrantIssuer(authority, [held]);
   (held.permissions as { resource: string; mode: string }[]).push({ resource: 'ref_late', mode: 'read' });
@@ -369,10 +589,16 @@ test('the equal issuer refuses a wider grant and the step does not invoke one', 
   assert.equal(issuer.issue(second), null);
   assert.equal(issuer.issue(structuredClone(held)), null);
   const wider = authority.issue({
-    action_id: 'wider', operation: 'repo.test', contract_rev: 'r1',
-    permissions: [{ resource: 'workspace-1', mode: 'write' }, { resource: 'ref_other', mode: 'write' }],
+    action_id: 'wider',
+    operation: 'repo.test',
+    contract_rev: 'r1',
+    permissions: [
+      { resource: 'workspace-1', mode: 'write' },
+      { resource: 'ref_other', mode: 'write' },
+    ],
     effects: [{ resource: 'workspace-1', mode: 'write' }],
-    process_effects: ['process.spawn', 'fs.write:workspace-1'], issued_at: 1,
+    process_effects: ['process.spawn', 'fs.write:workspace-1'],
+    issued_at: 1,
   });
   assert.equal(issuer.issue(wider), null);
   assert.equal(issuer.issue({ schema: 'decision-site@1', answer: 'pass' } as unknown as Grant), null);
@@ -419,10 +645,14 @@ test('a real host accepts a fresh grant when a green check is retried after D5 f
                 now += ms;
                 resolve();
               }, ms);
-              signal?.addEventListener('abort', () => {
-                clearTimeout(handle);
-                reject(new Error('aborted'));
-              }, { once: true });
+              signal?.addEventListener(
+                'abort',
+                () => {
+                  clearTimeout(handle);
+                  reject(new Error('aborted'));
+                },
+                { once: true },
+              );
             });
           },
         },
@@ -431,17 +661,20 @@ test('a real host accepts a fresh grant when a green check is retried after D5 f
     });
     const cwd = host.registerWorkspace(dir);
     const template = authority.issue({
-      action_id: 'repo-test', operation: 'repo.test', contract_rev: 'r1',
+      action_id: 'repo-test',
+      operation: 'repo.test',
+      contract_rev: 'r1',
       permissions: [{ resource: cwd, mode: 'write' }],
       effects: [{ resource: cwd, mode: 'write' }],
-      process_effects: ['process.spawn', `fs.write:${cwd}`], issued_at: 1,
+      process_effects: ['process.spawn', `fs.write:${cwd}`],
+      issued_at: 1,
     });
     const issuer = createEqualGrantIssuer(authority, [template]);
-    const world = driver({ evaluations: [{ c1: { p: .2, conf: .95 } }, { c1: { p: .95, conf: .95 } }] });
+    const world = driver({ evaluations: [{ c1: { p: 0.2, conf: 0.95 } }, { c1: { p: 0.95, conf: 0.95 } }] });
     const used: Grant[] = [];
     const ports: ImplementPorts = {
       ...world.ports,
-      issueCheckGrant: held => issuer.issue(held),
+      issueCheckGrant: (held) => issuer.issue(held),
       invoke(token, operation, inputs, invokeOptions) {
         if (token) used.push(token);
         const handle = host.invoke(token, operation, inputs, invokeOptions);
@@ -450,9 +683,16 @@ test('a real host accepts a fresh grant when a green check is retried after D5 f
       },
     };
     const work = input({
-      checks: [{
-        operation: 'repo.test', grant: template, cwd_ref: cwd, env_allow: [], timeout_ms: 5_000, argv: ['node', 'stub'],
-      }],
+      checks: [
+        {
+          operation: 'repo.test',
+          grant: template,
+          cwd_ref: cwd,
+          env_allow: [],
+          timeout_ms: 5_000,
+          argv: ['node', 'stub'],
+        },
+      ],
     });
     const result = await runImplementationStep(work, ports, world.journal);
     assert.equal(result.status, 'passed');
@@ -471,7 +711,12 @@ test('a real host accepts a fresh grant when a green check is retried after D5 f
     assert.deepEqual({ ...grantScope(used[1]), action_id: null }, { ...grantScope(template), action_id: null });
     assert.equal(new Set([template.action_id, used[0]?.action_id, used[1]?.action_id]).size, 3);
     assert.equal(authority.markInvoked(template), true);
-    const reused = host.invoke(used[0] ?? null, 'repo.test', { cwd_ref: cwd, env_allow: [], timeout_ms: 5_000 }, { invocation_id: 'reuse' });
+    const reused = host.invoke(
+      used[0] ?? null,
+      'repo.test',
+      { cwd_ref: cwd, env_allow: [], timeout_ms: 5_000 },
+      { invocation_id: 'reuse' },
+    );
     assert.equal(reused.kind, 'rejected');
     if (reused.kind === 'rejected') assert.equal(reused.reason, 'grant has already been used for an invocation');
     assert.equal(JSON.stringify(result).includes(dir), false);
@@ -481,88 +726,122 @@ test('a real host accepts a fresh grant when a green check is retried after D5 f
 });
 
 for (const sameText of [false, true]) {
-test(`restart cannot replay green durable checks against a new generation (same text: ${sameText})`, async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'weave-p8-restart-'));
-  let store: FabricStore | undefined;
-  try {
-    const storePath = join(dir, 'fabric.json');
-    const journalPath = join(dir, 'attempts.jsonl');
-    const stub = join(dir, 'check.mjs');
-    writeFileSync(stub, "import { readFileSync, appendFileSync } from 'node:fs'; appendFileSync('runs', 'check\\n'); process.exit(Number(readFileSync('exit', 'utf8')));\n");
-    const authority = createGrantAuthority();
-    const argv = [process.execPath, stub];
-    const openHost = () => {
-      store = FabricStore.open(storePath);
-      return new AgentFabricHost({ store, authority, shell: {
-        env: { lookup: () => undefined }, clock: { now: () => 10 },
-        timer: { sleep: ms => new Promise(resolve => setTimeout(resolve, ms)) },
-        repo: { test: argv, lint: argv, build: argv },
-      } });
-    };
-    let host = openHost();
-    const cwd = host.registerWorkspace(dir);
-    const template = authority.issue({
-      action_id: 'repo-test', operation: 'repo.test', contract_rev: 'r1',
-      permissions: [{ resource: cwd, mode: 'write' }], effects: [{ resource: cwd, mode: 'write' }],
-      process_effects: ['process.spawn', `fs.write:${cwd}`], issued_at: 1,
-    });
-    const issuer = createEqualGrantIssuer(authority, [template]);
-    const work = input({ ceiling: 'flash', retries: 0, checks: [{
-      operation: 'repo.test', grant: template, cwd_ref: cwd, env_allow: [], timeout_ms: 5_000,
-    }] });
-    const world = driver({});
-    let generations = 0;
-    const ports: ImplementPorts = { ...world.ports,
-      generate: async request => {
-        generations += 1;
-        writeFileSync(join(dir, 'exit'), generations === 1 ? '0' : '1');
-        return { status: 'accepted', text: sameText ? 'same-text' : `change-${generations}`, request_id: request.request_id,
-          site: request.site, routed_unit_id: 'fake', provider_response_id: 'fake',
-          attempts: [], spent: 0, uncertainty: [] };
-      },
-      issueCheckGrant: held => issuer.issue(held),
-      invoke: (token, operation, inputs, options) => {
-        const committed = options?.invocation_id === undefined ? false
-          : store!.getInvocation(options.invocation_id)?.status === 'committed';
-        const handle = host.invoke(token, operation, inputs, options);
-        if (handle.kind === 'handle' && !committed) host.release(handle.action_id);
-        return handle;
-      },
-    };
-    const journal = new FileAttemptJournal(journalPath);
-    const crashJournal: AttemptJournal = {
-      load: id => journal.load(id),
-      append: () => { throw new Error('crash before attempt append'); },
-    };
-    await assert.rejects(runImplementationStep(work, ports, crashJournal));
-    assert.equal(journal.load(work.execution_id).length, 0);
-    assert.equal(store!.snapshot().invocations[0]?.status, 'committed');
-    assert.equal(readFileSync(join(dir, 'runs'), 'utf8'), 'check\n');
-    store!.close();
-    host = openHost();
-    const result = await runImplementationStep(work, ports, journal);
-    assert.equal(generations, 2);
-    assert.equal(result.status, 'failed');
-    assert.equal(result.checks[0]?.exit, 1);
-    assert.equal(result.checks[0]?.passed, false);
-    assert.deepEqual(result.evals, []);
-    assert.equal(result.attempts[0]?.eval_skipped, 'check_failed');
-    assert.equal(result.execution_id, work.execution_id);
-    assert.equal(result.attempts[0]?.attempt, 1);
-    assert.equal(readFileSync(join(dir, 'runs'), 'utf8'), 'check\ncheck\n');
-    const finished = await runImplementationStep(work, ports, journal);
-    assert.deepEqual(finished, result);
-    assert.equal(generations, 2);
-  } finally {
-    store?.close();
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
+  test(`restart cannot replay green durable checks against a new generation (same text: ${sameText})`, async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-p8-restart-'));
+    let store: FabricStore | undefined;
+    try {
+      const storePath = join(dir, 'fabric.json');
+      const journalPath = join(dir, 'attempts.jsonl');
+      const stub = join(dir, 'check.mjs');
+      writeFileSync(
+        stub,
+        "import { readFileSync, appendFileSync } from 'node:fs'; appendFileSync('runs', 'check\\n'); process.exit(Number(readFileSync('exit', 'utf8')));\n",
+      );
+      const authority = createGrantAuthority();
+      const argv = [process.execPath, stub];
+      const openHost = () => {
+        store = FabricStore.open(storePath);
+        return new AgentFabricHost({
+          store,
+          authority,
+          shell: {
+            env: { lookup: () => undefined },
+            clock: { now: () => 10 },
+            timer: { sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
+            repo: { test: argv, lint: argv, build: argv },
+          },
+        });
+      };
+      let host = openHost();
+      const cwd = host.registerWorkspace(dir);
+      const template = authority.issue({
+        action_id: 'repo-test',
+        operation: 'repo.test',
+        contract_rev: 'r1',
+        permissions: [{ resource: cwd, mode: 'write' }],
+        effects: [{ resource: cwd, mode: 'write' }],
+        process_effects: ['process.spawn', `fs.write:${cwd}`],
+        issued_at: 1,
+      });
+      const issuer = createEqualGrantIssuer(authority, [template]);
+      const work = input({
+        ceiling: 'flash',
+        retries: 0,
+        checks: [
+          {
+            operation: 'repo.test',
+            grant: template,
+            cwd_ref: cwd,
+            env_allow: [],
+            timeout_ms: 5_000,
+          },
+        ],
+      });
+      const world = driver({});
+      let generations = 0;
+      const ports: ImplementPorts = {
+        ...world.ports,
+        generate: async (request) => {
+          generations += 1;
+          writeFileSync(join(dir, 'exit'), generations === 1 ? '0' : '1');
+          return {
+            status: 'accepted',
+            text: sameText ? 'same-text' : `change-${generations}`,
+            request_id: request.request_id,
+            site: request.site,
+            routed_unit_id: 'fake',
+            provider_response_id: 'fake',
+            attempts: [],
+            spent: 0,
+            uncertainty: [],
+          };
+        },
+        issueCheckGrant: (held) => issuer.issue(held),
+        invoke: (token, operation, inputs, options) => {
+          const committed =
+            options?.invocation_id === undefined
+              ? false
+              : store!.getInvocation(options.invocation_id)?.status === 'committed';
+          const handle = host.invoke(token, operation, inputs, options);
+          if (handle.kind === 'handle' && !committed) host.release(handle.action_id);
+          return handle;
+        },
+      };
+      const journal = new FileAttemptJournal(journalPath);
+      const crashJournal: AttemptJournal = {
+        load: (id) => journal.load(id),
+        append: () => {
+          throw new Error('crash before attempt append');
+        },
+      };
+      await assert.rejects(runImplementationStep(work, ports, crashJournal));
+      assert.equal(journal.load(work.execution_id).length, 0);
+      assert.equal(store!.snapshot().invocations[0]?.status, 'committed');
+      assert.equal(readFileSync(join(dir, 'runs'), 'utf8'), 'check\n');
+      store!.close();
+      host = openHost();
+      const result = await runImplementationStep(work, ports, journal);
+      assert.equal(generations, 2);
+      assert.equal(result.status, 'failed');
+      assert.equal(result.checks[0]?.exit, 1);
+      assert.equal(result.checks[0]?.passed, false);
+      assert.deepEqual(result.evals, []);
+      assert.equal(result.attempts[0]?.eval_skipped, 'check_failed');
+      assert.equal(result.execution_id, work.execution_id);
+      assert.equal(result.attempts[0]?.attempt, 1);
+      assert.equal(readFileSync(join(dir, 'runs'), 'utf8'), 'check\ncheck\n');
+      const finished = await runImplementationStep(work, ports, journal);
+      assert.deepEqual(finished, result);
+      assert.equal(generations, 2);
+    } finally {
+      store?.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 }
 
 test('a failed criterion is retried once and can pass on the same tier and execution', async () => {
-  const world = driver({ evaluations: [{ c1: { p: .2, conf: .95 } }, { c1: { p: .95, conf: .95 } }] });
+  const world = driver({ evaluations: [{ c1: { p: 0.2, conf: 0.95 } }, { c1: { p: 0.95, conf: 0.95 } }] });
   const result = await runImplementationStep(world.input, world.ports, world.journal);
   assert.equal(result.status, 'passed');
   assert.equal(result.goal_done, false);
@@ -572,21 +851,23 @@ test('a failed criterion is retried once and can pass on the same tier and execu
   assert.ok(world.prompts[1]?.includes('criterion_id=c1 passed=false'));
   assert.equal(world.prompts[1]?.includes('change-1'), false);
   assert.deepEqual(world.tiers, ['flash', 'flash']);
-  assert.ok(result.attempts.every(attempt => attempt.execution_id === 'exec-1'));
+  assert.ok(result.attempts.every((attempt) => attempt.execution_id === 'exec-1'));
   assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), result);
 });
 
 test('two retries then one tier escalation can pass, and a failed escalation raises the criterion ids', async () => {
   assert.equal(DEFAULT_IMPLEMENT_RETRIES, 2);
   const pass = driver({
-    input: input({ criteria: [
-      { criterion_id: 'c1', statement: 'first' },
-      { criterion_id: 'c2', statement: 'second' },
-    ] }),
+    input: input({
+      criteria: [
+        { criterion_id: 'c1', statement: 'first' },
+        { criterion_id: 'c2', statement: 'second' },
+      ],
+    }),
     evaluations: [
-      { c1: { p: 1, conf: 1 }, c2: { p: .2, conf: 1 } },
-      { c1: { p: 1, conf: 1 }, c2: { p: .2, conf: 1 } },
-      { c1: { p: 1, conf: 1 }, c2: { p: .2, conf: 1 } },
+      { c1: { p: 1, conf: 1 }, c2: { p: 0.2, conf: 1 } },
+      { c1: { p: 1, conf: 1 }, c2: { p: 0.2, conf: 1 } },
+      { c1: { p: 1, conf: 1 }, c2: { p: 0.2, conf: 1 } },
       { c1: { p: 1, conf: 1 }, c2: { p: 1, conf: 1 } },
     ],
   });
@@ -601,10 +882,10 @@ test('two retries then one tier escalation can pass, and a failed escalation rai
   const fail = driver({
     input: pass.input,
     evaluations: [
-      { c1: { p: 1, conf: 1 }, c2: { p: .2, conf: 1 } },
-      { c1: { p: 1, conf: 1 }, c2: { p: .2, conf: 1 } },
-      { c1: { p: 1, conf: 1 }, c2: { p: .2, conf: 1 } },
-      { c1: { p: 1, conf: 1 }, c2: { p: .1, conf: 1 } },
+      { c1: { p: 1, conf: 1 }, c2: { p: 0.2, conf: 1 } },
+      { c1: { p: 1, conf: 1 }, c2: { p: 0.2, conf: 1 } },
+      { c1: { p: 1, conf: 1 }, c2: { p: 0.2, conf: 1 } },
+      { c1: { p: 1, conf: 1 }, c2: { p: 0.1, conf: 1 } },
     ],
   });
   const failed = await runImplementationStep(fail.input, fail.ports, fail.journal);
@@ -618,13 +899,25 @@ test('two retries then one tier escalation can pass, and a failed escalation rai
   assert.equal(failed.open_issue?.severity, 'blocker');
   assert.equal(failed.open_issue?.blocked_by, null);
   assert.equal(failed.open_issue?.execution_id, 'exec-1');
-  assert.deepEqual(Object.keys(failed.open_issue!), ['schema', 'issue_id', 'execution_id', 'source', 'criterion_ids',
-    'check_ids', 'text', 'severity', 'blocked_by']);
+  assert.deepEqual(Object.keys(failed.open_issue!), [
+    'schema',
+    'issue_id',
+    'execution_id',
+    'source',
+    'criterion_ids',
+    'check_ids',
+    'text',
+    'severity',
+    'blocked_by',
+  ]);
   assert.deepEqual(replayImplementationStep(fail.journal.load('exec-1'), fail.input), failed);
 });
 
 test('escalation blocked by the ceiling or a budget downgrade raises an open issue without another generate', async () => {
-  const ceiling = driver({ input: input({ ceiling: 'flash' }), evaluations: [{ c1: { p: .1, conf: 1 } }, { c1: { p: .1, conf: 1 } }, { c1: { p: .1, conf: 1 } }] });
+  const ceiling = driver({
+    input: input({ ceiling: 'flash' }),
+    evaluations: [{ c1: { p: 0.1, conf: 1 } }, { c1: { p: 0.1, conf: 1 } }, { c1: { p: 0.1, conf: 1 } }],
+  });
   const capped = await runImplementationStep(ceiling.input, ceiling.ports, ceiling.journal);
   assert.equal(capped.status, 'failed');
   assert.deepEqual(ceiling.tiers, ['flash', 'flash', 'flash']);
@@ -632,13 +925,11 @@ test('escalation blocked by the ceiling or a budget downgrade raises an open iss
   assert.deepEqual(capped.open_issue?.criterion_ids, ['c1']);
   assert.equal(capped.goal_done, false);
   // A pause at escalation is resumable instead (#128); a downgrade cannot be that tier.
-  for (const budget of [
-    () => ({ status: 'allow', tier: 'flash' } as ImplementBudgetDecision),
-  ]) {
+  for (const budget of [() => ({ status: 'allow', tier: 'flash' }) as ImplementBudgetDecision]) {
     let escalations = 0;
     const world = driver({
-      evaluations: [{ c1: { p: .1, conf: 1 } }, { c1: { p: .1, conf: 1 } }, { c1: { p: .1, conf: 1 } }],
-      budget: request => {
+      evaluations: [{ c1: { p: 0.1, conf: 1 } }, { c1: { p: 0.1, conf: 1 } }, { c1: { p: 0.1, conf: 1 } }],
+      budget: (request) => {
         if (!request.escalation) return { status: 'allow', tier: request.requested };
         escalations += 1;
         return budget();
@@ -657,8 +948,8 @@ test('escalation blocked by the ceiling or a budget downgrade raises an open iss
 test('D5 uncertainty fails the step, and red checks fail it without asking D5', async () => {
   // An outage pauses instead (#129); see the outage test below.
   const cases = [
-    { name: 'low confidence', evaluation: { c1: { p: .95, conf: .89 } } as const, reason: 'low_confidence' },
-    { name: 'missing confidence', evaluation: { c1: { p: .95 } } as const, reason: 'missing_confidence' },
+    { name: 'low confidence', evaluation: { c1: { p: 0.95, conf: 0.89 } } as const, reason: 'low_confidence' },
+    { name: 'missing confidence', evaluation: { c1: { p: 0.95 } } as const, reason: 'missing_confidence' },
     { name: 'stale', evaluation: 'stale' as const, reason: 'stale_answer' },
   ];
   for (const item of cases) {
@@ -675,7 +966,11 @@ test('D5 uncertainty fails the step, and red checks fail it without asking D5', 
     assert.equal(JSON.stringify(result).includes('CANARY_PROVIDER'), false, item.name);
     assert.deepEqual(result.open_issue?.criterion_ids, ['c1'], item.name);
   }
-  const red = driver({ input: input({ ceiling: 'flash', retries: 0 }), exits: [1], evaluations: [{ c1: { p: 1, conf: 1 } }] });
+  const red = driver({
+    input: input({ ceiling: 'flash', retries: 0 }),
+    exits: [1],
+    evaluations: [{ c1: { p: 1, conf: 1 } }],
+  });
   const failed = await runImplementationStep(red.input, red.ports, red.journal);
   assert.equal(failed.status, 'failed');
   assert.equal(failed.goal_done, false);
@@ -719,7 +1014,10 @@ test('resume after a crash repeats no finished attempt and keeps the execution i
   try {
     const path = join(dir, 'attempts.jsonl');
     const work = input();
-    const first = driver({ journal: new FileAttemptJournal(path), evaluations: [{ c1: { p: .2, conf: 1 } }, { c1: { p: 1, conf: 1 } }] });
+    const first = driver({
+      journal: new FileAttemptJournal(path),
+      evaluations: [{ c1: { p: 0.2, conf: 1 } }, { c1: { p: 1, conf: 1 } }],
+    });
     first.crashesAt = 2;
     await assert.rejects(() => runImplementationStep(work, first.ports, first.journal), /simulated-crash/);
     const saved = new FileAttemptJournal(path).load('exec-1');
@@ -741,8 +1039,12 @@ test('resume after a crash repeats no finished attempt and keeps the execution i
     const quiet = driver({ journal: second.journal });
     const quietPorts: ImplementPorts = {
       ...quiet.ports,
-      generate: async () => { throw new Error('repeated'); },
-      evaluate: async () => { throw new Error('repeated'); },
+      generate: async () => {
+        throw new Error('repeated');
+      },
+      evaluate: async () => {
+        throw new Error('repeated');
+      },
     };
     assert.deepEqual(await runImplementationStep(work, quietPorts, quiet.journal), result);
   } finally {
@@ -757,7 +1059,7 @@ test('a torn final line is repaired so later attempts stay loadable and resume d
     const work = input();
     const first = driver({
       journal: new FileAttemptJournal(path),
-      evaluations: [{ c1: { p: .2, conf: 1 } }],
+      evaluations: [{ c1: { p: 0.2, conf: 1 } }],
     });
     first.crashesAt = 2;
     await assert.rejects(() => runImplementationStep(work, first.ports, first.journal), /simulated-crash/);
@@ -767,13 +1069,16 @@ test('a torn final line is repaired so later attempts stay loadable and resume d
     appendFileSync(path, '{"schema":"impl.att');
     const second = driver({
       journal: new FileAttemptJournal(path),
-      evaluations: [{ c1: { p: .2, conf: 1 } }, { c1: { p: 1, conf: 1 } }],
+      evaluations: [{ c1: { p: 0.2, conf: 1 } }, { c1: { p: 1, conf: 1 } }],
     });
     const result = await runImplementationStep(work, second.ports, second.journal);
     assert.deepEqual(second.generateIds, ['exec-1:a2:gen', 'exec-1:a3:gen']);
     assert.equal(result.status, 'passed');
     assert.equal(result.goal_done, false);
-    assert.deepEqual(result.attempts.map(attempt => attempt.id), ['exec-1:a1', 'exec-1:a2', 'exec-1:a3']);
+    assert.deepEqual(
+      result.attempts.map((attempt) => attempt.id),
+      ['exec-1:a1', 'exec-1:a2', 'exec-1:a3'],
+    );
     assert.equal(result.attempts[0]?.status, 'failed');
     assert.equal(result.attempts[1]?.status, 'failed');
     assert.equal(result.attempts[1]?.parentId, 'exec-1:a1');
@@ -781,16 +1086,23 @@ test('a torn final line is repaired so later attempts stay loadable and resume d
     assert.equal(result.attempts[2]?.parentId, 'exec-1:a2');
     const raw = readFileSync(path, 'utf8');
     assert.equal(raw.endsWith('\n'), true);
-    const lines = raw.split('\n').filter(line => line.length > 0);
+    const lines = raw.split('\n').filter((line) => line.length > 0);
     assert.equal(lines.length, 3);
     for (const line of lines) JSON.parse(line);
     const loaded = new FileAttemptJournal(path).load('exec-1');
-    assert.deepEqual(loaded.map(entry => entry.id), ['exec-1:a1', 'exec-1:a2', 'exec-1:a3']);
+    assert.deepEqual(
+      loaded.map((entry) => entry.id),
+      ['exec-1:a1', 'exec-1:a2', 'exec-1:a3'],
+    );
     const quiet = driver({ journal: new FileAttemptJournal(path) });
     const quietPorts: ImplementPorts = {
       ...quiet.ports,
-      generate: async () => { throw new Error('repeated'); },
-      evaluate: async () => { throw new Error('repeated'); },
+      generate: async () => {
+        throw new Error('repeated');
+      },
+      evaluate: async () => {
+        throw new Error('repeated');
+      },
     };
     assert.deepEqual(await runImplementationStep(work, quietPorts, quiet.journal), result);
     assert.equal(quiet.generateIds.length, 0);
@@ -815,7 +1127,7 @@ test('a finished attempt missing its newline is kept when the next attempt is ap
     const work = input();
     const first = driver({
       journal: new FileAttemptJournal(path),
-      evaluations: [{ c1: { p: .2, conf: 1 } }],
+      evaluations: [{ c1: { p: 0.2, conf: 1 } }],
     });
     first.crashesAt = 2;
     await assert.rejects(() => runImplementationStep(work, first.ports, first.journal), /simulated-crash/);
@@ -834,10 +1146,13 @@ test('a finished attempt missing its newline is kept when the next attempt is ap
     assert.equal(result.attempts[0]?.id, 'exec-1:a1');
     assert.equal(result.attempts[1]?.parentId, 'exec-1:a1');
     const loaded = new FileAttemptJournal(path).load('exec-1');
-    assert.deepEqual(loaded.map(entry => entry.id), ['exec-1:a1', 'exec-1:a2']);
+    assert.deepEqual(
+      loaded.map((entry) => entry.id),
+      ['exec-1:a1', 'exec-1:a2'],
+    );
     const raw = readFileSync(path, 'utf8');
     assert.equal(raw.endsWith('\n'), true);
-    for (const line of raw.split('\n').filter(line => line.length > 0)) JSON.parse(line);
+    for (const line of raw.split('\n').filter((line) => line.length > 0)) JSON.parse(line);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -847,12 +1162,12 @@ test('step-built ids stay bounded, unique and deterministic for long execution i
   const run = async (execution_id: string) => {
     const world = driver({
       input: input({ execution_id, retries: 1 }),
-      evaluations: [{ c1: { p: .2, conf: 1 } }, { c1: { p: 1, conf: 1 } }],
+      evaluations: [{ c1: { p: 0.2, conf: 1 } }, { c1: { p: 1, conf: 1 } }],
     });
     const result = await runImplementationStep(world.input, world.ports, world.journal);
     assert.equal(result.status, 'passed');
     assert.equal(result.attempts.length, 2);
-    const ids = [...world.generateIds, ...world.evalIds, ...result.attempts.map(attempt => attempt.id)];
+    const ids = [...world.generateIds, ...world.evalIds, ...result.attempts.map((attempt) => attempt.id)];
     for (const id of ids) {
       assert.equal(correlation(id), id, 'step id must be a valid correlation');
       assert.ok(id.length <= 128, 'step id must be bounded');
@@ -860,11 +1175,11 @@ test('step-built ids stay bounded, unique and deterministic for long execution i
     assert.equal(new Set(world.generateIds).size, 2);
     assert.equal(new Set(world.evalIds).size, 2);
     assert.equal(new Set(ids).size, ids.length);
-    assert.ok(world.generateIds.every(id => id.endsWith(':gen')));
-    assert.ok(world.evalIds.every(id => id.endsWith(':eval')));
+    assert.ok(world.generateIds.every((id) => id.endsWith(':gen')));
+    assert.ok(world.evalIds.every((id) => id.endsWith(':eval')));
     assert.equal(result.observations[0]?.request_id, world.evalIds[1]);
     assert.deepEqual(replayImplementationStep(world.journal.load(execution_id), world.input), result);
-    return { generate: world.generateIds, eval: world.evalIds, attempts: result.attempts.map(attempt => attempt.id) };
+    return { generate: world.generateIds, eval: world.evalIds, attempts: result.attempts.map((attempt) => attempt.id) };
   };
   const executions = ['x', 'e'.repeat(120), 'f'.repeat(128)];
   const runs = await Promise.all(executions.map(run));
@@ -913,10 +1228,22 @@ test('an invalid execution id is rejected without being copied or dispatched', a
 
 test('failed generation records no D5 observations for an evaluation never asked (#127)', async () => {
   const d = driver({ input: input({ retries: 0, ceiling: 'flash' }) });
-  const result = await runImplementationStep(d.input, {
-    ...d.ports,
-    generate: async () => ({ status: 'blocked', reason: 'no_route', request_id: 'req-1', site: 'impl.step', uncertainty: [], attempts: [], spent: 0 }),
-  }, d.journal);
+  const result = await runImplementationStep(
+    d.input,
+    {
+      ...d.ports,
+      generate: async () => ({
+        status: 'blocked',
+        reason: 'no_route',
+        request_id: 'req-1',
+        site: 'impl.step',
+        uncertainty: [],
+        attempts: [],
+        spent: 0,
+      }),
+    },
+    d.journal,
+  );
   assert.equal(result.status, 'failed');
   assert.deepEqual(result.observations, []);
   assert.deepEqual(result.evals, []);
@@ -925,13 +1252,24 @@ test('failed generation records no D5 observations for an evaluation never asked
 
 // Criterion proof (#199): D5 is asked only about criteria that need judgment.
 const heldOutGrant = {
-  ...grant, permissions: [...grant.permissions, { resource: 'heldout-1', mode: 'read' }],
+  ...grant,
+  permissions: [...grant.permissions, { resource: 'heldout-1', mode: 'read' }],
 } as Grant;
 const heldOutCheck: ImplementCheck = {
-  operation: 'repo.test', grant: heldOutGrant, cwd_ref: 'workspace-1', env_allow: ['PUBLIC_NAME'], timeout_ms: 1000,
-  argv: ['node', 'heldout'], oracle_refs: ['heldout-1'],
+  operation: 'repo.test',
+  grant: heldOutGrant,
+  cwd_ref: 'workspace-1',
+  env_allow: ['PUBLIC_NAME'],
+  timeout_ms: 1000,
+  argv: ['node', 'heldout'],
+  oracle_refs: ['heldout-1'],
 };
-const checkProven = { criterion_id: 'c1', statement: 'the held-out suite passes', proof: 'check' as const, check_ids: ['repo.test'] };
+const checkProven = {
+  criterion_id: 'c1',
+  statement: 'the held-out suite passes',
+  proof: 'check' as const,
+  check_ids: ['repo.test'],
+};
 function proofInput(overrides: Partial<ImplementStepInput> = {}): ImplementStepInput {
   return input({ criteria: [checkProven], checks: [heldOutCheck], generation_writes: ['workspace-1'], ...overrides });
 }
@@ -951,26 +1289,40 @@ test('criterion proof: a step whose criteria are all check-proven sends no D5 re
 });
 
 test('criterion proof: a mixed step asks D5 only about the judgment criterion and discloses only it', async () => {
-  const world = driver({ input: proofInput({ criteria: [checkProven, { criterion_id: 'c2', statement: 'CANARY_JUDGED' }] }) });
+  const world = driver({
+    input: proofInput({ criteria: [checkProven, { criterion_id: 'c2', statement: 'CANARY_JUDGED' }] }),
+  });
   const result = await runImplementationStep(world.input, { ...world.ports, canonical: identity }, world.journal);
   assert.equal(result.status, 'passed');
   assert.deepEqual(world.evalSites, ['eval.output']);
   const disclosed = world.evalStates[0] as { criteria: { criterion_id: string; statement: string }[] };
   assert.deepEqual(disclosed.criteria, [{ criterion_id: 'c2', statement: 'CANARY_JUDGED' }]);
-  assert.deepEqual(result.evals.map(item => item.criterion_id), ['c2']);
-  assert.deepEqual(result.proofs.map(item => item.proof), ['check', 'judgment']);
+  assert.deepEqual(
+    result.evals.map((item) => item.criterion_id),
+    ['c2'],
+  );
+  assert.deepEqual(
+    result.proofs.map((item) => item.proof),
+    ['check', 'judgment'],
+  );
 });
 
 test('criterion proof: tests in the workspace generation writes cannot prove a criterion, so D5 is asked', async () => {
   const workspaceOracle: ImplementCheck = {
-    ...heldOutCheck, oracle_refs: ['workspace-1'],
+    ...heldOutCheck,
+    oracle_refs: ['workspace-1'],
     grant: { ...grant, permissions: [...grant.permissions, { resource: 'workspace-1', mode: 'read' }] } as Grant,
   };
   const world = driver({ input: proofInput({ checks: [workspaceOracle] }) });
   const result = await runImplementationStep(world.input, { ...world.ports, canonical: identity }, world.journal);
   assert.deepEqual(world.evalSites, ['eval.output']);
-  assert.deepEqual(result.proofs, [{ criterion_id: 'c1', proposed: 'check', proof: 'judgment', reason: 'oracle_writable' }]);
-  assert.deepEqual(result.evals.map(item => item.criterion_id), ['c1']);
+  assert.deepEqual(result.proofs, [
+    { criterion_id: 'c1', proposed: 'check', proof: 'judgment', reason: 'oracle_writable' },
+  ]);
+  assert.deepEqual(
+    result.evals.map((item) => item.criterion_id),
+    ['c1'],
+  );
 });
 
 test('criterion proof: without host canonical identity or declared generation writes the criterion keeps D5', async () => {
@@ -980,7 +1332,11 @@ test('criterion proof: without host canonical identity or declared generation wr
   assert.equal(unported.proofs[0]?.reason, 'write_scope_unknown');
   const { generation_writes: _omitted, ...undeclared } = proofInput();
   const noWrites = driver({ input: undeclared });
-  const unscoped = await runImplementationStep(noWrites.input, { ...noWrites.ports, canonical: identity }, noWrites.journal);
+  const unscoped = await runImplementationStep(
+    noWrites.input,
+    { ...noWrites.ports, canonical: identity },
+    noWrites.journal,
+  );
   assert.deepEqual(noWrites.evalSites, ['eval.output']);
   assert.equal(unscoped.proofs[0]?.reason, 'write_scope_unknown');
 });
@@ -1014,7 +1370,7 @@ test('criterion proof: malformed proof fields are invalid input', async () => {
 test('criterion proof: a journal written before #199 replays with no proofs and the same outcome', async () => {
   const world = driver({});
   const result = await runImplementationStep(world.input, world.ports, world.journal);
-  const legacy = world.journal.load('exec-1').map(entry => {
+  const legacy = world.journal.load('exec-1').map((entry) => {
     if (entry.schema !== 'impl.attempt@1') return entry;
     const { proofs: _dropped, ...rest } = entry;
     return rest;
@@ -1026,7 +1382,10 @@ test('criterion proof: a journal written before #199 replays with no proofs and 
 
 test('criterion proof: a bound check id is green only when every run of it passed', async () => {
   const second: ImplementCheck = { ...heldOutCheck, grant: { ...heldOutGrant, action_id: 'act-2' } as Grant };
-  const world = driver({ input: proofInput({ checks: [heldOutCheck, second], retries: 0, ceiling: 'flash' }), exits: [0, 1] });
+  const world = driver({
+    input: proofInput({ checks: [heldOutCheck, second], retries: 0, ceiling: 'flash' }),
+    exits: [0, 1],
+  });
   const result = await runImplementationStep(world.input, { ...world.ports, canonical: identity }, world.journal);
   assert.equal(result.status, 'failed');
   assert.deepEqual(world.evalSites, []);
@@ -1073,20 +1432,29 @@ test('a red check on the last attempt raises a check-sourced open issue with no 
 // #120: the check-run identity comes from an injected port, as time does through `now`.
 test('check invocation ids come from the injected run-id port, not ambient entropy (#120)', async () => {
   const run = async (runIds: readonly string[]) => {
-    const world = driver({ evaluations: [{ c1: { p: .2, conf: 1 } }, { c1: { p: 1, conf: 1 } }] });
+    const world = driver({ evaluations: [{ c1: { p: 0.2, conf: 1 } }, { c1: { p: 1, conf: 1 } }] });
     const queue = [...runIds];
-    const result = await runImplementationStep(world.input, { ...world.ports, runId: () => queue.shift() ?? 'unexpected' },
-      world.journal);
+    const result = await runImplementationStep(
+      world.input,
+      { ...world.ports, runId: () => queue.shift() ?? 'unexpected' },
+      world.journal,
+    );
     assert.equal(result.status, 'passed');
     assert.deepEqual(queue, [], 'one run id per generation run');
-    return world.invokes.map(call => call.invocation_id);
+    return world.invokes.map((call) => call.invocation_id);
   };
   const first = await run(['run-a', 'run-b']);
   assert.deepEqual(await run(['run-a', 'run-b']), first, 'the same run ids replay the same check identities');
   assert.equal(new Set(first).size, 2, 'each generation run gets its own check identity');
   const fresh = await run(['run-c', 'run-d']);
-  assert.ok(fresh.every(id => !first.includes(id)), 'a fresh run id never reuses a committed check identity');
-  assert.ok(first.every(id => !id?.includes('run-a') && !id?.includes('run-b')), 'run ids are digested, not copied');
+  assert.ok(
+    fresh.every((id) => !first.includes(id)),
+    'a fresh run id never reuses a committed check identity',
+  );
+  assert.ok(
+    first.every((id) => !id?.includes('run-a') && !id?.includes('run-b')),
+    'run ids are digested, not copied',
+  );
   for (const bad of [() => '', () => 7 as unknown as string]) {
     const world = driver({});
     await assert.rejects(runImplementationStep(world.input, { ...world.ports, runId: bad }, world.journal), /run id/);
@@ -1106,12 +1474,18 @@ test('check evidence records the host invocation id, or null when the host gave 
   assert.ok(saved?.schema === 'impl.attempt@1');
   assert.equal(saved.checks[0]?.invocation_id, recorded);
   const denied = driver({ input: input({ checks: [{ ...input().checks[0]!, grant: null }] }) });
-  assert.equal((await runImplementationStep(denied.input, denied.ports, denied.journal)).checks[0]?.invocation_id, null);
+  assert.equal(
+    (await runImplementationStep(denied.input, denied.ports, denied.journal)).checks[0]?.invocation_id,
+    null,
+  );
   const unsafe = driver({});
-  const leaky: ImplementPorts = { ...unsafe.ports, invoke: (token, operation, inputs, options) => {
-    const handle = unsafe.ports.invoke(token, operation, inputs, options);
-    return handle.kind === 'handle' ? { ...handle, invocation_id: 'sk-CANARYHOSTID' } : handle;
-  } };
+  const leaky: ImplementPorts = {
+    ...unsafe.ports,
+    invoke: (token, operation, inputs, options) => {
+      const handle = unsafe.ports.invoke(token, operation, inputs, options);
+      return handle.kind === 'handle' ? { ...handle, invocation_id: 'sk-CANARYHOSTID' } : handle;
+    },
+  };
   const screened = await runImplementationStep(unsafe.input, leaky, unsafe.journal);
   assert.equal(screened.checks[0]?.invocation_id, null);
   assert.equal(JSON.stringify(unsafe.journal.load('exec-1')).includes('CANARY'), false);
@@ -1120,16 +1494,21 @@ test('check evidence records the host invocation id, or null when the host gave 
 // #122: ids the step builds stay valid correlation ids for any valid execution id.
 test('step-built ids stay within the 128-character correlation limit and stay distinct (#122)', async () => {
   const prefix = 'e'.repeat(127);
-  const failing = { c1: { p: .1, conf: 1 } };
+  const failing = { c1: { p: 0.1, conf: 1 } };
   const ids = async (execution_id: string) => {
-    const world = driver({ input: input({ execution_id, ceiling: 'standard' }), evaluations: [failing, failing, failing, failing] });
+    const world = driver({
+      input: input({ execution_id, ceiling: 'standard' }),
+      evaluations: [failing, failing, failing, failing],
+    });
     const result = await runImplementationStep(world.input, world.ports, world.journal);
     assert.equal(result.status, 'failed');
     assert.equal(result.attempts.length, 4);
     const built = [
-      ...world.generateIds, ...world.invokes.map(call => call.invocation_id), ...world.journal.load(execution_id).map(entry => entry.id),
-      ...result.attempts.flatMap(attempt => attempt.observations.map(observation => observation.request_id)),
-      ...result.attempts.flatMap(attempt => attempt.checks.map(check => check.invocation_id)),
+      ...world.generateIds,
+      ...world.invokes.map((call) => call.invocation_id),
+      ...world.journal.load(execution_id).map((entry) => entry.id),
+      ...result.attempts.flatMap((attempt) => attempt.observations.map((observation) => observation.request_id)),
+      ...result.attempts.flatMap((attempt) => attempt.checks.map((check) => check.invocation_id)),
       result.open_issue?.issue_id,
     ];
     assert.equal(built.length, 4 + 4 + 5 + 4 + 4 + 1);
@@ -1152,16 +1531,32 @@ test('cancelling the step requests cancellation of the in-flight check and pause
   const world = driver({});
   const controller = new AbortController();
   let cancels = 0;
-  const ports: ImplementPorts = { ...world.ports, invoke: (token, operation, inputs, options) => {
-    const handle = world.ports.invoke(token, operation, inputs, options);
-    if (handle.kind !== 'handle') return handle;
-    let settle: (outcome: Outcome) => void = () => {};
-    const result = new Promise<Outcome>(resolve => { settle = resolve; });
-    // A host that ends a long check only when asked to cancel; the fallback keeps a red run finite.
-    const fallback = setTimeout(() => settle({ outcome: 'succeeded', output: { exit: 0, stdout_tail: '', artifacts: [] } }), 500);
-    queueMicrotask(() => controller.abort());
-    return { ...handle, result, requestCancel() { cancels += 1; clearTimeout(fallback); settle({ outcome: 'failed', failure: 'cancelled' }); } };
-  } };
+  const ports: ImplementPorts = {
+    ...world.ports,
+    invoke: (token, operation, inputs, options) => {
+      const handle = world.ports.invoke(token, operation, inputs, options);
+      if (handle.kind !== 'handle') return handle;
+      let settle: (outcome: Outcome) => void = () => {};
+      const result = new Promise<Outcome>((resolve) => {
+        settle = resolve;
+      });
+      // A host that ends a long check only when asked to cancel; the fallback keeps a red run finite.
+      const fallback = setTimeout(
+        () => settle({ outcome: 'succeeded', output: { exit: 0, stdout_tail: '', artifacts: [] } }),
+        500,
+      );
+      queueMicrotask(() => controller.abort());
+      return {
+        ...handle,
+        result,
+        requestCancel() {
+          cancels += 1;
+          clearTimeout(fallback);
+          settle({ outcome: 'failed', failure: 'cancelled' });
+        },
+      };
+    },
+  };
   const result = await runImplementationStep(world.input, ports, world.journal, controller.signal);
   assert.equal(cancels, 1, 'the in-flight check is asked to cancel');
   assert.equal(result.status, 'paused');
@@ -1174,13 +1569,14 @@ test('cancelling the step requests cancellation of the in-flight check and pause
 
 // #128: a budget pause is temporary at escalation too.
 test('a budget pause at escalation pauses the step and resumes into the escalation (#128)', async () => {
-  const fail = { c1: { p: .1, conf: 1 } };
+  const fail = { c1: { p: 0.1, conf: 1 } };
   let pausing = true;
   const world = driver({
     evaluations: [fail, fail, fail, { c1: { p: 1, conf: 1 } }],
-    budget: request => request.escalation && pausing
-      ? { status: 'pause', reason: 'weekly_budget_cap', until: 80 }
-      : { status: 'allow', tier: request.requested },
+    budget: (request) =>
+      request.escalation && pausing
+        ? { status: 'pause', reason: 'weekly_budget_cap', until: 80 }
+        : { status: 'allow', tier: request.requested },
   });
   const paused = await runImplementationStep(world.input, world.ports, world.journal);
   assert.equal(paused.status, 'paused');
@@ -1194,14 +1590,24 @@ test('a budget pause at escalation pauses the step and resumes into the escalati
   assert.equal(held?.requested_tier, 'standard');
   assert.equal(held?.effective_tier, null);
   assert.deepEqual(held?.pause, { reason: 'weekly_budget_cap', until: 80 });
-  assert.equal(world.journal.load('exec-1').some(entry => entry.schema === 'impl.stop@1'), false);
+  assert.equal(
+    world.journal.load('exec-1').some((entry) => entry.schema === 'impl.stop@1'),
+    false,
+  );
   assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), paused);
-  assert.deepEqual(await runImplementationStep(world.input, world.ports, world.journal).then(again => again.status), 'paused');
+  assert.deepEqual(
+    await runImplementationStep(world.input, world.ports, world.journal).then((again) => again.status),
+    'paused',
+  );
   pausing = false;
   const resumed = await runImplementationStep(world.input, world.ports, world.journal);
   assert.equal(resumed.status, 'passed');
   assert.equal(resumed.escalated, true);
-  assert.deepEqual(world.tiers, ['flash', 'flash', 'flash', 'standard'], 'the paused escalation runs once, at one tier up');
+  assert.deepEqual(
+    world.tiers,
+    ['flash', 'flash', 'flash', 'standard'],
+    'the paused escalation runs once, at one tier up',
+  );
   assert.equal(resumed.attempts.at(-1)?.escalated, true);
   assert.equal(resumed.attempts.at(-1)?.effective_tier, 'standard');
   assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), resumed);
@@ -1210,13 +1616,19 @@ test('a budget pause at escalation pauses the step and resumes into the escalati
 // #129: a D5 outage pauses the step instead of spending its retries and escalation.
 test('a D5 outage pauses the attempt without consuming a retry or the escalation (#129)', async () => {
   for (const outage of ['throw', 'outage'] as const) {
-    const world = driver({ input: input({ retries: 0, ceiling: 'standard' }), evaluations: [outage, { c1: { p: 1, conf: 1 } }] });
+    const world = driver({
+      input: input({ retries: 0, ceiling: 'standard' }),
+      evaluations: [outage, { c1: { p: 1, conf: 1 } }],
+    });
     const paused = await runImplementationStep(world.input, world.ports, world.journal);
     assert.equal(paused.status, 'paused', outage);
     assert.equal(paused.open_issue, null, outage);
     assert.equal(paused.goal_done, false, outage);
     assert.deepEqual(paused.attempts[0]?.pause, { reason: 'decision_unavailable', until: null }, outage);
-    assert.ok(paused.observations.every(item => item.reason === 'decision_unavailable'), outage);
+    assert.ok(
+      paused.observations.every((item) => item.reason === 'decision_unavailable'),
+      outage,
+    );
     assert.deepEqual(world.tiers, ['flash'], 'no retry or escalation is spent during the outage');
     assert.deepEqual(replayImplementationStep(world.journal.load('exec-1'), world.input), paused);
     const resumed = await runImplementationStep(world.input, world.ports, world.journal);
@@ -1248,22 +1660,31 @@ test('the file journal fsyncs each append and does not reread the file per appen
       if (String(args[0]) === path) counts.reads += 1;
       return original.readFileSync(...args);
     }) as typeof original.readFileSync;
-    fsModule.fsyncSync = (fd: number) => { counts.fsyncs += 1; original.fsyncSync(fd); };
+    fsModule.fsyncSync = (fd: number) => {
+      counts.fsyncs += 1;
+      original.fsyncSync(fd);
+    };
     syncBuiltinESMExports();
-    const fail = { c1: { p: .2, conf: 1 } };
+    const fail = { c1: { p: 0.2, conf: 1 } };
     const world = driver({ journal, evaluations: [fail, fail, { c1: { p: 1, conf: 1 } }] });
     const result = await runImplementationStep(world.input, world.ports, world.journal);
     assert.equal(result.attempts.length, 3);
     assert.equal(journal.load('exec-1').length, 3);
     assert.equal(counts.fsyncs, 3, 'every append is synced before it returns');
-    assert.ok(counts.reads <= 2, `the writer reads and repairs the file once, then appends without rereading (read ${counts.reads} times)`);
+    assert.ok(
+      counts.reads <= 2,
+      `the writer reads and repairs the file once, then appends without rereading (read ${counts.reads} times)`,
+    );
   } finally {
     fsModule.readFileSync = original.readFileSync;
     fsModule.fsyncSync = original.fsyncSync;
     syncBuiltinESMExports();
   }
   try {
-    assert.deepEqual(new FileAttemptJournal(path).load('exec-1').map(entry => entry.id), ['exec-1:a1', 'exec-1:a2', 'exec-1:a3']);
+    assert.deepEqual(
+      new FileAttemptJournal(path).load('exec-1').map((entry) => entry.id),
+      ['exec-1:a1', 'exec-1:a2', 'exec-1:a3'],
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -1273,18 +1694,26 @@ test('a second writer on one attempt journal is detected and refused (#131)', as
   const dir = mkdtempSync(join(tmpdir(), 'weave-p8-writer-'));
   try {
     const path = join(dir, 'attempts.jsonl');
-    const source = driver({ evaluations: [{ c1: { p: .2, conf: 1 } }, { c1: { p: .2, conf: 1 } }, { c1: { p: 1, conf: 1 } }] });
+    const source = driver({
+      evaluations: [{ c1: { p: 0.2, conf: 1 } }, { c1: { p: 0.2, conf: 1 } }, { c1: { p: 1, conf: 1 } }],
+    });
     await runImplementationStep(source.input, source.ports, source.journal);
     const [first, second, third] = source.journal.load('exec-1');
     assert.ok(first && second && third);
     const owner = new FileAttemptJournal(path);
     owner.append(first);
     const intruder = new FileAttemptJournal(path);
-    assert.deepEqual(intruder.load('exec-1').map(entry => entry.id), ['exec-1:a1']);
+    assert.deepEqual(
+      intruder.load('exec-1').map((entry) => entry.id),
+      ['exec-1:a1'],
+    );
     intruder.append(second);
     assert.throws(() => owner.append(third), /another writer/);
     assert.throws(() => owner.load('exec-1'), /another writer/);
-    assert.deepEqual(new FileAttemptJournal(path).load('exec-1').map(entry => entry.id), ['exec-1:a1', 'exec-1:a2']);
+    assert.deepEqual(
+      new FileAttemptJournal(path).load('exec-1').map((entry) => entry.id),
+      ['exec-1:a1', 'exec-1:a2'],
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -1292,21 +1721,29 @@ test('a second writer on one attempt journal is detected and refused (#131)', as
 
 // #130: escalation is relative to the D2-routed tier; the budget gate re-checks it.
 test('escalation steps up from the routed tier, not from a budget-lowered tier (#130)', async () => {
-  const fail = { c1: { p: .1, conf: 1 } };
+  const fail = { c1: { p: 0.1, conf: 1 } };
   const requests: [ImplementBudgetRequest['requested'], boolean][] = [];
   const world = driver({
     input: input({ tier: 'standard', ceiling: 'strong' }),
     evaluations: [fail, fail, fail, { c1: { p: 1, conf: 1 } }],
-    budget: request => {
+    budget: (request) => {
       requests.push([request.requested, request.escalation]);
       return { status: 'allow', tier: request.escalation ? request.requested : 'flash' };
     },
   });
   const result = await runImplementationStep(world.input, world.ports, world.journal);
   assert.equal(result.status, 'passed');
-  assert.deepEqual(requests, [['standard', false], ['standard', false], ['standard', false], ['strong', true]]);
+  assert.deepEqual(requests, [
+    ['standard', false],
+    ['standard', false],
+    ['standard', false],
+    ['strong', true],
+  ]);
   assert.deepEqual(world.tiers, ['flash', 'flash', 'flash', 'strong']);
-  assert.deepEqual(result.attempts.map(attempt => attempt.requested_tier), ['standard', 'standard', 'standard', 'strong']);
+  assert.deepEqual(
+    result.attempts.map((attempt) => attempt.requested_tier),
+    ['standard', 'standard', 'standard', 'strong'],
+  );
   const lowered = driver({
     input: input({ tier: 'standard', ceiling: 'strong' }),
     evaluations: [fail, fail, fail],
@@ -1314,13 +1751,17 @@ test('escalation steps up from the routed tier, not from a budget-lowered tier (
   });
   const stopped = await runImplementationStep(lowered.input, lowered.ports, lowered.journal);
   assert.equal(stopped.status, 'failed');
-  assert.equal(stopped.open_issue?.blocked_by, 'budget', 'a budget that still lowers the escalated tier stops the step');
+  assert.equal(
+    stopped.open_issue?.blocked_by,
+    'budget',
+    'a budget that still lowers the escalated tier stops the step',
+  );
   assert.deepEqual(lowered.tiers, ['flash', 'flash', 'flash']);
 });
 
 // #126: a journal the step has not finished does not read as a terminal failure.
 test('replay of an unfinished journal reports unfinished, not failed (#126)', async () => {
-  const world = driver({ evaluations: [{ c1: { p: .2, conf: 1 } }, { c1: { p: 1, conf: 1 } }] });
+  const world = driver({ evaluations: [{ c1: { p: 0.2, conf: 1 } }, { c1: { p: 1, conf: 1 } }] });
   world.crashesAt = 2;
   await assert.rejects(runImplementationStep(world.input, world.ports, world.journal), /simulated-crash/);
   const midway = replayImplementationStep(world.journal.load('exec-1'), world.input);
@@ -1340,10 +1781,13 @@ test('replay of an unfinished journal reports unfinished, not failed (#126)', as
 test('the equal issuer gives each fresh grant its own action id and stops at its limit (#124, #125)', () => {
   const authority = createGrantAuthority();
   const fields = {
-    action_id: 'act-1', operation: 'repo.test', contract_rev: 'r1',
+    action_id: 'act-1',
+    operation: 'repo.test',
+    contract_rev: 'r1',
     permissions: [{ resource: 'workspace-1', mode: 'write' as const }],
     effects: [{ resource: 'workspace-1', mode: 'write' as const }],
-    process_effects: ['process.spawn', 'fs.write:workspace-1'], issued_at: 1,
+    process_effects: ['process.spawn', 'fs.write:workspace-1'],
+    issued_at: 1,
   };
   const held = authority.issue(fields);
   const other = authority.issue({ ...fields, action_id: 'act-2' });
@@ -1351,7 +1795,11 @@ test('the equal issuer gives each fresh grant its own action id and stops at its
   const first = issuer.issue(held);
   const second = issuer.issue(held);
   assert.ok(first && second);
-  assert.equal(new Set([held.action_id, first.action_id, second.action_id]).size, 3, 'release/proceed by action id stay unambiguous');
+  assert.equal(
+    new Set([held.action_id, first.action_id, second.action_id]).size,
+    3,
+    'release/proceed by action id stay unambiguous',
+  );
   assert.ok(authority.isIssued(first) && authority.isIssued(second));
   assert.equal(issuer.issue(held), null, 'the limit bounds fresh grants per held grant');
   const third = issuer.issue(other);
@@ -1359,8 +1807,11 @@ test('the equal issuer gives each fresh grant its own action id and stops at its
   assert.equal(new Set([first.action_id, second.action_id, third.action_id]).size, 3);
   const defaults = createEqualGrantIssuer(authority, [held]);
   const minted = Array.from({ length: DEFAULT_IMPLEMENT_RETRIES + 3 }, () => defaults.issue(held));
-  assert.equal(minted.filter(item => item !== null).length, DEFAULT_IMPLEMENT_RETRIES + 2,
-    'by default one fresh grant per generation run of a step: retries, the first attempt and the escalation');
+  assert.equal(
+    minted.filter((item) => item !== null).length,
+    DEFAULT_IMPLEMENT_RETRIES + 2,
+    'by default one fresh grant per generation run of a step: retries, the first attempt and the escalation',
+  );
   assert.equal(minted.at(-1), null);
   for (const bad of [0, -1, 1.5, 11, Number.NaN]) {
     assert.throws(() => createEqualGrantIssuer(authority, [held], bad), /limit/);

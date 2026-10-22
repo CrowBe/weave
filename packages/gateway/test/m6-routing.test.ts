@@ -69,7 +69,9 @@ function unreported(): GenerationProviderResult {
   };
 }
 
-function unit(overrides: Partial<GenerateUnit> & Pick<GenerateUnit, 'routed_unit_id' | 'destination' | 'price'>): GenerateUnit {
+function unit(
+  overrides: Partial<GenerateUnit> & Pick<GenerateUnit, 'routed_unit_id' | 'destination' | 'price'>,
+): GenerateUnit {
   return {
     operation: 'generate',
     kind: 'transform',
@@ -147,7 +149,9 @@ describe('M6 prefix cache', () => {
       assert.equal(outcome.attempts[0]?.cost_is_upper_bound, false);
     }
     assert.equal(cheapAdapter.calls, 0);
-    const belowCold = await gateway.generate(request({ ...warm, cost_ceiling: 3_600_000, request_id: 'req-below' } as InferenceTerms));
+    const belowCold = await gateway.generate(
+      request({ ...warm, cost_ceiling: 3_600_000, request_id: 'req-below' } as InferenceTerms),
+    );
     assert.equal(belowCold.status, 'blocked');
   });
 
@@ -186,12 +190,7 @@ describe('M6 prefix cache', () => {
       prefix_digest: SHORT_DIGEST,
       prefix_cache: { routed_unit_id: 'route.strong', prefix_digest: LONG_DIGEST, cached_tokens: 1_000 },
     });
-    const isolated = route(
-      [shortStrong, shortCheap],
-      { operation: 'generate', kind: 'transform' },
-      digestMiss,
-      20,
-    );
+    const isolated = route([shortStrong, shortCheap], { operation: 'generate', kind: 'transform' }, digestMiss, 20);
     assert.deepEqual(
       isolated.order.map((item) => item.routed_unit_id),
       ['route.cheap', 'route.strong'],

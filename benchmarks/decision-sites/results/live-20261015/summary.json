@@ -37,10 +37,7 @@
     "loop.triage/set": "9ddae6f34801a33ea5a42c95f4b788c5332752626829af5f3e6264b903ba7971",
     "loop.triage/tune": "c5a5696c2be58eb489f743efac581bbd0f0ea747e5bd706cfabcbff4613b5750"
   },
-  "models_served": [
-    "amos-1-2b",
-    "jev-1.14.0"
-  ],
+  "models_served": ["amos-1-2b", "jev-1.14.0"],
   "provider_statuses": [
     {
       "type": "provider_status",

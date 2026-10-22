@@ -107,14 +107,14 @@ already recorded.
 Retain every M0–M3 check. Use the admitted fixture implementation and
 injected ticks.
 
-| ID | Scenario | Required evidence |
-| --- | --- | --- |
-| M4-T01 | Repeat the normalized report | `text.normalize` is dispatched from the recorded composition. No framing inference is requested for that binding. The runtime procedure union is unchanged. |
-| M4-T02 | Same input, current read set, same goal | The cached conclusion is reused. No second host invocation occurs. The trace cites the conclusion's evidence. |
-| M4-T03 | Source revision changes after the conclusion, including when the cached output is under the byte bound | The stale output is not the action result. The operation runs again or the result is uncertain. The old conclusion remains in the log. |
-| M4-T04 | A second goal requests the first goal's conclusion, with no policy record | Reuse is denied. A policy record that names both goals permits reuse. Registry presence alone does not. |
-| M4-T05 | A second implementation of `text.normalize` is admitted | Its reliability and cost are empty. It is not selected on the first implementation's measurements. The host record names the implementation that ran. |
-| M4-T06 | Baseline recorded from the repeated workload, including one failed goal | The record has quality, inference count, tick latency, cost, and human corrections. It exists before any M5 candidate observation. A reused conclusion does not increase `cost_micros` a second time. |
+| ID     | Scenario                                                                                               | Required evidence                                                                                                                                                                                     |
+| ------ | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M4-T01 | Repeat the normalized report                                                                           | `text.normalize` is dispatched from the recorded composition. No framing inference is requested for that binding. The runtime procedure union is unchanged.                                           |
+| M4-T02 | Same input, current read set, same goal                                                                | The cached conclusion is reused. No second host invocation occurs. The trace cites the conclusion's evidence.                                                                                         |
+| M4-T03 | Source revision changes after the conclusion, including when the cached output is under the byte bound | The stale output is not the action result. The operation runs again or the result is uncertain. The old conclusion remains in the log.                                                                |
+| M4-T04 | A second goal requests the first goal's conclusion, with no policy record                              | Reuse is denied. A policy record that names both goals permits reuse. Registry presence alone does not.                                                                                               |
+| M4-T05 | A second implementation of `text.normalize` is admitted                                                | Its reliability and cost are empty. It is not selected on the first implementation's measurements. The host record names the implementation that ran.                                                 |
+| M4-T06 | Baseline recorded from the repeated workload, including one failed goal                                | The record has quality, inference count, tick latency, cost, and human corrections. It exists before any M5 candidate observation. A reused conclusion does not increase `cost_micros` a second time. |
 
 Replay of the repeated run does not invoke the host or the gateway. Record
 demonstrated red and green against the exact contract revisions.

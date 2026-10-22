@@ -64,7 +64,13 @@ async function withAdapter(
   stubArgs: readonly string[],
   timeout_ms: number,
   env_allow: readonly string[],
-  run: (adapter: GenerationAdapter, host: AgentFabricHost, cwd: string, dir: string, authority: GrantAuthority) => Promise<void>,
+  run: (
+    adapter: GenerationAdapter,
+    host: AgentFabricHost,
+    cwd: string,
+    dir: string,
+    authority: GrantAuthority,
+  ) => Promise<void>,
 ): Promise<void> {
   const dir = mkdtempSync(join(tmpdir(), 'weave-p7-cli-'));
   const authority = createGrantAuthority();
@@ -191,21 +197,40 @@ describe('stub CLI generate adapters', () => {
       const pidFile = join(dir, 'partial.pid');
       const abort = new AbortController();
       const pending = spawn.run({
-        argv: [process.execPath, STUB, '--partial', pidFile], cwd_ref: cwd, env_allow: ['CANARY'], timeout_ms: 60_000, stdin: '', signal: abort.signal,
+        argv: [process.execPath, STUB, '--partial', pidFile],
+        cwd_ref: cwd,
+        env_allow: ['CANARY'],
+        timeout_ms: 60_000,
+        stdin: '',
+        signal: abort.signal,
       });
       await waitForFile(pidFile);
       abort.abort();
       const cancelled = await pending;
       const cancelledTrace = host.shellTraces().at(-1);
       assert.deepEqual(cancelled, {
-        status: 'failed', failure: 'cancelled', stdout_tail: 'partial-out:[redacted]\n', stderr_tail: 'partial-err\n', duration_ms: cancelledTrace?.duration_ms,
+        status: 'failed',
+        failure: 'cancelled',
+        stdout_tail: 'partial-out:[redacted]\n',
+        stderr_tail: 'partial-err\n',
+        duration_ms: cancelledTrace?.duration_ms,
       });
       assert.ok(cancelled.duration_ms > 0);
       assert.equal(JSON.stringify(cancelled).includes(CANARY), false);
 
-      const signalled = await spawn.run({ argv: [process.execPath, STUB, '--signal'], cwd_ref: cwd, env_allow: [], timeout_ms: 5_000, stdin: '' });
+      const signalled = await spawn.run({
+        argv: [process.execPath, STUB, '--signal'],
+        cwd_ref: cwd,
+        env_allow: [],
+        timeout_ms: 5_000,
+        stdin: '',
+      });
       assert.deepEqual(signalled, {
-        status: 'failed', failure: 'spawn_failed', stdout_tail: '', stderr_tail: 'stub-signalled\n', duration_ms: host.shellTraces().at(-1)?.duration_ms,
+        status: 'failed',
+        failure: 'spawn_failed',
+        stdout_tail: '',
+        stderr_tail: 'stub-signalled\n',
+        duration_ms: host.shellTraces().at(-1)?.duration_ms,
       });
     });
   });

@@ -20,10 +20,10 @@ are not independent production observations. In particular, several
 unsupported matching tasks have close train or v1 analogues, so holding out
 their group IDs does not establish transfer to unseen semantic families.
 
-| Site | Train cases / groups | Validation cases / groups | Test cases / groups |
-| --- | ---: | ---: | ---: |
-| `capability.match` | 120 / 20 | 48 / 8 | 60 / 10 |
-| `result.evaluate` | 114 / 19 | 48 / 8 | 60 / 10 |
+| Site               | Train cases / groups | Validation cases / groups | Test cases / groups |
+| ------------------ | -------------------: | ------------------------: | ------------------: |
+| `capability.match` |             120 / 20 |                    48 / 8 |             60 / 10 |
+| `result.evaluate`  |             114 / 19 |                    48 / 8 |             60 / 10 |
 
 [`collect_v2.py`](collect_v2.py) rejects old group IDs or exact normalized
 rendered text. Exported GLiNER rows, provenance indices, model runs, and LoRA
@@ -32,7 +32,7 @@ in this repository workspace because they are authored here rather than
 extracted from BEV.
 The separately authored corpora received a cross-review before any baseline
 run. Review caught and corrected success criteria that had asked merely to
-*determine whether* an effect occurred while labeling a definitive negative
+_determine whether_ an effect occurred while labeling a definitive negative
 outcome `unmet`. The fixed corpus hashes are recorded in ignored
 `.local/gliner-decide/weave-v2/independence.json` and per-site manifests.
 
@@ -45,10 +45,10 @@ reused as a hidden final benchmark here.
 
 ## Untuned checkpoint
 
-| Site | Validation correct | Test correct | Test majority floor | Median test CPU inference |
-| --- | ---: | ---: | ---: | ---: |
-| `capability.match` | 36/48 | 44/60 | 20/60 | 1,033 ms |
-| `result.evaluate` | 48/48 | 40/60 | 16/60 | 926 ms |
+| Site               | Validation correct | Test correct | Test majority floor | Median test CPU inference |
+| ------------------ | -----------------: | -----------: | ------------------: | ------------------------: |
+| `capability.match` |              36/48 |        44/60 |               20/60 |                  1,033 ms |
+| `result.evaluate`  |              48/48 |        40/60 |               16/60 |                    926 ms |
 
 All 12 matching validation errors and 16 matching test errors are false
 matches on the relevant unsupported-operation arms (two surface variants per
@@ -63,10 +63,10 @@ and test case ID, expected label, both predictions, and both timings, without
 copying dataset text. Both adapters were loaded from disk into fresh base
 processes for evaluation.
 
-| Site | Validation base → adapter | Test base → adapter | Test corrections / regressions | All-correct test groups |
-| --- | ---: | ---: | ---: | ---: |
-| `capability.match` | **36/48 → 46/48** | **44/60 → 57/60** | 13 / 0 | 2/10 → 8/10 |
-| `result.evaluate` | **48/48 → 46/48** | **40/60 → 49/60** | 10 / 1 | 4/10 → 6/10 |
+| Site               | Validation base → adapter | Test base → adapter | Test corrections / regressions | All-correct test groups |
+| ------------------ | ------------------------: | ------------------: | -----------------------------: | ----------------------: |
+| `capability.match` |         **36/48 → 46/48** |   **44/60 → 57/60** |                         13 / 0 |             2/10 → 8/10 |
+| `result.evaluate`  |         **48/48 → 46/48** |   **40/60 → 49/60** |                         10 / 1 |             4/10 → 6/10 |
 
 For matching, all positive contract cases stayed correct. The held-out
 `none` rows improved from **4/20 → 17/20** on test and **4/16 → 14/16** on
@@ -82,10 +82,10 @@ The adapter introduced two validation errors on a queued cancellation case
 and one test error in effect ordering. Its net test gain is not a clean
 across-label improvement, and it should not be promoted.
 
-| Site | Train steps / time | Training peak RSS | Adapter size | Median test inference, base → adapter |
-| --- | ---: | ---: | ---: | ---: |
-| `capability.match` | 120 / 364 s | 4.07 GiB | 3.16 MB | 1,033 → 1,064 ms |
-| `result.evaluate` | 114 / 433 s | 4.07 GiB | 3.16 MB | 926 → 1,182 ms |
+| Site               | Train steps / time | Training peak RSS | Adapter size | Median test inference, base → adapter |
+| ------------------ | -----------------: | ----------------: | -----------: | ------------------------------------: |
+| `capability.match` |        120 / 364 s |          4.07 GiB |      3.16 MB |                      1,033 → 1,064 ms |
+| `result.evaluate`  |        114 / 433 s |          4.07 GiB |      3.16 MB |                        926 → 1,182 ms |
 
 The training processes ran concurrently and contended for the 15 W CPU; these
 times are feasibility measurements rather than a throughput curve. A repeat

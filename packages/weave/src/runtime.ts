@@ -36,7 +36,14 @@ import { stableStringify } from './stable-json.js';
 import { applyAccepted, initialState, snapshot, type MutableState } from './state.js';
 import { narrowDestinations } from './destinations.js';
 import { measureCandidate, stablePrefixBytes } from './strategy.js';
-import { DEFAULT_FRAME_PROFILE, renderFrameView, renderReviewView, SHARED_ASSEMBLY_MICROS, renderWeighView, type FrameProfile } from './views.js';
+import {
+  DEFAULT_FRAME_PROFILE,
+  renderFrameView,
+  renderReviewView,
+  SHARED_ASSEMBLY_MICROS,
+  renderWeighView,
+  type FrameProfile,
+} from './views.js';
 import { toAttempts, toMicros } from './gateway-decision.js';
 import { defersEverything, selectFrontier } from './frontier-weigh.js';
 import type {
@@ -515,9 +522,7 @@ export class Runtime {
     return this.step(() => this.appendStep(input));
   }
 
-  private appendStep(
-    input: ObservationInput & { forced?: Observation['validation'] },
-  ): Observation {
+  private appendStep(input: ObservationInput & { forced?: Observation['validation'] }): Observation {
     this.transitionLock = true;
     let observation: Observation;
     try {
@@ -600,7 +605,11 @@ export class Runtime {
     if (observation.payload_type === 'inference.recorded') {
       const attempts = (observation.payload as InferenceRecordedPayload).attempts;
       for (const attempt of attempts) {
-        retention.retain(`${observation.observation_id}:${attempt.attempt}`, stableStringify(attempt), this.transitionLock);
+        retention.retain(
+          `${observation.observation_id}:${attempt.attempt}`,
+          stableStringify(attempt),
+          this.transitionLock,
+        );
       }
       return;
     }
@@ -671,7 +680,13 @@ export class Runtime {
     });
 
     if (outcome === null) {
-      outcome = this.cycleOutcome(completed, selected.length, selection.not_selected, candidates, formation.unavailable);
+      outcome = this.cycleOutcome(
+        completed,
+        selected.length,
+        selection.not_selected,
+        candidates,
+        formation.unavailable,
+      );
     }
     if (pausedFraming && selected.length === 0) {
       outcome = { status: 'blocked', reason: 'profile record missing' };
@@ -704,8 +719,7 @@ export class Runtime {
   }
 
   private prepareSharedViews(state: State, candidates: readonly Candidate[], state_revision: Seq): void {
-    const rendered: State =
-      state.state_revision === state_revision ? state : { ...state, state_revision };
+    const rendered: State = state.state_revision === state_revision ? state : { ...state, state_revision };
     const profile = this.profileForFrame();
     if (profile && candidates.some((candidate) => candidate.operation === 'goal.frame')) {
       const view = renderFrameView(rendered, this.catalogueOps(), profile, { assemblies: true });
@@ -732,9 +746,7 @@ export class Runtime {
     if (dispatched > 0) {
       return { status: 'dispatched' };
     }
-    const running = Object.values(this.current.actions).some(
-      (a) => a.state === 'running' || a.state === 'pending',
-    );
+    const running = Object.values(this.current.actions).some((a) => a.state === 'running' || a.state === 'pending');
     if (running) {
       return { status: 'waiting' };
     }
@@ -995,7 +1007,9 @@ export class Runtime {
   }
 
   private anyInFlight(): boolean {
-    return Object.values(this.current.actions).some((action) => action.state === 'running' || action.state === 'pending');
+    return Object.values(this.current.actions).some(
+      (action) => action.state === 'running' || action.state === 'pending',
+    );
   }
 
   private appendInferenceRequested(payload: InferenceRequestedPayload): Observation {
@@ -1158,7 +1172,12 @@ export class Runtime {
     const prepared = this.takePrepared(started.action_id, 'goal.frame');
     const view =
       prepared ??
-      renderFrameView(this.view(), this.catalogueOps(), profile, this.options.shareAssemblies ? { assemblies: true } : undefined);
+      renderFrameView(
+        this.view(),
+        this.catalogueOps(),
+        profile,
+        this.options.shareAssemblies ? { assemblies: true } : undefined,
+      );
     if (!prepared) {
       this.noteViewAssemblies(view);
     }
@@ -1225,33 +1244,35 @@ export class Runtime {
           },
           controller.signal,
         )
-        .then((outcome) => this.step(() => {
-          this.inferAbort.delete(request_id);
-          this.gatewayIngress.submit({
-            observation_id: `inference:recorded:${request_id}`,
-            caused_by: started.action_id,
-            payload_type: 'inference.recorded',
-            payload_version: 1,
-            payload: {
-              request_id,
-              attempts: toAttempts(outcome.attempts),
-              spent: toMicros(outcome.spent),
-              status: outcome.status === 'accepted' ? 'accepted' : outcome.status,
-              reason: outcome.status === 'accepted' ? null : outcome.reason,
-            } satisfies InferenceRecordedPayload,
-          });
-          if (outcome.status !== 'accepted') {
-            this.recordResult(started.action_id, { outcome: 'failed', failure: outcome.reason }, GATEWAY_SOURCE);
-            return;
-          }
-          const parsed = parseProposalText(outcome.text);
-          if (!parsed.ok) {
-            this.recordResult(started.action_id, { outcome: 'failed', failure: parsed.reason }, GATEWAY_SOURCE);
-            return;
-          }
-          const proposal = validateProposal(parsed.bindings, this.view(), this.describe);
-          this.recordResult(started.action_id, { outcome: 'succeeded', output: proposal }, GATEWAY_SOURCE);
-        })),
+        .then((outcome) =>
+          this.step(() => {
+            this.inferAbort.delete(request_id);
+            this.gatewayIngress.submit({
+              observation_id: `inference:recorded:${request_id}`,
+              caused_by: started.action_id,
+              payload_type: 'inference.recorded',
+              payload_version: 1,
+              payload: {
+                request_id,
+                attempts: toAttempts(outcome.attempts),
+                spent: toMicros(outcome.spent),
+                status: outcome.status === 'accepted' ? 'accepted' : outcome.status,
+                reason: outcome.status === 'accepted' ? null : outcome.reason,
+              } satisfies InferenceRecordedPayload,
+            });
+            if (outcome.status !== 'accepted') {
+              this.recordResult(started.action_id, { outcome: 'failed', failure: outcome.reason }, GATEWAY_SOURCE);
+              return;
+            }
+            const parsed = parseProposalText(outcome.text);
+            if (!parsed.ok) {
+              this.recordResult(started.action_id, { outcome: 'failed', failure: parsed.reason }, GATEWAY_SOURCE);
+              return;
+            }
+            const proposal = validateProposal(parsed.bindings, this.view(), this.describe);
+            this.recordResult(started.action_id, { outcome: 'succeeded', output: proposal }, GATEWAY_SOURCE);
+          }),
+        ),
     );
     return null;
   }
@@ -1482,7 +1503,10 @@ export class Runtime {
         output: { goal_id: state.goal?.goal_id, report_evidence: state.report?.evidence ?? [] },
       };
     }
-    return { outcome: 'failed', failure: `success evidence missing for ${(started.inputs as { goal_id: string }).goal_id}` };
+    return {
+      outcome: 'failed',
+      failure: `success evidence missing for ${(started.inputs as { goal_id: string }).goal_id}`,
+    };
   }
 
   private requestApprovals(candidates: readonly Candidate[]): void {
@@ -1560,7 +1584,9 @@ export class Runtime {
     }
   }
 
-  private invokeHost(started: ActionStartedPayload):
+  private invokeHost(
+    started: ActionStartedPayload,
+  ):
     | { kind: 'handle'; result: Promise<InvocationOutcome>; implementation_id: string }
     | { kind: 'rejected'; code: string; reason: string }
     | { kind: 'failed_closed'; outcome: ActionOutcome } {
@@ -1716,14 +1742,22 @@ export class Runtime {
         payload: { action_id: action.action_id, invocation_id },
       });
       if (attempted.validation.status !== 'accepted') {
-        this.recordRecoveryExhausted(attempted.validation.status === 'rejected' ? attempted.validation.reason : 'recovery attempt was not recorded');
+        this.recordRecoveryExhausted(
+          attempted.validation.status === 'rejected'
+            ? attempted.validation.reason
+            : 'recovery attempt was not recorded',
+        );
         return;
       }
       const grant = this.grantForLookup(action);
       const looked = this.options.host.lookup(invocation_id, grant);
       if ('kind' in looked) {
         if (action.state !== 'uncertain') {
-          this.recordResult(action.action_id, { outcome: 'uncertain', reason: `${looked.code}: ${looked.reason}` }, RUNTIME_SOURCE);
+          this.recordResult(
+            action.action_id,
+            { outcome: 'uncertain', reason: `${looked.code}: ${looked.reason}` },
+            RUNTIME_SOURCE,
+          );
         }
         continue;
       }
@@ -1824,10 +1858,14 @@ export class Runtime {
             this.recordResult(started.action_id, result, HOST_SOURCE);
           },
           (error: unknown) => {
-            this.recordResult(started.action_id, {
-              outcome: 'failed',
-              failure: error instanceof Error ? error.message : 'crystallize failed',
-            }, HOST_SOURCE);
+            this.recordResult(
+              started.action_id,
+              {
+                outcome: 'failed',
+                failure: error instanceof Error ? error.message : 'crystallize failed',
+              },
+              HOST_SOURCE,
+            );
           },
         ),
       );
@@ -2093,7 +2131,8 @@ export class Runtime {
       return;
     }
     const results = this.current.comparisons.some(
-      (comparison) => comparison.experiment_id === experiment.experiment_id && comparison.evidence > experiment.evidence,
+      (comparison) =>
+        comparison.experiment_id === experiment.experiment_id && comparison.evidence > experiment.evidence,
     );
     if (!results) {
       return;
@@ -2307,7 +2346,10 @@ export class Runtime {
         if (typeof (weights as { then?: unknown }).then === 'function') {
           throw new Error('async decision layer must be handled by the gateway weigh path');
         }
-        return { implementation: this.options.decisionLayer.implementation, weights: weights as readonly WeightEntry[] };
+        return {
+          implementation: this.options.decisionLayer.implementation,
+          weights: weights as readonly WeightEntry[],
+        };
       },
       execute: (started, contract) => {
         if (contract === null) {
@@ -2380,7 +2422,11 @@ export class Runtime {
             return false;
           }
           const p = o.payload as WeightsRecordedPayload;
-          return p.site === request.site && p.state_revision === request.state_revision && p.candidate_set === request.candidate_set;
+          return (
+            p.site === request.site &&
+            p.state_revision === request.state_revision &&
+            p.candidate_set === request.candidate_set
+          );
         });
         if (!match) {
           throw new ReplayFailureError(
@@ -2400,10 +2446,15 @@ export class Runtime {
           this.frameGoal(started);
         }
         const match = accepted.find(
-          (o) => o.payload_type === 'action.result' && (o.payload as ActionResultPayload).action_id === started.action_id,
+          (o) =>
+            o.payload_type === 'action.result' && (o.payload as ActionResultPayload).action_id === started.action_id,
         );
         if (!match) {
-          throw new ReplayFailureError(this.nextSeq(), started.action_id, `missing recorded action.result for ${started.action_id}`);
+          throw new ReplayFailureError(
+            this.nextSeq(),
+            started.action_id,
+            `missing recorded action.result for ${started.action_id}`,
+          );
         }
         const payload = match.payload as ActionResultPayload;
         if (match.source.kind === 'runtime') {
@@ -2542,8 +2593,12 @@ export function replay(recorded: readonly Observation[], options: RuntimeOptions
     );
     let verified = 0;
     for (const observation of ordered) {
-      const resultAction = observation.payload_type === 'action.result' ? (observation.payload as { action_id?: string }).action_id : undefined;
-      const feedReviewResult = observation.source.kind === 'runtime' && resultAction !== undefined && reviewActions.has(resultAction);
+      const resultAction =
+        observation.payload_type === 'action.result'
+          ? (observation.payload as { action_id?: string }).action_id
+          : undefined;
+      const feedReviewResult =
+        observation.source.kind === 'runtime' && resultAction !== undefined && reviewActions.has(resultAction);
       if (CYCLE_APPENDED.includes(observation.source.kind) && !feedReviewResult) {
         continue;
       }
@@ -2584,11 +2639,7 @@ function liveLog(runtime: Runtime): readonly Observation[] {
   return log;
 }
 
-function checkPrefix(
-  replayed: readonly Observation[],
-  recorded: readonly Observation[],
-  from = 0,
-): number {
+function checkPrefix(replayed: readonly Observation[], recorded: readonly Observation[], from = 0): number {
   for (let i = from; i < replayed.length; i += 1) {
     const actual = replayed[i] as Observation;
     const expected = recorded[i];

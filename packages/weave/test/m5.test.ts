@@ -125,9 +125,18 @@ function submit(runtime: Runtime, id: string, payload_type: string, payload: unk
 }
 
 function recordWorkload(runtime: Runtime): void {
-  submit(runtime, 'operator:workload:g-normalize-1', 'workload.recorded', { goal_id: 'g-normalize-1', quality: 'held' });
-  submit(runtime, 'operator:workload:g-normalize-2', 'workload.recorded', { goal_id: 'g-normalize-2', quality: 'held' });
-  submit(runtime, 'operator:workload:g-normalize-blank', 'workload.recorded', { goal_id: 'g-normalize-blank', quality: 'missed' });
+  submit(runtime, 'operator:workload:g-normalize-1', 'workload.recorded', {
+    goal_id: 'g-normalize-1',
+    quality: 'held',
+  });
+  submit(runtime, 'operator:workload:g-normalize-2', 'workload.recorded', {
+    goal_id: 'g-normalize-2',
+    quality: 'held',
+  });
+  submit(runtime, 'operator:workload:g-normalize-blank', 'workload.recorded', {
+    goal_id: 'g-normalize-blank',
+    quality: 'missed',
+  });
 }
 
 function protocol(candidate: string, deadline = 4) {
@@ -164,7 +173,12 @@ function prepare(world: Lab, candidate = NARROW_FRAME_PROFILE.id, deadline = 4):
   const requested = submit(world.runtime, 'operator:baseline.requested', 'baseline.requested', {});
   assert.equal(requested.validation.status, 'accepted', JSON.stringify(requested.validation));
   assert.ok(world.runtime.state().baseline, 'the M4 baseline is recorded before the comparison');
-  const recorded = submit(world.runtime, `operator:experiment.recorded:${candidate}`, 'experiment.recorded', protocol(candidate, deadline));
+  const recorded = submit(
+    world.runtime,
+    `operator:experiment.recorded:${candidate}`,
+    'experiment.recorded',
+    protocol(candidate, deadline),
+  );
   assert.equal(recorded.validation.status, 'accepted', JSON.stringify(recorded.validation));
   return recorded;
 }
@@ -176,7 +190,10 @@ function compare(world: Lab, candidate = NARROW_FRAME_PROFILE.id): ExperimentCom
   assert.equal(requested.validation.status, 'accepted', JSON.stringify(requested.validation));
   const compared = world.runtime
     .trace()
-    .observations.find((observation) => observation.payload_type === 'experiment.compared' && observation.validation.status === 'accepted');
+    .observations.find(
+      (observation) =>
+        observation.payload_type === 'experiment.compared' && observation.validation.status === 'accepted',
+    );
   assert.ok(compared);
   return compared.payload as ExperimentComparedPayload;
 }
@@ -207,7 +224,10 @@ function openGoal(world: Lab, goal: Goal): Observation {
 function frameViews(runtime: Runtime): InferenceRequestedPayload[] {
   return runtime
     .trace()
-    .observations.filter((observation) => observation.payload_type === 'inference.requested' && observation.validation.status === 'accepted')
+    .observations.filter(
+      (observation) =>
+        observation.payload_type === 'inference.requested' && observation.validation.status === 'accepted',
+    )
     .map((observation) => observation.payload as InferenceRequestedPayload)
     .filter((payload) => payload.site === 'goal.frame');
 }
@@ -321,7 +341,11 @@ describe('M5 improve one operating strategy', () => {
     assert.ok(emptyMeasurement.cost_micros < emptyMeasurement.baseline_cost_micros);
     assert.equal(emptyMeasurement.quality, 'missed');
     assert.ok(emptyMeasurement.misses.includes('empty'));
-    const emptyView = renderFrameView(empty.runtime.state(), [], { id: 'profile.frame.empty@1', version: 1, catalogue_budget: 0 });
+    const emptyView = renderFrameView(empty.runtime.state(), [], {
+      id: 'profile.frame.empty@1',
+      version: 1,
+      catalogue_budget: 0,
+    });
     assert.deepEqual(emptyView.content, {});
     const emptyPromotion = promote(empty, 'profile.frame.empty@1');
     assert.equal(emptyPromotion.validation.status, 'rejected');
@@ -401,12 +425,14 @@ describe('M5 improve one operating strategy', () => {
     await publishReport(world);
     const receipt = world.host.publication(world.dest);
     assert.ok(receipt);
-    const published = world.runtime.trace().observations.find(
-      (observation) =>
-        observation.payload_type === 'action.result' &&
-        observation.validation.status === 'accepted' &&
-        JSON.stringify(observation.payload).includes(receipt.invocation_id),
-    );
+    const published = world.runtime
+      .trace()
+      .observations.find(
+        (observation) =>
+          observation.payload_type === 'action.result' &&
+          observation.validation.status === 'accepted' &&
+          JSON.stringify(observation.payload).includes(receipt.invocation_id),
+      );
     assert.ok(published);
     const goal = frameGoal(world, 'g-frame-inflight');
     openGoal(world, goal);
@@ -593,13 +619,20 @@ describe('M5 improve one operating strategy', () => {
     const prefixBytes = stablePrefixBytes(prefixProfile, candidateView).length;
     assert.ok(prefixBytes > 0);
     assert.notEqual(measurement.cost_micros, measurement.token_micros + prefixBytes + CACHE_MISS_DELTA_MICROS);
-    assert.notEqual(measurement.cost_micros, measurement.token_micros + measurement.token_micros + CACHE_MISS_DELTA_MICROS);
+    assert.notEqual(
+      measurement.cost_micros,
+      measurement.token_micros + measurement.token_micros + CACHE_MISS_DELTA_MICROS,
+    );
   });
 });
 
 function grantCount(runtime: Runtime): number {
   return runtime.trace().observations.filter((observation) => {
-    if (observation.validation.status !== 'accepted' || typeof observation.payload !== 'object' || observation.payload === null) {
+    if (
+      observation.validation.status !== 'accepted' ||
+      typeof observation.payload !== 'object' ||
+      observation.payload === null
+    ) {
       return false;
     }
     return (observation.payload as { grant?: unknown }).grant != null;
@@ -607,7 +640,9 @@ function grantCount(runtime: Runtime): number {
 }
 
 function admissionCount(runtime: Runtime): number {
-  return runtime.trace().observations.filter(
-    (observation) => observation.payload_type === 'admission.decided' && observation.validation.status === 'accepted',
-  ).length;
+  return runtime
+    .trace()
+    .observations.filter(
+      (observation) => observation.payload_type === 'admission.decided' && observation.validation.status === 'accepted',
+    ).length;
 }

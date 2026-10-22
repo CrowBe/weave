@@ -13,14 +13,7 @@ export interface AttachmentIndex {
   readonly kind: AttachmentKind;
 }
 
-export const PROVENANCE_ROLES = [
-  'operator',
-  'runtime',
-  'host',
-  'clock',
-  'judgment',
-  'untrusted',
-] as const;
+export const PROVENANCE_ROLES = ['operator', 'runtime', 'host', 'clock', 'judgment', 'untrusted'] as const;
 export type ProvenanceRole = (typeof PROVENANCE_ROLES)[number];
 
 export type DisclosedValidation =

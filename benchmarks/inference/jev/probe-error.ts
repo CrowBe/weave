@@ -12,15 +12,31 @@ const CAUSES: Readonly<Record<string, string>> = {
   ERR_INVALID_CHAR: 'invalid character in an HTTP header',
   ERR_INVALID_HTTP_TOKEN: 'invalid HTTP header name',
 };
-const NAMES = new Set(['Error', 'TypeError', 'RangeError', 'SyntaxError', 'URIError', 'AggregateError', 'AbortError', 'TimeoutError']);
+const NAMES = new Set([
+  'Error',
+  'TypeError',
+  'RangeError',
+  'SyntaxError',
+  'URIError',
+  'AggregateError',
+  'AbortError',
+  'TimeoutError',
+]);
 
 export function formatProbeError(error: unknown): string {
   const name = error instanceof Error && NAMES.has(error.name) ? error.name : 'Error';
   const rawCode = error instanceof Error && 'code' in error ? error.code : undefined;
-  const code = rawCode === undefined ? 'none'
-    : typeof rawCode === 'string' && Object.hasOwn(CAUSES, rawCode) ? rawCode : 'unknown';
-  const message = error instanceof ProbeConfigurationError ? error.message
-    : error instanceof SyntaxError ? 'invalid JSON input'
-    : CAUSES[code] ?? 'probe execution failed; check output and recorded results';
+  const code =
+    rawCode === undefined
+      ? 'none'
+      : typeof rawCode === 'string' && Object.hasOwn(CAUSES, rawCode)
+        ? rawCode
+        : 'unknown';
+  const message =
+    error instanceof ProbeConfigurationError
+      ? error.message
+      : error instanceof SyntaxError
+        ? 'invalid JSON input'
+        : (CAUSES[code] ?? 'probe execution failed; check output and recorded results');
   return `${name} (code=${code}): ${message}`;
 }

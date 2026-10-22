@@ -5,7 +5,9 @@
 import type { Describe } from './candidates.js';
 import type { Goal, Proposal, ProposedBinding, RejectedBinding, State } from './types.js';
 
-export function parseProposalText(text: string): { ok: true; bindings: ProposedBinding[] } | { ok: false; reason: string } {
+export function parseProposalText(
+  text: string,
+): { ok: true; bindings: ProposedBinding[] } | { ok: false; reason: string } {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text) as unknown;
@@ -33,11 +35,7 @@ export function parseProposalText(text: string): { ok: true; bindings: ProposedB
   return { ok: true, bindings: out };
 }
 
-export function validateProposal(
-  bindings: readonly ProposedBinding[],
-  state: State,
-  describe: Describe,
-): Proposal {
+export function validateProposal(bindings: readonly ProposedBinding[], state: State, describe: Describe): Proposal {
   const goal = state.goal;
   const accepted: ProposedBinding[] = [];
   const rejected: RejectedBinding[] = [];

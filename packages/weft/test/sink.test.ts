@@ -61,7 +61,10 @@ test('invalid records, unredacted credentials, unpermitted text and throwing red
   });
   sink.emit({ ...goal, kind: 'unknown.kind' });
   sink.emit({ ...goal, record_id: 'sk-live0123456789abcdef' });
-  sink.emit({ ...goal, fields: { ...goal.fields, statement: { content_class: 'private', digest: sha(TEXT), text: TEXT } } });
+  sink.emit({
+    ...goal,
+    fields: { ...goal.fields, statement: { content_class: 'private', digest: sha(TEXT), text: TEXT } },
+  });
   sink.emit({ ...goal, record_id: 'r-throws' });
   sink.emit('not a record');
   assert.equal(sink.rejected, 5);
@@ -73,8 +76,15 @@ test('inline text is written only under the policy the composition root supplied
   const lines: string[] = [];
   const policy: InlinePolicy = { trace_id: 'goal-17', classes: ['private'] };
   const sink = createWeftSink({ redact: keep, inline: policy, write: (line) => void lines.push(line) });
-  sink.emit({ ...goal, fields: { ...goal.fields, statement: { content_class: 'private', digest: sha(TEXT), text: TEXT } } });
-  sink.emit({ ...goal, trace_id: 'goal-18', fields: { ...goal.fields, statement: { content_class: 'private', digest: sha(TEXT), text: TEXT } } });
+  sink.emit({
+    ...goal,
+    fields: { ...goal.fields, statement: { content_class: 'private', digest: sha(TEXT), text: TEXT } },
+  });
+  sink.emit({
+    ...goal,
+    trace_id: 'goal-18',
+    fields: { ...goal.fields, statement: { content_class: 'private', digest: sha(TEXT), text: TEXT } },
+  });
   assert.equal(lines.length, 1);
   assert.equal(sink.rejected, 1);
 });
@@ -82,6 +92,15 @@ test('inline text is written only under the policy the composition root supplied
 test('a missing redactor, a missing write or a malformed policy is a configuration error at composition', () => {
   const write = () => {};
   assert.throws(() => createWeftSink({ redact: undefined as unknown as Redactor, write }), TypeError);
-  assert.throws(() => createWeftSink({ redact: keep, write: undefined as unknown as (line: string) => void }), TypeError);
-  assert.throws(() => createWeftSink({ redact: keep, write, inline: { trace_id: 'goal-17', classes: ['secret'] } as unknown as InlinePolicy }));
+  assert.throws(
+    () => createWeftSink({ redact: keep, write: undefined as unknown as (line: string) => void }),
+    TypeError,
+  );
+  assert.throws(() =>
+    createWeftSink({
+      redact: keep,
+      write,
+      inline: { trace_id: 'goal-17', classes: ['secret'] } as unknown as InlinePolicy,
+    }),
+  );
 });

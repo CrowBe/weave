@@ -84,12 +84,8 @@
       "split": "tune",
       "kind": "gather",
       "weigher": "scripted@1",
-      "preferred": [
-        "goal.frame"
-      ],
-      "selected": [
-        "goal.frame"
-      ],
+      "preferred": ["goal.frame"],
+      "selected": ["goal.frame"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -107,15 +103,8 @@
       "split": "tune",
       "kind": "gather",
       "weigher": "scripted@1",
-      "preferred": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta"
-      ],
-      "selected": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta",
-        "source.inspect:source:delta"
-      ],
+      "preferred": ["source.inspect:source:alpha", "source.inspect:source:beta"],
+      "selected": ["source.inspect:source:alpha", "source.inspect:source:beta", "source.inspect:source:delta"],
       "outcome": "misdirected",
       "agrees": false,
       "completable": false,
@@ -136,10 +125,7 @@
       "kind": "hold",
       "weigher": "scripted@1",
       "preferred": [],
-      "selected": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta"
-      ],
+      "selected": ["source.inspect:source:alpha", "source.inspect:source:beta"],
       "outcome": "premature",
       "agrees": false,
       "completable": false,
@@ -158,14 +144,8 @@
       "split": "tune",
       "kind": "gather",
       "weigher": "scripted@1",
-      "preferred": [
-        "goal.frame",
-        "report.review"
-      ],
-      "selected": [
-        "goal.frame",
-        "report.review"
-      ],
+      "preferred": ["goal.frame", "report.review"],
+      "selected": ["goal.frame", "report.review"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -184,12 +164,8 @@
       "split": "tune",
       "kind": "act",
       "weigher": "scripted@1",
-      "preferred": [
-        "report.assemble"
-      ],
-      "selected": [
-        "report.assemble"
-      ],
+      "preferred": ["report.assemble"],
+      "selected": ["report.assemble"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -208,9 +184,7 @@
       "kind": "hold",
       "weigher": "scripted@1",
       "preferred": [],
-      "selected": [
-        "source.inspect:source:delta"
-      ],
+      "selected": ["source.inspect:source:delta"],
       "outcome": "premature",
       "agrees": false,
       "completable": true,
@@ -228,12 +202,8 @@
       "split": "tune",
       "kind": "gather",
       "weigher": "scripted@1",
-      "preferred": [
-        "source.inspect:source:beta"
-      ],
-      "selected": [
-        "source.inspect:source:beta"
-      ],
+      "preferred": ["source.inspect:source:beta"],
+      "selected": ["source.inspect:source:beta"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -251,12 +221,8 @@
       "split": "tune",
       "kind": "act",
       "weigher": "scripted@1",
-      "preferred": [
-        "goal.complete"
-      ],
-      "selected": [
-        "goal.complete"
-      ],
+      "preferred": ["goal.complete"],
+      "selected": ["goal.complete"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -276,9 +242,7 @@
       "kind": "hold",
       "weigher": "scripted@1",
       "preferred": [],
-      "selected": [
-        "goal.frame"
-      ],
+      "selected": ["goal.frame"],
       "outcome": "premature",
       "agrees": false,
       "completable": false,
@@ -296,10 +260,7 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "scripted@1",
-      "preferred": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta"
-      ],
+      "preferred": ["source.inspect:source:alpha", "source.inspect:source:beta"],
       "selected": [
         "source.inspect:source:alpha",
         "source.inspect:source:beta",
@@ -326,13 +287,8 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "scripted@1",
-      "preferred": [
-        "source.inspect:source:beta"
-      ],
-      "selected": [
-        "source.inspect:source:beta",
-        "source.inspect:source:delta"
-      ],
+      "preferred": ["source.inspect:source:beta"],
+      "selected": ["source.inspect:source:beta", "source.inspect:source:delta"],
       "outcome": "misdirected",
       "agrees": false,
       "completable": false,
@@ -351,14 +307,8 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "scripted@1",
-      "preferred": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta"
-      ],
-      "selected": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta"
-      ],
+      "preferred": ["source.inspect:source:alpha", "source.inspect:source:beta"],
+      "selected": ["source.inspect:source:alpha", "source.inspect:source:beta"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -377,13 +327,8 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "scripted@1",
-      "preferred": [
-        "goal.frame"
-      ],
-      "selected": [
-        "goal.frame",
-        "report.review"
-      ],
+      "preferred": ["goal.frame"],
+      "selected": ["goal.frame", "report.review"],
       "outcome": "misdirected",
       "agrees": false,
       "completable": false,
@@ -403,10 +348,7 @@
       "kind": "hold",
       "weigher": "scripted@1",
       "preferred": [],
-      "selected": [
-        "goal.frame",
-        "report.review"
-      ],
+      "selected": ["goal.frame", "report.review"],
       "outcome": "premature",
       "agrees": false,
       "completable": false,
@@ -425,13 +367,8 @@
       "split": "holdout",
       "kind": "act",
       "weigher": "scripted@1",
-      "preferred": [
-        "report.assemble"
-      ],
-      "selected": [
-        "report.assemble",
-        "source.inspect:source:delta"
-      ],
+      "preferred": ["report.assemble"],
+      "selected": ["report.assemble", "source.inspect:source:delta"],
       "outcome": "misdirected",
       "agrees": false,
       "completable": false,
@@ -450,12 +387,8 @@
       "split": "holdout",
       "kind": "act",
       "weigher": "scripted@1",
-      "preferred": [
-        "goal.complete"
-      ],
-      "selected": [
-        "goal.complete"
-      ],
+      "preferred": ["goal.complete"],
+      "selected": ["goal.complete"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -473,14 +406,8 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "scripted@1",
-      "preferred": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta"
-      ],
-      "selected": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta"
-      ],
+      "preferred": ["source.inspect:source:alpha", "source.inspect:source:beta"],
+      "selected": ["source.inspect:source:alpha", "source.inspect:source:beta"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -500,9 +427,7 @@
       "kind": "hold",
       "weigher": "scripted@1",
       "preferred": [],
-      "selected": [
-        "report.assemble"
-      ],
+      "selected": ["report.assemble"],
       "outcome": "premature",
       "agrees": false,
       "completable": false,
@@ -521,9 +446,7 @@
       "kind": "hold",
       "weigher": "scripted@1",
       "preferred": [],
-      "selected": [
-        "source.inspect:source:epsilon"
-      ],
+      "selected": ["source.inspect:source:epsilon"],
       "outcome": "premature",
       "agrees": false,
       "completable": false,
@@ -541,13 +464,8 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "scripted@1",
-      "preferred": [
-        "source.inspect:source:alpha"
-      ],
-      "selected": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:delta"
-      ],
+      "preferred": ["source.inspect:source:alpha"],
+      "selected": ["source.inspect:source:alpha", "source.inspect:source:delta"],
       "outcome": "misdirected",
       "agrees": false,
       "completable": false,
@@ -566,12 +484,8 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "scripted@1",
-      "preferred": [
-        "goal.frame"
-      ],
-      "selected": [
-        "goal.frame"
-      ],
+      "preferred": ["goal.frame"],
+      "selected": ["goal.frame"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -589,14 +503,8 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "scripted@1",
-      "preferred": [
-        "goal.frame",
-        "report.review"
-      ],
-      "selected": [
-        "goal.frame",
-        "report.review"
-      ],
+      "preferred": ["goal.frame", "report.review"],
+      "selected": ["goal.frame", "report.review"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -615,12 +523,8 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "scripted@1",
-      "preferred": [
-        "source.inspect:source:alpha"
-      ],
-      "selected": [
-        "source.inspect:source:alpha"
-      ],
+      "preferred": ["source.inspect:source:alpha"],
+      "selected": ["source.inspect:source:alpha"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -638,12 +542,8 @@
       "split": "tune",
       "kind": "gather",
       "weigher": "constant-dispatch",
-      "preferred": [
-        "goal.frame"
-      ],
-      "selected": [
-        "goal.frame"
-      ],
+      "preferred": ["goal.frame"],
+      "selected": ["goal.frame"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -661,15 +561,8 @@
       "split": "tune",
       "kind": "gather",
       "weigher": "constant-dispatch",
-      "preferred": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta"
-      ],
-      "selected": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta",
-        "source.inspect:source:delta"
-      ],
+      "preferred": ["source.inspect:source:alpha", "source.inspect:source:beta"],
+      "selected": ["source.inspect:source:alpha", "source.inspect:source:beta", "source.inspect:source:delta"],
       "outcome": "misdirected",
       "agrees": false,
       "completable": false,
@@ -690,10 +583,7 @@
       "kind": "hold",
       "weigher": "constant-dispatch",
       "preferred": [],
-      "selected": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta"
-      ],
+      "selected": ["source.inspect:source:alpha", "source.inspect:source:beta"],
       "outcome": "premature",
       "agrees": false,
       "completable": false,
@@ -712,14 +602,8 @@
       "split": "tune",
       "kind": "gather",
       "weigher": "constant-dispatch",
-      "preferred": [
-        "goal.frame",
-        "report.review"
-      ],
-      "selected": [
-        "goal.frame",
-        "report.review"
-      ],
+      "preferred": ["goal.frame", "report.review"],
+      "selected": ["goal.frame", "report.review"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -738,12 +622,8 @@
       "split": "tune",
       "kind": "act",
       "weigher": "constant-dispatch",
-      "preferred": [
-        "report.assemble"
-      ],
-      "selected": [
-        "report.assemble"
-      ],
+      "preferred": ["report.assemble"],
+      "selected": ["report.assemble"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -762,9 +642,7 @@
       "kind": "hold",
       "weigher": "constant-dispatch",
       "preferred": [],
-      "selected": [
-        "source.inspect:source:delta"
-      ],
+      "selected": ["source.inspect:source:delta"],
       "outcome": "premature",
       "agrees": false,
       "completable": true,
@@ -782,12 +660,8 @@
       "split": "tune",
       "kind": "gather",
       "weigher": "constant-dispatch",
-      "preferred": [
-        "source.inspect:source:beta"
-      ],
-      "selected": [
-        "source.inspect:source:beta"
-      ],
+      "preferred": ["source.inspect:source:beta"],
+      "selected": ["source.inspect:source:beta"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -805,12 +679,8 @@
       "split": "tune",
       "kind": "act",
       "weigher": "constant-dispatch",
-      "preferred": [
-        "goal.complete"
-      ],
-      "selected": [
-        "goal.complete"
-      ],
+      "preferred": ["goal.complete"],
+      "selected": ["goal.complete"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -830,9 +700,7 @@
       "kind": "hold",
       "weigher": "constant-dispatch",
       "preferred": [],
-      "selected": [
-        "goal.frame"
-      ],
+      "selected": ["goal.frame"],
       "outcome": "premature",
       "agrees": false,
       "completable": false,
@@ -850,10 +718,7 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "constant-dispatch",
-      "preferred": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta"
-      ],
+      "preferred": ["source.inspect:source:alpha", "source.inspect:source:beta"],
       "selected": [
         "source.inspect:source:alpha",
         "source.inspect:source:beta",
@@ -880,13 +745,8 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "constant-dispatch",
-      "preferred": [
-        "source.inspect:source:beta"
-      ],
-      "selected": [
-        "source.inspect:source:beta",
-        "source.inspect:source:delta"
-      ],
+      "preferred": ["source.inspect:source:beta"],
+      "selected": ["source.inspect:source:beta", "source.inspect:source:delta"],
       "outcome": "misdirected",
       "agrees": false,
       "completable": false,
@@ -905,14 +765,8 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "constant-dispatch",
-      "preferred": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta"
-      ],
-      "selected": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta"
-      ],
+      "preferred": ["source.inspect:source:alpha", "source.inspect:source:beta"],
+      "selected": ["source.inspect:source:alpha", "source.inspect:source:beta"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -931,13 +785,8 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "constant-dispatch",
-      "preferred": [
-        "goal.frame"
-      ],
-      "selected": [
-        "goal.frame",
-        "report.review"
-      ],
+      "preferred": ["goal.frame"],
+      "selected": ["goal.frame", "report.review"],
       "outcome": "misdirected",
       "agrees": false,
       "completable": false,
@@ -957,10 +806,7 @@
       "kind": "hold",
       "weigher": "constant-dispatch",
       "preferred": [],
-      "selected": [
-        "goal.frame",
-        "report.review"
-      ],
+      "selected": ["goal.frame", "report.review"],
       "outcome": "premature",
       "agrees": false,
       "completable": false,
@@ -979,13 +825,8 @@
       "split": "holdout",
       "kind": "act",
       "weigher": "constant-dispatch",
-      "preferred": [
-        "report.assemble"
-      ],
-      "selected": [
-        "report.assemble",
-        "source.inspect:source:delta"
-      ],
+      "preferred": ["report.assemble"],
+      "selected": ["report.assemble", "source.inspect:source:delta"],
       "outcome": "misdirected",
       "agrees": false,
       "completable": false,
@@ -1004,12 +845,8 @@
       "split": "holdout",
       "kind": "act",
       "weigher": "constant-dispatch",
-      "preferred": [
-        "goal.complete"
-      ],
-      "selected": [
-        "goal.complete"
-      ],
+      "preferred": ["goal.complete"],
+      "selected": ["goal.complete"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -1027,14 +864,8 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "constant-dispatch",
-      "preferred": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta"
-      ],
-      "selected": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta"
-      ],
+      "preferred": ["source.inspect:source:alpha", "source.inspect:source:beta"],
+      "selected": ["source.inspect:source:alpha", "source.inspect:source:beta"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -1054,9 +885,7 @@
       "kind": "hold",
       "weigher": "constant-dispatch",
       "preferred": [],
-      "selected": [
-        "report.assemble"
-      ],
+      "selected": ["report.assemble"],
       "outcome": "premature",
       "agrees": false,
       "completable": false,
@@ -1075,9 +904,7 @@
       "kind": "hold",
       "weigher": "constant-dispatch",
       "preferred": [],
-      "selected": [
-        "source.inspect:source:epsilon"
-      ],
+      "selected": ["source.inspect:source:epsilon"],
       "outcome": "premature",
       "agrees": false,
       "completable": false,
@@ -1095,13 +922,8 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "constant-dispatch",
-      "preferred": [
-        "source.inspect:source:alpha"
-      ],
-      "selected": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:delta"
-      ],
+      "preferred": ["source.inspect:source:alpha"],
+      "selected": ["source.inspect:source:alpha", "source.inspect:source:delta"],
       "outcome": "misdirected",
       "agrees": false,
       "completable": false,
@@ -1120,12 +942,8 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "constant-dispatch",
-      "preferred": [
-        "goal.frame"
-      ],
-      "selected": [
-        "goal.frame"
-      ],
+      "preferred": ["goal.frame"],
+      "selected": ["goal.frame"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -1143,14 +961,8 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "constant-dispatch",
-      "preferred": [
-        "goal.frame",
-        "report.review"
-      ],
-      "selected": [
-        "goal.frame",
-        "report.review"
-      ],
+      "preferred": ["goal.frame", "report.review"],
+      "selected": ["goal.frame", "report.review"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -1169,12 +981,8 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "constant-dispatch",
-      "preferred": [
-        "source.inspect:source:alpha"
-      ],
-      "selected": [
-        "source.inspect:source:alpha"
-      ],
+      "preferred": ["source.inspect:source:alpha"],
+      "selected": ["source.inspect:source:alpha"],
       "outcome": "advanced",
       "agrees": true,
       "completable": true,
@@ -1192,9 +1000,7 @@
       "split": "tune",
       "kind": "gather",
       "weigher": "constant-defer",
-      "preferred": [
-        "goal.frame"
-      ],
+      "preferred": ["goal.frame"],
       "selected": [],
       "outcome": "stalled",
       "agrees": false,
@@ -1213,10 +1019,7 @@
       "split": "tune",
       "kind": "gather",
       "weigher": "constant-defer",
-      "preferred": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta"
-      ],
+      "preferred": ["source.inspect:source:alpha", "source.inspect:source:beta"],
       "selected": [],
       "outcome": "stalled",
       "agrees": false,
@@ -1257,10 +1060,7 @@
       "split": "tune",
       "kind": "gather",
       "weigher": "constant-defer",
-      "preferred": [
-        "goal.frame",
-        "report.review"
-      ],
+      "preferred": ["goal.frame", "report.review"],
       "selected": [],
       "outcome": "stalled",
       "agrees": false,
@@ -1280,9 +1080,7 @@
       "split": "tune",
       "kind": "act",
       "weigher": "constant-defer",
-      "preferred": [
-        "report.assemble"
-      ],
+      "preferred": ["report.assemble"],
       "selected": [],
       "outcome": "stalled",
       "agrees": false,
@@ -1320,9 +1118,7 @@
       "split": "tune",
       "kind": "gather",
       "weigher": "constant-defer",
-      "preferred": [
-        "source.inspect:source:beta"
-      ],
+      "preferred": ["source.inspect:source:beta"],
       "selected": [],
       "outcome": "stalled",
       "agrees": false,
@@ -1341,9 +1137,7 @@
       "split": "tune",
       "kind": "act",
       "weigher": "constant-defer",
-      "preferred": [
-        "goal.complete"
-      ],
+      "preferred": ["goal.complete"],
       "selected": [],
       "outcome": "stalled",
       "agrees": false,
@@ -1382,10 +1176,7 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "constant-defer",
-      "preferred": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta"
-      ],
+      "preferred": ["source.inspect:source:alpha", "source.inspect:source:beta"],
       "selected": [],
       "outcome": "stalled",
       "agrees": false,
@@ -1407,9 +1198,7 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "constant-defer",
-      "preferred": [
-        "source.inspect:source:beta"
-      ],
+      "preferred": ["source.inspect:source:beta"],
       "selected": [],
       "outcome": "stalled",
       "agrees": false,
@@ -1429,10 +1218,7 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "constant-defer",
-      "preferred": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta"
-      ],
+      "preferred": ["source.inspect:source:alpha", "source.inspect:source:beta"],
       "selected": [],
       "outcome": "stalled",
       "agrees": false,
@@ -1452,9 +1238,7 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "constant-defer",
-      "preferred": [
-        "goal.frame"
-      ],
+      "preferred": ["goal.frame"],
       "selected": [],
       "outcome": "stalled",
       "agrees": false,
@@ -1494,9 +1278,7 @@
       "split": "holdout",
       "kind": "act",
       "weigher": "constant-defer",
-      "preferred": [
-        "report.assemble"
-      ],
+      "preferred": ["report.assemble"],
       "selected": [],
       "outcome": "stalled",
       "agrees": false,
@@ -1516,9 +1298,7 @@
       "split": "holdout",
       "kind": "act",
       "weigher": "constant-defer",
-      "preferred": [
-        "goal.complete"
-      ],
+      "preferred": ["goal.complete"],
       "selected": [],
       "outcome": "stalled",
       "agrees": false,
@@ -1537,10 +1317,7 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "constant-defer",
-      "preferred": [
-        "source.inspect:source:alpha",
-        "source.inspect:source:beta"
-      ],
+      "preferred": ["source.inspect:source:alpha", "source.inspect:source:beta"],
       "selected": [],
       "outcome": "stalled",
       "agrees": false,
@@ -1598,9 +1375,7 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "constant-defer",
-      "preferred": [
-        "source.inspect:source:alpha"
-      ],
+      "preferred": ["source.inspect:source:alpha"],
       "selected": [],
       "outcome": "stalled",
       "agrees": false,
@@ -1620,9 +1395,7 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "constant-defer",
-      "preferred": [
-        "goal.frame"
-      ],
+      "preferred": ["goal.frame"],
       "selected": [],
       "outcome": "stalled",
       "agrees": false,
@@ -1641,10 +1414,7 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "constant-defer",
-      "preferred": [
-        "goal.frame",
-        "report.review"
-      ],
+      "preferred": ["goal.frame", "report.review"],
       "selected": [],
       "outcome": "stalled",
       "agrees": false,
@@ -1664,9 +1434,7 @@
       "split": "holdout",
       "kind": "gather",
       "weigher": "constant-defer",
-      "preferred": [
-        "source.inspect:source:alpha"
-      ],
+      "preferred": ["source.inspect:source:alpha"],
       "selected": [],
       "outcome": "stalled",
       "agrees": false,

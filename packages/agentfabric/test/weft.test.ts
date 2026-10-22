@@ -21,16 +21,26 @@ function inspectGrant(authority: ReturnType<typeof createGrantAuthority>, source
 
 async function scenario(emit?: (record: WeftRecordShape) => unknown) {
   const authority = createGrantAuthority();
-  const host = new AgentFabricHost({ authority, ...(emit ? { weft: { trace_id: 'run-1', emitter_id: 'fab', emit } } : {}) });
+  const host = new AgentFabricHost({
+    authority,
+    ...(emit ? { weft: { trace_id: 'run-1', emitter_id: 'fab', emit } } : {}),
+  });
   const source = host.registerSource('mem:w5', 'one\ntwo');
   host.installAdmitted(SOURCE_INSPECT, () => ({ outcome: 'succeeded', output: { line_count: 2 } }), 'impl.secret-free');
-  const handle = host.invoke(inspectGrant(authority, source, 'a:1:1'), SOURCE_INSPECT.id, { source }, { invocation_id: 'a:1:1' });
+  const handle = host.invoke(
+    inspectGrant(authority, source, 'a:1:1'),
+    SOURCE_INSPECT.id,
+    { source },
+    { invocation_id: 'a:1:1' },
+  );
   assert.equal(handle.kind, 'handle');
   if (handle.kind !== 'handle') throw new Error('expected a handle');
   host.release('a:1:1');
   const outcome = await handle.result;
   // A forged grant is rejected; so is a second presentation of the consumed one.
-  const forged = host.invoke({ ...inspectGrant(createGrantAuthority(), source, 'a:1:2') }, SOURCE_INSPECT.id, { source });
+  const forged = host.invoke({ ...inspectGrant(createGrantAuthority(), source, 'a:1:2') }, SOURCE_INSPECT.id, {
+    source,
+  });
   host.revoke(SOURCE_INSPECT.id, 'withdrawn for sk-fabriccanary0123456789');
   return { host, outcome, forged };
 }
@@ -57,8 +67,15 @@ describe('W5 Fabric emission', () => {
     });
     assert.equal(records[2]!.parent_id, records[1]!.record_id);
     assert.deepEqual(records[2]!.evidence, [{ source: 'invocation', ref: 'a:1:1' }]);
-    assert.deepEqual(records[4]!.fields, { operation: SOURCE_INSPECT.id, implementation: 'impl.secret-free', event: 'revoked' });
-    assert.deepEqual(records.map((r) => r.sequence), [1, 2, 3, 4, 5]);
+    assert.deepEqual(records[4]!.fields, {
+      operation: SOURCE_INSPECT.id,
+      implementation: 'impl.secret-free',
+      event: 'revoked',
+    });
+    assert.deepEqual(
+      records.map((r) => r.sequence),
+      [1, 2, 3, 4, 5],
+    );
     assert.equal(JSON.stringify(records).includes('canary'), false);
     assert.equal(JSON.stringify(records).includes('one\\ntwo'), false);
   });
@@ -66,10 +83,22 @@ describe('W5 Fabric emission', () => {
   it('W5-T56 the host behaves the same with no sink, a throwing sink and a rejecting sink', async () => {
     const shape = async (emit?: (record: WeftRecordShape) => unknown) => {
       const { host, outcome, forged } = await scenario(emit);
-      return JSON.stringify({ outcome, forged, rejections: host.rejections, invocations: host.invocations, store: host.snapshot(), resolution: host.resolution(SOURCE_INSPECT.id) });
+      return JSON.stringify({
+        outcome,
+        forged,
+        rejections: host.rejections,
+        invocations: host.invocations,
+        store: host.snapshot(),
+        resolution: host.resolution(SOURCE_INSPECT.id),
+      });
     };
     const plain = await shape();
-    assert.equal(await shape(() => { throw new Error('sink down'); }), plain);
+    assert.equal(
+      await shape(() => {
+        throw new Error('sink down');
+      }),
+      plain,
+    );
     assert.equal(await shape(() => Promise.reject(new Error('sink rejected'))), plain);
   });
 
@@ -77,7 +106,11 @@ describe('W5 Fabric emission', () => {
     const authority = createGrantAuthority();
     const store = new FabricStore();
     const first = new AgentFabricHost({ authority, store });
-    first.noteAdmission(SOURCE_INSPECT, 'impl.stored', 'export default (inputs) => ({ outcome: "succeeded", output: inputs });');
+    first.noteAdmission(
+      SOURCE_INSPECT,
+      'impl.stored',
+      'export default (inputs) => ({ outcome: "succeeded", output: inputs });',
+    );
     const records: WeftRecordShape[] = [];
     const restored = new AgentFabricHost({
       authority,
@@ -161,7 +194,12 @@ describe('W5 Fabric emission', () => {
       });
       source = host.registerSource('mem:w5', 'one\ntwo');
       host.installAdmitted(SOURCE_INSPECT, () => ({ outcome: 'succeeded', output: { line_count: 2 } }), 'impl.one');
-      const handle = host.invoke(inspectGrant(authority, source, 'a:1:1'), SOURCE_INSPECT.id, { source }, { invocation_id: 'a:1:1' });
+      const handle = host.invoke(
+        inspectGrant(authority, source, 'a:1:1'),
+        SOURCE_INSPECT.id,
+        { source },
+        { invocation_id: 'a:1:1' },
+      );
       if (handle.kind !== 'handle') throw new Error('expected a handle');
       host.release('a:1:1');
       const outcome = await handle.result;

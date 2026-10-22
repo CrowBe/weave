@@ -11,31 +11,19 @@ import { test } from 'node:test';
 
 import { fitThreshold, stabilityGate, type OrderedAnswer } from '../gates.ts';
 
-function answer(
-  case_id: string,
-  predicted: string,
-  label: string,
-  confidence: number,
-): OrderedAnswer {
+function answer(case_id: string, predicted: string, label: string, confidence: number): OrderedAnswer {
   return { case_id, predicted, label, confidence };
 }
 
 test('a case answered identically under every ordering is accepted', () => {
-  const report = stabilityGate([
-    answer('a', 'x', 'x', 0.9),
-    answer('a', 'x', 'x', 0.9),
-    answer('a', 'x', 'x', 0.9),
-  ]);
+  const report = stabilityGate([answer('a', 'x', 'x', 0.9), answer('a', 'x', 'x', 0.9), answer('a', 'x', 'x', 0.9)]);
   assert.equal(report.covered, 1);
   assert.equal(report.coverage, 1);
   assert.equal(report.accuracy_covered, 1);
 });
 
 test('a case whose answer moves with presentation is deferred', () => {
-  const report = stabilityGate([
-    answer('a', 'x', 'x', 0.9),
-    answer('a', 'y', 'x', 0.9),
-  ]);
+  const report = stabilityGate([answer('a', 'x', 'x', 0.9), answer('a', 'y', 'x', 0.9)]);
   assert.equal(report.covered, 0);
   assert.equal(report.coverage, 0);
   assert.equal(report.wrong_caught, 0, 'the first ordering was right, so nothing wrong was caught');
@@ -61,10 +49,7 @@ test('the gate reports what it throws away, not just what it keeps', () => {
 });
 
 test('a stable but wrong case is accepted; stability is not correctness', () => {
-  const report = stabilityGate([
-    answer('a', 'wrong', 'right', 0.99),
-    answer('a', 'wrong', 'right', 0.99),
-  ]);
+  const report = stabilityGate([answer('a', 'wrong', 'right', 0.99), answer('a', 'wrong', 'right', 0.99)]);
   assert.equal(report.covered, 1, 'consistently wrong still looks stable');
   assert.equal(report.accuracy_covered, 0);
 });
@@ -86,10 +71,14 @@ test('a fitted threshold is reported against its test half', () => {
     }
   }
   const report = fitThreshold(answers, 0.25);
-  assert.ok(report.train.accuracy_covered > report.test.accuracy_covered,
-    'the fitted half must flatter the threshold relative to the test half');
-  assert.ok(report.in_sample.accuracy_covered >= report.test.accuracy_covered,
-    'the in-sample figure is an upper bound on the honest one');
+  assert.ok(
+    report.train.accuracy_covered > report.test.accuracy_covered,
+    'the fitted half must flatter the threshold relative to the test half',
+  );
+  assert.ok(
+    report.in_sample.accuracy_covered >= report.test.accuracy_covered,
+    'the in-sample figure is an upper bound on the honest one',
+  );
   assert.equal(report.train.n + report.test.n, answers.length, 'every record lands in exactly one half');
 });
 

@@ -3,8 +3,14 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import {
-  FIELD_DISCLOSURE, KIND_FIELDS, serializeRecord, validateRecord, validateTrace,
-  type InlinePolicy, type Redactor, type WeftRecord,
+  FIELD_DISCLOSURE,
+  KIND_FIELDS,
+  serializeRecord,
+  validateRecord,
+  validateTrace,
+  type InlinePolicy,
+  type Redactor,
+  type WeftRecord,
 } from '@weave/weft';
 
 /** W4: disclosure classes and the redaction boundary (WEFT-CONTRACT.md, Disclosure). */
@@ -30,7 +36,7 @@ const record = (x: unknown) => x as WeftRecord;
 const withStatement = (statement: unknown) => record({ ...goal, fields: { ...goal.fields, statement } });
 const withText = (text: unknown, content_class = 'private', digest = typeof text === 'string' ? sha(text) : sha('')) =>
   withStatement({ content_class, digest, text });
-const keep: Redactor = r => r;
+const keep: Redactor = (r) => r;
 const policy: InlinePolicy = { trace_id: 'goal-17', classes: ['private'] };
 const reason = (value: unknown, inline?: InlinePolicy) => {
   const verdict = validateRecord(value, inline);
@@ -66,7 +72,10 @@ test('inline text crosses only with an explicit class plus a policy for this tra
   assert.equal(reason(inline), 'content');
   assert.throws(() => serializeRecord(inline, keep), /content/);
   assert.throws(() => serializeRecord(inline, keep, { trace_id: 'goal-18', classes: ['private'] }), /content/);
-  assert.throws(() => serializeRecord(inline, keep, { trace_id: 'goal-17', classes: ['public', 'non_sensitive', 'sensitive'] }), /content/);
+  assert.throws(
+    () => serializeRecord(inline, keep, { trace_id: 'goal-17', classes: ['public', 'non_sensitive', 'sensitive'] }),
+    /content/,
+  );
   assert.throws(() => serializeRecord(inline, keep, { trace_id: 'goal-17', classes: [] }), /content/);
   // No explicit class: a policy cannot make up for it.
   assert.throws(() => serializeRecord(withStatement({ digest: sha(TEXT), text: TEXT }), keep, policy), /content/);
@@ -76,26 +85,39 @@ test('inline text crosses only with an explicit class plus a policy for this tra
 });
 
 test('a redactor that drops the text lets the record cross without a policy', () => {
-  const dropText: Redactor = r => ({ ...r, fields: { ...r.fields, statement: { content_class: 'private', digest: sha(TEXT) } } });
+  const dropText: Redactor = (r) => ({
+    ...r,
+    fields: { ...r.fields, statement: { content_class: 'private', digest: sha(TEXT) } },
+  });
   assert.equal(serializeRecord(withText(TEXT), dropText), `${JSON.stringify(goal)}\n`);
 });
 
 test('secrets are rejected after redaction, in ids and in inline text', () => {
   assert.throws(() => serializeRecord(record({ ...goal, record_id: 'ghp_abc123' }), keep), /id/);
-  const renameId: Redactor = r => ({ ...r, record_id: 'r-goal' });
+  const renameId: Redactor = (r) => ({ ...r, record_id: 'r-goal' });
   assert.equal(serializeRecord(record({ ...goal, record_id: 'ghp_abc123' }), renameId), `${JSON.stringify(goal)}\n`);
   for (const secret of [
-    'Authorization: Bearer abc123', 'use sk-live-123', 'token=ghp_abc', 'eyJhbGciOi', 'AKIAABCDEF',
-    'key AIzaSyD-x', 'xoxb-1-2', 'github_pat_11AB', '-----BEGIN RSA PRIVATE KEY-----\nMIIB',
+    'Authorization: Bearer abc123',
+    'use sk-live-123',
+    'token=ghp_abc',
+    'eyJhbGciOi',
+    'AKIAABCDEF',
+    'key AIzaSyD-x',
+    'xoxb-1-2',
+    'github_pat_11AB',
+    '-----BEGIN RSA PRIVATE KEY-----\nMIIB',
   ]) {
     assert.equal(reason(withText(secret), policy), 'content', secret);
     assert.throws(() => serializeRecord(withText(secret), keep, policy), /content/, secret);
   }
-  const scrub: Redactor = r => {
+  const scrub: Redactor = (r) => {
     const text = 'Authorization: [redacted]';
     return { ...r, fields: { ...r.fields, statement: { content_class: 'private', digest: sha(text), text } } };
   };
-  assert.equal(JSON.parse(serializeRecord(withText('Authorization: Bearer abc123'), scrub, policy)).fields.statement.text, 'Authorization: [redacted]');
+  assert.equal(
+    JSON.parse(serializeRecord(withText('Authorization: Bearer abc123'), scrub, policy)).fields.statement.text,
+    'Authorization: [redacted]',
+  );
   // Ordinary words are not credentials (#158).
   assert.equal(reason(withText('Rotate the bearer_x and task_sk rows'), policy), 'ok');
 });
@@ -104,7 +126,19 @@ test('the credential screen covers the repository markers in ids, content refs a
   for (const id of ['AIzaSyabc', 'xoxb-123', 'xoxp-9']) {
     assert.equal(reason({ ...goal, record_id: id }), 'id', id);
     assert.equal(reason(withStatement({ ...goal.fields.statement, ref: id })), 'content', id);
-    assert.equal(validateTrace({ schema: 'weave.trace@1', id, parentId: null, run_id: 'run1', kind: 'audit', sequence: 0, payload: {} }), false, id);
+    assert.equal(
+      validateTrace({
+        schema: 'weave.trace@1',
+        id,
+        parentId: null,
+        run_id: 'run1',
+        kind: 'audit',
+        sequence: 0,
+        payload: {},
+      }),
+      false,
+      id,
+    );
   }
 });
 
@@ -125,24 +159,46 @@ test('a missing redactor fails before anything runs', () => {
 });
 
 test('a redactor that returns an invalid record or throws serializes nothing', () => {
-  for (const out of [undefined, null, 'line', [], {}, { ...goal, extra: 1 }, { ...goal, fields: { ...goal.fields, note: 'x' } }, { ...goal, schema: 'weave.trace@1' }]) {
+  for (const out of [
+    undefined,
+    null,
+    'line',
+    [],
+    {},
+    { ...goal, extra: 1 },
+    { ...goal, fields: { ...goal.fields, note: 'x' } },
+    { ...goal, schema: 'weave.trace@1' },
+  ]) {
     assert.throws(() => serializeRecord(record(goal), () => out), /Invalid Weft record/);
   }
-  assert.throws(() => serializeRecord(record(goal), () => { throw new Error('redactor failed'); }), /redactor failed/);
+  assert.throws(
+    () =>
+      serializeRecord(record(goal), () => {
+        throw new Error('redactor failed');
+      }),
+    /redactor failed/,
+  );
 });
 
 test('the serializer writes exactly the redactor output it validated, read once', () => {
   let reads = 0;
-  const shifting: Redactor = r => Object.defineProperty({ ...r }, 'record_id', { enumerable: true, get: () => `r-${(reads += 1)}` });
+  const shifting: Redactor = (r) =>
+    Object.defineProperty({ ...r }, 'record_id', { enumerable: true, get: () => `r-${(reads += 1)}` });
   assert.equal(JSON.parse(serializeRecord(record(goal), shifting)).record_id, 'r-1');
   assert.equal(reads, 1);
 });
 
 test('an unknown class fails closed in a content value and in a policy', () => {
   assert.equal(reason(withStatement({ ...goal.fields.statement, content_class: 'secret' })), 'content');
-  assert.throws(() => serializeRecord(withStatement({ ...goal.fields.statement, content_class: 'secret' }), keep), /content/);
+  assert.throws(
+    () => serializeRecord(withStatement({ ...goal.fields.statement, content_class: 'secret' }), keep),
+    /content/,
+  );
   let calls = 0;
-  const counting: Redactor = r => { calls += 1; return r; };
+  const counting: Redactor = (r) => {
+    calls += 1;
+    return r;
+  };
   for (const bad of [
     { trace_id: 'goal-17', classes: ['secret'] },
     { trace_id: 'goal-17', classes: 'private' },
@@ -151,18 +207,31 @@ test('an unknown class fails closed in a content value and in a policy', () => {
     { trace_id: 'sk-live-1', classes: ['private'] },
     null,
   ]) {
-    assert.throws(() => validateRecord(goal, bad as unknown as InlinePolicy), /inline content policy/, JSON.stringify(bad));
-    assert.throws(() => serializeRecord(withText(TEXT), counting, bad as unknown as InlinePolicy), /inline content policy/, JSON.stringify(bad));
+    assert.throws(
+      () => validateRecord(goal, bad as unknown as InlinePolicy),
+      /inline content policy/,
+      JSON.stringify(bad),
+    );
+    assert.throws(
+      () => serializeRecord(withText(TEXT), counting, bad as unknown as InlinePolicy),
+      /inline content policy/,
+      JSON.stringify(bad),
+    );
   }
   assert.equal(calls, 0);
 });
 
 /** Reverse every object's key order, deeply. */
-const reversed = (x: unknown): unknown => Array.isArray(x)
-  ? x.map(reversed)
-  : typeof x === 'object' && x !== null
-    ? Object.fromEntries(Object.entries(x).reverse().map(([k, v]) => [k, reversed(v)]))
-    : x;
+const reversed = (x: unknown): unknown =>
+  Array.isArray(x)
+    ? x.map(reversed)
+    : typeof x === 'object' && x !== null
+      ? Object.fromEntries(
+          Object.entries(x)
+            .reverse()
+            .map(([k, v]) => [k, reversed(v)]),
+        )
+      : x;
 
 test('serialization writes every key in contract order, whatever order the redactor returns', () => {
   const fixtures = JSON.parse(readFileSync(new URL('../../fixtures/records.json', import.meta.url), 'utf8')) as {
@@ -171,7 +240,14 @@ test('serialization writes every key in contract order, whatever order the redac
   for (const { name, record: r } of fixtures.valid) {
     const line = serializeRecord(r, keep);
     assert.equal(line, `${JSON.stringify(r)}\n`, name);
-    assert.equal(serializeRecord(r, x => reversed(x)), line, name);
+    assert.equal(
+      serializeRecord(r, (x) => reversed(x)),
+      line,
+      name,
+    );
   }
-  assert.equal(serializeRecord(withText(TEXT), x => reversed(x), policy), serializeRecord(withText(TEXT), keep, policy));
+  assert.equal(
+    serializeRecord(withText(TEXT), (x) => reversed(x), policy),
+    serializeRecord(withText(TEXT), keep, policy),
+  );
 });

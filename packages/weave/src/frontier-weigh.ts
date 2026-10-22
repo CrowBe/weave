@@ -84,7 +84,9 @@ export function deferredByContract(weight: number | null, contract: string | und
 
 /** True when the recorded weights defer every candidate they weigh. */
 export function defersEverything(payload: WeightsRecordedPayload): boolean {
-  return payload.weights.length > 0 && payload.weights.every((entry) => deferredByContract(entry.weight, payload.contract));
+  return (
+    payload.weights.length > 0 && payload.weights.every((entry) => deferredByContract(entry.weight, payload.contract))
+  );
 }
 
 /**

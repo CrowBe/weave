@@ -1,1 +1,13 @@
-{"name":"@weave/auth-chatgpt","version":"0.0.0","private":true,"type":"module","exports":{".":"./dist/src/index.js","./file-store":"./dist/src/file-store.js"},"files":["dist"]}
+{
+  "name": "@weave/auth-chatgpt",
+  "version": "0.0.0",
+  "private": true,
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./dist/src/index.js",
+    "./file-store": "./dist/src/file-store.js"
+  }
+}

@@ -68,10 +68,9 @@ function probe(): Record<string, unknown> {
   }
   const permission = process.permission;
   const network: 'none' | 'open' | 'error' = permission ? (permission.has('net') ? 'open' : 'none') : 'error';
-  const evaluated = new vm.Script('({ process: typeof process, require: typeof require, fetch: typeof fetch })').runInContext(
-    sandbox(),
-    { timeout: 100 },
-  ) as { process: string; require: string; fetch: string };
+  const evaluated = new vm.Script(
+    '({ process: typeof process, require: typeof require, fetch: typeof fetch })',
+  ).runInContext(sandbox(), { timeout: 100 }) as { process: string; require: string; fetch: string };
   return {
     filesystem,
     network,
@@ -81,12 +80,17 @@ function probe(): Record<string, unknown> {
   };
 }
 
-function runBatch(source: string, cases: readonly { readonly id: string; readonly input: unknown }[]): { results: unknown[] } {
+function runBatch(
+  source: string,
+  cases: readonly { readonly id: string; readonly input: unknown }[],
+): { results: unknown[] } {
   const results: unknown[] = [];
   for (const testCase of cases) {
     try {
       const literal = JSON.stringify(JSON.stringify(testCase.input));
-      const script = new vm.Script(`"use strict"; (function () {\nconst input = JSON.parse(${literal});\n${source}\n})()`);
+      const script = new vm.Script(
+        `"use strict"; (function () {\nconst input = JSON.parse(${literal});\n${source}\n})()`,
+      );
       const output = script.runInContext(sandbox(), { timeout: 100 });
       results.push({ id: testCase.id, output });
     } catch (error) {
@@ -97,7 +101,9 @@ function runBatch(source: string, cases: readonly { readonly id: string; readonl
 }
 
 function codeOf(error: unknown): string | undefined {
-  return typeof error === 'object' && error !== null && 'code' in error ? String((error as { code: unknown }).code) : undefined;
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code: unknown }).code)
+    : undefined;
 }
 
 process.on('message', (message: Inbound) => {

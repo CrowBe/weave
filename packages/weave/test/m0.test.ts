@@ -281,7 +281,10 @@ describe('M0 authority', () => {
       payload: { goal_id: 'g-report', status: 'complete' },
     });
     assert.deepEqual(claim.validation, { status: 'unknown_type' });
-    assert.ok(s.runtime.trace().observations.some((o) => o.seq === claim.seq), 'retained in the log');
+    assert.ok(
+      s.runtime.trace().observations.some((o) => o.seq === claim.seq),
+      'retained in the log',
+    );
     assert.equal(s.runtime.state().state_revision, before.state_revision);
     assert.equal(s.runtime.state().goal?.status, 'active');
     assert.equal(cycles(s).length, cyclesBefore, 'a non-accepted observation triggers no cycle');
@@ -416,7 +419,10 @@ describe('M0 malformed input', () => {
       payload: { resource: ALPHA, content: 'changed without a revision' },
     });
     assert.equal(malformed.validation.status, 'rejected');
-    assert.ok(s.runtime.trace().observations.some((o) => o.seq === malformed.seq), 'retained in the log');
+    assert.ok(
+      s.runtime.trace().observations.some((o) => o.seq === malformed.seq),
+      'retained in the log',
+    );
     assert.equal(stableStringify(s.runtime.state().sources), sourcesBefore);
     assert.equal(s.runtime.state().state_revision, revisionBefore);
 
@@ -470,10 +476,7 @@ describe('M0 replay', () => {
     stringifies: number;
   } {
     const originalClone = globalThis.structuredClone;
-    const originalStringify = JSON.stringify as unknown as (
-      value: unknown,
-      ...rest: unknown[]
-    ) => string | undefined;
+    const originalStringify = JSON.stringify as unknown as (value: unknown, ...rest: unknown[]) => string | undefined;
     let traceClones = 0;
     let stringifies = 0;
     try {

@@ -436,7 +436,7 @@ export class FabricStore {
     if (mutation.op === 'cost') cost += mutation.micros;
     if (mutation.op === 'start') {
       const previous = this.invocations.get(mutation.record.invocation_id);
-      const previousCost = previous ? previous.measured_cost_micros ?? mutation.measured_cost_micros : 0;
+      const previousCost = previous ? (previous.measured_cost_micros ?? mutation.measured_cost_micros) : 0;
       cost += mutation.measured_cost_micros - previousCost;
     }
     if (!isNonNegativeNumber(cost)) throw new Error('invalid host store measured cost');
@@ -479,8 +479,10 @@ export class FabricStore {
           // Only successful writeSync calls contribute to the rollback range.
           if (written > 0) {
             const appended = Buffer.alloc(written);
-            if (readSync(fd, appended, 0, written, previousBytes) !== written ||
-                !appended.equals(line.subarray(0, written))) {
+            if (
+              readSync(fd, appended, 0, written, previousBytes) !== written ||
+              !appended.equals(line.subarray(0, written))
+            ) {
               throw new Error('host store append range changed');
             }
             ftruncateSync(fd, previousBytes);
@@ -588,9 +590,14 @@ export class FabricStore {
   private validateTransition(mutation: FabricMutation): void {
     if (mutation.op !== 'uncertain' && mutation.op !== 'reconcile') return;
     const previous = this.invocations.get(mutation.record.invocation_id);
-    if (!previous || previous.binding_digest !== mutation.record.binding_digest ||
-        previous.action_id !== mutation.record.action_id || previous.operation !== mutation.record.operation ||
-        previous.reconciliation || (previous.status !== 'running' && previous.status !== 'uncertain')) {
+    if (
+      !previous ||
+      previous.binding_digest !== mutation.record.binding_digest ||
+      previous.action_id !== mutation.record.action_id ||
+      previous.operation !== mutation.record.operation ||
+      previous.reconciliation ||
+      (previous.status !== 'running' && previous.status !== 'uncertain')
+    ) {
       throw new Error(`invalid host store ${mutation.op} transition`);
     }
   }
@@ -667,7 +674,7 @@ export class FabricStore {
 
   private applyStart(record: InvocationRecord, measuredCostMicros: number): void {
     const previous = this.invocations.get(record.invocation_id);
-    const previousCost = previous ? previous.measured_cost_micros ?? measuredCostMicros : 0;
+    const previousCost = previous ? (previous.measured_cost_micros ?? measuredCostMicros) : 0;
     this.invocations.set(record.invocation_id, {
       ...record,
       inputs: structuredClone(record.inputs),
@@ -857,7 +864,7 @@ function acquireReclaim(path: string, token: string, sleep: (milliseconds: numbe
         if (!sameReclaimOwner(owner, current) || isAlive(current.pid) || !existsSync(claimPath)) return false;
         throw new Error(
           `host store is already open: ${path}; stale-lock reclaim is blocked by ${claimPath}; ` +
-          `confirm no weave process is using ${path}, then remove ${claimPath} and retry`,
+            `confirm no weave process is using ${path}, then remove ${claimPath} and retry`,
         );
       }
       throw error;
@@ -887,7 +894,7 @@ function acquireReclaim(path: string, token: string, sleep: (milliseconds: numbe
       } catch (error) {
         throw new Error(
           `failed to restore host store reclaim directory from ${quarantine} to ${reclaimPath}; ` +
-          `confirm no weave process is using ${path}, then move ${reclaimPath} and ${quarantine} aside and retry`,
+            `confirm no weave process is using ${path}, then move ${reclaimPath} and ${quarantine} aside and retry`,
           { cause: error },
         );
       }
@@ -937,7 +944,12 @@ function readReclaimIdentity(reclaimPath: string): ReclaimIdentity | undefined {
 }
 
 function sameReclaimOwner(expected: ReclaimIdentity, actual: ReclaimIdentity | undefined): actual is ReclaimIdentity {
-  return actual !== undefined && expected.token === actual.token && expected.dev === actual.dev && expected.ino === actual.ino;
+  return (
+    actual !== undefined &&
+    expected.token === actual.token &&
+    expected.dev === actual.dev &&
+    expected.ino === actual.ino
+  );
 }
 
 function lockOwner(content: string | undefined): number | undefined {
@@ -1068,23 +1080,41 @@ function asMutation(value: unknown, index: number, path: string): FabricMutation
 function isMutation(value: unknown): value is FabricMutation {
   if (!isRecord(value)) return false;
   switch (value.op) {
-    case 'snapshot': return isSnapshot(value.snapshot);
-    case 'allocate': return isString(value.id) && counterAfter(value.id, 'res_') !== undefined;
-    case 'issue': return isRef(value.ref);
-    case 'put': return isResource(value.resource);
-    case 'start': return isInvocation(value.record) && isNonNegativeNumber(value.measured_cost_micros);
-    case 'result': return isInvocation(value.record);
-    case 'uncertain': return isInvocation(value.record) && isRecord(value.record) &&
-      value.record.status === 'uncertain' && isRecord(value.record.outcome) &&
-      value.record.outcome.outcome === 'uncertain' && value.record.reconciliation === undefined;
-    case 'reconcile': return isInvocation(value.record) && isRecord(value.record) &&
-      isReconciliation(value.record.reconciliation);
-    case 'cost': return isNonNegativeNumber(value.micros);
-    case 'admission': return isAdmission(value.admission);
-    case 'conclusion': return 'conclusion' in value;
-    case 'workload': return isWorkload(value.workload);
-    case 'remember': return isBuiltinResult(value.result);
-    default: return false;
+    case 'snapshot':
+      return isSnapshot(value.snapshot);
+    case 'allocate':
+      return isString(value.id) && counterAfter(value.id, 'res_') !== undefined;
+    case 'issue':
+      return isRef(value.ref);
+    case 'put':
+      return isResource(value.resource);
+    case 'start':
+      return isInvocation(value.record) && isNonNegativeNumber(value.measured_cost_micros);
+    case 'result':
+      return isInvocation(value.record);
+    case 'uncertain':
+      return (
+        isInvocation(value.record) &&
+        isRecord(value.record) &&
+        value.record.status === 'uncertain' &&
+        isRecord(value.record.outcome) &&
+        value.record.outcome.outcome === 'uncertain' &&
+        value.record.reconciliation === undefined
+      );
+    case 'reconcile':
+      return isInvocation(value.record) && isRecord(value.record) && isReconciliation(value.record.reconciliation);
+    case 'cost':
+      return isNonNegativeNumber(value.micros);
+    case 'admission':
+      return isAdmission(value.admission);
+    case 'conclusion':
+      return 'conclusion' in value;
+    case 'workload':
+      return isWorkload(value.workload);
+    case 'remember':
+      return isBuiltinResult(value.result);
+    default:
+      return false;
   }
 }
 
@@ -1121,10 +1151,11 @@ function isKind(value: unknown): boolean {
 }
 
 function isOutcome(value: unknown): boolean {
-  return isRecord(value) && (
-    (value.outcome === 'succeeded' && 'output' in value) ||
-    (value.outcome === 'failed' && isString(value.failure)) ||
-    (value.outcome === 'uncertain' && isString(value.reason))
+  return (
+    isRecord(value) &&
+    ((value.outcome === 'succeeded' && 'output' in value) ||
+      (value.outcome === 'failed' && isString(value.failure)) ||
+      (value.outcome === 'uncertain' && isString(value.reason)))
   );
 }
 
@@ -1137,63 +1168,114 @@ export function normalizeInvocationOutcome(value: unknown): InvocationOutcome {
 }
 
 function isPublication(value: unknown): boolean {
-  return isRecord(value) && isString(value.invocation_id) && isString(value.binding_digest) &&
-    isString(value.report_digest) && isString(value.destination) && isCounter(value.committed_revision);
+  return (
+    isRecord(value) &&
+    isString(value.invocation_id) &&
+    isString(value.binding_digest) &&
+    isString(value.report_digest) &&
+    isString(value.destination) &&
+    isCounter(value.committed_revision)
+  );
 }
 
 function isResource(value: unknown): boolean {
-  return isRecord(value) && isString(value.canonical_id) && isKind(value.kind) &&
-    isString(value.locator) && isCounter(value.revision) && isString(value.content) &&
-    (value.publication === null || isPublication(value.publication));
+  return (
+    isRecord(value) &&
+    isString(value.canonical_id) &&
+    isKind(value.kind) &&
+    isString(value.locator) &&
+    isCounter(value.revision) &&
+    isString(value.content) &&
+    (value.publication === null || isPublication(value.publication))
+  );
 }
 
 function isRef(value: unknown): boolean {
-  return isRecord(value) && isString(value.handle) && counterAfter(value.handle, 'ref_') !== undefined && isString(value.canonical_id) && isKind(value.kind);
+  return (
+    isRecord(value) &&
+    isString(value.handle) &&
+    counterAfter(value.handle, 'ref_') !== undefined &&
+    isString(value.canonical_id) &&
+    isKind(value.kind)
+  );
 }
 
 function isInvocation(value: unknown): boolean {
-  return isRecord(value) && isString(value.invocation_id) && isString(value.action_id) &&
-    isString(value.operation) && (value.implementation_id === undefined || isString(value.implementation_id)) &&
-    isString(value.binding_digest) && 'inputs' in value &&
+  return (
+    isRecord(value) &&
+    isString(value.invocation_id) &&
+    isString(value.action_id) &&
+    isString(value.operation) &&
+    (value.implementation_id === undefined || isString(value.implementation_id)) &&
+    isString(value.binding_digest) &&
+    'inputs' in value &&
     ['running', 'committed', 'stopped', 'uncertain'].includes(value.status as string) &&
-    (value.outcome === null || isOutcome(value.outcome)) && typeof value.cancel_requested === 'boolean' &&
+    (value.outcome === null || isOutcome(value.outcome)) &&
+    typeof value.cancel_requested === 'boolean' &&
     (value.measured_cost_micros === undefined || isNonNegativeNumber(value.measured_cost_micros)) &&
-    (value.reservation === undefined || arrayOf(value.reservation, (effect) =>
-      isRecord(effect) && isString(effect.resource) && effect.resource.length > 0 && isEffect(effect.mode))) &&
-    (value.reconciliation === undefined || (isReconciliation(value.reconciliation) &&
-      isRecord(value.outcome) && (value.reconciliation.resolution === 'committed'
-        ? value.status === 'committed' && value.outcome.outcome === 'succeeded'
-        : value.status === 'stopped' && value.outcome.outcome === 'failed')));
+    (value.reservation === undefined ||
+      arrayOf(
+        value.reservation,
+        (effect) =>
+          isRecord(effect) && isString(effect.resource) && effect.resource.length > 0 && isEffect(effect.mode),
+      )) &&
+    (value.reconciliation === undefined ||
+      (isReconciliation(value.reconciliation) &&
+        isRecord(value.outcome) &&
+        (value.reconciliation.resolution === 'committed'
+          ? value.status === 'committed' && value.outcome.outcome === 'succeeded'
+          : value.status === 'stopped' && value.outcome.outcome === 'failed')))
+  );
 }
 
 function isReconciliation(value: unknown): value is InvocationReconciliation {
-  return isRecord(value) && (value.resolution === 'committed' || value.resolution === 'not_committed') &&
-    isString(value.evidence) && value.evidence.trim().length > 0;
+  return (
+    isRecord(value) &&
+    (value.resolution === 'committed' || value.resolution === 'not_committed') &&
+    isString(value.evidence) &&
+    value.evidence.trim().length > 0
+  );
 }
 
 function isContract(value: unknown): boolean {
   if (!isRecord(value)) return false;
   const stringMap = (item: unknown) => isRecord(item) && Object.values(item).every(isString);
-  const selector = (item: unknown) => isRecord(item) && isString(item.input) &&
+  const selector = (item: unknown) =>
+    isRecord(item) &&
+    isString(item.input) &&
     ['discover', 'read', 'create', 'write', 'append', 'delete'].includes(item.mode as string);
-  const processSelector = (item: unknown) => isRecord(item) && (
-    item.name === 'process.spawn' || (item.name === 'fs.write' && isString(item.input))
-  );
+  const processSelector = (item: unknown) =>
+    isRecord(item) && (item.name === 'process.spawn' || (item.name === 'fs.write' && isString(item.input)));
   const inference = value.inference;
-  return isString(value.id) && isString(value.revision) && isString(value.purpose) &&
-    stringMap(value.input) && stringMap(value.output) && arrayOf(value.effects, selector) &&
-    arrayOf(value.permissions, selector) && arrayOf(value.failures, isString) &&
+  return (
+    isString(value.id) &&
+    isString(value.revision) &&
+    isString(value.purpose) &&
+    stringMap(value.input) &&
+    stringMap(value.output) &&
+    arrayOf(value.effects, selector) &&
+    arrayOf(value.permissions, selector) &&
+    arrayOf(value.failures, isString) &&
     arrayOf(value.depends_on, isString) &&
     (value.process_effects === undefined || arrayOf(value.process_effects, processSelector)) &&
-    (inference === undefined || (isRecord(inference) && isString(inference.kind) &&
-      ['framing', 'working', 'extension'].includes(inference.role as string) &&
-      isNonNegativeNumber(inference.max_cost) && arrayOf(inference.destinations, isString) &&
-      isCounter(inference.max_attempts)));
+    (inference === undefined ||
+      (isRecord(inference) &&
+        isString(inference.kind) &&
+        ['framing', 'working', 'extension'].includes(inference.role as string) &&
+        isNonNegativeNumber(inference.max_cost) &&
+        arrayOf(inference.destinations, isString) &&
+        isCounter(inference.max_attempts)))
+  );
 }
 
 function isAdmission(value: unknown): boolean {
-  return isRecord(value) && isString(value.operation) && isString(value.implementation_id) &&
-    isContract(value.contract) && isString(value.source);
+  return (
+    isRecord(value) &&
+    isString(value.operation) &&
+    isString(value.implementation_id) &&
+    isContract(value.contract) &&
+    isString(value.source)
+  );
 }
 
 function isWorkload(value: unknown): boolean {
@@ -1201,16 +1283,27 @@ function isWorkload(value: unknown): boolean {
 }
 
 function isBuiltinResult(value: unknown): boolean {
-  return isRecord(value) && isString(value.key) && isString(value.operation) &&
-    isString(value.implementation_id) && isOutcome(value.outcome);
+  return (
+    isRecord(value) &&
+    isString(value.key) &&
+    isString(value.operation) &&
+    isString(value.implementation_id) &&
+    isOutcome(value.outcome)
+  );
 }
 
 function isSnapshot(value: unknown): value is FabricSnapshot {
-  return isRecord(value) && isCounter(value.next_handle) && isCounter(value.next_canonical) &&
-    arrayOf(value.resources, isResource) && arrayOf(value.refs, isRef) && arrayOf(value.invocations, isInvocation) &&
+  return (
+    isRecord(value) &&
+    isCounter(value.next_handle) &&
+    isCounter(value.next_canonical) &&
+    arrayOf(value.resources, isResource) &&
+    arrayOf(value.refs, isRef) &&
+    arrayOf(value.invocations, isInvocation) &&
     (value.admissions === undefined || arrayOf(value.admissions, isAdmission)) &&
     (value.conclusions === undefined || Array.isArray(value.conclusions)) &&
     (value.workload === undefined || arrayOf(value.workload, isWorkload)) &&
     (value.measured_cost_micros === undefined || isNonNegativeNumber(value.measured_cost_micros)) &&
-    (value.builtin_results === undefined || arrayOf(value.builtin_results, isBuiltinResult));
+    (value.builtin_results === undefined || arrayOf(value.builtin_results, isBuiltinResult))
+  );
 }

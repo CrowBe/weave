@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BOOTSTRAP_RESAMPLES, aggregate, bootstrap, difference, generator, normalQuantile, wilson } from '../src/stats.js';
+import {
+  BOOTSTRAP_RESAMPLES,
+  aggregate,
+  bootstrap,
+  difference,
+  generator,
+  normalQuantile,
+  wilson,
+} from '../src/stats.js';
 import type { Interval } from '@weave/gauge';
 
 /** G5 statistics: deterministic for a seed, checked against published values where they exist. */
@@ -29,7 +37,14 @@ test('wilson@1 matches Newcombe (1998) single-proportion intervals', () => {
 });
 
 test('a wilson interval contains its proportion and stays in [0, 1]', () => {
-  for (const [k, n] of [[0, 1], [1, 1], [20, 20], [0, 20], [7, 9], [1, 1000]] as const) {
+  for (const [k, n] of [
+    [0, 1],
+    [1, 1],
+    [20, 20],
+    [0, 20],
+    [7, 9],
+    [1, 1000],
+  ] as const) {
     const [lo, hi] = wilson(k, n, 0.95);
     assert.ok(lo >= 0 && hi <= 1 && lo <= k / n && k / n <= hi, `${k}/${n}: [${lo}, ${hi}]`);
   }
@@ -37,13 +52,11 @@ test('a wilson interval contains its proportion and stays in [0, 1]', () => {
   assert.equal(wilson(0, 20, 0.95)[0], 0);
 });
 
-test('the difference of two wilson intervals is Newcombe\'s hybrid score interval', () => {
-  const diff = (k1: number, n1: number, k2: number, n2: number) => difference(
-    { value: k2 / n2, interval: wilson(k2, n2, 0.95) },
-    { value: k1 / n1, interval: wilson(k1, n1, 0.95) },
-  );
+test("the difference of two wilson intervals is Newcombe's hybrid score interval", () => {
+  const diff = (k1: number, n1: number, k2: number, n2: number) =>
+    difference({ value: k2 / n2, interval: wilson(k2, n2, 0.95) }, { value: k1 / n1, interval: wilson(k1, n1, 0.95) });
   closeInterval(diff(56, 70, 48, 80), [0.0524, 0.3339], 5e-5, '56/70 - 48/80');
-  closeInterval(diff(9, 10, 3, 10), [0.1705, 0.8090], 5e-5, '9/10 - 3/10');
+  closeInterval(diff(9, 10, 3, 10), [0.1705, 0.809], 5e-5, '9/10 - 3/10');
   closeInterval(diff(5, 56, 0, 29), [-0.0381, 0.1926], 5e-5, '5/56 - 0/29');
 });
 
@@ -74,7 +87,13 @@ test('aggregates are the mean, sum and nearest-rank p95', () => {
   assert.equal(aggregate('rate', rates(3, 4)), 0.75);
   assert.equal(aggregate('sum', xs), 210);
   assert.equal(aggregate('p95', [...xs].reverse()), 19);
-  assert.equal(aggregate('p95', Array.from({ length: 100 }, (_, i) => i + 1)), 95);
+  assert.equal(
+    aggregate(
+      'p95',
+      Array.from({ length: 100 }, (_, i) => i + 1),
+    ),
+    95,
+  );
   assert.equal(aggregate('p95', [42]), 42);
 });
 
@@ -89,7 +108,7 @@ test('a bootstrap interval contains its value and is near the normal interval fo
   const xs = Array.from({ length: 400 }, (_, i) => (i * 7919) % 1000);
   const mean = aggregate('mean', xs);
   const sd = Math.sqrt(xs.reduce((s, x) => s + (x - mean) ** 2, 0) / (xs.length - 1));
-  const half = 1.959963985 * sd / Math.sqrt(xs.length);
+  const half = (1.959963985 * sd) / Math.sqrt(xs.length);
   const [lo, hi] = bootstrap(xs, 'mean', 0.95, 7);
   assert.ok(lo <= mean && mean <= hi);
   close(lo, mean - half, half * 0.2, 'lo');
@@ -97,7 +116,11 @@ test('a bootstrap interval contains its value and is near the normal interval fo
 });
 
 test('a bootstrap interval for a rate stays in [0, 1] and a constant sample has no width', () => {
-  for (const [k, n] of [[0, 30], [30, 30], [1, 40]] as const) {
+  for (const [k, n] of [
+    [0, 30],
+    [30, 30],
+    [1, 40],
+  ] as const) {
     const [lo, hi] = bootstrap(rates(k, n), 'rate', 0.95, 7);
     assert.ok(lo >= 0 && hi <= 1 && lo <= k / n && k / n <= hi, `${k}/${n}`);
   }

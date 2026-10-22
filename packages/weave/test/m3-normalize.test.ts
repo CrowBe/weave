@@ -35,10 +35,18 @@ interface World {
   readonly gamma: string;
 }
 
-function world(options: { isolation?: 'enforcing' | 'unsupported'; lifecycle?: CapabilityLifecycle; author?: ExtensionAuthor; host?: AgentFabricHost } = {}): World {
+function world(
+  options: {
+    isolation?: 'enforcing' | 'unsupported';
+    lifecycle?: CapabilityLifecycle;
+    author?: ExtensionAuthor;
+    host?: AgentFabricHost;
+  } = {},
+): World {
   const authority = createGrantAuthority();
   const host = options.host ?? new AgentFabricHost({ authority });
-  const lifecycle = (options.lifecycle as FabricLifecycle | undefined) ?? new FabricLifecycle(host, options.isolation ?? 'enforcing');
+  const lifecycle =
+    (options.lifecycle as FabricLifecycle | undefined) ?? new FabricLifecycle(host, options.isolation ?? 'enforcing');
   const author = (options.author as ScriptedNormalizeAuthor | undefined) ?? new ScriptedNormalizeAuthor();
   const alpha = host.registerSource('mem:alpha', CONTENT['source:alpha'] as string);
   const beta = host.registerSource('mem:beta', CONTENT['source:beta'] as string);
@@ -100,7 +108,9 @@ function openGoal(world: World, overrides: Partial<Goal> = {}): void {
 function started(world: World, operation: string): ActionStartedPayload[] {
   return world.runtime
     .trace()
-    .observations.filter((observation) => observation.payload_type === 'action.started' && observation.validation.status === 'accepted')
+    .observations.filter(
+      (observation) => observation.payload_type === 'action.started' && observation.validation.status === 'accepted',
+    )
     .map((observation) => observation.payload as ActionStartedPayload)
     .filter((payload) => payload.operation === operation);
 }
@@ -109,7 +119,9 @@ function results(world: World, operation: string): ActionResultPayload[] {
   const ids = new Set(started(world, operation).map((payload) => payload.action_id));
   return world.runtime
     .trace()
-    .observations.filter((observation) => observation.payload_type === 'action.result' && observation.validation.status === 'accepted')
+    .observations.filter(
+      (observation) => observation.payload_type === 'action.result' && observation.validation.status === 'accepted',
+    )
     .map((observation) => observation.payload as ActionResultPayload)
     .filter((payload) => ids.has(payload.action_id));
 }
@@ -145,7 +157,9 @@ async function drive(world: World, until: 'complete' | 'green' | 'settled' = 'co
     for (const action_id of open) {
       world.host.release(action_id);
     }
-    const running = Object.values(world.runtime.state().actions).filter((action) => action.state === 'running' || action.state === 'pending');
+    const running = Object.values(world.runtime.state().actions).filter(
+      (action) => action.state === 'running' || action.state === 'pending',
+    );
     if (running.length > 0) {
       await Promise.all(
         running.map(async (action) => {
@@ -161,9 +175,15 @@ async function drive(world: World, until: 'complete' | 'green' | 'settled' = 'co
     if (open.length === 0) {
       await flush(8);
       const after = world.runtime.state();
-      const still = Object.values(after.actions).some((action) => action.state === 'running' || action.state === 'pending');
+      const still = Object.values(after.actions).some(
+        (action) => action.state === 'running' || action.state === 'pending',
+      );
       if (!still && world.host.openActionIds().length === 0) {
-        if (until === 'settled' || after.goal?.status === 'complete' || after.crystallization.admission?.status !== 'requested') {
+        if (
+          until === 'settled' ||
+          after.goal?.status === 'complete' ||
+          after.crystallization.admission?.status !== 'requested'
+        ) {
           return;
         }
       }
@@ -173,11 +193,22 @@ async function drive(world: World, until: 'complete' | 'green' | 'settled' = 'co
   const running = Object.values(stuck.actions)
     .filter((action) => action.state === 'running' || action.state === 'pending')
     .map((action) => `${action.operation}:${action.state}`);
-  throw new Error(`drive stopped at ${stuck.goal?.status ?? 'no goal'}; running ${running.join(',') || 'none'}; search ${stuck.crystallization.search?.status ?? 'none'}`);
+  throw new Error(
+    `drive stopped at ${stuck.goal?.status ?? 'no goal'}; running ${running.join(',') || 'none'}; search ${stuck.crystallization.search?.status ?? 'none'}`,
+  );
 }
 
-function selectedOperations(world: World, cycle: { candidates: readonly { candidate_id: string; operation: string }[]; selected: readonly { candidate_id: string }[] }): string[] {
-  return cycle.selected.map((selected) => cycle.candidates.find((candidate) => candidate.candidate_id === selected.candidate_id)?.operation ?? '');
+function selectedOperations(
+  world: World,
+  cycle: {
+    candidates: readonly { candidate_id: string; operation: string }[];
+    selected: readonly { candidate_id: string }[];
+  },
+): string[] {
+  return cycle.selected.map(
+    (selected) =>
+      cycle.candidates.find((candidate) => candidate.candidate_id === selected.candidate_id)?.operation ?? '',
+  );
 }
 
 function seqOf(world: World, operation: string, type: 'action.started' | 'action.result'): number {
@@ -258,17 +289,49 @@ describe('M3 text.normalize composition', () => {
     await drive(fixture);
     const search = results(fixture, 'gap.search')[0];
     assert.equal(search?.outcome.outcome, 'succeeded');
-    const output = search?.outcome.outcome === 'succeeded' ? (search.outcome.output as { status: string; compositions: string[] }) : undefined;
+    const output =
+      search?.outcome.outcome === 'succeeded'
+        ? (search.outcome.output as { status: string; compositions: string[] })
+        : undefined;
     assert.equal(output?.status, 'gap');
     assert.deepEqual(output?.compositions, []);
-    const contractSeq = fixture.runtime.trace().observations.find((observation) => observation.payload_type === 'action.result' && started(fixture, 'contract.establish').some((item) => item.action_id === (observation.payload as ActionResultPayload).action_id))?.seq;
-    const later = started(fixture, 'corpus.propose').map((payload) => fixture.runtime.trace().observations.find((observation) => observation.payload_type === 'action.started' && (observation.payload as ActionStartedPayload).action_id === payload.action_id)?.seq);
+    const contractSeq = fixture.runtime
+      .trace()
+      .observations.find(
+        (observation) =>
+          observation.payload_type === 'action.result' &&
+          started(fixture, 'contract.establish').some(
+            (item) => item.action_id === (observation.payload as ActionResultPayload).action_id,
+          ),
+      )?.seq;
+    const later = started(fixture, 'corpus.propose').map(
+      (payload) =>
+        fixture.runtime
+          .trace()
+          .observations.find(
+            (observation) =>
+              observation.payload_type === 'action.started' &&
+              (observation.payload as ActionStartedPayload).action_id === payload.action_id,
+          )?.seq,
+    );
     assert.ok(contractSeq);
     assert.ok(later.every((seq) => seq !== undefined && seq > contractSeq));
     assert.equal(fixture.runtime.state().goal?.status, 'complete');
-    assert.equal(fixture.runtime.trace().cycles.every((cycle) => cycle.procedure !== 'crystallize_and_report@1'), true);
-    const corpusCycle = fixture.runtime.trace().cycles.find((cycle) => selectedOperations(fixture, cycle).filter((operation) => operation === 'corpus.propose').length >= 2);
-    const generateCycle = fixture.runtime.trace().cycles.find((cycle) => selectedOperations(fixture, cycle).filter((operation) => operation === 'implementation.generate').length >= 2);
+    assert.equal(
+      fixture.runtime.trace().cycles.every((cycle) => cycle.procedure !== 'crystallize_and_report@1'),
+      true,
+    );
+    const corpusCycle = fixture.runtime
+      .trace()
+      .cycles.find(
+        (cycle) => selectedOperations(fixture, cycle).filter((operation) => operation === 'corpus.propose').length >= 2,
+      );
+    const generateCycle = fixture.runtime
+      .trace()
+      .cycles.find(
+        (cycle) =>
+          selectedOperations(fixture, cycle).filter((operation) => operation === 'implementation.generate').length >= 2,
+      );
     assert.ok(corpusCycle, 'visible and held-out corpus proposals share a cycle');
     assert.ok(generateCycle, 'implementation proposals share a later cycle');
   });
@@ -294,8 +357,17 @@ describe('M3 text.normalize composition', () => {
     assert.equal(early.ok, false);
     openGoal(fixture);
     await drive(fixture, 'green');
-    const corpusCycle = fixture.runtime.trace().cycles.find((cycle) => selectedOperations(fixture, cycle).filter((operation) => operation === 'corpus.propose').length >= 2);
-    const generateCycle = fixture.runtime.trace().cycles.find((cycle) => selectedOperations(fixture, cycle).filter((operation) => operation === 'implementation.generate').length >= 2);
+    const corpusCycle = fixture.runtime
+      .trace()
+      .cycles.find(
+        (cycle) => selectedOperations(fixture, cycle).filter((operation) => operation === 'corpus.propose').length >= 2,
+      );
+    const generateCycle = fixture.runtime
+      .trace()
+      .cycles.find(
+        (cycle) =>
+          selectedOperations(fixture, cycle).filter((operation) => operation === 'implementation.generate').length >= 2,
+      );
     assert.ok(corpusCycle);
     assert.ok(generateCycle);
     const redSeq = seqOf(fixture, 'red.demonstrate', 'action.result');
@@ -307,7 +379,12 @@ describe('M3 text.normalize composition', () => {
     const host = new AgentFabricHost({ authority: createGrantAuthority() });
     const lifecycle = new FabricLifecycle(host);
     lifecycle.searchExact(
-      { operation: 'text.normalize', purpose: NORMALIZE_CONTRACT.purpose, input: NORMALIZE_CONTRACT.input, output: NORMALIZE_CONTRACT.output },
+      {
+        operation: 'text.normalize',
+        purpose: NORMALIZE_CONTRACT.purpose,
+        input: NORMALIZE_CONTRACT.input,
+        output: NORMALIZE_CONTRACT.output,
+      },
       null,
     );
     assert.equal(lifecycle.proposeContract(NORMALIZE_CONTRACT).ok, true);
@@ -322,8 +399,25 @@ describe('M3 text.normalize composition', () => {
     const fixture = world();
     openGoal(fixture);
     await drive(fixture);
-    const redSeq = fixture.runtime.trace().observations.find((observation) => observation.payload_type === 'action.result' && started(fixture, 'red.demonstrate').some((item) => item.action_id === (observation.payload as ActionResultPayload).action_id))?.seq;
-    const generateSeqs = started(fixture, 'implementation.generate').map((payload) => fixture.runtime.trace().observations.find((observation) => observation.payload_type === 'action.started' && (observation.payload as ActionStartedPayload).action_id === payload.action_id)?.seq);
+    const redSeq = fixture.runtime
+      .trace()
+      .observations.find(
+        (observation) =>
+          observation.payload_type === 'action.result' &&
+          started(fixture, 'red.demonstrate').some(
+            (item) => item.action_id === (observation.payload as ActionResultPayload).action_id,
+          ),
+      )?.seq;
+    const generateSeqs = started(fixture, 'implementation.generate').map(
+      (payload) =>
+        fixture.runtime
+          .trace()
+          .observations.find(
+            (observation) =>
+              observation.payload_type === 'action.started' &&
+              (observation.payload as ActionStartedPayload).action_id === payload.action_id,
+          )?.seq,
+    );
     assert.ok(redSeq);
     assert.ok(generateSeqs.every((seq) => seq !== undefined && seq > redSeq));
   });
@@ -349,7 +443,20 @@ describe('M3 text.normalize composition', () => {
     openGoal(fixture);
     await drive(fixture, 'green');
     const red = results(fixture, 'red.demonstrate')[0];
-    const isolation = red?.outcome.outcome === 'succeeded' ? (red.outcome.output as { isolation: { network: string; host_process: string; filesystem: string; held_out_mounted: boolean; broker: string } }).isolation : undefined;
+    const isolation =
+      red?.outcome.outcome === 'succeeded'
+        ? (
+            red.outcome.output as {
+              isolation: {
+                network: string;
+                host_process: string;
+                filesystem: string;
+                held_out_mounted: boolean;
+                broker: string;
+              };
+            }
+          ).isolation
+        : undefined;
     assert.equal(isolation?.network, 'none');
     assert.equal(isolation?.filesystem, 'blocked');
     assert.equal(isolation?.held_out_mounted, false);
@@ -384,7 +491,9 @@ describe('M3 text.normalize composition', () => {
     const fixture = world();
     openGoal(fixture);
     await drive(fixture);
-    const decided = fixture.runtime.trace().observations.find((observation) => observation.payload_type === 'admission.decided');
+    const decided = fixture.runtime
+      .trace()
+      .observations.find((observation) => observation.payload_type === 'admission.decided');
     assert.ok(decided);
     assert.equal(JSON.stringify(decided?.payload).includes('grant'), false);
     const normalize = started(fixture, 'text.normalize')[0];
@@ -401,10 +510,19 @@ describe('M3 text.normalize composition', () => {
     const fixture = world();
     openGoal(fixture);
     await drive(fixture, 'settled');
-    const beforeRed = fixture.runtime.trace().observations.findIndex((observation) => observation.payload_type === 'action.started' && (observation.payload as ActionStartedPayload).operation === 'red.demonstrate');
+    const beforeRed = fixture.runtime
+      .trace()
+      .observations.findIndex(
+        (observation) =>
+          observation.payload_type === 'action.started' &&
+          (observation.payload as ActionStartedPayload).operation === 'red.demonstrate',
+      );
     assert.ok(beforeRed > 0);
     assert.equal(fixture.runtime.state().goal?.retained_procedure, RETAINED_NORMALIZE_PROCEDURE);
-    assert.equal(fixture.host.invocations.some((invocation) => invocation.operation === 'text.normalize'), false);
+    assert.equal(
+      fixture.host.invocations.some((invocation) => invocation.operation === 'text.normalize'),
+      false,
+    );
     assert.notEqual(fixture.host.resolution('text.normalize'), 'resolved');
   });
 
@@ -420,7 +538,19 @@ describe('M3 text.normalize composition', () => {
       host,
       decisionLayer: new FailingDecisionLayer(),
       lifecycle: throwingLifecycle(),
-      author: { implementation: 'nope', variants: [], proposeContract: () => { throw new Error('author'); }, proposeCases: () => { throw new Error('author'); }, proposeImplementation: () => { throw new Error('author'); } },
+      author: {
+        implementation: 'nope',
+        variants: [],
+        proposeContract: () => {
+          throw new Error('author');
+        },
+        proposeCases: () => {
+          throw new Error('author');
+        },
+        proposeImplementation: () => {
+          throw new Error('author');
+        },
+      },
     });
     assert.equal(result.ok, true, result.ok ? '' : result.failure.reason);
     assert.equal(result.state.goal?.status, 'complete');
@@ -477,14 +607,28 @@ describe('M3 text.normalize composition', () => {
       host: new AgentFabricHost({ authority: createGrantAuthority() }),
       decisionLayer: new FailingDecisionLayer(),
       lifecycle: throwingLifecycle(),
-      author: { implementation: 'nope', variants: [], proposeContract: () => { throw new Error('author'); }, proposeCases: () => { throw new Error('author'); }, proposeImplementation: () => { throw new Error('author'); } },
+      author: {
+        implementation: 'nope',
+        variants: [],
+        proposeContract: () => {
+          throw new Error('author');
+        },
+        proposeCases: () => {
+          throw new Error('author');
+        },
+        proposeImplementation: () => {
+          throw new Error('author');
+        },
+      },
     });
     assert.equal(replayed.ok, true, replayed.ok ? '' : replayed.failure.reason);
   });
 
   it('M3-T13 the broker has no sleep, and a child that ends without a result settles', async () => {
     const fixture = world();
-    const slept = await fixture.lifecycle.runner.runCases('return broker.sleep();', [{ id: 'sleep', input: { text: 'a' } }]);
+    const slept = await fixture.lifecycle.runner.runCases('return broker.sleep();', [
+      { id: 'sleep', input: { text: 'a' } },
+    ]);
     assert.equal(typeof slept[0]?.error, 'string');
     const report = fixture.lifecycle.runner.currentReport();
     assert.equal(report?.host_process, 'unreachable');
@@ -506,7 +650,19 @@ describe('M3 text.normalize composition', () => {
       decisionLayer: new ScriptedDecisionLayer(),
       grantAuthority: authority,
       lifecycle: throwingLifecycle(),
-      author: { implementation: 'nope', variants: [], proposeContract: () => { throw new Error('author'); }, proposeCases: () => { throw new Error('author'); }, proposeImplementation: () => { throw new Error('author'); } },
+      author: {
+        implementation: 'nope',
+        variants: [],
+        proposeContract: () => {
+          throw new Error('author');
+        },
+        proposeCases: () => {
+          throw new Error('author');
+        },
+        proposeImplementation: () => {
+          throw new Error('author');
+        },
+      },
     });
     const alpha = fixture.alpha;
     const beta = fixture.beta;
@@ -537,7 +693,16 @@ describe('M3 text.normalize composition', () => {
     const restarted: World = { ...fixture, authority, host: restored, runtime, lifecycle: fixture.lifecycle };
     await drive(restarted);
     assert.equal(runtime.state().goal?.status, 'complete');
-    assert.equal(runtime.trace().observations.some((observation) => observation.payload_type === 'action.started' && (observation.payload as ActionStartedPayload).operation === 'gap.search'), false);
+    assert.equal(
+      runtime
+        .trace()
+        .observations.some(
+          (observation) =>
+            observation.payload_type === 'action.started' &&
+            (observation.payload as ActionStartedPayload).operation === 'gap.search',
+        ),
+      false,
+    );
     assert.ok(restored.invocations.some((invocation) => invocation.operation === 'text.normalize'));
   });
 });

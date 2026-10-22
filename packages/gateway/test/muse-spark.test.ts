@@ -28,8 +28,14 @@ const BODY = {
   choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'ok' } }],
   usage: { prompt_tokens: 12, completion_tokens: 1, total_tokens: 13 },
 };
-interface Captured { url: string; init: RequestInit }
-function mockFetch(body: unknown = BODY, options: { status?: number; headers?: Record<string, string>; raw?: string } = {}) {
+interface Captured {
+  url: string;
+  init: RequestInit;
+}
+function mockFetch(
+  body: unknown = BODY,
+  options: { status?: number; headers?: Record<string, string>; raw?: string } = {},
+) {
   const calls: Captured[] = [];
   const fetch: typeof globalThis.fetch = async (url, init) => {
     calls.push({ url: String(url), init: init ?? {} });
@@ -49,8 +55,11 @@ function failureOf(result: GenerationProviderResult) {
 
 describe('muse-spark adapter contract', () => {
   it('redacts the trimmed credential from completion text and response identity', async () => {
-    const mock = mockFetch({ ...BODY, id: `id-${KEY}`, choices: [{ index: 0,
-      finish_reason: 'stop', message: { role: 'assistant', content: `echo(${KEY})` } }] });
+    const mock = mockFetch({
+      ...BODY,
+      id: `id-${KEY}`,
+      choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: `echo(${KEY})` } }],
+    });
     const result = await museSparkAdapter({ apiKey: `  ${KEY}  `, fetch: mock.fetch }).execute(CALL);
     assert.equal(result.status, 'completed');
     assert.ok(!JSON.stringify(result).includes(KEY));
@@ -67,12 +76,16 @@ describe('muse-spark adapter contract', () => {
     for (const max_output_tokens of [16, 1023, 0, -1, 1024.5, NaN, Infinity]) {
       const mock = mockFetch();
       const result = await museSparkAdapter({ apiKey: KEY, fetch: mock.fetch }).execute({
-        ...CALL, settings: { max_output_tokens },
+        ...CALL,
+        settings: { max_output_tokens },
       });
       const failure = failureOf(result);
       assert.equal(failure.code, 'invalid_request');
       assert.equal(failure.retryable, false);
-      assert.equal(failure.message, 'muse-spark: settings.max_output_tokens must be an integer at least 1024 to leave room for default reasoning and text');
+      assert.equal(
+        failure.message,
+        'muse-spark: settings.max_output_tokens must be an integer at least 1024 to leave room for default reasoning and text',
+      );
       assert.equal(mock.calls.length, 0);
     }
   });
@@ -99,15 +112,20 @@ describe('muse-spark adapter contract', () => {
     assert.ok(!('reasoning_effort' in body));
     assert.ok(!('temperature' in body));
     assert.deepEqual(result, {
-      status: 'completed', text: 'ok', usage: { input_tokens: 12, output_tokens: 1 },
-      finish_reason: 'stop', provider_response_id: 'completion-1',
+      status: 'completed',
+      text: 'ok',
+      usage: { input_tokens: 12, output_tokens: 1 },
+      finish_reason: 'stop',
+      provider_response_id: 'completion-1',
     });
   });
 
   it('honours an injected base URL, temperature, and explicitly selected fallback model', async () => {
     const mock = mockFetch();
     await museSparkAdapter({ apiKey: KEY, fetch: mock.fetch, baseURL: 'http://mock.invalid/v1/' }).execute({
-      ...CALL, model: MUSE_SPARK_FALLBACK_MODEL, settings: { ...CALL.settings, temperature: 0.2 },
+      ...CALL,
+      model: MUSE_SPARK_FALLBACK_MODEL,
+      settings: { ...CALL.settings, temperature: 0.2 },
     });
     assert.equal(mock.calls[0]!.url, 'http://mock.invalid/v1/chat/completions');
     const body = JSON.parse(String(mock.calls[0]!.init.body)) as Record<string, unknown>;
@@ -117,12 +135,15 @@ describe('muse-spark adapter contract', () => {
 
   it('rejects missing, blank and invalid header credentials at construction without disclosing them', () => {
     for (const apiKey of ['', '   ', undefined, `${KEY}\r\nheader: value`]) {
-      assert.throws(() => museSparkAdapter({ apiKey: apiKey as string }), (error: unknown) => {
-        assert.ok(error instanceof Error);
-        assert.match(error.message, /apiKey/);
-        assert.ok(!error.message.includes(KEY));
-        return true;
-      });
+      assert.throws(
+        () => museSparkAdapter({ apiKey: apiKey as string }),
+        (error: unknown) => {
+          assert.ok(error instanceof Error);
+          assert.match(error.message, /apiKey/);
+          assert.ok(!error.message.includes(KEY));
+          return true;
+        },
+      );
     }
   });
 
@@ -137,9 +158,13 @@ describe('muse-spark adapter contract', () => {
   });
 
   for (const [status, code, retryable] of [
-    [401, 'unauthorized', false], [403, 'unauthorized', false],
-    [429, 'rate_limited', true], [500, 'unavailable', true], [503, 'unavailable', true],
-    [404, 'invalid_request', false], [408, 'timeout', false],
+    [401, 'unauthorized', false],
+    [403, 'unauthorized', false],
+    [429, 'rate_limited', true],
+    [500, 'unavailable', true],
+    [503, 'unavailable', true],
+    [404, 'invalid_request', false],
+    [408, 'timeout', false],
   ] as const) {
     it(`maps HTTP ${status} to ${code} with no hidden retries or credential disclosure`, async () => {
       const mock = mockFetch({ error: { message: `rejected ${KEY}` } }, { status });
@@ -152,7 +177,11 @@ describe('muse-spark adapter contract', () => {
   }
 
   it('honours relative Retry-After exactly, including zero and fractional seconds', async () => {
-    for (const [header, delay] of [['7', 7_000], ['0', 0], ['0.1255', 126]] as const) {
+    for (const [header, delay] of [
+      ['7', 7_000],
+      ['0', 0],
+      ['0.1255', 126],
+    ] as const) {
       const mock = mockFetch({}, { status: 429, headers: { 'retry-after': header } });
       const failure = failureOf(await museSparkAdapter({ apiKey: KEY, fetch: mock.fetch }).execute(CALL));
       assert.equal(failure.retry_after_ms, delay, header);
@@ -162,7 +191,10 @@ describe('muse-spark adapter contract', () => {
   it('leaves absolute, negative and malformed Retry-After absent without consulting a clock', async () => {
     for (const header of ['Wed, 21 Oct 2026 07:28:00 GMT', '-1', 'NaN']) {
       const mock = mockFetch({}, { status: 429, headers: { 'retry-after': header } });
-      assert.equal(failureOf(await museSparkAdapter({ apiKey: KEY, fetch: mock.fetch }).execute(CALL)).retry_after_ms, undefined);
+      assert.equal(
+        failureOf(await museSparkAdapter({ apiKey: KEY, fetch: mock.fetch }).execute(CALL)).retry_after_ms,
+        undefined,
+      );
     }
   });
 
@@ -181,15 +213,21 @@ describe('muse-spark adapter contract', () => {
   it('preserves SDK usage on empty completions without inventing omitted usage or exposing non-finite counts', async () => {
     for (const finish_reason of ['stop', 'length']) {
       for (const [usage, expected] of [
-        [{ prompt_tokens: 12, completion_tokens: 1024 }, { input_tokens: 12, output_tokens: 1024 }],
+        [
+          { prompt_tokens: 12, completion_tokens: 1024 },
+          { input_tokens: 12, output_tokens: 1024 },
+        ],
         [undefined, { input_tokens: undefined, output_tokens: undefined }],
         // The SDK fills a missing count with zero when a usage object exists.
         [{ prompt_tokens: 12 }, { input_tokens: 12, output_tokens: 0 }],
         // The SDK rejects non-finite wire counts before returning a completion.
         [{ prompt_tokens: 'OVERFLOW', completion_tokens: 1024 }, undefined],
       ] as const) {
-        const raw = JSON.stringify({ ...BODY, usage, choices: [{ index: 0, finish_reason,
-          message: { role: 'assistant', content: '' } }] }).replace('"OVERFLOW"', '1e400');
+        const raw = JSON.stringify({
+          ...BODY,
+          usage,
+          choices: [{ index: 0, finish_reason, message: { role: 'assistant', content: '' } }],
+        }).replace('"OVERFLOW"', '1e400');
         const mock = mockFetch(undefined, { raw });
         const result = await museSparkAdapter({ apiKey: KEY, fetch: mock.fetch }).execute(CALL);
         assert.equal(failureOf(result).code, 'malformed_response');
@@ -202,10 +240,15 @@ describe('muse-spark adapter contract', () => {
   it('reports network faults without throwing, logging or returning the echoed key', async (t) => {
     const logs: unknown[][] = [];
     for (const method of ['log', 'warn', 'error', 'debug', 'info'] as const) {
-      t.mock.method(console, method, (...args: unknown[]) => { logs.push(args); });
+      t.mock.method(console, method, (...args: unknown[]) => {
+        logs.push(args);
+      });
     }
     let requests = 0;
-    const fetch: typeof globalThis.fetch = async () => { requests++; throw new TypeError(`network failed ${KEY}`); };
+    const fetch: typeof globalThis.fetch = async () => {
+      requests++;
+      throw new TypeError(`network failed ${KEY}`);
+    };
     const result = await museSparkAdapter({ apiKey: KEY, fetch }).execute(CALL);
     const failure = failureOf(result);
     assert.equal(failure.code, 'unavailable');
@@ -215,9 +258,11 @@ describe('muse-spark adapter contract', () => {
   });
 
   it('redacts a credential maliciously echoed in successful response fields', async () => {
-    const mock = mockFetch({ ...BODY, id: `echo-${KEY}`, choices: [
-      { index: 0, finish_reason: 'stop', message: { role: 'assistant', content: `echo ${KEY}` } },
-    ] });
+    const mock = mockFetch({
+      ...BODY,
+      id: `echo-${KEY}`,
+      choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: `echo ${KEY}` } }],
+    });
     const result = await museSparkAdapter({ apiKey: KEY, fetch: mock.fetch }).execute(CALL);
     assert.equal(result.status, 'completed');
     assert.ok(!JSON.stringify(result).includes(KEY));
@@ -231,11 +276,16 @@ describe('muse-spark adapter contract', () => {
     assert.equal(result.usage.output_tokens, undefined);
   });
 
-  for (const [name, code] of [['AbortError', 'cancelled'], ['TimeoutError', 'timeout']] as const) {
+  for (const [name, code] of [
+    ['AbortError', 'cancelled'],
+    ['TimeoutError', 'timeout'],
+  ] as const) {
     it(`propagates ${name} from the supplied signal to fetch without another request`, async () => {
       const controller = new AbortController();
       let started!: () => void;
-      const start = new Promise<void>((resolve) => { started = resolve; });
+      const start = new Promise<void>((resolve) => {
+        started = resolve;
+      });
       let requests = 0;
       const fetch: typeof globalThis.fetch = async (_url, init) => {
         requests++;
@@ -246,7 +296,11 @@ describe('muse-spark adapter contract', () => {
         });
       };
       const pending = museSparkAdapter({ apiKey: KEY, fetch }).execute({ ...CALL, signal: controller.signal });
-      assert.equal(await Promise.race([start.then(() => 'started'), pending.then(() => 'completed')]), 'started', 'the request must reach the injected fetch');
+      assert.equal(
+        await Promise.race([start.then(() => 'started'), pending.then(() => 'completed')]),
+        'started',
+        'the request must reach the injected fetch',
+      );
       controller.abort(new DOMException(`stop ${KEY}`, name));
       const failure = failureOf(await pending);
       assert.equal(failure.code, code);
@@ -257,7 +311,11 @@ describe('muse-spark adapter contract', () => {
 
   it('isolates concurrent requests, credentials, and rate-limit failures', async () => {
     const mocks = Array.from({ length: 8 }, (_, i) => mockFetch(i === 0 ? {} : BODY, { status: i === 0 ? 429 : 200 }));
-    const results = await Promise.all(mocks.map((mock, i) => museSparkAdapter({ apiKey: `${KEY}-${i}`, fetch: mock.fetch }).execute({ ...CALL, prompt: `public ${i}` })));
+    const results = await Promise.all(
+      mocks.map((mock, i) =>
+        museSparkAdapter({ apiKey: `${KEY}-${i}`, fetch: mock.fetch }).execute({ ...CALL, prompt: `public ${i}` }),
+      ),
+    );
     assert.equal(results[0]!.status, 'failed');
     for (const [i, mock] of mocks.entries()) {
       assert.equal(mock.calls.length, 1);

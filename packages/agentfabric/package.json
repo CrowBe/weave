@@ -2,14 +2,14 @@
   "name": "@weave/agentfabric",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
   "description": "AgentFabric: the capability host. Depends on AgentSOP and, for the resolver infer port, the gateway.",
-  "exports": {
-    ".": "./dist/src/index.js"
-  },
   "files": [
     "dist"
   ],
+  "type": "module",
+  "exports": {
+    ".": "./dist/src/index.js"
+  },
   "dependencies": {
     "@weave/agentsop": "*",
     "@weave/gateway": "*"

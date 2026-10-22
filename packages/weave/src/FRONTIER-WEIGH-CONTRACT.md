@@ -27,12 +27,12 @@ governed decision described in `benchmarks/frontier-weigh/README.md`.
 `renderWeighView(state, eligible, formed)` renders four slices. `content` is
 exactly what the gateway sends as the evaluation state.
 
-| Slice | `content` | Manifest revisions | Disclosed omissions |
-| --- | --- | --- | --- |
-| `goal` | `goal: { purpose, success_evidence, sources, review_requested }`. `sources` lists goal sources the goal may read. | `goal.opened` seq | goal sources without read authority, reason `authority` |
-| `budget` | `budget: { actions_remaining }` = limit − reserved − spent | `goal.opened` seq and every action's start and finish seq | none |
-| `progress` | `progress: { sources: [{ source, revision, inspected_revision }], in_flight: [{ operation, inputs }], report: null \| { covers_sources, current } }` for readable goal sources | each listed source's and inspection's seq, in-flight start seqs, report evidence | every other registered source: reason `authority` when unreadable, `profile` when readable but not a goal source |
-| `candidates` | `candidates: [{ candidate_id, operation, inputs }]`, eligible candidates only | union of the candidates' evidence | each non-eligible formed candidate, reason = its eligibility status (`prohibited`, `approval_required`); each non-scalar input key as `<candidate_id>.inputs.<key>`, reason `profile` |
+| Slice        | `content`                                                                                                                                                                      | Manifest revisions                                                               | Disclosed omissions                                                                                                                                                                   |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `goal`       | `goal: { purpose, success_evidence, sources, review_requested }`. `sources` lists goal sources the goal may read.                                                              | `goal.opened` seq                                                                | goal sources without read authority, reason `authority`                                                                                                                               |
+| `budget`     | `budget: { actions_remaining }` = limit − reserved − spent                                                                                                                     | `goal.opened` seq and every action's start and finish seq                        | none                                                                                                                                                                                  |
+| `progress`   | `progress: { sources: [{ source, revision, inspected_revision }], in_flight: [{ operation, inputs }], report: null \| { covers_sources, current } }` for readable goal sources | each listed source's and inspection's seq, in-flight start seqs, report evidence | every other registered source: reason `authority` when unreadable, `profile` when readable but not a goal source                                                                      |
+| `candidates` | `candidates: [{ candidate_id, operation, inputs }]`, eligible candidates only                                                                                                  | union of the candidates' evidence                                                | each non-eligible formed candidate, reason = its eligibility status (`prohibited`, `approval_required`); each non-scalar input key as `<candidate_id>.inputs.<key>`, reason `profile` |
 
 Inputs are summarised to top-level string, number and boolean fields. Source
 bodies never enter this profile. Prohibited and approval-required candidates
@@ -57,8 +57,7 @@ question per eligible candidate, keyed by candidate id:
 - `instructions`: `Candidate <candidate_id> is listed in candidates. If Weave
   dispatched it now, how directly would it move this goal toward its success
   evidence, given the progress shown and the actions remaining?`
-- `criteria`, in level order (`FRONTIER_WEIGH_CRITERIA`):
-  0. `defer: do not dispatch it now. It does not contribute to the success
+- `criteria`, in level order (`FRONTIER_WEIGH_CRITERIA`): 0. `defer: do not dispatch it now. It does not contribute to the success
      evidence, what it would produce is already current or in flight, or the
      actions remaining cannot cover the work still needed to complete the goal.`
   1. `consider: it contributes to the success evidence, but it is not among the
@@ -98,11 +97,11 @@ Weights without the `frontier.weigh@1` tag (scripted weighing) have no floor.
 
 ## 7. Recorded observations and revisions
 
-| Record | Carries |
-| --- | --- |
-| `inference.requested` (runtime) | `request_id`, the full `view` (profile, version, `state_revision`, content, manifest), `candidate_set`, terms, reservation |
-| `weights.recorded` (gateway) | `contract: "frontier.weigh@1"`, `implementation` = routed unit, `request_id`, `state_revision` = seq of its `inference.requested`, `candidate_set`, weights |
-| `inference.recorded` (gateway) | attempts, spent, status, reason |
+| Record                          | Carries                                                                                                                                                     |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inference.requested` (runtime) | `request_id`, the full `view` (profile, version, `state_revision`, content, manifest), `candidate_set`, terms, reservation                                  |
+| `weights.recorded` (gateway)    | `contract: "frontier.weigh@1"`, `implementation` = routed unit, `request_id`, `state_revision` = seq of its `inference.requested`, `candidate_set`, weights |
+| `inference.recorded` (gateway)  | attempts, spent, status, reason                                                                                                                             |
 
 To reproduce a weight: follow `weights.recorded.request_id` to its
 `inference.requested`; its `view` is what the routed unit saw and its
@@ -150,15 +149,15 @@ approval-required candidate (never in the request, never weighted).
 `packages/weave/test/frontier-weigh.test.ts`, with fixture adapters and
 injected ticks. The fixture judge is a stand-in, not evidence about a model.
 
-| ID | Scenario | Evidence |
-| --- | --- | --- |
-| FW-T01 | Report goal weighed end to end | Every accepted weight carries the contract, binds to its `inference.requested` seq and candidate set, and was produced from exactly the recorded view content and questions; content holds no gamma id or body; omissions are disclosed. |
-| FW-T02 | Proposal adds an authorized source the goal does not list (`source:delta`), five actions | Typed weights defer delta, Weave dispatches the rest and the goal completes. `scripted@1` on the same state dispatches delta and ends `blocked / actions budget exhausted`. |
-| FW-T03 | Every weight `defer` | No dispatch; `blocked` with the deferral reason; one weighing; a tick does not re-weigh; a source change re-weighs once. |
-| FW-T04 | Scores out of range | Unaccepted, no weights, explicit `blocked`, no second weighing. |
-| FW-T05 | Tick while weighing is held | The late weight is rejected as stale; nothing dispatches; `blocked / stale judgment`. |
-| FW-T06 | Forged and policy-bound weights | A weight set naming a non-candidate is ignored; an out-of-range weight is rejected; `dispatch` on every candidate still leaves one `budget` exclusion; a prohibited candidate is never weighed, sent or dispatched. |
-| FW-T07 | Replay of FW-T02's weighed run | Replay succeeds with a decision layer that throws; zero host invocations; identical cycle records. |
+| ID     | Scenario                                                                                 | Evidence                                                                                                                                                                                                                                 |
+| ------ | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FW-T01 | Report goal weighed end to end                                                           | Every accepted weight carries the contract, binds to its `inference.requested` seq and candidate set, and was produced from exactly the recorded view content and questions; content holds no gamma id or body; omissions are disclosed. |
+| FW-T02 | Proposal adds an authorized source the goal does not list (`source:delta`), five actions | Typed weights defer delta, Weave dispatches the rest and the goal completes. `scripted@1` on the same state dispatches delta and ends `blocked / actions budget exhausted`.                                                              |
+| FW-T03 | Every weight `defer`                                                                     | No dispatch; `blocked` with the deferral reason; one weighing; a tick does not re-weigh; a source change re-weighs once.                                                                                                                 |
+| FW-T04 | Scores out of range                                                                      | Unaccepted, no weights, explicit `blocked`, no second weighing.                                                                                                                                                                          |
+| FW-T05 | Tick while weighing is held                                                              | The late weight is rejected as stale; nothing dispatches; `blocked / stale judgment`.                                                                                                                                                    |
+| FW-T06 | Forged and policy-bound weights                                                          | A weight set naming a non-candidate is ignored; an out-of-range weight is rejected; `dispatch` on every candidate still leaves one `budget` exclusion; a prohibited candidate is never weighed, sent or dispatched.                      |
+| FW-T07 | Replay of FW-T02's weighed run                                                           | Replay succeeds with a decision layer that throws; zero host invocations; identical cycle records.                                                                                                                                       |
 
 M0–M2 checks, including M2-T03 and M2-T05–T10, stay green.
 

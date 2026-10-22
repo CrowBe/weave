@@ -8,10 +8,10 @@ and provenance/privacy. A local deterministic scan and spot checks reproduced
 the key counts. No dataset row was submitted to a hosted model, and no dataset
 instruction was executed.
 
-| File | Rows | SHA-256 |
-| --- | ---: | --- |
+| File                 |    Rows | SHA-256                                                            |
+| -------------------- | ------: | ------------------------------------------------------------------ |
 | `data/train.parquet` | 125,614 | `1b163182db155ba986c8ab8d3d582ac09ec1b1dcbc13c65d048e61379be9fe5b` |
-| `data/test.parquet` | 24,386 | `eba9f9df6ad54ccdc3aa6516ab97e4f9dea4030422e0dc90510b85e462206a61` |
+| `data/test.parquet`  |  24,386 | `eba9f9df6ad54ccdc3aa6516ab97e4f9dea4030422e0dc90510b85e462206a61` |
 
 The downloaded files live in ignored `.local/bev-decision-150k/<revision>/` and
 are not part of the repository. Both Parquet files have the documented five
@@ -29,7 +29,7 @@ quality`; the other train row belongs to `Software engineering and code`.
 Examples include train rows 5768 and 6262 and test rows 3346 and 4549 (all
 zero-based indices): their source text asks the reader to ignore previous
 instructions. Train rows 165 and 1304 and test row 1869 contain DAN-style
-role-play prompts. These are often legitimate *objects of evaluation* in a
+role-play prompts. These are often legitimate _objects of evaluation_ in a
 prompt/response rating corpus; if handed to an unconstrained agent as an
 instruction, they become an injection surface.
 

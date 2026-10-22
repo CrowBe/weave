@@ -93,7 +93,8 @@ export function renderQuestions(kind: EvaluationKind, decision: DecisionCase): E
           // hypothesis moves the signal more than the model does.
           criteria: {
             true: 'This candidate is the action the described state calls for, and dispatching it now advances the authorized goal.',
-            false: 'This candidate is not the action the described state calls for; some other eligible candidate should be dispatched first.',
+            false:
+              'This candidate is not the action the described state calls for; some other eligible candidate should be dispatched first.',
           },
         };
       }
@@ -145,11 +146,7 @@ function rank(values: readonly { candidate_id: string; value: number }[]): Ranki
  * - `boolean` ranks on P(true) per candidate, renormalised across candidates,
  *   because the decision being scored is which candidate to dispatch.
  */
-export function reduceAnswers(
-  kind: EvaluationKind,
-  decision: DecisionCase,
-  answers: EvaluationAnswers,
-): Ranking {
+export function reduceAnswers(kind: EvaluationKind, decision: DecisionCase, answers: EvaluationAnswers): Ranking {
   switch (kind) {
     case 'choice': {
       const answer = answers['best'] as ChoiceAnswer | undefined;

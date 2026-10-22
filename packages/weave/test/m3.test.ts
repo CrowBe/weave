@@ -27,7 +27,9 @@ import { driveFold, m3World, openFoldGoal, type M3World } from './m3-fixture.js'
 function started(world: M3World, operation: string): ActionStartedPayload[] {
   return world.runtime
     .trace()
-    .observations.filter((observation) => observation.payload_type === 'action.started' && observation.validation.status === 'accepted')
+    .observations.filter(
+      (observation) => observation.payload_type === 'action.started' && observation.validation.status === 'accepted',
+    )
     .map((observation) => observation.payload as ActionStartedPayload)
     .filter((payload) => payload.operation === operation);
 }
@@ -36,13 +38,19 @@ function results(world: M3World, operation: string): ActionResultPayload[] {
   const ids = new Set(started(world, operation).map((payload) => payload.action_id));
   return world.runtime
     .trace()
-    .observations.filter((observation) => observation.payload_type === 'action.result' && observation.validation.status === 'accepted')
+    .observations.filter(
+      (observation) => observation.payload_type === 'action.result' && observation.validation.status === 'accepted',
+    )
     .map((observation) => observation.payload as ActionResultPayload)
     .filter((payload) => ids.has(payload.action_id));
 }
 
 function cycleSelecting(world: M3World, operation: string, count: number): CycleRecord | undefined {
-  return world.runtime.trace().cycles.find((cycle) => cycle.selected.filter((item) => operationOf(cycle, item.candidate_id) === operation).length >= count);
+  return world.runtime
+    .trace()
+    .cycles.find(
+      (cycle) => cycle.selected.filter((item) => operationOf(cycle, item.candidate_id) === operation).length >= count,
+    );
 }
 
 function operationOf(cycle: CycleRecord, candidate_id: string): string | undefined {
@@ -57,7 +65,10 @@ describe('M3 fill one capability gap', () => {
     assert.ok(first);
     assert.equal(first.procedure, 'crystallize_and_report@1');
     assert.equal(first.candidates.filter((candidate) => candidate.operation === 'source.inspect').length, 2);
-    assert.equal(first.candidates.some((candidate) => candidate.operation === 'gap.search'), true);
+    assert.equal(
+      first.candidates.some((candidate) => candidate.operation === 'gap.search'),
+      true,
+    );
     assert.equal(first.selected.length >= 3, true);
 
     await driveFold(world);
@@ -75,11 +86,14 @@ describe('M3 fill one capability gap', () => {
     assert.ok(generateCycle, 'implementation proposals run in one cycle');
 
     const redSeq = resultSeq(world, 'red.demonstrate');
-    const generateSeqs = started(world, 'implementation.generate').map((payload) => seqOf(world, payload.action_id, 'action.started'));
+    const generateSeqs = started(world, 'implementation.generate').map((payload) =>
+      seqOf(world, payload.action_id, 'action.started'),
+    );
     assert.ok(generateSeqs.every((seq) => seq > redSeq));
     const redOutput = results(world, 'red.demonstrate')[0]?.outcome;
     assert.equal(redOutput?.outcome, 'succeeded');
-    const placeholder = redOutput?.outcome === 'succeeded' ? (redOutput.output as { placeholder_digest: string }).placeholder_digest : '';
+    const placeholder =
+      redOutput?.outcome === 'succeeded' ? (redOutput.output as { placeholder_digest: string }).placeholder_digest : '';
     for (const payload of started(world, 'implementation.generate')) {
       const result = results(world, 'implementation.generate').find((item) => item.action_id === payload.action_id);
       assert.equal(result?.outcome.outcome, 'succeeded');
@@ -94,8 +108,14 @@ describe('M3 fill one capability gap', () => {
     assert.equal(fold?.grant?.contract_rev, 'r1');
     assert.deepEqual(fold?.grant?.permissions, []);
     assert.equal(fold?.grant?.action_id, fold?.action_id);
-    assert.ok(world.host.invocations.some((invocation) => invocation.operation === 'report.fold' && invocation.action_id === fold?.action_id));
-    const decision = world.runtime.trace().observations.find((observation) => observation.payload_type === 'admission.decided');
+    assert.ok(
+      world.host.invocations.some(
+        (invocation) => invocation.operation === 'report.fold' && invocation.action_id === fold?.action_id,
+      ),
+    );
+    const decision = world.runtime
+      .trace()
+      .observations.find((observation) => observation.payload_type === 'admission.decided');
     assert.ok(decision);
     assert.equal('grant' in (decision.payload as object), false);
     assert.ok((decision.seq as number) < seqOf(world, fold.action_id, 'action.started'));
@@ -127,7 +147,10 @@ describe('M3 fill one capability gap', () => {
     assert.ok(world.author.views.length >= 1);
     for (const view of world.author.views) {
       assert.equal(JSON.stringify(view).includes(HELD_OUT_MARKER), false);
-      assert.equal(view.visible_cases.every((testCase) => testCase.split === 'visible'), true);
+      assert.equal(
+        view.visible_cases.every((testCase) => testCase.split === 'visible'),
+        true,
+      );
     }
     for (const result of results(world, 'green.prove')) {
       assert.equal(result.outcome.outcome, 'succeeded');
@@ -167,7 +190,9 @@ describe('M3 fill one capability gap', () => {
     }
     const beforeRed = world.runtime.trace().cycles.filter((cycle) => cycle.state_revision < redAt);
     assert.equal(
-      beforeRed.some((cycle) => cycle.candidates.some((candidate) => candidate.operation === 'implementation.generate')),
+      beforeRed.some((cycle) =>
+        cycle.candidates.some((candidate) => candidate.operation === 'implementation.generate'),
+      ),
       false,
     );
   });
@@ -199,7 +224,14 @@ describe('M3 fill one capability gap', () => {
       caused_by: null,
       payload_type: 'admission.decided',
       payload_version: 1,
-      payload: { request_id: 'adm:nope', implementation_id: 'direct', decision: 'admitted', approver: 'operator', evidence_digest: 'x', authority_revision: 1 },
+      payload: {
+        request_id: 'adm:nope',
+        implementation_id: 'direct',
+        decision: 'admitted',
+        approver: 'operator',
+        evidence_digest: 'x',
+        authority_revision: 1,
+      },
     });
     assert.equal(untrusted.validation.status, 'rejected');
     assert.equal(started(world, 'report.fold').length, 0);
@@ -224,12 +256,21 @@ describe('M3 fill one capability gap', () => {
     const world = m3World();
     openFoldGoal(world);
     await driveFold(world, 'admission-requested');
-    const revised: CapabilityContract = { ...FOLD_CONTRACT, revision: 'r2', purpose: 'Fold digests under a revised contract' };
+    const revised: CapabilityContract = {
+      ...FOLD_CONTRACT,
+      revision: 'r2',
+      purpose: 'Fold digests under a revised contract',
+    };
     const invalidated = world.runtime.invalidateEvidence(revised);
     assert.equal(invalidated.validation.status, 'accepted');
     assert.equal(world.runtime.state().crystallization.contract, null);
     assert.equal(world.runtime.state().crystallization.admission, null);
-    const admission = world.runtime.trace().observations.find((observation) => observation.payload_type === 'admission.decided' && observation.validation.status === 'accepted');
+    const admission = world.runtime
+      .trace()
+      .observations.find(
+        (observation) =>
+          observation.payload_type === 'admission.decided' && observation.validation.status === 'accepted',
+      );
     assert.equal(admission, undefined);
     const decided = world.runtime.admitCapability({
       request_id: 'adm:stale',
@@ -256,9 +297,15 @@ describe('M3 fill one capability gap', () => {
       approver: 'operator',
       authority_revision: 1,
     });
-    const fold = Object.values(world.runtime.state().actions).find((action) => action.operation === 'report.fold' && action.state === 'running');
+    const fold = Object.values(world.runtime.state().actions).find(
+      (action) => action.operation === 'report.fold' && action.state === 'running',
+    );
     assert.ok(fold);
-    const notice = world.runtime.revokeCapability('report.fold', admission.implementation_id, 'operator revoked the fold');
+    const notice = world.runtime.revokeCapability(
+      'report.fold',
+      admission.implementation_id,
+      'operator revoked the fold',
+    );
     assert.equal(notice.validation.status, 'accepted');
     world.host.release(fold.action_id);
     await world.runtime.settle(fold.action_id);
@@ -278,7 +325,10 @@ describe('M3 fill one capability gap', () => {
     await Promise.resolve();
     const green = world.runtime.state().crystallization.green;
     assert.equal(green.length, 2);
-    assert.equal(green.every((item) => item.proven), true);
+    assert.equal(
+      green.every((item) => item.proven),
+      true,
+    );
     const late = world.lifecycle.attachImplementation('late', foldSource('direct'));
     assert.equal(late.ok, false);
     assert.match((late as { reason: string }).reason, /spent/);
@@ -351,17 +401,21 @@ describe('M3 fill one capability gap', () => {
 function resultSeq(world: M3World, operation: string): number {
   const action_id = started(world, operation)[0]?.action_id;
   assert.ok(action_id);
-  const observation = world.runtime.trace().observations.find(
-    (item) => item.payload_type === 'action.result' && (item.payload as ActionResultPayload).action_id === action_id,
-  );
+  const observation = world.runtime
+    .trace()
+    .observations.find(
+      (item) => item.payload_type === 'action.result' && (item.payload as ActionResultPayload).action_id === action_id,
+    );
   assert.ok(observation);
   return observation.seq;
 }
 
 function seqOf(world: M3World, action_id: string, payload_type: string): number {
-  const observation = world.runtime.trace().observations.find(
-    (item) => item.payload_type === payload_type && (item.payload as { action_id?: string }).action_id === action_id,
-  );
+  const observation = world.runtime
+    .trace()
+    .observations.find(
+      (item) => item.payload_type === payload_type && (item.payload as { action_id?: string }).action_id === action_id,
+    );
   assert.ok(observation);
   return observation.seq;
 }
@@ -370,7 +424,13 @@ function throwingAuthor(): ExtensionAuthor {
   const fail = (): never => {
     throw new Error('author must not be invoked');
   };
-  return { implementation: 'boom', variants: [], proposeContract: fail, proposeCases: fail, proposeImplementation: fail };
+  return {
+    implementation: 'boom',
+    variants: [],
+    proposeContract: fail,
+    proposeCases: fail,
+    proposeImplementation: fail,
+  };
 }
 
 function throwingLifecycle(): CapabilityLifecycle {

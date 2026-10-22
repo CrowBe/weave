@@ -74,7 +74,8 @@ export interface VercelAiGatewayFreeOptions extends VercelAiGatewayOptions {
 
 function gatewayProvider(options: VercelAiGatewayOptions, fn: string) {
   if (options.apiKey.trim().length === 0) throw new Error(`${fn} requires an apiKey`);
-  return createGateway({ apiKey: options.apiKey,
+  return createGateway({
+    apiKey: options.apiKey,
     ...(options.baseURL === undefined ? {} : { baseURL: options.baseURL }),
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
   });
@@ -116,14 +117,19 @@ function generationAdapter(
       try {
         const model = provider(call.model);
         const result = await generateText({
-          model: free ? wrapLanguageModel({ model, middleware: {
-            async wrapGenerate({ doGenerate }) {
-              const response = await doGenerate();
-              // The SDK logs warnings before returning. Untrusted provider warning
-              // details may echo headers; withhold them per call, never globally.
-              return { ...response, warnings: [] };
-            },
-          } }) : model,
+          model: free
+            ? wrapLanguageModel({
+                model,
+                middleware: {
+                  async wrapGenerate({ doGenerate }) {
+                    const response = await doGenerate();
+                    // The SDK logs warnings before returning. Untrusted provider warning
+                    // details may echo headers; withhold them per call, never globally.
+                    return { ...response, warnings: [] };
+                  },
+                },
+              })
+            : model,
           ...(free && call.instructions.trim().length === 0 ? {} : { system: call.instructions }),
           prompt: call.prompt,
           maxOutputTokens: call.settings.max_output_tokens,
@@ -133,14 +139,22 @@ function generationAdapter(
         });
 
         const cost = free ? reportedCost(result.providerMetadata) : undefined;
-        const usage = { input_tokens: free ? tokenCount(result.usage.inputTokens) : result.usage.inputTokens,
+        const usage = {
+          input_tokens: free ? tokenCount(result.usage.inputTokens) : result.usage.inputTokens,
           output_tokens: free ? tokenCount(result.usage.outputTokens) : result.usage.outputTokens,
-          ...(cost === undefined ? {} : { cost }) };
-        if (free && call.signal?.aborted) return { status: 'failed', failure: freeFailure('cancelled', 'request cancelled'), usage };
+          ...(cost === undefined ? {} : { cost }),
+        };
+        if (free && call.signal?.aborted)
+          return { status: 'failed', failure: freeFailure('cancelled', 'request cancelled'), usage };
         if (free && !freeCost(result.providerMetadata)) {
-          return { status: 'failed', failure: freeFailure('invalid_request',
-            'response cost is absent, invalid, or no longer zero; promotional model refused'),
-            usage };
+          return {
+            status: 'failed',
+            failure: freeFailure(
+              'invalid_request',
+              'response cost is absent, invalid, or no longer zero; promotional model refused',
+            ),
+            usage,
+          };
         }
         return {
           status: 'completed',
@@ -180,15 +194,14 @@ async function freePreflight(
   key: string,
 ): Promise<ProviderFailure | undefined> {
   if (call.signal?.aborted) return freeFailure('cancelled', 'request cancelled');
-  if (!Object.values(VERCEL_AI_GATEWAY_FREE_MODELS).some(id => id === call.model)) {
+  if (!Object.values(VERCEL_AI_GATEWAY_FREE_MODELS).some((id) => id === call.model)) {
     return freeFailure('invalid_request', 'model is outside the promotional free allowlist');
   }
   if (call.instructions.includes(key) || call.prompt.includes(key)) {
     return freeFailure('invalid_request', 'request content contains the adapter credential');
   }
   try {
-    const source = typeof options.catalogue === 'function'
-      ? await options.catalogue(call.signal) : options.catalogue;
+    const source = typeof options.catalogue === 'function' ? await options.catalogue(call.signal) : options.catalogue;
     if (call.signal?.aborted) return freeFailure('cancelled', 'request cancelled');
     const catalogue: unknown = typeof source === 'string' ? JSON.parse(source) : source;
     if (!record(catalogue) || !Array.isArray(catalogue.data)) {
@@ -199,22 +212,32 @@ async function freePreflight(
     if (matches.length !== 1) return freeFailure('malformed_response', 'catalogue model is ambiguous');
     const model = matches[0] as Record<string, unknown>;
     const pricing = model.pricing;
-    if (!record(pricing) || !zero(pricing.input) || !zero(pricing.output) ||
-      Object.keys(pricing).some(field => field !== 'input' && field !== 'output') ||
-      ('varies_by_provider' in model && model.varies_by_provider !== false)) {
+    if (
+      !record(pricing) ||
+      !zero(pricing.input) ||
+      !zero(pricing.output) ||
+      Object.keys(pricing).some((field) => field !== 'input' && field !== 'output') ||
+      ('varies_by_provider' in model && model.varies_by_provider !== false)
+    ) {
       return freeFailure('invalid_request', 'catalogue does not establish an unconditional zero price');
     }
     const now = options.now();
     if (!Number.isFinite(now)) return freeFailure('invalid_request', 'caller time is invalid');
-    if (('deprecated_at' in model && model.deprecated_at !== null && (typeof model.deprecated_at !== 'number' ||
-      !Number.isFinite(model.deprecated_at) || now >= model.deprecated_at)) ||
-      (call.model === VERCEL_AI_GATEWAY_FREE_MODELS.laguna && now >= LAGUNA_FREE_EXPIRY)) {
+    if (
+      ('deprecated_at' in model &&
+        model.deprecated_at !== null &&
+        (typeof model.deprecated_at !== 'number' ||
+          !Number.isFinite(model.deprecated_at) ||
+          now >= model.deprecated_at)) ||
+      (call.model === VERCEL_AI_GATEWAY_FREE_MODELS.laguna && now >= LAGUNA_FREE_EXPIRY)
+    ) {
       return freeFailure('unavailable', 'promotional model is deprecated or expiry is invalid');
     }
     return undefined;
   } catch {
     // Catalogue fetch/parse failures may contain headers: never retain their messages.
-    return call.signal?.aborted ? freeFailure('cancelled', 'request cancelled')
+    return call.signal?.aborted
+      ? freeFailure('cancelled', 'request cancelled')
       : freeFailure('malformed_response', 'catalogue or caller time could not be read');
   }
 }
@@ -222,7 +245,9 @@ async function freePreflight(
 function freeCost(metadata: unknown): boolean {
   if (!record(metadata) || !record(metadata.gateway)) return false;
   const gateway = metadata.gateway;
-  return zero(gateway.cost) && ['marketCost', 'gatewayCost'].every(field => !(field in gateway) || zero(gateway[field]));
+  return (
+    zero(gateway.cost) && ['marketCost', 'gatewayCost'].every((field) => !(field in gateway) || zero(gateway[field]))
+  );
 }
 
 /** Gateway bills in currency units; the provider-neutral port meters in micros. */
@@ -233,7 +258,8 @@ function reportedCost(metadata: unknown): number | undefined {
   // largest charge evidence rather than assuming they are additive components.
   for (const field of ['cost', 'marketCost', 'gatewayCost']) {
     const value = metadata.gateway[field];
-    if (typeof value !== 'number' && !(typeof value === 'string' && /^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value))) continue;
+    if (typeof value !== 'number' && !(typeof value === 'string' && /^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value)))
+      continue;
     const cost = Number(value) * 1_000_000;
     if (Number.isFinite(cost) && cost > 0) reported = Math.max(reported ?? 0, cost);
   }

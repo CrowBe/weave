@@ -53,9 +53,7 @@ export function grantCovers(
     return { ok: false, code: 'DENIED', reason: 'grant names a different contract revision' };
   }
   for (const need of requiredPermissions) {
-    const covered = grant.permissions.some(
-      (p) => p.resource === need.resource && p.mode === need.mode,
-    );
+    const covered = grant.permissions.some((p) => p.resource === need.resource && p.mode === need.mode);
     if (!covered) {
       return {
         ok: false,

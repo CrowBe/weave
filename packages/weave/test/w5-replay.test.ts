@@ -19,10 +19,23 @@ import {
   type Observation,
   type RuntimeOptions,
 } from '@weave/weave';
-import { collector, flakyWeigher, port, runW5, settleAsync, w5World, WEIGH_UNIT, type Rec, type W5Sinks } from './w5-fixture.js';
+import {
+  collector,
+  flakyWeigher,
+  port,
+  runW5,
+  settleAsync,
+  w5World,
+  WEIGH_UNIT,
+  type Rec,
+  type W5Sinks,
+} from './w5-fixture.js';
 
 /** A fresh stack for replay or recovery, optionally with sinks; `snapshot` restores the host store. */
-function stack(sinks: W5Sinks, snapshot?: FabricSnapshot): RuntimeOptions & { readonly host: AgentFabricHost; readonly weigher: ReturnType<typeof flakyWeigher> } {
+function stack(
+  sinks: W5Sinks,
+  snapshot?: FabricSnapshot,
+): RuntimeOptions & { readonly host: AgentFabricHost; readonly weigher: ReturnType<typeof flakyWeigher> } {
   const authority = createGrantAuthority();
   const host = new AgentFabricHost({
     authority,
@@ -89,7 +102,10 @@ describe('W5 crash and replay', () => {
     const recorded = await completedLog();
     const lastResult = [...recorded].reverse().find((o) => o.payload_type === 'action.result')!;
     const loom = collector();
-    const result = replay(recorded.filter((o) => o.seq !== lastResult.seq), stack({ loom: loom.sink }));
+    const result = replay(
+      recorded.filter((o) => o.seq !== lastResult.seq),
+      stack({ loom: loom.sink }),
+    );
     assert.equal(result.ok, false);
     assert.deepEqual(loom.records, []);
   });
@@ -123,7 +139,10 @@ describe('W5 crash and replay', () => {
 
     assert.ok(after.records.length > 0, 'recovery appended observations but emitted nothing');
     for (const record of after.records) {
-      assert.ok(record.sequence > liveHigh, `${record.record_id} sequence ${record.sequence} does not continue past ${liveHigh}`);
+      assert.ok(
+        record.sequence > liveHigh,
+        `${record.record_id} sequence ${record.sequence} does not continue past ${liveHigh}`,
+      );
       for (const seq of seqOf(record)) {
         assert.ok(seq > loadedHigh, `${record.record_id} re-reports loaded observation ${seq}`);
       }
@@ -135,7 +154,10 @@ describe('W5 crash and replay', () => {
       assert.ok(prior === undefined || prior === stableStringify(record), `conflicting record ${record.record_id}`);
     }
     // Restored admissions are not reported again.
-    assert.equal(fabric.records.some((r) => r.fields['event'] === 'admitted'), false);
+    assert.equal(
+      fabric.records.some((r) => r.fields['event'] === 'admitted'),
+      false,
+    );
   });
 
   it('W5-T24 cycles after recovery never reuse a cycle record identity, though Loom may reuse the cycle number', async () => {
@@ -144,12 +166,24 @@ describe('W5 crash and replay', () => {
     const world = w5World({ loom: live.sink }, { journal });
     await settleAsync(world);
     for (let n = 1; n <= 3; n += 1) {
-      world.runtime.clock.submit({ observation_id: `clock:tick:${n}`, caused_by: null, payload_type: 'clock.tick', payload_version: 1, payload: { tick: n } });
+      world.runtime.clock.submit({
+        observation_id: `clock:tick:${n}`,
+        caused_by: null,
+        payload_type: 'clock.tick',
+        payload_version: 1,
+        payload: { tick: n },
+      });
     }
     const after = collector();
     const recovered = recover(journal.snapshot(), stack({ loom: after.sink }, world.host.snapshot()));
     for (let n = 4; n <= 6; n += 1) {
-      recovered.clock.submit({ observation_id: `clock:tick:${n}`, caused_by: null, payload_type: 'clock.tick', payload_version: 1, payload: { tick: n } });
+      recovered.clock.submit({
+        observation_id: `clock:tick:${n}`,
+        caused_by: null,
+        payload_type: 'clock.tick',
+        payload_version: 1,
+        payload: { tick: n },
+      });
     }
     const cyclesAfter = after.records.filter((r) => r.kind === 'cycle.weighed');
     assert.ok(cyclesAfter.length >= 3);
@@ -161,7 +195,8 @@ describe('W5 crash and replay', () => {
     // Threads opened after recovery still name the cycle record that dispatched them.
     const ids = new Set(after.records.map((r) => r.record_id));
     for (const record of after.records) {
-      if (record.parent_id !== null) assert.ok(ids.has(record.parent_id), `${record.record_id} parent ${record.parent_id}`);
+      if (record.parent_id !== null)
+        assert.ok(ids.has(record.parent_id), `${record.record_id} parent ${record.parent_id}`);
     }
   });
 });

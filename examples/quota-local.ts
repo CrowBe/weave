@@ -7,7 +7,8 @@ import type { QuotaPort, QuotaSnapshot, LoopPausedRecord } from '@weave/gateway'
 
 function object(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown> : undefined;
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
 function timestamp(value: unknown): number | null {
@@ -23,7 +24,9 @@ function timestamp(value: unknown): number | null {
  * code-review and used-share windows, keeps its own id and is not read.
  */
 const GATED_WINDOWS: Readonly<Record<string, 'seven_day' | 'five_hour'>> = {
-  seven_day: 'seven_day', weekly: 'seven_day', five_hour: 'five_hour',
+  seven_day: 'seven_day',
+  weekly: 'seven_day',
+  five_hour: 'five_hour',
 };
 
 /**
@@ -46,31 +49,49 @@ export function normalizeQuotaSnapshot(value: unknown): QuotaSnapshot | undefine
     let malformed = !Array.isArray(provider.windows);
     for (const rawWindow of Array.isArray(provider.windows) ? provider.windows : []) {
       const window = object(rawWindow);
-      if (typeof window?.id !== 'string' || !window.id.trim()) { malformed = true; continue; }
+      if (typeof window?.id !== 'string' || !window.id.trim()) {
+        malformed = true;
+        continue;
+      }
       const id = Object.hasOwn(GATED_WINDOWS, window.id) ? GATED_WINDOWS[window.id]! : window.id;
       const gated = id === 'seven_day' || id === 'five_hour';
       const remaining = window.percentRemaining;
-      const percentRemaining = typeof remaining === 'number' && Number.isFinite(remaining) && remaining >= 0 && remaining <= 100
-        ? remaining : null;
+      const percentRemaining =
+        typeof remaining === 'number' && Number.isFinite(remaining) && remaining >= 0 && remaining <= 100
+          ? remaining
+          : null;
       const resetsAt = timestamp(window.resetsAt);
       const pace = object(window.pace);
       if (percentRemaining === null && (gated || remaining !== undefined)) malformed = true;
       if (resetsAt === null && (gated || window.resetsAt !== undefined)) malformed = true;
       if (window.pace !== undefined && typeof pace?.status !== 'string') malformed = true;
-      windows.push({ id, percentRemaining, resetsAt,
+      windows.push({
+        id,
+        percentRemaining,
+        resetsAt,
         ...(typeof pace?.status === 'string' ? { pace: { status: pace.status } } : {}),
       });
     }
     if (windows.length === 0) malformed = true;
     const state = object(provider.state);
-    const reported = typeof state?.status !== 'string' ? 'unknown'
-      : state.status === 'fresh' && state.stale !== false ? 'stale' : state.status;
+    const reported =
+      typeof state?.status !== 'string'
+        ? 'unknown'
+        : state.status === 'fresh' && state.stale !== false
+          ? 'stale'
+          : state.status;
     // A reused reading was taken at refreshedAt, so its age counts from there.
     const reused = state?.reused === true;
     const refreshedAt = timestamp(state?.refreshedAt);
     const takenAt = reused && refreshedAt !== null && refreshedAt <= observed_at ? refreshedAt : null;
-    const status = reported !== 'fresh' ? reported : reused && takenAt === null ? 'stale' : malformed ? 'unknown' : 'fresh';
-    providers.push({ provider: provider.provider, status, ...(takenAt === null ? {} : { observed_at: takenAt }), windows });
+    const status =
+      reported !== 'fresh' ? reported : reused && takenAt === null ? 'stale' : malformed ? 'unknown' : 'fresh';
+    providers.push({
+      provider: provider.provider,
+      status,
+      ...(takenAt === null ? {} : { observed_at: takenAt }),
+      windows,
+    });
   }
   return { observed_at, providers };
 }
@@ -91,19 +112,25 @@ export function createQuotaPort(options: { now?: () => number; run?: () => Promi
   let loadedAt: number | undefined;
   let cached: QuotaSnapshot | undefined;
   let pending: Promise<QuotaSnapshot | undefined> | undefined;
-  return { read() {
-    const current = now();
-    if (pending) return pending;
-    if (loadedAt !== undefined && current >= loadedAt && current - loadedAt < 60_000) return Promise.resolve(cached);
-    loadedAt = current;
-    pending = (async () => {
-      try { cached = normalizeQuotaSnapshot(JSON.parse(await Promise.resolve().then(run))); }
-      catch { cached = undefined; }
-      finally { pending = undefined; }
-      return cached;
-    })();
-    return pending;
-  } };
+  return {
+    read() {
+      const current = now();
+      if (pending) return pending;
+      if (loadedAt !== undefined && current >= loadedAt && current - loadedAt < 60_000) return Promise.resolve(cached);
+      loadedAt = current;
+      pending = (async () => {
+        try {
+          cached = normalizeQuotaSnapshot(JSON.parse(await Promise.resolve().then(run)));
+        } catch {
+          cached = undefined;
+        } finally {
+          pending = undefined;
+        }
+        return cached;
+      })();
+      return pending;
+    },
+  };
 }
 
 export function localBudgetGate(options: { pausePath?: string } = {}): {
@@ -111,8 +138,11 @@ export function localBudgetGate(options: { pausePath?: string } = {}): {
   persist_pause: (record: LoopPausedRecord) => Promise<void>;
 } {
   const pausePath = options.pausePath ?? join(homedir(), '.local', 'state', 'weave', 'loop-paused.jsonl');
-  return { quota: createQuotaPort(), persist_pause: async (record) => {
-    await mkdir(dirname(pausePath), { recursive: true, mode: 0o700 });
-    await appendFile(pausePath, `${JSON.stringify(record)}\n`, { mode: 0o600 });
-  } };
+  return {
+    quota: createQuotaPort(),
+    persist_pause: async (record) => {
+      await mkdir(dirname(pausePath), { recursive: true, mode: 0o700 });
+      await appendFile(pausePath, `${JSON.stringify(record)}\n`, { mode: 0o600 });
+    },
+  };
 }

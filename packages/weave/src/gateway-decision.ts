@@ -3,7 +3,13 @@
  * The questions, criteria and valid output are the `frontier.weigh@1` site
  * contract (FRONTIER-WEIGH-CONTRACT.md); this class only routes them.
  */
-import type { EvaluationAdapter, EvaluationContent, GenerationAdapter, InferenceGateway, RoutedUnit } from '@weave/gateway';
+import type {
+  EvaluationAdapter,
+  EvaluationContent,
+  GenerationAdapter,
+  InferenceGateway,
+  RoutedUnit,
+} from '@weave/gateway';
 import { createInferenceGateway } from '@weave/gateway';
 import { FRONTIER_WEIGH_CONTRACT, frontierWeighQuestions, frontierWeights } from './frontier-weigh.js';
 import type { Candidate, InferenceAttemptRecord, WeighRequest, WeighResult } from './types.js';
@@ -59,7 +65,12 @@ export class GatewayDecisionLayer {
         attempts,
         spent: toMicros(outcome.spent),
         status: outcome.status === 'accepted' ? 'unaccepted' : outcome.status,
-        reason: outcome.status === 'accepted' ? (checked && !checked.ok ? checked.reason : 'invalid weights') : outcome.reason,
+        reason:
+          outcome.status === 'accepted'
+            ? checked && !checked.ok
+              ? checked.reason
+              : 'invalid weights'
+            : outcome.reason,
         implementation: this.implementation,
       };
     }

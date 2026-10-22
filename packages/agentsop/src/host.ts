@@ -117,11 +117,7 @@ export type InferResult =
  */
 export interface ResolverContext {
   read(ref: ResourceRef): { readonly revision: number; readonly content: string };
-  write(
-    ref: ResourceRef,
-    expected_revision: number,
-    content: string,
-  ): { readonly revision: number };
+  write(ref: ResourceRef, expected_revision: number, content: string): { readonly revision: number };
   invoke(capability: string, input: unknown): InvocationOutcome;
   infer?(call: InferCall): Promise<InferResult>;
 }

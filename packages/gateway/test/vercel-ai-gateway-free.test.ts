@@ -4,35 +4,54 @@ import { setImmediate } from 'node:timers/promises';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { createInferenceGateway } from '../src/gateway.js';
 import {
-  vercelAiGatewayFreeAdapter, VERCEL_AI_GATEWAY_FREE_ADAPTER,
-  VERCEL_AI_GATEWAY_FREE_DESTINATION, VERCEL_AI_GATEWAY_FREE_MODELS,
+  vercelAiGatewayFreeAdapter,
+  VERCEL_AI_GATEWAY_FREE_ADAPTER,
+  VERCEL_AI_GATEWAY_FREE_DESTINATION,
+  VERCEL_AI_GATEWAY_FREE_MODELS,
 } from '../src/adapters/vercel-ai-gateway.js';
 import type { GenerationCall, GenerationRequest, RoutedUnit, Timer } from '../src/types.js';
 
 // Synthetic sentinel only; no live credential or network is used.
 const KEY = 'synthetic-wv018-credential';
 let unexpectedCalls = 0;
-function unexpected(message: string): never { unexpectedCalls++; assert.fail(message); }
-beforeEach(() => { unexpectedCalls = 0; });
-afterEach(() => { assert.equal(unexpectedCalls, 0, 'no forbidden catalogue lookup or HTTP dispatch'); });
+function unexpected(message: string): never {
+  unexpectedCalls++;
+  assert.fail(message);
+}
+beforeEach(() => {
+  unexpectedCalls = 0;
+});
+afterEach(() => {
+  assert.equal(unexpectedCalls, 0, 'no forbidden catalogue lookup or HTTP dispatch');
+});
 const PRIMARY = 'nvidia/nemotron-3.5-lightning-free';
 const FALLBACK = 'reflection/beam-free';
 const NOW = 1_792_454_400_000;
 const EXPIRY = Date.parse('2026-10-31T00:00Z');
-const IDS = [PRIMARY, 'poolside/laguna-s-2.1-free', FALLBACK,
-  'minimax/minimax-m3.1-flash', 'stealth/glyph-cluster'];
-const model = (id = PRIMARY, pricing: unknown = { input: '0', output: '0' }) =>
-  ({ id, pricing, zdr: 'none', no_training: 'none' });
-const catalogue = () => ({ data: IDS.map(id => model(id)) });
-const call: GenerationCall = { model: PRIMARY, instructions: '', prompt: 'ok',
-  settings: { max_output_tokens: 32 }, signal: undefined };
+const IDS = [PRIMARY, 'poolside/laguna-s-2.1-free', FALLBACK, 'minimax/minimax-m3.1-flash', 'stealth/glyph-cluster'];
+const model = (id = PRIMARY, pricing: unknown = { input: '0', output: '0' }) => ({
+  id,
+  pricing,
+  zdr: 'none',
+  no_training: 'none',
+});
+const catalogue = () => ({ data: IDS.map((id) => model(id)) });
+const call: GenerationCall = {
+  model: PRIMARY,
+  instructions: '',
+  prompt: 'ok',
+  settings: { max_output_tokens: 32 },
+  signal: undefined,
+};
 
 /** createGateway uses the native language-model wire shape, not chat completions. */
 function completion(cost: unknown = '0'): Response {
-  return Response.json({ content: [{ type: 'text', text: 'ok' }],
+  return Response.json({
+    content: [{ type: 'text', text: 'ok' }],
     finishReason: { unified: 'stop', raw: 'stop' },
     usage: { inputTokens: { total: 2 }, outputTokens: { total: 1 } },
-    providerMetadata: { gateway: { cost, marketCost: '0', gatewayCost: '0' } } });
+    providerMetadata: { gateway: { cost, marketCost: '0', gatewayCost: '0' } },
+  });
 }
 function refused(status: number): Response {
   return Response.json({ error: { message: `echo Bearer ${KEY}` } }, { status });
@@ -41,27 +60,56 @@ function adapter(fetch: typeof globalThis.fetch, source: unknown = catalogue(), 
   return vercelAiGatewayFreeAdapter({ apiKey: KEY, fetch, catalogue: source, now });
 }
 const primary: RoutedUnit = {
-  routed_unit_id: 'free.primary', operation: 'generate', kind: 'transform', tier: 'flash',
-  context_profile: 'test', context_profile_version: 1, prompt_template: 'test', prompt_template_version: 1,
-  adapter: 'vercel-ai-gateway-free', model: PRIMARY, settings: call.settings,
-  destination: 'vercel-ai-gateway-free', destination_training_allowed: true,
-  quality: 'baseline', context_limit_tokens: 100, price: { input_per_mtok: 0, output_per_mtok: 0 },
+  routed_unit_id: 'free.primary',
+  operation: 'generate',
+  kind: 'transform',
+  tier: 'flash',
+  context_profile: 'test',
+  context_profile_version: 1,
+  prompt_template: 'test',
+  prompt_template_version: 1,
+  adapter: 'vercel-ai-gateway-free',
+  model: PRIMARY,
+  settings: call.settings,
+  destination: 'vercel-ai-gateway-free',
+  destination_training_allowed: true,
+  quality: 'baseline',
+  context_limit_tokens: 100,
+  price: { input_per_mtok: 0, output_per_mtok: 0 },
 };
 const fallback: RoutedUnit = { ...primary, routed_unit_id: 'free.fallback', model: FALLBACK };
 function request(id = 'test'): GenerationRequest {
-  return { request_id: id, site: 'example.free', role: 'working', kind: 'transform',
-    input: { instructions: '', prompt: id }, terms: { quality: 'baseline', tier: 'flash',
-      content_class: 'non_sensitive', destinations: ['vercel-ai-gateway-free'],
-      max_context_tokens: 10, deadline: NOW + 10_000, cost_ceiling: 0,
-      max_attempts: 4, max_attempts_per_route: 1 } };
+  return {
+    request_id: id,
+    site: 'example.free',
+    role: 'working',
+    kind: 'transform',
+    input: { instructions: '', prompt: id },
+    terms: {
+      quality: 'baseline',
+      tier: 'flash',
+      content_class: 'non_sensitive',
+      destinations: ['vercel-ai-gateway-free'],
+      max_context_tokens: 10,
+      deadline: NOW + 10_000,
+      cost_ceiling: 0,
+      max_attempts: 4,
+      max_attempts_per_route: 1,
+    },
+  };
 }
 function gateway(fetch: typeof globalThis.fetch, source: unknown = catalogue()) {
-  return createInferenceGateway({ routes: [primary, fallback], adapters: [adapter(fetch, source)],
-    clock: { now: () => NOW } });
+  return createInferenceGateway({
+    routes: [primary, fallback],
+    adapters: [adapter(fetch, source)],
+    clock: { now: () => NOW },
+  });
 }
 function deferred() {
   let resolve!: () => void;
-  const promise = new Promise<void>(r => { resolve = r; });
+  const promise = new Promise<void>((r) => {
+    resolve = r;
+  });
   return { promise, resolve };
 }
 
@@ -69,22 +117,35 @@ function controlledTime() {
   let now = NOW;
   const waits: number[] = [];
   const wakes = new Set<() => void>();
-  const timer: Timer = { sleep(ms, signal) {
-    waits.push(ms);
-    return new Promise(resolve => {
-      const done = () => { wakes.delete(done); signal?.removeEventListener('abort', done); resolve(); };
-      wakes.add(done);
-      if (signal?.aborted) done();
-      else signal?.addEventListener('abort', done, { once: true });
-    });
-  } };
-  return { timer, waits, clock: { now: () => now }, advance(ms: number) {
-    now += ms;
-    for (const wake of wakes) wake();
-  }, expire() {
-    now = NOW + 10_000;
-    for (const wake of wakes) wake();
-  }, active: () => wakes.size };
+  const timer: Timer = {
+    sleep(ms, signal) {
+      waits.push(ms);
+      return new Promise((resolve) => {
+        const done = () => {
+          wakes.delete(done);
+          signal?.removeEventListener('abort', done);
+          resolve();
+        };
+        wakes.add(done);
+        if (signal?.aborted) done();
+        else signal?.addEventListener('abort', done, { once: true });
+      });
+    },
+  };
+  return {
+    timer,
+    waits,
+    clock: { now: () => now },
+    advance(ms: number) {
+      now += ms;
+      for (const wake of wakes) wake();
+    },
+    expire() {
+      now = NOW + 10_000;
+      for (const wake of wakes) wake();
+    },
+    active: () => wakes.size,
+  };
 }
 
 describe('Vercel promotional free contract', () => {
@@ -111,9 +172,14 @@ describe('Vercel promotional free contract', () => {
 
   for (const id of ['reflection/beam', 'paid/model', `${PRIMARY}-extra`]) {
     it(`refuses non-allowlisted ${id} before catalogue lookup or dispatch`, async () => {
-      const result = await adapter(async () => { unexpected('dispatch'); }, () => {
-        unexpected('catalogue lookup');
-      }).execute({ ...call, model: id });
+      const result = await adapter(
+        async () => {
+          unexpected('dispatch');
+        },
+        () => {
+          unexpected('catalogue lookup');
+        },
+      ).execute({ ...call, model: id });
       assert.equal(result.status, 'failed');
       assert.ok(result.status === 'failed');
       assert.equal(result.failure.retryable, false);
@@ -121,33 +187,53 @@ describe('Vercel promotional free contract', () => {
     });
   }
 
-  const unsafe: unknown[] = [undefined, null, '{', {}, { data: null },
-    { data: [model(PRIMARY, null)] }, { data: [model(PRIMARY, { input: '0' })] },
-    ...['0.001', '-1', 'NaN', '', '1e-999', null, false].map(input =>
-      ({ data: [model(PRIMARY, { input, output: '0' })] })),
+  const unsafe: unknown[] = [
+    undefined,
+    null,
+    '{',
+    {},
+    { data: null },
+    { data: [model(PRIMARY, null)] },
+    { data: [model(PRIMARY, { input: '0' })] },
+    ...['0.001', '-1', 'NaN', '', '1e-999', null, false].map((input) => ({
+      data: [model(PRIMARY, { input, output: '0' })],
+    })),
     { data: [model(PRIMARY, { input: '0', output: '1' })] },
     { data: [model(PRIMARY, { input: '0', output: '0', input_cache_read: '0.1' })] },
     { data: [model(PRIMARY, { input: '0', output: '0', fast: { input: '1' } })] },
     { data: [model(PRIMARY, { input: '0', output: '0', varies_by_provider: true })] },
     { data: [model(), model()] },
   ];
-  unsafe.forEach((source, index) => it(`fails closed on unsafe catalogue ${index}`, async () => {
-    // Construct explicitly so undefined is tested, rather than the helper default.
-    const instance = vercelAiGatewayFreeAdapter({ apiKey: KEY, now: () => NOW,
-      catalogue: source, fetch: async () => { unexpected('dispatch'); } });
-    const result = await instance.execute(call);
-    assert.equal(result.status, 'failed');
-    assert.ok(result.status === 'failed');
-    assert.equal(result.failure.retryable, false);
-  }));
+  unsafe.forEach((source, index) =>
+    it(`fails closed on unsafe catalogue ${index}`, async () => {
+      // Construct explicitly so undefined is tested, rather than the helper default.
+      const instance = vercelAiGatewayFreeAdapter({
+        apiKey: KEY,
+        now: () => NOW,
+        catalogue: source,
+        fetch: async () => {
+          unexpected('dispatch');
+        },
+      });
+      const result = await instance.execute(call);
+      assert.equal(result.status, 'failed');
+      assert.ok(result.status === 'failed');
+      assert.equal(result.failure.retryable, false);
+    }),
+  );
 
   for (const deprecation of [{}, { deprecated_at: null }, { deprecated_at: NOW + 1 }]) {
     for (const variation of [{}, { varies_by_provider: false }]) {
       const fields = { ...deprecation, ...variation };
       it(`dispatches with safe optional catalogue fields ${JSON.stringify(fields)}`, async () => {
         let calls = 0;
-        const result = await adapter(async () => { calls++; return completion(); },
-          { data: [{ ...model(), ...fields }] }).execute(call);
+        const result = await adapter(
+          async () => {
+            calls++;
+            return completion();
+          },
+          { data: [{ ...model(), ...fields }] },
+        ).execute(call);
         assert.equal(result.status, 'completed');
         assert.equal(calls, 1);
       });
@@ -188,8 +274,12 @@ describe('Vercel promotional free contract', () => {
   ];
   for (const { name, fields } of refusedFields) {
     it(`refuses ${name} before dispatch`, async () => {
-      const result = await adapter(async () => { unexpected('dispatch'); },
-        { data: [{ ...model(), ...fields }] }).execute(call);
+      const result = await adapter(
+        async () => {
+          unexpected('dispatch');
+        },
+        { data: [{ ...model(), ...fields }] },
+      ).execute(call);
       assert.ok(result.status === 'failed');
       assert.equal(result.failure.retryable, false);
       assert.deepEqual(result.usage, { input_tokens: 0, output_tokens: 0 });
@@ -199,18 +289,38 @@ describe('Vercel promotional free contract', () => {
   it('uses caller time and the 2026-10-31T00:00Z Laguna expiry even if the catalogue omits it', async () => {
     let now = EXPIRY - 1;
     let calls = 0;
-    const instance = adapter(async () => { calls++; return completion(); }, catalogue(), () => now);
+    const instance = adapter(
+      async () => {
+        calls++;
+        return completion();
+      },
+      catalogue(),
+      () => now,
+    );
     const laguna = { ...call, model: 'poolside/laguna-s-2.1-free' };
     assert.equal((await instance.execute(laguna)).status, 'completed');
     now = EXPIRY;
     assert.equal((await instance.execute(laguna)).status, 'failed');
     assert.equal(calls, 1);
-    assert.equal((await adapter(async () => { unexpected('dispatch'); }, catalogue(), () => NaN).execute(call)).status, 'failed');
+    assert.equal(
+      (
+        await adapter(
+          async () => {
+            unexpected('dispatch');
+          },
+          catalogue(),
+          () => NaN,
+        ).execute(call)
+      ).status,
+      'failed',
+    );
   });
 
   it('accepts caller-fetched JSON text and exact numeric zeros', async () => {
-    const result = await adapter(async () => completion(0),
-      JSON.stringify({ data: [model(PRIMARY, { input: 0, output: 0 })] })).execute(call);
+    const result = await adapter(
+      async () => completion(0),
+      JSON.stringify({ data: [model(PRIMARY, { input: 0, output: 0 })] }),
+    ).execute(call);
     assert.equal(result.status, 'completed');
   });
 
@@ -228,8 +338,14 @@ describe('Vercel promotional free contract', () => {
     let source: unknown = catalogue();
     let reads = 0;
     let calls = 0;
-    const getCatalogue = async () => { reads++; return source; };
-    const fetch: typeof globalThis.fetch = async () => { calls++; return completion(); };
+    const getCatalogue = async () => {
+      reads++;
+      return source;
+    };
+    const fetch: typeof globalThis.fetch = async () => {
+      calls++;
+      return completion();
+    };
     const instance = adapter(fetch, getCatalogue);
     assert.equal((await instance.execute(call)).status, 'completed');
     source = { data: [model(PRIMARY, { input: '1', output: '0' })] };
@@ -261,7 +377,10 @@ describe('Vercel promotional free contract', () => {
   for (const cost of ['0.01', 0.01, '0.0000001']) {
     it(`meters reported charge ${cost} and stops a stale catalogue at the spending ceiling`, async () => {
       let calls = 0;
-      const result = await gateway(async () => { calls++; return completion(cost); }).generate(request());
+      const result = await gateway(async () => {
+        calls++;
+        return completion(cost);
+      }).generate(request());
       assert.equal(result.spent, Number(cost) * 1_000_000);
       assert.equal(result.status, 'unaccepted');
       assert.equal(result.status === 'unaccepted' && result.reason, 'budget_exhausted');
@@ -280,25 +399,28 @@ describe('Vercel promotional free contract', () => {
     { cost: '0', marketCost: '0', gatewayCost: 0.01 },
     { cost: '0.01', marketCost: '0.01', gatewayCost: '0.01' },
     { cost: '0.001', marketCost: '0.01', gatewayCost: '0.005' },
-  ]) it(`meters cost evidence without adding overlapping figures ${JSON.stringify(evidence)}`, async () => {
-    let calls = 0;
-    const result = await gateway(async () => {
-      calls++;
-      const body = await completion().json() as Record<string, unknown>;
-      return Response.json({ ...body, providerMetadata: { gateway: evidence } });
-    }).generate(request());
-    assert.equal(result.spent, 10_000);
-    assert.equal(result.attempts[0]?.cost, 10_000);
-    assert.equal(result.attempts[0]?.usage.cost, 10_000);
-    assert.equal(result.attempts[0]?.cost_is_upper_bound, false);
-    assert.equal(result.status === 'unaccepted' && result.reason, 'budget_exhausted');
-    assert.equal(calls, 1, 'a component charge must also prevent fallback');
-  });
+  ])
+    it(`meters cost evidence without adding overlapping figures ${JSON.stringify(evidence)}`, async () => {
+      let calls = 0;
+      const result = await gateway(async () => {
+        calls++;
+        const body = (await completion().json()) as Record<string, unknown>;
+        return Response.json({ ...body, providerMetadata: { gateway: evidence } });
+      }).generate(request());
+      assert.equal(result.spent, 10_000);
+      assert.equal(result.attempts[0]?.cost, 10_000);
+      assert.equal(result.attempts[0]?.usage.cost, 10_000);
+      assert.equal(result.attempts[0]?.cost_is_upper_bound, false);
+      assert.equal(result.status === 'unaccepted' && result.reason, 'budget_exhausted');
+      assert.equal(calls, 1, 'a component charge must also prevent fallback');
+    });
 
   it('keeps a verified zero charge at zero despite declared token prices', async () => {
-    const instance = createInferenceGateway({ routes: [{ ...primary,
-      price: { input_per_mtok: 100, output_per_mtok: 100 } }],
-      adapters: [adapter(async () => completion())], clock: { now: () => NOW } });
+    const instance = createInferenceGateway({
+      routes: [{ ...primary, price: { input_per_mtok: 100, output_per_mtok: 100 } }],
+      adapters: [adapter(async () => completion())],
+      clock: { now: () => NOW },
+    });
     const input = request();
     const result = await instance.generate({ ...input, terms: { ...input.terms, cost_ceiling: 10_000 } });
     assert.equal(result.status, 'accepted');
@@ -310,7 +432,7 @@ describe('Vercel promotional free contract', () => {
 
   it('meters a reported charge even when token usage is absent', async () => {
     const result = await gateway(async () => {
-      const body = await completion('0.01').json() as Record<string, unknown>;
+      const body = (await completion('0.01').json()) as Record<string, unknown>;
       return Response.json({ ...body, usage: { inputTokens: {}, outputTokens: {} } });
     }).generate(request());
     assert.equal(result.spent, 10_000);
@@ -326,9 +448,16 @@ describe('Vercel promotional free contract', () => {
       calls++;
       const bytes = new Uint8Array(await completion('0.01').arrayBuffer());
       // A transport can finish reading a billed response despite cancellation.
-      return new Response(new ReadableStream({ pull(stream) {
-        stream.enqueue(bytes); stream.close(); controller.abort();
-      } }), { headers: { 'content-type': 'application/json' } });
+      return new Response(
+        new ReadableStream({
+          pull(stream) {
+            stream.enqueue(bytes);
+            stream.close();
+            controller.abort();
+          },
+        }),
+        { headers: { 'content-type': 'application/json' } },
+      );
     }).generate(request(), controller.signal);
     assert.equal(result.spent, 10_000);
     assert.equal(result.attempts[0]?.cost, 10_000);
@@ -347,14 +476,19 @@ describe('Vercel promotional free contract', () => {
       const entered = deferred();
       let calls = 0;
       let observed: AbortSignal | null | undefined;
-      const instance = createInferenceGateway({ routes: [primary, fallback], ...time,
-        adapters: [adapter((_url, init) => {
-          calls++;
-          observed = init?.signal;
-          entered.resolve();
-          // Deliberately ignore abort and never release this transport.
-          return new Promise<Response>(() => {});
-        })] });
+      const instance = createInferenceGateway({
+        routes: [primary, fallback],
+        ...time,
+        adapters: [
+          adapter((_url, init) => {
+            calls++;
+            observed = init?.signal;
+            entered.resolve();
+            // Deliberately ignore abort and never release this transport.
+            return new Promise<Response>(() => {});
+          }),
+        ],
+      });
       const pending = instance.generate(request('stuck'), controller.signal);
       await entered.promise;
       await setImmediate();
@@ -366,8 +500,10 @@ describe('Vercel promotional free contract', () => {
       const result = await Promise.race([pending, setImmediate().then(() => undefined)]);
       assert.ok(result, 'generate must settle when the 100 ms usage grace expires');
       assert.deepEqual(time.waits, [10_000, 100]);
-      assert.equal(result.status === 'unaccepted' && result.reason,
-        interruption === 'cancel' ? 'provider_failed' : 'deadline_reached');
+      assert.equal(
+        result.status === 'unaccepted' && result.reason,
+        interruption === 'cancel' ? 'provider_failed' : 'deadline_reached',
+      );
       assert.equal(result.attempts.length, 1);
       assert.deepEqual(result.attempts[0]?.usage, { input_tokens: undefined, output_tokens: undefined });
       assert.equal(result.attempts[0]?.cost_is_upper_bound, true);
@@ -387,17 +523,32 @@ describe('Vercel promotional free contract', () => {
       const otherRelease = deferred();
       let calls = 0;
       let observed: AbortSignal | null | undefined;
-      const instance = createInferenceGateway({ routes: [primary, fallback], ...time,
-        adapters: [adapter(async (_url, init) => {
-          if (++calls === 2) { otherEntered.resolve(); await otherRelease.promise; return completion(); }
-          observed = init?.signal;
-          const bytes = new Uint8Array(await completion('0.01').arrayBuffer());
-          return new Response(new ReadableStream({ async pull(stream) {
-            entered.resolve();
-            await release.promise;
-            stream.enqueue(bytes); stream.close();
-          } }), { headers: { 'content-type': 'application/json' } });
-        })] });
+      const instance = createInferenceGateway({
+        routes: [primary, fallback],
+        ...time,
+        adapters: [
+          adapter(async (_url, init) => {
+            if (++calls === 2) {
+              otherEntered.resolve();
+              await otherRelease.promise;
+              return completion();
+            }
+            observed = init?.signal;
+            const bytes = new Uint8Array(await completion('0.01').arrayBuffer());
+            return new Response(
+              new ReadableStream({
+                async pull(stream) {
+                  entered.resolve();
+                  await release.promise;
+                  stream.enqueue(bytes);
+                  stream.close();
+                },
+              }),
+              { headers: { 'content-type': 'application/json' } },
+            );
+          }),
+        ],
+      });
       const pending = instance.generate(request('billed'), controller.signal);
       await entered.promise;
       const otherInput = request('free');
@@ -414,8 +565,10 @@ describe('Vercel promotional free contract', () => {
       assert.equal(result.attempts[0]?.cost, 10_000);
       assert.equal(result.attempts[0]?.cost_is_upper_bound, false);
       assert.equal(result.attempts.length, 1);
-      assert.equal(result.status === 'unaccepted' && result.reason,
-        interruption === 'cancel' ? 'provider_failed' : 'deadline_reached');
+      assert.equal(
+        result.status === 'unaccepted' && result.reason,
+        interruption === 'cancel' ? 'provider_failed' : 'deadline_reached',
+      );
       const disposition = result.attempts[0]?.disposition;
       assert.ok(disposition?.status === 'failed');
       assert.equal(disposition.failure.code, interruption === 'cancel' ? 'cancelled' : 'timeout');
@@ -451,12 +604,12 @@ describe('Vercel promotional free contract', () => {
     assert.equal(free.spent, 0);
     assert.equal(free.status, 'accepted');
     assert.equal(calls, 2);
-    assert.ok([charged, free].every(result => result.attempts.length === 1));
+    assert.ok([charged, free].every((result) => result.attempts.length === 1));
   });
 
   it('fails closed when cost metadata is absent', async () => {
     const result = await adapter(async () => {
-      const body = await completion().json() as { providerMetadata?: unknown };
+      const body = (await completion().json()) as { providerMetadata?: unknown };
       delete body.providerMetadata;
       return Response.json(body);
     }).execute(call);
@@ -466,10 +619,13 @@ describe('Vercel promotional free contract', () => {
   for (const field of ['cost', 'marketCost', 'gatewayCost']) {
     it(`refuses nonzero reported ${field} despite other zero cost fields`, async () => {
       const result = await adapter(async () => {
-        const body = await completion().json() as Record<string, unknown>;
-        return Response.json({ ...body, providerMetadata: {
-          gateway: { cost: '0', marketCost: '0', gatewayCost: '0', [field]: '0.01' },
-        } });
+        const body = (await completion().json()) as Record<string, unknown>;
+        return Response.json({
+          ...body,
+          providerMetadata: {
+            gateway: { cost: '0', marketCost: '0', gatewayCost: '0', [field]: '0.01' },
+          },
+        });
       }).execute(call);
       assert.ok(result.status === 'failed' && !result.failure.retryable);
     });
@@ -478,9 +634,13 @@ describe('Vercel promotional free contract', () => {
   it('keeps a cost refusal local to one invocation and checks again on resubmission', async () => {
     let calls = 0;
     let reads = 0;
-    const instance = adapter(async () => completion(++calls === 1 ? '0.01' : '0'), async () => {
-      reads++; return catalogue();
-    });
+    const instance = adapter(
+      async () => completion(++calls === 1 ? '0.01' : '0'),
+      async () => {
+        reads++;
+        return catalogue();
+      },
+    );
     assert.equal((await instance.execute(call)).status, 'failed');
     assert.equal((await instance.execute(call)).status, 'completed');
     assert.equal(reads, 2);
@@ -490,7 +650,7 @@ describe('Vercel promotional free contract', () => {
   for (const status of [429, 404]) {
     it(`falls back on HTTP ${status} without hidden SDK retries or credential leakage`, async () => {
       let calls = 0;
-      const result = await gateway(async () => ++calls === 1 ? refused(status) : completion()).generate(request());
+      const result = await gateway(async () => (++calls === 1 ? refused(status) : completion())).generate(request());
       assert.equal(result.status, 'accepted');
       assert.equal(calls, 2);
       const failure = result.attempts[0]?.disposition;
@@ -505,10 +665,15 @@ describe('Vercel promotional free contract', () => {
     let calls = 0;
     const result = await gateway(async () => {
       if (++calls > 1) return completion();
-      return new Response(new ReadableStream({ start(controller) {
-        controller.enqueue(new TextEncoder().encode('{"content":'));
-        controller.error(Object.assign(new Error(KEY), { statusCode: 429 }));
-      } }), { headers: { 'content-type': 'application/json' } });
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('{"content":'));
+            controller.error(Object.assign(new Error(KEY), { statusCode: 429 }));
+          },
+        }),
+        { headers: { 'content-type': 'application/json' } },
+      );
     }).generate(request());
     assert.equal(result.status, 'accepted');
     assert.equal(calls, 2);
@@ -520,8 +685,13 @@ describe('Vercel promotional free contract', () => {
 
   it('falls back when the primary is removed from the supplied catalogue', async () => {
     let calls = 0;
-    const result = await gateway(async () => { calls++; return completion(); },
-      { data: [model(FALLBACK)] }).generate(request());
+    const result = await gateway(
+      async () => {
+        calls++;
+        return completion();
+      },
+      { data: [model(FALLBACK)] },
+    ).generate(request());
     assert.equal(result.status, 'accepted');
     assert.equal(calls, 1);
     assert.equal(result.attempts.length, 2);
@@ -546,9 +716,9 @@ describe('Vercel promotional free contract', () => {
     await entered.promise;
     release.resolve();
     const results = await pending;
-    assert.ok(results.every(result => result.status === 'accepted' && result.attempts.length === 2));
-    assert.equal(seen.filter(id => id === PRIMARY).length, 2);
-    assert.equal(seen.filter(id => id === FALLBACK).length, 2);
+    assert.ok(results.every((result) => result.status === 'accepted' && result.attempts.length === 2));
+    assert.equal(seen.filter((id) => id === PRIMARY).length, 2);
+    assert.equal(seen.filter((id) => id === FALLBACK).length, 2);
   });
 
   it('cancels an in-flight call with no retry or fallback storm', async () => {
@@ -558,8 +728,9 @@ describe('Vercel promotional free contract', () => {
     const pending = gateway(async (_url, init) => {
       calls++;
       entered.resolve();
-      return new Promise((_resolve, reject) => init?.signal?.addEventListener('abort',
-        () => reject(new Error(KEY)), { once: true }));
+      return new Promise((_resolve, reject) =>
+        init?.signal?.addEventListener('abort', () => reject(new Error(KEY)), { once: true }),
+      );
     }).generate(request(), controller.signal);
     await entered.promise;
     controller.abort(KEY);
@@ -575,55 +746,82 @@ describe('Vercel promotional free contract', () => {
   it('does not dispatch an already aborted call or one cancelled during catalogue lookup', async () => {
     const controller = new AbortController();
     controller.abort();
-    const instance = adapter(async () => { unexpected('dispatch'); });
+    const instance = adapter(async () => {
+      unexpected('dispatch');
+    });
     const result = await instance.execute({ ...call, signal: controller.signal });
     assert.ok(result.status === 'failed' && result.failure.code === 'cancelled');
     const next = new AbortController();
-    const result2 = await adapter(async () => { unexpected('dispatch'); }, async () => {
-      next.abort(KEY); return catalogue();
-    }).execute({ ...call, signal: next.signal });
+    const result2 = await adapter(
+      async () => {
+        unexpected('dispatch');
+      },
+      async () => {
+        next.abort(KEY);
+        return catalogue();
+      },
+    ).execute({ ...call, signal: next.signal });
     assert.ok(result2.status === 'failed' && result2.failure.code === 'cancelled');
   });
 
   it('records catalogue exceptions without disclosing the key', async () => {
-    const result = await adapter(async () => { unexpected('dispatch'); }, async () => {
-      throw new Error(KEY);
-    }).execute(call);
+    const result = await adapter(
+      async () => {
+        unexpected('dispatch');
+      },
+      async () => {
+        throw new Error(KEY);
+      },
+    ).execute(call);
     assert.equal(result.status, 'failed');
     assert.ok(!JSON.stringify(result).includes(KEY));
   });
 
-  it('keeps provider warnings and successful response metadata credential-free', async t => {
+  it('keeps provider warnings and successful response metadata credential-free', async (t) => {
     const warnings: unknown[] = [];
-    t.mock.method(process, 'emitWarning', (...args: unknown[]) => { warnings.push(args); });
+    t.mock.method(process, 'emitWarning', (...args: unknown[]) => {
+      warnings.push(args);
+    });
     const result = await adapter(async () => {
-      const body = await completion().json() as Record<string, unknown>;
-      return Response.json({ ...body, content: [{ type: 'text', text: KEY }],
-        finishReason: { unified: KEY, raw: KEY }, warnings: [{ type: 'other', message: KEY }] });
+      const body = (await completion().json()) as Record<string, unknown>;
+      return Response.json({
+        ...body,
+        content: [{ type: 'text', text: KEY }],
+        finishReason: { unified: KEY, raw: KEY },
+        warnings: [{ type: 'other', message: KEY }],
+      });
     }).execute(call);
     assert.equal(result.status, 'completed');
     assert.ok(!JSON.stringify(warnings).includes(KEY), 'SDK warnings must not echo the key');
     assert.ok(!JSON.stringify(result).includes(KEY), 'response metadata must not echo the key');
   });
 
-  for (const cost of ['0', '0.01']) it(`normalizes untrusted usage before publishing cost ${cost}`, async () => {
-    const result = await adapter(async () => {
-      const body = await completion(cost).json() as Record<string, unknown>;
-      return Response.json({ ...body,
-        usage: { inputTokens: { total: KEY }, outputTokens: { total: KEY } } });
-    }).execute(call);
-    assert.ok(!JSON.stringify(result).includes(KEY));
-    assert.deepEqual(result.usage, { input_tokens: undefined, output_tokens: undefined,
-      cost: cost === '0' ? 0 : 10_000 });
-  });
+  for (const cost of ['0', '0.01'])
+    it(`normalizes untrusted usage before publishing cost ${cost}`, async () => {
+      const result = await adapter(async () => {
+        const body = (await completion(cost).json()) as Record<string, unknown>;
+        return Response.json({ ...body, usage: { inputTokens: { total: KEY }, outputTokens: { total: KEY } } });
+      }).execute(call);
+      assert.ok(!JSON.stringify(result).includes(KEY));
+      assert.deepEqual(result.usage, {
+        input_tokens: undefined,
+        output_tokens: undefined,
+        cost: cost === '0' ? 0 : 10_000,
+      });
+    });
 
   for (const contentClass of [undefined, 'sensitive', 'private', 'public', 'non_sensitive'] as const) {
     it(`applies existing training-allowed routing for ${contentClass ?? 'absent'} content_class`, async () => {
       let calls = 0;
       const input = request();
       const { content_class: _class, ...terms } = input.terms;
-      const result = await gateway(async () => { calls++; return completion(); }).generate({ ...input,
-        terms: { ...terms, ...(contentClass === undefined ? {} : { content_class: contentClass }) } });
+      const result = await gateway(async () => {
+        calls++;
+        return completion();
+      }).generate({
+        ...input,
+        terms: { ...terms, ...(contentClass === undefined ? {} : { content_class: contentClass }) },
+      });
       const allowed = contentClass === 'public' || contentClass === 'non_sensitive';
       assert.equal(calls, allowed ? 1 : 0);
       assert.equal(result.status, allowed ? 'accepted' : 'blocked');

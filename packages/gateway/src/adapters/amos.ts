@@ -37,18 +37,22 @@ export function amosBody(call: Pick<EvaluationCall, 'model' | 'state' | 'questio
   return {
     model: call.model,
     state: content(call.state),
-    questions: Object.fromEntries(
-      Object.entries(call.questions).map(([id, question]) => [id, wireQuestion(question)]),
-    ),
+    questions: Object.fromEntries(Object.entries(call.questions).map(([id, question]) => [id, wireQuestion(question)])),
   };
 }
 
 export function amosEvaluator(options: AmosOptions = {}): EvaluationAdapter {
   const baseURL = (options.baseURL ?? AMOS_BASE_URL).replace(/\/+$/, '');
   const url = parseURL(baseURL);
-  if (url === null || !['http:', 'https:'].includes(url.protocol) ||
-      !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) ||
-      url.username || url.password || baseURL.includes('?') || baseURL.includes('#')) {
+  if (
+    url === null ||
+    !['http:', 'https:'].includes(url.protocol) ||
+    !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) ||
+    url.username ||
+    url.password ||
+    baseURL.includes('?') ||
+    baseURL.includes('#')
+  ) {
     throw new Error('Amos base URL must be a loopback HTTP URL without credentials, query, or fragment');
   }
   const timeoutMs = options.timeoutMs ?? 30_000;
@@ -68,9 +72,14 @@ export function amosEvaluator(options: AmosOptions = {}): EvaluationAdapter {
         const health = await doFetch(`${baseURL}/v1/models`, { method: 'GET', signal, redirect: 'error' });
         if (!health.ok) return failure('unavailable');
         const models: unknown = await health.json();
-        if (!record(models) || !Array.isArray(models['models']) || models['models'].length === 0 ||
-            !models['models'].every((model: unknown) =>
-              record(model) && typeof model['name'] === 'string' && model['name'].length > 0)) {
+        if (
+          !record(models) ||
+          !Array.isArray(models['models']) ||
+          models['models'].length === 0 ||
+          !models['models'].every(
+            (model: unknown) => record(model) && typeof model['name'] === 'string' && model['name'].length > 0,
+          )
+        ) {
           return failure('unavailable');
         }
         // The server answers an unknown model with its own, so check the configured one is served.
@@ -127,9 +136,11 @@ function wireQuestion(question: EvaluationQuestion): unknown {
   return {
     type: 'noul',
     instructions,
-    ...(question.criteria === undefined ? {} : {
-      criteria: Object.fromEntries(Object.entries(question.criteria).map(([key, value]) => [key, content(value)])),
-    }),
+    ...(question.criteria === undefined
+      ? {}
+      : {
+          criteria: Object.fromEntries(Object.entries(question.criteria).map(([key, value]) => [key, content(value)])),
+        }),
   };
 }
 
@@ -161,9 +172,15 @@ function parse(body: unknown, call: EvaluationCall): EvaluationProviderResult {
       answers[id] = { type: 'choice', choice: raw['choice'], probabilities };
     } else {
       const keys = question.criteria.map((_, index) => String(index));
-      if (raw['type'] !== 'score' || typeof raw['score'] !== 'number' || !Number.isFinite(raw['score']) ||
-          raw['score'] < 0 || raw['score'] > question.criteria.length - 1 ||
-          !record(raw['legend']) || !sameKeys(raw['legend'], keys)) {
+      if (
+        raw['type'] !== 'score' ||
+        typeof raw['score'] !== 'number' ||
+        !Number.isFinite(raw['score']) ||
+        raw['score'] < 0 ||
+        raw['score'] > question.criteria.length - 1 ||
+        !record(raw['legend']) ||
+        !sameKeys(raw['legend'], keys)
+      ) {
         return failure('malformed_response');
       }
       const legend = raw['legend'];

@@ -7,10 +7,7 @@
       "group": "inspect",
       "desired": "For one named text source, obtain its current revision, line count, and digest.",
       "situation": "The source is registered. No inspection result exists yet.",
-      "catalogue": [
-        "source.inspect",
-        "report.assemble"
-      ],
+      "catalogue": ["source.inspect", "report.assemble"],
       "label": "source.inspect",
       "provenance": {
         "fixture": "packages/weave/test/fixture.ts",
@@ -25,10 +22,7 @@
       "group": "assemble",
       "desired": "Turn the completed source inspections into a report retaining their source read set.",
       "situation": "Both source inspection results are available.",
-      "catalogue": [
-        "source.inspect",
-        "report.assemble"
-      ],
+      "catalogue": ["source.inspect", "report.assemble"],
       "label": "report.assemble",
       "provenance": {
         "fixture": "packages/weave/test/fixture.ts",
@@ -43,11 +37,7 @@
       "group": "publish",
       "desired": "Write the already checked report to its existing destination and return a publication receipt.",
       "situation": "The report is assembled. The trace shows approval is required before dispatch.",
-      "catalogue": [
-        "source.inspect",
-        "report.assemble",
-        "report.publish"
-      ],
+      "catalogue": ["source.inspect", "report.assemble", "report.publish"],
       "label": "report.publish",
       "provenance": {
         "fixture": "packages/weave/test/m1-fixture.ts",
@@ -62,11 +52,7 @@
       "group": "fold-admission",
       "desired": "Fold the inspection digests into one canonical digest.",
       "situation": "The fold implementation has not been admitted. The trace opens a capability gap.",
-      "catalogue": [
-        "source.inspect",
-        "report.assemble",
-        "report.publish"
-      ],
+      "catalogue": ["source.inspect", "report.assemble", "report.publish"],
       "label": "none",
       "provenance": {
         "fixture": "packages/weave/test/m3-fixture.ts",
@@ -81,12 +67,7 @@
       "group": "fold-admission",
       "desired": "Fold the inspection digests into one canonical digest.",
       "situation": "The fold implementation is now admitted; inspection results are available.",
-      "catalogue": [
-        "source.inspect",
-        "report.assemble",
-        "report.publish",
-        "report.fold"
-      ],
+      "catalogue": ["source.inspect", "report.assemble", "report.publish", "report.fold"],
       "label": "report.fold",
       "provenance": {
         "fixture": "packages/weave/test/m3-fixture.ts",
@@ -101,12 +82,7 @@
       "group": "assemble",
       "desired": "Assemble the inspection results and the already computed fold into the checked report.",
       "situation": "The fold action has completed. The report still needs assembly.",
-      "catalogue": [
-        "source.inspect",
-        "report.assemble",
-        "report.publish",
-        "report.fold"
-      ],
+      "catalogue": ["source.inspect", "report.assemble", "report.publish", "report.fold"],
       "label": "report.assemble",
       "provenance": {
         "fixture": "packages/weave/test/m3-fixture.ts",
@@ -121,18 +97,10 @@
       "group": "composition-gap",
       "desired": "In one operation, inspect an unexamined source, assemble a checked report, and publish it.",
       "situation": "No inspection result or checked report exists.",
-      "catalogue": [
-        "source.inspect",
-        "report.assemble",
-        "report.publish"
-      ],
+      "catalogue": ["source.inspect", "report.assemble", "report.publish"],
       "label": "none",
       "provenance": {
-        "contract_contrast": [
-          "source.inspect",
-          "report.assemble",
-          "report.publish"
-        ]
+        "contract_contrast": ["source.inspect", "report.assemble", "report.publish"]
       }
     },
     {
@@ -140,17 +108,10 @@
       "group": "text-gap",
       "desired": "Remove personal names from a text value while keeping the other words unchanged.",
       "situation": "The available text operation only collapses whitespace.",
-      "catalogue": [
-        "source.inspect",
-        "report.assemble",
-        "report.publish",
-        "text.normalize"
-      ],
+      "catalogue": ["source.inspect", "report.assemble", "report.publish", "text.normalize"],
       "label": "none",
       "provenance": {
-        "contract_contrast": [
-          "text.normalize"
-        ]
+        "contract_contrast": ["text.normalize"]
       }
     },
     {
@@ -158,12 +119,7 @@
       "group": "text-gap",
       "desired": "Collapse repeated spaces and line breaks in one supplied text value.",
       "situation": "A text value is supplied.",
-      "catalogue": [
-        "source.inspect",
-        "report.assemble",
-        "report.publish",
-        "text.normalize"
-      ],
+      "catalogue": ["source.inspect", "report.assemble", "report.publish", "text.normalize"],
       "label": "text.normalize",
       "provenance": {
         "contract_source": "packages/weave/src/normalize-author.ts"

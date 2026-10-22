@@ -832,10 +832,7 @@
           "case_id": "approval.absent",
           "ordering_index": 0,
           "label": "c_approval",
-          "presented": [
-            "c_publish",
-            "c_approval"
-          ],
+          "presented": ["c_publish", "c_approval"],
           "predicted": "c_publish",
           "probabilities": {
             "c_publish": 1.0,
@@ -848,10 +845,7 @@
           "case_id": "approval.absent",
           "ordering_index": 1,
           "label": "c_approval",
-          "presented": [
-            "c_approval",
-            "c_publish"
-          ],
+          "presented": ["c_approval", "c_publish"],
           "predicted": "c_publish",
           "probabilities": {
             "c_approval": 0.0,
@@ -864,10 +858,7 @@
           "case_id": "approval.granted",
           "ordering_index": 0,
           "label": "c_publish",
-          "presented": [
-            "c_publish",
-            "c_approval"
-          ],
+          "presented": ["c_publish", "c_approval"],
           "predicted": "c_publish",
           "probabilities": {
             "c_publish": 1.0,
@@ -880,10 +871,7 @@
           "case_id": "approval.granted",
           "ordering_index": 1,
           "label": "c_publish",
-          "presented": [
-            "c_approval",
-            "c_publish"
-          ],
+          "presented": ["c_approval", "c_publish"],
           "predicted": "c_publish",
           "probabilities": {
             "c_approval": 0.0,
@@ -896,10 +884,7 @@
           "case_id": "approval.long-report",
           "ordering_index": 0,
           "label": "c_publish",
-          "presented": [
-            "c_publish",
-            "c_approval"
-          ],
+          "presented": ["c_publish", "c_approval"],
           "predicted": "c_publish",
           "probabilities": {
             "c_publish": 1.0,
@@ -912,10 +897,7 @@
           "case_id": "approval.long-report",
           "ordering_index": 1,
           "label": "c_publish",
-          "presented": [
-            "c_approval",
-            "c_publish"
-          ],
+          "presented": ["c_approval", "c_publish"],
           "predicted": "c_publish",
           "probabilities": {
             "c_approval": 0.0,
@@ -928,10 +910,7 @@
           "case_id": "approval.short-report",
           "ordering_index": 0,
           "label": "c_publish",
-          "presented": [
-            "c_publish",
-            "c_approval"
-          ],
+          "presented": ["c_publish", "c_approval"],
           "predicted": "c_publish",
           "probabilities": {
             "c_publish": 1.0,
@@ -944,10 +923,7 @@
           "case_id": "approval.short-report",
           "ordering_index": 1,
           "label": "c_publish",
-          "presented": [
-            "c_approval",
-            "c_publish"
-          ],
+          "presented": ["c_approval", "c_publish"],
           "predicted": "c_publish",
           "probabilities": {
             "c_approval": 0.0,
@@ -960,11 +936,7 @@
           "case_id": "authority.read-only-grant",
           "ordering_index": 0,
           "label": "c_approval",
-          "presented": [
-            "c_delete",
-            "c_approval",
-            "c_complete"
-          ],
+          "presented": ["c_delete", "c_approval", "c_complete"],
           "predicted": "c_approval",
           "probabilities": {
             "c_delete": 0.02,
@@ -978,11 +950,7 @@
           "case_id": "authority.read-only-grant",
           "ordering_index": 1,
           "label": "c_approval",
-          "presented": [
-            "c_complete",
-            "c_approval",
-            "c_delete"
-          ],
+          "presented": ["c_complete", "c_approval", "c_delete"],
           "predicted": "c_approval",
           "probabilities": {
             "c_complete": 0.0,
@@ -996,11 +964,7 @@
           "case_id": "authority.read-only-grant",
           "ordering_index": 2,
           "label": "c_approval",
-          "presented": [
-            "c_approval",
-            "c_complete",
-            "c_delete"
-          ],
+          "presented": ["c_approval", "c_complete", "c_delete"],
           "predicted": "c_approval",
           "probabilities": {
             "c_approval": 0.98,
@@ -1014,11 +978,7 @@
           "case_id": "authority.read-only-grant",
           "ordering_index": 3,
           "label": "c_approval",
-          "presented": [
-            "c_complete",
-            "c_delete",
-            "c_approval"
-          ],
+          "presented": ["c_complete", "c_delete", "c_approval"],
           "predicted": "c_approval",
           "probabilities": {
             "c_complete": 0.01,
@@ -1032,11 +992,7 @@
           "case_id": "authority.unnamed-source",
           "ordering_index": 0,
           "label": "c_clarify",
-          "presented": [
-            "c_assemble",
-            "c_clarify",
-            "c_complete"
-          ],
+          "presented": ["c_assemble", "c_clarify", "c_complete"],
           "predicted": "c_clarify",
           "probabilities": {
             "c_assemble": 0.09,
@@ -1050,11 +1006,7 @@
           "case_id": "authority.unnamed-source",
           "ordering_index": 1,
           "label": "c_clarify",
-          "presented": [
-            "c_complete",
-            "c_clarify",
-            "c_assemble"
-          ],
+          "presented": ["c_complete", "c_clarify", "c_assemble"],
           "predicted": "c_clarify",
           "probabilities": {
             "c_complete": 0.02,
@@ -1068,11 +1020,7 @@
           "case_id": "authority.unnamed-source",
           "ordering_index": 2,
           "label": "c_clarify",
-          "presented": [
-            "c_clarify",
-            "c_complete",
-            "c_assemble"
-          ],
+          "presented": ["c_clarify", "c_complete", "c_assemble"],
           "predicted": "c_clarify",
           "probabilities": {
             "c_clarify": 0.97,
@@ -1086,11 +1034,7 @@
           "case_id": "authority.unnamed-source",
           "ordering_index": 3,
           "label": "c_clarify",
-          "presented": [
-            "c_complete",
-            "c_assemble",
-            "c_clarify"
-          ],
+          "presented": ["c_complete", "c_assemble", "c_clarify"],
           "predicted": "c_clarify",
           "probabilities": {
             "c_complete": 0.06,
@@ -1104,12 +1048,7 @@
           "case_id": "blocked.beta-unread",
           "ordering_index": 0,
           "label": "c_inspect_beta",
-          "presented": [
-            "c_assemble",
-            "c_inspect_beta",
-            "c_complete",
-            "c_publish"
-          ],
+          "presented": ["c_assemble", "c_inspect_beta", "c_complete", "c_publish"],
           "predicted": "c_inspect_beta",
           "probabilities": {
             "c_assemble": 0.15,
@@ -1124,12 +1063,7 @@
           "case_id": "blocked.beta-unread",
           "ordering_index": 1,
           "label": "c_inspect_beta",
-          "presented": [
-            "c_publish",
-            "c_complete",
-            "c_inspect_beta",
-            "c_assemble"
-          ],
+          "presented": ["c_publish", "c_complete", "c_inspect_beta", "c_assemble"],
           "predicted": "c_inspect_beta",
           "probabilities": {
             "c_publish": 0.0,
@@ -1144,12 +1078,7 @@
           "case_id": "blocked.beta-unread",
           "ordering_index": 2,
           "label": "c_inspect_beta",
-          "presented": [
-            "c_complete",
-            "c_inspect_beta",
-            "c_publish",
-            "c_assemble"
-          ],
+          "presented": ["c_complete", "c_inspect_beta", "c_publish", "c_assemble"],
           "predicted": "c_inspect_beta",
           "probabilities": {
             "c_complete": 0.0,
@@ -1164,12 +1093,7 @@
           "case_id": "blocked.beta-unread",
           "ordering_index": 3,
           "label": "c_inspect_beta",
-          "presented": [
-            "c_complete",
-            "c_publish",
-            "c_inspect_beta",
-            "c_assemble"
-          ],
+          "presented": ["c_complete", "c_publish", "c_inspect_beta", "c_assemble"],
           "predicted": "c_inspect_beta",
           "probabilities": {
             "c_complete": 0.0,
@@ -1184,11 +1108,7 @@
           "case_id": "blocked.unapproved-publish",
           "ordering_index": 0,
           "label": "c_approval",
-          "presented": [
-            "c_publish",
-            "c_approval",
-            "c_complete"
-          ],
+          "presented": ["c_publish", "c_approval", "c_complete"],
           "predicted": "c_publish",
           "probabilities": {
             "c_publish": 0.51,
@@ -1202,11 +1122,7 @@
           "case_id": "blocked.unapproved-publish",
           "ordering_index": 1,
           "label": "c_approval",
-          "presented": [
-            "c_complete",
-            "c_approval",
-            "c_publish"
-          ],
+          "presented": ["c_complete", "c_approval", "c_publish"],
           "predicted": "c_publish",
           "probabilities": {
             "c_complete": 0.05,
@@ -1220,11 +1136,7 @@
           "case_id": "blocked.unapproved-publish",
           "ordering_index": 2,
           "label": "c_approval",
-          "presented": [
-            "c_approval",
-            "c_complete",
-            "c_publish"
-          ],
+          "presented": ["c_approval", "c_complete", "c_publish"],
           "predicted": "c_approval",
           "probabilities": {
             "c_approval": 0.7,
@@ -1238,11 +1150,7 @@
           "case_id": "blocked.unapproved-publish",
           "ordering_index": 3,
           "label": "c_approval",
-          "presented": [
-            "c_complete",
-            "c_publish",
-            "c_approval"
-          ],
+          "presented": ["c_complete", "c_publish", "c_approval"],
           "predicted": "c_approval",
           "probabilities": {
             "c_complete": 0.05,
@@ -1256,10 +1164,7 @@
           "case_id": "cache.deps-changed",
           "ordering_index": 0,
           "label": "c_infer",
-          "presented": [
-            "c_reuse",
-            "c_infer"
-          ],
+          "presented": ["c_reuse", "c_infer"],
           "predicted": "c_infer",
           "probabilities": {
             "c_reuse": 0.0,
@@ -1272,10 +1177,7 @@
           "case_id": "cache.deps-changed",
           "ordering_index": 1,
           "label": "c_infer",
-          "presented": [
-            "c_infer",
-            "c_reuse"
-          ],
+          "presented": ["c_infer", "c_reuse"],
           "predicted": "c_infer",
           "probabilities": {
             "c_infer": 0.99,
@@ -1288,10 +1190,7 @@
           "case_id": "cache.deps-unchanged",
           "ordering_index": 0,
           "label": "c_reuse",
-          "presented": [
-            "c_reuse",
-            "c_infer"
-          ],
+          "presented": ["c_reuse", "c_infer"],
           "predicted": "c_reuse",
           "probabilities": {
             "c_reuse": 1.0,
@@ -1304,10 +1203,7 @@
           "case_id": "cache.deps-unchanged",
           "ordering_index": 1,
           "label": "c_reuse",
-          "presented": [
-            "c_infer",
-            "c_reuse"
-          ],
+          "presented": ["c_infer", "c_reuse"],
           "predicted": "c_reuse",
           "probabilities": {
             "c_infer": 0.0,
@@ -1320,10 +1216,7 @@
           "case_id": "cache.requester-ben",
           "ordering_index": 0,
           "label": "c_reuse",
-          "presented": [
-            "c_reuse",
-            "c_infer"
-          ],
+          "presented": ["c_reuse", "c_infer"],
           "predicted": "c_reuse",
           "probabilities": {
             "c_reuse": 1.0,
@@ -1336,10 +1229,7 @@
           "case_id": "cache.requester-ben",
           "ordering_index": 1,
           "label": "c_reuse",
-          "presented": [
-            "c_infer",
-            "c_reuse"
-          ],
+          "presented": ["c_infer", "c_reuse"],
           "predicted": "c_reuse",
           "probabilities": {
             "c_infer": 0.0,
@@ -1352,10 +1242,7 @@
           "case_id": "cache.requester-sam",
           "ordering_index": 0,
           "label": "c_reuse",
-          "presented": [
-            "c_reuse",
-            "c_infer"
-          ],
+          "presented": ["c_reuse", "c_infer"],
           "predicted": "c_reuse",
           "probabilities": {
             "c_reuse": 1.0,
@@ -1368,10 +1255,7 @@
           "case_id": "cache.requester-sam",
           "ordering_index": 1,
           "label": "c_reuse",
-          "presented": [
-            "c_infer",
-            "c_reuse"
-          ],
+          "presented": ["c_infer", "c_reuse"],
           "predicted": "c_reuse",
           "probabilities": {
             "c_infer": 0.0,
@@ -1384,11 +1268,7 @@
           "case_id": "complete.no-remaining-work",
           "ordering_index": 0,
           "label": "c_complete",
-          "presented": [
-            "c_assemble",
-            "c_complete",
-            "c_clarify"
-          ],
+          "presented": ["c_assemble", "c_complete", "c_clarify"],
           "predicted": "c_complete",
           "probabilities": {
             "c_assemble": 0.07,
@@ -1402,11 +1282,7 @@
           "case_id": "complete.no-remaining-work",
           "ordering_index": 1,
           "label": "c_complete",
-          "presented": [
-            "c_clarify",
-            "c_complete",
-            "c_assemble"
-          ],
+          "presented": ["c_clarify", "c_complete", "c_assemble"],
           "predicted": "c_complete",
           "probabilities": {
             "c_clarify": 0.0,
@@ -1420,11 +1296,7 @@
           "case_id": "complete.no-remaining-work",
           "ordering_index": 2,
           "label": "c_complete",
-          "presented": [
-            "c_complete",
-            "c_clarify",
-            "c_assemble"
-          ],
+          "presented": ["c_complete", "c_clarify", "c_assemble"],
           "predicted": "c_complete",
           "probabilities": {
             "c_complete": 0.99,
@@ -1438,11 +1310,7 @@
           "case_id": "complete.no-remaining-work",
           "ordering_index": 3,
           "label": "c_complete",
-          "presented": [
-            "c_clarify",
-            "c_assemble",
-            "c_complete"
-          ],
+          "presented": ["c_clarify", "c_assemble", "c_complete"],
           "predicted": "c_complete",
           "probabilities": {
             "c_clarify": 0.0,
@@ -1456,11 +1324,7 @@
           "case_id": "complete.published-and-checked",
           "ordering_index": 0,
           "label": "c_complete",
-          "presented": [
-            "c_publish",
-            "c_complete",
-            "c_inspect_beta"
-          ],
+          "presented": ["c_publish", "c_complete", "c_inspect_beta"],
           "predicted": "c_publish",
           "probabilities": {
             "c_publish": 0.66,
@@ -1474,11 +1338,7 @@
           "case_id": "complete.published-and-checked",
           "ordering_index": 1,
           "label": "c_complete",
-          "presented": [
-            "c_inspect_beta",
-            "c_complete",
-            "c_publish"
-          ],
+          "presented": ["c_inspect_beta", "c_complete", "c_publish"],
           "predicted": "c_publish",
           "probabilities": {
             "c_inspect_beta": 0.0,
@@ -1492,11 +1352,7 @@
           "case_id": "complete.published-and-checked",
           "ordering_index": 2,
           "label": "c_complete",
-          "presented": [
-            "c_complete",
-            "c_inspect_beta",
-            "c_publish"
-          ],
+          "presented": ["c_complete", "c_inspect_beta", "c_publish"],
           "predicted": "c_complete",
           "probabilities": {
             "c_complete": 0.95,
@@ -1510,11 +1366,7 @@
           "case_id": "complete.published-and-checked",
           "ordering_index": 3,
           "label": "c_complete",
-          "presented": [
-            "c_inspect_beta",
-            "c_publish",
-            "c_complete"
-          ],
+          "presented": ["c_inspect_beta", "c_publish", "c_complete"],
           "predicted": "c_complete",
           "probabilities": {
             "c_inspect_beta": 0.0,
@@ -1528,12 +1380,7 @@
           "case_id": "distractor.more-documentation",
           "ordering_index": 0,
           "label": "c_check",
-          "presented": [
-            "c_document",
-            "c_check",
-            "c_publish",
-            "c_complete"
-          ],
+          "presented": ["c_document", "c_check", "c_publish", "c_complete"],
           "predicted": "c_check",
           "probabilities": {
             "c_document": 0.0,
@@ -1548,12 +1395,7 @@
           "case_id": "distractor.more-documentation",
           "ordering_index": 1,
           "label": "c_check",
-          "presented": [
-            "c_complete",
-            "c_publish",
-            "c_check",
-            "c_document"
-          ],
+          "presented": ["c_complete", "c_publish", "c_check", "c_document"],
           "predicted": "c_check",
           "probabilities": {
             "c_complete": 0.0,
@@ -1568,12 +1410,7 @@
           "case_id": "distractor.more-documentation",
           "ordering_index": 2,
           "label": "c_check",
-          "presented": [
-            "c_publish",
-            "c_check",
-            "c_complete",
-            "c_document"
-          ],
+          "presented": ["c_publish", "c_check", "c_complete", "c_document"],
           "predicted": "c_check",
           "probabilities": {
             "c_publish": 0.0,
@@ -1588,12 +1425,7 @@
           "case_id": "distractor.more-documentation",
           "ordering_index": 3,
           "label": "c_check",
-          "presented": [
-            "c_publish",
-            "c_complete",
-            "c_check",
-            "c_document"
-          ],
+          "presented": ["c_publish", "c_complete", "c_check", "c_document"],
           "predicted": "c_check",
           "probabilities": {
             "c_publish": 0.0,
@@ -1608,11 +1440,7 @@
           "case_id": "distractor.rewrite-first",
           "ordering_index": 0,
           "label": "c_inspect_alpha",
-          "presented": [
-            "c_rewrite",
-            "c_inspect_alpha",
-            "c_complete"
-          ],
+          "presented": ["c_rewrite", "c_inspect_alpha", "c_complete"],
           "predicted": "c_inspect_alpha",
           "probabilities": {
             "c_rewrite": 0.0,
@@ -1626,11 +1454,7 @@
           "case_id": "distractor.rewrite-first",
           "ordering_index": 1,
           "label": "c_inspect_alpha",
-          "presented": [
-            "c_complete",
-            "c_inspect_alpha",
-            "c_rewrite"
-          ],
+          "presented": ["c_complete", "c_inspect_alpha", "c_rewrite"],
           "predicted": "c_inspect_alpha",
           "probabilities": {
             "c_complete": 0.0,
@@ -1644,11 +1468,7 @@
           "case_id": "distractor.rewrite-first",
           "ordering_index": 2,
           "label": "c_inspect_alpha",
-          "presented": [
-            "c_inspect_alpha",
-            "c_complete",
-            "c_rewrite"
-          ],
+          "presented": ["c_inspect_alpha", "c_complete", "c_rewrite"],
           "predicted": "c_inspect_alpha",
           "probabilities": {
             "c_inspect_alpha": 1.0,
@@ -1662,11 +1482,7 @@
           "case_id": "distractor.rewrite-first",
           "ordering_index": 3,
           "label": "c_inspect_alpha",
-          "presented": [
-            "c_complete",
-            "c_rewrite",
-            "c_inspect_alpha"
-          ],
+          "presented": ["c_complete", "c_rewrite", "c_inspect_alpha"],
           "predicted": "c_inspect_alpha",
           "probabilities": {
             "c_complete": 0.0,
@@ -1680,12 +1496,7 @@
           "case_id": "waiting.dependency-in-flight",
           "ordering_index": 0,
           "label": "c_wait",
-          "presented": [
-            "c_wait",
-            "c_inspect_beta",
-            "c_assemble",
-            "c_complete"
-          ],
+          "presented": ["c_wait", "c_inspect_beta", "c_assemble", "c_complete"],
           "predicted": "c_wait",
           "probabilities": {
             "c_wait": 0.82,
@@ -1700,12 +1511,7 @@
           "case_id": "waiting.dependency-in-flight",
           "ordering_index": 1,
           "label": "c_wait",
-          "presented": [
-            "c_complete",
-            "c_assemble",
-            "c_inspect_beta",
-            "c_wait"
-          ],
+          "presented": ["c_complete", "c_assemble", "c_inspect_beta", "c_wait"],
           "predicted": "c_assemble",
           "probabilities": {
             "c_complete": 0.02,
@@ -1720,12 +1526,7 @@
           "case_id": "waiting.dependency-in-flight",
           "ordering_index": 2,
           "label": "c_wait",
-          "presented": [
-            "c_assemble",
-            "c_inspect_beta",
-            "c_complete",
-            "c_wait"
-          ],
+          "presented": ["c_assemble", "c_inspect_beta", "c_complete", "c_wait"],
           "predicted": "c_assemble",
           "probabilities": {
             "c_assemble": 0.91,
@@ -1740,12 +1541,7 @@
           "case_id": "waiting.dependency-in-flight",
           "ordering_index": 3,
           "label": "c_wait",
-          "presented": [
-            "c_assemble",
-            "c_complete",
-            "c_inspect_beta",
-            "c_wait"
-          ],
+          "presented": ["c_assemble", "c_complete", "c_inspect_beta", "c_wait"],
           "predicted": "c_assemble",
           "probabilities": {
             "c_assemble": 0.94,
@@ -1760,12 +1556,7 @@
           "case_id": "waiting.nothing-in-flight",
           "ordering_index": 0,
           "label": "c_inspect_beta",
-          "presented": [
-            "c_wait",
-            "c_inspect_beta",
-            "c_assemble",
-            "c_complete"
-          ],
+          "presented": ["c_wait", "c_inspect_beta", "c_assemble", "c_complete"],
           "predicted": "c_inspect_beta",
           "probabilities": {
             "c_wait": 0.0,
@@ -1780,12 +1571,7 @@
           "case_id": "waiting.nothing-in-flight",
           "ordering_index": 1,
           "label": "c_inspect_beta",
-          "presented": [
-            "c_complete",
-            "c_assemble",
-            "c_inspect_beta",
-            "c_wait"
-          ],
+          "presented": ["c_complete", "c_assemble", "c_inspect_beta", "c_wait"],
           "predicted": "c_inspect_beta",
           "probabilities": {
             "c_complete": 0.0,
@@ -1800,12 +1586,7 @@
           "case_id": "waiting.nothing-in-flight",
           "ordering_index": 2,
           "label": "c_inspect_beta",
-          "presented": [
-            "c_assemble",
-            "c_inspect_beta",
-            "c_complete",
-            "c_wait"
-          ],
+          "presented": ["c_assemble", "c_inspect_beta", "c_complete", "c_wait"],
           "predicted": "c_inspect_beta",
           "probabilities": {
             "c_assemble": 0.26,
@@ -1820,12 +1601,7 @@
           "case_id": "waiting.nothing-in-flight",
           "ordering_index": 3,
           "label": "c_inspect_beta",
-          "presented": [
-            "c_assemble",
-            "c_complete",
-            "c_inspect_beta",
-            "c_wait"
-          ],
+          "presented": ["c_assemble", "c_complete", "c_inspect_beta", "c_wait"],
           "predicted": "c_inspect_beta",
           "probabilities": {
             "c_assemble": 0.44,

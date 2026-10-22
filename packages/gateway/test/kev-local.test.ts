@@ -41,9 +41,11 @@ describe('local Kev evaluator', () => {
         questions: { area: { criteria: Record<string, string> } };
       };
       assert.deepEqual(Object.keys(body.questions.area.criteria), ['auth', 'payments', 'ui']);
-      return new Response(JSON.stringify({
-        answers: { area: { type: 'choice', choice: 'auth' } },
-      }));
+      return new Response(
+        JSON.stringify({
+          answers: { area: { type: 'choice', choice: 'auth' } },
+        }),
+      );
     };
     const evaluator = kevLocalEvaluator({
       runtime: { ensureReady: async () => ({ status: 'ready' }) },
@@ -73,8 +75,14 @@ describe('local Kev evaluator', () => {
       return new Response(JSON.stringify({ answers: { area: { type: 'choice', choice: 'ui' } } }));
     };
 
-    const result = await kevLocalEvaluator({ runtime: { ensureReady: async () => ({ status: 'ready' }) }, fetch })
-      .evaluate({ ...CALL, kind: 'choice', questions: { area: { type: 'choice', instructions: 'Which area?', criteria } } });
+    const result = await kevLocalEvaluator({
+      runtime: { ensureReady: async () => ({ status: 'ready' }) },
+      fetch,
+    }).evaluate({
+      ...CALL,
+      kind: 'choice',
+      questions: { area: { type: 'choice', instructions: 'Which area?', criteria } },
+    });
 
     // Fisher-Yates with a constant 0 draw moves the last key to the front, then swaps the first two.
     assert.deepEqual(sent, ['payments', 'ui', 'auth']);

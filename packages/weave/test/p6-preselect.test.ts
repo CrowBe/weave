@@ -4,53 +4,119 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { EvaluationOutcome } from '@weave/gateway';
-import { transitionBooleanSite, evaluateBooleanSite, INPUT_RULES, type BooleanSiteInput, type PreselectPolicyInput, type PreselectSelection } from '../src/sites/boolean.js';
+import {
+  transitionBooleanSite,
+  evaluateBooleanSite,
+  INPUT_RULES,
+  type BooleanSiteInput,
+  type PreselectPolicyInput,
+  type PreselectSelection,
+} from '../src/sites/boolean.js';
 import type { InferenceGateway } from '@weave/gateway';
 import { FileJournal } from '../src/journal.js';
 import { digest } from '../src/digest.js';
 import type { Observation } from '../src/types.js';
 
 const current = { state_revision: 1, state_updated_at: 10 };
-const terms = { quality: 'baseline' as const, destinations: ['local'], max_context_tokens: 100, deadline: 100, cost_ceiling: 10, max_attempts: 1 };
-function policy(k: number, floor = 0, provider: PreselectPolicyInput['provider'] = 'typesafe-jev', max_excluded = 0.4, min_margin = 0.3): PreselectPolicyInput {
+const terms = {
+  quality: 'baseline' as const,
+  destinations: ['local'],
+  max_context_tokens: 100,
+  deadline: 100,
+  cost_ceiling: 10,
+  max_attempts: 1,
+};
+function policy(
+  k: number,
+  floor = 0,
+  provider: PreselectPolicyInput['provider'] = 'typesafe-jev',
+  max_excluded = 0.4,
+  min_margin = 0.3,
+): PreselectPolicyInput {
   return { k, floor, max_excluded, min_margin, provider };
 }
 function input(probabilities: readonly number[], extra: Partial<BooleanSiteInput> = {}): BooleanSiteInput {
   return {
-    ...current, request_id: 'r1', state: { text: 'STATE_CANARY' }, needs_dispatch: true, terms,
+    ...current,
+    request_id: 'r1',
+    state: { text: 'STATE_CANARY' },
+    needs_dispatch: true,
+    terms,
     catalogue_index: probabilities.map((_, n) => ({ id: `cap_${n}`, purpose: 'PURPOSE_CANARY' })),
     ...extra,
   };
 }
-function recorded(probabilities: readonly number[], confidence: number | readonly unknown[] | 'missing' = 1, routed_unit_id = 'fixture') {
+function recorded(
+  probabilities: readonly number[],
+  confidence: number | readonly unknown[] | 'missing' = 1,
+  routed_unit_id = 'fixture',
+) {
   const keys = probabilities.map((_, n) => `entry_${n}`);
-  const confidenceMap = confidence === 'missing' ? undefined
-    : typeof confidence === 'number' ? Object.fromEntries(keys.map(key => [key, confidence]))
-    : Object.fromEntries(keys.flatMap((key, n) => confidence[n] === undefined ? [] : [[key, confidence[n]]]));
+  const confidenceMap =
+    confidence === 'missing'
+      ? undefined
+      : typeof confidence === 'number'
+        ? Object.fromEntries(keys.map((key) => [key, confidence]))
+        : Object.fromEntries(keys.flatMap((key, n) => (confidence[n] === undefined ? [] : [[key, confidence[n]]])));
   const outcome: EvaluationOutcome<'boolean'> = {
-    status: 'accepted', kind: 'boolean', site: 'loop.preselect', request_id: 'r1',
-    answers: Object.fromEntries(keys.map((key, n) => [key, { type: 'boolean' as const, probability: probabilities[n]! }])),
+    status: 'accepted',
+    kind: 'boolean',
+    site: 'loop.preselect',
+    request_id: 'r1',
+    answers: Object.fromEntries(
+      keys.map((key, n) => [key, { type: 'boolean' as const, probability: probabilities[n]! }]),
+    ),
     confidence: confidenceMap as Extract<EvaluationOutcome<'boolean'>, { status: 'accepted' }>['confidence'],
-    provider_response_id: 'provider-1', routed_unit_id, attempts: [], spent: 0, uncertainty: [],
+    provider_response_id: 'provider-1',
+    routed_unit_id,
+    attempts: [],
+    spent: 0,
+    uncertainty: [],
   };
   return { state_revision: 1, observed_at: 10, outcome };
 }
-function select(probabilities: readonly number[], extra: Partial<BooleanSiteInput> = {}, confidence: number | readonly unknown[] | 'missing' = 1, routed_unit_id = 'fixture') {
-  return transitionBooleanSite('loop.preselect', input(probabilities, extra), recorded(probabilities, confidence, routed_unit_id), current);
+function select(
+  probabilities: readonly number[],
+  extra: Partial<BooleanSiteInput> = {},
+  confidence: number | readonly unknown[] | 'missing' = 1,
+  routed_unit_id = 'fixture',
+) {
+  return transitionBooleanSite(
+    'loop.preselect',
+    input(probabilities, extra),
+    recorded(probabilities, confidence, routed_unit_id),
+    current,
+  );
 }
 function ids(result: { catalogue_index: readonly { id: string }[] }) {
-  return result.catalogue_index.map(entry => entry.id);
+  return result.catalogue_index.map((entry) => entry.id);
 }
 function assertTrace(record: PreselectSelection, probabilities: readonly number[]) {
-  assert.deepEqual(Object.keys(record), ['schema', 'k', 'floor', 'cap', 'max_excluded', 'min_margin', 'policy_provider',
-    'routed_unit_id', 'outcome', 'reason', 'top_p', 'best_excluded_p', 'margin', 'scores', 'kept', 'required_missing',
-    'required_ids_invalid']);
+  assert.deepEqual(Object.keys(record), [
+    'schema',
+    'k',
+    'floor',
+    'cap',
+    'max_excluded',
+    'min_margin',
+    'policy_provider',
+    'routed_unit_id',
+    'outcome',
+    'reason',
+    'top_p',
+    'best_excluded_p',
+    'margin',
+    'scores',
+    'kept',
+    'required_missing',
+    'required_ids_invalid',
+  ]);
   assert.equal(record.schema, 'preselect-selection@2');
   assert.equal(record.cap, 8);
   assert.equal(Object.hasOwn(record, 'provider'), false);
   assert.equal(record.routed_unit_id === null || typeof record.routed_unit_id === 'string', true);
   assert.equal(record.scores.length, probabilities.length);
-  assert.equal(record.kept, record.scores.filter(score => score.kept).length);
+  assert.equal(record.kept, record.scores.filter((score) => score.kept).length);
   for (const [n, score] of record.scores.entries()) {
     assert.deepEqual(Object.keys(score), ['entry', 'p', 'rank', 'kept', 'required']);
     assert.equal(score.entry, n);
@@ -70,7 +136,10 @@ test('top-k keeps exactly k by score, including k=1, k=8, ties, and a short inde
   assert.deepEqual(ids(select(descending, { preselect_policy: policy(1) })), ['cap_0']);
   assert.deepEqual(ids(select([0.9, 0.4, 0.4], { preselect_policy: policy(2) })), ['cap_0', 'cap_1']);
   assert.deepEqual(ids(select([0.1, 0.4, 0.4], { preselect_policy: policy(2) })), ['cap_1', 'cap_2']);
-  assert.deepEqual(ids(select(descending, { preselect_policy: policy(8) })), descending.slice(0, 8).map((_, n) => `cap_${n}`));
+  assert.deepEqual(
+    ids(select(descending, { preselect_policy: policy(8) })),
+    descending.slice(0, 8).map((_, n) => `cap_${n}`),
+  );
   assert.deepEqual(ids(select([0.2, 0.9])), ['cap_1', 'cap_0']);
   const short = select([0.4, 0.2], { preselect_policy: policy(8) });
   assert.deepEqual(ids(short), ['cap_0', 'cap_1']);
@@ -81,8 +150,14 @@ test('top-k keeps exactly k by score, including k=1, k=8, ties, and a short inde
 test('a probability of .49 inside the top k is kept and the observation follows the kept set', () => {
   const result = select([0.49, 0.9, 0.49, 0.1], { preselect_policy: policy(3, 0, 'amos') });
   assert.deepEqual(ids(result), ['cap_1', 'cap_0', 'cap_2']);
-  assert.deepEqual(result.observations.slice(0, 4).map(observation => observation.answer), ['include', 'include', 'include', 'exclude']);
-  assert.deepEqual(result.observations.slice(0, 4).map(observation => observation.top_p), [0.49, 0.9, 0.49, 0.1]);
+  assert.deepEqual(
+    result.observations.slice(0, 4).map((observation) => observation.answer),
+    ['include', 'include', 'include', 'exclude'],
+  );
+  assert.deepEqual(
+    result.observations.slice(0, 4).map((observation) => observation.top_p),
+    [0.49, 0.9, 0.49, 0.1],
+  );
   assert.equal(result.preselect?.policy_provider, 'amos');
   assert.equal(result.preselect?.routed_unit_id, 'fixture');
   assert.equal(result.preselect?.outcome, 'narrowed');
@@ -109,11 +184,14 @@ test('a catalogue id that appears twice keeps both positions when required', () 
     required_entry_ids: ['cap_dup'],
     catalogue_index,
   });
-  assert.deepEqual(result.catalogue_index.map(entry => [entry.id, entry.purpose]), [
-    ['cap_other', 'OTHER_POSITION'],
-    ['cap_dup', 'FIRST_POSITION'],
-    ['cap_dup', 'SECOND_POSITION'],
-  ]);
+  assert.deepEqual(
+    result.catalogue_index.map((entry) => [entry.id, entry.purpose]),
+    [
+      ['cap_other', 'OTHER_POSITION'],
+      ['cap_dup', 'FIRST_POSITION'],
+      ['cap_dup', 'SECOND_POSITION'],
+    ],
+  );
   assert.equal(result.preselect?.scores[0]?.required, true);
   assert.equal(result.preselect?.scores[0]?.kept, true);
   assert.equal(result.preselect?.scores[2]?.required, true);
@@ -165,10 +243,19 @@ test('required entries stay beyond k and cap, and a missing id is only a count',
   const notConsuming = select([0.99, 0.8, 0.4], { preselect_policy: policy(1), required_entry_ids: ['cap_0'] });
   assert.deepEqual(ids(notConsuming), ['cap_0', 'cap_1']);
   const probabilities = [0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.01, 0.2];
-  const beyondCap = select(probabilities, { preselect_policy: policy(8), required_entry_ids: ['cap_8', 'MISSING_CANARY'] });
+  const beyondCap = select(probabilities, {
+    preselect_policy: policy(8),
+    required_entry_ids: ['cap_8', 'MISSING_CANARY'],
+  });
   assert.equal(beyondCap.catalogue_index.length, 9);
-  assert.equal(beyondCap.catalogue_index.some(entry => entry.id === 'cap_8'), true);
-  assert.equal(beyondCap.catalogue_index.some(entry => entry.id === 'cap_9'), false);
+  assert.equal(
+    beyondCap.catalogue_index.some((entry) => entry.id === 'cap_8'),
+    true,
+  );
+  assert.equal(
+    beyondCap.catalogue_index.some((entry) => entry.id === 'cap_9'),
+    false,
+  );
   assert.equal(beyondCap.preselect?.required_missing, 1);
   assert.equal(beyondCap.preselect?.cap, 8);
   assert.ok(beyondCap.preselect);
@@ -178,16 +265,34 @@ test('required entries stay beyond k and cap, and a missing id is only a count',
 test('admission failure returns the whole index, keeps required entries, and records fallback', () => {
   const probabilities = [0.99, 0.01, 0.4];
   const extra = { preselect_policy: policy(1), required_entry_ids: ['cap_1', 'MISSING_CANARY'] };
-  const stale = transitionBooleanSite('loop.preselect', input(probabilities, extra), { ...recorded(probabilities), observed_at: 9 }, current);
-  const outage = transitionBooleanSite('loop.preselect', input(probabilities, extra), { ...recorded(probabilities), outcome: null }, current);
-  const cancelled = transitionBooleanSite('loop.preselect', input(probabilities, extra), { ...recorded(probabilities), cancelled: true }, current);
+  const stale = transitionBooleanSite(
+    'loop.preselect',
+    input(probabilities, extra),
+    { ...recorded(probabilities), observed_at: 9 },
+    current,
+  );
+  const outage = transitionBooleanSite(
+    'loop.preselect',
+    input(probabilities, extra),
+    { ...recorded(probabilities), outcome: null },
+    current,
+  );
+  const cancelled = transitionBooleanSite(
+    'loop.preselect',
+    input(probabilities, extra),
+    { ...recorded(probabilities), cancelled: true },
+    current,
+  );
   for (const result of [stale, outage, cancelled]) {
     assert.deepEqual(ids(result), ['cap_0', 'cap_1', 'cap_2']);
     assert.equal(result.preselect?.outcome, 'fallback');
     assert.equal(result.preselect?.reason, 'admission');
     assert.equal(result.preselect?.top_p, null);
     assert.equal(result.preselect?.margin, null);
-    assert.equal(result.preselect?.scores.every(score => score.kept), true);
+    assert.equal(
+      result.preselect?.scores.every((score) => score.kept),
+      true,
+    );
     assert.equal(result.preselect?.scores[1]?.required, true);
     assert.equal(result.preselect?.required_missing, 1);
     assert.ok(result.preselect);
@@ -199,15 +304,19 @@ test('admission failure returns the whole index, keeps required entries, and rec
   assert.equal(cancelled.observations[0]?.reason, 'cancelled');
   const missing = recorded(probabilities);
   const answers = Object.fromEntries(Object.entries(missing.outcome.answers).filter(([key]) => key !== 'entry_1'));
-  const partial = transitionBooleanSite('loop.preselect', input(probabilities, extra),
-    { ...missing, outcome: { ...missing.outcome, answers } }, current);
+  const partial = transitionBooleanSite(
+    'loop.preselect',
+    input(probabilities, extra),
+    { ...missing, outcome: { ...missing.outcome, answers } },
+    current,
+  );
   assert.equal(partial.preselect?.outcome, 'fallback');
   assert.equal(partial.preselect?.scores[1]?.p, null);
   assert.equal(partial.preselect?.scores[1]?.rank, null);
   assert.equal(partial.preselect?.scores[1]?.kept, true);
   assert.equal(partial.observations[1]?.answer, null);
   assert.deepEqual(ids(partial), ['cap_0', 'cap_1', 'cap_2']);
-  const ranked = partial.preselect?.scores.filter(score => score.p !== null).map(score => score.rank);
+  const ranked = partial.preselect?.scores.filter((score) => score.p !== null).map((score) => score.rank);
   assert.deepEqual(ranked, [1, 2]);
 });
 
@@ -247,8 +356,12 @@ test('an invalid preselect policy is replaced by the defaults and still narrows'
 });
 
 test('the selection record is present for an empty index and absent for guards', () => {
-  const empty = transitionBooleanSite('loop.preselect', { ...input([]), catalogue_index: [], required_entry_ids: ['MISSING_CANARY'] },
-    { state_revision: 1, observed_at: 10, outcome: null }, current);
+  const empty = transitionBooleanSite(
+    'loop.preselect',
+    { ...input([]), catalogue_index: [], required_entry_ids: ['MISSING_CANARY'] },
+    { state_revision: 1, observed_at: 10, outcome: null },
+    current,
+  );
   assert.equal(empty.preselect?.outcome, 'empty_index');
   assert.deepEqual(empty.preselect?.scores, []);
   assert.equal(empty.preselect?.kept, 0);
@@ -259,10 +372,17 @@ test('the selection record is present for an empty index and absent for guards',
   for (const site of ['guard.input', 'guard.output'] as const) {
     const keys = site === 'guard.input' ? INPUT_RULES : ['decision'];
     const outcome: EvaluationOutcome<'boolean'> = {
-      status: 'accepted', kind: 'boolean', site, request_id: 'r1',
-      answers: Object.fromEntries(keys.map(key => [key, { type: 'boolean' as const, probability: .1 }])),
-      confidence: Object.fromEntries(keys.map(key => [key, 1])),
-      provider_response_id: 'provider-1', routed_unit_id: 'fixture', attempts: [], spent: 0, uncertainty: [],
+      status: 'accepted',
+      kind: 'boolean',
+      site,
+      request_id: 'r1',
+      answers: Object.fromEntries(keys.map((key) => [key, { type: 'boolean' as const, probability: 0.1 }])),
+      confidence: Object.fromEntries(keys.map((key) => [key, 1])),
+      provider_response_id: 'provider-1',
+      routed_unit_id: 'fixture',
+      attempts: [],
+      spent: 0,
+      uncertainty: [],
     };
     const result = transitionBooleanSite(site, input([0.1]), { state_revision: 1, observed_at: 10, outcome }, current);
     assert.equal(Object.hasOwn(result, 'preselect'), false);
@@ -278,8 +398,15 @@ test('a strong margin narrows when no confidence is published, and the boundary 
   assert.equal(open.preselect?.top_p, 0.9);
   assert.equal(open.preselect?.best_excluded_p, 0.2);
   assert.equal(open.preselect?.margin, 0.7);
-  assert.deepEqual(open.observations.slice(0, 4).map(observation => observation.reason), ['accepted', 'accepted', 'accepted', 'accepted']);
-  assert.ok(open.observations.slice(0, 4).every(observation => observation.accepted && !observation.fallback_used && observation.confidence === null));
+  assert.deepEqual(
+    open.observations.slice(0, 4).map((observation) => observation.reason),
+    ['accepted', 'accepted', 'accepted', 'accepted'],
+  );
+  assert.ok(
+    open.observations
+      .slice(0, 4)
+      .every((observation) => observation.accepted && !observation.fallback_used && observation.confidence === null),
+  );
   const both = select([0.7, 0.4], { preselect_policy: policy(1) });
   assert.deepEqual(ids(both), ['cap_0']);
   assert.equal(both.preselect?.outcome, 'narrowed');
@@ -299,8 +426,12 @@ test('a weak margin returns the full index and does not blame a missing confiden
   assert.equal(above.preselect?.reason, 'weak_margin');
   assert.equal(above.preselect?.best_excluded_p, 0.41);
   assert.equal(above.preselect?.top_p, 0.9);
-  assert.ok(above.observations.every(observation => observation.reason === 'accepted' && observation.accepted && !observation.fallback_used));
-  assert.ok(above.preselect?.scores.every(score => score.kept));
+  assert.ok(
+    above.observations.every(
+      (observation) => observation.reason === 'accepted' && observation.accepted && !observation.fallback_used,
+    ),
+  );
+  assert.ok(above.preselect?.scores.every((score) => score.kept));
   const tight = select([0.69, 0.4], { preselect_policy: policy(1) });
   assert.deepEqual(ids(tight), ['cap_0', 'cap_1']);
   assert.equal(tight.preselect?.reason, 'weak_margin');
@@ -332,7 +463,11 @@ test('published low confidence blocks only the boundary of the candidate slice',
   assert.equal(tied.preselect?.reason, null);
   const tiedBoundary = select([0.9, 0.4, 0.4], { preselect_policy: policy(1) }, [1, 0.1, 1]);
   assert.equal(tiedBoundary.preselect?.reason, 'low_confidence');
-  const requiredLow = select([0.95, 0.9, 0.2], { preselect_policy: policy(1), required_entry_ids: ['cap_0'] }, [0.1, 1, 1]);
+  const requiredLow = select(
+    [0.95, 0.9, 0.2],
+    { preselect_policy: policy(1), required_entry_ids: ['cap_0'] },
+    [0.1, 1, 1],
+  );
   assert.deepEqual(ids(requiredLow), ['cap_0', 'cap_1']);
   assert.equal(requiredLow.preselect?.top_p, 0.9);
   assert.equal(requiredLow.observations[0]?.reason, 'accepted');
@@ -350,7 +485,9 @@ test('nothing excluded keeps the index without applying the margin or confidence
   assert.equal(short.preselect?.best_excluded_p, null);
   assert.equal(short.preselect?.margin, null);
   assert.equal(short.preselect?.top_p, 0.9);
-  assert.ok(short.observations.every(observation => observation.reason === 'accepted' && observation.confidence === 0.1));
+  assert.ok(
+    short.observations.every((observation) => observation.reason === 'accepted' && observation.confidence === 0.1),
+  );
   const covered = select([0.4, 0.2, 0.1], { preselect_policy: policy(2), required_entry_ids: ['cap_2'] }, 0.2);
   assert.deepEqual(ids(covered), ['cap_0', 'cap_1', 'cap_2']);
   assert.equal(covered.preselect?.best_excluded_p, null);
@@ -358,7 +495,8 @@ test('nothing excluded keeps the index without applying the margin or confidence
 });
 
 test('a routed unit id that starts with bearer is recorded; a real token marker is omitted (#158)', () => {
-  for (const id of ['bearer_unit', 'Bearer-1', 'bearer.jev@1.14']) assert.equal(select([0.9, 0.1], {}, 1, id).preselect?.routed_unit_id, id, id);
+  for (const id of ['bearer_unit', 'Bearer-1', 'bearer.jev@1.14'])
+    assert.equal(select([0.9, 0.1], {}, 1, id).preselect?.routed_unit_id, id, id);
   for (const id of ['Bearer abc', 'sk-abc', 'ghp_abc', 'github_pat_abc', 'eyJhbGci', 'AKIAABC']) {
     assert.equal(select([0.9, 0.1], {}, 1, id).preselect?.routed_unit_id, null, id);
   }
@@ -392,23 +530,43 @@ test('untyped required_entry_ids do not throw and are not treated as required id
   const port = { evaluate: async () => recorded(probabilities).outcome } as Pick<InferenceGateway, 'evaluate'>;
   const now = () => ({ ...current, observed_at: 10 });
   for (const required_entry_ids of [7, 'cap_1', { length: 1 }, null, [1, { id: 'cap_1' }]]) {
-    const result = await evaluateBooleanSite('loop.preselect', { ...base, required_entry_ids } as BooleanSiteInput, port, now);
+    const result = await evaluateBooleanSite(
+      'loop.preselect',
+      { ...base, required_entry_ids } as BooleanSiteInput,
+      port,
+      now,
+    );
     assert.deepEqual(ids(result), ['cap_0']);
     assert.equal(result.preselect?.required_ids_invalid, true);
     assert.equal(result.preselect?.scores[1]?.required, false);
     assert.equal(result.preselect?.required_missing, 0);
     assert.equal(JSON.stringify(result.preselect).includes('cap_'), false);
   }
-  const mixed = await evaluateBooleanSite('loop.preselect', { ...base, required_entry_ids: ['cap_1', 1] } as BooleanSiteInput, port, now);
+  const mixed = await evaluateBooleanSite(
+    'loop.preselect',
+    { ...base, required_entry_ids: ['cap_1', 1] } as BooleanSiteInput,
+    port,
+    now,
+  );
   assert.deepEqual(ids(mixed), ['cap_0', 'cap_1']);
   assert.equal(mixed.preselect?.required_ids_invalid, true);
   assert.equal(mixed.preselect?.scores[1]?.required, true);
   assert.equal(mixed.preselect?.scores[1]?.kept, true);
-  const clean = await evaluateBooleanSite('loop.preselect', { ...base, required_entry_ids: ['cap_1', 'cap_1'] }, port, now);
+  const clean = await evaluateBooleanSite(
+    'loop.preselect',
+    { ...base, required_entry_ids: ['cap_1', 'cap_1'] },
+    port,
+    now,
+  );
   assert.equal(clean.preselect?.required_ids_invalid, false);
   assert.equal(clean.preselect?.scores[1]?.required, true);
   assert.deepEqual(ids(clean), ['cap_0', 'cap_1']);
-  const direct = transitionBooleanSite('loop.preselect', { ...base, required_entry_ids: 'cap_1' as unknown as readonly string[] }, recorded(probabilities), current);
+  const direct = transitionBooleanSite(
+    'loop.preselect',
+    { ...base, required_entry_ids: 'cap_1' as unknown as readonly string[] },
+    recorded(probabilities),
+    current,
+  );
   assert.equal(direct.preselect?.required_ids_invalid, true);
   assert.deepEqual(ids(direct), ['cap_0']);
 });
@@ -451,7 +609,11 @@ test('a published invalid confidence fails closed on any entry; an absent one st
   assert.deepEqual(ids(covered), ['cap_0', 'cap_1']);
   assert.equal(covered.observations[0]?.reason, 'invalid_confidence');
   assert.equal(covered.observations[1]?.reason, 'accepted');
-  const requiredInvalid = select([0.95, 0.9, 0.2], { preselect_policy: policy(1), required_entry_ids: ['cap_0'] }, [60, 1, 1]);
+  const requiredInvalid = select(
+    [0.95, 0.9, 0.2],
+    { preselect_policy: policy(1), required_entry_ids: ['cap_0'] },
+    [60, 1, 1],
+  );
   assert.equal(requiredInvalid.preselect?.reason, 'invalid_confidence');
   assert.deepEqual(ids(requiredInvalid), ['cap_0', 'cap_1', 'cap_2']);
   assert.equal(requiredInvalid.observations[0]?.reason, 'invalid_confidence');
@@ -461,8 +623,12 @@ test('a published invalid confidence fails closed on any entry; an absent one st
   const base = recorded(probabilities, [60, 1, 1, 1, 1]);
   assert.equal(base.outcome.status, 'accepted');
   const answers = Object.fromEntries(Object.entries(base.outcome.answers).filter(([key]) => key !== 'entry_4'));
-  const partial = transitionBooleanSite('loop.preselect', input(probabilities, { preselect_policy: policy(3) }),
-    { ...base, outcome: { ...base.outcome, answers } }, current);
+  const partial = transitionBooleanSite(
+    'loop.preselect',
+    input(probabilities, { preselect_policy: policy(3) }),
+    { ...base, outcome: { ...base.outcome, answers } },
+    current,
+  );
   assert.equal(partial.preselect?.reason, 'admission');
   const again = select(probabilities, { preselect_policy: policy(3) }, [60, 1, 1, 1, 1]);
   assert.deepEqual(again.preselect, select(probabilities, { preselect_policy: policy(3) }, [60, 1, 1, 1, 1]).preselect);
@@ -474,15 +640,38 @@ test('each invalid confidence has its own observation marker while valid entries
   const result = select([0.9, 0.8, 0.7, 0.2, 0.1], { preselect_policy: policy(3) }, [Number.NaN, 1, -1, 1, 60]);
   assert.equal(result.preselect?.reason, 'invalid_confidence');
   assert.deepEqual(ids(result), ['cap_0', 'cap_1', 'cap_2', 'cap_3', 'cap_4']);
-  assert.deepEqual(result.observations.map(observation => observation.reason),
-    ['invalid_confidence', 'accepted', 'invalid_confidence', 'accepted', 'invalid_confidence']);
-  assert.deepEqual(result.observations.map(observation => observation.confidence), [null, 1, null, 1, null]);
-  assert.deepEqual(result.observations.map(observation => observation.accepted), [false, true, false, true, false]);
-  assert.deepEqual(result.observations.map(observation => observation.fallback_used), [true, false, true, false, true]);
+  assert.deepEqual(
+    result.observations.map((observation) => observation.reason),
+    ['invalid_confidence', 'accepted', 'invalid_confidence', 'accepted', 'invalid_confidence'],
+  );
+  assert.deepEqual(
+    result.observations.map((observation) => observation.confidence),
+    [null, 1, null, 1, null],
+  );
+  assert.deepEqual(
+    result.observations.map((observation) => observation.accepted),
+    [false, true, false, true, false],
+  );
+  assert.deepEqual(
+    result.observations.map((observation) => observation.fallback_used),
+    [true, false, true, false, true],
+  );
   for (const observation of result.observations) {
     assert.equal(observation.schema, 'decision-site@1');
-    assert.deepEqual(Object.keys(observation), ['schema', 'site', 'question', 'request_id', 'state_revision',
-      'answer', 'confidence', 'top_p', 'accepted', 'fallback_used', 'reason', 'provider_request_id']);
+    assert.deepEqual(Object.keys(observation), [
+      'schema',
+      'site',
+      'question',
+      'request_id',
+      'state_revision',
+      'answer',
+      'confidence',
+      'top_p',
+      'accepted',
+      'fallback_used',
+      'reason',
+      'provider_request_id',
+    ]);
   }
   assert.deepEqual(JSON.parse(JSON.stringify(result)), result);
 });
@@ -490,13 +679,28 @@ test('each invalid confidence has its own observation marker while valid entries
 test('journal and digest readers preserve historical D3 observations alongside invalid confidence markers', () => {
   // A pre-change observation could not distinguish invalid from absent confidence.
   const historical = {
-    schema: 'decision-site@1', site: 'loop.preselect', question: 'Is this disclosed catalogue entry relevant to this step?',
-    request_id: 'r1', state_revision: 1, answer: 'include', confidence: null, top_p: 0.9,
-    accepted: true, fallback_used: false, reason: 'accepted', provider_request_id: 'provider-1',
+    schema: 'decision-site@1',
+    site: 'loop.preselect',
+    question: 'Is this disclosed catalogue entry relevant to this step?',
+    request_id: 'r1',
+    state_revision: 1,
+    answer: 'include',
+    confidence: null,
+    top_p: 0.9,
+    accepted: true,
+    fallback_used: false,
+    reason: 'accepted',
+    provider_request_id: 'provider-1',
   };
   const envelope = (seq: number, payload: unknown): Observation => ({
-    observation_id: `o${seq}`, source: { kind: 'test', id: 'fixture' }, caused_by: null,
-    payload_type: 'decision-site', payload_version: 1, payload, seq, validation: { status: 'unknown_type' },
+    observation_id: `o${seq}`,
+    source: { kind: 'test', id: 'fixture' },
+    caused_by: null,
+    payload_type: 'decision-site',
+    payload_version: 1,
+    payload,
+    seq,
+    validation: { status: 'unknown_type' },
   });
   const legacy = envelope(1, historical);
   const before = digest(legacy);
@@ -525,8 +729,12 @@ test('a floor that keeps no non-required entry is no_candidate, with or without 
   assert.equal(none.preselect?.margin, null);
   assert.equal(none.preselect?.best_excluded_p, 0.04);
   assert.deepEqual(ids(none), ['cap_0', 'cap_1']);
-  assert.ok(none.preselect?.scores.every(score => score.kept && !score.required));
-  assert.ok(none.observations.every(observation => observation.reason === 'accepted' && observation.accepted && !observation.fallback_used));
+  assert.ok(none.preselect?.scores.every((score) => score.kept && !score.required));
+  assert.ok(
+    none.observations.every(
+      (observation) => observation.reason === 'accepted' && observation.accepted && !observation.fallback_used,
+    ),
+  );
   assert.ok(none.preselect);
   assertTrace(none.preselect, [0.04, 0.02]);
   const required = select([0.99, 0.04, 0.02], { preselect_policy: policy(3, 0.1), required_entry_ids: ['cap_0'] });
@@ -538,12 +746,19 @@ test('a floor that keeps no non-required entry is no_candidate, with or without 
   assert.equal(required.preselect?.scores[0]?.required, true);
   assert.equal(required.preselect?.scores[0]?.kept, true);
   assert.deepEqual(ids(required), ['cap_0', 'cap_1', 'cap_2']);
-  assert.ok(required.observations.every(observation => observation.reason === 'accepted' && observation.accepted && !observation.fallback_used));
+  assert.ok(
+    required.observations.every(
+      (observation) => observation.reason === 'accepted' && observation.accepted && !observation.fallback_used,
+    ),
+  );
   const kept = select([0.9, 0.04, 0.5], { preselect_policy: policy(3, 0.1) });
   assert.equal(kept.preselect?.reason, null);
   assert.equal(kept.preselect?.outcome, 'narrowed');
   assert.deepEqual(ids(kept), ['cap_0', 'cap_2']);
-  const onlyRequired = select([0.01, 0.02], { preselect_policy: policy(1, 0.5), required_entry_ids: ['cap_0', 'cap_1'] });
+  const onlyRequired = select([0.01, 0.02], {
+    preselect_policy: policy(1, 0.5),
+    required_entry_ids: ['cap_0', 'cap_1'],
+  });
   assert.equal(onlyRequired.preselect?.reason, null);
   assert.equal(onlyRequired.preselect?.outcome, 'narrowed');
   assert.equal(onlyRequired.preselect?.top_p, null);
@@ -625,8 +840,12 @@ test('confident answers below .5 never empty a nonempty index, while mixed and e
   assert.equal(mixed.preselect?.outcome, 'narrowed');
   assert.deepEqual(ids(mixed), ['cap_0', 'cap_1', 'cap_2']);
 
-  const empty = transitionBooleanSite('loop.preselect', { ...input([]), catalogue_index: [] },
-    { state_revision: 1, observed_at: 10, outcome: null }, current);
+  const empty = transitionBooleanSite(
+    'loop.preselect',
+    { ...input([]), catalogue_index: [] },
+    { state_revision: 1, observed_at: 10, outcome: null },
+    current,
+  );
   assert.equal(empty.status, 'transition');
   assert.deepEqual(empty.catalogue_index, []);
   assert.equal(empty.preselect?.outcome, 'empty_index');
@@ -635,17 +854,32 @@ test('confident answers below .5 never empty a nonempty index, while mixed and e
 
 // #96 (branch sweep): no k, floor or margin setting turns a nonempty index into an empty slice.
 test('no preselect policy empties a nonempty index', () => {
-  const distributions = [[0.49], [0.49, 0.49], [0.3, 0.2, 0.1, 0.05], [0.45, 0.4, 0.35, 0.01, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0.49, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01]];
-  for (const probabilities of distributions) for (let k = 1; k <= 8; k++) for (const floor of [0, 0.25, 0.49, 0.5, 0.9]) {
-    for (const [max_excluded, min_margin] of [[0.4, 0.3], [0, 0], [1, 1]] as const) {
-      const result = select(probabilities, { preselect_policy: policy(k, floor, 'typesafe-jev', max_excluded, min_margin) });
-      const label = `k=${k} floor=${floor} margins=${max_excluded}/${min_margin} p=${probabilities.join(',')}`;
-      assert.equal(result.status, 'transition', label);
-      assert.ok(result.catalogue_index.length > 0, label);
-      assert.notEqual(result.preselect?.outcome, 'empty_index', label);
-      // A fallback returns the whole index; a narrowed slice holds at least one kept entry.
-      if (result.preselect?.outcome === 'fallback') assert.equal(result.catalogue_index.length, probabilities.length, label);
-    }
-  }
+  const distributions = [
+    [0.49],
+    [0.49, 0.49],
+    [0.3, 0.2, 0.1, 0.05],
+    [0.45, 0.4, 0.35, 0.01, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0.49, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01],
+  ];
+  for (const probabilities of distributions)
+    for (let k = 1; k <= 8; k++)
+      for (const floor of [0, 0.25, 0.49, 0.5, 0.9]) {
+        for (const [max_excluded, min_margin] of [
+          [0.4, 0.3],
+          [0, 0],
+          [1, 1],
+        ] as const) {
+          const result = select(probabilities, {
+            preselect_policy: policy(k, floor, 'typesafe-jev', max_excluded, min_margin),
+          });
+          const label = `k=${k} floor=${floor} margins=${max_excluded}/${min_margin} p=${probabilities.join(',')}`;
+          assert.equal(result.status, 'transition', label);
+          assert.ok(result.catalogue_index.length > 0, label);
+          assert.notEqual(result.preselect?.outcome, 'empty_index', label);
+          // A fallback returns the whole index; a narrowed slice holds at least one kept entry.
+          if (result.preselect?.outcome === 'fallback')
+            assert.equal(result.catalogue_index.length, probabilities.length, label);
+        }
+      }
 });

@@ -161,13 +161,13 @@ A revoked capability remains historically inspectable but cannot newly execute.
 M0-T19's strict replay failure for a missing result remains valid; recovery does
 not weaken that check by synthesizing a result or secretly invoking the host.
 
-| Interruption point | Required recovery behavior |
-| --- | --- |
-| Before durable start | No dispatch occurred. Re-form and authorize work from current state. |
-| After durable start, before known commit | Restore reservations; determine whether execution can still commit before retry. |
+| Interruption point                          | Required recovery behavior                                                                  |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Before durable start                        | No dispatch occurred. Re-form and authorize work from current state.                        |
+| After durable start, before known commit    | Restore reservations; determine whether execution can still commit before retry.            |
 | After commit, before durable runtime result | Resolve the original identity to its stored receipt; record it without another publication. |
-| After durable result | Reconstruct the confirmed outcome; do not invoke publication again. |
-| Lookup unavailable or unauthorized | Record uncertainty and the blocking reason; do not retry blindly. |
+| After durable result                        | Reconstruct the confirmed outcome; do not invoke publication again.                         |
+| Lookup unavailable or unauthorized          | Record uncertainty and the blocking reason; do not retry blindly.                           |
 
 Producing the report, publishing it and notifying a client are distinct outcomes.
 M1 completes on the recorded publication receipt. If a later client misses that
@@ -181,27 +181,27 @@ not sleeps or timing-dependent races. Restart checks construct a fresh runtime
 and host from durable stores; include process termination at the commit/result
 boundary to show that surviving in-memory objects are not the persistence proof.
 
-| ID | Scenario | Required evidence |
-| --- | --- | --- |
-| M1-T01 | Base report awaits approval, then receives an authenticated scoped approval | No publication before approval; one conditional write afterwards; receipt binds report and destination; completion follows durable receipt. |
-| M1-T02 | Denial, expiry, and a silent operator | No dispatch; explicit blocked or pending reason. Gamma stays prohibited without generating an approval request. |
-| M1-T03 | Untrusted input claims operator, host or runtime origin; model-like text claims approval | Recorded rejection cannot grant authority, confirm an effect or complete the goal. |
-| M1-T04 | Direct host invocation with forged, absent, copied or widened grant | Denial without resource access; another invocation cannot reuse authority; no resource existence leak. |
-| M1-T05 | Approved work waits for capacity, then approval is revoked or expires | No later dispatch, including after restart; current authority wins over persisted approval. |
-| M1-T06 | Report, destination, source revision, effect binding or permitted budget widens/changes beyond approved scope | Old approval cannot authorize the new binding; stale report cannot publish. |
-| M1-T07 | Two publications share a destination, including through aliases | Only one conflicting write runs; source reads also conflict with an authorized fixture source write using the same resource coordinator. Independent reads still overlap. |
+| ID     | Scenario                                                                                                                                   | Required evidence                                                                                                                                                                            |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1-T01 | Base report awaits approval, then receives an authenticated scoped approval                                                                | No publication before approval; one conditional write afterwards; receipt binds report and destination; completion follows durable receipt.                                                  |
+| M1-T02 | Denial, expiry, and a silent operator                                                                                                      | No dispatch; explicit blocked or pending reason. Gamma stays prohibited without generating an approval request.                                                                              |
+| M1-T03 | Untrusted input claims operator, host or runtime origin; model-like text claims approval                                                   | Recorded rejection cannot grant authority, confirm an effect or complete the goal.                                                                                                           |
+| M1-T04 | Direct host invocation with forged, absent, copied or widened grant                                                                        | Denial without resource access; another invocation cannot reuse authority; no resource existence leak.                                                                                       |
+| M1-T05 | Approved work waits for capacity, then approval is revoked or expires                                                                      | No later dispatch, including after restart; current authority wins over persisted approval.                                                                                                  |
+| M1-T06 | Report, destination, source revision, effect binding or permitted budget widens/changes beyond approved scope                              | Old approval cannot authorize the new binding; stale report cannot publish.                                                                                                                  |
+| M1-T07 | Two publications share a destination, including through aliases                                                                            | Only one conflicting write runs; source reads also conflict with an authorized fixture source write using the same resource coordinator. Independent reads still overlap.                    |
 | M1-T08 | Stale source/destination revision supplied at reservation or commit validation; authority revoked/expired after dispatch but before commit | No conditional write on stale revisions or invalid authority. Source updates respect held locks; changes or revocation ordered after commit retain the receipt and do not erase publication. |
-| M1-T09 | Concurrent work competes for the last budget unit | Reservations prevent overspend; failed/uncertain actions consume once; receipt replay consumes nothing further. |
-| M1-T10 | Cancel queued work, then release capacity | It never starts. Cancellation is ordered before draining the affected queue. |
-| M1-T11 | Cancel running publication before commit and after commit | Locks remain while effects are unresolved; confirmed stopped/no-effect work can release; late committed receipt is retained without claiming rollback or reviving cancelled work. |
-| M1-T12 | Host throws, rejects, disconnects or times out before/after possible commit | Outcomes are normalized; possible effects remain uncertain; no leaked unhandled failure or false success. |
-| M1-T13 | Crash at each §6 boundary | Fresh-process recovery preserves starts, reservations and receipts; one committed publication is never duplicated. |
-| M1-T14 | Commit succeeds, acknowledgement is lost, lookup is unavailable | Goal is not complete; uncertainty blocks conflicting work while unrelated work progresses. Recovery attempts are bounded. |
-| M1-T15 | Duplicate request with identical identity/binding; then changed binding | First returns the existing receipt without another effect; second is refused. |
-| M1-T16 | Execution slots are saturated | Cancellation, result integration and authority changes still progress; bounded reconciliation cannot deadlock behind the work it must settle. |
-| M1-T17 | Catalogue changes or implementation is revoked after recorded execution | Historical replay uses its original contract and makes zero host calls; fresh dispatch uses current authority/availability. Missing history fails explicitly. |
-| M1-T18 | Required start/result persistence fails | Failed start persistence prevents invocation; lost result persistence triggers reconciliation, never changes a committed effect into a safe-to-repeat failure. |
-| M1-T19 | Recovery is denied access or exhausts its allowance | No authority expansion or fresh budget; uncertainty and relevant reservations survive. |
+| M1-T09 | Concurrent work competes for the last budget unit                                                                                          | Reservations prevent overspend; failed/uncertain actions consume once; receipt replay consumes nothing further.                                                                              |
+| M1-T10 | Cancel queued work, then release capacity                                                                                                  | It never starts. Cancellation is ordered before draining the affected queue.                                                                                                                 |
+| M1-T11 | Cancel running publication before commit and after commit                                                                                  | Locks remain while effects are unresolved; confirmed stopped/no-effect work can release; late committed receipt is retained without claiming rollback or reviving cancelled work.            |
+| M1-T12 | Host throws, rejects, disconnects or times out before/after possible commit                                                                | Outcomes are normalized; possible effects remain uncertain; no leaked unhandled failure or false success.                                                                                    |
+| M1-T13 | Crash at each §6 boundary                                                                                                                  | Fresh-process recovery preserves starts, reservations and receipts; one committed publication is never duplicated.                                                                           |
+| M1-T14 | Commit succeeds, acknowledgement is lost, lookup is unavailable                                                                            | Goal is not complete; uncertainty blocks conflicting work while unrelated work progresses. Recovery attempts are bounded.                                                                    |
+| M1-T15 | Duplicate request with identical identity/binding; then changed binding                                                                    | First returns the existing receipt without another effect; second is refused.                                                                                                                |
+| M1-T16 | Execution slots are saturated                                                                                                              | Cancellation, result integration and authority changes still progress; bounded reconciliation cannot deadlock behind the work it must settle.                                                |
+| M1-T17 | Catalogue changes or implementation is revoked after recorded execution                                                                    | Historical replay uses its original contract and makes zero host calls; fresh dispatch uses current authority/availability. Missing history fails explicitly.                                |
+| M1-T18 | Required start/result persistence fails                                                                                                    | Failed start persistence prevents invocation; lost result persistence triggers reconciliation, never changes a committed effect into a safe-to-repeat failure.                               |
+| M1-T19 | Recovery is denied access or exhausts its allowance                                                                                        | No authority expansion or fresh budget; uncertainty and relevant reservations survive.                                                                                                       |
 
 The fixture source writer in T07/T08 is trusted test-environment activity subject
 to the same resource coordinator and revision transaction as publication. It

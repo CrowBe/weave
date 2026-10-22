@@ -56,10 +56,10 @@ export type NousPortalCatalogueVerdict = 'free' | 'priced' | 'absent' | 'malform
 
 export function nousPortalCatalogueVerdict(body: unknown, model: string): NousPortalCatalogueVerdict {
   if (!object(body) || !Array.isArray(body['data'])) return 'malformed';
-  const entries = body['data'].filter(entry => object(entry) && entry['id'] === model);
+  const entries = body['data'].filter((entry) => object(entry) && entry['id'] === model);
   if (entries.length === 0) return 'absent';
   // A duplicate listing must not let one zero-priced entry vouch for another.
-  return entries.every(entry => freePricing((entry as Record<string, unknown>)['pricing'])) ? 'free' : 'priced';
+  return entries.every((entry) => freePricing((entry as Record<string, unknown>)['pricing'])) ? 'free' : 'priced';
 }
 
 /** Override tiers carry these thresholds beside their prices; they are not prices. */
@@ -76,9 +76,15 @@ function freePricing(pricing: unknown): boolean {
   if (!object(pricing) || !Object.hasOwn(pricing, 'prompt') || !Object.hasOwn(pricing, 'completion')) return false;
   return Object.entries(pricing).every(([key, value]) => {
     if (key !== 'overrides') return zeroLeaves(value);
-    return Array.isArray(value) && value.every(tier => object(tier) &&
-      Object.keys(tier).some(field => !OVERRIDE_THRESHOLDS.has(field)) &&
-      Object.entries(tier).every(([field, price]) => OVERRIDE_THRESHOLDS.has(field) || zeroLeaves(price)));
+    return (
+      Array.isArray(value) &&
+      value.every(
+        (tier) =>
+          object(tier) &&
+          Object.keys(tier).some((field) => !OVERRIDE_THRESHOLDS.has(field)) &&
+          Object.entries(tier).every(([field, price]) => OVERRIDE_THRESHOLDS.has(field) || zeroLeaves(price)),
+      )
+    );
   });
 }
 
@@ -86,8 +92,9 @@ function zeroLeaves(value: unknown): boolean {
   if (object(value)) return Object.keys(value).length > 0 && Object.values(value).every(zeroLeaves);
   // A leading sign is anomalous and outside the unsigned price grammar;
   // fail closed: refusing can never meter a paid call as $0.
-  return value === 0 || (typeof value === 'string' &&
-    /^0+(\.0+)?([eE][+-]?[0-9]+)?$/.test(value) && Number(value) === 0);
+  return (
+    value === 0 || (typeof value === 'string' && /^0+(\.0+)?([eE][+-]?[0-9]+)?$/.test(value) && Number(value) === 0)
+  );
 }
 
 function object(value: unknown): value is Record<string, unknown> {

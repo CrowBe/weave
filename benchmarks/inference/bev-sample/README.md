@@ -47,15 +47,15 @@ expected level; our exact-decision scorer rounds it to the nearest ordinal
 The result pins the local adapter, pointer head, training-config hashes, and
 backbone revision in addition to the dataset hashes.
 
-| Cell | N | Decision exact (Score rounded) | First-option baseline |
-| --- | ---: | ---: | ---: |
-| Support choice | 4 | 2 | 3 |
-| Workflow choice | 4 | 3 | 1 |
-| Reading NOUL | 4 | 3 | 2 |
-| Workflow NOUL | 4 | 4 | 2 |
-| Retail invoice Score | 4 | 2 | 2 |
-| Movie sentiment Score | 4 | 3 | 0 |
-| **Total** | **24** | **17 (70.8%)** | **10 (41.7%)** |
+| Cell                  |      N | Decision exact (Score rounded) | First-option baseline |
+| --------------------- | -----: | -----------------------------: | --------------------: |
+| Support choice        |      4 |                              2 |                     3 |
+| Workflow choice       |      4 |                              3 |                     1 |
+| Reading NOUL          |      4 |                              3 |                     2 |
+| Workflow NOUL         |      4 |                              4 |                     2 |
+| Retail invoice Score  |      4 |                              2 |                     2 |
+| Movie sentiment Score |      4 |                              3 |                     0 |
+| **Total**             | **24** |                 **17 (70.8%)** |        **10 (41.7%)** |
 
 For Score alone, rounded exact accuracy was **5/8**, total ordinal absolute
 error was **3 levels**, and the continuous expected-level mean absolute error
@@ -90,15 +90,15 @@ With network access enabled, the
 12 responses reported the expected route and model identity, and each had one
 accepted attempt. The runner did not route directly to TypeSafe or retry.
 
-| Cell | N | Jev correct | Kev correct |
-| --- | ---: | ---: | ---: |
-| Support and intent routing / choice | 2 | 1 | 2 |
-| Tool and workflow decisions / choice | 2 | 2 | 1 |
-| Reading comprehension / NOUL | 2 | 2 | 2 |
-| Tool and workflow decisions / NOUL | 2 | 2 | 2 |
-| Retail invoice / Score | 2 | 2 | 1 |
-| Sentiment / Score | 2 | 2 | 2 |
-| **Total** | **12** | **11 (91.7%)** | **10 (83.3%)** |
+| Cell                                 |      N |    Jev correct |    Kev correct |
+| ------------------------------------ | -----: | -------------: | -------------: |
+| Support and intent routing / choice  |      2 |              1 |              2 |
+| Tool and workflow decisions / choice |      2 |              2 |              1 |
+| Reading comprehension / NOUL         |      2 |              2 |              2 |
+| Tool and workflow decisions / NOUL   |      2 |              2 |              2 |
+| Retail invoice / Score               |      2 |              2 |              1 |
+| Sentiment / Score                    |      2 |              2 |              2 |
+| **Total**                            | **12** | **11 (91.7%)** | **10 (83.3%)** |
 
 There were nine cases both models got right, two Jev-only, one Kev-only, and
 no cases both missed. Both invoice Score cases were correct for Jev; Kev got

@@ -137,11 +137,13 @@ describe('M6 slice assembly', () => {
     const requested = runtime
       .trace()
       .observations.find((observation) => observation.payload_type === 'inference.requested');
-    const reviewResult = runtime.trace().observations.find(
-      (observation) =>
-        observation.payload_type === 'action.result' &&
-        (observation.payload as { action_id: string }).action_id === review.action_id,
-    );
+    const reviewResult = runtime
+      .trace()
+      .observations.find(
+        (observation) =>
+          observation.payload_type === 'action.result' &&
+          (observation.payload as { action_id: string }).action_id === review.action_id,
+      );
     assert.ok(requested);
     assert.ok(reviewResult);
     const frameView = (requested.payload as InferenceRequestedPayload).view;
@@ -222,7 +224,9 @@ describe('M6 slice assembly', () => {
     await runtime.settle(frame.action_id);
     runtime.finishReview(review.action_id);
     for (let attempt = 0; attempt < 8; attempt += 1) {
-      const running = Object.values(runtime.state().actions).filter((action) => action.state === 'running' && action.operation === 'goal.frame');
+      const running = Object.values(runtime.state().actions).filter(
+        (action) => action.state === 'running' && action.operation === 'goal.frame',
+      );
       if (running.length === 0) {
         break;
       }
@@ -245,22 +249,26 @@ describe('M6 slice assembly', () => {
       );
     assert.ok(frameView);
     assert.ok(reviewResult);
-    const reviewOutput = (reviewResult.payload as { outcome: { output: { view: StateView; profile: string; grant: { grant_id: string } } } }).outcome.output;
+    const reviewOutput = (
+      reviewResult.payload as { outcome: { output: { view: StateView; profile: string; grant: { grant_id: string } } } }
+    ).outcome.output;
     assert.equal(assemblyId(frameView, 'goal'), assemblyId(reviewOutput.view, 'goal'));
     assert.equal(assemblyId(frameView, 'registered'), assemblyId(reviewOutput.view, 'registered'));
     assert.notEqual(assemblyId(frameView, 'catalogue_schema'), assemblyId(frameView, 'goal'));
-    const cycle = runtime.trace().cycles.find((item) => item.selected.some((selected) => selected.action_id === review.action_id));
+    const cycle = runtime
+      .trace()
+      .cycles.find((item) => item.selected.some((selected) => selected.action_id === review.action_id));
     assert.equal(cycle?.cost_micros, 1_000);
     const shared = assemblyId(frameView, 'goal');
-    assert.equal(
-      requested.filter((payload) => assemblyId(payload.view, 'goal') === shared).length,
-      1,
-    );
+    assert.equal(requested.filter((payload) => assemblyId(payload.view, 'goal') === shared).length, 1);
     assert.equal(runtime.state().strategy.profile_id, 'profile.frame@1');
     assert.equal(reviewOutput.profile, 'profile.frame.narrow@1');
     assert.equal(reviewOutput.grant.grant_id, 'forged');
     assert.equal(runtime.state().actions[review.action_id]?.grant, null);
-    assert.equal(runtime.trace().observations.filter((observation) => observation.payload_type === 'goal.opened').length, 1);
+    assert.equal(
+      runtime.trace().observations.filter((observation) => observation.payload_type === 'goal.opened').length,
+      1,
+    );
 
     const callsBefore = strong.calls + cheap.calls;
     const replayHost = new AgentFabricHost({ authority: createGrantAuthority() });

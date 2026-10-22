@@ -106,15 +106,14 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
   const evaluators = new Map((config.evaluators ?? []).map((a) => [a.id, a]));
   const trainingAllowed = trainingAllowedDestinations(config.routes);
   // Preserve destination-wide privacy when a decision binding narrows the table.
-  const routes: RouteTable = config.routes.map(unit => trainingAllowed.has(unit.destination)
-    ? { ...unit, destination_training_allowed: true } : unit);
+  const routes: RouteTable = config.routes.map((unit) =>
+    trainingAllowed.has(unit.destination) ? { ...unit, destination_training_allowed: true } : unit,
+  );
 
   for (const unit of config.routes) {
     const pool = unit.operation === 'generate' ? generators : evaluators;
     if (!pool.has(unit.adapter)) {
-      throw new Error(
-        `routed unit '${unit.routed_unit_id}' names unknown ${unit.operation} adapter '${unit.adapter}'`,
-      );
+      throw new Error(`routed unit '${unit.routed_unit_id}' names unknown ${unit.operation} adapter '${unit.adapter}'`);
     }
   }
   const minEvidence = config.min_evidence_attempts ?? DEFAULT_MIN_EVIDENCE_ATTEMPTS;
@@ -127,51 +126,53 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
     async generate(request: GenerationRequest, signal?: AbortSignal): Promise<GenerationOutcome> {
       const accept = request.accept ?? nonEmptyText;
 
-      const bounded = await traced(weft, request.request_id, (trace) => runBounded<GenerationValue>({
-        weft: trace,
-        clock: config.clock,
-        timer: config.timer,
-        signal,
-        pacing,
-        routes,
-        availability: config.availability,
-        quota: config.quota,
-        persist_pause: config.persist_pause,
-        request_id: request.request_id,
-        site: request.site,
-        minEvidence,
-        target: { operation: 'generate', kind: request.kind },
-        terms: request.terms,
-        invalid: invalidGeneration(request),
-        containsCredentials: containsCredentialContent(request.input),
-        settle_on_abort: unit => generators.get(unit.adapter)?.settle_on_abort === true,
-        attempt: async (unit, attemptSignal) => {
-          const adapter = generators.get(unit.adapter);
-          if (adapter === undefined) return missingAdapter(unit);
+      const bounded = await traced(weft, request.request_id, (trace) =>
+        runBounded<GenerationValue>({
+          weft: trace,
+          clock: config.clock,
+          timer: config.timer,
+          signal,
+          pacing,
+          routes,
+          availability: config.availability,
+          quota: config.quota,
+          persist_pause: config.persist_pause,
+          request_id: request.request_id,
+          site: request.site,
+          minEvidence,
+          target: { operation: 'generate', kind: request.kind },
+          terms: request.terms,
+          invalid: invalidGeneration(request),
+          containsCredentials: containsCredentialContent(request.input),
+          settle_on_abort: (unit) => generators.get(unit.adapter)?.settle_on_abort === true,
+          attempt: async (unit, attemptSignal) => {
+            const adapter = generators.get(unit.adapter);
+            if (adapter === undefined) return missingAdapter(unit);
 
-          const result = await adapter.execute({
-            model: unit.model,
-            instructions: request.input.instructions,
-            prompt: request.input.prompt,
-            settings: unit.settings,
-            signal: attemptSignal,
-          });
-          if (result.status === 'failed') return failedAttempt(result.failure, result.usage);
+            const result = await adapter.execute({
+              model: unit.model,
+              instructions: request.input.instructions,
+              prompt: request.input.prompt,
+              settings: unit.settings,
+              signal: attemptSignal,
+            });
+            if (result.status === 'failed') return failedAttempt(result.failure, result.usage);
 
-          const verdict = accept(result.text);
-          return {
-            usage: result.usage,
-            disposition:
-              verdict.status === 'accepted'
-                ? {
-                    status: 'accepted',
-                    value: { text: result.text },
-                    provider_response_id: result.provider_response_id,
-                  }
-                : { status: 'unaccepted', reason: verdict.reason },
-          };
-        },
-      }));
+            const verdict = accept(result.text);
+            return {
+              usage: result.usage,
+              disposition:
+                verdict.status === 'accepted'
+                  ? {
+                      status: 'accepted',
+                      value: { text: result.text },
+                      provider_response_id: result.provider_response_id,
+                    }
+                  : { status: 'unaccepted', reason: verdict.reason },
+            };
+          },
+        }),
+      );
 
       const base = outcomeBase(request.request_id, request.site, bounded);
       return bounded.settled.status === 'accepted'
@@ -192,77 +193,92 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
       const accept = request.accept;
       const binding = config.decision ? bindDecisionProvider(config.decision, request.site) : undefined;
 
-      const bounded = await traced(weft, request.request_id, (trace) => runBounded<EvaluationValue>({
-        weft: trace,
-        clock: config.clock,
-        timer: config.timer,
-        signal,
-        pacing,
-        routes: binding ? routes.filter(u => u.operation === 'evaluate' && u.adapter === binding.adapter && u.model === binding.model) : routes,
-        availability: config.availability,
-        quota: config.quota,
-        persist_pause: config.persist_pause,
-        request_id: request.request_id,
-        site: request.site,
-        minEvidence,
-        target: { operation: 'evaluate', kind: request.kind },
-        terms: request.terms,
-        invalid: invalidEvaluation(request),
-        containsCredentials: containsCredentialContent([request.state, request.questions]),
-        attempt: async (unit, attemptSignal) => {
-          const adapter = evaluators.get(unit.adapter);
-          if (adapter === undefined) return missingAdapter(unit);
+      const bounded = await traced(weft, request.request_id, (trace) =>
+        runBounded<EvaluationValue>({
+          weft: trace,
+          clock: config.clock,
+          timer: config.timer,
+          signal,
+          pacing,
+          routes: binding
+            ? routes.filter(
+                (u) => u.operation === 'evaluate' && u.adapter === binding.adapter && u.model === binding.model,
+              )
+            : routes,
+          availability: config.availability,
+          quota: config.quota,
+          persist_pause: config.persist_pause,
+          request_id: request.request_id,
+          site: request.site,
+          minEvidence,
+          target: { operation: 'evaluate', kind: request.kind },
+          terms: request.terms,
+          invalid: invalidEvaluation(request),
+          containsCredentials: containsCredentialContent([request.state, request.questions]),
+          attempt: async (unit, attemptSignal) => {
+            const adapter = evaluators.get(unit.adapter);
+            if (adapter === undefined) return missingAdapter(unit);
 
-          const result = await adapter.evaluate({
-            model: unit.model,
-            kind: request.kind,
-            state: request.state,
-            questions: request.questions,
-            signal: attemptSignal,
-          });
-          if (result.status === 'failed') return {
-            ...failedAttempt(result.failure),
-            ...(result.provider_response_id === undefined ? {} : { provider_response_id: result.provider_response_id }),
-          };
-          const provenance = {
-            ...(result.resolved_model_id === undefined ? {} : { resolved_model_id: result.resolved_model_id }),
-            ...(result.provider_response_id === undefined ? {} : { provider_response_id: result.provider_response_id }),
-          };
+            const result = await adapter.evaluate({
+              model: unit.model,
+              kind: request.kind,
+              state: request.state,
+              questions: request.questions,
+              signal: attemptSignal,
+            });
+            if (result.status === 'failed')
+              return {
+                ...failedAttempt(result.failure),
+                ...(result.provider_response_id === undefined
+                  ? {}
+                  : { provider_response_id: result.provider_response_id }),
+              };
+            const provenance = {
+              ...(result.resolved_model_id === undefined ? {} : { resolved_model_id: result.resolved_model_id }),
+              ...(result.provider_response_id === undefined
+                ? {}
+                : { provider_response_id: result.provider_response_id }),
+            };
 
-          // Structural first: an answer set that does not match the questions
-          // is a malformed response, and the caller's bar never sees it.
-          const structural = answersMatchQuestions(request.kind, request.questions, result.answers);
-          if (structural.status === 'rejected') {
+            // Structural first: an answer set that does not match the questions
+            // is a malformed response, and the caller's bar never sees it.
+            const structural = answersMatchQuestions(request.kind, request.questions, result.answers);
+            if (structural.status === 'rejected') {
+              return {
+                ...provenance,
+                usage: result.usage,
+                disposition: { status: 'unaccepted', reason: structural.reason },
+              };
+            }
+
+            // Narrowed by `answersMatchQuestions`: every answer carries `kind`.
+            const answers = result.answers as EvaluationAnswers<K>;
+            const verdict = accept?.(answers) ?? { status: 'accepted' as const };
             return {
               ...provenance,
               usage: result.usage,
-              disposition: { status: 'unaccepted', reason: structural.reason },
+              disposition:
+                verdict.status === 'accepted'
+                  ? {
+                      status: 'accepted',
+                      value: { answers, confidence: result.confidence, ...provenance },
+                      provider_response_id: result.provider_response_id,
+                    }
+                  : { status: 'unaccepted', reason: verdict.reason },
             };
-          }
-
-          // Narrowed by `answersMatchQuestions`: every answer carries `kind`.
-          const answers = result.answers as EvaluationAnswers<K>;
-          const verdict = accept?.(answers) ?? { status: 'accepted' as const };
-          return {
-            ...provenance,
-            usage: result.usage,
-            disposition:
-              verdict.status === 'accepted'
-                ? {
-                    status: 'accepted',
-                    value: { answers, confidence: result.confidence, ...provenance },
-                    provider_response_id: result.provider_response_id,
-                  }
-                : { status: 'unaccepted', reason: verdict.reason },
-          };
-        },
-      }));
+          },
+        }),
+      );
 
       const base = outcomeBase(request.request_id, request.site, bounded);
-      if (binding?.provider === 'amos' && !signal?.aborted &&
-          bounded.settled.status === 'unaccepted' && bounded.settled.reason !== 'deadline_reached' &&
-          bounded.attempts.length > 0 && bounded.attempts.every(a =>
-            a.disposition.status === 'failed' && a.disposition.failure.code === 'unavailable')) {
+      if (
+        binding?.provider === 'amos' &&
+        !signal?.aborted &&
+        bounded.settled.status === 'unaccepted' &&
+        bounded.settled.reason !== 'deadline_reached' &&
+        bounded.attempts.length > 0 &&
+        bounded.attempts.every((a) => a.disposition.status === 'failed' && a.disposition.failure.code === 'unavailable')
+      ) {
         return { ...base, status: 'blocked', reason: 'provider_unavailable' };
       }
       return bounded.settled.status === 'accepted'
@@ -270,7 +286,9 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
             ...base,
             status: 'accepted',
             kind: request.kind,
-            ...(bounded.settled.value.resolved_model_id === undefined ? {} : { resolved_model_id: bounded.settled.value.resolved_model_id }),
+            ...(bounded.settled.value.resolved_model_id === undefined
+              ? {}
+              : { resolved_model_id: bounded.settled.value.resolved_model_id }),
             answers: bounded.settled.value.answers as EvaluationAnswers<K>,
             confidence: bounded.settled.value.confidence,
             routed_unit_id: bounded.settled.routed_unit_id,
@@ -391,28 +409,53 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
     }
     if (params.signal?.aborted) return finish({ status: 'unaccepted', reason: 'provider_failed' });
     if (clock.now() >= terms.deadline) {
-      return finish(attempts.length ? { status: 'unaccepted', reason: 'deadline_reached' } : { status: 'blocked', reason: 'deadline_passed' });
+      return finish(
+        attempts.length
+          ? { status: 'unaccepted', reason: 'deadline_reached' }
+          : { status: 'blocked', reason: 'deadline_passed' },
+      );
     }
     const snapshot = await readQuota(params);
-    const decision = budgetRoute(params.routes, params.target, terms, params.minEvidence,
-      params.availability, snapshot, clock.now(), params.containsCredentials);
+    const decision = budgetRoute(
+      params.routes,
+      params.target,
+      terms,
+      params.minEvidence,
+      params.availability,
+      snapshot,
+      clock.now(),
+      params.containsCredentials,
+    );
     for (const note of decision.uncertainty) if (!uncertainty.includes(note)) uncertainty.push(note);
     if (params.signal?.aborted) return finish({ status: 'unaccepted', reason: 'provider_failed' });
     if (clock.now() >= terms.deadline) {
-      return finish(attempts.length ? { status: 'unaccepted', reason: 'deadline_reached' } : { status: 'blocked', reason: 'deadline_passed' });
+      return finish(
+        attempts.length
+          ? { status: 'unaccepted', reason: 'deadline_reached' }
+          : { status: 'blocked', reason: 'deadline_passed' },
+      );
     }
     if (decision.order.length === 0) {
       if (decision.pause) {
-        const paused: LoopPausedRecord = { type: 'loop.paused', policy: 'budget.policy@1',
-          request_id: params.request_id, site: params.site, ...decision.pause };
+        const paused: LoopPausedRecord = {
+          type: 'loop.paused',
+          policy: 'budget.policy@1',
+          request_id: params.request_id,
+          site: params.site,
+          ...decision.pause,
+        };
         await params.persist_pause?.(paused);
         return { ...finish({ status: 'blocked', reason: paused.reason }), paused };
       }
       return finish({ status: 'blocked', reason: blockedRoutingReason(decision.excluded) });
     }
     lastOrder = decision.order;
-    const unit = decision.order.find(u => !exhausted.has(u.routed_unit_id) &&
-      (consumed.get(u.routed_unit_id) ?? 0) < perRoute && spent + worstCaseCost(u, terms) <= terms.cost_ceiling);
+    const unit = decision.order.find(
+      (u) =>
+        !exhausted.has(u.routed_unit_id) &&
+        (consumed.get(u.routed_unit_id) ?? 0) < perRoute &&
+        spent + worstCaseCost(u, terms) <= terms.cost_ceiling,
+    );
     if (!unit) break;
 
     // A paced limit holds the request until it fits. The wait spends deadline,
@@ -428,11 +471,13 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
         waitedMs += Math.max(0, clock.now() - before);
         continue;
       }
-      uncertainty.push(!Number.isFinite(pace)
-        ? `${unit.routed_unit_id}: pacing cannot fit the worst-case tokens in a paced budget; sent without waiting`
-        : params.timer === undefined
-          ? `${unit.routed_unit_id}: pacing wait of ${Math.round(pace)}ms indicated but no timer is configured; sent without waiting`
-          : `${unit.routed_unit_id}: pacing wait of ${Math.round(pace)}ms would pass the deadline; sent without waiting`);
+      uncertainty.push(
+        !Number.isFinite(pace)
+          ? `${unit.routed_unit_id}: pacing cannot fit the worst-case tokens in a paced budget; sent without waiting`
+          : params.timer === undefined
+            ? `${unit.routed_unit_id}: pacing wait of ${Math.round(pace)}ms indicated but no timer is configured; sent without waiting`
+            : `${unit.routed_unit_id}: pacing wait of ${Math.round(pace)}ms would pass the deadline; sent without waiting`,
+      );
     }
     const paced = reservePace(params.pacing, unit, terms, clock.now());
     const worstCase = worstCaseCost(unit, terms);
@@ -452,7 +497,12 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
       uncertainty.push(
         `attempt ${attempts.length + 1} on ${unit.routed_unit_id}: usage unreported, charged worst case`,
       );
-    } else if (priceAttempt(unit, terms, { input_tokens: result.usage.input_tokens ?? 0, output_tokens: result.usage.output_tokens ?? 0 }).cache_ignored) {
+    } else if (
+      priceAttempt(unit, terms, {
+        input_tokens: result.usage.input_tokens ?? 0,
+        output_tokens: result.usage.output_tokens ?? 0,
+      }).cache_ignored
+    ) {
       uncertainty.push(
         `attempt ${attempts.length + 1} on ${unit.routed_unit_id}: prefix cache ignored, cached tokens exceed the input`,
       );
@@ -559,10 +609,14 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
 async function readQuota<T>(params: BoundedParams<T>): Promise<QuotaSnapshot | undefined> {
   const quota = params.quota;
   if (quota === undefined) return undefined;
-  const read = Promise.resolve().then(() => quota.read()).catch(() => undefined);
+  const read = Promise.resolve()
+    .then(() => quota.read())
+    .catch(() => undefined);
   const watcher = new AbortController();
   let stop!: () => void;
-  const stopped = new Promise<undefined>(resolve => { stop = () => resolve(undefined); });
+  const stopped = new Promise<undefined>((resolve) => {
+    stop = () => resolve(undefined);
+  });
   params.signal?.addEventListener('abort', stop, { once: true });
   if (params.signal?.aborted) stop();
   const deadline = async (timer: Timer) => {
@@ -571,7 +625,10 @@ async function readQuota<T>(params: BoundedParams<T>): Promise<QuotaSnapshot | u
       await Promise.race([read, Promise.resolve()]);
       while (!watcher.signal.aborted) {
         const remaining = params.terms.deadline - params.clock.now();
-        if (remaining <= 0) { stop(); return; }
+        if (remaining <= 0) {
+          stop();
+          return;
+        }
         await timer.sleep(Math.min(remaining, 2 ** 31 - 1), watcher.signal);
       }
     } catch {
@@ -588,16 +645,15 @@ async function readQuota<T>(params: BoundedParams<T>): Promise<QuotaSnapshot | u
 }
 
 /** Each attempt owns its cancellation state; no timer or signal crosses calls. */
-async function attemptBeforeDeadline<T>(
-  params: BoundedParams<T>,
-  unit: RoutedUnit,
-): Promise<AttemptResult<T>> {
+async function attemptBeforeDeadline<T>(params: BoundedParams<T>, unit: RoutedUnit): Promise<AttemptResult<T>> {
   if (params.timer === undefined) return params.attempt(unit, params.signal);
 
   const provider = new AbortController();
   const watcher = new AbortController();
   let interrupt!: (result: AttemptResult<T>) => void;
-  const interrupted = new Promise<AttemptResult<T>>(resolve => { interrupt = resolve; });
+  const interrupted = new Promise<AttemptResult<T>>((resolve) => {
+    interrupt = resolve;
+  });
   const cancel = () => {
     watcher.abort();
     provider.abort();
@@ -615,7 +671,13 @@ async function attemptBeforeDeadline<T>(
         const remaining = params.terms.deadline - params.clock.now();
         if (remaining <= 0) {
           provider.abort();
-          interrupt(failedAttempt({ code: 'timeout', message: 'provider attempt exceeded the request deadline', retryable: false }));
+          interrupt(
+            failedAttempt({
+              code: 'timeout',
+              message: 'provider attempt exceeded the request deadline',
+              retryable: false,
+            }),
+          );
           return;
         }
         // Native timer delays are signed 32-bit milliseconds. A wake is only
@@ -632,7 +694,10 @@ async function attemptBeforeDeadline<T>(
     const attempt = params.attempt(unit, provider.signal);
     // Observe late failures without exposing provider errors or changing the race.
     void attempt.catch(() => {});
-    void attempt.then(() => watcher.abort(), () => watcher.abort());
+    void attempt.then(
+      () => watcher.abort(),
+      () => watcher.abort(),
+    );
     // The watcher catches its own failures, including cancellation during cleanup.
     void deadline(attempt);
     const result = await Promise.race([attempt, interrupted]);
@@ -643,8 +708,14 @@ async function attemptBeforeDeadline<T>(
       const grace = new AbortController();
       try {
         const usage = await Promise.race([
-          attempt.then(settled => settled.usage, () => failure.usage),
-          params.timer.sleep(100, grace.signal).then(() => failure.usage, () => failure.usage),
+          attempt.then(
+            (settled) => settled.usage,
+            () => failure.usage,
+          ),
+          params.timer.sleep(100, grace.signal).then(
+            () => failure.usage,
+            () => failure.usage,
+          ),
         ]);
         return { ...failure, usage };
       } finally {
@@ -662,7 +733,14 @@ function outcomeBase(
   request_id: string,
   site: string,
   bounded: Bounded<unknown>,
-): { request_id: string; site: string; attempts: readonly AttemptRecord[]; spent: Micros; uncertainty: readonly string[]; paused?: LoopPausedRecord } {
+): {
+  request_id: string;
+  site: string;
+  attempts: readonly AttemptRecord[];
+  spent: Micros;
+  uncertainty: readonly string[];
+  paused?: LoopPausedRecord;
+} {
   return {
     request_id,
     site,
@@ -673,7 +751,10 @@ function outcomeBase(
   };
 }
 
-function failedAttempt<T>(failure: ProviderFailure, usage: ProviderUsage = { input_tokens: undefined, output_tokens: undefined }): AttemptResult<T> {
+function failedAttempt<T>(
+  failure: ProviderFailure,
+  usage: ProviderUsage = { input_tokens: undefined, output_tokens: undefined },
+): AttemptResult<T> {
   return {
     usage,
     disposition: { status: 'failed', failure },
@@ -695,7 +776,8 @@ function missingAdapter<T>(unit: RoutedUnit): AttemptResult<T> {
 // ---------------------------------------------------------------------------
 
 function invalidTerms(terms: InferenceTerms): string | null {
-  if (terms.content_class !== undefined && !CONTENT_CLASSES.includes(terms.content_class)) return 'terms.content_class must be a known content class';
+  if (terms.content_class !== undefined && !CONTENT_CLASSES.includes(terms.content_class))
+    return 'terms.content_class must be a known content class';
   if (terms.audit !== undefined && typeof terms.audit !== 'boolean') return 'terms.audit must be boolean';
   if (terms.audit && terms.tier !== 'strong') return 'audit requires strong tier';
   if (terms.tier !== undefined && !TIERS.includes(terms.tier)) return 'terms.tier must be a known tier';
@@ -757,11 +839,7 @@ function invalidEvaluation<K extends EvaluationKind>(request: EvaluationRequest<
  * idiom — and the gateway may not let that escape as a thrown `generate`: an
  * unroutable, refused or abandoned request has an outcome, never an exception.
  */
-async function sleepInterrupted(
-  timer: Timer,
-  ms: number,
-  signal: AbortSignal | undefined,
-): Promise<boolean> {
+async function sleepInterrupted(timer: Timer, ms: number, signal: AbortSignal | undefined): Promise<boolean> {
   try {
     await timer.sleep(ms, signal);
   } catch {
@@ -774,13 +852,13 @@ async function sleepInterrupted(
 type PaceHistory = Map<RoutedUnitId, { readonly at: Timestamp; tokens: number }[]>;
 
 function pacedLimits(unit: RoutedUnit): readonly RateLimit[] {
-  return (unit.rate_limits ?? []).filter(limit => limit.pace === true);
+  return (unit.rate_limits ?? []).filter((limit) => limit.pace === true);
 }
 
 /** Started requests still inside the unit's longest paced window. */
 function recentStarts(history: PaceHistory, unit: RoutedUnit, limits: readonly RateLimit[], now: Timestamp) {
-  const window = Math.max(...limits.map(limit => limit.window_ms));
-  const kept = (history.get(unit.routed_unit_id) ?? []).filter(start => start.at > now - window);
+  const window = Math.max(...limits.map((limit) => limit.window_ms));
+  const kept = (history.get(unit.routed_unit_id) ?? []).filter((start) => start.at > now - window);
   history.set(unit.routed_unit_id, kept);
   return kept;
 }
@@ -866,8 +944,10 @@ function cheapestWorstCase(order: readonly RoutedUnit[], terms: InferenceTerms):
  * so an unaffordable requested tier still reports `no_budget`.
  */
 function blockedRoutingReason(excluded: readonly RouteExclusion[]): BlockedReason {
-  const considered = excluded.filter((e) =>
-    e.reason !== 'kind_mismatch' && e.reason !== 'operation_mismatch' && e.reason !== 'tier_mismatch');
-  if (considered.length > 0 && considered.every(e => e.reason === 'provider_unavailable')) return 'provider_unavailable';
+  const considered = excluded.filter(
+    (e) => e.reason !== 'kind_mismatch' && e.reason !== 'operation_mismatch' && e.reason !== 'tier_mismatch',
+  );
+  if (considered.length > 0 && considered.every((e) => e.reason === 'provider_unavailable'))
+    return 'provider_unavailable';
   return considered.length > 0 && considered.every((e) => e.reason === 'unaffordable') ? 'no_budget' : 'no_route';
 }

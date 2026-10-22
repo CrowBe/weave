@@ -97,7 +97,11 @@ const outcome = await gateway.generate(request);
 function describe(attempt: (typeof outcome.attempts)[number]): string {
   const d = attempt.disposition;
   const detail =
-    d.status === 'failed' ? `${d.status} (${d.failure.code})` : d.status === 'unaccepted' ? `${d.status} (${d.reason})` : d.status;
+    d.status === 'failed'
+      ? `${d.status} (${d.failure.code})`
+      : d.status === 'unaccepted'
+        ? `${d.status} (${d.reason})`
+        : d.status;
   return `  ${attempt.attempt}. ${attempt.model} -> ${detail}, ${attempt.cost.toFixed(0)} micros`;
 }
 

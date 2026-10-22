@@ -87,7 +87,10 @@ export function flakyWeigher(canary = ''): EvaluationAdapter & { readonly calls:
     async evaluate(call): Promise<EvaluationProviderResult> {
       calls.push(call);
       if (calls.length === 1) {
-        return { status: 'failed', failure: { code: 'unavailable', message: `provider overloaded ${canary}`, retryable: true } };
+        return {
+          status: 'failed',
+          failure: { code: 'unavailable', message: `provider overloaded ${canary}`, retryable: true },
+        };
       }
       return scoreAnswers(Object.fromEntries(Object.keys(call.questions).map((id) => [id, 2])));
     },
@@ -216,7 +219,9 @@ export async function runW5(world: W5World): Promise<{ readonly cancelled: strin
   await settleAsync(world);
   const queued = Object.values(world.runtime.state().actions).filter((action) => action.state === 'pending');
   if (queued.length !== 1 || running(world).length !== 2) {
-    throw new Error(`expected two running inspections and one queued, got ${stableStringify(world.runtime.state().actions)}`);
+    throw new Error(
+      `expected two running inspections and one queued, got ${stableStringify(world.runtime.state().actions)}`,
+    );
   }
   const cancelled = (queued[0] as { action_id: string }).action_id;
   world.runtime.cancel(cancelled, 'operator cancel');

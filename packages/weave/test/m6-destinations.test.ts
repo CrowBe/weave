@@ -6,7 +6,12 @@
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { createInferenceGateway, type GenerationAdapter, type GenerationProviderResult, type RoutedUnit } from '@weave/gateway';
+import {
+  createInferenceGateway,
+  type GenerationAdapter,
+  type GenerationProviderResult,
+  type RoutedUnit,
+} from '@weave/gateway';
 import {
   Runtime,
   type DecisionLayer,
@@ -83,7 +88,9 @@ function goal(source: string): Goal {
   });
 }
 
-async function frame(source: string): Promise<{ requested: InferenceRequestedPayload; recorded: InferenceRecordedPayload }> {
+async function frame(
+  source: string,
+): Promise<{ requested: InferenceRequestedPayload; recorded: InferenceRecordedPayload }> {
   const strong = adapter('route.strong');
   const cheap = adapter('route.cheap');
   let now = 1;

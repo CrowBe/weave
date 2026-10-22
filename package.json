@@ -1,14 +1,10 @@
 {
   "name": "weave-workspace",
   "private": true,
-  "type": "module",
   "workspaces": [
     "packages/*"
   ],
-  "engines": {
-    "node": ">=22.18.0",
-    "npm": ">=10"
-  },
+  "type": "module",
   "scripts": {
     "build": "tsc -b",
     "test": "npm run build && node --test \"packages/*/dist/test/**/*.test.js\"",
@@ -61,5 +57,9 @@
   },
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@1.2.0"
+  },
+  "engines": {
+    "node": ">=22.18.0",
+    "npm": ">=10"
   }
 }

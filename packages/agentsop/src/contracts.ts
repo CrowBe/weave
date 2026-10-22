@@ -64,7 +64,11 @@ export function bindSelectors(selectors: readonly EffectSelector[], inputs: unkn
     const value = record[selector.input];
     if (typeof value === 'string') {
       if (!isWellFormedRef(value)) {
-        return { ok: false, code: 'INVALID_REF', reason: `input '${selector.input}' is not a well-formed resource reference` };
+        return {
+          ok: false,
+          code: 'INVALID_REF',
+          reason: `input '${selector.input}' is not a well-formed resource reference`,
+        };
       }
       bound.push({ resource: value, mode: selector.mode });
       continue;
@@ -86,7 +90,11 @@ export function bindSelectors(selectors: readonly EffectSelector[], inputs: unkn
           };
         }
         if (!isWellFormedRef(item)) {
-          return { ok: false, code: 'INVALID_REF', reason: `input '${selector.input}' contains a malformed resource reference` };
+          return {
+            ok: false,
+            code: 'INVALID_REF',
+            reason: `input '${selector.input}' contains a malformed resource reference`,
+          };
         }
         bound.push({ resource: item, mode: selector.mode });
       }

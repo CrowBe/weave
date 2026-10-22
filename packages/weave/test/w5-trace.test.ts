@@ -86,7 +86,12 @@ describe('W5 causal trace', () => {
       assert.equal(record.fields['state_revision'], cycle.state_revision);
       assert.equal(record.fields['procedure'], cycle.procedure);
       assert.equal(record.fields['weights_ref'], cycle.weights_ref === null ? null : `seq:${cycle.weights_ref}`);
-      const candidates = record.fields['candidates'] as { candidate_ref: string; disposition: string; weight: number | null; eligibility: string }[];
+      const candidates = record.fields['candidates'] as {
+        candidate_ref: string;
+        disposition: string;
+        weight: number | null;
+        eligibility: string;
+      }[];
       assert.equal(candidates.length, cycle.candidates.length);
       cycle.candidates.forEach((candidate, index) => {
         const emitted = candidates[index]!;
@@ -106,7 +111,9 @@ describe('W5 causal trace', () => {
         assert.equal(emitted.weight, candidate.eligibility.status === 'allowed' ? candidate.weight : null);
       });
       for (const sel of cycle.selected) {
-        const opened = loom.find((r) => r.kind === 'thread.transition' && r.thread_id === sel.action_id && r.fields['transition'] === 'opened');
+        const opened = loom.find(
+          (r) => r.kind === 'thread.transition' && r.thread_id === sel.action_id && r.fields['transition'] === 'opened',
+        );
         assert.ok(opened, `no opened thread for ${sel.action_id}`);
         assert.equal(opened.parent_id, record.record_id, `${sel.action_id} is not a child of cycle ${cycle.cycle_no}`);
       }
@@ -121,17 +128,23 @@ describe('W5 causal trace', () => {
         (o) => (o.payload as ActionStartedPayload).action_id,
       ),
     );
-    const opened = new Set(loom.filter((r) => r.kind === 'thread.transition' && r.fields['transition'] === 'opened').map((r) => r.thread_id));
+    const opened = new Set(
+      loom.filter((r) => r.kind === 'thread.transition' && r.fields['transition'] === 'opened').map((r) => r.thread_id),
+    );
     assert.deepEqual([...opened].sort(), [...dispatched].sort());
     for (const result of accepted(observations, 'action.result')) {
       const payload = result.payload as ActionResultPayload;
       const action = loom.find(
-        (r) => r.kind === 'action.transition' && r.thread_id === payload.action_id && r.fields['state'] === payload.outcome.outcome,
+        (r) =>
+          r.kind === 'action.transition' &&
+          r.thread_id === payload.action_id &&
+          r.fields['state'] === payload.outcome.outcome,
       );
       assert.ok(action, `no ${payload.outcome.outcome} transition for ${payload.action_id}`);
       assert.deepEqual(action.evidence[0], { source: 'observation', ref: `seq:${result.seq}` });
       const closed = loom.find(
-        (r) => r.kind === 'thread.transition' && r.thread_id === payload.action_id && r.fields['transition'] === 'closed',
+        (r) =>
+          r.kind === 'thread.transition' && r.thread_id === payload.action_id && r.fields['transition'] === 'closed',
       );
       assert.ok(closed, `thread ${payload.action_id} not closed`);
       assert.deepEqual(closed.links, [{ rel: 'caused_by', record_id: action.record_id }]);
@@ -143,9 +156,14 @@ describe('W5 causal trace', () => {
       .sort()
       .slice(0, 2);
     const seqOf = (thread: string, transition: string) =>
-      loom.find((r) => r.kind === 'thread.transition' && r.thread_id === thread && r.fields['transition'] === transition)!.sequence;
+      loom.find(
+        (r) => r.kind === 'thread.transition' && r.thread_id === thread && r.fields['transition'] === transition,
+      )!.sequence;
     const [a, b] = firstInspections as [string, string];
-    assert.ok(seqOf(a, 'opened') < seqOf(b, 'closed') && seqOf(b, 'opened') < seqOf(a, 'closed'), 'inspections did not overlap');
+    assert.ok(
+      seqOf(a, 'opened') < seqOf(b, 'closed') && seqOf(b, 'opened') < seqOf(a, 'closed'),
+      'inspections did not overlap',
+    );
   });
 
   it('W5-T05 cancellation and supersession are explicit links', async () => {
@@ -159,10 +177,14 @@ describe('W5 causal trace', () => {
     const cancelObservation = accepted(world.runtime.trace().observations, 'action.cancel_requested')[0]!;
     assert.deepEqual(cancelled.evidence, [{ source: 'observation', ref: `seq:${cancelObservation.seq}` }]);
     assert.ok(
-      loom.some((r) => r.kind === 'action.transition' && r.thread_id === run.cancelled && r.fields['state'] === 'cancelled'),
+      loom.some(
+        (r) => r.kind === 'action.transition' && r.thread_id === run.cancelled && r.fields['state'] === 'cancelled',
+      ),
     );
     const superseded = loom.find((r) => r.thread_id === run.cancelled && r.fields['transition'] === 'superseded')!;
-    assert.deepEqual(superseded.links, [{ rel: 'supersedes', record_id: `loom.main:thread:${run.superseding}:opened` }]);
+    assert.deepEqual(superseded.links, [
+      { rel: 'supersedes', record_id: `loom.main:thread:${run.superseding}:opened` },
+    ]);
     assert.equal(state.actions[run.superseding]?.candidate_id, state.actions[run.cancelled]?.candidate_id);
   });
 
@@ -180,7 +202,9 @@ describe('W5 causal trace', () => {
       payload: { action_id: queued.action_id, reason: 'operator cancel, repeated' },
     });
     assert.equal(again.validation.status, 'accepted');
-    const cancels = loom.records.filter((r) => r.thread_id === queued.action_id && r.fields['transition'] === 'cancelled');
+    const cancels = loom.records.filter(
+      (r) => r.thread_id === queued.action_id && r.fields['transition'] === 'cancelled',
+    );
     assert.equal(cancels.length, 2);
     byId(loom.records);
   });
@@ -234,11 +258,18 @@ describe('W5 causal trace', () => {
     const invocations = world.host.invocations;
     assert.ok(invocations.length >= 4);
     for (const invocation of invocations) {
-      const selected = fabric.find((r) => r.kind === 'capability.lifecycle' && r.fields['event'] === 'selected' && r.evidence[0]?.ref === invocation.invocation_id)!;
+      const selected = fabric.find(
+        (r) =>
+          r.kind === 'capability.lifecycle' &&
+          r.fields['event'] === 'selected' &&
+          r.evidence[0]?.ref === invocation.invocation_id,
+      )!;
       assert.ok(selected, `no selection for ${invocation.invocation_id}`);
       assert.equal(selected.fields['operation'], invocation.operation);
       assert.equal(selected.fields['implementation'], invocation.implementation_id);
-      const invoked = fabric.find((r) => r.kind === 'capability.invoked' && r.fields['invocation_ref'] === invocation.invocation_id)!;
+      const invoked = fabric.find(
+        (r) => r.kind === 'capability.invoked' && r.fields['invocation_ref'] === invocation.invocation_id,
+      )!;
       assert.ok(invoked, `no capability.invoked for ${invocation.invocation_id}`);
       assert.equal(invoked.parent_id, selected.record_id);
       assert.equal(invoked.fields['status'], world.runtime.state().actions[invocation.action_id]?.state);
@@ -247,7 +278,11 @@ describe('W5 causal trace', () => {
         `Loom has no transition for ${invocation.action_id}`,
       );
     }
-    assert.equal(fabric.some((r) => r.thread_id !== null), false, 'Fabric does not know Loom threads');
+    assert.equal(
+      fabric.some((r) => r.thread_id !== null),
+      false,
+      'Fabric does not know Loom threads',
+    );
   });
 
   it('W5-T09 the goal intent and outcome bracket the trace', async () => {

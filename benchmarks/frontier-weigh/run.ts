@@ -63,7 +63,9 @@ export async function compare(
     caseset: set.caseset,
     digest,
     cases: set.cases,
-    weighers: weighers.filter(({ weigher }) => weigher.id !== 'jev').map(({ weigher, role }) => ({ id: weigher.id, role })),
+    weighers: weighers
+      .filter(({ weigher }) => weigher.id !== 'jev')
+      .map(({ weigher, role }) => ({ id: weigher.id, role })),
     results,
     verdicts,
     jev,
@@ -76,12 +78,16 @@ function repoJson(name: string): unknown {
 }
 
 /** The explicitly configured Jev route, or the reason it cannot run. */
-export function configureJev(env: Readonly<Record<string, string | undefined>>): { weigher: Weigher; routed_unit: string } | { not_run: string } {
+export function configureJev(
+  env: Readonly<Record<string, string | undefined>>,
+): { weigher: Weigher; routed_unit: string } | { not_run: string } {
   const key = resolveTypesafeApiKey(env);
   if (!key) {
     return { not_run: 'no_credential' };
   }
-  let json = repoJson(existsSync(new URL('weave.routes.json', REPO)) ? 'weave.routes.json' : 'weave.routes.example.json');
+  let json = repoJson(
+    existsSync(new URL('weave.routes.json', REPO)) ? 'weave.routes.json' : 'weave.routes.example.json',
+  );
   if (existsSync(new URL('weave.routes.local.json', REPO))) {
     json = applyRouteOverlay(json, repoJson('weave.routes.local.json'));
   }
@@ -89,7 +95,9 @@ export function configureJev(env: Readonly<Record<string, string | undefined>>):
   if (!parsed.ok) {
     return { not_run: 'invalid_route_config' };
   }
-  const unit = parsed.table.find((u) => u.operation === 'evaluate' && u.kind === 'score' && u.adapter === TYPESAFE_AI_ADAPTER);
+  const unit = parsed.table.find(
+    (u) => u.operation === 'evaluate' && u.kind === 'score' && u.adapter === TYPESAFE_AI_ADAPTER,
+  );
   if (!unit) {
     return { not_run: 'no_route' };
   }
@@ -157,13 +165,20 @@ export async function main(args: readonly string[] = process.argv.slice(2), env 
       return 1;
     }
     if (!rerun) {
-      process.stderr.write('a live Jev run over this case-set digest is already recorded; pass --rerun to start a new experiment\n');
+      process.stderr.write(
+        'a live Jev run over this case-set digest is already recorded; pass --rerun to start a new experiment\n',
+      );
       return 1;
     }
   }
-  const run_id = `frontier-weigh-${new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14)}`;
+  const run_id = `frontier-weigh-${new Date()
+    .toISOString()
+    .replace(/[^0-9]/g, '')
+    .slice(0, 14)}`;
   const jev: JevStatus =
-    'weigher' in configured ? { status: 'run', routed_unit: configured.routed_unit, run_id } : { status: 'not_run', reason: configured.not_run };
+    'weigher' in configured
+      ? { status: 'run', routed_unit: configured.routed_unit, run_id }
+      : { status: 'not_run', reason: configured.not_run };
   const weighers = [
     ...OFFLINE_WEIGHERS.map(({ weigher, role }) => ({ weigher: weigher(), role })),
     ...('weigher' in configured ? [{ weigher: configured.weigher, role: 'configured Jev route' }] : []),
@@ -177,7 +192,9 @@ export async function main(args: readonly string[] = process.argv.slice(2), env 
   for (const verdict of comparison.verdicts) {
     process.stdout.write(`${verdict.weigher}: ${verdict.verdict}\n`);
   }
-  process.stdout.write(jev.status === 'run' ? `jev: ran through ${jev.routed_unit}\n` : `jev: not run (${jev.reason})\n`);
+  process.stdout.write(
+    jev.status === 'run' ? `jev: ran through ${jev.routed_unit}\n` : `jev: not run (${jev.reason})\n`,
+  );
   return 0;
 }
 

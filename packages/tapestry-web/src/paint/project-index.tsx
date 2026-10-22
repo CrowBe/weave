@@ -12,12 +12,20 @@ export function ProjectIndex({
 }) {
   if (presentation.kind === 'omitted') {
     return (
-      <Condition kind="withheld" mark={theme.mark['condition-omitted']} text={presentation.text} testId="availability-omitted" />
+      <Condition
+        kind="withheld"
+        mark={theme.mark['condition-omitted']}
+        text={presentation.text}
+        testId="availability-omitted"
+      />
     );
   }
   return (
     <div data-testid="project-index">
-      <div className="mb-1 flex items-baseline justify-between px-2 text-[12px] leading-4 font-medium" style={{ color: 'var(--text-muted)' }}>
+      <div
+        className="mb-1 flex items-baseline justify-between px-2 text-[12px] leading-4 font-medium"
+        style={{ color: 'var(--text-muted)' }}
+      >
         <span>Attachments</span>
         <span className="tabular-nums">{presentation.items.length}</span>
       </div>
@@ -33,7 +41,12 @@ export function ProjectIndex({
                 onClick={() => onSelect(item.label)}
                 className="relative flex h-[var(--row)] w-full items-center gap-2 rounded-md px-2 text-left text-[13px] leading-5 font-normal hover:bg-[var(--hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] aria-pressed:font-medium data-[selected=true]:bg-[var(--surface-raised)]"
               >
-                {selected ? <span aria-hidden="true" className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-[var(--focus)]" /> : null}
+                {selected ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-[var(--focus)]"
+                  />
+                ) : null}
                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
                 <span className="shrink-0 font-mono text-[11px]" style={{ color: 'var(--text-muted)' }}>
                   {item.kind}

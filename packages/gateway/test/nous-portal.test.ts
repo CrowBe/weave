@@ -170,9 +170,12 @@ describe('nous-portal adapter', () => {
     for (const id of ids) {
       assert.ok(id.endsWith(':free'), `${id} must carry the :free suffix`);
     }
-    assert.deepEqual([...NOUS_PORTAL_FREE_LIMITS], [
-      { requests: 10, tokens: 80_000, window_ms: 60_000 },
-      { requests: 420, tokens: 3_360_000, window_ms: 3_600_000 },
-    ]);
+    assert.deepEqual(
+      [...NOUS_PORTAL_FREE_LIMITS],
+      [
+        { requests: 10, tokens: 80_000, window_ms: 60_000 },
+        { requests: 420, tokens: 3_360_000, window_ms: 3_600_000 },
+      ],
+    );
   });
 });

@@ -92,10 +92,16 @@ export type ProviderStatus = 'available' | 'exhausted' | 'auth_required' | 'unav
  * or destination ids. The composition root must map quota-provider ids to adapters.
  * Only own entries are consulted; missing or unmatched keys leave routing unchanged.
  * Rechecking belongs to the composition root; metadata never implies availability. */
-export type ProviderAvailability = Readonly<Record<string, ProviderStatus | {
-  readonly status: ProviderStatus;
-  readonly recheck_after?: Timestamp;
-}>>;
+export type ProviderAvailability = Readonly<
+  Record<
+    string,
+    | ProviderStatus
+    | {
+        readonly status: ProviderStatus;
+        readonly recheck_after?: Timestamp;
+      }
+  >
+>;
 
 export const QUALITY_BARS = ['baseline', 'high'] as const;
 export type QualityBar = (typeof QUALITY_BARS)[number];
@@ -148,9 +154,7 @@ export interface InferenceTerms {
   readonly max_attempts_per_route?: number;
 }
 
-export type Acceptance =
-  | { readonly status: 'accepted' }
-  | { readonly status: 'rejected'; readonly reason: string };
+export type Acceptance = { readonly status: 'accepted' } | { readonly status: 'rejected'; readonly reason: string };
 
 // ---------------------------------------------------------------------------
 // Generation: text in, text out.
@@ -505,13 +509,15 @@ export interface AttemptRecord {
   readonly disposition: AttemptDisposition;
 }
 
-export type BlockedReason = 'invalid_request' | 'no_route' | 'no_budget' | 'deadline_passed' | 'provider_unavailable' | BudgetReason;
+export type BlockedReason =
+  | 'invalid_request'
+  | 'no_route'
+  | 'no_budget'
+  | 'deadline_passed'
+  | 'provider_unavailable'
+  | BudgetReason;
 
-export type UnacceptedReason =
-  | 'attempts_exhausted'
-  | 'budget_exhausted'
-  | 'deadline_reached'
-  | 'provider_failed';
+export type UnacceptedReason = 'attempts_exhausted' | 'budget_exhausted' | 'deadline_reached' | 'provider_failed';
 
 /**
  * Every status carries the attempts made and their spend. `blocked` means the

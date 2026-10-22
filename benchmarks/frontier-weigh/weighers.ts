@@ -106,10 +106,18 @@ export function fixtureWeigher(id: string, score: (call: EvaluationCall, candida
       for (const candidate_id of Object.keys(call.questions)) {
         answers[candidate_id] = { type: 'score', score: score(call, candidate_id) };
       }
-      return { status: 'completed', answers, usage: { input_tokens: 0, output_tokens: 0 }, provider_response_id: undefined, confidence: undefined };
+      return {
+        status: 'completed',
+        answers,
+        usage: { input_tokens: 0, output_tokens: 0 },
+        provider_response_id: undefined,
+        confidence: undefined,
+      };
     },
   };
-  return siteWeigher(id, 'fixture', fixtureGateway({ clock: { now: () => 0 }, evaluate: adapter }), [LOCAL_DESTINATION]);
+  return siteWeigher(id, 'fixture', fixtureGateway({ clock: { now: () => 0 }, evaluate: adapter }), [
+    LOCAL_DESTINATION,
+  ]);
 }
 
 /** Red controls: unsuitable weighers the promotion rule must reject. */

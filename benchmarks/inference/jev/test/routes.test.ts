@@ -108,7 +108,10 @@ test('describeRoutes in reference mode names only the pinned TypeSafe route, wha
   const reference = { preferFree: false, reference: true };
   for (const credentials of [both, direct, run.readCredentials({ TYPESAFE_API_KEY: 'fake-typesafe-key' }, reference)]) {
     assert.ok(!('error' in credentials));
-    assert.equal(run.describeRoutes(credentials, reference), 'routes: TypeSafe direct only (pinned jev-1.14.0, no fallback)');
+    assert.equal(
+      run.describeRoutes(credentials, reference),
+      'routes: TypeSafe direct only (pinned jev-1.14.0, no fallback)',
+    );
   }
 });
 

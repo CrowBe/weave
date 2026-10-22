@@ -38,9 +38,9 @@ consumers use the same records.
 
 ## Terms
 
-- **Experiment** is the existing glossary term for a comparative run. *Swatch*
+- **Experiment** is the existing glossary term for a comparative run. _Swatch_
   is not used.
-- *Pattern* is not added. An expected behaviour is a constraint in a criteria
+- _Pattern_ is not added. An expected behaviour is a constraint in a criteria
   set, or a case in a capability contract's test corpus.
 - **Tune split** and **holdout** are the existing glossary terms. A
   **held-out report** is the only evidence a holdout result may disclose.
@@ -50,11 +50,11 @@ consumers use the same records.
 Weft's `id`, `code`, `count`, `metric`, `ratio`, `flag` and `digest` apply
 unchanged. In addition:
 
-| Type | Rule |
-| --- | --- |
-| rev | `^[A-Za-z0-9_.:-]{1,120}@[0-9]{1,9}$`: a governed record's name and revision |
-| number | Finite number |
-| interval | `[lo, hi]` of numbers with `lo ≤ hi` |
+| Type       | Rule                                                                                     |
+| ---------- | ---------------------------------------------------------------------------------------- |
+| rev        | `^[A-Za-z0-9_.:-]{1,120}@[0-9]{1,9}$`: a governed record's name and revision             |
+| number     | Finite number                                                                            |
+| interval   | `[lo, hi]` of numbers with `lo ≤ hi`                                                     |
 | governance | `{ "kind": "policy" \| "approval", "ref": id }`: the authority that issued this revision |
 
 Every record is an object with exactly the keys listed for its schema. Lists

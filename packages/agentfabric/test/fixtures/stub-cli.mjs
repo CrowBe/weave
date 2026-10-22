@@ -23,7 +23,9 @@ if (mode === '--subprocess') {
   const pidFile = args[1];
   const exitArg = args.find((arg) => arg.startsWith('--exit='));
   const child = spawn(process.execPath, [new URL(import.meta.url).pathname, '--sleep', pidFile], {
-    stdio: ['ignore', 'inherit', 'inherit'], shell: false, detached: args.includes('--escape'),
+    stdio: ['ignore', 'inherit', 'inherit'],
+    shell: false,
+    detached: args.includes('--escape'),
   });
   child.on('error', () => exit(3));
   if (exitArg === undefined) {

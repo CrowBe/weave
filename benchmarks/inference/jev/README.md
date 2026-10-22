@@ -148,16 +148,16 @@ Proposals, not commitments. Each names the purpose, the shape it plausibly
 wants, and what it gates. Priority is the open question this directory exists
 to inform.
 
-| site | purpose | plausible shape | gates |
-| --- | --- | --- | --- |
-| `frontier.weigh` | how far each candidate advances the goal | `score` | every dispatch; highest volume |
-| `capability.match` | which established capability or composition serves a desired operation | `choice` | whether a gap is declared |
-| `gap.confirm` | is this genuinely a capability gap | `boolean` | entry to crystallization |
-| `result.evaluate` | did this result satisfy the goal's success criteria | `score` | completion and retry |
-| `clarification.needed` | is intent or authority insufficient to proceed | `boolean` | autonomous action |
-| `risk.flag` | does this candidate warrant escalation to approval | `boolean` | routing to approval, never policy itself |
-| `completion.check` | is the goal complete | `boolean` | goal closure |
-| `judgment.review` | is a recorded answer defensible on its state | `boolean` | nothing yet; a measurement subject |
+| site                   | purpose                                                                | plausible shape | gates                                    |
+| ---------------------- | ---------------------------------------------------------------------- | --------------- | ---------------------------------------- |
+| `frontier.weigh`       | how far each candidate advances the goal                               | `score`         | every dispatch; highest volume           |
+| `capability.match`     | which established capability or composition serves a desired operation | `choice`        | whether a gap is declared                |
+| `gap.confirm`          | is this genuinely a capability gap                                     | `boolean`       | entry to crystallization                 |
+| `result.evaluate`      | did this result satisfy the goal's success criteria                    | `score`         | completion and retry                     |
+| `clarification.needed` | is intent or authority insufficient to proceed                         | `boolean`       | autonomous action                        |
+| `risk.flag`            | does this candidate warrant escalation to approval                     | `boolean`       | routing to approval, never policy itself |
+| `completion.check`     | is the goal complete                                                   | `boolean`       | goal closure                             |
+| `judgment.review`      | is a recorded answer defensible on its state                           | `boolean`       | nothing yet; a measurement subject       |
 
 `risk.flag` is bounded by VISION.md: a model "may identify risk, recommend
 escalation, or express uncertainty; it cannot waive a boundary." The site
@@ -200,7 +200,7 @@ that shape regardless of its mean accuracy.
 > versioned `FrameProfile` whose `catalogue_budget` replaced a hardcoded
 > budget of 1, and excess operations are disclosed as omissions with reason
 > `budget`. The sharper experiment is whether the model reasons correctly
-> about *disclosed omissions*, which no case in this corpus currently carries,
+> about _disclosed omissions_, which no case in this corpus currently carries,
 > rather than whether accuracy decays under irrelevant padding.
 
 Latency, cost and accuracy against state size, padded with authorized but
@@ -278,13 +278,13 @@ Hosted Jev through the Vercel AI Gateway (`typesafe-ai/jev`), with TypeSafe
 direct (`jev-latest`) as the fallback route. Raw records, one JSON object per
 request, replayable with `--from`:
 
-| file | corpus | model | orderings |
-| --- | --- | --- | --: |
-| [`results.json`](results.json) | Weave | Jev | 1 |
-| [`transfer-results.json`](transfer-results.json) | transfer-v4 | Jev | 1 |
-| [`permutation-results.json`](permutation-results.json) | Weave | Jev | 4 |
-| [`transfer-permutation-results.json`](transfer-permutation-results.json) | transfer-v4 | Jev | 4 |
-| [`kev-permutation-results.json`](kev-permutation-results.json) | Weave | Kev 4B | 4 |
+| file                                                                     | corpus      | model  | orderings |
+| ------------------------------------------------------------------------ | ----------- | ------ | --------: |
+| [`results.json`](results.json)                                           | Weave       | Jev    |         1 |
+| [`transfer-results.json`](transfer-results.json)                         | transfer-v4 | Jev    |         1 |
+| [`permutation-results.json`](permutation-results.json)                   | Weave       | Jev    |         4 |
+| [`transfer-permutation-results.json`](transfer-permutation-results.json) | transfer-v4 | Jev    |         4 |
+| [`kev-permutation-results.json`](kev-permutation-results.json)           | Weave       | Kev 4B |         4 |
 
 Every number below was derived from these files rather than copied from a run
 log, and four errors were caught that way — see the note at the end.
@@ -302,13 +302,13 @@ finding is recorded rather than deleted because the saturation is the result.
 
 What the run does establish, since it holds regardless of difficulty:
 
-| | choice | score | boolean |
-| --- | ---: | ---: | ---: |
-| clean single-attempt latency (median) | 397 ms | 396 ms | 425 ms |
-| clean single-attempt requests | 29/54 | 22/54 | 12/54 |
-| input tokens per attempt | 568 | 733 | 725 |
-| argmax unanimous across 3 repeats | 18/18 | 18/18 | 18/18 |
-| largest top-value drift across repeats | 0.060 | 0.017 | 0.040 |
+|                                        | choice |  score | boolean |
+| -------------------------------------- | -----: | -----: | ------: |
+| clean single-attempt latency (median)  | 397 ms | 396 ms |  425 ms |
+| clean single-attempt requests          |  29/54 |  22/54 |   12/54 |
+| input tokens per attempt               |    568 |    733 |     725 |
+| argmax unanimous across 3 repeats      |  18/18 |  18/18 |   18/18 |
+| largest top-value drift across repeats |  0.060 |  0.017 |   0.040 |
 
 **Latency is shape-independent.** An earlier reading that `choice` was faster
 was an artefact of counting escalated retries in the wall clock; on
@@ -348,11 +348,11 @@ minute budget. Its higher retry count is ordering, not shape.
 4B fp32 was scored on, read from Kev's own `predictions.jsonl` so the
 comparison is paired rather than across two subsamples.
 
-| | hosted Jev | local Kev (same 125) |
-| --- | ---: | ---: |
-| accuracy | **0.832** | 0.776 |
-| 95% Wilson | [0.757, 0.887] | — |
-| median latency | 1651 ms (411 ms unthrottled) | 6373 ms |
+|                |                   hosted Jev | local Kev (same 125) |
+| -------------- | ---------------------------: | -------------------: |
+| accuracy       |                    **0.832** |                0.776 |
+| 95% Wilson     |               [0.757, 0.887] |                    — |
+| median latency | 1651 ms (411 ms unthrottled) |              6373 ms |
 
 Floors on these records: uniform 0.360, majority-class 0.208. The margin over
 the stronger floor is 0.472, or 14.1 standard errors, so the model is
@@ -368,24 +368,24 @@ accuracy. What separates them is latency — 4x with throttle waits included,
 
 By question type, and by source:
 
-| type | n | accuracy | uniform | majority | ECE |
-| --- | --: | --: | --: | --: | --: |
-| choice | 72 | 0.819 | 0.281 | 0.194 | 0.152 |
-| noul (boolean) | 43 | 0.837 | 0.500 | 0.605 | 0.067 |
-| score | 10 | 0.900 | 0.333 | 0.500 | 0.061 |
+| type           |   n | accuracy | uniform | majority |   ECE |
+| -------------- | --: | -------: | ------: | -------: | ----: |
+| choice         |  72 |    0.819 |   0.281 |    0.194 | 0.152 |
+| noul (boolean) |  43 |    0.837 |   0.500 |    0.605 | 0.067 |
+| score          |  10 |    0.900 |   0.333 |    0.500 | 0.061 |
 
-| source | n | Jev | Kev | uniform | majority |
-| --- | --: | --: | --: | --: | --: |
-| sciq | 18 | 1.000 | 1.000 | 0.247 | 0.444 |
-| composition_held_or_not | 8 | 1.000 | 1.000 | 0.500 | 0.750 |
-| contrastive_authorization | 4 | 1.000 | 1.000 | 0.500 | 0.500 |
-| paws | 13 | 0.923 | 0.769 | 0.500 | 0.538 |
-| contrastive_deadline | 10 | 0.900 | 0.600 | 0.333 | 0.500 |
-| composition_held_and_or | 8 | 0.875 | 0.875 | 0.500 | 0.625 |
-| qnli | 13 | 0.846 | 0.846 | 0.500 | 0.615 |
-| mmlu | 20 | 0.800 | 0.500 | 0.243 | 0.350 |
-| tweet_offensive | 13 | 0.692 | 0.692 | 0.500 | **0.769** |
-| emotion | 18 | 0.556 | 0.778 | 0.163 | 0.444 |
+| source                    |   n |   Jev |   Kev | uniform |  majority |
+| ------------------------- | --: | ----: | ----: | ------: | --------: |
+| sciq                      |  18 | 1.000 | 1.000 |   0.247 |     0.444 |
+| composition_held_or_not   |   8 | 1.000 | 1.000 |   0.500 |     0.750 |
+| contrastive_authorization |   4 | 1.000 | 1.000 |   0.500 |     0.500 |
+| paws                      |  13 | 0.923 | 0.769 |   0.500 |     0.538 |
+| contrastive_deadline      |  10 | 0.900 | 0.600 |   0.333 |     0.500 |
+| composition_held_and_or   |   8 | 0.875 | 0.875 |   0.500 |     0.625 |
+| qnli                      |  13 | 0.846 | 0.846 |   0.500 |     0.615 |
+| mmlu                      |  20 | 0.800 | 0.500 |   0.243 |     0.350 |
+| tweet_offensive           |  13 | 0.692 | 0.692 |   0.500 | **0.769** |
+| emotion                   |  18 | 0.556 | 0.778 |   0.163 |     0.444 |
 
 Two cells deserve naming. **`tweet_offensive` sits below its own majority-class
 floor** — 0.692 against 0.769, for both models, so "always answer offensive"
@@ -410,10 +410,10 @@ public benchmarks that any modern checkpoint may have seen.
 If Jev's advantage were memorisation, it should concentrate in those public
 sources and disappear on the suite's own generated ones. It does the opposite:
 
-| | n | Jev | Kev | delta |
-| --- | --: | --: | --: | --: |
-| synthetic (suite-generated; in no training set) | 30 | 0.933 | 0.833 | **+10.0 pp** |
-| public benchmark | 95 | 0.800 | 0.758 | +4.2 pp |
+|                                                 |   n |   Jev |   Kev |        delta |
+| ----------------------------------------------- | --: | ----: | ----: | -----------: |
+| synthetic (suite-generated; in no training set) |  30 | 0.933 | 0.833 | **+10.0 pp** |
+| public benchmark                                |  95 | 0.800 | 0.758 |      +4.2 pp |
 
 The margin is larger where contamination is impossible, which is evidence
 against the memorisation story rather than for it. Two limits keep this from
@@ -428,14 +428,14 @@ not as a clearance.
 > confirms 0.9 and measures the optimism at 0.3 points. The cautions about
 > band sizes and the confident-error rate still stand.
 
-| confidence band | n | mean confidence | accuracy | gap |
-| --- | --: | --: | --: | --: |
-| below 0.5 | 1 | 0.090 | 0.000 | +0.090 |
-| 0.5–0.6 | 7 | 0.529 | 0.286 | +0.243 |
-| 0.6–0.7 | 7 | 0.659 | 0.714 | −0.056 |
-| 0.7–0.8 | 7 | 0.746 | 0.143 | +0.603 |
-| 0.8–0.9 | 8 | 0.862 | 1.000 | −0.138 |
-| 0.9–1.0 | 95 | 0.983 | 0.926 | +0.057 |
+| confidence band |   n | mean confidence | accuracy |    gap |
+| --------------- | --: | --------------: | -------: | -----: |
+| below 0.5       |   1 |           0.090 |    0.000 | +0.090 |
+| 0.5–0.6         |   7 |           0.529 |    0.286 | +0.243 |
+| 0.6–0.7         |   7 |           0.659 |    0.714 | −0.056 |
+| 0.7–0.8         |   7 |           0.746 |    0.143 | +0.603 |
+| 0.8–0.9         |   8 |           0.862 |    1.000 | −0.138 |
+| 0.9–1.0         |  95 |           0.983 |    0.926 | +0.057 |
 
 Overall ECE 0.103, Brier 0.108, mean confidence 0.911 against 0.832 accuracy —
 overconfident by 7.9 points, which is mild next to OpenJev's 10.5.
@@ -471,19 +471,19 @@ Jev, and both are now caught by tests.
 - **Per-ordering accuracy compared different populations.** Ordering 0 held all
   125 records, ordering 3 only the 56 four-candidate ones. The reported spread
   of 80.4% to 85.6% measured which cases are hard, not what order does.
-  Accuracy is now taken on the balanced panel — cases answered under *every*
+  Accuracy is now taken on the balanced panel — cases answered under _every_
   ordering index.
 
 Corrected, on transfer-v4 (309 records, 125 cases, 4 orderings):
 
-| metric | value |
-| --- | --- |
-| cases actually permuted | 72 of 125 |
-| stable across every ordering | 72 of 72 (100.0%) |
-| balanced panel | 56 cases |
-| accuracy, worst ordering | 80.4% |
-| accuracy, best ordering | 80.4% |
-| position bias (stratified TV distance) | 0.061 |
+| metric                                 | value             |
+| -------------------------------------- | ----------------- |
+| cases actually permuted                | 72 of 125         |
+| stable across every ordering           | 72 of 72 (100.0%) |
+| balanced panel                         | 56 cases          |
+| accuracy, worst ordering               | 80.4%             |
+| accuracy, best ordering                | 80.4%             |
+| position bias (stratified TV distance) | 0.061             |
 
 Worst and best are identical because every case on the balanced panel answered
 the same way under all four orderings. The 5.2-point spread in the first cut
@@ -491,7 +491,7 @@ was the population artifact, not an order effect.
 
 Position bias is a total-variation distance between where the answer landed and
 where the label sat, computed **within each candidate-count stratum** and then
-weighted. Stratification is load-bearing: a stub locked to the *last* position
+weighted. Stratification is load-bearing: a stub locked to the _last_ position
 smears across absolute indices 1–3 when the corpus mixes 2-, 3- and
 4-candidate cases and scored 0.446, under the same threshold that catches a
 first-position lock at 0.732. Within a stratum it concentrates again — 0.696.
@@ -504,14 +504,14 @@ Jev at 0.061 is not reading position. On the Weave corpus it is 0.000 exactly.
 Both models answered the identical 168 records — 56 cases × 3 shapes, same
 orderings, same state, same seed.
 
-| | hosted Jev | local Kev 4B |
-| --- | --: | --: |
-| overall | **168/168 (100.0%)** | 140/168 (83.3%) |
-| choice | 100.0% | 83.9% |
-| boolean | 100.0% | 87.5% |
-| score | 100.0% | 78.6% |
-| order-stable (permuted choice) | 18/18 (100.0%) | 15/18 (83.3%) |
-| position bias | 0.000 | 0.107 |
+|                                |           hosted Jev |    local Kev 4B |
+| ------------------------------ | -------------------: | --------------: |
+| overall                        | **168/168 (100.0%)** | 140/168 (83.3%) |
+| choice                         |               100.0% |           83.9% |
+| boolean                        |               100.0% |           87.5% |
+| score                          |               100.0% |           78.6% |
+| order-stable (permuted choice) |       18/18 (100.0%) |   15/18 (83.3%) |
+| position bias                  |                0.000 |           0.107 |
 
 Paired on the 168 identical records: both right 140, **Jev only 28, Kev only
 0**, neither 0. McNemar z = (28 − 0) / sqrt(28) = 5.29, significant at 0.05.
@@ -524,14 +524,14 @@ The Weave corpus is saturated for Jev, so this measures Kev's distance from a
 ceiling rather than ranking two models on a discriminating corpus. It does
 discriminate Kev cleanly. Its six failing cases:
 
-| case | wrong records |
-| --- | --: |
-| `waiting.dependency-in-flight` | 10 |
-| `complete.published-and-checked` | 7 |
-| `approval.absent` | 6 |
-| `waiting.nothing-in-flight` | 3 |
-| `blocked.unapproved-publish` | 1 |
-| `distractor.more-documentation` | 1 |
+| case                             | wrong records |
+| -------------------------------- | ------------: |
+| `waiting.dependency-in-flight`   |            10 |
+| `complete.published-and-checked` |             7 |
+| `approval.absent`                |             6 |
+| `waiting.nothing-in-flight`      |             3 |
+| `blocked.unapproved-publish`     |             1 |
+| `distractor.more-documentation`  |             1 |
 
 Four of the six are the state-transition cases — whether work is waiting on
 something in flight, and whether it is finished. `blocked.unapproved-publish`
@@ -561,9 +561,9 @@ real tool pointed at a problem this model does not have.
 
 On Kev it does work, on 18 permuted choice cases:
 
-| | coverage | accuracy covered | accuracy deferred | caught | lost |
-| --- | --: | --: | --: | --: | --: |
-| Kev, stability gate | 83.3% | 93.3% | 66.7% | 1 wrong | 2 right |
+|                     | coverage | accuracy covered | accuracy deferred |  caught |    lost |
+| ------------------- | -------: | ---------------: | ----------------: | ------: | ------: |
+| Kev, stability gate |    83.3% |            93.3% |             66.7% | 1 wrong | 2 right |
 
 83.9% to 93.3% is the right direction, but 18 cases and a single caught error
 is an observation, not a rate. The honest reading is that the gate is worth
@@ -574,12 +574,12 @@ twice that the 0.9 gate was fitted in sample and was therefore an upper bound.
 Fitting on a deterministic interleaved half of the 309 transfer records and
 reporting on the other half closes that:
 
-| | n | coverage | accuracy covered | accuracy deferred |
-| --- | --: | --: | --: | --: |
-| ungated | 309 | 100% | 83.2% | — |
-| threshold fitted on train half | 155 | 78.1% | 91.7% | 50.0% |
-| **same threshold, test half** | **154** | **80.5%** | **91.1%** | **53.3%** |
-| fitted and scored in sample | 309 | 79.3% | 91.4% | 51.6% |
+|                                |       n |  coverage | accuracy covered | accuracy deferred |
+| ------------------------------ | ------: | --------: | ---------------: | ----------------: |
+| ungated                        |     309 |      100% |            83.2% |                 — |
+| threshold fitted on train half |     155 |     78.1% |            91.7% |             50.0% |
+| **same threshold, test half**  | **154** | **80.5%** |        **91.1%** |         **53.3%** |
+| fitted and scored in sample    |     309 |     79.3% |            91.4% |             51.6% |
 
 The threshold chosen on the training half is 0.9, the same value the in-sample
 reading suggested. **Optimism is 0.3 points** — in-sample 91.4% against
@@ -598,7 +598,7 @@ does overfit, so the in-sample caution that turned out not to bite on Jev does
 bite here. Calibration is model-specific and does not transfer.
 
 Combining both gates on the 72 permuted transfer cases — accept only when
-stable *and* above 0.9 — covers 87.5% at 90.5%. That is no better than the
+stable _and_ above 0.9 — covers 87.5% at 90.5%. That is no better than the
 confidence gate alone, because stability is adding no information on this
 model.
 
@@ -648,7 +648,7 @@ or the evidence look stronger than it was:
 Errors 5 and 6 were found by tests written before the metric, not by review:
 the load-bearing case is a stub locked to a fixed position, which must fail
 stability and bias by construction whatever its accuracy. A third such test
-caught a subtler defect during development — a *last*-position lock scored
+caught a subtler defect during development — a _last_-position lock scored
 0.446 bias, under the threshold that catches a first-position lock, because
 absolute position smears across a corpus mixing 2-, 3- and 4-candidate cases.
 That is why position bias is stratified by candidate count.

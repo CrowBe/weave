@@ -93,15 +93,15 @@ implementation: one `GrantAuthority.issue` and one `host.invoke` per call.
 Exit status and spawn failures map onto the gateway's existing provider
 failures:
 
-| Spawn result | Provider failure |
-|---|---|
-| `timeout` | `timeout` |
-| `cancelled` | `cancelled` |
-| `denied` | `unauthorized` |
-| `spawn_failed` | `unavailable` |
-| exit nonzero | `unavailable` (`exited N`) |
+| Spawn result             | Provider failure                                                   |
+| ------------------------ | ------------------------------------------------------------------ |
+| `timeout`                | `timeout`                                                          |
+| `cancelled`              | `cancelled`                                                        |
+| `denied`                 | `unauthorized`                                                     |
+| `spawn_failed`           | `unavailable`                                                      |
+| exit nonzero             | `unavailable` (`exited N`)                                         |
 | exit 0, stdout truncated | `unavailable` (`cli generate stdout was truncated`), non-retryable |
-| exit 0, stdout intact | completed text is the full stdout body, with `stop` |
+| exit 0, stdout intact    | completed text is the full stdout body, with `stop`                |
 
 A failed spawn result carries the redacted tails and `duration_ms` from that
 invocation's `shell.trace@1` record, because a failed invocation outcome

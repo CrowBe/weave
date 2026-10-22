@@ -50,7 +50,11 @@ export class FabricLifecycle implements CapabilityLifecycle {
   private readonly heldOut: TestCase[] = [];
   private corpusRevision: string | null = null;
   private corpusValidated = false;
-  private red: { readonly demonstrated: boolean; readonly corpus_revision: string; readonly contract_revision: string } | null = null;
+  private red: {
+    readonly demonstrated: boolean;
+    readonly corpus_revision: string;
+    readonly contract_revision: string;
+  } | null = null;
   private readonly sources = new Map<string, string>();
   private readonly attached = new Set<string>();
   private heldOutSpent = false;
@@ -90,7 +94,9 @@ export class FabricLifecycle implements CapabilityLifecycle {
       .filter((contract) => contract.id === desired.operation && this.host.resolution(contract.id) === 'resolved')
       .map((contract) => contract.id);
     if (matches.length > 0) {
-      return ok(searchBody('reusable', matches, [], retained, 'an admitted capability already performs this operation'));
+      return ok(
+        searchBody('reusable', matches, [], retained, 'an admitted capability already performs this operation'),
+      );
     }
     const compositions = catalogue
       .filter(
@@ -103,7 +109,15 @@ export class FabricLifecycle implements CapabilityLifecycle {
       )
       .map((contract) => contract.id);
     if (compositions.length > 0) {
-      return ok(searchBody('composed', [], compositions, retained, 'an admitted capability matches the purpose and closed shapes'));
+      return ok(
+        searchBody(
+          'composed',
+          [],
+          compositions,
+          retained,
+          'an admitted capability matches the purpose and closed shapes',
+        ),
+      );
     }
     return ok(searchBody('gap', [], [], retained, 'no admitted capability matches the purpose and closed shapes'));
   }
@@ -116,12 +130,22 @@ export class FabricLifecycle implements CapabilityLifecycle {
       .filter((contract) => contract.id === desired.operation && this.host.resolution(contract.id) === 'resolved')
       .map((contract) => contract.id);
     if (matches.length > 0) {
-      return ok(searchBody('reusable', matches, [], retained, 'an admitted capability already performs this operation'));
+      return ok(
+        searchBody('reusable', matches, [], retained, 'an admitted capability already performs this operation'),
+      );
     }
-    const compositions = catalogue.filter((contract) => typeMapsEqual(contract.output, desired.output)).map((contract) => contract.id);
+    const compositions = catalogue
+      .filter((contract) => typeMapsEqual(contract.output, desired.output))
+      .map((contract) => contract.id);
     if (compositions.length > 0) {
       return ok(
-        searchBody('composed', [], compositions, retained, 'an admitted capability already produces the desired output'),
+        searchBody(
+          'composed',
+          [],
+          compositions,
+          retained,
+          'an admitted capability already produces the desired output',
+        ),
       );
     }
     return ok(searchBody('gap', [], [], retained, 'no admitted capability or composition produces the desired output'));
@@ -385,7 +409,10 @@ export class FabricLifecycle implements CapabilityLifecycle {
     if (!pending || pending.status !== 'requested' || pending.request_id !== decision.request_id) {
       return fail('admission request is not pending');
     }
-    if (pending.implementation_id !== decision.implementation_id || pending.evidence_digest !== decision.evidence_digest) {
+    if (
+      pending.implementation_id !== decision.implementation_id ||
+      pending.evidence_digest !== decision.evidence_digest
+    ) {
       return fail('admission decision does not match the recorded evidence');
     }
     const record = this.green.get(decision.implementation_id);
@@ -453,7 +480,10 @@ export class FabricLifecycle implements CapabilityLifecycle {
     return this.heldOut.map((testCase) => ({ ...testCase }));
   }
 
-  private implementation(source: string, contract: CapabilityContract | null = this.contract): CapabilityImplementation {
+  private implementation(
+    source: string,
+    contract: CapabilityContract | null = this.contract,
+  ): CapabilityImplementation {
     return async (inputs) => {
       const ran = await isolatedCall(this.runner, source, inputs);
       if (!ran.ok) {

@@ -24,9 +24,9 @@ That skip is not a pass. A configured run sets `live_comparison` to `ran` and
 This row is the shape of a recorded disagreement. It is not a measured live
 result.
 
-| id | split | single_facts | validation_agrees | disagreement | disposition | label_done | agent_stop | facts | facts_decided_in_code |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| example-criteria | tune | false | true | criteria | fail | false | not_done | 0 | 0 |
+| id               | split | single_facts | validation_agrees | disagreement | disposition | label_done | agent_stop | facts | facts_decided_in_code |
+| ---------------- | ----- | ------------ | ----------------- | ------------ | ----------- | ---------- | ---------- | ----- | --------------------- |
+| example-criteria | tune  | false        | true              | criteria     | fail        | false      | not_done   | 0     | 0                     |
 
 Read it as: the hand label says the line was one fact, the criteria gate kept
 it out, validation therefore had nothing to pass, and the disagreement is

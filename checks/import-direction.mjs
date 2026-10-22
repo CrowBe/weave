@@ -107,7 +107,9 @@ let filesChecked = 0;
 
 for (const entry of readdirSync(packagesDir)) {
   if (statSync(join(packagesDir, entry)).isDirectory() && !Object.hasOwn(ALLOWED, entry)) {
-    violations.push(`packages/${entry}: no import direction declared — add it to ALLOWED in checks/import-direction.mjs`);
+    violations.push(
+      `packages/${entry}: no import direction declared — add it to ALLOWED in checks/import-direction.mjs`,
+    );
   }
 }
 

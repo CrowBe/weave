@@ -5,14 +5,20 @@
  */
 import type { InlinePolicy, Redactor, WeftRecord } from './types.js';
 import {
-  EMITTER_KEYS, ENVELOPE_KEYS, EVIDENCE_KEYS, FIELDS, LINK_KEYS, assertInlinePolicy, validateRecord,
+  EMITTER_KEYS,
+  ENVELOPE_KEYS,
+  EVIDENCE_KEYS,
+  FIELDS,
+  LINK_KEYS,
+  assertInlinePolicy,
+  validateRecord,
 } from './validate.js';
 
 type Obj = Readonly<Record<string, unknown>>;
 
 /** The keys of `o` in the given order. Validation has already ruled out any other key. */
 const pick = (o: unknown, keys: readonly string[]): Obj =>
-  Object.fromEntries(keys.filter(k => Object.hasOwn(o as Obj, k)).map(k => [k, (o as Obj)[k]]));
+  Object.fromEntries(keys.filter((k) => Object.hasOwn(o as Obj, k)).map((k) => [k, (o as Obj)[k]]));
 
 /** One JSONL line: the record redacted, validated under `inline`, with every key in contract order. */
 export function serializeRecord(record: WeftRecord, redact: Redactor, inline?: InlinePolicy): string {
@@ -29,13 +35,13 @@ export function serializeRecord(record: WeftRecord, redact: Redactor, inline?: I
     .map(([name, field]) => {
       const value = fields[name];
       if (field.keys === undefined) return [name, value];
-      return [name, Array.isArray(value) ? value.map(item => pick(item, field.keys!)) : pick(value, field.keys)];
+      return [name, Array.isArray(value) ? value.map((item) => pick(item, field.keys!)) : pick(value, field.keys)];
     });
   return `${JSON.stringify({
     ...pick(r, ENVELOPE_KEYS),
     emitter: pick(r.emitter, EMITTER_KEYS),
-    links: r.links.map(link => pick(link, LINK_KEYS)),
-    evidence: r.evidence.map(item => pick(item, EVIDENCE_KEYS)),
+    links: r.links.map((link) => pick(link, LINK_KEYS)),
+    evidence: r.evidence.map((item) => pick(item, EVIDENCE_KEYS)),
     fields: Object.fromEntries(ordered),
   })}\n`;
 }

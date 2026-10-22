@@ -8,25 +8,25 @@ Case set `frontier-weigh.report-goal@1` sha256 `19b5efd87bbfb8bfa4f19796141b58e0
 
 ## Weighers
 
-| Weigher | Role |
-| --- | --- |
-| scripted@1 | baseline: the runtime default, weights by operation only |
-| constant-dispatch | red control: every candidate `dispatch` |
-| constant-defer | red control: every candidate `defer` |
-| jev | not run: `no_credential` |
+| Weigher           | Role                                                     |
+| ----------------- | -------------------------------------------------------- |
+| scripted@1        | baseline: the runtime default, weights by operation only |
+| constant-dispatch | red control: every candidate `dispatch`                  |
+| constant-defer    | red control: every candidate `defer`                     |
+| jev               | not run: `no_credential`                                 |
 
 ## Results by split
 
 Agreement is the share of cases whose selected frontier equals the adjudicated one. A failed weighing counts as disagreement. `completable`: after the frontier, the actions remaining still cover the goal.
 
-| Weigher | Split | n | covered | agreement | advanced | held | premature | misdirected | stalled | failed | completable | spend (micros) | p95 latency |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| scripted@1 | tune | 8 | 8 | 5/8 = 0.63 | 5 | 0 | 2 | 1 | 0 | 0 | 6 | 0 | n/a |
-| constant-dispatch | tune | 8 | 8 | 5/8 = 0.63 | 5 | 0 | 2 | 1 | 0 | 0 | 6 | 0 | n/a |
-| constant-defer | tune | 8 | 8 | 2/8 = 0.25 | 0 | 2 | 0 | 0 | 6 | 0 | 7 | 0 | n/a |
-| scripted@1 | holdout | 15 | 15 | 6/15 = 0.40 | 6 | 0 | 4 | 5 | 0 | 0 | 7 | 0 | n/a |
-| constant-dispatch | holdout | 15 | 15 | 6/15 = 0.40 | 6 | 0 | 4 | 5 | 0 | 0 | 7 | 0 | n/a |
-| constant-defer | holdout | 15 | 15 | 4/15 = 0.27 | 0 | 4 | 0 | 0 | 11 | 0 | 12 | 0 | n/a |
+| Weigher           | Split   | n   | covered | agreement   | advanced | held | premature | misdirected | stalled | failed | completable | spend (micros) | p95 latency |
+| ----------------- | ------- | --- | ------- | ----------- | -------- | ---- | --------- | ----------- | ------- | ------ | ----------- | -------------- | ----------- |
+| scripted@1        | tune    | 8   | 8       | 5/8 = 0.63  | 5        | 0    | 2         | 1           | 0       | 0      | 6           | 0              | n/a         |
+| constant-dispatch | tune    | 8   | 8       | 5/8 = 0.63  | 5        | 0    | 2         | 1           | 0       | 0      | 6           | 0              | n/a         |
+| constant-defer    | tune    | 8   | 8       | 2/8 = 0.25  | 0        | 2    | 0         | 0           | 6       | 0      | 7           | 0              | n/a         |
+| scripted@1        | holdout | 15  | 15      | 6/15 = 0.40 | 6        | 0    | 4         | 5           | 0       | 0      | 7           | 0              | n/a         |
+| constant-dispatch | holdout | 15  | 15      | 6/15 = 0.40 | 6        | 0    | 4         | 5           | 0       | 0      | 7           | 0              | n/a         |
+| constant-defer    | holdout | 15  | 15      | 4/15 = 0.27 | 0        | 4    | 0         | 0           | 11      | 0      | 12          | 0              | n/a         |
 
 ## Promotion (holdout only)
 
@@ -54,33 +54,33 @@ Agreement is the share of cases whose selected frontier equals the adjudicated o
 
 Each cell is the frontier Weave selected from that weigher's weights, then its outcome class.
 
-| Case | Kind | Adjudicated | scripted@1 | constant-dispatch | constant-defer | jev |
-| --- | --- | --- | --- | --- | --- | --- |
-| fw-h01 | hold | (none) | frame — premature | frame — premature | (none) — held | not run |
+| Case   | Kind   | Adjudicated                 | scripted@1                                                                | constant-dispatch                                                         | constant-defer   | jev     |
+| ------ | ------ | --------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------- | ------- |
+| fw-h01 | hold   | (none)                      | frame — premature                                                         | frame — premature                                                         | (none) — held    | not run |
 | fw-h02 | gather | inspect alpha, inspect beta | inspect alpha, inspect beta, inspect delta, inspect epsilon — misdirected | inspect alpha, inspect beta, inspect delta, inspect epsilon — misdirected | (none) — stalled | not run |
-| fw-h03 | gather | inspect beta | inspect beta, inspect delta — misdirected | inspect beta, inspect delta — misdirected | (none) — stalled | not run |
-| fw-h04 | gather | inspect alpha, inspect beta | inspect alpha, inspect beta — advanced | inspect alpha, inspect beta — advanced | (none) — stalled | not run |
-| fw-h05 | gather | frame | frame, review — misdirected | frame, review — misdirected | (none) — stalled | not run |
-| fw-h06 | hold | (none) | frame, review — premature | frame, review — premature | (none) — held | not run |
-| fw-h07 | act | assemble | assemble, inspect delta — misdirected | assemble, inspect delta — misdirected | (none) — stalled | not run |
-| fw-h08 | act | complete | complete — advanced | complete — advanced | (none) — stalled | not run |
-| fw-h09 | gather | inspect alpha, inspect beta | inspect alpha, inspect beta — advanced | inspect alpha, inspect beta — advanced | (none) — stalled | not run |
-| fw-h10 | hold | (none) | assemble — premature | assemble — premature | (none) — held | not run |
-| fw-h11 | hold | (none) | inspect epsilon — premature | inspect epsilon — premature | (none) — held | not run |
-| fw-h12 | gather | inspect alpha | inspect alpha, inspect delta — misdirected | inspect alpha, inspect delta — misdirected | (none) — stalled | not run |
-| fw-h13 | gather | frame | frame — advanced | frame — advanced | (none) — stalled | not run |
-| fw-h14 | gather | frame, review | frame, review — advanced | frame, review — advanced | (none) — stalled | not run |
-| fw-h15 | gather | inspect alpha | inspect alpha — advanced | inspect alpha — advanced | (none) — stalled | not run |
+| fw-h03 | gather | inspect beta                | inspect beta, inspect delta — misdirected                                 | inspect beta, inspect delta — misdirected                                 | (none) — stalled | not run |
+| fw-h04 | gather | inspect alpha, inspect beta | inspect alpha, inspect beta — advanced                                    | inspect alpha, inspect beta — advanced                                    | (none) — stalled | not run |
+| fw-h05 | gather | frame                       | frame, review — misdirected                                               | frame, review — misdirected                                               | (none) — stalled | not run |
+| fw-h06 | hold   | (none)                      | frame, review — premature                                                 | frame, review — premature                                                 | (none) — held    | not run |
+| fw-h07 | act    | assemble                    | assemble, inspect delta — misdirected                                     | assemble, inspect delta — misdirected                                     | (none) — stalled | not run |
+| fw-h08 | act    | complete                    | complete — advanced                                                       | complete — advanced                                                       | (none) — stalled | not run |
+| fw-h09 | gather | inspect alpha, inspect beta | inspect alpha, inspect beta — advanced                                    | inspect alpha, inspect beta — advanced                                    | (none) — stalled | not run |
+| fw-h10 | hold   | (none)                      | assemble — premature                                                      | assemble — premature                                                      | (none) — held    | not run |
+| fw-h11 | hold   | (none)                      | inspect epsilon — premature                                               | inspect epsilon — premature                                               | (none) — held    | not run |
+| fw-h12 | gather | inspect alpha               | inspect alpha, inspect delta — misdirected                                | inspect alpha, inspect delta — misdirected                                | (none) — stalled | not run |
+| fw-h13 | gather | frame                       | frame — advanced                                                          | frame — advanced                                                          | (none) — stalled | not run |
+| fw-h14 | gather | frame, review               | frame, review — advanced                                                  | frame, review — advanced                                                  | (none) — stalled | not run |
+| fw-h15 | gather | inspect alpha               | inspect alpha — advanced                                                  | inspect alpha — advanced                                                  | (none) — stalled | not run |
 
 ## Cost and correction tradeoff
 
 A correction is a holdout case where a reviewer applying the rubric would change the selected frontier. No human correction has been recorded yet; these counts are the rubric's.
 
-| Weigher | Holdout corrections | Corrections avoided vs scripted@1 | Spend (micros) | Spend per avoided correction |
-| --- | --- | --- | --- | --- |
-| scripted@1 | 9 | 0 | 0 | n/a |
-| constant-dispatch | 9 | 0 | 0 | n/a |
-| constant-defer | 11 | -2 | 0 | n/a |
+| Weigher           | Holdout corrections | Corrections avoided vs scripted@1 | Spend (micros) | Spend per avoided correction |
+| ----------------- | ------------------- | --------------------------------- | -------------- | ---------------------------- |
+| scripted@1        | 9                   | 0                                 | 0              | n/a                          |
+| constant-dispatch | 9                   | 0                                 | 0              | n/a                          |
+| constant-defer    | 11                  | -2                                | 0              | n/a                          |
 
 ## Jev route
 

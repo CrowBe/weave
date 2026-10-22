@@ -475,7 +475,8 @@ function parseCommands(raw: unknown, taskId: string): FrozenTask['commands'] {
     };
     const exit = item['exit'];
     if (exit === undefined) return command;
-    if (exit !== null && !Number.isSafeInteger(exit)) throw new Error(`${taskId} command exit must be an integer or null`);
+    if (exit !== null && !Number.isSafeInteger(exit))
+      throw new Error(`${taskId} command exit must be an integer or null`);
     return { ...command, exit: exit as number | null };
   });
 }

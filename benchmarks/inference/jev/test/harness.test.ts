@@ -207,9 +207,15 @@ test('the mapping never carries the answer to the model', () => {
 });
 
 test('option counts drive the uniform floor for every question type', () => {
-  assert.equal(optionKeys({ type: 'choice', instructions: '', criteria: { a: 1, b: 2, c: 3 }, label: 'a', src: '' }).length, 3);
+  assert.equal(
+    optionKeys({ type: 'choice', instructions: '', criteria: { a: 1, b: 2, c: 3 }, label: 'a', src: '' }).length,
+    3,
+  );
   assert.equal(optionKeys({ type: 'noul', instructions: '', label: true, src: '' }).length, 2);
-  assert.equal(optionKeys({ type: 'score', instructions: '', criteria: ['a', 'b', 'c', 'd'], label: 0, src: '' }).length, 4);
+  assert.equal(
+    optionKeys({ type: 'score', instructions: '', criteria: ['a', 'b', 'c', 'd'], label: 0, src: '' }).length,
+    4,
+  );
 });
 
 // --- the direct model must be named, not merely present ---------------------

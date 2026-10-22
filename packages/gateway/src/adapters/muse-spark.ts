@@ -78,16 +78,27 @@ export function museSparkAdapter(options: MuseSparkOptions): GenerationAdapter {
     id: MUSE_SPARK_ADAPTER,
     async execute(call: GenerationCall): Promise<GenerationProviderResult> {
       if (call.instructions.includes(contentKey) || call.prompt.includes(contentKey)) {
-        return { status: 'failed', failure: failure('invalid_request',
-          'request content contains the adapter credential', false),
-          usage: { input_tokens: 0, output_tokens: 0 } };
+        return {
+          status: 'failed',
+          failure: failure('invalid_request', 'request content contains the adapter credential', false),
+          usage: { input_tokens: 0, output_tokens: 0 },
+        };
       }
       // Route settings validation is adapter-agnostic. Enforce this provider's
       // minimum here, including callers that construct routed units directly.
-      if (!Number.isInteger(call.settings.max_output_tokens) || call.settings.max_output_tokens < MUSE_SPARK_MIN_OUTPUT_TOKENS) {
-        return { status: 'failed', failure: failure('invalid_request',
-          `settings.max_output_tokens must be an integer at least ${MUSE_SPARK_MIN_OUTPUT_TOKENS} to leave room for default reasoning and text`, false),
-          usage: { input_tokens: 0, output_tokens: 0 } };
+      if (
+        !Number.isInteger(call.settings.max_output_tokens) ||
+        call.settings.max_output_tokens < MUSE_SPARK_MIN_OUTPUT_TOKENS
+      ) {
+        return {
+          status: 'failed',
+          failure: failure(
+            'invalid_request',
+            `settings.max_output_tokens must be an integer at least ${MUSE_SPARK_MIN_OUTPUT_TOKENS} to leave room for default reasoning and text`,
+            false,
+          ),
+          usage: { input_tokens: 0, output_tokens: 0 },
+        };
       }
       try {
         const result = await generateText({
@@ -100,12 +111,20 @@ export function museSparkAdapter(options: MuseSparkOptions): GenerationAdapter {
           ...(call.signal === undefined ? {} : { abortSignal: call.signal }),
         });
         if (result.text.length === 0) {
-          return { status: 'failed', failure: failure('malformed_response', result.finishReason === 'length'
-            ? 'output token cap exhausted before any text content; increase settings.max_output_tokens to leave room for reasoning and text'
-            : 'response carried no text content', false), usage: {
+          return {
+            status: 'failed',
+            failure: failure(
+              'malformed_response',
+              result.finishReason === 'length'
+                ? 'output token cap exhausted before any text content; increase settings.max_output_tokens to leave room for reasoning and text'
+                : 'response carried no text content',
+              false,
+            ),
+            usage: {
               input_tokens: Number.isFinite(result.usage.inputTokens) ? result.usage.inputTokens : undefined,
               output_tokens: Number.isFinite(result.usage.outputTokens) ? result.usage.outputTokens : undefined,
-            } };
+            },
+          };
         }
         return {
           status: 'completed',
@@ -130,7 +149,7 @@ export function museSparkAdapter(options: MuseSparkOptions): GenerationAdapter {
  * relative Retry-After, never the original error or its message.
  */
 function classify(error: unknown, signal: AbortSignal | undefined): ProviderFailure {
-  const record = typeof error === 'object' && error !== null ? error as Record<string, unknown> : {};
+  const record = typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : {};
   const name = typeof record['name'] === 'string' ? record['name'] : '';
   const reason = signal?.reason as unknown;
   const reasonName = reason instanceof Error ? reason.name : '';
@@ -141,18 +160,19 @@ function classify(error: unknown, signal: AbortSignal | undefined): ProviderFail
 
   const status = typeof record['statusCode'] === 'number' ? record['statusCode'] : undefined;
   const headers = record['responseHeaders'];
-  const retryAfter = typeof headers === 'object' && headers !== null
-    ? (headers as Record<string, unknown>)['retry-after']
-    : undefined;
+  const retryAfter =
+    typeof headers === 'object' && headers !== null ? (headers as Record<string, unknown>)['retry-after'] : undefined;
   const delay = secondsToMs(typeof retryAfter === 'string' ? retryAfter : null);
-  const withDelay = (result: ProviderFailure): ProviderFailure => delay === undefined ? result : { ...result, retry_after_ms: delay };
+  const withDelay = (result: ProviderFailure): ProviderFailure =>
+    delay === undefined ? result : { ...result, retry_after_ms: delay };
   if (status === 401 || status === 402 || status === 403) {
     return withDelay(failure('unauthorized', 'provider refused authentication', false));
   }
   if (status === 408) return withDelay(failure('timeout', 'provider request timed out', false));
   if (status === 429) return withDelay(failure('rate_limited', 'provider rate limit refused the request', true));
   if (status !== undefined && status >= 500) return withDelay(failure('unavailable', 'provider unavailable', true));
-  if (status !== undefined && status >= 400) return withDelay(failure('invalid_request', 'provider refused the request', false));
+  if (status !== undefined && status >= 400)
+    return withDelay(failure('invalid_request', 'provider refused the request', false));
   if (status !== undefined || name === 'AI_InvalidResponseDataError' || name === 'AI_NoOutputGeneratedError') {
     return failure('malformed_response', 'provider response was malformed', false);
   }

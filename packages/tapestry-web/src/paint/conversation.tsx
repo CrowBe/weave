@@ -40,10 +40,16 @@ export function ConversationThread({
               <caption className="sr-only">Recorded observations</caption>
               <thead className="sticky top-0 bg-[var(--surface)]">
                 <tr className="h-8 text-left text-[11px] leading-4 font-medium" style={{ color: 'var(--text-muted)' }}>
-                  <th className="w-9 border-b border-[var(--hairline)] pr-2 text-right font-medium whitespace-nowrap">Seq</th>
+                  <th className="w-9 border-b border-[var(--hairline)] pr-2 text-right font-medium whitespace-nowrap">
+                    Seq
+                  </th>
                   <th className="border-b border-[var(--hairline)] px-2 font-medium whitespace-nowrap">Type</th>
-                  <th className="w-[7.25rem] border-b border-[var(--hairline)] px-1.5 font-medium whitespace-nowrap">Provenance</th>
-                  <th className="w-[7rem] border-b border-[var(--hairline)] px-1.5 font-medium whitespace-nowrap">Validation</th>
+                  <th className="w-[7.25rem] border-b border-[var(--hairline)] px-1.5 font-medium whitespace-nowrap">
+                    Provenance
+                  </th>
+                  <th className="w-[7rem] border-b border-[var(--hairline)] px-1.5 font-medium whitespace-nowrap">
+                    Validation
+                  </th>
                   <th className="w-14 border-b border-[var(--hairline)] pl-1.5 font-medium whitespace-nowrap">Cause</th>
                 </tr>
               </thead>
@@ -60,10 +66,16 @@ export function ConversationThread({
                   const validation = validationRole(item.validation.status);
                   return (
                     <tr key={item.sequence} data-testid="observation">
-                      <td className="h-[var(--row)] overflow-hidden border-b border-[var(--hairline-soft)] pr-2 text-right font-mono text-[12px] font-normal tabular-nums whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
+                      <td
+                        className="h-[var(--row)] overflow-hidden border-b border-[var(--hairline-soft)] pr-2 text-right font-mono text-[12px] font-normal tabular-nums whitespace-nowrap"
+                        style={{ color: 'var(--text-muted)' }}
+                      >
                         {item.sequence}
                       </td>
-                      <td className="h-[var(--row)] overflow-hidden border-b border-[var(--hairline-soft)] px-2 font-mono text-[12px] font-normal text-[var(--text)] whitespace-nowrap" title={item.type}>
+                      <td
+                        className="h-[var(--row)] overflow-hidden border-b border-[var(--hairline-soft)] px-2 font-mono text-[12px] font-normal text-[var(--text)] whitespace-nowrap"
+                        title={item.type}
+                      >
                         <span className="block truncate">{item.type}</span>
                       </td>
                       <td className="h-[var(--row)] overflow-hidden border-b border-[var(--hairline-soft)] px-1.5">
@@ -83,7 +95,10 @@ export function ConversationThread({
                           </span>
                         ) : null}
                       </td>
-                      <td className="h-[var(--row)] overflow-hidden border-b border-[var(--hairline-soft)] pl-1.5 font-mono text-[12px] font-normal whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
+                      <td
+                        className="h-[var(--row)] overflow-hidden border-b border-[var(--hairline-soft)] pl-1.5 font-mono text-[12px] font-normal whitespace-nowrap"
+                        style={{ color: 'var(--text-muted)' }}
+                      >
                         {item.cause === null ? 'none' : String(item.cause)}
                       </td>
                     </tr>
@@ -100,7 +115,11 @@ export function ConversationThread({
           event.preventDefault();
         }}
       >
-        <label className="text-[12px] leading-4 font-medium" htmlFor="operator-input" style={{ color: 'var(--text-muted)' }}>
+        <label
+          className="text-[12px] leading-4 font-medium"
+          htmlFor="operator-input"
+          style={{ color: 'var(--text-muted)' }}
+        >
           Operator input
         </label>
         <textarea
@@ -112,8 +131,14 @@ export function ConversationThread({
           aria-describedby="input-unavailable"
           className="mt-2 w-full resize-none rounded-md border border-dashed border-[var(--hairline)] bg-[var(--canvas)] px-3 py-2 text-[13px] leading-5 text-[var(--text)] placeholder:text-[var(--text-muted)] disabled:cursor-not-allowed"
         />
-        <p id="input-unavailable" data-testid="input-unavailable" className="mt-2 text-[12px] leading-4" style={{ color: 'var(--text-muted)' }}>
-          Input is unavailable. <code className="font-mono text-[11px]">operator.input</code> has no trusted ingress contract.
+        <p
+          id="input-unavailable"
+          data-testid="input-unavailable"
+          className="mt-2 text-[12px] leading-4"
+          style={{ color: 'var(--text-muted)' }}
+        >
+          Input is unavailable. <code className="font-mono text-[11px]">operator.input</code> has no trusted ingress
+          contract.
         </p>
       </form>
     </div>

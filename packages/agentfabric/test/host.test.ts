@@ -11,7 +11,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, type TestContext } from 'node:test';
 import { createGrantAuthority, type Grant, type InvocationOutcome, validateCatalogue } from '@weave/agentsop';
-import { AgentFabricHost, type CapabilityImplementation, FabricStore, REPORT_PUBLISH, SOURCE_INSPECT } from '@weave/agentfabric';
+import {
+  AgentFabricHost,
+  type CapabilityImplementation,
+  FabricStore,
+  REPORT_PUBLISH,
+  SOURCE_INSPECT,
+} from '@weave/agentfabric';
 
 function inspectGrant(authority: ReturnType<typeof createGrantAuthority>, source: string, action_id: string): Grant {
   return authority.issue({
@@ -30,7 +36,10 @@ describe('admitted implementation single-use release', () => {
   function deferred() {
     let resolve!: (outcome: InvocationOutcome) => void;
     let reject!: (error: Error) => void;
-    const result = new Promise<InvocationOutcome>((yes, no) => { resolve = yes; reject = no; });
+    const result = new Promise<InvocationOutcome>((yes, no) => {
+      resolve = yes;
+      reject = no;
+    });
     return { result, resolve, reject };
   }
 
@@ -38,7 +47,10 @@ describe('admitted implementation single-use release', () => {
     const dir = mkdtempSync(join(tmpdir(), 'weave-host-single-release-'));
     const path = join(dir, 'fabric.json');
     const store = FabricStore.open(path);
-    t.after(() => { store.close(); rmSync(dir, { recursive: true, force: true }); });
+    t.after(() => {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    });
     const authority = createGrantAuthority();
     const host = new AgentFabricHost({ authority, store });
     const source = host.registerSource('mem:single-release', 'line');
@@ -48,17 +60,29 @@ describe('admitted implementation single-use release', () => {
       return run(inputs, context);
     });
     const persist = store.persistInvocationResult.bind(store);
-    store.persistInvocationResult = (record) => { counts.finishes += 1; persist(record); };
+    store.persistInvocationResult = (record) => {
+      counts.finishes += 1;
+      persist(record);
+    };
     const release = host.coordinator.release.bind(host.coordinator);
-    host.coordinator.release = (id) => { counts.reservationReleases += 1; release(id); };
+    host.coordinator.release = (id) => {
+      counts.reservationReleases += 1;
+      release(id);
+    };
     const grant = inspectGrant(authority, source, 'single-action');
     const handle = host.invoke(grant, SOURCE_INSPECT.id, { source }, { invocation_id: 'single-invocation' });
     assert.equal(handle.kind, 'handle');
     if (handle.kind !== 'handle') throw new Error('expected invocation handle');
-    const result = handle.result.then((outcome) => { counts.settlements += 1; return outcome; });
-    const records = () => readFileSync(path, 'utf8').trim().split('\n')
-      .map((line) => JSON.parse(line) as { op: string; record?: { invocation_id: string; status: string } })
-      .filter((entry) => entry.op === 'result' && entry.record?.invocation_id === handle.invocation_id);
+    const result = handle.result.then((outcome) => {
+      counts.settlements += 1;
+      return outcome;
+    });
+    const records = () =>
+      readFileSync(path, 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as { op: string; record?: { invocation_id: string; status: string } })
+        .filter((entry) => entry.op === 'result' && entry.record?.invocation_id === handle.invocation_id);
     return { path, store, host, source, grant, handle, result, counts, records };
   }
 
@@ -80,9 +104,16 @@ describe('admitted implementation single-use release', () => {
       const reopened = FabricStore.open(f.path);
       try {
         const host = new AgentFabricHost({ authority: f.host.authority, store: reopened });
-        host.installAdmitted(SOURCE_INSPECT, () => { f.counts.runs += 1; return succeeded; });
-        const replay = host.invoke(f.grant, SOURCE_INSPECT.id, { source: f.source },
-          { invocation_id: f.handle.invocation_id });
+        host.installAdmitted(SOURCE_INSPECT, () => {
+          f.counts.runs += 1;
+          return succeeded;
+        });
+        const replay = host.invoke(
+          f.grant,
+          SOURCE_INSPECT.id,
+          { source: f.source },
+          { invocation_id: f.handle.invocation_id },
+        );
         assert.equal(replay.kind, 'handle');
         if (replay.kind !== 'handle') throw new Error('expected replay handle');
         assert.deepEqual(await replay.result, succeeded);
@@ -90,7 +121,9 @@ describe('admitted implementation single-use release', () => {
         assert.equal(f.counts.runs, 1);
         assert.equal(f.records().length, 1);
         assert.deepEqual(reopened.getInvocation(f.handle.invocation_id)?.outcome, succeeded);
-      } finally { reopened.close(); }
+      } finally {
+        reopened.close();
+      }
     });
   }
 
@@ -100,7 +133,7 @@ describe('admitted implementation single-use release', () => {
         const first = deferred();
         const late = deferred();
         let calls = 0;
-        const f = fixture(t, () => ++calls === 1 ? first.result : late.result);
+        const f = fixture(t, () => (++calls === 1 ? first.result : late.result));
         f.host.release('single-action');
         f.host.releaseAll();
         if (fault === 'closed store') f.store.close();
@@ -109,8 +142,11 @@ describe('admitted implementation single-use release', () => {
         const before = readFileSync(f.path);
         first.resolve(succeeded);
         const markerPersisted = fault === 'persistence refusal';
-        const uncertain = { outcome: 'uncertain', reason: 'failed to persist invocation result' +
-          (markerPersisted ? '' : '; uncertain marker was not persisted') };
+        const uncertain = {
+          outcome: 'uncertain',
+          reason:
+            'failed to persist invocation result' + (markerPersisted ? '' : '; uncertain marker was not persisted'),
+        };
         assert.deepEqual(await f.result, uncertain);
         const holds = structuredClone(f.host.coordinator.held());
         const releases = f.counts.reservationReleases;
@@ -132,7 +168,8 @@ describe('admitted implementation single-use release', () => {
         assert.equal(f.counts.reservationReleases, releases);
         assert.deepEqual(f.host.coordinator.held(), holds);
         assert.deepEqual(f.host.lookup(f.handle.invocation_id, f.grant), {
-          status: 'unresolved', reason: uncertain.reason,
+          status: 'unresolved',
+          reason: uncertain.reason,
         });
         assert.equal(f.store.getInvocation(f.handle.invocation_id)?.status, markerPersisted ? 'uncertain' : 'running');
         if (markerPersisted) assert.notDeepEqual(readFileSync(f.path), before);
@@ -156,8 +193,10 @@ describe('admitted implementation single-use release', () => {
       if (completion !== 'throws synchronously') f.host.releaseAll();
       if (completion === 'resolves') pending.resolve(succeeded);
       if (completion === 'rejects') pending.reject(new Error('implementation failed'));
-      assert.deepEqual(await f.result, completion === 'resolves'
-        ? succeeded : { outcome: 'failed', failure: 'implementation failed' });
+      assert.deepEqual(
+        await f.result,
+        completion === 'resolves' ? succeeded : { outcome: 'failed', failure: 'implementation failed' },
+      );
       assert.deepEqual(f.counts, { runs: 1, finishes: 1, settlements: 1, reservationReleases: 1 });
       assert.equal(f.records().length, 1);
     });
@@ -175,14 +214,22 @@ describe('admitted implementation single-use release', () => {
     assert.deepEqual(f.counts, { runs: 1, finishes: 1, settlements: 1, reservationReleases: 1 });
     assert.equal(f.store.getInvocation(f.handle.invocation_id)?.cancel_requested, true);
     // Cancellation writes a running record; settlement adds one terminal record.
-    assert.deepEqual(f.records().map((entry) => entry.record?.status), ['running', 'stopped']);
+    assert.deepEqual(
+      f.records().map((entry) => entry.record?.status),
+      ['running', 'stopped'],
+    );
   });
 
   it('denies reuse of the invocation grant while its implementation is pending', async (t) => {
     const pending = deferred();
     const f = fixture(t, () => pending.result);
     f.host.release('single-action');
-    const reused = f.host.invoke(f.grant, SOURCE_INSPECT.id, { source: f.source }, { invocation_id: 'second-invocation' });
+    const reused = f.host.invoke(
+      f.grant,
+      SOURCE_INSPECT.id,
+      { source: f.source },
+      { invocation_id: 'second-invocation' },
+    );
     assert.equal(reused.kind, 'rejected');
     if (reused.kind !== 'rejected') throw new Error('expected grant reuse rejection');
     assert.equal(reused.code, 'DENIED');
@@ -196,11 +243,24 @@ describe('admitted implementation single-use release', () => {
 });
 
 describe('AgentFabric host authority', () => {
-  for (const fault of ['closed store', 'replaced lock', 'poisoned append', 'validation error', 'persistence refusal',
-    'rejected implementation', 'uncertain implementation', 'cache error']) {
+  for (const fault of [
+    'closed store',
+    'replaced lock',
+    'poisoned append',
+    'validation error',
+    'persistence refusal',
+    'rejected implementation',
+    'uncertain implementation',
+    'cache error',
+  ]) {
     it(`settles an admitted implementation after ${fault} without an unhandled rejection`, () => {
       // Observe unhandled rejections in a child, independently of node:test's hook.
-      const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      const child = spawnSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `
         import assert from 'node:assert/strict';
         import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
         import { tmpdir } from 'node:os';
@@ -275,15 +335,29 @@ describe('AgentFabric host authority', () => {
           await new Promise((resolve) => setImmediate(resolve));
           assert.deepEqual(unhandled, []);
         } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
-      `], { encoding: 'utf8', timeout: 10_000 });
+      `,
+        ],
+        { encoding: 'utf8', timeout: 10_000 },
+      );
       assert.equal(child.status, 0, child.stderr || String(child.error));
     });
   }
 
-  for (const malformed of ['undefined output', 'non-string failure', 'BigInt output', 'cyclic output', 'invalid serialized outcome']) {
+  for (const malformed of [
+    'undefined output',
+    'non-string failure',
+    'BigInt output',
+    'cyclic output',
+    'invalid serialized outcome',
+  ]) {
     it(`settles an admitted implementation's ${malformed} without an unhandled rejection`, () => {
       // Isolate rejection observation from node:test's own unhandled-rejection hook.
-      const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      const child = spawnSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `
         import assert from 'node:assert/strict';
         import { mkdtempSync, rmSync } from 'node:fs';
         import { tmpdir } from 'node:os';
@@ -328,7 +402,10 @@ describe('AgentFabric host authority', () => {
           await new Promise((resolve) => setImmediate(resolve));
           assert.deepEqual(unhandled, []);
         } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
-      `], { encoding: 'utf8', timeout: 10_000 });
+      `,
+        ],
+        { encoding: 'utf8', timeout: 10_000 },
+      );
       assert.equal(child.status, 0, child.stderr || String(child.error));
     });
   }
@@ -351,9 +428,15 @@ describe('AgentFabric host authority', () => {
       assert.deepEqual(host.conclusions(), store.conclusions());
       store.close();
       const reopened = FabricStore.open(path);
-      try { assert.deepEqual(host.conclusions(), reopened.conclusions()); }
-      finally { reopened.close(); }
-    } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+      try {
+        assert.deepEqual(host.conclusions(), reopened.conclusions());
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('does not retain a conclusion after persistence is refused', () => {
@@ -364,7 +447,9 @@ describe('AgentFabric host authority', () => {
     try {
       assert.throws(() => host.retainConclusion('unaccepted'), /closed/);
       assert.deepEqual(host.conclusions(), []);
-    } finally { rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   for (const late of ['completion', 'cancellation'] as const) {
@@ -375,8 +460,12 @@ describe('AgentFabric host authority', () => {
       const authority = createGrantAuthority();
       const host = new AgentFabricHost({ authority, store });
       const source = host.registerSource('mem:late', 'line');
-      const handle = host.invoke(inspectGrant(authority, source, 'late-action'), SOURCE_INSPECT.id,
-        { source }, { invocation_id: 'late-invocation' });
+      const handle = host.invoke(
+        inspectGrant(authority, source, 'late-action'),
+        SOURCE_INSPECT.id,
+        { source },
+        { invocation_id: 'late-invocation' },
+      );
       assert.equal(handle.kind, 'handle');
       if (handle.kind !== 'handle') throw new Error('expected invocation handle');
       store.close();
@@ -386,8 +475,10 @@ describe('AgentFabric host authority', () => {
         const before = readFileSync(path);
         if (late === 'completion') {
           host.release('late-action');
-          assert.deepEqual(await handle.result, { outcome: 'uncertain',
-            reason: 'failed to persist invocation result; uncertain marker was not persisted' });
+          assert.deepEqual(await handle.result, {
+            outcome: 'uncertain',
+            reason: 'failed to persist invocation result; uncertain marker was not persisted',
+          });
           assert.equal(host.openCount(), 0);
           assert.deepEqual(host.coordinator.held(), []);
         } else {
@@ -456,7 +547,10 @@ describe('AgentFabric host authority', () => {
     const host = new AgentFabricHost({ authority });
     const alpha = host.registerSource('mem:alpha', 'line');
     const dest = host.registerDestination('mem:outbox');
-    const report = { entries: [{ source: alpha, revision: 1, line_count: 1, digest: 'x' }], read_set: [{ resource: alpha, revision: 1 }] };
+    const report = {
+      entries: [{ source: alpha, revision: 1, line_count: 1, digest: 'x' }],
+      read_set: [{ resource: alpha, revision: 1 }],
+    };
     const inputs = { report, read_set: report.read_set, sources: [alpha], destination: dest, expected_revision: 1 };
     const grant = authority.issue({
       action_id: 'a:3:1',
@@ -475,7 +569,8 @@ describe('AgentFabric host authority', () => {
     const first = host.invoke(grant, REPORT_PUBLISH.id, inputs, { invocation_id: 'inv-1' });
     assert.equal(first.kind, 'handle');
     host.release('a:3:1');
-    const outcome = await (first as { result: Promise<{ outcome: string; output: { committed_revision: number } }> }).result;
+    const outcome = await (first as { result: Promise<{ outcome: string; output: { committed_revision: number } }> })
+      .result;
     assert.equal(outcome.outcome, 'succeeded');
     const writes = host.resourceAccesses.filter((a) => a.operation === 'write').length;
 
@@ -514,7 +609,16 @@ describe('AgentFabric host authority', () => {
     const dest = host.registerDestination('mem:outbox');
     const alias = host.alias(dest);
     const report = { entries: [], read_set: [{ resource: alpha, revision: 1 }] };
-    const inputs = { report: { entries: [{ source: alpha, revision: 1, line_count: 1, digest: 'x' }], read_set: [{ resource: alpha, revision: 1 }] }, read_set: [{ resource: alpha, revision: 1 }], sources: [alpha], destination: dest, expected_revision: 1 };
+    const inputs = {
+      report: {
+        entries: [{ source: alpha, revision: 1, line_count: 1, digest: 'x' }],
+        read_set: [{ resource: alpha, revision: 1 }],
+      },
+      read_set: [{ resource: alpha, revision: 1 }],
+      sources: [alpha],
+      destination: dest,
+      expected_revision: 1,
+    };
     void report;
     const grant = authority.issue({
       action_id: 'a:1:1',
@@ -832,8 +936,17 @@ describe('Fabric store indexes', () => {
     const host = new AgentFabricHost({ authority, store });
     const source = host.registerSource('mem:cancel', 'line');
     const destination = host.registerDestination('mem:cancel-outbox');
-    store.putResource({ canonical_id: 'res_padding', kind: 'source', locator: 'mem:padding', revision: 1,
-      content: 'x'.repeat(300 * 1024), publication: null }, false);
+    store.putResource(
+      {
+        canonical_id: 'res_padding',
+        kind: 'source',
+        locator: 'mem:padding',
+        revision: 1,
+        content: 'x'.repeat(300 * 1024),
+        publication: null,
+      },
+      false,
+    );
     const mutableFs = createRequire(import.meta.url)('node:fs') as typeof nodeFs;
     const original = mutableFs.renameSync;
     let failures = 0;
@@ -846,8 +959,12 @@ describe('Fabric store indexes', () => {
     }) as typeof original;
     syncBuiltinESMExports();
     try {
-      const handle = host.invoke(publishGrant(authority, source, destination, 'cancel-action', 1), REPORT_PUBLISH.id,
-        publishInput(source, destination), { invocation_id: 'cancel-invocation' });
+      const handle = host.invoke(
+        publishGrant(authority, source, destination, 'cancel-action', 1),
+        REPORT_PUBLISH.id,
+        publishInput(source, destination),
+        { invocation_id: 'cancel-invocation' },
+      );
       assert.equal(handle.kind, 'handle');
       if (handle.kind !== 'handle') throw new Error('expected invocation handle');
       handle.requestCancel();
@@ -862,7 +979,9 @@ describe('Fabric store indexes', () => {
       try {
         assert.equal(reopened.getInvocation('cancel-invocation')?.status, 'stopped');
         assert.equal(reopened.getInvocation('cancel-invocation')?.cancel_requested, true);
-      } finally { reopened.close(); }
+      } finally {
+        reopened.close();
+      }
     } finally {
       mutableFs.renameSync = original;
       syncBuiltinESMExports();
@@ -920,9 +1039,7 @@ describe('Fabric store indexes', () => {
     const running = {
       ...snapshot,
       invocations: snapshot.invocations.map((record) =>
-        record.invocation_id === 'inv-index-lookup'
-          ? { ...record, status: 'running' as const, outcome: null }
-          : record,
+        record.invocation_id === 'inv-index-lookup' ? { ...record, status: 'running' as const, outcome: null } : record,
       ),
     };
     const restored = new AgentFabricHost({ authority, store: FabricStore.restore(running) });
@@ -953,31 +1070,42 @@ describe('Fabric store indexes', () => {
       authority,
       store: FabricStore.restore(uncommittedWithoutPublication),
     });
-    const uncertain = absent.lookup(
-      'inv-index-lookup',
-      publishGrant(authority, source, destination, 'a:index:2', 4),
-    );
+    const uncertain = absent.lookup('inv-index-lookup', publishGrant(authority, source, destination, 'a:index:2', 4));
     assert.equal('status' in uncertain && uncertain.status, 'unresolved');
   });
 
   for (const fault of ['closed store', 'replaced lock', 'validation error', 'persistence refusal'] as const) {
-    for (const pathToCommit of ['rejected acknowledgement', 'after_commit release', 'after_commit proceed', 'disconnect'] as const) {
+    for (const pathToCommit of [
+      'rejected acknowledgement',
+      'after_commit release',
+      'after_commit proceed',
+      'disconnect',
+    ] as const) {
       it(`settles ${pathToCommit} after ${fault} without escaping and reconciles the publication`, async () => {
         const dir = mkdtempSync(join(tmpdir(), 'weave-host-note-committed-'));
         const path = join(dir, 'fabric.json');
         const store = FabricStore.open(path);
         const authority = createGrantAuthority();
-        const host = new AgentFabricHost({ authority, store, faults: {
-          rejectPromiseAfterCommit: pathToCommit === 'rejected acknowledgement',
-          disconnectAfterCommit: pathToCommit === 'disconnect',
-          publishGate: pathToCommit === 'after_commit proceed' ? 'before_commit'
-            : pathToCommit === 'after_commit release' ? 'after_commit' : 'none',
-        } });
+        const host = new AgentFabricHost({
+          authority,
+          store,
+          faults: {
+            rejectPromiseAfterCommit: pathToCommit === 'rejected acknowledgement',
+            disconnectAfterCommit: pathToCommit === 'disconnect',
+            publishGate:
+              pathToCommit === 'after_commit proceed'
+                ? 'before_commit'
+                : pathToCommit === 'after_commit release'
+                  ? 'after_commit'
+                  : 'none',
+          },
+        });
         const source = host.registerSource('mem:note-committed', 'line');
         const destination = host.registerDestination('mem:note-committed-outbox');
         const issued = publishGrant(authority, source, destination, 'note-action', 1);
-        const handle = host.invoke(issued, REPORT_PUBLISH.id, publishInput(source, destination),
-          { invocation_id: 'note-invocation' });
+        const handle = host.invoke(issued, REPORT_PUBLISH.id, publishInput(source, destination), {
+          invocation_id: 'note-invocation',
+        });
         assert.equal(handle.kind, 'handle');
         if (handle.kind !== 'handle') throw new Error('expected invocation handle');
         const persistResult = store.persistInvocationResult.bind(store);
@@ -1002,8 +1130,12 @@ describe('Fabric store indexes', () => {
             new Promise((resolve) => setImmediate(() => resolve('unsettled'))),
           ]);
           const markerPersisted = fault === 'validation error' || fault === 'persistence refusal';
-          assert.deepEqual(result, { outcome: 'uncertain', reason: 'failed to persist invocation result after commit' +
-            (markerPersisted ? '' : '; uncertain marker was not persisted') });
+          assert.deepEqual(result, {
+            outcome: 'uncertain',
+            reason:
+              'failed to persist invocation result after commit' +
+              (markerPersisted ? '' : '; uncertain marker was not persisted'),
+          });
           assert.equal(host.openCount(), 0);
           assert.deepEqual(host.openInvocationIds(), []);
           assert.equal(host.coordinator.held().length, 2);
@@ -1026,7 +1158,9 @@ describe('Fabric store indexes', () => {
             assert.equal('status' in found && found.status, 'committed');
             assert.deepEqual(recovered.coordinator.held(), []);
             assert.equal(reopened.getInvocation('note-invocation')?.status, 'committed');
-          } finally { reopened.close(); }
+          } finally {
+            reopened.close();
+          }
         } finally {
           store.close();
           rmSync(dir, { recursive: true, force: true });
@@ -1040,15 +1174,22 @@ describe('Fabric store indexes', () => {
       const dir = mkdtempSync(join(tmpdir(), 'weave-second-result-'));
       const path = join(dir, 'fabric.json');
       const store = FabricStore.open(path);
-      t.after(() => { store.close(); rmSync(dir, { recursive: true, force: true }); });
+      t.after(() => {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      });
       const authority = createGrantAuthority();
-      const host = new AgentFabricHost({ authority, store, faults: gate === 'after_commit'
-        ? { publishGate: 'after_commit' } : { disconnectAfterCommit: true } });
+      const host = new AgentFabricHost({
+        authority,
+        store,
+        faults: gate === 'after_commit' ? { publishGate: 'after_commit' } : { disconnectAfterCommit: true },
+      });
       const source = host.registerSource('mem:second-result', 'line');
       const destination = host.registerDestination('mem:second-result-outbox');
       const grant = publishGrant(authority, source, destination, 'second-action', 1);
-      const handle = host.invoke(grant, REPORT_PUBLISH.id, publishInput(source, destination),
-        { invocation_id: 'second-invocation' });
+      const handle = host.invoke(grant, REPORT_PUBLISH.id, publishInput(source, destination), {
+        invocation_id: 'second-invocation',
+      });
       assert.equal(handle.kind, 'handle');
       if (handle.kind !== 'handle') throw new Error('expected handle');
       const persist = store.persistInvocationResult.bind(store);
@@ -1059,7 +1200,10 @@ describe('Fabric store indexes', () => {
         persist(record);
       };
       const mark = store.persistInvocationUncertain.bind(store);
-      store.persistInvocationUncertain = (record) => { markers += 1; mark(record); };
+      store.persistInvocationUncertain = (record) => {
+        markers += 1;
+        mark(record);
+      };
       host.release('second-action');
       const durable = store.getInvocation('second-invocation')!;
       assert.equal(durable.status, 'committed');
@@ -1072,15 +1216,22 @@ describe('Fabric store indexes', () => {
       assert.deepEqual(host.coordinator.held(), []);
       assert.deepEqual(host.lookup('second-invocation', grant), { status: 'committed', outcome: durable.outcome });
       assert.deepEqual(readFileSync(path), before);
-      const next = host.invoke(publishGrant(authority, source, destination, 'next-action', 2), REPORT_PUBLISH.id,
-        { ...publishInput(source, destination), expected_revision: 2 });
+      const next = host.invoke(publishGrant(authority, source, destination, 'next-action', 2), REPORT_PUBLISH.id, {
+        ...publishInput(source, destination),
+        expected_revision: 2,
+      });
       assert.equal(next.kind, 'handle');
       store.close();
       const reopened = FabricStore.open(path);
       try {
         const recovered = new AgentFabricHost({ authority, store: reopened });
-        assert.deepEqual(recovered.lookup('second-invocation', grant), { status: 'committed', outcome: durable.outcome });
-      } finally { reopened.close(); }
+        assert.deepEqual(recovered.lookup('second-invocation', grant), {
+          status: 'committed',
+          outcome: durable.outcome,
+        });
+      } finally {
+        reopened.close();
+      }
     });
   }
 
@@ -1090,16 +1241,22 @@ describe('Fabric store indexes', () => {
     const source = host.registerSource('mem:stopped-receipt', 'line');
     const destination = host.registerDestination('mem:stopped-receipt-outbox');
     const grant = publishGrant(authority, source, destination, 'stopped-action', 1);
-    const handle = host.invoke(grant, REPORT_PUBLISH.id, publishInput(source, destination),
-      { invocation_id: 'stopped-invocation' });
+    const handle = host.invoke(grant, REPORT_PUBLISH.id, publishInput(source, destination), {
+      invocation_id: 'stopped-invocation',
+    });
     assert.equal(handle.kind, 'handle');
     if (handle.kind !== 'handle') throw new Error('expected handle');
     host.release('stopped-action');
     const outcome = await handle.result;
     const snapshot = host.snapshot();
-    const store = FabricStore.restore({ ...snapshot, invocations: snapshot.invocations.map((record) => ({
-      ...record, status: 'stopped', outcome: { outcome: 'failed', failure: 'legacy interrupted acknowledgement' },
-    })) });
+    const store = FabricStore.restore({
+      ...snapshot,
+      invocations: snapshot.invocations.map((record) => ({
+        ...record,
+        status: 'stopped',
+        outcome: { outcome: 'failed', failure: 'legacy interrupted acknowledgement' },
+      })),
+    });
     const recovered = new AgentFabricHost({ authority, store });
     assert.deepEqual(recovered.lookup('stopped-invocation', grant), { status: 'committed', outcome });
     assert.deepEqual(recovered.coordinator.held(), []);
@@ -1121,19 +1278,39 @@ describe('Fabric store indexes', () => {
     const snapshot = original.snapshot();
     const dir = mkdtempSync(join(tmpdir(), 'weave-publication-replay-'));
     const path = join(dir, 'fabric.json');
-    const store = FabricStore.restore({ ...snapshot, invocations: snapshot.invocations.map((record) => ({
-      ...record, status, outcome: status === 'running' ? null : status === 'stopped'
-        ? { outcome: 'failed', failure: 'legacy interrupted acknowledgement' }
-        : { outcome: 'uncertain', reason: 'interrupted acknowledgement' },
-    })) }, path);
-    t.after(() => { store.close(); rmSync(dir, { recursive: true, force: true }); });
+    const store = FabricStore.restore(
+      {
+        ...snapshot,
+        invocations: snapshot.invocations.map((record) => ({
+          ...record,
+          status,
+          outcome:
+            status === 'running'
+              ? null
+              : status === 'stopped'
+                ? { outcome: 'failed', failure: 'legacy interrupted acknowledgement' }
+                : { outcome: 'uncertain', reason: 'interrupted acknowledgement' },
+        })),
+      },
+      path,
+    );
+    t.after(() => {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    });
     const mark = store.persistInvocationUncertain.bind(store);
     // Keep the durable orphan start intact to exercise prepare's running path.
-    if (status === 'running') store.persistInvocationUncertain = () => { throw new Error('marker append refused'); };
+    if (status === 'running')
+      store.persistInvocationUncertain = () => {
+        throw new Error('marker append refused');
+      };
     const host = new AgentFabricHost({ authority, store });
     store.persistInvocationUncertain = mark;
     let runs = 0;
-    host.installAdmitted(REPORT_PUBLISH, () => { runs += 1; return outcome; });
+    host.installAdmitted(REPORT_PUBLISH, () => {
+      runs += 1;
+      return outcome;
+    });
     assert.equal(store.getInvocation(options.invocation_id)?.status, status);
     assert.equal(host.coordinator.held().length, status === 'stopped' ? 0 : 2);
     return { authority, host, store, path, grant, inputs, options, outcome, runs: () => runs };
@@ -1178,8 +1355,13 @@ describe('Fabric store indexes', () => {
         assert.equal(reopened.getInvocation(f.options.invocation_id)?.status, 'committed');
         const recovered = new AgentFabricHost({ authority: f.authority, store: reopened });
         assert.deepEqual(recovered.coordinator.held(), []);
-        assert.deepEqual(recovered.lookup(f.options.invocation_id, f.grant), { status: 'committed', outcome: f.outcome });
-      } finally { reopened.close(); }
+        assert.deepEqual(recovered.lookup(f.options.invocation_id, f.grant), {
+          status: 'committed',
+          outcome: f.outcome,
+        });
+      } finally {
+        reopened.close();
+      }
     });
   }
 
@@ -1187,14 +1369,19 @@ describe('Fabric store indexes', () => {
     it(`retains the ${status} publication hold if re-invocation cannot persist reconciliation`, async (t) => {
       const f = await publicationReplayFixture(t, status);
       const persist = f.store.persistInvocationReconciliation.bind(f.store);
-      f.store.persistInvocationReconciliation = () => { throw new Error('reconciliation append refused'); };
+      f.store.persistInvocationReconciliation = () => {
+        throw new Error('reconciliation append refused');
+      };
       const before = readFileSync(f.path);
       const replay = f.host.invoke(f.grant, REPORT_PUBLISH.id, f.inputs, f.options);
       assert.equal(replay.kind, 'handle');
       if (replay.kind !== 'handle') throw new Error('expected replay handle');
       const outcome = { outcome: 'uncertain', reason: 'failed to persist publication reconciliation' };
       assert.deepEqual(await replay.result, outcome);
-      assert.deepEqual(f.host.lookup(f.options.invocation_id, f.grant), { status: 'unresolved', reason: outcome.reason });
+      assert.deepEqual(f.host.lookup(f.options.invocation_id, f.grant), {
+        status: 'unresolved',
+        reason: outcome.reason,
+      });
       assert.deepEqual(readFileSync(f.path), before);
       assert.equal(f.host.coordinator.held().length, 2);
       assert.equal(f.runs(), 0);
@@ -1213,14 +1400,19 @@ describe('Fabric store indexes', () => {
       const source = host.registerSource('mem:commit-receipt', 'line');
       const destination = host.registerDestination('mem:commit-receipt-outbox');
       const grant = publishGrant(authority, source, destination, 'commit-action', 1);
-      const handle = host.invoke(grant, REPORT_PUBLISH.id, publishInput(source, destination),
-        { invocation_id: 'commit-invocation' });
+      const handle = host.invoke(grant, REPORT_PUBLISH.id, publishInput(source, destination), {
+        invocation_id: 'commit-invocation',
+      });
       if (handle.kind !== 'handle') throw new Error('expected handle');
       host.release('commit-action');
       const dest = host.store.getResource(host.store.lookupRef(destination)!.canonical_id)!;
-      const receipt = { invocation_id: handle.invocation_id,
+      const receipt = {
+        invocation_id: handle.invocation_id,
         binding_digest: host.store.getInvocation(handle.invocation_id)!.binding_digest,
-        report_digest: 'already-committed', destination, committed_revision: 2 };
+        report_digest: 'already-committed',
+        destination,
+        committed_revision: 2,
+      };
       host.store.putResource({ ...dest, revision: 2, content: receipt.report_digest, publication: receipt });
       if (stale === 'source') {
         const resource = host.store.getResource(host.store.lookupRef(source)!.canonical_id)!;
@@ -1228,9 +1420,15 @@ describe('Fabric store indexes', () => {
       }
       const resources = host.snapshot().resources;
       host.proceed('commit-action');
-      assert.deepEqual(await handle.result, { outcome: 'succeeded', output: {
-        invocation_id: handle.invocation_id, report_digest: receipt.report_digest, destination, committed_revision: 2,
-      } });
+      assert.deepEqual(await handle.result, {
+        outcome: 'succeeded',
+        output: {
+          invocation_id: handle.invocation_id,
+          report_digest: receipt.report_digest,
+          destination,
+          committed_revision: 2,
+        },
+      });
       assert.deepEqual(host.snapshot().resources, resources);
       assert.deepEqual(host.coordinator.held(), []);
     });
@@ -1241,20 +1439,33 @@ describe('Fabric store indexes', () => {
     const host = new AgentFabricHost({ authority });
     const source = host.registerSource('mem:unpersisted', 'line');
     const destination = host.registerDestination('mem:unpersisted-outbox');
-    const handle = host.invoke(publishGrant(authority, source, destination, 'unpersisted-action', 1), REPORT_PUBLISH.id,
-      publishInput(source, destination), { invocation_id: 'unpersisted-invocation' });
+    const handle = host.invoke(
+      publishGrant(authority, source, destination, 'unpersisted-action', 1),
+      REPORT_PUBLISH.id,
+      publishInput(source, destination),
+      { invocation_id: 'unpersisted-invocation' },
+    );
     assert.equal(handle.kind, 'handle');
     if (handle.kind !== 'handle') throw new Error('expected invocation handle');
     const persistResult = host.store.persistInvocationResult;
-    host.store.persistInvocationResult = () => { throw new TypeError('injected result validation error'); };
+    host.store.persistInvocationResult = () => {
+      throw new TypeError('injected result validation error');
+    };
     try {
       host.release('unpersisted-action');
-      assert.deepEqual(await handle.result, { outcome: 'uncertain', reason: 'failed to persist invocation result after commit' });
+      assert.deepEqual(await handle.result, {
+        outcome: 'uncertain',
+        reason: 'failed to persist invocation result after commit',
+      });
       assert.equal(host.openCount(), 0);
       assert.equal(host.coordinator.held().length, 2);
-    } finally { host.store.persistInvocationResult = persistResult; }
-    const reconciled = host.lookup('unpersisted-invocation',
-      publishGrant(authority, source, destination, 'unpersisted-action', 2));
+    } finally {
+      host.store.persistInvocationResult = persistResult;
+    }
+    const reconciled = host.lookup(
+      'unpersisted-invocation',
+      publishGrant(authority, source, destination, 'unpersisted-action', 2),
+    );
     assert.equal('status' in reconciled && reconciled.status, 'committed');
     assert.deepEqual(host.coordinator.held(), []);
   });

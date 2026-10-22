@@ -118,7 +118,10 @@ describe('W5 authority and opt-in', () => {
   it('W5-T42 a sink that re-presents what it received cannot start, repeat or commit work', async () => {
     const book = ledger();
     const kept: Rec[] = [];
-    const world = w5World({ loom: (r) => void kept.push(r), fabric: (r) => void kept.push(r) }, { authority: book.authority });
+    const world = w5World(
+      { loom: (r) => void kept.push(r), fabric: (r) => void kept.push(r) },
+      { authority: book.authority },
+    );
     await runW5(world);
     const before = world.host.invocations.length;
     // The host reports each rejection to the same sink, so walk what it had received.
@@ -132,7 +135,9 @@ describe('W5 authority and opt-in', () => {
   });
 
   it('W5-T43 no benchmark composes a Weft port unless it opts in', () => {
-    const composing = sources(join(repoRoot, 'benchmarks')).filter((file) => /\bweft\s*:/.test(readFileSync(file, 'utf8')));
+    const composing = sources(join(repoRoot, 'benchmarks')).filter((file) =>
+      /\bweft\s*:/.test(readFileSync(file, 'utf8')),
+    );
     assert.deepEqual(
       composing.map((file) => file.slice(repoRoot.length)),
       [...OPTED_IN],

@@ -41,7 +41,7 @@ describe('W5 records', () => {
     ]);
   });
 
-  it('W5-T31 Weft\'s sink fits every package\'s port and writes only redacted, validated lines', async () => {
+  it("W5-T31 Weft's sink fits every package's port and writes only redacted, validated lines", async () => {
     const lines: string[] = [];
     const seenByRedactor: unknown[] = [];
     const sink = createWeftSink({
@@ -84,8 +84,14 @@ describe('W5 records', () => {
     });
     await runW5(w5World({ loom: sink.emit }));
     assert.ok(sink.rejected > 0, 'the credential-shaped request_ref was not rejected');
-    assert.equal(lines.some((line) => line.includes(CANARY)), false);
-    assert.equal(lines.some((line) => JSON.parse(line).kind === 'judgment'), false);
+    assert.equal(
+      lines.some((line) => line.includes(CANARY)),
+      false,
+    );
+    assert.equal(
+      lines.some((line) => JSON.parse(line).kind === 'judgment'),
+      false,
+    );
   });
 
   it('W5-T33 canary: goal text, source content, provider messages and environment values never enter a record', async () => {
@@ -164,13 +170,22 @@ describe('W5 records', () => {
     }
     const intents = records.filter((r) => r.kind === 'goal.intent');
     const outcomes = records.filter((r) => r.kind === 'outcome' && r.fields['subject'] === 'goal');
-    assert.deepEqual(intents.map((r) => r.fields['goal_ref']), [TRACE_ID, 'g-w5-second']);
-    assert.deepEqual(outcomes.map((r) => [r.fields['subject_ref'], r.fields['status']]), [
-      [TRACE_ID, 'missed'],
-      ['g-w5-second', 'missed'],
-    ]);
+    assert.deepEqual(
+      intents.map((r) => r.fields['goal_ref']),
+      [TRACE_ID, 'g-w5-second'],
+    );
+    assert.deepEqual(
+      outcomes.map((r) => [r.fields['subject_ref'], r.fields['status']]),
+      [
+        [TRACE_ID, 'missed'],
+        ['g-w5-second', 'missed'],
+      ],
+    );
     // Ids derive from recorded observations: the same run names its goals the same way.
     const again = await goals();
-    assert.deepEqual(again.map((r) => r.record_id), records.map((r) => r.record_id));
+    assert.deepEqual(
+      again.map((r) => r.record_id),
+      records.map((r) => r.record_id),
+    );
   });
 });
