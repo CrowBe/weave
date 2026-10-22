@@ -8,7 +8,7 @@ import * as run from '../run.ts';
 const clock = { now: () => 1_000 };
 const direct = { vercel: undefined, typesafe: 'fake-typesafe-key' };
 const both = { vercel: 'fake-vercel-key', typesafe: 'fake-typesafe-key' };
-/** The --prefer-free policy is stated whenever the free (Vercel) route is configured. */
+/** Throttle escalation is available when both hosted routes are configured. */
 const freeRoute = (preferFree: boolean) =>
   `; free route ${preferFree ? 'preferred, throttles waited out' : 'escalates on throttle'}`;
 
@@ -93,7 +93,10 @@ test('describeRoutes names routes in order and never includes fake key or model 
     const options = { preferFree, model: 'fake-env-model-value' };
     const cases = [
       [direct, 'routes: TypeSafe direct only'],
-      [{ vercel: both.vercel, typesafe: undefined }, `routes: Vercel AI Gateway only${freeRoute(preferFree)}`],
+      [
+        { vercel: both.vercel, typesafe: undefined },
+        `routes: Vercel AI Gateway only${preferFree ? freeRoute(true) : '; free route has no fallback'}`,
+      ],
       [both, `routes: Vercel AI Gateway first, then TypeSafe direct${freeRoute(preferFree)}`],
     ] as const;
     for (const [credentials, expected] of cases) {
@@ -150,7 +153,10 @@ for (const script of ['probe.ts', 'transfer-probe.ts']) {
     for (const preferFree of [false, true]) {
       for (const [env, expected] of [
         [{ TYPESAFE_API_KEY: direct.typesafe }, 'routes: TypeSafe direct only'],
-        [{ AI_GATEWAY_API_KEY: both.vercel }, `routes: Vercel AI Gateway only${freeRoute(preferFree)}`],
+        [
+          { AI_GATEWAY_API_KEY: both.vercel },
+          `routes: Vercel AI Gateway only${preferFree ? freeRoute(true) : '; free route has no fallback'}`,
+        ],
         [
           { AI_GATEWAY_API_KEY: both.vercel, TYPESAFE_API_KEY: both.typesafe },
           `routes: Vercel AI Gateway first, then TypeSafe direct${freeRoute(preferFree)}`,
