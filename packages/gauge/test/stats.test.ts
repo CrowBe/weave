@@ -135,3 +135,107 @@ test('every bootstrap interval contains its statistic, p95 and sum included', ()
     assert.ok(lo <= value && value <= hi, `${kind}: ${value} in [${lo}, ${hi}]`);
   }
 });
+
+test('p95 bootstrap reuses one typed draw without per-resample array sorts', () => {
+  const n = 64;
+  const arraySort = Array.prototype.sort;
+  const typedSort = Float64Array.prototype.sort;
+  let arraySorts = 0;
+  let typedSorts = 0;
+  const buffers = new Set<Float64Array>();
+  Array.prototype.sort = function (this: number[], compare?: (a: number, b: number) => number) {
+    if (this.length === n) arraySorts += 1;
+    return arraySort.call(this, compare);
+  };
+  Float64Array.prototype.sort = function (this: Float64Array, compare?: (a: number, b: number) => number) {
+    if (this.length === n) {
+      typedSorts += 1;
+      buffers.add(this);
+      assert.equal(compare, undefined, 'ordinary p95 draws use native numeric sorting');
+    }
+    return typedSort.call(this, compare);
+  };
+  try {
+    bootstrap(
+      Array.from({ length: n }, (_, i) => (i * 37) % 101),
+      'p95',
+      0.95,
+      7,
+    );
+  } finally {
+    Array.prototype.sort = arraySort;
+    Float64Array.prototype.sort = typedSort;
+  }
+  assert.ok(arraySorts <= 1, `p95 must not copy and comparator-sort each resample: got ${arraySorts} array sorts`);
+  assert.equal(typedSorts, BOOTSTRAP_RESAMPLES);
+  assert.equal(buffers.size, 1, 'all resamples share one scratch buffer');
+});
+
+/** The original copying implementation, independent of the optimized draw path. */
+function referenceBootstrap(
+  samples: readonly number[],
+  kind: Parameters<typeof aggregate>[0],
+  level: number,
+  seed: number,
+): Interval {
+  const next = generator(seed);
+  const statistics = new Float64Array(BOOTSTRAP_RESAMPLES);
+  for (let b = 0; b < BOOTSTRAP_RESAMPLES; b += 1) {
+    const draw = Array.from({ length: samples.length }, () => samples[Math.floor(next() * samples.length)]!);
+    statistics[b] = aggregate(kind, draw);
+  }
+  statistics.sort();
+  const value = aggregate(kind, samples);
+  const alpha = 1 - level;
+  const lo = Math.min(value, statistics[Math.floor((BOOTSTRAP_RESAMPLES * alpha) / 2)]!);
+  const hi = Math.max(value, statistics[Math.ceil(BOOTSTRAP_RESAMPLES * (1 - alpha / 2)) - 1]!);
+  return kind === 'rate' ? [Math.max(0, lo), Math.min(1, hi)] : [lo, hi];
+}
+
+test('bootstrap is bit-identical to copying resamples, including rank boundaries and signed zeros', () => {
+  const cases = [
+    [42],
+    [-0],
+    [0, -0],
+    Array.from({ length: 20 }, (_, i) => (i === 0 ? -0 : 0)),
+    [-1, -0, 0, 1],
+    Array(21).fill(-7) as number[],
+    [Number.MIN_VALUE, -Number.MIN_VALUE, Number.MAX_VALUE, -Number.MAX_VALUE],
+    ...[2, 19, 20, 21, 100, 257].map((n) => Array.from({ length: n }, (_, i) => ((i * 37) % 101) / 7 - 5)),
+    // The p95 rank crosses a stable tie of differently signed zeros.
+    Array.from({ length: 100 }, (_, i) => (i < 90 ? -1 : i % 2 === 0 ? -0 : 0)),
+  ];
+  for (const xs of cases) {
+    const samples = Object.freeze([...xs]);
+    for (const seed of [0, 7, 2 ** 32 + 7]) {
+      for (const level of [0.5, 0.95, 0.99]) {
+        assert.deepEqual(bootstrap(samples, 'p95', level, seed), referenceBootstrap(samples, 'p95', level, seed));
+      }
+    }
+    assert.deepEqual(samples, xs, 'the caller retains its original sample order and bits');
+  }
+  for (const kind of ['rate', 'mean', 'sum'] as const) {
+    const samples = kind === 'rate' ? rates(7, 20) : [1e20, 1, -1e20, 0.5, -0, 7];
+    assert.deepEqual(bootstrap(samples, kind, 0.95, 7), referenceBootstrap(samples, kind, 0.95, 7));
+  }
+});
+
+test('bootstrap scratch is isolated across failed calls, replay and returned interval mutation', () => {
+  const samples = Array.from({ length: 100 }, (_, i) => (i * 37) % 101);
+  const expected = referenceBootstrap(samples, 'p95', 0.95, 7);
+  let reads = 0;
+  const interrupted = new Proxy(samples, {
+    get(target, key, receiver) {
+      if (typeof key === 'string' && /^\d+$/.test(key) && ++reads === 250) throw new Error('interrupted draw');
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  assert.throws(() => bootstrap(interrupted, 'p95', 0.95, 7), /interrupted draw/);
+  const first = bootstrap(samples, 'p95', 0.95, 7);
+  assert.deepEqual(first, expected);
+  (first as [number, number])[0] = -999;
+  bootstrap([1, 2, 3], 'p95', 0.9, 8);
+  const recovered = JSON.parse(JSON.stringify(samples)) as number[];
+  assert.deepEqual(bootstrap(recovered, 'p95', 0.95, 7), expected);
+  assert.deepEqual(bootstrap(samples, 'p95', 0.95, 7), expected);
+});

@@ -240,6 +240,8 @@ export class Runtime {
   private readonly weightsByRequestId = new Map<string, Observation>();
   private boundFrame: { profile: string; version: number } | null = null;
   private recoveryExhausted = false;
+  /** First logged request sequence, matching the workspace's historical trace scan. */
+  private readonly approvalRequestSequences = new Map<string, Seq>();
   /** Conclusion ids already applied to State, so an import can skip without scanning. */
   private readonly importedConclusions = new Set<string>();
   private transitionLock = false;
@@ -460,6 +462,33 @@ export class Runtime {
     return structuredClone({ observations: this.log, cycles: this.cycles });
   }
 
+  /** Defensive copy of a bounded suffix, without copying cycle records. */
+  recentObservations(limit: number): { readonly observations: readonly Observation[]; readonly total: number } {
+    if (!Number.isSafeInteger(limit) || limit < 0) {
+      throw new RangeError('observation limit must be a non-negative safe integer');
+    }
+    return {
+      observations: structuredClone(limit === 0 ? [] : this.log.slice(-limit)),
+      total: this.log.length,
+    };
+  }
+
+  approvalRequestSeq(request_id: string): Seq | undefined {
+    return this.approvalRequestSequences.get(request_id);
+  }
+
+  private indexApprovalRequest(observation: Observation): void {
+    if (observation.payload_type !== 'approval.requested') return;
+    const payload = observation.payload;
+    if (payload === null || typeof payload !== 'object' || !('request_id' in payload)) return;
+    const request_id = payload.request_id;
+    if (typeof request_id === 'string' && !this.approvalRequestSequences.has(request_id)) {
+      // Logged validation rejections participated in the old scan too. This is
+      // presentation evidence only; approval authority still comes from State.
+      this.approvalRequestSequences.set(request_id, observation.seq);
+    }
+  }
+
   /** Rejections kept for diagnosis. Oversize payloads are not copied into the log. */
   diagnosticRejections(): readonly Observation[] {
     return structuredClone(this.diagnostics);
@@ -602,6 +631,7 @@ export class Runtime {
         }
       }
       this.log.push(observation);
+      this.indexApprovalRequest(observation);
       this.seqHigh = observation.seq;
       this.observationIds.add(observation.observation_id);
       this.emittedIds.add(observation.observation_id);
@@ -1818,6 +1848,7 @@ export class Runtime {
     for (const observation of observations) {
       const stored = structuredClone(observation);
       this.log.push(stored);
+      this.indexApprovalRequest(stored);
       this.seqHigh = Math.max(this.seqHigh, stored.seq);
       this.observationIds.add(stored.observation_id);
       this.emittedIds.add(stored.observation_id);
