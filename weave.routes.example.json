@@ -233,7 +233,8 @@
         {
           "requests": 150,
           "tokens": 3000000,
-          "window_ms": 60000
+          "window_ms": 60000,
+          "pace": true
         }
       ]
     },
@@ -263,7 +264,8 @@
         {
           "requests": 150,
           "tokens": 3000000,
-          "window_ms": 60000
+          "window_ms": 60000,
+          "pace": true
         }
       ]
     },

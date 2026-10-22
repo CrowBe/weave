@@ -100,13 +100,18 @@ export function bindDecisionProvider(decision: DecisionConfig, site?: string): D
 /**
  * Deep-merge a route-table overlay onto a base document. Objects merge; arrays
  * and scalars replace. The composition root uses this for `weave.routes.local.json`.
- * Neither value is mutated.
+ * Neither value is mutated. Keys are defined, not assigned, so a parsed
+ * `__proto__` key stays an own data key that `parseRouteConfig` rejects as
+ * unknown; it cannot replace the merged object's prototype.
  */
 export function applyRouteOverlay(base: unknown, overlay: unknown): unknown {
   if (!object(base) || !object(overlay)) return overlay;
   const out: Record<string, unknown> = { ...base };
   for (const [key, value] of Object.entries(overlay)) {
-    out[key] = Object.hasOwn(base, key) ? applyRouteOverlay(base[key], value) : value;
+    Object.defineProperty(out, key, {
+      value: Object.hasOwn(base, key) ? applyRouteOverlay(base[key], value) : value,
+      enumerable: true, writable: true, configurable: true,
+    });
   }
   return out;
 }
@@ -122,8 +127,15 @@ function text(value: unknown): value is string {
 function identifier(value: unknown): value is string {
   return text(value) && value === value.trim();
 }
+/**
+ * Takes a parsed `URL.hostname`. The URL parser canonicalizes every IPv4 form
+ * (`127.1`, `2130706433`) to dotted decimal and rejects invalid octets, so only
+ * a real 127.0.0.0/8 address matches; a domain such as `127.0.0.1.evil.com`
+ * never does.
+ */
 function loopbackHost(hostname: string): boolean {
-  return ['127.0.0.1', '[::1]', 'localhost'].includes(hostname);
+  return ['[::1]', 'localhost'].includes(hostname) ||
+    /^127(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(hostname);
 }
 /** A usable provider URL, or null when the transport rules reject it. */
 function providerUrl(value: unknown): URL | null {
@@ -268,9 +280,10 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
     if (unit.rate_limits !== undefined) {
       check(Array.isArray(unit.rate_limits), `${path}.rate_limits`);
       if (Array.isArray(unit.rate_limits)) unit.rate_limits.forEach((limit: unknown, j: number) => {
-        if (object(limit)) keys(limit, ['requests', 'tokens', 'window_ms'], `${path}.rate_limits[${j}]`);
+        if (object(limit)) keys(limit, ['requests', 'tokens', 'window_ms', 'pace'], `${path}.rate_limits[${j}]`);
         check(object(limit) && positiveInteger(limit.requests) && number(limit.window_ms) && limit.window_ms > 0 &&
-          (limit.tokens === undefined || positiveInteger(limit.tokens)), `${path}.rate_limits[${j}]`);
+          (limit.tokens === undefined || positiveInteger(limit.tokens)) &&
+          (limit.pace === undefined || typeof limit.pace === 'boolean'), `${path}.rate_limits[${j}]`);
       });
     }
   });

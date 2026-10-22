@@ -16,6 +16,23 @@ function timestamp(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/**
+ * quota-axi window ids that budget.policy@1 reads, under the policy's own ids.
+ * Claude reports its weekly allowance as `seven_day` and Codex as `weekly`
+ * (both `kind: "weekly"`). Every other window, such as model, credit,
+ * code-review and used-share windows, keeps its own id and is not read.
+ */
+const GATED_WINDOWS: Readonly<Record<string, 'seven_day' | 'five_hour'>> = {
+  seven_day: 'seven_day', weekly: 'seven_day', five_hour: 'five_hour',
+};
+
+/**
+ * Normalizes quota-axi `--json` output (schemaVersion 5). A provider's status
+ * is quota-axi's `state.status`; a status quota-axi already reports as not
+ * fresh is kept as is. A fresh status becomes `unknown` when the row breaks the
+ * published schema or a window the policy reads lacks its percentage or reset.
+ * Optional fields absent from other windows do not count against the row.
+ */
 export function normalizeQuotaSnapshot(value: unknown): QuotaSnapshot | undefined {
   const data = object(value);
   const observed_at = timestamp(data?.generatedAt);
@@ -30,20 +47,30 @@ export function normalizeQuotaSnapshot(value: unknown): QuotaSnapshot | undefine
     for (const rawWindow of Array.isArray(provider.windows) ? provider.windows : []) {
       const window = object(rawWindow);
       if (typeof window?.id !== 'string' || !window.id.trim()) { malformed = true; continue; }
+      const id = Object.hasOwn(GATED_WINDOWS, window.id) ? GATED_WINDOWS[window.id]! : window.id;
+      const gated = id === 'seven_day' || id === 'five_hour';
       const remaining = window.percentRemaining;
+      const percentRemaining = typeof remaining === 'number' && Number.isFinite(remaining) && remaining >= 0 && remaining <= 100
+        ? remaining : null;
+      const resetsAt = timestamp(window.resetsAt);
       const pace = object(window.pace);
-      if (typeof remaining !== 'number' || !Number.isFinite(remaining) || remaining < 0 || remaining > 100 ||
-          timestamp(window.resetsAt) === null || (window.pace !== undefined && typeof pace?.status !== 'string')) malformed = true;
-      windows.push({ id: window.id, percentRemaining: typeof remaining === 'number' && Number.isFinite(remaining) && remaining >= 0 && remaining <= 100 ? remaining : null,
-        resetsAt: timestamp(window.resetsAt),
+      if (percentRemaining === null && (gated || remaining !== undefined)) malformed = true;
+      if (resetsAt === null && (gated || window.resetsAt !== undefined)) malformed = true;
+      if (window.pace !== undefined && typeof pace?.status !== 'string') malformed = true;
+      windows.push({ id, percentRemaining, resetsAt,
         ...(typeof pace?.status === 'string' ? { pace: { status: pace.status } } : {}),
       });
     }
     if (windows.length === 0) malformed = true;
     const state = object(provider.state);
+    const reported = typeof state?.status !== 'string' ? 'unknown'
+      : state.status === 'fresh' && state.stale !== false ? 'stale' : state.status;
+    // A reused reading was taken at refreshedAt, so its age counts from there.
+    const reused = state?.reused === true;
     const refreshedAt = timestamp(state?.refreshedAt);
-    const staleReuse = state?.reused === true && (refreshedAt === null || refreshedAt > observed_at || observed_at - refreshedAt >= 60_000);
-    providers.push({ provider: provider.provider, status: malformed ? 'unknown' : staleReuse ? 'stale' : typeof provider.status === 'string' ? provider.status : 'unknown', windows });
+    const takenAt = reused && refreshedAt !== null && refreshedAt <= observed_at ? refreshedAt : null;
+    const status = reported !== 'fresh' ? reported : reused && takenAt === null ? 'stale' : malformed ? 'unknown' : 'fresh';
+    providers.push({ provider: provider.provider, status, ...(takenAt === null ? {} : { observed_at: takenAt }), windows });
   }
   return { observed_at, providers };
 }
