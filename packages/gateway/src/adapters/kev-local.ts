@@ -5,8 +5,17 @@
  * neither installation nor model files: it asks a runtime port to make the
  * configured service ready, then speaks the same System One wire contract as
  * the hosted TypeSafe adapter.
+ *
+ * Choice criteria are shuffled per call by default, as on the hosted route.
+ * That is deliberate for local Kev: on the Weave corpus its choice answers
+ * were order-sensitive (15 of 18 permuted cases order-stable, position bias
+ * 0.107; benchmarks/inference/jev/README.md). A fixed order would turn that
+ * bias into a steady preference for whichever key a caller lists first;
+ * shuffling makes it unsystematic, and answers still map back by key.
+ * Benchmarks that vary order as an independent variable pass `shuffle: false`.
  */
-import { typesafeAiEvaluator } from './typesafe-ai.js';
+import { typesafeWireProfile } from './typesafe-ai.js';
+import { evaluationTransport } from './decision-transport.js';
 import { execFile } from 'node:child_process';
 
 import type { Clock, EvaluationAdapter, ProviderFailure, Timer } from '../types.js';
@@ -27,7 +36,7 @@ export interface KevRuntime {
 export interface KevLocalOptions {
   readonly runtime: KevRuntime;
   readonly baseURL?: string;
-  /** Per-call choice ordering, passed through to typesafeAiEvaluator. Defaults to Math.random; false preserves criteria order. */
+  /** Per-call Fisher-Yates choice ordering, as for typesafeAiEvaluator. Defaults to Math.random; false preserves criteria order. */
   readonly shuffle?: false | (() => number);
   readonly fetch?: typeof globalThis.fetch;
 }
@@ -51,12 +60,18 @@ export interface SystemdKevRuntimeOptions {
 }
 
 export function kevLocalEvaluator(options: KevLocalOptions): EvaluationAdapter {
-  const delegate = typesafeAiEvaluator({
-    apiKey: 'local',
-    baseURL: options.baseURL ?? KEV_LOCAL_BASE_URL,
-    ...(options.shuffle === undefined ? {} : { shuffle: options.shuffle }),
-    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-  });
+  // Kev does not authenticate. `Bearer local` is the header the recorded fixture
+  // was captured with; it is a public placeholder, so it is sent but not redacted.
+  const delegate = evaluationTransport(
+    typesafeWireProfile(options.shuffle === undefined ? {} : { shuffle: options.shuffle }),
+    {
+      credential: 'local',
+      placeholder: true,
+      defaultBaseURL: KEV_LOCAL_BASE_URL,
+      ...(options.baseURL === undefined ? {} : { baseURL: options.baseURL }),
+      ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+    },
+  );
 
   return {
     id: KEV_LOCAL_ADAPTER,

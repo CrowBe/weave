@@ -182,7 +182,7 @@ A configured routed-unit attribute: `decision`, `flash`, `standard`, or `strong`
 
 ### Decision provider
 
-An evaluation adapter serving judgment sites in the decision-model loop, selected by configuration. OpenAI Decisions and TypeSafe Jev are examples. Its typed answers are observations; deterministic policy decides transitions and authority to execute.
+An evaluation adapter serving judgment sites in the decision-model loop, selected by configuration. `decision.provider` names the default, which must be `typesafe-jev` (TypeSafe Jev); OpenAI Decisions may be described under `decision.providers` but cannot yet be selected. `decision.sites` overrides the provider for `intake.classify` and `loop.preselect` only, with `typesafe-jev` or `amos`. Amos is a local, loopback-only provider with no credentials at destination `local`; an override to it needs an Amos evaluate unit of that site's kind (choice for intake, boolean for preselect). Selection is exclusive: a site never retries against another provider, and an Amos outage is `provider_unavailable`. Its typed answers are observations; deterministic policy decides transitions and authority to execute.
 
 ### Preselect policy
 

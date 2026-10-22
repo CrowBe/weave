@@ -31,7 +31,18 @@ describe('ChatGPT plan Responses adapter', () => {
     assert.equal((await failure(event('error', { code: 'subscription_sharing_usage_limit_exceeded' }))).code, 'quota_exhausted');
     assert.equal((await failure('data: {bad json}\n\n')).code, 'malformed_response');
   });
-  for (const [status, code] of [[401, 'unauthorized'], [403, 'unauthorized'], [429, 'rate_limited'], [503, 'unavailable'], [400, 'invalid_request']] as const) {
+  it('maps undocumented stream failure codes to retryable unavailable', async () => {
+    for (const body of [
+      event('response.failed', { response: { error: { code: 'server_error', message: 'internal' } } }),
+      event('response.failed', { response: { status: 'failed' } }),
+      event('error', { code: 'future_unlisted_code' }),
+    ]) {
+      const result = await failure(body);
+      assert.equal(result.code, 'unavailable');
+      assert.equal(result.retryable, true);
+    }
+  });
+  for (const [status, code] of [[401, 'unauthorized'], [403, 'unauthorized'], [429, 'rate_limited'], [500, 'unavailable'], [503, 'unavailable'], [400, 'invalid_request']] as const) {
     it(`maps HTTP ${status} and redacts body diagnostics`, async () => { const result = await failure(JSON.stringify({ detail: TOKEN }), status); assert.equal(result.code, code); assert.ok(result.message.includes(String(status))); assert.ok(!JSON.stringify(result).includes(TOKEN)); });
   }
   it('redacts escaped and URL-encoded credential echoes', async () => {
