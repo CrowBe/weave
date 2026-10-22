@@ -437,12 +437,13 @@ recovery is not opened a second time. Replay invokes
 neither the gateway nor the host, so they emit nothing either.
 
 **Identity and order.** Loom's record ids are derived from the log, so a run
-yields the same ids every time: `<emitter>:goal`,
+yields the same ids every time: `<emitter>:goal:<goal.opened seq>` (a run may
+open another goal after one completes or is missed),
 `<emitter>:cycle:<cycle_no>:<trigger seq>` (Loom may reuse a cycle number after
 recovery; the trigger keeps the id unique), `<emitter>:thread:<action_id>:<transition>`
 (`cancelled` adds the request's seq, since a cancel may be repeated),
 `<emitter>:action:<action_id>:<state>`, `<emitter>:judgment:<ref>` and
-`<emitter>:outcome:goal`. Loom's `sequence` is the highest observation seq
+`<emitter>:outcome:goal:<goal.opened seq>`. Loom's `sequence` is the highest observation seq
 times 1024 plus an offset, so it keeps increasing across recovery. Gateway and
 Fabric sequences count per emitter instance; a restarted gateway or host takes
 a new emitter id. Loom evidence cites an observation by its seq (`seq:<n>`),

@@ -10,7 +10,7 @@ import { createWeftSink, validateRecord, type WeftRecord } from '@weave/weft';
 import type { WeftPort as FabricPort } from '@weave/agentfabric';
 import type { WeftPort as GatewayPort } from '@weave/gateway';
 import type { WeftPort as LoomPort } from '@weave/weave';
-import { collector, runW5, TRACE_ID, w5World, type Rec } from './w5-fixture.js';
+import { collector, runW5, settleAsync, TRACE_ID, w5World, type Rec } from './w5-fixture.js';
 
 const CANARY = 'sk-w5canary7f3b9c2e4d1a6b8f0e2c4a6b';
 
@@ -119,5 +119,58 @@ describe('W5 records', () => {
       if (previous === undefined) delete process.env['W5_CANARY_SECRET'];
       else process.env['W5_CANARY_SECRET'] = previous;
     }
+  });
+  it('W5-T34 successive goals in one run each get their own intent and outcome records', async () => {
+    const goals = async (): Promise<Rec[]> => {
+      const loom = collector();
+      const world = w5World({ loom: loom.sink });
+      await settleAsync(world);
+      const miss = (goal_id: string): void => {
+        const missed = world.runtime.operator.submit({
+          observation_id: `operator:goal.missed:${goal_id}`,
+          caused_by: null,
+          payload_type: 'goal.missed',
+          payload_version: 1,
+          payload: { goal_id, reason: 'operator gave up' },
+        });
+        assert.equal(missed.validation.status, 'accepted');
+      };
+      miss(TRACE_ID);
+      const second = world.runtime.operator.submit({
+        observation_id: 'operator:goal.opened:g-w5-second',
+        caused_by: null,
+        payload_type: 'goal.opened',
+        payload_version: 1,
+        payload: {
+          goal_id: 'g-w5-second',
+          purpose: 'A second goal in the same run',
+          sources: [world.alpha],
+          authority: { read: [world.alpha] },
+          budget: { actions: 4, judgments: 4, recovery: 0, cost: 1_000_000 },
+          success_evidence: 'a Report artifact covering alpha',
+        },
+      });
+      assert.equal(second.validation.status, 'accepted');
+      await settleAsync(world);
+      miss('g-w5-second');
+      return loom.records;
+    };
+    const records = await goals();
+    const ids = new Set<string>();
+    for (const record of records) {
+      assert.equal(ids.has(record.record_id), false, `duplicate record id ${record.record_id}`);
+      ids.add(record.record_id);
+      assert.deepEqual(validateRecord(record), { ok: true }, `${record.record_id} (${record.kind})`);
+    }
+    const intents = records.filter((r) => r.kind === 'goal.intent');
+    const outcomes = records.filter((r) => r.kind === 'outcome' && r.fields['subject'] === 'goal');
+    assert.deepEqual(intents.map((r) => r.fields['goal_ref']), [TRACE_ID, 'g-w5-second']);
+    assert.deepEqual(outcomes.map((r) => [r.fields['subject_ref'], r.fields['status']]), [
+      [TRACE_ID, 'missed'],
+      ['g-w5-second', 'missed'],
+    ]);
+    // Ids derive from recorded observations: the same run names its goals the same way.
+    const again = await goals();
+    assert.deepEqual(again.map((r) => r.record_id), records.map((r) => r.record_id));
   });
 });

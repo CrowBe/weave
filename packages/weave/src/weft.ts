@@ -52,6 +52,8 @@ export class LoomWeft {
   private dispatching: Candidate | null = null;
   /** The running cycle's record id. Loom may reuse a cycle number after recovery, so the id adds the trigger. */
   private cycleRecord: string | null = null;
+  /** The seq of the goal.opened that opened the current goal: a run may open several goals. */
+  private goalSeq: Seq | null = null;
   /** Latest thread per operation and resources, revisions ignored: the thread a new dispatch supersedes. */
   private readonly latest = new Map<string, ActionId>();
 
@@ -99,6 +101,9 @@ export class LoomWeft {
 
   /** A journaled dispatch loaded at recovery: indexed for supersession, not reported again. */
   loaded(observation: Observation): void {
+    if (observation.payload_type === 'goal.opened') {
+      this.goalSeq = observation.seq;
+    }
     if (observation.payload_type === 'action.started' || observation.payload_type === 'action.queued') {
       const started = observation.payload as ActionStartedPayload;
       this.latest.set(supersedeKey(started), started.action_id);
@@ -113,7 +118,8 @@ export class LoomWeft {
       case 'goal.opened': {
         const goal = state.goal;
         if (goal) {
-          this.send(seq, this.id('goal'), 'goal.intent', null, null, [], cite(), {
+          this.goalSeq = seq;
+          this.send(seq, this.id(`goal:${seq}`), 'goal.intent', null, null, [], cite(), {
             goal_ref: goal.goal_id,
             statement: {
               content_class: 'private',
@@ -197,7 +203,7 @@ export class LoomWeft {
     }
     const goal = state.goal;
     if (goal && goalBefore === 'active' && goal.status !== 'active') {
-      this.send(seq, this.id('outcome:goal'), 'outcome', null, null, [], cite(), {
+      this.send(seq, this.id(`outcome:goal:${this.goalSeq ?? seq}`), 'outcome', null, null, [], cite(), {
         subject: 'goal',
         subject_ref: goal.goal_id,
         status: goal.status,
