@@ -221,6 +221,62 @@ for (const cli of [probe, transferProbe]) {
     }));
 }
 
+for (const script of ['probe.ts', 'transfer-probe.ts']) {
+  for (const first of ['SIGINT', 'SIGTERM'])
+    for (const second of ['SIGINT', 'SIGTERM']) {
+      test(`${script} reference ${first} then ${second} force-quits with 130 when abort hangs`, async (t) => {
+        const worker = new Worker(
+          `
+        const { workerData, parentPort } = require('node:worker_threads');
+        const { pathToFileURL } = require('node:url');
+        const { syncBuiltinESMExports } = require('node:module');
+        const fs = require('node:fs/promises');
+        let aborts = 0;
+        let aborted = false;
+        const NativeAbortController = AbortController;
+        globalThis.AbortController = class extends NativeAbortController {
+          abort() {
+            super.abort();
+            aborts++;
+            aborted = this.signal.aborted;
+          }
+        };
+        // Keep main pending without inference or filesystem effects, even after abort.
+        fs.readFile = () => new Promise(() => {
+          setImmediate(() => {
+            process.emit(workerData.first);
+            parentPort.postMessage({ aborts, aborted });
+            process.emit(workerData.second);
+            process.exit(0); // Reached only if the second signal failed to force-quit.
+          });
+        });
+        syncBuiltinESMExports();
+        process.argv = [process.execPath, workerData.path, '--reference', '--from', 'fake-pending.json'];
+        import(pathToFileURL(workerData.path).href);
+      `,
+          {
+            eval: true,
+            stdout: true,
+            stderr: true,
+            workerData: { path: fileURLToPath(new URL(`../${script}`, import.meta.url)), first, second },
+            env: {},
+          },
+        );
+        t.after(() => worker.terminate());
+        worker.stdout.resume();
+        worker.stderr.resume();
+        const observations: unknown[] = [];
+        worker.on('message', (value) => observations.push(value));
+        const status = await new Promise<number>((resolve, reject) => {
+          worker.on('error', reject);
+          worker.on('exit', resolve);
+        });
+        assert.deepEqual(observations, [{ aborts: 1, aborted: true }], 'first signal must request graceful abort');
+        assert.equal(status, 130, 'second signal must force-quit pending work');
+      });
+    }
+}
+
 for (const script of ['probe.ts', 'transfer-probe.ts'])
   for (const reference of [false, true]) {
     test(`${script} ${reference ? 'reference' : 'legacy'} errors identify cause without exposing secrets`, async () =>
