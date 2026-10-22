@@ -182,6 +182,101 @@ async function fixture(
 }
 
 describe('CLI cancellation before prepare', () => {
+  for (const invalid of [
+    'operation',
+    'contract revision',
+    'permissions',
+    'effects',
+    'process effects',
+    'input shape',
+    'shell input',
+  ] as const) {
+    it(`rejects ${invalid} before consuming a grant with pending cancellation`, async (t) => {
+      const f = await fixture(t, 'recovery');
+      const id = 'shell-cli:invalid';
+      const fields = f.grant(id);
+      const grant = f.authority.issue({
+        ...fields,
+        ...(invalid === 'operation' ? { operation: 'repo.test' } : {}),
+        ...(invalid === 'contract revision' ? { contract_rev: 'wrong-revision' } : {}),
+        ...(invalid === 'permissions' ? { permissions: [] } : {}),
+        ...(invalid === 'effects' ? { effects: [] } : {}),
+        ...(invalid === 'process effects' ? { process_effects: [] } : {}),
+      });
+      const inputs = {
+        ...f.request(),
+        ...(invalid === 'input shape' ? { timeout_ms: 'invalid' } : {}),
+        ...(invalid === 'shell input' ? { argv: [] } : {}),
+      };
+      const expected = f.host.invoke(grant, SHELL_RUN.id, inputs);
+      assert.equal(expected.kind, 'rejected');
+      const consume = t.mock.method(f.authority, 'markInvoked');
+      const pending = f.host.invokeCliGeneration(grant, inputs);
+      assert.deepEqual(f.host.requestCancel(id), { acknowledged: true });
+      f.resume();
+      assert.deepEqual(await pending, expected);
+      assert.equal(consume.mock.callCount(), 0);
+      assert.equal(f.spawn.mock.callCount(), 0);
+      assert.equal(f.store.getInvocation(id), undefined);
+      assert.equal(f.host.coordinator.held().length, 0);
+      assert.equal(f.host.openCount(), 0);
+      assert.equal(f.authority.markInvoked(grant), true, 'rejection must not consume the grant');
+      const fresh = await f.host.invokeCliGeneration(f.grant(id), f.request());
+      assert.equal(fresh.kind, 'handle', 'rejection must release the identity reservation');
+      if (fresh.kind !== 'handle') return;
+      f.host.release(id);
+      assert.equal((await fresh.result).outcome, 'succeeded');
+    });
+  }
+
+  for (const invalid of [
+    'revoked',
+    'not issued',
+    'revoked during consumption',
+    'not issued during consumption',
+  ] as const) {
+    it(`reports ${invalid} accurately with pending cancellation`, async (t) => {
+      const f = await fixture(t, 'recovery');
+      const id = 'shell-cli:invalid-authority';
+      const issued = f.grant(id);
+      const grant = invalid === 'not issued' ? { ...issued } : issued;
+      if (invalid === 'revoked') f.authority.revoke(grant);
+      const markInvoked = f.authority.markInvoked.bind(f.authority);
+      const consume = t.mock.method(
+        f.authority,
+        'markInvoked',
+        (candidate: Grant) => {
+          if (invalid === 'revoked during consumption') f.authority.revoke(candidate);
+          if (invalid === 'not issued during consumption') {
+            t.mock.method(f.authority, 'isIssued', () => false, { times: 1 });
+            return false;
+          }
+          return markInvoked(candidate);
+        },
+        { times: 1 },
+      );
+      const pending = f.host.invokeCliGeneration(grant, f.request());
+      assert.deepEqual(f.host.requestCancel(id), { acknowledged: true });
+      f.resume();
+      const result = await pending;
+      assert.equal(result.kind, 'rejected');
+      if (result.kind === 'rejected') {
+        assert.equal(result.code, 'DENIED');
+        assert.match(result.reason, invalid.startsWith('revoked') ? /revoked/ : /not.*issued/);
+      }
+      assert.equal(consume.mock.callCount(), invalid.includes('during consumption') ? 1 : 0);
+      assert.equal(f.spawn.mock.callCount(), 0);
+      assert.equal(f.store.getInvocation(id), undefined);
+      assert.equal(f.host.coordinator.held().length, 0);
+      assert.equal(f.host.openCount(), 0);
+      const fresh = await f.host.invokeCliGeneration(f.grant(id), f.request());
+      assert.equal(fresh.kind, 'handle', 'rejection must release the identity reservation');
+      if (fresh.kind !== 'handle') return;
+      f.host.release(id);
+      assert.equal((await fresh.result).outcome, 'succeeded');
+    });
+  }
+
   for (const wait of ['recovery', 'startup check'] as const) {
     it(`retains request.signal abort while awaiting ${wait}, without a durable record or spawn`, async (t) => {
       const f = await fixture(t, wait);

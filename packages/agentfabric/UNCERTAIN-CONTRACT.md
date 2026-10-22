@@ -200,14 +200,20 @@ reservation; duplicate identities are rejected. Cancellation is also retained fo
 allocated CLI identities and placeholders while awaiting recovery or an uncertain
 startup check. Before preparation, a retained cancellation returns `cancelled`
 without spawning, writing an invocation record, or acquiring a workspace
-reservation. It consumes the single-use grant through `GrantAuthority.markInvoked`
-before releasing the identity reservation. Reusing that grant is denied, including
-after reopening the host/store with the same authority; a fresh grant for a new id
-can run. Grant issuance and consumption currently live in the in-process authority,
-not the Fabric journal: a new authority does not recognize a prior grant object or
-its serialized copy. An authority that persists grant use must persist cancellation
-consumption through the same gate. A refused consumption returns `DENIED`; a thrown
-consumption error is surfaced. Neither path spawns or retains a reservation.
+reservation. Only after the same input validation, issued-grant validity and
+coverage checks as ordinary preparation (operation, contract revision, permissions,
+effects and process effects) does it consume the single-use grant through
+`GrantAuthority.markInvoked` before releasing the identity reservation. Failed
+checks return the same rejection as preparation without consuming the grant.
+Reusing a consumed grant is denied, including after reopening the host/store with
+the same authority; a fresh grant for a new id can run. Grant issuance and
+consumption currently live in the in-process authority,
+not the Fabric journal, matching ordinary grant use. Consumption survives reopening
+only with the same authority: a new authority does not recognize a prior grant
+object or its serialized copy. An authority that persists grant use must persist cancellation
+consumption through the same gate. A refused consumption returns `DENIED` with
+the reason (revoked, not issued or already used); a thrown consumption error is
+surfaced. Neither path spawns or retains a reservation.
 A cancellation for an id with an existing durable record is not
 retained as pending: it marks that record `cancel_requested` (unless already
 reconciled), and the invocation continues to prepare/replay. After preparation
