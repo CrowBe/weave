@@ -244,6 +244,8 @@ export class Runtime {
   private readonly approvalRequestSequences = new Map<string, Seq>();
   /** Conclusion ids already applied to State, so an import can skip without scanning. */
   private readonly importedConclusions = new Set<string>();
+  /** Host position, reconciled against accepted conclusion ids on the first read after load. */
+  private conclusionCursor = 0;
   private transitionLock = false;
   private readonly weft: LoomWeft | null;
 
@@ -2296,22 +2298,29 @@ export class Runtime {
     if (this.replayMode) {
       return;
     }
-    const host = this.options.host as { conclusions?: () => readonly unknown[] };
-    for (const item of host.conclusions?.() ?? []) {
-      if (!isCachedConclusion(item)) {
-        continue;
+    const host = this.options.host as CapabilityHost & { conclusions?: () => readonly unknown[] };
+    const incremental = host.conclusionsSince !== undefined;
+    const items = host.conclusionsSince?.(this.conclusionCursor) ?? host.conclusions?.() ?? [];
+    for (const item of items) {
+      if (isCachedConclusion(item) && !this.importedConclusions.has(item.conclusion_id)) {
+        const observation_id = `conclusion:imported:${item.conclusion_id}`;
+        // A returned rejection is terminal: re-appending the same observation_id
+        // can only be rejected as a duplicate, so each import is attempted once.
+        if (!this.observationIds.has(observation_id)) {
+          this.append({
+            observation_id,
+            source: RUNTIME_SOURCE,
+            caused_by: null,
+            payload_type: 'conclusion.cached',
+            payload_version: 1,
+            payload: item,
+          });
+        }
       }
-      if (this.importedConclusions.has(item.conclusion_id)) {
-        continue;
+      // A thrown persistence failure exits before this, leaving the position for the retry.
+      if (incremental) {
+        this.conclusionCursor += 1;
       }
-      this.append({
-        observation_id: `conclusion:imported:${item.conclusion_id}`,
-        source: RUNTIME_SOURCE,
-        caused_by: null,
-        payload_type: 'conclusion.cached',
-        payload_version: 1,
-        payload: item,
-      });
     }
   }
 

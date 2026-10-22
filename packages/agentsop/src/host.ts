@@ -70,6 +70,12 @@ export interface CapabilityHost {
   requestCancel(invocation_id: string): { readonly acknowledged: true };
   /** Whether an admitted implementation may still be reused. Absent hosts do not record admission. */
   implementationAdmitted?(operation: string, implementationId: string): boolean;
+  /**
+   * Defensive copies of retained conclusions starting at a zero-based position.
+   * Retention order is append-only for this host's lifetime. Reading grants no
+   * authority to reuse a conclusion. Hosts without retention may omit this port.
+   */
+  conclusionsSince?(cursor: number): readonly unknown[];
 }
 
 /**
