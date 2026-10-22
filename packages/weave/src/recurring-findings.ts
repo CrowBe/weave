@@ -156,13 +156,15 @@ export function auditJudgmentFindings(round: AuditRound): readonly JudgmentFindi
   const choices = round.disposal?.choices ?? [];
   return findings.flatMap((finding, index) =>
     choices[index] === FIX_NOW
-      ? [{
-          site: 'audit.generate' as const,
-          execution_id: round.execution_id,
-          kind: finding.kind,
-          criterion_id: finding.criterion_id,
-          evidence_ref: finding.evidence_ref,
-        }]
+      ? [
+          {
+            site: 'audit.generate' as const,
+            execution_id: round.execution_id,
+            kind: finding.kind,
+            criterion_id: finding.criterion_id,
+            evidence_ref: finding.evidence_ref,
+          },
+        ]
       : [],
   );
 }
@@ -182,13 +184,15 @@ export function outputEvalJudgmentFindings(
     item.confidence >= OUTPUT_EVAL_POLICY.confidence &&
     item.verdict_probability !== null &&
     item.verdict_probability < OUTPUT_EVAL_POLICY.probability
-      ? [{
-          site: 'eval.output' as const,
-          execution_id: attempt.execution_id,
-          kind: 'criterion_failed' as const,
-          criterion_id: item.criterion_id,
-          evidence_ref,
-        }]
+      ? [
+          {
+            site: 'eval.output' as const,
+            execution_id: attempt.execution_id,
+            kind: 'criterion_failed' as const,
+            criterion_id: item.criterion_id,
+            evidence_ref,
+          },
+        ]
       : [],
   );
 }
@@ -205,7 +209,9 @@ export function checkCoverage(
   admitted_operations: readonly string[],
 ): CheckCoverage {
   const admitted = new Set(admitted_operations);
-  const coveredKeys = new Set(gaps.filter((gap) => admitted.has(gap.desired.operation)).map((gap) => gap.recurrence_key));
+  const coveredKeys = new Set(
+    gaps.filter((gap) => admitted.has(gap.desired.operation)).map((gap) => gap.recurrence_key),
+  );
   const caught = new Map<string, boolean>();
   for (const finding of findings) {
     const { execution_id, kind, criterion_id, evidence_ref } = finding;
@@ -213,5 +219,10 @@ export function checkCoverage(
     caught.set(digest({ execution_id, kind, criterion_id, evidence_ref }), key !== null && coveredKeys.has(key));
   }
   const covered = [...caught.values()].filter(Boolean).length;
-  return { schema: CHECK_COVERAGE_SCHEMA, caught: caught.size, covered, share: caught.size === 0 ? null : covered / caught.size };
+  return {
+    schema: CHECK_COVERAGE_SCHEMA,
+    caught: caught.size,
+    covered,
+    share: caught.size === 0 ? null : covered / caught.size,
+  };
 }

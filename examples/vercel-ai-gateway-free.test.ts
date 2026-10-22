@@ -48,11 +48,21 @@ function run(key: string | undefined, scenario: string, requests: number) {
   const out = openSync(join(dir, 'stdout'), 'w');
   const err = openSync(join(dir, 'stderr'), 'w');
   try {
-    const result = spawnSync(process.execPath, ['--experimental-strip-types', '--import',
-      `data:text/javascript,${encodeURIComponent(preload)}`, 'examples/vercel-ai-gateway-free.ts'],
-      { env, stdio: ['ignore', out, err], timeout: 10_000 });
-    return { ...result, stdout: readFileSync(join(dir, 'stdout'), 'utf8'),
-      stderr: readFileSync(join(dir, 'stderr'), 'utf8') };
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--experimental-strip-types',
+        '--import',
+        `data:text/javascript,${encodeURIComponent(preload)}`,
+        'examples/vercel-ai-gateway-free.ts',
+      ],
+      { env, stdio: ['ignore', out, err], timeout: 10_000 },
+    );
+    return {
+      ...result,
+      stdout: readFileSync(join(dir, 'stdout'), 'utf8'),
+      stderr: readFileSync(join(dir, 'stderr'), 'utf8'),
+    };
   } finally {
     closeSync(out);
     closeSync(err);
@@ -68,7 +78,11 @@ test('Vercel free example requires an injected environment key before network', 
     assert.equal(result.stderr, 'AI_GATEWAY_API_KEY is not set\n');
   }
 });
-for (const [scenario, requests, status] of [['ok', 1, 0], ['rate', 2, 0], ['paid', 1, 1]] as const) {
+for (const [scenario, requests, status] of [
+  ['ok', 1, 0],
+  ['rate', 2, 0],
+  ['paid', 1, 1],
+] as const) {
   test(`Vercel free example ${scenario} prints safe accounted outcomes`, () => {
     const key = 'synthetic-wv018-example';
     const result = run(key, scenario, requests);

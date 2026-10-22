@@ -51,7 +51,9 @@ export function formNormalizeCandidates(state: State, describe: Describe, canoni
     const text = current.content;
     const inputs = { text };
     const id = candidateId(contract.id, contract.revision, { source, text });
-    const failed = Object.values(state.actions).some((action) => action.candidate_id === id && action.state === 'failed');
+    const failed = Object.values(state.actions).some(
+      (action) => action.candidate_id === id && action.state === 'failed',
+    );
     if (failed) {
       continue;
     }
@@ -138,9 +140,10 @@ function gapCandidates(state: State): Candidate[] {
       candidates.push(runtimeCandidate('corpus.propose', { split: 'held_out' }, evidence));
     }
     if (crystal.visible_ids.length > 0 && crystal.held_out_ids.length > 0) {
-      const dependencies = [succeeded(state, 'corpus.propose', 'visible'), succeeded(state, 'corpus.propose', 'held_out')].filter(
-        (id): id is ActionId => id !== null,
-      );
+      const dependencies = [
+        succeeded(state, 'corpus.propose', 'visible'),
+        succeeded(state, 'corpus.propose', 'held_out'),
+      ].filter((id): id is ActionId => id !== null);
       candidates.push(
         runtimeCandidate('corpus.validate', { contract_revision: crystal.contract.revision }, evidence, dependencies),
       );
@@ -188,7 +191,8 @@ function gapCandidates(state: State): Candidate[] {
       );
     }
   }
-  const proven = crystal.green.find((item) => item.proven && item.id === 'direct') ?? crystal.green.find((item) => item.proven);
+  const proven =
+    crystal.green.find((item) => item.proven && item.id === 'direct') ?? crystal.green.find((item) => item.proven);
   if (proven && !crystal.admission) {
     const green = succeeded(state, 'green.prove', proven.id);
     candidates.push(
@@ -242,7 +246,11 @@ function succeeded(state: State, operation: string, marker?: string): ActionId |
 
 function succeededInspect(state: State, source: ResourceId): ActionId | null {
   for (const action of Object.values(state.actions)) {
-    if (action.state === 'succeeded' && action.operation === 'source.inspect' && (action.inputs as { source?: string }).source === source) {
+    if (
+      action.state === 'succeeded' &&
+      action.operation === 'source.inspect' &&
+      (action.inputs as { source?: string }).source === source
+    ) {
       return action.action_id;
     }
   }

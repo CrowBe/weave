@@ -6,12 +6,12 @@ result is a different rule, not a rerun of this one.
 
 ## Declared policy
 
-| field | value |
-| --- | --- |
-| contract | `acceptance.line@2` |
-| model | `jev-1.13.0` |
-| probability threshold | `0.8` |
-| confidence floor | `0.9` |
+| field                 | value               |
+| --------------------- | ------------------- |
+| contract              | `acceptance.line@2` |
+| model                 | `jev-1.13.0`        |
+| probability threshold | `0.8`               |
+| confidence floor      | `0.9`               |
 
 The contract row moved from `acceptance.line@1` to `acceptance.line@2` with
 #201. `@2` adds predicate lines and changes nothing else: a free-text line is

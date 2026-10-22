@@ -18,7 +18,13 @@ import { isWellFormedRef, type ResourceEffect, type ResourceRef } from '@weave/a
 
 export const CRITERION_PROOFS = ['check', 'judgment'] as const;
 export type CriterionProof = (typeof CRITERION_PROOFS)[number];
-export const PROOF_DOWNGRADES = ['unbound_check', 'write_scope_unknown', 'no_oracle', 'oracle_not_granted', 'oracle_writable'] as const;
+export const PROOF_DOWNGRADES = [
+  'unbound_check',
+  'write_scope_unknown',
+  'no_oracle',
+  'oracle_not_granted',
+  'oracle_writable',
+] as const;
 export type ProofDowngrade = (typeof PROOF_DOWNGRADES)[number];
 
 export function isCriterionProof(value: unknown): value is CriterionProof {
@@ -51,15 +57,24 @@ export interface ProofAdmission {
   readonly reason: ProofDowngrade | null;
 }
 
-export function admitCriterionProof(criterion: ProofCriterion, checks: readonly ProofCheck[], scope: ProofScope): ProofAdmission {
+export function admitCriterionProof(
+  criterion: ProofCriterion,
+  checks: readonly ProofCheck[],
+  scope: ProofScope,
+): ProofAdmission {
   const criterion_id = criterion.criterion_id;
   if (criterion.proof !== 'check') return { criterion_id, proposed: 'judgment', proof: 'judgment', reason: null };
-  const downgrade = (reason: ProofDowngrade): ProofAdmission => ({ criterion_id, proposed: 'check', proof: 'judgment', reason });
+  const downgrade = (reason: ProofDowngrade): ProofAdmission => ({
+    criterion_id,
+    proposed: 'check',
+    proof: 'judgment',
+    reason,
+  });
   const ids = criterion.check_ids;
   if (!Array.isArray(ids) || ids.length === 0) return downgrade('unbound_check');
   const bound: ProofCheck[] = [];
   for (const id of ids) {
-    const matches = checks.filter(check => check.check_id === id);
+    const matches = checks.filter((check) => check.check_id === id);
     if (matches.length === 0) return downgrade('unbound_check');
     bound.push(...matches);
   }
@@ -67,20 +82,22 @@ export function admitCriterionProof(criterion: ProofCriterion, checks: readonly 
   if (!Array.isArray(generation_writes) || typeof canonical !== 'function') return downgrade('write_scope_unknown');
   let written: Set<string>;
   try {
-    written = new Set(generation_writes.map(ref => canonical(ref)));
+    written = new Set(generation_writes.map((ref) => canonical(ref)));
   } catch {
     return downgrade('write_scope_unknown');
   }
   for (const check of bound) {
     const oracle = check.oracle_refs;
-    if (!Array.isArray(oracle) || oracle.length === 0 || !oracle.every(ref => isWellFormedRef(ref))) return downgrade('no_oracle');
+    if (!Array.isArray(oracle) || oracle.length === 0 || !oracle.every((ref) => isWellFormedRef(ref)))
+      return downgrade('no_oracle');
     for (const ref of oracle) {
       let id: string;
       let readable: boolean;
       try {
         id = canonical(ref);
-        readable = check.permissions !== null &&
-          check.permissions.some(permission => permission.mode === 'read' && canonical(permission.resource) === id);
+        readable =
+          check.permissions !== null &&
+          check.permissions.some((permission) => permission.mode === 'read' && canonical(permission.resource) === id);
       } catch {
         return downgrade('write_scope_unknown');
       }

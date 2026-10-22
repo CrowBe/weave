@@ -29,10 +29,7 @@ export type ProcessBindResult =
   | { readonly ok: false; readonly code: FailureCode; readonly reason: string };
 
 /** Bind declared process effects against concrete inputs. Fails closed. */
-export function bindProcessEffects(
-  selectors: readonly ProcessEffectSelector[],
-  inputs: unknown,
-): ProcessBindResult {
+export function bindProcessEffects(selectors: readonly ProcessEffectSelector[], inputs: unknown): ProcessBindResult {
   if (typeof inputs !== 'object' || inputs === null) {
     return { ok: false, code: 'INVALID_INPUT', reason: 'inputs must be a record' };
   }

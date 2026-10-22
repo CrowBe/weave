@@ -16,7 +16,15 @@ import {
   type InvocationOutcome,
   type InvocationRejected,
 } from '@weave/agentsop';
-import { AgentFabricHost, FabricStore, REPO_BUILD, REPO_LINT, REPO_TEST, SHELL_RUN, type ShellHostOptions } from '@weave/agentfabric';
+import {
+  AgentFabricHost,
+  FabricStore,
+  REPO_BUILD,
+  REPO_LINT,
+  REPO_TEST,
+  SHELL_RUN,
+  type ShellHostOptions,
+} from '@weave/agentfabric';
 
 const CANARY = 'canary-secret-9f3a2c7b-NOT-ON-ARGV';
 const STUB = fileURLToPath(new URL('../../test/fixtures/stub-cli.mjs', import.meta.url));
@@ -93,7 +101,11 @@ function expiringTime(timeout_ms: number): ReturnType<typeof testTime> & { expir
   };
 }
 
-function hostFor(repo: ShellHostOptions['repo'], port: ShellHostOptions['env'] = envPort(), time = testTime()): {
+function hostFor(
+  repo: ShellHostOptions['repo'],
+  port: ShellHostOptions['env'] = envPort(),
+  time = testTime(),
+): {
   authority: GrantAuthority;
   host: AgentFabricHost;
   dir: string;
@@ -161,7 +173,12 @@ function asOutcome(value: Settled): InvocationOutcome {
   assert.fail(`expected an outcome, got ${value.code}`);
 }
 
-function succeeded(value: Settled): { exit: number; stdout_tail: string; stderr_tail: string; stdout_truncated: boolean } {
+function succeeded(value: Settled): {
+  exit: number;
+  stdout_tail: string;
+  stderr_tail: string;
+  stdout_truncated: boolean;
+} {
   const outcome = asOutcome(value);
   if (outcome.outcome !== 'succeeded') {
     assert.fail(`expected success, got ${outcome.outcome}`);
@@ -250,7 +267,9 @@ describe('shell.run@1', () => {
       const { host, authority, cwd, dir } = world;
       try {
         if (fault === 'throw after execution') {
-          (host as unknown as { pushShellTrace(): void }).pushShellTrace = () => { throw new Error('trace fault'); };
+          (host as unknown as { pushShellTrace(): void }).pushShellTrace = () => {
+            throw new Error('trace fault');
+          };
         } else {
           (host as unknown as { performShell(): Promise<unknown> }).performShell = async () => undefined;
         }
@@ -288,25 +307,36 @@ describe('shell.run@1', () => {
       const store = FabricStore.open(path);
       const authority = createGrantAuthority();
       const time = testTime();
-      const host = new AgentFabricHost({ authority, store, shell: {
-        env: envPort(), clock: time.clock, timer: time.timer,
-      } });
+      const host = new AgentFabricHost({
+        authority,
+        store,
+        shell: {
+          env: envPort(),
+          clock: time.clock,
+          timer: time.timer,
+        },
+      });
       try {
         const cwd = host.registerWorkspace(dir);
         const issued = grant(authority, SHELL_RUN.id, cwd, 'shell-settle', ['process.spawn', `fs.write:${cwd}`]);
-        const handle = host.invoke(issued, SHELL_RUN.id,
-          shellInputs(cwd, [process.execPath, STUB, '--report']), { invocation_id: 'shell-settle-invocation' });
+        const handle = host.invoke(issued, SHELL_RUN.id, shellInputs(cwd, [process.execPath, STUB, '--report']), {
+          invocation_id: 'shell-settle-invocation',
+        });
         assert.equal(handle.kind, 'handle');
         if (handle.kind !== 'handle') throw new Error('expected invocation handle');
         host.release('shell-settle');
         if (fault === 'closed store') store.close();
         else writeFileSync(`${path}.lock`, `${process.pid}:replacement`);
         const before = readFileSync(path);
-        assert.deepEqual(await handle.result, { outcome: 'uncertain', reason: 'failed to persist invocation result; uncertain marker was not persisted' });
+        assert.deepEqual(await handle.result, {
+          outcome: 'uncertain',
+          reason: 'failed to persist invocation result; uncertain marker was not persisted',
+        });
         assert.equal(host.shellTraces()[0]?.exit, 0, 'the shell operation completed');
         assert.equal(host.openCount(), 0);
         assert.deepEqual(host.lookup('shell-settle-invocation', issued), {
-          status: 'unresolved', reason: 'failed to persist invocation result; uncertain marker was not persisted',
+          status: 'unresolved',
+          reason: 'failed to persist invocation result; uncertain marker was not persisted',
         });
         assert.equal(host.coordinator.held().length, 1);
         assert.deepEqual(readFileSync(path), before);
@@ -321,12 +351,14 @@ describe('shell.run@1', () => {
     const world = hostFor(undefined);
     try {
       const argv = [process.execPath, STUB, '--report'];
-      const outcome = asOutcome(await invoke(
-        world.host,
-        grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-report', ['process.spawn', `fs.write:${world.cwd}`]),
-        SHELL_RUN.id,
-        shellInputs(world.cwd, argv, ['CANARY'], 5_000, 'stdin-body'),
-      ));
+      const outcome = asOutcome(
+        await invoke(
+          world.host,
+          grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-report', ['process.spawn', `fs.write:${world.cwd}`]),
+          SHELL_RUN.id,
+          shellInputs(world.cwd, argv, ['CANARY'], 5_000, 'stdin-body'),
+        ),
+      );
       assert.equal(outcome.outcome, 'succeeded');
       const output = outcome.output as { exit: number; stdout_tail: string; artifacts: string[] };
       assert.equal(output.exit, 0);
@@ -357,12 +389,14 @@ describe('shell.run@1', () => {
   it('redacts a canary the child writes to stdout', async () => {
     const world = hostFor(undefined);
     try {
-      const outcome = asOutcome(await invoke(
-        world.host,
-        grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-leak', ['process.spawn', `fs.write:${world.cwd}`]),
-        SHELL_RUN.id,
-        shellInputs(world.cwd, [process.execPath, STUB, '--leak'], ['CANARY']),
-      ));
+      const outcome = asOutcome(
+        await invoke(
+          world.host,
+          grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-leak', ['process.spawn', `fs.write:${world.cwd}`]),
+          SHELL_RUN.id,
+          shellInputs(world.cwd, [process.execPath, STUB, '--leak'], ['CANARY']),
+        ),
+      );
       assert.equal(outcome.outcome, 'succeeded');
       const output = outcome.output as { stdout_tail: string };
       assert.equal(output.stdout_tail.includes(CANARY), false);
@@ -376,24 +410,30 @@ describe('shell.run@1', () => {
   it('denies a grant that does not match process effects, without spawning', async () => {
     const world = hostFor(undefined);
     try {
-      const missing = asRejected(await invoke(
-        world.host,
-        grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-missing', [`fs.write:${world.cwd}`]),
-        SHELL_RUN.id,
-        shellInputs(world.cwd, [process.execPath, STUB, '--report'], ['CANARY']),
-      ));
-      const wrongRef = asRejected(await invoke(
-        world.host,
-        grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-wrong', ['process.spawn', 'fs.write:ref_other']),
-        SHELL_RUN.id,
-        shellInputs(world.cwd, [process.execPath, STUB, '--report']),
-      ));
-      const absent = asRejected(await invoke(
-        world.host,
-        grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-absent'),
-        SHELL_RUN.id,
-        shellInputs(world.cwd, [process.execPath, STUB, '--report']),
-      ));
+      const missing = asRejected(
+        await invoke(
+          world.host,
+          grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-missing', [`fs.write:${world.cwd}`]),
+          SHELL_RUN.id,
+          shellInputs(world.cwd, [process.execPath, STUB, '--report'], ['CANARY']),
+        ),
+      );
+      const wrongRef = asRejected(
+        await invoke(
+          world.host,
+          grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-wrong', ['process.spawn', 'fs.write:ref_other']),
+          SHELL_RUN.id,
+          shellInputs(world.cwd, [process.execPath, STUB, '--report']),
+        ),
+      );
+      const absent = asRejected(
+        await invoke(
+          world.host,
+          grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-absent'),
+          SHELL_RUN.id,
+          shellInputs(world.cwd, [process.execPath, STUB, '--report']),
+        ),
+      );
       for (const result of [missing, wrongRef, absent]) {
         assert.equal(result.code, 'DENIED');
       }
@@ -444,18 +484,25 @@ describe('shell.run@1', () => {
     const world = hostFor(undefined);
     const throwing = hostFor(undefined, envPort('CANARY'));
     try {
-      const carried = asRejected(await invoke(
-        world.host,
-        grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-carried', ['process.spawn', `fs.write:${world.cwd}`]),
-        SHELL_RUN.id,
-        shellInputs(world.cwd, [process.execPath, CANARY], ['CANARY']),
-      ));
-      const blew = asRejected(await invoke(
-        throwing.host,
-        grant(throwing.authority, SHELL_RUN.id, throwing.cwd, 'shell-threw', ['process.spawn', `fs.write:${throwing.cwd}`]),
-        SHELL_RUN.id,
-        shellInputs(throwing.cwd, [process.execPath, STUB, '--report'], ['CANARY']),
-      ));
+      const carried = asRejected(
+        await invoke(
+          world.host,
+          grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-carried', ['process.spawn', `fs.write:${world.cwd}`]),
+          SHELL_RUN.id,
+          shellInputs(world.cwd, [process.execPath, CANARY], ['CANARY']),
+        ),
+      );
+      const blew = asRejected(
+        await invoke(
+          throwing.host,
+          grant(throwing.authority, SHELL_RUN.id, throwing.cwd, 'shell-threw', [
+            'process.spawn',
+            `fs.write:${throwing.cwd}`,
+          ]),
+          SHELL_RUN.id,
+          shellInputs(throwing.cwd, [process.execPath, STUB, '--report'], ['CANARY']),
+        ),
+      );
       assert.equal(carried.code, 'DENIED');
       assert.equal(carried.reason, 'denied');
       assert.equal(blew.code, 'DENIED');
@@ -477,8 +524,14 @@ describe('shell.run@1', () => {
     const effects = ['process.spawn', `fs.write:${world.cwd}`];
     try {
       for (const name of ['SHORT', 'ONE', 'EMPTY']) {
-        const refused = asRejected(await invoke(world.host, grant(world.authority, SHELL_RUN.id, world.cwd, `shell-short-${name}`, effects),
-          SHELL_RUN.id, shellInputs(world.cwd, [process.execPath, STUB, '--report'], [name])));
+        const refused = asRejected(
+          await invoke(
+            world.host,
+            grant(world.authority, SHELL_RUN.id, world.cwd, `shell-short-${name}`, effects),
+            SHELL_RUN.id,
+            shellInputs(world.cwd, [process.execPath, STUB, '--report'], [name]),
+          ),
+        );
         assert.equal(refused.code, 'DENIED', name);
         assert.equal(refused.reason, 'denied', name);
       }
@@ -486,15 +539,39 @@ describe('shell.run@1', () => {
       assert.equal(observed(world.host).includes(SHORT), false);
 
       // Eight characters is the shortest value injected. It is refused on argv and redacted as a whole.
-      const carried = asRejected(await invoke(world.host, grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-exact-argv', effects),
-        SHELL_RUN.id, shellInputs(world.cwd, [process.execPath, STUB, '--report', `--token=${EXACT}`], ['CANARY'])));
+      const carried = asRejected(
+        await invoke(
+          world.host,
+          grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-exact-argv', effects),
+          SHELL_RUN.id,
+          shellInputs(world.cwd, [process.execPath, STUB, '--report', `--token=${EXACT}`], ['CANARY']),
+        ),
+      );
       assert.equal(carried.code, 'DENIED');
-      const leaked = succeeded(await invoke(world.host, grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-exact-leak', effects),
-        SHELL_RUN.id, shellInputs(world.cwd, [process.execPath, STUB, '--leak'], ['CANARY'])));
+      const leaked = succeeded(
+        await invoke(
+          world.host,
+          grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-exact-leak', effects),
+          SHELL_RUN.id,
+          shellInputs(world.cwd, [process.execPath, STUB, '--leak'], ['CANARY']),
+        ),
+      );
       assert.equal(leaked.stdout_tail, '[redacted]');
       // Fragments of the value and common short tokens are ordinary output, not redaction targets.
-      const ordinary = succeeded(await invoke(world.host, grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-exact-ordinary', effects),
-        SHELL_RUN.id, shellInputs(world.cwd, [process.execPath, STUB, '--report'], ['CANARY'], 5_000, `${EXACT.slice(0, 7)} 1 exit`)));
+      const ordinary = succeeded(
+        await invoke(
+          world.host,
+          grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-exact-ordinary', effects),
+          SHELL_RUN.id,
+          shellInputs(
+            world.cwd,
+            [process.execPath, STUB, '--report'],
+            ['CANARY'],
+            5_000,
+            `${EXACT.slice(0, 7)} 1 exit`,
+          ),
+        ),
+      );
       const report = JSON.parse(ordinary.stdout_tail) as { stdin: string; canary_len: number };
       assert.equal(report.stdin, `${EXACT.slice(0, 7)} 1 exit`);
       assert.equal(report.canary_len, EXACT.length);
@@ -507,12 +584,14 @@ describe('shell.run@1', () => {
   it('does not interpolate argv through a shell', async () => {
     const world = hostFor(undefined);
     try {
-      const outcome = asOutcome(await invoke(
-        world.host,
-        grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-literal', ['process.spawn', `fs.write:${world.cwd}`]),
-        SHELL_RUN.id,
-        shellInputs(world.cwd, ['echo hello && touch pwned']),
-      ));
+      const outcome = asOutcome(
+        await invoke(
+          world.host,
+          grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-literal', ['process.spawn', `fs.write:${world.cwd}`]),
+          SHELL_RUN.id,
+          shellInputs(world.cwd, ['echo hello && touch pwned']),
+        ),
+      );
       assert.equal(outcome.outcome, 'failed');
       assert.equal(outcome.failure, 'spawn_failed');
       assert.equal(existsSync(join(world.dir, 'pwned')), false);
@@ -524,12 +603,14 @@ describe('shell.run@1', () => {
   it('maps a missing executable to spawn_failed', async () => {
     const world = hostFor(undefined);
     try {
-      const outcome = asOutcome(await invoke(
-        world.host,
-        grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-enoent', ['process.spawn', `fs.write:${world.cwd}`]),
-        SHELL_RUN.id,
-        shellInputs(world.cwd, [join(world.dir, 'missing-binary-p7')]),
-      ));
+      const outcome = asOutcome(
+        await invoke(
+          world.host,
+          grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-enoent', ['process.spawn', `fs.write:${world.cwd}`]),
+          SHELL_RUN.id,
+          shellInputs(world.cwd, [join(world.dir, 'missing-binary-p7')]),
+        ),
+      );
       assert.equal(outcome.outcome, 'failed');
       assert.equal(outcome.failure, 'spawn_failed');
       assert.equal(observed(world.host).includes(CANARY), false);
@@ -541,12 +622,14 @@ describe('shell.run@1', () => {
   it('bounds stdout and stderr tails', async () => {
     const world = hostFor(undefined);
     try {
-      const outcome = asOutcome(await invoke(
-        world.host,
-        grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-flood', ['process.spawn', `fs.write:${world.cwd}`]),
-        SHELL_RUN.id,
-        shellInputs(world.cwd, [process.execPath, STUB, '--flood', '20000']),
-      ));
+      const outcome = asOutcome(
+        await invoke(
+          world.host,
+          grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-flood', ['process.spawn', `fs.write:${world.cwd}`]),
+          SHELL_RUN.id,
+          shellInputs(world.cwd, [process.execPath, STUB, '--flood', '20000']),
+        ),
+      );
       assert.equal(outcome.outcome, 'succeeded');
       const output = outcome.output as { stdout_tail: string; stderr_tail: string };
       assert.equal(output.stdout_tail.length, 4096);
@@ -562,12 +645,14 @@ describe('shell.run@1', () => {
     const world = hostFor(undefined);
     const pidFile = join(tmpdir(), `weave-p7-timeout-${process.pid}.pid`);
     try {
-      const outcome = asOutcome(await invoke(
-        world.host,
-        grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-timeout', ['process.spawn', `fs.write:${world.cwd}`]),
-        SHELL_RUN.id,
-        shellInputs(world.cwd, [process.execPath, STUB, '--sleep', pidFile], [], 700),
-      ));
+      const outcome = asOutcome(
+        await invoke(
+          world.host,
+          grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-timeout', ['process.spawn', `fs.write:${world.cwd}`]),
+          SHELL_RUN.id,
+          shellInputs(world.cwd, [process.execPath, STUB, '--sleep', pidFile], [], 700),
+        ),
+      );
       assert.equal(outcome.outcome, 'failed');
       assert.equal(outcome.failure, 'timeout');
       const pid = await waitForPid(pidFile);
@@ -615,8 +700,14 @@ describe('shell.run@1', () => {
   // One that left the group (its own session) is only detached from the pipes; it is not signalled.
   for (const escape of [false, true]) {
     const holder = escape ? 'a grandchild outside the process group' : 'a grandchild';
-    const subprocess = (pidFile: string, ...extra: string[]) =>
-      [process.execPath, STUB, '--subprocess', pidFile, ...(escape ? ['--escape'] : []), ...extra];
+    const subprocess = (pidFile: string, ...extra: string[]) => [
+      process.execPath,
+      STUB,
+      '--subprocess',
+      pidFile,
+      ...(escape ? ['--escape'] : []),
+      ...extra,
+    ];
 
     for (const failure of ['timeout', 'cancelled'] as const) {
       it(`${failure} returns promptly when ${holder} holds stdout open, and releases the lock`, async () => {
@@ -628,7 +719,11 @@ describe('shell.run@1', () => {
         try {
           const effects = ['process.spawn', `fs.write:${world.cwd}`];
           const issued = grant(world.authority, SHELL_RUN.id, world.cwd, 'subprocess', effects);
-          const handle = world.host.invoke(issued, SHELL_RUN.id, shellInputs(world.cwd, subprocess(pidFile), [], TIMEOUT_MS));
+          const handle = world.host.invoke(
+            issued,
+            SHELL_RUN.id,
+            shellInputs(world.cwd, subprocess(pidFile), [], TIMEOUT_MS),
+          );
           assert.equal(handle.kind, 'handle');
           if (handle.kind !== 'handle') return;
           world.host.release(issued.action_id);
@@ -639,17 +734,31 @@ describe('shell.run@1', () => {
           assert.equal(outcome.outcome, 'failed');
           assert.equal(outcome.failure, failure);
           if (escape) {
-            assert.equal(terminated(grandchild), false, 'the grandchild left the group, so the group signal did not reach it');
+            assert.equal(
+              terminated(grandchild),
+              false,
+              'the grandchild left the group, so the group signal did not reach it',
+            );
           } else {
             await waitDead(grandchild);
           }
-          const next = asOutcome(await invoke(world.host, grant(world.authority, SHELL_RUN.id, world.cwd, 'after-subprocess', effects),
-            SHELL_RUN.id, shellInputs(world.cwd, [process.execPath, STUB, '--report'])));
+          const next = asOutcome(
+            await invoke(
+              world.host,
+              grant(world.authority, SHELL_RUN.id, world.cwd, 'after-subprocess', effects),
+              SHELL_RUN.id,
+              shellInputs(world.cwd, [process.execPath, STUB, '--report']),
+            ),
+          );
           assert.equal(next.outcome, 'succeeded');
         } finally {
           // Cleanup of the test's own grandchild; every assertion above has already run.
           if (grandchild !== undefined && !terminated(grandchild)) {
-            try { process.kill(grandchild, 'SIGKILL'); } catch { /* Already gone. */ }
+            try {
+              process.kill(grandchild, 'SIGKILL');
+            } catch {
+              /* Already gone. */
+            }
           }
           rmSync(world.dir, { recursive: true, force: true });
         }
@@ -663,7 +772,11 @@ describe('shell.run@1', () => {
       try {
         const effects = ['process.spawn', `fs.write:${world.cwd}`];
         const issued = grant(world.authority, SHELL_RUN.id, world.cwd, 'exits-early', effects);
-        const handle = world.host.invoke(issued, SHELL_RUN.id, shellInputs(world.cwd, subprocess(pidFile, '--exit=5'), [], 60_000));
+        const handle = world.host.invoke(
+          issued,
+          SHELL_RUN.id,
+          shellInputs(world.cwd, subprocess(pidFile, '--exit=5'), [], 60_000),
+        );
         assert.equal(handle.kind, 'handle');
         if (handle.kind !== 'handle') return;
         world.host.release(issued.action_id);
@@ -674,19 +787,33 @@ describe('shell.run@1', () => {
         // Detaching before end-of-file means stdout may be incomplete, so it is reported as truncated.
         assert.equal(output.stdout_truncated, escape);
         if (escape) {
-          assert.equal(terminated(grandchild), false, 'the grandchild left the group, so the group signal did not reach it');
+          assert.equal(
+            terminated(grandchild),
+            false,
+            'the grandchild left the group, so the group signal did not reach it',
+          );
         } else {
           await waitDead(grandchild);
         }
         const trace = world.host.shellTraces()[0];
         assert.equal(trace?.exit, 5);
         assert.equal(trace?.failure, null);
-        const next = asOutcome(await invoke(world.host, grant(world.authority, SHELL_RUN.id, world.cwd, 'after-exit', effects),
-          SHELL_RUN.id, shellInputs(world.cwd, [process.execPath, STUB, '--report'])));
+        const next = asOutcome(
+          await invoke(
+            world.host,
+            grant(world.authority, SHELL_RUN.id, world.cwd, 'after-exit', effects),
+            SHELL_RUN.id,
+            shellInputs(world.cwd, [process.execPath, STUB, '--report']),
+          ),
+        );
         assert.equal(next.outcome, 'succeeded');
       } finally {
         if (grandchild !== undefined && !terminated(grandchild)) {
-          try { process.kill(grandchild, 'SIGKILL'); } catch { /* Already gone. */ }
+          try {
+            process.kill(grandchild, 'SIGKILL');
+          } catch {
+            /* Already gone. */
+          }
         }
         rmSync(world.dir, { recursive: true, force: true });
       }
@@ -696,12 +823,14 @@ describe('shell.run@1', () => {
   it('returns artifact refs and keeps locators in the host', async () => {
     const world = hostFor(undefined);
     try {
-      const outcome = asOutcome(await invoke(
-        world.host,
-        grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-touch', ['process.spawn', `fs.write:${world.cwd}`]),
-        SHELL_RUN.id,
-        shellInputs(world.cwd, [process.execPath, STUB, '--touch', 'hello.txt']),
-      ));
+      const outcome = asOutcome(
+        await invoke(
+          world.host,
+          grant(world.authority, SHELL_RUN.id, world.cwd, 'shell-touch', ['process.spawn', `fs.write:${world.cwd}`]),
+          SHELL_RUN.id,
+          shellInputs(world.cwd, [process.execPath, STUB, '--touch', 'hello.txt']),
+        ),
+      );
       assert.equal(outcome.outcome, 'succeeded');
       const output = outcome.output as { artifacts: string[] };
       assert.equal(output.artifacts.length, 1);
@@ -733,12 +862,14 @@ describe('repo.test, repo.lint, and repo.build', () => {
         [REPO_BUILD.id, 'configured-build'],
       ] as const;
       for (const [operation, token] of cases) {
-        const outcome = asOutcome(await invoke(
-          world.host,
-          grant(world.authority, operation, world.cwd, operation, ['process.spawn', `fs.write:${world.cwd}`]),
-          operation,
-          { cwd_ref: world.cwd, env_allow: [], timeout_ms: 5_000 },
-        ));
+        const outcome = asOutcome(
+          await invoke(
+            world.host,
+            grant(world.authority, operation, world.cwd, operation, ['process.spawn', `fs.write:${world.cwd}`]),
+            operation,
+            { cwd_ref: world.cwd, env_allow: [], timeout_ms: 5_000 },
+          ),
+        );
         assert.equal(outcome.outcome, 'succeeded');
         const output = outcome.output as { stdout_tail: string };
         const report = JSON.parse(output.stdout_tail) as { argv: string[] };
@@ -752,12 +883,19 @@ describe('repo.test, repo.lint, and repo.build', () => {
       );
       assert.equal(rejected.kind, 'rejected');
       assert.equal(rejected.code, 'INVALID_INPUT');
-      const lines = world.host.shellTraceJsonl().trim().split('\n').map((line) => JSON.parse(line) as {
-        id: string;
-        parentId: string | null;
-        operation: string;
-        argv: string[];
-      });
+      const lines = world.host
+        .shellTraceJsonl()
+        .trim()
+        .split('\n')
+        .map(
+          (line) =>
+            JSON.parse(line) as {
+              id: string;
+              parentId: string | null;
+              operation: string;
+              argv: string[];
+            },
+        );
       const parent = lines.find((line) => line.operation === REPO_TEST.id && line.parentId === null);
       assert.ok(parent);
       const child = lines.find((line) => line.parentId === parent.id);

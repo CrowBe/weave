@@ -27,25 +27,48 @@ test('core builds, passes its tests and imports with the OTel and SQLite adapter
     cpSync(join(weft, 'fixtures'), join(directory, 'fixtures'), { recursive: true });
     cpSync(join(weft, 'src'), join(directory, 'src'), { recursive: true });
     for (const name of readdirSync(join(directory, 'src'))) {
-      if (name.startsWith('otel') || name.startsWith('sqlite')) rmSync(join(directory, 'src', name), { recursive: true });
+      if (name.startsWith('otel') || name.startsWith('sqlite'))
+        rmSync(join(directory, 'src', name), { recursive: true });
     }
     for (const name of readdirSync(join(weft, 'test'))) {
       if (!name.startsWith('otel') && !name.startsWith('sqlite') && name.endsWith('.test.ts')) {
         cpSync(join(weft, 'test', name), join(directory, 'test', name), { recursive: true });
       }
     }
-    writeFileSync(join(directory, 'tsconfig.json'), JSON.stringify({
-      extends: join(root, 'tsconfig.base.json'),
-      compilerOptions: { rootDir: '.', outDir: 'dist', typeRoots: [join(root, 'node_modules/@types')] },
-      include: ['src/**/*.ts', 'test/**/*.ts'],
-    }));
-    execFileSync(process.execPath, [join(root, 'node_modules/typescript/bin/tsc'), '-p', directory], { encoding: 'utf8' });
+    writeFileSync(
+      join(directory, 'tsconfig.json'),
+      JSON.stringify({
+        extends: join(root, 'tsconfig.base.json'),
+        compilerOptions: { rootDir: '.', outDir: 'dist', typeRoots: [join(root, 'node_modules/@types')] },
+        include: ['src/**/*.ts', 'test/**/*.ts'],
+      }),
+    );
+    execFileSync(process.execPath, [join(root, 'node_modules/typescript/bin/tsc'), '-p', directory], {
+      encoding: 'utf8',
+    });
     const childEnv = { ...process.env };
     delete childEnv.NODE_TEST_CONTEXT;
-    const testOutput = execFileSync(process.execPath, ['--test', ...readdirSync(join(directory, 'dist/test')).filter((name) => name.endsWith('.test.js')).map((name) => join(directory, 'dist/test', name))], { cwd: directory, encoding: 'utf8', env: childEnv });
+    const testOutput = execFileSync(
+      process.execPath,
+      [
+        '--test',
+        ...readdirSync(join(directory, 'dist/test'))
+          .filter((name) => name.endsWith('.test.js'))
+          .map((name) => join(directory, 'dist/test', name)),
+      ],
+      { cwd: directory, encoding: 'utf8', env: childEnv },
+    );
     assert.match(testOutput, /# fail 0/);
     assert.doesNotMatch(testOutput, /# tests 0/);
-    const result = execFileSync(process.execPath, ['--input-type=module', '-e', "const core = await import('@weave/weft'); if (typeof core.validateRecord !== 'function') process.exit(1); console.log('core-only import passed');"], { cwd: directory, encoding: 'utf8' });
+    const result = execFileSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        "const core = await import('@weave/weft'); if (typeof core.validateRecord !== 'function') process.exit(1); console.log('core-only import passed');",
+      ],
+      { cwd: directory, encoding: 'utf8' },
+    );
     assert.match(result, /core-only import passed/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -53,10 +76,11 @@ test('core builds, passes its tests and imports with the OTel and SQLite adapter
 });
 
 test('benchmark routes have no ambient OTel opt-in', () => {
-  const walk = (directory: string): string[] => readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name);
-    return entry.isDirectory() ? walk(path) : /\.(?:ts|mts|js|mjs)$/.test(entry.name) ? [path] : [];
-  });
+  const walk = (directory: string): string[] =>
+    readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+      const path = join(directory, entry.name);
+      return entry.isDirectory() ? walk(path) : /\.(?:ts|mts|js|mjs)$/.test(entry.name) ? [path] : [];
+    });
   const sources = walk(join(root, 'benchmarks'));
   assert.ok(sources.length > 0);
   for (const path of sources) {

@@ -2,10 +2,7 @@
   "status": "exploratory quality-only comparison",
   "observed_at": "2026-09-25T05:06:41.326Z",
   "corpus_sha256": "d2a9f10c3793d423caaab080317844a961c8dfd8654e164896e1044a6e74115b",
-  "models": [
-    "stealth/space-bunny-alpha",
-    "gpt-6-sol"
-  ],
+  "models": ["stealth/space-bunny-alpha", "gpt-6-sol"],
   "settings": {
     "bunny": "Nous adapter, temperature 0, max_output_tokens 8192",
     "sol": "Codex CLI 0.157.0, fresh ephemeral session, read-only, medium effort",

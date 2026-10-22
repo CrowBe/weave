@@ -160,20 +160,20 @@ the binding.
 
 ### Token roles `tokens@1`
 
-| Group | Roles | Rule |
-| --- | --- | --- |
-| Color, base | `canvas`, `surface`, `surface-raised`, `border`, `text`, `text-muted`, `focus` | |
-| Color, provenance | `provenance-operator`, `provenance-runtime`, `provenance-host`, `provenance-clock`, `provenance-judgment`, `provenance-untrusted` | Judgment and gateway share `provenance-judgment`. Test and unrecognized provenance use `provenance-untrusted`. Model-derived values use `provenance-judgment`. |
-| Color, eligibility | `eligibility-allowed`, `eligibility-approval`, `eligibility-prohibited` | |
-| Color, action | `action-pending`, `action-running`, `action-succeeded`, `action-failed`, `action-uncertain`, `action-cancelled` | `action-failed` and `action-uncertain` are distinct values. |
-| Color, validation | `validation-accepted`, `validation-rejected`, `validation-unknown` | `validation-accepted` and `validation-rejected` are distinct values. |
-| Color, condition | `condition-empty`, `condition-omitted`, `condition-stale`, `condition-exhausted` | |
-| Color, decision | `decision-request`, `decision-approve`, `decision-deny` | Only cut-through components may reference these. `decision-approve` and `decision-deny` are distinct values. |
-| Type | `title`, `heading`, `body`, `label`, `id`, `numeric` | Weight, emphasis, fixed width, tabular figures. Family and size are renderer bindings. |
-| Space | `space.0` through `space.5` | Integer multiples of `space.unit`. |
-| Density | `density.comfort` (`comfortable` or `compact`), `density.list-rows`, `density.gutter` | Density changes spacing and list length. It is not a product mode. |
-| Elevation | `elevation.base`, `elevation.raised`, `elevation.overlay` | `overlay` is the cut-through. A pin cannot cover it. |
-| Marks | one text mark per status role | Examples: `mark.uncertain`, `mark.stale`, `mark.rejected`, `mark.omitted`. |
+| Group              | Roles                                                                                                                             | Rule                                                                                                                                                           |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Color, base        | `canvas`, `surface`, `surface-raised`, `border`, `text`, `text-muted`, `focus`                                                    |                                                                                                                                                                |
+| Color, provenance  | `provenance-operator`, `provenance-runtime`, `provenance-host`, `provenance-clock`, `provenance-judgment`, `provenance-untrusted` | Judgment and gateway share `provenance-judgment`. Test and unrecognized provenance use `provenance-untrusted`. Model-derived values use `provenance-judgment`. |
+| Color, eligibility | `eligibility-allowed`, `eligibility-approval`, `eligibility-prohibited`                                                           |                                                                                                                                                                |
+| Color, action      | `action-pending`, `action-running`, `action-succeeded`, `action-failed`, `action-uncertain`, `action-cancelled`                   | `action-failed` and `action-uncertain` are distinct values.                                                                                                    |
+| Color, validation  | `validation-accepted`, `validation-rejected`, `validation-unknown`                                                                | `validation-accepted` and `validation-rejected` are distinct values.                                                                                           |
+| Color, condition   | `condition-empty`, `condition-omitted`, `condition-stale`, `condition-exhausted`                                                  |                                                                                                                                                                |
+| Color, decision    | `decision-request`, `decision-approve`, `decision-deny`                                                                           | Only cut-through components may reference these. `decision-approve` and `decision-deny` are distinct values.                                                   |
+| Type               | `title`, `heading`, `body`, `label`, `id`, `numeric`                                                                              | Weight, emphasis, fixed width, tabular figures. Family and size are renderer bindings.                                                                         |
+| Space              | `space.0` through `space.5`                                                                                                       | Integer multiples of `space.unit`.                                                                                                                             |
+| Density            | `density.comfort` (`comfortable` or `compact`), `density.list-rows`, `density.gutter`                                             | Density changes spacing and list length. It is not a product mode.                                                                                             |
+| Elevation          | `elevation.base`, `elevation.raised`, `elevation.overlay`                                                                         | `overlay` is the cut-through. A pin cannot cover it.                                                                                                           |
+| Marks              | one text mark per status role                                                                                                     | Examples: `mark.uncertain`, `mark.stale`, `mark.rejected`, `mark.omitted`.                                                                                     |
 
 `density.comfort` replaces the earlier `density.mode` name so a token is not
 read as a chat, code, research, or agent mode.
@@ -216,12 +216,12 @@ names and no token values. A theme change invalidates paint only.
 States are semantic. A renderer maps them. The vocabulary does not name the
 mapping.
 
-| State | Meaning |
-| --- | --- |
-| `rest`, `focus`, `pressed`, `disabled` | Pointer and keyboard affordance of a control. |
-| `pinned`, `placed` | The operator holds this component in this region for the session. |
-| `collapsed`, `expanded` | A region or a nav group is folded or open. Operator collapse is session state. |
-| `cut-through` | A blocking request is showing in the cut-through. |
+| State                                     | Meaning                                                                          |
+| ----------------------------------------- | -------------------------------------------------------------------------------- |
+| `rest`, `focus`, `pressed`, `disabled`    | Pointer and keyboard affordance of a control.                                    |
+| `pinned`, `placed`                        | The operator holds this component in this region for the session.                |
+| `collapsed`, `expanded`                   | A region or a nav group is folded or open. Operator collapse is session state.   |
+| `cut-through`                             | A blocking request is showing in the cut-through.                                |
 | `empty`, `withheld`, `stale`, `exhausted` | No rows, an omitted slice, a lagging revision, or a spent arrangement allowance. |
 
 Focus does not move onto an approve or deny control when a request appears.
@@ -263,13 +263,13 @@ Those indicators are not components and are not questions.
 The default tree is a pure function. Predicates are data on the vocabulary,
 evaluated against the workspace view:
 
-| Predicate | Holds when |
-| --- | --- |
-| `blocking` | a pending approval or a requested admission is unplaced |
-| `work.active` | an action is pending, running, or uncertain |
-| `artifact.current` | the artifacts slice is disclosed and non-empty |
-| `research.active` | crystallization or notices are non-empty, and `work.active` is false |
-| `conversation.leads` | none of the above |
+| Predicate            | Holds when                                                           |
+| -------------------- | -------------------------------------------------------------------- |
+| `blocking`           | a pending approval or a requested admission is unplaced              |
+| `work.active`        | an action is pending, running, or uncertain                          |
+| `artifact.current`   | the artifacts slice is disclosed and non-empty                       |
+| `research.active`    | crystallization or notices are non-empty, and `work.active` is false |
+| `conversation.leads` | none of the above                                                    |
 
 When `conversation.leads`, `main.primary` is `conversation.thread` and the
 drawer is collapsed.
@@ -313,16 +313,16 @@ most one region.
 
 ### Paint conditions
 
-| Condition | Where | What is shown |
-| --- | --- | --- |
-| No applicable component, or no rows | the region | the region's fixed empty text, role `condition-empty`. A collapsed drawer shows nothing. |
-| A slice omitted by disclosure | the component | `Withheld: <slice> (<reason>)`, role `condition-omitted`. An omission is not an empty list. |
-| Painted revision older than current | shell indicator | both revisions, role `condition-stale` |
-| A weight's revision differs from the candidate revision | `frontier.table` | the weight, marked stale, with site and revision |
-| No arrangement for the current key | arrangement indicator | `default` |
-| Request in flight, superseded, unaccepted, blocked, or rejected | arrangement indicator | the status and reason; the tree stays as it was |
-| Allowance exhausted, or the site disabled | arrangement indicator | `exhausted` or `disabled`; pins, placements, cut-through, and the default tree hold |
-| Session ended | the workspace | the last paint, static, with the reason; ingress is closed |
+| Condition                                                       | Where                 | What is shown                                                                               |
+| --------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------- |
+| No applicable component, or no rows                             | the region            | the region's fixed empty text, role `condition-empty`. A collapsed drawer shows nothing.    |
+| A slice omitted by disclosure                                   | the component         | `Withheld: <slice> (<reason>)`, role `condition-omitted`. An omission is not an empty list. |
+| Painted revision older than current                             | shell indicator       | both revisions, role `condition-stale`                                                      |
+| A weight's revision differs from the candidate revision         | `frontier.table`      | the weight, marked stale, with site and revision                                            |
+| No arrangement for the current key                              | arrangement indicator | `default`                                                                                   |
+| Request in flight, superseded, unaccepted, blocked, or rejected | arrangement indicator | the status and reason; the tree stays as it was                                             |
+| Allowance exhausted, or the site disabled                       | arrangement indicator | `exhausted` or `disabled`; pins, placements, cut-through, and the default tree hold         |
+| Session ended                                                   | the workspace         | the last paint, static, with the reason; ingress is closed                                  |
 
 ## 5. Workspace view
 
@@ -331,22 +331,22 @@ one slice assembly at one revision. Policy may omit any slice. The manifest
 records each omission and its reason. With no open goal, goal slices are
 omitted and the conversational surface still paints.
 
-| Slice | Contents drawn from current state |
-| --- | --- |
-| `goal` | id, purpose, status, success evidence |
-| `authority` | read and write resource ids |
-| `budget` | budget lines and the recovery allowance |
-| `approvals` | approval records |
-| `admission` | the admission request, green evidence, and held-out report counts and failure codes |
-| `cycle` | the latest cycle outcome and not-selected reasons |
-| `candidates` | the latest cycle's candidates, eligibility, weights, and the weights' revision |
-| `actions` | action records |
-| `artifacts` | report and publication identity, revision, and body only when policy discloses it |
-| `notices` | `admission.decided`, `implementation.revoked`, and `evidence.invalidated`, with validation status |
-| `crystallization` | crystallization state, without held-out case ids |
-| `inferences` | goal inference records: site, role, kind, status, attempts, spent; no view content |
-| `observations` | the most recent N observations: sequence, type, provenance, validation, cause; truncation disclosed |
-| `availability` | project attachment names and kinds. No bodies. |
+| Slice             | Contents drawn from current state                                                                   |
+| ----------------- | --------------------------------------------------------------------------------------------------- |
+| `goal`            | id, purpose, status, success evidence                                                               |
+| `authority`       | read and write resource ids                                                                         |
+| `budget`          | budget lines and the recovery allowance                                                             |
+| `approvals`       | approval records                                                                                    |
+| `admission`       | the admission request, green evidence, and held-out report counts and failure codes                 |
+| `cycle`           | the latest cycle outcome and not-selected reasons                                                   |
+| `candidates`      | the latest cycle's candidates, eligibility, weights, and the weights' revision                      |
+| `actions`         | action records                                                                                      |
+| `artifacts`       | report and publication identity, revision, and body only when policy discloses it                   |
+| `notices`         | `admission.decided`, `implementation.revoked`, and `evidence.invalidated`, with validation status   |
+| `crystallization` | crystallization state, without held-out case ids                                                    |
+| `inferences`      | goal inference records: site, role, kind, status, attempts, spent; no view content                  |
+| `observations`    | the most recent N observations: sequence, type, provenance, validation, cause; truncation disclosed |
+| `availability`    | project attachment names and kinds. No bodies.                                                      |
 
 `inferences`, `crystallization`, report, and publication already exist on
 `State`. `availability` is project state, outside the goal fold. The other
@@ -362,22 +362,22 @@ operator observation types it may submit, the regions that may hold it, and
 its interaction states. It has no AgentSOP contract, no admission, and no
 grant. Nothing in the declaration names a renderer.
 
-| Component | May occupy | Binds | Applies when | May submit |
-| --- | --- | --- | --- | --- |
-| `project.index@1` | `nav` | `availability` | always | a session-record selection, not an observation |
-| `conversation.thread@1` | `main.primary`, `main.bottom`, `right.drawer` | `observations` | always | `operator.input` (planned; no runtime transition yet) |
-| `goal.status@1` | `nav` | `goal`, `authority`, `notices` | a goal is open | |
-| `approval.pending@1` | `cut-through`, and adaptive regions only by operator placement | `approvals` | one instance per pending request | `approval.decided` (`approved` or `denied`) |
-| `admission.pending@1` | `cut-through`, and adaptive regions only by operator placement | `admission` | one instance per requested admission | `admission.decided` (`admitted`) |
-| `work.actions@1` | `main.primary`, `main.bottom` | `actions` | `actions` is non-empty | `action.cancel_requested` |
-| `editor@1` | `main.primary`, `main.bottom` | `artifacts` | `artifacts` is disclosed and non-empty | a correction, only as an existing observation or a granted write |
-| `crystallization.progress@1` | `main.primary`, `main.bottom` | `crystallization` | crystallization is non-empty | |
-| `notice.list@1` | `main.primary`, `main.bottom`, `right.drawer` | `notices` | `notices` is non-empty | |
-| `frontier.table@1` | adaptive regions, by nav placement or arrangement | `candidates`, `cycle` | `candidates` is non-empty | |
-| `evidence.trace@1` | adaptive regions, by nav placement or arrangement | `observations` | `observations` is non-empty | |
-| `inference.ledger@1` | adaptive regions, by nav placement or arrangement | `inferences` | `inferences` is non-empty | |
-| `budget.meter@1` | adaptive regions, by nav placement or arrangement | `budget` | a goal is open | |
-| `cycle.outcome@1` | adaptive regions, by nav placement or arrangement | `cycle`, `actions` | a goal is open | |
+| Component                    | May occupy                                                     | Binds                          | Applies when                           | May submit                                                       |
+| ---------------------------- | -------------------------------------------------------------- | ------------------------------ | -------------------------------------- | ---------------------------------------------------------------- |
+| `project.index@1`            | `nav`                                                          | `availability`                 | always                                 | a session-record selection, not an observation                   |
+| `conversation.thread@1`      | `main.primary`, `main.bottom`, `right.drawer`                  | `observations`                 | always                                 | `operator.input` (planned; no runtime transition yet)            |
+| `goal.status@1`              | `nav`                                                          | `goal`, `authority`, `notices` | a goal is open                         |                                                                  |
+| `approval.pending@1`         | `cut-through`, and adaptive regions only by operator placement | `approvals`                    | one instance per pending request       | `approval.decided` (`approved` or `denied`)                      |
+| `admission.pending@1`        | `cut-through`, and adaptive regions only by operator placement | `admission`                    | one instance per requested admission   | `admission.decided` (`admitted`)                                 |
+| `work.actions@1`             | `main.primary`, `main.bottom`                                  | `actions`                      | `actions` is non-empty                 | `action.cancel_requested`                                        |
+| `editor@1`                   | `main.primary`, `main.bottom`                                  | `artifacts`                    | `artifacts` is disclosed and non-empty | a correction, only as an existing observation or a granted write |
+| `crystallization.progress@1` | `main.primary`, `main.bottom`                                  | `crystallization`              | crystallization is non-empty           |                                                                  |
+| `notice.list@1`              | `main.primary`, `main.bottom`, `right.drawer`                  | `notices`                      | `notices` is non-empty                 |                                                                  |
+| `frontier.table@1`           | adaptive regions, by nav placement or arrangement              | `candidates`, `cycle`          | `candidates` is non-empty              |                                                                  |
+| `evidence.trace@1`           | adaptive regions, by nav placement or arrangement              | `observations`                 | `observations` is non-empty            |                                                                  |
+| `inference.ledger@1`         | adaptive regions, by nav placement or arrangement              | `inferences`                   | `inferences` is non-empty              |                                                                  |
+| `budget.meter@1`             | adaptive regions, by nav placement or arrangement              | `budget`                       | a goal is open                         |                                                                  |
+| `cycle.outcome@1`            | adaptive regions, by nav placement or arrangement              | `cycle`, `actions`             | a goal is open                         |                                                                  |
 
 `collapsed` is an occupant of `right.drawer` and of `nav`, not a component.
 

@@ -3,12 +3,13 @@ import type { DataDestination, RouteTable } from './types.js';
 
 /** A destination's training permission cannot be bypassed through an unmarked unit. */
 export function trainingAllowedDestinations(table: RouteTable): ReadonlySet<DataDestination> {
-  return new Set(table.filter(unit => unit.destination_training_allowed === true).map(unit => unit.destination));
+  return new Set(table.filter((unit) => unit.destination_training_allowed === true).map((unit) => unit.destination));
 }
 
 // Match token starts, as in the repository's trace and audit screens. Keep
 // every credential family and keep this package independent of Loom.
-const CREDENTIAL = /(?<![A-Za-z0-9])(?:sk[-_]|Bearer\s+|eyJ|gh[pousr]_|github_pat_|AKIA|AIza|xox[abp]-|-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----)/i;
+const CREDENTIAL =
+  /(?<![A-Za-z0-9])(?:sk[-_]|Bearer\s+|eyJ|gh[pousr]_|github_pat_|AKIA|AIza|xox[abp]-|-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----)/i;
 
 /**
  * Screen all JSON content, including keys, without changing caller-owned state.
@@ -18,10 +19,9 @@ const CREDENTIAL = /(?<![A-Za-z0-9])(?:sk[-_]|Bearer\s+|eyJ|gh[pousr]_|github_pa
  */
 export function containsCredentialContent(value: unknown): boolean {
   if (typeof value === 'string') return CREDENTIAL.test(value);
-  if (Array.isArray(value)) return value.some(item => containsCredentialContent(item));
+  if (Array.isArray(value)) return value.some((item) => containsCredentialContent(item));
   if (value !== null && typeof value === 'object') {
-    return Object.entries(value).some(([key, item]) =>
-      CREDENTIAL.test(key) || containsCredentialContent(item));
+    return Object.entries(value).some(([key, item]) => CREDENTIAL.test(key) || containsCredentialContent(item));
   }
   return false;
 }

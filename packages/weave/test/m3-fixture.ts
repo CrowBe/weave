@@ -114,7 +114,10 @@ async function flush(times = 8): Promise<void> {
   }
 }
 
-export async function driveFold(world: M3World, until: 'complete' | 'admission-requested' | 'green' = 'complete'): Promise<void> {
+export async function driveFold(
+  world: M3World,
+  until: 'complete' | 'admission-requested' | 'green' = 'complete',
+): Promise<void> {
   for (let step = 0; step < 50; step += 1) {
     await flush(6);
     const state = world.runtime.state();
@@ -142,7 +145,9 @@ export async function driveFold(world: M3World, until: 'complete' | 'admission-r
     for (const action_id of open) {
       world.host.release(action_id);
     }
-    const running = Object.values(world.runtime.state().actions).filter((action) => action.state === 'running' || action.state === 'pending');
+    const running = Object.values(world.runtime.state().actions).filter(
+      (action) => action.state === 'running' || action.state === 'pending',
+    );
     if (running.length > 0) {
       await Promise.all(
         running.map(async (action) => {
@@ -158,8 +163,14 @@ export async function driveFold(world: M3World, until: 'complete' | 'admission-r
     if (open.length === 0) {
       await flush(8);
       const after = world.runtime.state();
-      const still = Object.values(after.actions).some((action) => action.state === 'running' || action.state === 'pending');
-      if (!still && world.host.openActionIds().length === 0 && after.crystallization.admission?.status !== 'requested') {
+      const still = Object.values(after.actions).some(
+        (action) => action.state === 'running' || action.state === 'pending',
+      );
+      if (
+        !still &&
+        world.host.openActionIds().length === 0 &&
+        after.crystallization.admission?.status !== 'requested'
+      ) {
         return;
       }
     }
@@ -168,5 +179,7 @@ export async function driveFold(world: M3World, until: 'complete' | 'admission-r
   const running = Object.values(stuck.actions)
     .filter((action) => action.state === 'running' || action.state === 'pending')
     .map((action) => action.operation);
-  throw new Error(`drive stopped at ${stuck.goal?.status ?? 'no goal'}; running ${running.join(',') || 'none'}; admission ${stuck.crystallization.admission?.status ?? 'none'}`);
+  throw new Error(
+    `drive stopped at ${stuck.goal?.status ?? 'no goal'}; running ${running.join(',') || 'none'}; admission ${stuck.crystallization.admission?.status ?? 'none'}`,
+  );
 }

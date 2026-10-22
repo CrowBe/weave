@@ -70,10 +70,12 @@ function cachedConclusion(conclusion_id: string): Record<string, unknown> {
   };
 }
 
-function setup(options: {
-  readonly retained?: readonly string[];
-  readonly journal?: InterruptingJournal;
-} = {}): { readonly host: ConclusionHost; readonly runtime: Runtime } {
+function setup(
+  options: {
+    readonly retained?: readonly string[];
+    readonly journal?: InterruptingJournal;
+  } = {},
+): { readonly host: ConclusionHost; readonly runtime: Runtime } {
   const environment = new FixtureEnvironment();
   const host = new ConclusionHost(environment);
   environment.register(ALPHA, CONTENT[ALPHA] as string);
@@ -139,7 +141,10 @@ describe('WV-026d conclusion import index', () => {
 
   it('WV-026d-T02 imports each conclusion once across cycles and after recover, and picks up new ones', () => {
     const { host, runtime } = setup({ retained: ['conc:a'] });
-    assert.deepEqual(imported(runtime).map((observation) => observation.observation_id), ['conclusion:imported:conc:a']);
+    assert.deepEqual(
+      imported(runtime).map((observation) => observation.observation_id),
+      ['conclusion:imported:conc:a'],
+    );
 
     runtime.clock.submit(tick(1));
     runtime.clock.submit(tick(2));
@@ -147,10 +152,10 @@ describe('WV-026d conclusion import index', () => {
 
     host.retained.push(cachedConclusion('conc:b'));
     runtime.clock.submit(tick(3));
-    assert.deepEqual(imported(runtime).map((observation) => observation.observation_id), [
-      'conclusion:imported:conc:a',
-      'conclusion:imported:conc:b',
-    ]);
+    assert.deepEqual(
+      imported(runtime).map((observation) => observation.observation_id),
+      ['conclusion:imported:conc:a', 'conclusion:imported:conc:b'],
+    );
 
     const restored = recover(runtime.trace().observations, { host, decisionLayer: new QuietDecisionLayer() });
     restored.clock.submit(tick(4));
@@ -162,11 +167,10 @@ describe('WV-026d conclusion import index', () => {
 
     host.retained.push(cachedConclusion('conc:c'));
     restored.clock.submit(tick(5));
-    assert.deepEqual(imported(restored).map((observation) => observation.observation_id), [
-      'conclusion:imported:conc:a',
-      'conclusion:imported:conc:b',
-      'conclusion:imported:conc:c',
-    ]);
+    assert.deepEqual(
+      imported(restored).map((observation) => observation.observation_id),
+      ['conclusion:imported:conc:a', 'conclusion:imported:conc:b', 'conclusion:imported:conc:c'],
+    );
     assert.deepEqual(
       restored.state().conclusions.map((conclusion) => conclusion.conclusion_id),
       ['conc:a', 'conc:b', 'conc:c'],
@@ -193,9 +197,9 @@ describe('WV-026d conclusion import index', () => {
       ['conc:a', 'conc:b'],
       'the retry imports the conclusion that was not recorded',
     );
-    assert.deepEqual(imported(runtime).map((observation) => observation.observation_id), [
-      'conclusion:imported:conc:a',
-      'conclusion:imported:conc:b',
-    ]);
+    assert.deepEqual(
+      imported(runtime).map((observation) => observation.observation_id),
+      ['conclusion:imported:conc:a', 'conclusion:imported:conc:b'],
+    );
   });
 });

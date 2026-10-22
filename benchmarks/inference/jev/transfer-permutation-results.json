@@ -3,12 +3,7 @@
     "id": "mmlu/test/4589",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "mmlu/test/4589",
     "variant": "clean",
     "type": "choice",
@@ -31,12 +26,7 @@
     "id": "mmlu/test/4589",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "mmlu/test/4589",
     "variant": "clean",
     "type": "choice",
@@ -59,12 +49,7 @@
     "id": "mmlu/test/4589",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "mmlu/test/4589",
     "variant": "clean",
     "type": "choice",
@@ -87,12 +72,7 @@
     "id": "mmlu/test/4589",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "mmlu/test/4589",
     "variant": "clean",
     "type": "choice",
@@ -115,12 +95,7 @@
     "id": "mmlu/test/123",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "mmlu/test/123",
     "variant": "clean",
     "type": "choice",
@@ -143,12 +118,7 @@
     "id": "mmlu/test/123",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "mmlu/test/123",
     "variant": "clean",
     "type": "choice",
@@ -171,12 +141,7 @@
     "id": "mmlu/test/123",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "mmlu/test/123",
     "variant": "clean",
     "type": "choice",
@@ -199,12 +164,7 @@
     "id": "mmlu/test/123",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "mmlu/test/123",
     "variant": "clean",
     "type": "choice",
@@ -227,12 +187,7 @@
     "id": "mmlu/test/1047",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "mmlu/test/1047",
     "variant": "clean",
     "type": "choice",
@@ -255,12 +210,7 @@
     "id": "mmlu/test/1047",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "mmlu/test/1047",
     "variant": "clean",
     "type": "choice",
@@ -283,12 +233,7 @@
     "id": "mmlu/test/1047",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "mmlu/test/1047",
     "variant": "clean",
     "type": "choice",
@@ -311,12 +256,7 @@
     "id": "mmlu/test/1047",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "mmlu/test/1047",
     "variant": "clean",
     "type": "choice",
@@ -339,12 +279,7 @@
     "id": "mmlu/test/1492",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "mmlu/test/1492",
     "variant": "clean",
     "type": "choice",
@@ -367,12 +302,7 @@
     "id": "mmlu/test/1492",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "mmlu/test/1492",
     "variant": "clean",
     "type": "choice",
@@ -395,12 +325,7 @@
     "id": "mmlu/test/1492",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "mmlu/test/1492",
     "variant": "clean",
     "type": "choice",
@@ -423,12 +348,7 @@
     "id": "mmlu/test/1492",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "mmlu/test/1492",
     "variant": "clean",
     "type": "choice",
@@ -451,12 +371,7 @@
     "id": "mmlu/test/4063",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "mmlu/test/4063",
     "variant": "clean",
     "type": "choice",
@@ -479,12 +394,7 @@
     "id": "mmlu/test/4063",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "mmlu/test/4063",
     "variant": "clean",
     "type": "choice",
@@ -507,12 +417,7 @@
     "id": "mmlu/test/4063",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "mmlu/test/4063",
     "variant": "clean",
     "type": "choice",
@@ -535,12 +440,7 @@
     "id": "mmlu/test/4063",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "mmlu/test/4063",
     "variant": "clean",
     "type": "choice",
@@ -563,12 +463,7 @@
     "id": "mmlu/test/8228",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "mmlu/test/8228",
     "variant": "clean",
     "type": "choice",
@@ -591,12 +486,7 @@
     "id": "mmlu/test/8228",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "mmlu/test/8228",
     "variant": "clean",
     "type": "choice",
@@ -619,12 +509,7 @@
     "id": "mmlu/test/8228",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "mmlu/test/8228",
     "variant": "clean",
     "type": "choice",
@@ -647,12 +532,7 @@
     "id": "mmlu/test/8228",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "mmlu/test/8228",
     "variant": "clean",
     "type": "choice",
@@ -675,12 +555,7 @@
     "id": "mmlu/test/3349",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "mmlu/test/3349",
     "variant": "clean",
     "type": "choice",
@@ -703,12 +578,7 @@
     "id": "mmlu/test/3349",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "mmlu/test/3349",
     "variant": "clean",
     "type": "choice",
@@ -731,12 +601,7 @@
     "id": "mmlu/test/3349",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "mmlu/test/3349",
     "variant": "clean",
     "type": "choice",
@@ -759,12 +624,7 @@
     "id": "mmlu/test/3349",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "mmlu/test/3349",
     "variant": "clean",
     "type": "choice",
@@ -787,12 +647,7 @@
     "id": "mmlu/test/12163",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "mmlu/test/12163",
     "variant": "clean",
     "type": "choice",
@@ -815,12 +670,7 @@
     "id": "mmlu/test/12163",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "mmlu/test/12163",
     "variant": "clean",
     "type": "choice",
@@ -843,12 +693,7 @@
     "id": "mmlu/test/12163",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "mmlu/test/12163",
     "variant": "clean",
     "type": "choice",
@@ -871,12 +716,7 @@
     "id": "mmlu/test/12163",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "mmlu/test/12163",
     "variant": "clean",
     "type": "choice",
@@ -899,12 +739,7 @@
     "id": "mmlu/test/6773",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "mmlu/test/6773",
     "variant": "clean",
     "type": "choice",
@@ -927,12 +762,7 @@
     "id": "mmlu/test/6773",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "mmlu/test/6773",
     "variant": "clean",
     "type": "choice",
@@ -955,12 +785,7 @@
     "id": "mmlu/test/6773",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "mmlu/test/6773",
     "variant": "clean",
     "type": "choice",
@@ -983,12 +808,7 @@
     "id": "mmlu/test/6773",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "mmlu/test/6773",
     "variant": "clean",
     "type": "choice",
@@ -1011,12 +831,7 @@
     "id": "mmlu/test/6245",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "mmlu/test/6245",
     "variant": "clean",
     "type": "choice",
@@ -1039,12 +854,7 @@
     "id": "mmlu/test/6245",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "mmlu/test/6245",
     "variant": "clean",
     "type": "choice",
@@ -1067,12 +877,7 @@
     "id": "mmlu/test/6245",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "mmlu/test/6245",
     "variant": "clean",
     "type": "choice",
@@ -1095,12 +900,7 @@
     "id": "mmlu/test/6245",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "mmlu/test/6245",
     "variant": "clean",
     "type": "choice",
@@ -1123,12 +923,7 @@
     "id": "mmlu/test/9900",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "mmlu/test/9900",
     "variant": "clean",
     "type": "choice",
@@ -1151,12 +946,7 @@
     "id": "mmlu/test/9900",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "mmlu/test/9900",
     "variant": "clean",
     "type": "choice",
@@ -1179,12 +969,7 @@
     "id": "mmlu/test/9900",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "mmlu/test/9900",
     "variant": "clean",
     "type": "choice",
@@ -1207,12 +992,7 @@
     "id": "mmlu/test/9900",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "mmlu/test/9900",
     "variant": "clean",
     "type": "choice",
@@ -1235,14 +1015,7 @@
     "id": "emotion/test/20",
     "source": "emotion",
     "ordering_index": 0,
-    "presented": [
-      "sadness",
-      "joy",
-      "love",
-      "anger",
-      "fear",
-      "surprise"
-    ],
+    "presented": ["sadness", "joy", "love", "anger", "fear", "surprise"],
     "group": "emotion/test/20",
     "variant": "clean",
     "type": "choice",
@@ -1265,14 +1038,7 @@
     "id": "emotion/test/20",
     "source": "emotion",
     "ordering_index": 1,
-    "presented": [
-      "surprise",
-      "fear",
-      "anger",
-      "love",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["surprise", "fear", "anger", "love", "joy", "sadness"],
     "group": "emotion/test/20",
     "variant": "clean",
     "type": "choice",
@@ -1295,14 +1061,7 @@
     "id": "emotion/test/20",
     "source": "emotion",
     "ordering_index": 2,
-    "presented": [
-      "fear",
-      "anger",
-      "surprise",
-      "love",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["fear", "anger", "surprise", "love", "joy", "sadness"],
     "group": "emotion/test/20",
     "variant": "clean",
     "type": "choice",
@@ -1325,14 +1084,7 @@
     "id": "emotion/test/20",
     "source": "emotion",
     "ordering_index": 3,
-    "presented": [
-      "love",
-      "fear",
-      "surprise",
-      "sadness",
-      "anger",
-      "joy"
-    ],
+    "presented": ["love", "fear", "surprise", "sadness", "anger", "joy"],
     "group": "emotion/test/20",
     "variant": "clean",
     "type": "choice",
@@ -1355,14 +1107,7 @@
     "id": "emotion/test/639",
     "source": "emotion",
     "ordering_index": 0,
-    "presented": [
-      "sadness",
-      "joy",
-      "love",
-      "anger",
-      "fear",
-      "surprise"
-    ],
+    "presented": ["sadness", "joy", "love", "anger", "fear", "surprise"],
     "group": "emotion/test/639",
     "variant": "clean",
     "type": "choice",
@@ -1385,14 +1130,7 @@
     "id": "emotion/test/639",
     "source": "emotion",
     "ordering_index": 1,
-    "presented": [
-      "surprise",
-      "fear",
-      "anger",
-      "love",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["surprise", "fear", "anger", "love", "joy", "sadness"],
     "group": "emotion/test/639",
     "variant": "clean",
     "type": "choice",
@@ -1415,14 +1153,7 @@
     "id": "emotion/test/639",
     "source": "emotion",
     "ordering_index": 2,
-    "presented": [
-      "fear",
-      "anger",
-      "surprise",
-      "love",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["fear", "anger", "surprise", "love", "joy", "sadness"],
     "group": "emotion/test/639",
     "variant": "clean",
     "type": "choice",
@@ -1445,14 +1176,7 @@
     "id": "emotion/test/639",
     "source": "emotion",
     "ordering_index": 3,
-    "presented": [
-      "love",
-      "fear",
-      "surprise",
-      "sadness",
-      "anger",
-      "joy"
-    ],
+    "presented": ["love", "fear", "surprise", "sadness", "anger", "joy"],
     "group": "emotion/test/639",
     "variant": "clean",
     "type": "choice",
@@ -1475,14 +1199,7 @@
     "id": "emotion/test/1171",
     "source": "emotion",
     "ordering_index": 0,
-    "presented": [
-      "sadness",
-      "joy",
-      "love",
-      "anger",
-      "fear",
-      "surprise"
-    ],
+    "presented": ["sadness", "joy", "love", "anger", "fear", "surprise"],
     "group": "emotion/test/1171",
     "variant": "clean",
     "type": "choice",
@@ -1505,14 +1222,7 @@
     "id": "emotion/test/1171",
     "source": "emotion",
     "ordering_index": 1,
-    "presented": [
-      "surprise",
-      "fear",
-      "anger",
-      "love",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["surprise", "fear", "anger", "love", "joy", "sadness"],
     "group": "emotion/test/1171",
     "variant": "clean",
     "type": "choice",
@@ -1535,14 +1245,7 @@
     "id": "emotion/test/1171",
     "source": "emotion",
     "ordering_index": 2,
-    "presented": [
-      "fear",
-      "anger",
-      "surprise",
-      "love",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["fear", "anger", "surprise", "love", "joy", "sadness"],
     "group": "emotion/test/1171",
     "variant": "clean",
     "type": "choice",
@@ -1565,14 +1268,7 @@
     "id": "emotion/test/1171",
     "source": "emotion",
     "ordering_index": 3,
-    "presented": [
-      "love",
-      "fear",
-      "surprise",
-      "sadness",
-      "anger",
-      "joy"
-    ],
+    "presented": ["love", "fear", "surprise", "sadness", "anger", "joy"],
     "group": "emotion/test/1171",
     "variant": "clean",
     "type": "choice",
@@ -1595,14 +1291,7 @@
     "id": "emotion/test/851",
     "source": "emotion",
     "ordering_index": 0,
-    "presented": [
-      "sadness",
-      "joy",
-      "love",
-      "anger",
-      "fear",
-      "surprise"
-    ],
+    "presented": ["sadness", "joy", "love", "anger", "fear", "surprise"],
     "group": "emotion/test/851",
     "variant": "clean",
     "type": "choice",
@@ -1625,14 +1314,7 @@
     "id": "emotion/test/851",
     "source": "emotion",
     "ordering_index": 1,
-    "presented": [
-      "surprise",
-      "fear",
-      "anger",
-      "love",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["surprise", "fear", "anger", "love", "joy", "sadness"],
     "group": "emotion/test/851",
     "variant": "clean",
     "type": "choice",
@@ -1655,14 +1337,7 @@
     "id": "emotion/test/851",
     "source": "emotion",
     "ordering_index": 2,
-    "presented": [
-      "fear",
-      "anger",
-      "surprise",
-      "love",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["fear", "anger", "surprise", "love", "joy", "sadness"],
     "group": "emotion/test/851",
     "variant": "clean",
     "type": "choice",
@@ -1685,14 +1360,7 @@
     "id": "emotion/test/851",
     "source": "emotion",
     "ordering_index": 3,
-    "presented": [
-      "love",
-      "fear",
-      "surprise",
-      "sadness",
-      "anger",
-      "joy"
-    ],
+    "presented": ["love", "fear", "surprise", "sadness", "anger", "joy"],
     "group": "emotion/test/851",
     "variant": "clean",
     "type": "choice",
@@ -1715,14 +1383,7 @@
     "id": "emotion/test/282",
     "source": "emotion",
     "ordering_index": 0,
-    "presented": [
-      "sadness",
-      "joy",
-      "love",
-      "anger",
-      "fear",
-      "surprise"
-    ],
+    "presented": ["sadness", "joy", "love", "anger", "fear", "surprise"],
     "group": "emotion/test/282",
     "variant": "clean",
     "type": "choice",
@@ -1745,14 +1406,7 @@
     "id": "emotion/test/282",
     "source": "emotion",
     "ordering_index": 1,
-    "presented": [
-      "surprise",
-      "fear",
-      "anger",
-      "love",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["surprise", "fear", "anger", "love", "joy", "sadness"],
     "group": "emotion/test/282",
     "variant": "clean",
     "type": "choice",
@@ -1775,14 +1429,7 @@
     "id": "emotion/test/282",
     "source": "emotion",
     "ordering_index": 2,
-    "presented": [
-      "fear",
-      "anger",
-      "surprise",
-      "love",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["fear", "anger", "surprise", "love", "joy", "sadness"],
     "group": "emotion/test/282",
     "variant": "clean",
     "type": "choice",
@@ -1805,14 +1452,7 @@
     "id": "emotion/test/282",
     "source": "emotion",
     "ordering_index": 3,
-    "presented": [
-      "love",
-      "fear",
-      "surprise",
-      "sadness",
-      "anger",
-      "joy"
-    ],
+    "presented": ["love", "fear", "surprise", "sadness", "anger", "joy"],
     "group": "emotion/test/282",
     "variant": "clean",
     "type": "choice",
@@ -1835,14 +1475,7 @@
     "id": "emotion/test/1273",
     "source": "emotion",
     "ordering_index": 0,
-    "presented": [
-      "sadness",
-      "joy",
-      "love",
-      "anger",
-      "fear",
-      "surprise"
-    ],
+    "presented": ["sadness", "joy", "love", "anger", "fear", "surprise"],
     "group": "emotion/test/1273",
     "variant": "clean",
     "type": "choice",
@@ -1865,14 +1498,7 @@
     "id": "emotion/test/1273",
     "source": "emotion",
     "ordering_index": 1,
-    "presented": [
-      "surprise",
-      "fear",
-      "anger",
-      "love",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["surprise", "fear", "anger", "love", "joy", "sadness"],
     "group": "emotion/test/1273",
     "variant": "clean",
     "type": "choice",
@@ -1895,14 +1521,7 @@
     "id": "emotion/test/1273",
     "source": "emotion",
     "ordering_index": 2,
-    "presented": [
-      "fear",
-      "anger",
-      "surprise",
-      "love",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["fear", "anger", "surprise", "love", "joy", "sadness"],
     "group": "emotion/test/1273",
     "variant": "clean",
     "type": "choice",
@@ -1925,14 +1544,7 @@
     "id": "emotion/test/1273",
     "source": "emotion",
     "ordering_index": 3,
-    "presented": [
-      "love",
-      "fear",
-      "surprise",
-      "sadness",
-      "anger",
-      "joy"
-    ],
+    "presented": ["love", "fear", "surprise", "sadness", "anger", "joy"],
     "group": "emotion/test/1273",
     "variant": "clean",
     "type": "choice",
@@ -1955,14 +1567,7 @@
     "id": "emotion/test/1442",
     "source": "emotion",
     "ordering_index": 0,
-    "presented": [
-      "sadness",
-      "joy",
-      "love",
-      "anger",
-      "fear",
-      "surprise"
-    ],
+    "presented": ["sadness", "joy", "love", "anger", "fear", "surprise"],
     "group": "emotion/test/1442",
     "variant": "clean",
     "type": "choice",
@@ -1985,14 +1590,7 @@
     "id": "emotion/test/1442",
     "source": "emotion",
     "ordering_index": 1,
-    "presented": [
-      "surprise",
-      "fear",
-      "anger",
-      "love",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["surprise", "fear", "anger", "love", "joy", "sadness"],
     "group": "emotion/test/1442",
     "variant": "clean",
     "type": "choice",
@@ -2015,14 +1613,7 @@
     "id": "emotion/test/1442",
     "source": "emotion",
     "ordering_index": 2,
-    "presented": [
-      "fear",
-      "anger",
-      "surprise",
-      "love",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["fear", "anger", "surprise", "love", "joy", "sadness"],
     "group": "emotion/test/1442",
     "variant": "clean",
     "type": "choice",
@@ -2045,14 +1636,7 @@
     "id": "emotion/test/1442",
     "source": "emotion",
     "ordering_index": 3,
-    "presented": [
-      "love",
-      "fear",
-      "surprise",
-      "sadness",
-      "anger",
-      "joy"
-    ],
+    "presented": ["love", "fear", "surprise", "sadness", "anger", "joy"],
     "group": "emotion/test/1442",
     "variant": "clean",
     "type": "choice",
@@ -2075,14 +1659,7 @@
     "id": "emotion/test/423",
     "source": "emotion",
     "ordering_index": 0,
-    "presented": [
-      "sadness",
-      "joy",
-      "love",
-      "anger",
-      "fear",
-      "surprise"
-    ],
+    "presented": ["sadness", "joy", "love", "anger", "fear", "surprise"],
     "group": "emotion/test/423",
     "variant": "clean",
     "type": "choice",
@@ -2105,14 +1682,7 @@
     "id": "emotion/test/423",
     "source": "emotion",
     "ordering_index": 1,
-    "presented": [
-      "surprise",
-      "fear",
-      "anger",
-      "love",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["surprise", "fear", "anger", "love", "joy", "sadness"],
     "group": "emotion/test/423",
     "variant": "clean",
     "type": "choice",
@@ -2135,14 +1705,7 @@
     "id": "emotion/test/423",
     "source": "emotion",
     "ordering_index": 2,
-    "presented": [
-      "fear",
-      "anger",
-      "surprise",
-      "love",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["fear", "anger", "surprise", "love", "joy", "sadness"],
     "group": "emotion/test/423",
     "variant": "clean",
     "type": "choice",
@@ -2165,14 +1728,7 @@
     "id": "emotion/test/423",
     "source": "emotion",
     "ordering_index": 3,
-    "presented": [
-      "love",
-      "fear",
-      "surprise",
-      "sadness",
-      "anger",
-      "joy"
-    ],
+    "presented": ["love", "fear", "surprise", "sadness", "anger", "joy"],
     "group": "emotion/test/423",
     "variant": "clean",
     "type": "choice",
@@ -2195,14 +1751,7 @@
     "id": "emotion/test/1951",
     "source": "emotion",
     "ordering_index": 0,
-    "presented": [
-      "sadness",
-      "joy",
-      "love",
-      "anger",
-      "fear",
-      "surprise"
-    ],
+    "presented": ["sadness", "joy", "love", "anger", "fear", "surprise"],
     "group": "emotion/test/1951",
     "variant": "clean",
     "type": "choice",
@@ -2225,14 +1774,7 @@
     "id": "emotion/test/1951",
     "source": "emotion",
     "ordering_index": 1,
-    "presented": [
-      "surprise",
-      "fear",
-      "anger",
-      "love",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["surprise", "fear", "anger", "love", "joy", "sadness"],
     "group": "emotion/test/1951",
     "variant": "clean",
     "type": "choice",
@@ -2255,14 +1797,7 @@
     "id": "emotion/test/1951",
     "source": "emotion",
     "ordering_index": 2,
-    "presented": [
-      "fear",
-      "anger",
-      "surprise",
-      "love",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["fear", "anger", "surprise", "love", "joy", "sadness"],
     "group": "emotion/test/1951",
     "variant": "clean",
     "type": "choice",
@@ -2285,14 +1820,7 @@
     "id": "emotion/test/1951",
     "source": "emotion",
     "ordering_index": 3,
-    "presented": [
-      "love",
-      "fear",
-      "surprise",
-      "sadness",
-      "anger",
-      "joy"
-    ],
+    "presented": ["love", "fear", "surprise", "sadness", "anger", "joy"],
     "group": "emotion/test/1951",
     "variant": "clean",
     "type": "choice",
@@ -2315,10 +1843,7 @@
     "id": "tweet_offensive/test/468",
     "source": "tweet_offensive",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "tweet_offensive/test/468",
     "variant": "clean",
     "type": "noul",
@@ -2341,10 +1866,7 @@
     "id": "tweet_offensive/test/429",
     "source": "tweet_offensive",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "tweet_offensive/test/429",
     "variant": "clean",
     "type": "noul",
@@ -2367,10 +1889,7 @@
     "id": "tweet_offensive/test/374",
     "source": "tweet_offensive",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "tweet_offensive/test/374",
     "variant": "clean",
     "type": "noul",
@@ -2393,10 +1912,7 @@
     "id": "tweet_offensive/test/6",
     "source": "tweet_offensive",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "tweet_offensive/test/6",
     "variant": "clean",
     "type": "noul",
@@ -2419,10 +1935,7 @@
     "id": "tweet_offensive/test/342",
     "source": "tweet_offensive",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "tweet_offensive/test/342",
     "variant": "clean",
     "type": "noul",
@@ -2445,10 +1958,7 @@
     "id": "tweet_offensive/test/123",
     "source": "tweet_offensive",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "tweet_offensive/test/123",
     "variant": "clean",
     "type": "noul",
@@ -2471,10 +1981,7 @@
     "id": "tweet_offensive/test/253",
     "source": "tweet_offensive",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "tweet_offensive/test/253",
     "variant": "clean",
     "type": "noul",
@@ -2497,10 +2004,7 @@
     "id": "tweet_offensive/test/27",
     "source": "tweet_offensive",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "tweet_offensive/test/27",
     "variant": "clean",
     "type": "noul",
@@ -2523,10 +2027,7 @@
     "id": "tweet_offensive/test/283",
     "source": "tweet_offensive",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "tweet_offensive/test/283",
     "variant": "clean",
     "type": "noul",
@@ -2549,10 +2050,7 @@
     "id": "tweet_offensive/test/238",
     "source": "tweet_offensive",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "tweet_offensive/test/238",
     "variant": "clean",
     "type": "noul",
@@ -2575,10 +2073,7 @@
     "id": "tweet_offensive/test/324",
     "source": "tweet_offensive",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "tweet_offensive/test/324",
     "variant": "clean",
     "type": "noul",
@@ -2601,10 +2096,7 @@
     "id": "tweet_offensive/test/782",
     "source": "tweet_offensive",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "tweet_offensive/test/782",
     "variant": "clean",
     "type": "noul",
@@ -2627,10 +2119,7 @@
     "id": "tweet_offensive/test/141",
     "source": "tweet_offensive",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "tweet_offensive/test/141",
     "variant": "clean",
     "type": "noul",
@@ -2653,10 +2142,7 @@
     "id": "qnli/validation/1900",
     "source": "qnli",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "qnli/validation/1900",
     "variant": "clean",
     "type": "noul",
@@ -2679,10 +2165,7 @@
     "id": "qnli/validation/182",
     "source": "qnli",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "qnli/validation/182",
     "variant": "clean",
     "type": "noul",
@@ -2705,10 +2188,7 @@
     "id": "qnli/validation/2378",
     "source": "qnli",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "qnli/validation/2378",
     "variant": "clean",
     "type": "noul",
@@ -2731,10 +2211,7 @@
     "id": "qnli/validation/2972",
     "source": "qnli",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "qnli/validation/2972",
     "variant": "clean",
     "type": "noul",
@@ -2757,10 +2234,7 @@
     "id": "qnli/validation/4577",
     "source": "qnli",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "qnli/validation/4577",
     "variant": "clean",
     "type": "noul",
@@ -2783,10 +2257,7 @@
     "id": "qnli/validation/78",
     "source": "qnli",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "qnli/validation/78",
     "variant": "clean",
     "type": "noul",
@@ -2809,10 +2280,7 @@
     "id": "qnli/validation/1877",
     "source": "qnli",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "qnli/validation/1877",
     "variant": "clean",
     "type": "noul",
@@ -2835,10 +2303,7 @@
     "id": "qnli/validation/289",
     "source": "qnli",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "qnli/validation/289",
     "variant": "clean",
     "type": "noul",
@@ -2861,10 +2326,7 @@
     "id": "qnli/validation/2203",
     "source": "qnli",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "qnli/validation/2203",
     "variant": "clean",
     "type": "noul",
@@ -2887,10 +2349,7 @@
     "id": "qnli/validation/4777",
     "source": "qnli",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "qnli/validation/4777",
     "variant": "clean",
     "type": "noul",
@@ -2913,10 +2372,7 @@
     "id": "qnli/validation/4839",
     "source": "qnli",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "qnli/validation/4839",
     "variant": "clean",
     "type": "noul",
@@ -2939,10 +2395,7 @@
     "id": "qnli/validation/864",
     "source": "qnli",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "qnli/validation/864",
     "variant": "clean",
     "type": "noul",
@@ -2965,10 +2418,7 @@
     "id": "qnli/validation/2221",
     "source": "qnli",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "qnli/validation/2221",
     "variant": "clean",
     "type": "noul",
@@ -2991,10 +2441,7 @@
     "id": "paws/test/2414",
     "source": "paws",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "paws/test/2414",
     "variant": "clean",
     "type": "noul",
@@ -3017,10 +2464,7 @@
     "id": "paws/test/2795",
     "source": "paws",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "paws/test/2795",
     "variant": "clean",
     "type": "noul",
@@ -3043,10 +2487,7 @@
     "id": "paws/test/1125",
     "source": "paws",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "paws/test/1125",
     "variant": "clean",
     "type": "noul",
@@ -3069,10 +2510,7 @@
     "id": "paws/test/504",
     "source": "paws",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "paws/test/504",
     "variant": "clean",
     "type": "noul",
@@ -3095,10 +2533,7 @@
     "id": "paws/test/7712",
     "source": "paws",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "paws/test/7712",
     "variant": "clean",
     "type": "noul",
@@ -3121,10 +2556,7 @@
     "id": "paws/test/1721",
     "source": "paws",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "paws/test/1721",
     "variant": "clean",
     "type": "noul",
@@ -3147,10 +2579,7 @@
     "id": "paws/test/848",
     "source": "paws",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "paws/test/848",
     "variant": "clean",
     "type": "noul",
@@ -3173,10 +2602,7 @@
     "id": "paws/test/4634",
     "source": "paws",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "paws/test/4634",
     "variant": "clean",
     "type": "noul",
@@ -3199,10 +2625,7 @@
     "id": "paws/test/4925",
     "source": "paws",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "paws/test/4925",
     "variant": "clean",
     "type": "noul",
@@ -3225,10 +2648,7 @@
     "id": "paws/test/7941",
     "source": "paws",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "paws/test/7941",
     "variant": "clean",
     "type": "noul",
@@ -3251,10 +2671,7 @@
     "id": "paws/test/2543",
     "source": "paws",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "paws/test/2543",
     "variant": "clean",
     "type": "noul",
@@ -3277,10 +2694,7 @@
     "id": "paws/test/595",
     "source": "paws",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "paws/test/595",
     "variant": "clean",
     "type": "noul",
@@ -3303,10 +2717,7 @@
     "id": "paws/test/7832",
     "source": "paws",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "paws/test/7832",
     "variant": "clean",
     "type": "noul",
@@ -3329,12 +2740,7 @@
     "id": "sciq/test/291",
     "source": "sciq",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "sciq/test/291",
     "variant": "clean",
     "type": "choice",
@@ -3357,12 +2763,7 @@
     "id": "sciq/test/291",
     "source": "sciq",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "sciq/test/291",
     "variant": "clean",
     "type": "choice",
@@ -3385,12 +2786,7 @@
     "id": "sciq/test/291",
     "source": "sciq",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "sciq/test/291",
     "variant": "clean",
     "type": "choice",
@@ -3413,12 +2809,7 @@
     "id": "sciq/test/291",
     "source": "sciq",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "sciq/test/291",
     "variant": "clean",
     "type": "choice",
@@ -3441,12 +2832,7 @@
     "id": "sciq/test/651",
     "source": "sciq",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "sciq/test/651",
     "variant": "clean",
     "type": "choice",
@@ -3469,12 +2855,7 @@
     "id": "sciq/test/651",
     "source": "sciq",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "sciq/test/651",
     "variant": "clean",
     "type": "choice",
@@ -3497,12 +2878,7 @@
     "id": "sciq/test/651",
     "source": "sciq",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "sciq/test/651",
     "variant": "clean",
     "type": "choice",
@@ -3525,12 +2901,7 @@
     "id": "sciq/test/651",
     "source": "sciq",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "sciq/test/651",
     "variant": "clean",
     "type": "choice",
@@ -3553,12 +2924,7 @@
     "id": "sciq/test/524",
     "source": "sciq",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "sciq/test/524",
     "variant": "clean",
     "type": "choice",
@@ -3581,12 +2947,7 @@
     "id": "sciq/test/524",
     "source": "sciq",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "sciq/test/524",
     "variant": "clean",
     "type": "choice",
@@ -3609,12 +2970,7 @@
     "id": "sciq/test/524",
     "source": "sciq",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "sciq/test/524",
     "variant": "clean",
     "type": "choice",
@@ -3637,12 +2993,7 @@
     "id": "sciq/test/524",
     "source": "sciq",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "sciq/test/524",
     "variant": "clean",
     "type": "choice",
@@ -3665,12 +3016,7 @@
     "id": "sciq/test/512",
     "source": "sciq",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "sciq/test/512",
     "variant": "clean",
     "type": "choice",
@@ -3693,12 +3039,7 @@
     "id": "sciq/test/512",
     "source": "sciq",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "sciq/test/512",
     "variant": "clean",
     "type": "choice",
@@ -3721,12 +3062,7 @@
     "id": "sciq/test/512",
     "source": "sciq",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "sciq/test/512",
     "variant": "clean",
     "type": "choice",
@@ -3749,12 +3085,7 @@
     "id": "sciq/test/512",
     "source": "sciq",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "sciq/test/512",
     "variant": "clean",
     "type": "choice",
@@ -3777,12 +3108,7 @@
     "id": "sciq/test/844",
     "source": "sciq",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "sciq/test/844",
     "variant": "clean",
     "type": "choice",
@@ -3805,12 +3131,7 @@
     "id": "sciq/test/844",
     "source": "sciq",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "sciq/test/844",
     "variant": "clean",
     "type": "choice",
@@ -3833,12 +3154,7 @@
     "id": "sciq/test/844",
     "source": "sciq",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "sciq/test/844",
     "variant": "clean",
     "type": "choice",
@@ -3861,12 +3177,7 @@
     "id": "sciq/test/844",
     "source": "sciq",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "sciq/test/844",
     "variant": "clean",
     "type": "choice",
@@ -3889,12 +3200,7 @@
     "id": "sciq/test/810",
     "source": "sciq",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "sciq/test/810",
     "variant": "clean",
     "type": "choice",
@@ -3917,12 +3223,7 @@
     "id": "sciq/test/810",
     "source": "sciq",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "sciq/test/810",
     "variant": "clean",
     "type": "choice",
@@ -3945,12 +3246,7 @@
     "id": "sciq/test/810",
     "source": "sciq",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "sciq/test/810",
     "variant": "clean",
     "type": "choice",
@@ -3973,12 +3269,7 @@
     "id": "sciq/test/810",
     "source": "sciq",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "sciq/test/810",
     "variant": "clean",
     "type": "choice",
@@ -4001,12 +3292,7 @@
     "id": "sciq/test/391",
     "source": "sciq",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "sciq/test/391",
     "variant": "clean",
     "type": "choice",
@@ -4029,12 +3315,7 @@
     "id": "sciq/test/391",
     "source": "sciq",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "sciq/test/391",
     "variant": "clean",
     "type": "choice",
@@ -4057,12 +3338,7 @@
     "id": "sciq/test/391",
     "source": "sciq",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "sciq/test/391",
     "variant": "clean",
     "type": "choice",
@@ -4085,12 +3361,7 @@
     "id": "sciq/test/391",
     "source": "sciq",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "sciq/test/391",
     "variant": "clean",
     "type": "choice",
@@ -4113,12 +3384,7 @@
     "id": "sciq/test/639",
     "source": "sciq",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "sciq/test/639",
     "variant": "clean",
     "type": "choice",
@@ -4141,12 +3407,7 @@
     "id": "sciq/test/639",
     "source": "sciq",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "sciq/test/639",
     "variant": "clean",
     "type": "choice",
@@ -4169,12 +3430,7 @@
     "id": "sciq/test/639",
     "source": "sciq",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "sciq/test/639",
     "variant": "clean",
     "type": "choice",
@@ -4197,12 +3453,7 @@
     "id": "sciq/test/639",
     "source": "sciq",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "sciq/test/639",
     "variant": "clean",
     "type": "choice",
@@ -4225,12 +3476,7 @@
     "id": "sciq/test/54",
     "source": "sciq",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "sciq/test/54",
     "variant": "clean",
     "type": "choice",
@@ -4253,12 +3499,7 @@
     "id": "sciq/test/54",
     "source": "sciq",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "sciq/test/54",
     "variant": "clean",
     "type": "choice",
@@ -4281,12 +3522,7 @@
     "id": "sciq/test/54",
     "source": "sciq",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "sciq/test/54",
     "variant": "clean",
     "type": "choice",
@@ -4309,12 +3545,7 @@
     "id": "sciq/test/54",
     "source": "sciq",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "sciq/test/54",
     "variant": "clean",
     "type": "choice",
@@ -4337,12 +3568,7 @@
     "id": "sciq/test/450",
     "source": "sciq",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "sciq/test/450",
     "variant": "clean",
     "type": "choice",
@@ -4365,12 +3591,7 @@
     "id": "sciq/test/450",
     "source": "sciq",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "sciq/test/450",
     "variant": "clean",
     "type": "choice",
@@ -4393,12 +3614,7 @@
     "id": "sciq/test/450",
     "source": "sciq",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "sciq/test/450",
     "variant": "clean",
     "type": "choice",
@@ -4421,12 +3637,7 @@
     "id": "sciq/test/450",
     "source": "sciq",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "sciq/test/450",
     "variant": "clean",
     "type": "choice",
@@ -4449,12 +3660,7 @@
     "id": "sciq/test/404",
     "source": "sciq",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "sciq/test/404",
     "variant": "clean",
     "type": "choice",
@@ -4477,12 +3683,7 @@
     "id": "sciq/test/404",
     "source": "sciq",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "sciq/test/404",
     "variant": "clean",
     "type": "choice",
@@ -4505,12 +3706,7 @@
     "id": "sciq/test/404",
     "source": "sciq",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "sciq/test/404",
     "variant": "clean",
     "type": "choice",
@@ -4533,12 +3729,7 @@
     "id": "sciq/test/404",
     "source": "sciq",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "sciq/test/404",
     "variant": "clean",
     "type": "choice",
@@ -4561,12 +3752,7 @@
     "id": "sciq/test/80",
     "source": "sciq",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "sciq/test/80",
     "variant": "clean",
     "type": "choice",
@@ -4589,12 +3775,7 @@
     "id": "sciq/test/80",
     "source": "sciq",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "sciq/test/80",
     "variant": "clean",
     "type": "choice",
@@ -4617,12 +3798,7 @@
     "id": "sciq/test/80",
     "source": "sciq",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "sciq/test/80",
     "variant": "clean",
     "type": "choice",
@@ -4645,12 +3821,7 @@
     "id": "sciq/test/80",
     "source": "sciq",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "sciq/test/80",
     "variant": "clean",
     "type": "choice",
@@ -4673,12 +3844,7 @@
     "id": "sciq/test/805",
     "source": "sciq",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "sciq/test/805",
     "variant": "clean",
     "type": "choice",
@@ -4701,12 +3867,7 @@
     "id": "sciq/test/805",
     "source": "sciq",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "sciq/test/805",
     "variant": "clean",
     "type": "choice",
@@ -4729,12 +3890,7 @@
     "id": "sciq/test/805",
     "source": "sciq",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "sciq/test/805",
     "variant": "clean",
     "type": "choice",
@@ -4757,12 +3913,7 @@
     "id": "sciq/test/805",
     "source": "sciq",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "sciq/test/805",
     "variant": "clean",
     "type": "choice",
@@ -4785,12 +3936,7 @@
     "id": "sciq/test/190",
     "source": "sciq",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "sciq/test/190",
     "variant": "clean",
     "type": "choice",
@@ -4813,12 +3959,7 @@
     "id": "sciq/test/190",
     "source": "sciq",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "sciq/test/190",
     "variant": "clean",
     "type": "choice",
@@ -4841,12 +3982,7 @@
     "id": "sciq/test/190",
     "source": "sciq",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "sciq/test/190",
     "variant": "clean",
     "type": "choice",
@@ -4869,12 +4005,7 @@
     "id": "sciq/test/190",
     "source": "sciq",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "sciq/test/190",
     "variant": "clean",
     "type": "choice",
@@ -4897,12 +4028,7 @@
     "id": "sciq/test/207",
     "source": "sciq",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "sciq/test/207",
     "variant": "clean",
     "type": "choice",
@@ -4925,12 +4051,7 @@
     "id": "sciq/test/207",
     "source": "sciq",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "sciq/test/207",
     "variant": "clean",
     "type": "choice",
@@ -4953,12 +4074,7 @@
     "id": "sciq/test/207",
     "source": "sciq",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "sciq/test/207",
     "variant": "clean",
     "type": "choice",
@@ -4981,12 +4097,7 @@
     "id": "sciq/test/207",
     "source": "sciq",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "sciq/test/207",
     "variant": "clean",
     "type": "choice",
@@ -5009,13 +4120,7 @@
     "id": "mmlu/test/4589/none_present",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "none_of_these",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "none_of_these", "b", "c", "d"],
     "group": "mmlu/test/4589",
     "variant": "none_present",
     "type": "choice",
@@ -5038,13 +4143,7 @@
     "id": "mmlu/test/4589/none_present",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "none_of_these",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "none_of_these", "a"],
     "group": "mmlu/test/4589",
     "variant": "none_present",
     "type": "choice",
@@ -5067,13 +4166,7 @@
     "id": "mmlu/test/4589/none_present",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "b",
-      "c",
-      "none_of_these",
-      "d",
-      "a"
-    ],
+    "presented": ["b", "c", "none_of_these", "d", "a"],
     "group": "mmlu/test/4589",
     "variant": "none_present",
     "type": "choice",
@@ -5096,13 +4189,7 @@
     "id": "mmlu/test/4589/none_present",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "a",
-      "d",
-      "none_of_these",
-      "b"
-    ],
+    "presented": ["c", "a", "d", "none_of_these", "b"],
     "group": "mmlu/test/4589",
     "variant": "none_present",
     "type": "choice",
@@ -5125,12 +4212,7 @@
     "id": "mmlu/test/4589/none_absent",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "b",
-      "c",
-      "d",
-      "none_of_these"
-    ],
+    "presented": ["b", "c", "d", "none_of_these"],
     "group": "mmlu/test/4589",
     "variant": "none_absent",
     "type": "choice",
@@ -5153,12 +4235,7 @@
     "id": "mmlu/test/4589/none_absent",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "none_of_these",
-      "d",
-      "c",
-      "b"
-    ],
+    "presented": ["none_of_these", "d", "c", "b"],
     "group": "mmlu/test/4589",
     "variant": "none_absent",
     "type": "choice",
@@ -5181,12 +4258,7 @@
     "id": "mmlu/test/4589/none_absent",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "d",
-      "c",
-      "none_of_these",
-      "b"
-    ],
+    "presented": ["d", "c", "none_of_these", "b"],
     "group": "mmlu/test/4589",
     "variant": "none_absent",
     "type": "choice",
@@ -5209,12 +4281,7 @@
     "id": "mmlu/test/4589/none_absent",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "d",
-      "none_of_these",
-      "c",
-      "b"
-    ],
+    "presented": ["d", "none_of_these", "c", "b"],
     "group": "mmlu/test/4589",
     "variant": "none_absent",
     "type": "choice",
@@ -5237,12 +4304,7 @@
     "id": "mmlu/test/4589/permuted",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "mmlu/test/4589",
     "variant": "permuted",
     "type": "choice",
@@ -5265,12 +4327,7 @@
     "id": "mmlu/test/4589/permuted",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "c", "b", "a"],
     "group": "mmlu/test/4589",
     "variant": "permuted",
     "type": "choice",
@@ -5293,12 +4350,7 @@
     "id": "mmlu/test/4589/permuted",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "a"],
     "group": "mmlu/test/4589",
     "variant": "permuted",
     "type": "choice",
@@ -5321,12 +4373,7 @@
     "id": "mmlu/test/4589/permuted",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "c",
-      "d",
-      "b",
-      "a"
-    ],
+    "presented": ["c", "d", "b", "a"],
     "group": "mmlu/test/4589",
     "variant": "permuted",
     "type": "choice",
@@ -5349,13 +4396,7 @@
     "id": "mmlu/test/123/none_present",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "c",
-      "d",
-      "none_of_these",
-      "b"
-    ],
+    "presented": ["a", "c", "d", "none_of_these", "b"],
     "group": "mmlu/test/123",
     "variant": "none_present",
     "type": "choice",
@@ -5378,13 +4419,7 @@
     "id": "mmlu/test/123/none_present",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "b",
-      "none_of_these",
-      "d",
-      "c",
-      "a"
-    ],
+    "presented": ["b", "none_of_these", "d", "c", "a"],
     "group": "mmlu/test/123",
     "variant": "none_present",
     "type": "choice",
@@ -5407,13 +4442,7 @@
     "id": "mmlu/test/123/none_present",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "d",
-      "none_of_these",
-      "c",
-      "b",
-      "a"
-    ],
+    "presented": ["d", "none_of_these", "c", "b", "a"],
     "group": "mmlu/test/123",
     "variant": "none_present",
     "type": "choice",
@@ -5436,13 +4465,7 @@
     "id": "mmlu/test/123/none_present",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "none_of_these",
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["none_of_these", "a", "b", "c", "d"],
     "group": "mmlu/test/123",
     "variant": "none_present",
     "type": "choice",
@@ -5465,12 +4488,7 @@
     "id": "mmlu/test/123/none_absent",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "d",
-      "none_of_these",
-      "a",
-      "c"
-    ],
+    "presented": ["d", "none_of_these", "a", "c"],
     "group": "mmlu/test/123",
     "variant": "none_absent",
     "type": "choice",
@@ -5493,12 +4511,7 @@
     "id": "mmlu/test/123/none_absent",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "c",
-      "a",
-      "none_of_these",
-      "d"
-    ],
+    "presented": ["c", "a", "none_of_these", "d"],
     "group": "mmlu/test/123",
     "variant": "none_absent",
     "type": "choice",
@@ -5521,12 +4534,7 @@
     "id": "mmlu/test/123/none_absent",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "a",
-      "none_of_these",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "none_of_these", "c", "d"],
     "group": "mmlu/test/123",
     "variant": "none_absent",
     "type": "choice",
@@ -5549,12 +4557,7 @@
     "id": "mmlu/test/123/none_absent",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "a",
-      "c",
-      "none_of_these",
-      "d"
-    ],
+    "presented": ["a", "c", "none_of_these", "d"],
     "group": "mmlu/test/123",
     "variant": "none_absent",
     "type": "choice",
@@ -5577,12 +4580,7 @@
     "id": "mmlu/test/123/permuted",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "c",
-      "d",
-      "a",
-      "b"
-    ],
+    "presented": ["c", "d", "a", "b"],
     "group": "mmlu/test/123",
     "variant": "permuted",
     "type": "choice",
@@ -5605,12 +4603,7 @@
     "id": "mmlu/test/123/permuted",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "b",
-      "a",
-      "d",
-      "c"
-    ],
+    "presented": ["b", "a", "d", "c"],
     "group": "mmlu/test/123",
     "variant": "permuted",
     "type": "choice",
@@ -5633,12 +4626,7 @@
     "id": "mmlu/test/123/permuted",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "a",
-      "d",
-      "b",
-      "c"
-    ],
+    "presented": ["a", "d", "b", "c"],
     "group": "mmlu/test/123",
     "variant": "permuted",
     "type": "choice",
@@ -5661,12 +4649,7 @@
     "id": "mmlu/test/123/permuted",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "a",
-      "b",
-      "d",
-      "c"
-    ],
+    "presented": ["a", "b", "d", "c"],
     "group": "mmlu/test/123",
     "variant": "permuted",
     "type": "choice",
@@ -5689,13 +4672,7 @@
     "id": "mmlu/test/1047/none_present",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "a",
-      "none_of_these",
-      "d",
-      "b",
-      "c"
-    ],
+    "presented": ["a", "none_of_these", "d", "b", "c"],
     "group": "mmlu/test/1047",
     "variant": "none_present",
     "type": "choice",
@@ -5718,13 +4695,7 @@
     "id": "mmlu/test/1047/none_present",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "c",
-      "b",
-      "d",
-      "none_of_these",
-      "a"
-    ],
+    "presented": ["c", "b", "d", "none_of_these", "a"],
     "group": "mmlu/test/1047",
     "variant": "none_present",
     "type": "choice",
@@ -5747,13 +4718,7 @@
     "id": "mmlu/test/1047/none_present",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "d",
-      "b",
-      "none_of_these",
-      "c",
-      "a"
-    ],
+    "presented": ["d", "b", "none_of_these", "c", "a"],
     "group": "mmlu/test/1047",
     "variant": "none_present",
     "type": "choice",
@@ -5776,13 +4741,7 @@
     "id": "mmlu/test/1047/none_present",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "b",
-      "a",
-      "c",
-      "none_of_these",
-      "d"
-    ],
+    "presented": ["b", "a", "c", "none_of_these", "d"],
     "group": "mmlu/test/1047",
     "variant": "none_present",
     "type": "choice",
@@ -5805,12 +4764,7 @@
     "id": "mmlu/test/1047/none_absent",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "none_of_these",
-      "c",
-      "a",
-      "d"
-    ],
+    "presented": ["none_of_these", "c", "a", "d"],
     "group": "mmlu/test/1047",
     "variant": "none_absent",
     "type": "choice",
@@ -5833,12 +4787,7 @@
     "id": "mmlu/test/1047/none_absent",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "a",
-      "c",
-      "none_of_these"
-    ],
+    "presented": ["d", "a", "c", "none_of_these"],
     "group": "mmlu/test/1047",
     "variant": "none_absent",
     "type": "choice",
@@ -5861,12 +4810,7 @@
     "id": "mmlu/test/1047/none_absent",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "a",
-      "c",
-      "d",
-      "none_of_these"
-    ],
+    "presented": ["a", "c", "d", "none_of_these"],
     "group": "mmlu/test/1047",
     "variant": "none_absent",
     "type": "choice",
@@ -5889,12 +4833,7 @@
     "id": "mmlu/test/1047/none_absent",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "a",
-      "d",
-      "c",
-      "none_of_these"
-    ],
+    "presented": ["a", "d", "c", "none_of_these"],
     "group": "mmlu/test/1047",
     "variant": "none_absent",
     "type": "choice",
@@ -5917,12 +4856,7 @@
     "id": "mmlu/test/1047/permuted",
     "source": "mmlu",
     "ordering_index": 0,
-    "presented": [
-      "d",
-      "b",
-      "a",
-      "c"
-    ],
+    "presented": ["d", "b", "a", "c"],
     "group": "mmlu/test/1047",
     "variant": "permuted",
     "type": "choice",
@@ -5945,12 +4879,7 @@
     "id": "mmlu/test/1047/permuted",
     "source": "mmlu",
     "ordering_index": 1,
-    "presented": [
-      "c",
-      "a",
-      "b",
-      "d"
-    ],
+    "presented": ["c", "a", "b", "d"],
     "group": "mmlu/test/1047",
     "variant": "permuted",
     "type": "choice",
@@ -5973,12 +4902,7 @@
     "id": "mmlu/test/1047/permuted",
     "source": "mmlu",
     "ordering_index": 2,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "d"],
     "group": "mmlu/test/1047",
     "variant": "permuted",
     "type": "choice",
@@ -6001,12 +4925,7 @@
     "id": "mmlu/test/1047/permuted",
     "source": "mmlu",
     "ordering_index": 3,
-    "presented": [
-      "a",
-      "c",
-      "b",
-      "d"
-    ],
+    "presented": ["a", "c", "b", "d"],
     "group": "mmlu/test/1047",
     "variant": "permuted",
     "type": "choice",
@@ -6029,15 +4948,7 @@
     "id": "emotion/test/20/none_present",
     "source": "emotion",
     "ordering_index": 0,
-    "presented": [
-      "anger",
-      "surprise",
-      "sadness",
-      "fear",
-      "joy",
-      "love",
-      "none_of_these"
-    ],
+    "presented": ["anger", "surprise", "sadness", "fear", "joy", "love", "none_of_these"],
     "group": "emotion/test/20",
     "variant": "none_present",
     "type": "choice",
@@ -6060,15 +4971,7 @@
     "id": "emotion/test/20/none_present",
     "source": "emotion",
     "ordering_index": 1,
-    "presented": [
-      "none_of_these",
-      "love",
-      "joy",
-      "fear",
-      "sadness",
-      "surprise",
-      "anger"
-    ],
+    "presented": ["none_of_these", "love", "joy", "fear", "sadness", "surprise", "anger"],
     "group": "emotion/test/20",
     "variant": "none_present",
     "type": "choice",
@@ -6091,15 +4994,7 @@
     "id": "emotion/test/20/none_present",
     "source": "emotion",
     "ordering_index": 2,
-    "presented": [
-      "sadness",
-      "joy",
-      "love",
-      "none_of_these",
-      "fear",
-      "surprise",
-      "anger"
-    ],
+    "presented": ["sadness", "joy", "love", "none_of_these", "fear", "surprise", "anger"],
     "group": "emotion/test/20",
     "variant": "none_present",
     "type": "choice",
@@ -6122,15 +5017,7 @@
     "id": "emotion/test/20/none_present",
     "source": "emotion",
     "ordering_index": 3,
-    "presented": [
-      "joy",
-      "surprise",
-      "fear",
-      "none_of_these",
-      "sadness",
-      "anger",
-      "love"
-    ],
+    "presented": ["joy", "surprise", "fear", "none_of_these", "sadness", "anger", "love"],
     "group": "emotion/test/20",
     "variant": "none_present",
     "type": "choice",
@@ -6153,14 +5040,7 @@
     "id": "emotion/test/20/none_absent",
     "source": "emotion",
     "ordering_index": 0,
-    "presented": [
-      "fear",
-      "none_of_these",
-      "joy",
-      "surprise",
-      "love",
-      "anger"
-    ],
+    "presented": ["fear", "none_of_these", "joy", "surprise", "love", "anger"],
     "group": "emotion/test/20",
     "variant": "none_absent",
     "type": "choice",
@@ -6183,14 +5063,7 @@
     "id": "emotion/test/20/none_absent",
     "source": "emotion",
     "ordering_index": 1,
-    "presented": [
-      "anger",
-      "love",
-      "surprise",
-      "joy",
-      "none_of_these",
-      "fear"
-    ],
+    "presented": ["anger", "love", "surprise", "joy", "none_of_these", "fear"],
     "group": "emotion/test/20",
     "variant": "none_absent",
     "type": "choice",
@@ -6213,14 +5086,7 @@
     "id": "emotion/test/20/none_absent",
     "source": "emotion",
     "ordering_index": 2,
-    "presented": [
-      "love",
-      "surprise",
-      "anger",
-      "joy",
-      "none_of_these",
-      "fear"
-    ],
+    "presented": ["love", "surprise", "anger", "joy", "none_of_these", "fear"],
     "group": "emotion/test/20",
     "variant": "none_absent",
     "type": "choice",
@@ -6243,14 +5109,7 @@
     "id": "emotion/test/20/none_absent",
     "source": "emotion",
     "ordering_index": 3,
-    "presented": [
-      "joy",
-      "love",
-      "anger",
-      "fear",
-      "surprise",
-      "none_of_these"
-    ],
+    "presented": ["joy", "love", "anger", "fear", "surprise", "none_of_these"],
     "group": "emotion/test/20",
     "variant": "none_absent",
     "type": "choice",
@@ -6273,14 +5132,7 @@
     "id": "emotion/test/20/permuted",
     "source": "emotion",
     "ordering_index": 0,
-    "presented": [
-      "anger",
-      "surprise",
-      "sadness",
-      "fear",
-      "joy",
-      "love"
-    ],
+    "presented": ["anger", "surprise", "sadness", "fear", "joy", "love"],
     "group": "emotion/test/20",
     "variant": "permuted",
     "type": "choice",
@@ -6303,14 +5155,7 @@
     "id": "emotion/test/20/permuted",
     "source": "emotion",
     "ordering_index": 1,
-    "presented": [
-      "love",
-      "joy",
-      "fear",
-      "sadness",
-      "surprise",
-      "anger"
-    ],
+    "presented": ["love", "joy", "fear", "sadness", "surprise", "anger"],
     "group": "emotion/test/20",
     "variant": "permuted",
     "type": "choice",
@@ -6333,14 +5178,7 @@
     "id": "emotion/test/20/permuted",
     "source": "emotion",
     "ordering_index": 2,
-    "presented": [
-      "joy",
-      "fear",
-      "love",
-      "sadness",
-      "surprise",
-      "anger"
-    ],
+    "presented": ["joy", "fear", "love", "sadness", "surprise", "anger"],
     "group": "emotion/test/20",
     "variant": "permuted",
     "type": "choice",
@@ -6363,14 +5201,7 @@
     "id": "emotion/test/20/permuted",
     "source": "emotion",
     "ordering_index": 3,
-    "presented": [
-      "sadness",
-      "joy",
-      "love",
-      "anger",
-      "fear",
-      "surprise"
-    ],
+    "presented": ["sadness", "joy", "love", "anger", "fear", "surprise"],
     "group": "emotion/test/20",
     "variant": "permuted",
     "type": "choice",
@@ -6393,15 +5224,7 @@
     "id": "emotion/test/639/none_present",
     "source": "emotion",
     "ordering_index": 0,
-    "presented": [
-      "none_of_these",
-      "sadness",
-      "love",
-      "joy",
-      "surprise",
-      "fear",
-      "anger"
-    ],
+    "presented": ["none_of_these", "sadness", "love", "joy", "surprise", "fear", "anger"],
     "group": "emotion/test/639",
     "variant": "none_present",
     "type": "choice",
@@ -6424,15 +5247,7 @@
     "id": "emotion/test/639/none_present",
     "source": "emotion",
     "ordering_index": 1,
-    "presented": [
-      "anger",
-      "fear",
-      "surprise",
-      "joy",
-      "love",
-      "sadness",
-      "none_of_these"
-    ],
+    "presented": ["anger", "fear", "surprise", "joy", "love", "sadness", "none_of_these"],
     "group": "emotion/test/639",
     "variant": "none_present",
     "type": "choice",
@@ -6455,15 +5270,7 @@
     "id": "emotion/test/639/none_present",
     "source": "emotion",
     "ordering_index": 2,
-    "presented": [
-      "love",
-      "surprise",
-      "fear",
-      "anger",
-      "joy",
-      "sadness",
-      "none_of_these"
-    ],
+    "presented": ["love", "surprise", "fear", "anger", "joy", "sadness", "none_of_these"],
     "group": "emotion/test/639",
     "variant": "none_present",
     "type": "choice",
@@ -6486,15 +5293,7 @@
     "id": "emotion/test/639/none_present",
     "source": "emotion",
     "ordering_index": 3,
-    "presented": [
-      "surprise",
-      "sadness",
-      "joy",
-      "anger",
-      "love",
-      "none_of_these",
-      "fear"
-    ],
+    "presented": ["surprise", "sadness", "joy", "anger", "love", "none_of_these", "fear"],
     "group": "emotion/test/639",
     "variant": "none_present",
     "type": "choice",
@@ -6517,14 +5316,7 @@
     "id": "emotion/test/639/none_absent",
     "source": "emotion",
     "ordering_index": 0,
-    "presented": [
-      "none_of_these",
-      "sadness",
-      "anger",
-      "love",
-      "surprise",
-      "fear"
-    ],
+    "presented": ["none_of_these", "sadness", "anger", "love", "surprise", "fear"],
     "group": "emotion/test/639",
     "variant": "none_absent",
     "type": "choice",
@@ -6547,14 +5339,7 @@
     "id": "emotion/test/639/none_absent",
     "source": "emotion",
     "ordering_index": 1,
-    "presented": [
-      "fear",
-      "surprise",
-      "love",
-      "anger",
-      "sadness",
-      "none_of_these"
-    ],
+    "presented": ["fear", "surprise", "love", "anger", "sadness", "none_of_these"],
     "group": "emotion/test/639",
     "variant": "none_absent",
     "type": "choice",
@@ -6577,14 +5362,7 @@
     "id": "emotion/test/639/none_absent",
     "source": "emotion",
     "ordering_index": 2,
-    "presented": [
-      "surprise",
-      "love",
-      "fear",
-      "anger",
-      "sadness",
-      "none_of_these"
-    ],
+    "presented": ["surprise", "love", "fear", "anger", "sadness", "none_of_these"],
     "group": "emotion/test/639",
     "variant": "none_absent",
     "type": "choice",
@@ -6607,14 +5385,7 @@
     "id": "emotion/test/639/none_absent",
     "source": "emotion",
     "ordering_index": 3,
-    "presented": [
-      "anger",
-      "surprise",
-      "fear",
-      "none_of_these",
-      "love",
-      "sadness"
-    ],
+    "presented": ["anger", "surprise", "fear", "none_of_these", "love", "sadness"],
     "group": "emotion/test/639",
     "variant": "none_absent",
     "type": "choice",
@@ -6637,14 +5408,7 @@
     "id": "emotion/test/639/permuted",
     "source": "emotion",
     "ordering_index": 0,
-    "presented": [
-      "surprise",
-      "sadness",
-      "love",
-      "joy",
-      "fear",
-      "anger"
-    ],
+    "presented": ["surprise", "sadness", "love", "joy", "fear", "anger"],
     "group": "emotion/test/639",
     "variant": "permuted",
     "type": "choice",
@@ -6667,14 +5431,7 @@
     "id": "emotion/test/639/permuted",
     "source": "emotion",
     "ordering_index": 1,
-    "presented": [
-      "anger",
-      "fear",
-      "joy",
-      "love",
-      "sadness",
-      "surprise"
-    ],
+    "presented": ["anger", "fear", "joy", "love", "sadness", "surprise"],
     "group": "emotion/test/639",
     "variant": "permuted",
     "type": "choice",
@@ -6697,14 +5454,7 @@
     "id": "emotion/test/639/permuted",
     "source": "emotion",
     "ordering_index": 2,
-    "presented": [
-      "fear",
-      "joy",
-      "anger",
-      "love",
-      "sadness",
-      "surprise"
-    ],
+    "presented": ["fear", "joy", "anger", "love", "sadness", "surprise"],
     "group": "emotion/test/639",
     "variant": "permuted",
     "type": "choice",
@@ -6727,14 +5477,7 @@
     "id": "emotion/test/639/permuted",
     "source": "emotion",
     "ordering_index": 3,
-    "presented": [
-      "love",
-      "fear",
-      "anger",
-      "surprise",
-      "joy",
-      "sadness"
-    ],
+    "presented": ["love", "fear", "anger", "surprise", "joy", "sadness"],
     "group": "emotion/test/639",
     "variant": "permuted",
     "type": "choice",
@@ -6757,15 +5500,7 @@
     "id": "emotion/test/1171/none_present",
     "source": "emotion",
     "ordering_index": 0,
-    "presented": [
-      "anger",
-      "love",
-      "sadness",
-      "none_of_these",
-      "fear",
-      "surprise",
-      "joy"
-    ],
+    "presented": ["anger", "love", "sadness", "none_of_these", "fear", "surprise", "joy"],
     "group": "emotion/test/1171",
     "variant": "none_present",
     "type": "choice",
@@ -6788,15 +5523,7 @@
     "id": "emotion/test/1171/none_present",
     "source": "emotion",
     "ordering_index": 1,
-    "presented": [
-      "joy",
-      "surprise",
-      "fear",
-      "none_of_these",
-      "sadness",
-      "love",
-      "anger"
-    ],
+    "presented": ["joy", "surprise", "fear", "none_of_these", "sadness", "love", "anger"],
     "group": "emotion/test/1171",
     "variant": "none_present",
     "type": "choice",
@@ -6819,15 +5546,7 @@
     "id": "emotion/test/1171/none_present",
     "source": "emotion",
     "ordering_index": 2,
-    "presented": [
-      "sadness",
-      "fear",
-      "surprise",
-      "joy",
-      "none_of_these",
-      "love",
-      "anger"
-    ],
+    "presented": ["sadness", "fear", "surprise", "joy", "none_of_these", "love", "anger"],
     "group": "emotion/test/1171",
     "variant": "none_present",
     "type": "choice",
@@ -6850,15 +5569,7 @@
     "id": "emotion/test/1171/none_present",
     "source": "emotion",
     "ordering_index": 3,
-    "presented": [
-      "fear",
-      "love",
-      "none_of_these",
-      "joy",
-      "sadness",
-      "anger",
-      "surprise"
-    ],
+    "presented": ["fear", "love", "none_of_these", "joy", "sadness", "anger", "surprise"],
     "group": "emotion/test/1171",
     "variant": "none_present",
     "type": "choice",
@@ -6881,14 +5592,7 @@
     "id": "emotion/test/1171/none_absent",
     "source": "emotion",
     "ordering_index": 0,
-    "presented": [
-      "fear",
-      "anger",
-      "sadness",
-      "none_of_these",
-      "surprise",
-      "love"
-    ],
+    "presented": ["fear", "anger", "sadness", "none_of_these", "surprise", "love"],
     "group": "emotion/test/1171",
     "variant": "none_absent",
     "type": "choice",
@@ -6911,14 +5615,7 @@
     "id": "emotion/test/1171/none_absent",
     "source": "emotion",
     "ordering_index": 1,
-    "presented": [
-      "love",
-      "surprise",
-      "none_of_these",
-      "sadness",
-      "anger",
-      "fear"
-    ],
+    "presented": ["love", "surprise", "none_of_these", "sadness", "anger", "fear"],
     "group": "emotion/test/1171",
     "variant": "none_absent",
     "type": "choice",
@@ -6941,14 +5638,7 @@
     "id": "emotion/test/1171/none_absent",
     "source": "emotion",
     "ordering_index": 2,
-    "presented": [
-      "surprise",
-      "none_of_these",
-      "love",
-      "sadness",
-      "anger",
-      "fear"
-    ],
+    "presented": ["surprise", "none_of_these", "love", "sadness", "anger", "fear"],
     "group": "emotion/test/1171",
     "variant": "none_absent",
     "type": "choice",
@@ -6971,14 +5661,7 @@
     "id": "emotion/test/1171/none_absent",
     "source": "emotion",
     "ordering_index": 3,
-    "presented": [
-      "sadness",
-      "surprise",
-      "love",
-      "fear",
-      "none_of_these",
-      "anger"
-    ],
+    "presented": ["sadness", "surprise", "love", "fear", "none_of_these", "anger"],
     "group": "emotion/test/1171",
     "variant": "none_absent",
     "type": "choice",
@@ -7001,14 +5684,7 @@
     "id": "emotion/test/1171/permuted",
     "source": "emotion",
     "ordering_index": 0,
-    "presented": [
-      "anger",
-      "love",
-      "sadness",
-      "surprise",
-      "fear",
-      "joy"
-    ],
+    "presented": ["anger", "love", "sadness", "surprise", "fear", "joy"],
     "group": "emotion/test/1171",
     "variant": "permuted",
     "type": "choice",
@@ -7031,14 +5707,7 @@
     "id": "emotion/test/1171/permuted",
     "source": "emotion",
     "ordering_index": 1,
-    "presented": [
-      "joy",
-      "fear",
-      "surprise",
-      "sadness",
-      "love",
-      "anger"
-    ],
+    "presented": ["joy", "fear", "surprise", "sadness", "love", "anger"],
     "group": "emotion/test/1171",
     "variant": "permuted",
     "type": "choice",
@@ -7061,14 +5730,7 @@
     "id": "emotion/test/1171/permuted",
     "source": "emotion",
     "ordering_index": 2,
-    "presented": [
-      "fear",
-      "surprise",
-      "joy",
-      "sadness",
-      "love",
-      "anger"
-    ],
+    "presented": ["fear", "surprise", "joy", "sadness", "love", "anger"],
     "group": "emotion/test/1171",
     "variant": "permuted",
     "type": "choice",
@@ -7091,14 +5753,7 @@
     "id": "emotion/test/1171/permuted",
     "source": "emotion",
     "ordering_index": 3,
-    "presented": [
-      "sadness",
-      "fear",
-      "joy",
-      "anger",
-      "surprise",
-      "love"
-    ],
+    "presented": ["sadness", "fear", "joy", "anger", "surprise", "love"],
     "group": "emotion/test/1171",
     "variant": "permuted",
     "type": "choice",
@@ -7121,13 +5776,7 @@
     "id": "sciq/test/291/none_present",
     "source": "sciq",
     "ordering_index": 0,
-    "presented": [
-      "b",
-      "none_of_these",
-      "d",
-      "a",
-      "c"
-    ],
+    "presented": ["b", "none_of_these", "d", "a", "c"],
     "group": "sciq/test/291",
     "variant": "none_present",
     "type": "choice",
@@ -7150,13 +5799,7 @@
     "id": "sciq/test/291/none_present",
     "source": "sciq",
     "ordering_index": 1,
-    "presented": [
-      "c",
-      "a",
-      "d",
-      "none_of_these",
-      "b"
-    ],
+    "presented": ["c", "a", "d", "none_of_these", "b"],
     "group": "sciq/test/291",
     "variant": "none_present",
     "type": "choice",
@@ -7179,13 +5822,7 @@
     "id": "sciq/test/291/none_present",
     "source": "sciq",
     "ordering_index": 2,
-    "presented": [
-      "d",
-      "a",
-      "none_of_these",
-      "c",
-      "b"
-    ],
+    "presented": ["d", "a", "none_of_these", "c", "b"],
     "group": "sciq/test/291",
     "variant": "none_present",
     "type": "choice",
@@ -7208,13 +5845,7 @@
     "id": "sciq/test/291/none_present",
     "source": "sciq",
     "ordering_index": 3,
-    "presented": [
-      "a",
-      "b",
-      "c",
-      "none_of_these",
-      "d"
-    ],
+    "presented": ["a", "b", "c", "none_of_these", "d"],
     "group": "sciq/test/291",
     "variant": "none_present",
     "type": "choice",
@@ -7237,12 +5868,7 @@
     "id": "sciq/test/291/none_absent",
     "source": "sciq",
     "ordering_index": 0,
-    "presented": [
-      "b",
-      "none_of_these",
-      "a",
-      "d"
-    ],
+    "presented": ["b", "none_of_these", "a", "d"],
     "group": "sciq/test/291",
     "variant": "none_absent",
     "type": "choice",
@@ -7265,12 +5891,7 @@
     "id": "sciq/test/291/none_absent",
     "source": "sciq",
     "ordering_index": 1,
-    "presented": [
-      "d",
-      "a",
-      "none_of_these",
-      "b"
-    ],
+    "presented": ["d", "a", "none_of_these", "b"],
     "group": "sciq/test/291",
     "variant": "none_absent",
     "type": "choice",
@@ -7293,12 +5914,7 @@
     "id": "sciq/test/291/none_absent",
     "source": "sciq",
     "ordering_index": 2,
-    "presented": [
-      "a",
-      "none_of_these",
-      "d",
-      "b"
-    ],
+    "presented": ["a", "none_of_these", "d", "b"],
     "group": "sciq/test/291",
     "variant": "none_absent",
     "type": "choice",
@@ -7321,12 +5937,7 @@
     "id": "sciq/test/291/none_absent",
     "source": "sciq",
     "ordering_index": 3,
-    "presented": [
-      "a",
-      "d",
-      "none_of_these",
-      "b"
-    ],
+    "presented": ["a", "d", "none_of_these", "b"],
     "group": "sciq/test/291",
     "variant": "none_absent",
     "type": "choice",
@@ -7349,12 +5960,7 @@
     "id": "sciq/test/291/permuted",
     "source": "sciq",
     "ordering_index": 0,
-    "presented": [
-      "b",
-      "d",
-      "a",
-      "c"
-    ],
+    "presented": ["b", "d", "a", "c"],
     "group": "sciq/test/291",
     "variant": "permuted",
     "type": "choice",
@@ -7377,12 +5983,7 @@
     "id": "sciq/test/291/permuted",
     "source": "sciq",
     "ordering_index": 1,
-    "presented": [
-      "c",
-      "a",
-      "d",
-      "b"
-    ],
+    "presented": ["c", "a", "d", "b"],
     "group": "sciq/test/291",
     "variant": "permuted",
     "type": "choice",
@@ -7405,12 +6006,7 @@
     "id": "sciq/test/291/permuted",
     "source": "sciq",
     "ordering_index": 2,
-    "presented": [
-      "a",
-      "d",
-      "c",
-      "b"
-    ],
+    "presented": ["a", "d", "c", "b"],
     "group": "sciq/test/291",
     "variant": "permuted",
     "type": "choice",
@@ -7433,12 +6029,7 @@
     "id": "sciq/test/291/permuted",
     "source": "sciq",
     "ordering_index": 3,
-    "presented": [
-      "a",
-      "c",
-      "d",
-      "b"
-    ],
+    "presented": ["a", "c", "d", "b"],
     "group": "sciq/test/291",
     "variant": "permuted",
     "type": "choice",
@@ -7461,10 +6052,7 @@
     "id": "contrastive/authorization/v3-legacy-transfer-authorization-0000/a",
     "source": "contrastive_authorization",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "v3-legacy-transfer-authorization-0000",
     "variant": "clean",
     "type": "noul",
@@ -7487,10 +6075,7 @@
     "id": "contrastive/authorization/v3-legacy-transfer-authorization-0000/b",
     "source": "contrastive_authorization",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "v3-legacy-transfer-authorization-0000",
     "variant": "clean",
     "type": "noul",
@@ -7513,10 +6098,7 @@
     "id": "contrastive/authorization/v3-legacy-transfer-authorization-0019/a",
     "source": "contrastive_authorization",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "v3-legacy-transfer-authorization-0019",
     "variant": "clean",
     "type": "noul",
@@ -7539,10 +6121,7 @@
     "id": "contrastive/authorization/v3-legacy-transfer-authorization-0019/b",
     "source": "contrastive_authorization",
     "ordering_index": 0,
-    "presented": [
-      "true",
-      "false"
-    ],
+    "presented": ["true", "false"],
     "group": "v3-legacy-transfer-authorization-0019",
     "variant": "clean",
     "type": "noul",
@@ -7565,11 +6144,7 @@
     "id": "contrastive/deadline/v3-legacy-transfer-deadline-0000/a",
     "source": "contrastive_deadline",
     "ordering_index": 0,
-    "presented": [
-      "0",
-      "1",
-      "2"
-    ],
+    "presented": ["0", "1", "2"],
     "group": "v3-legacy-transfer-deadline-0000",
     "variant": "clean",
     "type": "score",
@@ -7593,11 +6168,7 @@
     "id": "contrastive/deadline/v3-legacy-transfer-deadline-0000/b",
     "source": "contrastive_deadline",
     "ordering_index": 0,
-    "presented": [
-      "0",
-      "1",
-      "2"
-    ],
+    "presented": ["0", "1", "2"],
     "group": "v3-legacy-transfer-deadline-0000",
     "variant": "clean",
     "type": "score",
@@ -7621,11 +6192,7 @@
     "id": "contrastive/deadline/v3-legacy-transfer-deadline-0002/a",
     "source": "contrastive_deadline",
     "ordering_index": 0,
-    "presented": [
-      "0",
-      "1",
-      "2"
-    ],
+    "presented": ["0", "1", "2"],
     "group": "v3-legacy-transfer-deadline-0002",
     "variant": "clean",
     "type": "score",
@@ -7649,11 +6216,7 @@
     "id": "contrastive/deadline/v3-legacy-transfer-deadline-0002/b",
     "source": "contrastive_deadline",
     "ordering_index": 0,
-    "presented": [
-      "0",
-      "1",
-      "2"
-    ],
+    "presented": ["0", "1", "2"],
     "group": "v3-legacy-transfer-deadline-0002",
     "variant": "clean",
     "type": "score",
@@ -7677,11 +6240,7 @@
     "id": "contrastive/deadline/v3-legacy-transfer-deadline-0003/a",
     "source": "contrastive_deadline",
     "ordering_index": 0,
-    "presented": [
-      "0",
-      "1",
-      "2"
-    ],
+    "presented": ["0", "1", "2"],
     "group": "v3-legacy-transfer-deadline-0003",
     "variant": "clean",
     "type": "score",
@@ -7705,11 +6264,7 @@
     "id": "contrastive/deadline/v3-legacy-transfer-deadline-0003/b",
     "source": "contrastive_deadline",
     "ordering_index": 0,
-    "presented": [
-      "0",
-      "1",
-      "2"
-    ],
+    "presented": ["0", "1", "2"],
     "group": "v3-legacy-transfer-deadline-0003",
     "variant": "clean",
     "type": "score",
@@ -7733,11 +6288,7 @@
     "id": "contrastive/deadline/v3-legacy-transfer-deadline-0010/a",
     "source": "contrastive_deadline",
     "ordering_index": 0,
-    "presented": [
-      "0",
-      "1",
-      "2"
-    ],
+    "presented": ["0", "1", "2"],
     "group": "v3-legacy-transfer-deadline-0010",
     "variant": "clean",
     "type": "score",
@@ -7761,11 +6312,7 @@
     "id": "contrastive/deadline/v3-legacy-transfer-deadline-0010/b",
     "source": "contrastive_deadline",
     "ordering_index": 0,
-    "presented": [
-      "0",
-      "1",
-      "2"
-    ],
+    "presented": ["0", "1", "2"],
     "group": "v3-legacy-transfer-deadline-0010",
     "variant": "clean",
     "type": "score",
@@ -7789,11 +6336,7 @@
     "id": "contrastive/deadline/v3-legacy-transfer-deadline-0019/a",
     "source": "contrastive_deadline",
     "ordering_index": 0,
-    "presented": [
-      "0",
-      "1",
-      "2"
-    ],
+    "presented": ["0", "1", "2"],
     "group": "v3-legacy-transfer-deadline-0019",
     "variant": "clean",
     "type": "score",
@@ -7817,11 +6360,7 @@
     "id": "contrastive/deadline/v3-legacy-transfer-deadline-0019/b",
     "source": "contrastive_deadline",
     "ordering_index": 0,
-    "presented": [
-      "0",
-      "1",
-      "2"
-    ],
+    "presented": ["0", "1", "2"],
     "group": "v3-legacy-transfer-deadline-0019",
     "variant": "clean",
     "type": "score",
@@ -7845,10 +6384,7 @@
     "id": "composition/v3-composition-transfer/held_and_or/0/relevant/a",
     "source": "composition_held_and_or",
     "ordering_index": 0,
-    "presented": [
-      "reject",
-      "accept"
-    ],
+    "presented": ["reject", "accept"],
     "group": "composition/v3-composition-transfer/held_and_or/0",
     "variant": "clean",
     "type": "choice",
@@ -7871,10 +6407,7 @@
     "id": "composition/v3-composition-transfer/held_and_or/0/relevant/a",
     "source": "composition_held_and_or",
     "ordering_index": 1,
-    "presented": [
-      "accept",
-      "reject"
-    ],
+    "presented": ["accept", "reject"],
     "group": "composition/v3-composition-transfer/held_and_or/0",
     "variant": "clean",
     "type": "choice",
@@ -7897,10 +6430,7 @@
     "id": "composition/v3-composition-transfer/held_and_or/0/relevant/b",
     "source": "composition_held_and_or",
     "ordering_index": 0,
-    "presented": [
-      "reject",
-      "accept"
-    ],
+    "presented": ["reject", "accept"],
     "group": "composition/v3-composition-transfer/held_and_or/0",
     "variant": "clean",
     "type": "choice",
@@ -7923,10 +6453,7 @@
     "id": "composition/v3-composition-transfer/held_and_or/0/relevant/b",
     "source": "composition_held_and_or",
     "ordering_index": 1,
-    "presented": [
-      "accept",
-      "reject"
-    ],
+    "presented": ["accept", "reject"],
     "group": "composition/v3-composition-transfer/held_and_or/0",
     "variant": "clean",
     "type": "choice",
@@ -7949,10 +6476,7 @@
     "id": "composition/v3-composition-transfer/held_and_or/0/irrelevant/a",
     "source": "composition_held_and_or",
     "ordering_index": 0,
-    "presented": [
-      "reject",
-      "accept"
-    ],
+    "presented": ["reject", "accept"],
     "group": "composition/v3-composition-transfer/held_and_or/0",
     "variant": "clean",
     "type": "choice",
@@ -7975,10 +6499,7 @@
     "id": "composition/v3-composition-transfer/held_and_or/0/irrelevant/a",
     "source": "composition_held_and_or",
     "ordering_index": 1,
-    "presented": [
-      "accept",
-      "reject"
-    ],
+    "presented": ["accept", "reject"],
     "group": "composition/v3-composition-transfer/held_and_or/0",
     "variant": "clean",
     "type": "choice",
@@ -8001,10 +6522,7 @@
     "id": "composition/v3-composition-transfer/held_and_or/0/irrelevant/b",
     "source": "composition_held_and_or",
     "ordering_index": 0,
-    "presented": [
-      "reject",
-      "accept"
-    ],
+    "presented": ["reject", "accept"],
     "group": "composition/v3-composition-transfer/held_and_or/0",
     "variant": "clean",
     "type": "choice",
@@ -8027,10 +6545,7 @@
     "id": "composition/v3-composition-transfer/held_and_or/0/irrelevant/b",
     "source": "composition_held_and_or",
     "ordering_index": 1,
-    "presented": [
-      "accept",
-      "reject"
-    ],
+    "presented": ["accept", "reject"],
     "group": "composition/v3-composition-transfer/held_and_or/0",
     "variant": "clean",
     "type": "choice",
@@ -8053,10 +6568,7 @@
     "id": "composition/v3-composition-transfer/held_and_or/1/relevant/a",
     "source": "composition_held_and_or",
     "ordering_index": 0,
-    "presented": [
-      "accept",
-      "reject"
-    ],
+    "presented": ["accept", "reject"],
     "group": "composition/v3-composition-transfer/held_and_or/1",
     "variant": "clean",
     "type": "choice",
@@ -8079,10 +6591,7 @@
     "id": "composition/v3-composition-transfer/held_and_or/1/relevant/a",
     "source": "composition_held_and_or",
     "ordering_index": 1,
-    "presented": [
-      "reject",
-      "accept"
-    ],
+    "presented": ["reject", "accept"],
     "group": "composition/v3-composition-transfer/held_and_or/1",
     "variant": "clean",
     "type": "choice",
@@ -8105,10 +6614,7 @@
     "id": "composition/v3-composition-transfer/held_and_or/1/relevant/b",
     "source": "composition_held_and_or",
     "ordering_index": 0,
-    "presented": [
-      "accept",
-      "reject"
-    ],
+    "presented": ["accept", "reject"],
     "group": "composition/v3-composition-transfer/held_and_or/1",
     "variant": "clean",
     "type": "choice",
@@ -8131,10 +6637,7 @@
     "id": "composition/v3-composition-transfer/held_and_or/1/relevant/b",
     "source": "composition_held_and_or",
     "ordering_index": 1,
-    "presented": [
-      "reject",
-      "accept"
-    ],
+    "presented": ["reject", "accept"],
     "group": "composition/v3-composition-transfer/held_and_or/1",
     "variant": "clean",
     "type": "choice",
@@ -8157,10 +6660,7 @@
     "id": "composition/v3-composition-transfer/held_and_or/5/relevant/a",
     "source": "composition_held_and_or",
     "ordering_index": 0,
-    "presented": [
-      "reject",
-      "accept"
-    ],
+    "presented": ["reject", "accept"],
     "group": "composition/v3-composition-transfer/held_and_or/5",
     "variant": "clean",
     "type": "choice",
@@ -8183,10 +6683,7 @@
     "id": "composition/v3-composition-transfer/held_and_or/5/relevant/a",
     "source": "composition_held_and_or",
     "ordering_index": 1,
-    "presented": [
-      "accept",
-      "reject"
-    ],
+    "presented": ["accept", "reject"],
     "group": "composition/v3-composition-transfer/held_and_or/5",
     "variant": "clean",
     "type": "choice",
@@ -8209,10 +6706,7 @@
     "id": "composition/v3-composition-transfer/held_and_or/5/relevant/b",
     "source": "composition_held_and_or",
     "ordering_index": 0,
-    "presented": [
-      "reject",
-      "accept"
-    ],
+    "presented": ["reject", "accept"],
     "group": "composition/v3-composition-transfer/held_and_or/5",
     "variant": "clean",
     "type": "choice",
@@ -8235,10 +6729,7 @@
     "id": "composition/v3-composition-transfer/held_and_or/5/relevant/b",
     "source": "composition_held_and_or",
     "ordering_index": 1,
-    "presented": [
-      "accept",
-      "reject"
-    ],
+    "presented": ["accept", "reject"],
     "group": "composition/v3-composition-transfer/held_and_or/5",
     "variant": "clean",
     "type": "choice",
@@ -8261,10 +6752,7 @@
     "id": "composition/v3-composition-transfer/held_or_not/0/relevant/a",
     "source": "composition_held_or_not",
     "ordering_index": 0,
-    "presented": [
-      "reject",
-      "accept"
-    ],
+    "presented": ["reject", "accept"],
     "group": "composition/v3-composition-transfer/held_or_not/0",
     "variant": "clean",
     "type": "choice",
@@ -8287,10 +6775,7 @@
     "id": "composition/v3-composition-transfer/held_or_not/0/relevant/a",
     "source": "composition_held_or_not",
     "ordering_index": 1,
-    "presented": [
-      "accept",
-      "reject"
-    ],
+    "presented": ["accept", "reject"],
     "group": "composition/v3-composition-transfer/held_or_not/0",
     "variant": "clean",
     "type": "choice",
@@ -8313,10 +6798,7 @@
     "id": "composition/v3-composition-transfer/held_or_not/0/relevant/b",
     "source": "composition_held_or_not",
     "ordering_index": 0,
-    "presented": [
-      "reject",
-      "accept"
-    ],
+    "presented": ["reject", "accept"],
     "group": "composition/v3-composition-transfer/held_or_not/0",
     "variant": "clean",
     "type": "choice",
@@ -8339,10 +6821,7 @@
     "id": "composition/v3-composition-transfer/held_or_not/0/relevant/b",
     "source": "composition_held_or_not",
     "ordering_index": 1,
-    "presented": [
-      "accept",
-      "reject"
-    ],
+    "presented": ["accept", "reject"],
     "group": "composition/v3-composition-transfer/held_or_not/0",
     "variant": "clean",
     "type": "choice",
@@ -8365,10 +6844,7 @@
     "id": "composition/v3-composition-transfer/held_or_not/2/irrelevant/a",
     "source": "composition_held_or_not",
     "ordering_index": 0,
-    "presented": [
-      "accept",
-      "reject"
-    ],
+    "presented": ["accept", "reject"],
     "group": "composition/v3-composition-transfer/held_or_not/2",
     "variant": "clean",
     "type": "choice",
@@ -8391,10 +6867,7 @@
     "id": "composition/v3-composition-transfer/held_or_not/2/irrelevant/a",
     "source": "composition_held_or_not",
     "ordering_index": 1,
-    "presented": [
-      "reject",
-      "accept"
-    ],
+    "presented": ["reject", "accept"],
     "group": "composition/v3-composition-transfer/held_or_not/2",
     "variant": "clean",
     "type": "choice",
@@ -8417,10 +6890,7 @@
     "id": "composition/v3-composition-transfer/held_or_not/2/irrelevant/b",
     "source": "composition_held_or_not",
     "ordering_index": 0,
-    "presented": [
-      "accept",
-      "reject"
-    ],
+    "presented": ["accept", "reject"],
     "group": "composition/v3-composition-transfer/held_or_not/2",
     "variant": "clean",
     "type": "choice",
@@ -8443,10 +6913,7 @@
     "id": "composition/v3-composition-transfer/held_or_not/2/irrelevant/b",
     "source": "composition_held_or_not",
     "ordering_index": 1,
-    "presented": [
-      "reject",
-      "accept"
-    ],
+    "presented": ["reject", "accept"],
     "group": "composition/v3-composition-transfer/held_or_not/2",
     "variant": "clean",
     "type": "choice",
@@ -8469,10 +6936,7 @@
     "id": "composition/v3-composition-transfer/held_or_not/4/relevant/a",
     "source": "composition_held_or_not",
     "ordering_index": 0,
-    "presented": [
-      "reject",
-      "accept"
-    ],
+    "presented": ["reject", "accept"],
     "group": "composition/v3-composition-transfer/held_or_not/4",
     "variant": "clean",
     "type": "choice",
@@ -8495,10 +6959,7 @@
     "id": "composition/v3-composition-transfer/held_or_not/4/relevant/a",
     "source": "composition_held_or_not",
     "ordering_index": 1,
-    "presented": [
-      "accept",
-      "reject"
-    ],
+    "presented": ["accept", "reject"],
     "group": "composition/v3-composition-transfer/held_or_not/4",
     "variant": "clean",
     "type": "choice",
@@ -8521,10 +6982,7 @@
     "id": "composition/v3-composition-transfer/held_or_not/4/relevant/b",
     "source": "composition_held_or_not",
     "ordering_index": 0,
-    "presented": [
-      "reject",
-      "accept"
-    ],
+    "presented": ["reject", "accept"],
     "group": "composition/v3-composition-transfer/held_or_not/4",
     "variant": "clean",
     "type": "choice",
@@ -8547,10 +7005,7 @@
     "id": "composition/v3-composition-transfer/held_or_not/4/relevant/b",
     "source": "composition_held_or_not",
     "ordering_index": 1,
-    "presented": [
-      "accept",
-      "reject"
-    ],
+    "presented": ["accept", "reject"],
     "group": "composition/v3-composition-transfer/held_or_not/4",
     "variant": "clean",
     "type": "choice",
@@ -8573,10 +7028,7 @@
     "id": "composition/v3-composition-transfer/held_or_not/6/irrelevant/a",
     "source": "composition_held_or_not",
     "ordering_index": 0,
-    "presented": [
-      "accept",
-      "reject"
-    ],
+    "presented": ["accept", "reject"],
     "group": "composition/v3-composition-transfer/held_or_not/6",
     "variant": "clean",
     "type": "choice",
@@ -8599,10 +7051,7 @@
     "id": "composition/v3-composition-transfer/held_or_not/6/irrelevant/a",
     "source": "composition_held_or_not",
     "ordering_index": 1,
-    "presented": [
-      "reject",
-      "accept"
-    ],
+    "presented": ["reject", "accept"],
     "group": "composition/v3-composition-transfer/held_or_not/6",
     "variant": "clean",
     "type": "choice",
@@ -8625,10 +7074,7 @@
     "id": "composition/v3-composition-transfer/held_or_not/6/irrelevant/b",
     "source": "composition_held_or_not",
     "ordering_index": 0,
-    "presented": [
-      "accept",
-      "reject"
-    ],
+    "presented": ["accept", "reject"],
     "group": "composition/v3-composition-transfer/held_or_not/6",
     "variant": "clean",
     "type": "choice",
@@ -8651,10 +7097,7 @@
     "id": "composition/v3-composition-transfer/held_or_not/6/irrelevant/b",
     "source": "composition_held_or_not",
     "ordering_index": 1,
-    "presented": [
-      "reject",
-      "accept"
-    ],
+    "presented": ["reject", "accept"],
     "group": "composition/v3-composition-transfer/held_or_not/6",
     "variant": "clean",
     "type": "choice",

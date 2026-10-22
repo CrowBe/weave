@@ -69,7 +69,10 @@ export function frameQuality(
   return { quality: misses.length === 0 ? 'held' : 'missed', misses };
 }
 
-export function profileReservation(profile: FrameProfile, prefixStable: boolean): {
+export function profileReservation(
+  profile: FrameProfile,
+  prefixStable: boolean,
+): {
   token_micros: number;
   cache_miss_delta: number;
   cost_micros: number;
@@ -89,7 +92,8 @@ export function measureCandidate(input: {
   humanCorrections: number;
   latencyTicks: number;
 }): ExperimentComparedPayload {
-  const prefix_stable = stablePrefixBytes(input.baseline, input.baselineView) === stablePrefixBytes(input.candidate, input.candidateView);
+  const prefix_stable =
+    stablePrefixBytes(input.baseline, input.baselineView) === stablePrefixBytes(input.candidate, input.candidateView);
   const reserved = profileReservation(input.candidate, prefix_stable);
   const baselineCost = profileReservation(input.baseline, true);
   const quality = frameQuality(input.candidateView);
@@ -116,7 +120,17 @@ export function measureCandidate(input: {
  */
 export function promotionRefusal(
   experiment: ExperimentRecord,
-  comparison: { evidence: number; quality: 'held' | 'missed'; misses: readonly string[]; human_corrections: number; latency_ticks: number; cost_micros: number; baseline_cost_micros: number } | undefined,
+  comparison:
+    | {
+        evidence: number;
+        quality: 'held' | 'missed';
+        misses: readonly string[];
+        human_corrections: number;
+        latency_ticks: number;
+        cost_micros: number;
+        baseline_cost_micros: number;
+      }
+    | undefined,
   baseline: BaselineRecord | null,
 ): string | null {
   if (experiment.invalidated) {

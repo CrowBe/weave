@@ -116,9 +116,7 @@ export function openAiCompatibleAdapter(
 function messagesFor(call: GenerationCall): readonly { role: string; content: string }[] {
   const user = { role: 'user', content: call.prompt };
   // An empty system message is not neutral on every model; send none instead.
-  return call.instructions.trim().length === 0
-    ? [user]
-    : [{ role: 'system', content: call.instructions }, user];
+  return call.instructions.trim().length === 0 ? [user] : [{ role: 'system', content: call.instructions }, user];
 }
 
 // ---------------------------------------------------------------------------

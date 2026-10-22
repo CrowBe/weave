@@ -83,7 +83,7 @@ and both were measured, not assumed:
   only with the desktop quiet. Cap it (`systemd-run --user --scope
   -p MemoryMax=26G -p MemorySwapMax=0`) so an overrun kills the probe rather
   than the session.
-- More threads is *slower* at fp32: 8.83 s at 2 threads against 10.32 s at 8
+- More threads is _slower_ at fp32: 8.83 s at 2 threads against 10.32 s at 8
   and 11.64 s at 12. This is the opposite of the `-t 8` that is correct for
   llama.cpp on the same machine, and the opposite of what bf16 wants.
 
@@ -128,7 +128,7 @@ test and nothing more. On held-out records it scores far lower.
   `instructions` or the declarative `criteria.true`. On `tweet_offensive` that
   switch takes AUC from 0.619 (p 0.114, indistinguishable from no signal) to
   **0.827** (p 0.0003); on `paws` it goes the other way, 0.803 to 0.661. One
-  rule explains both: an NLI hypothesis must be declarative *and* carry the
+  rule explains both: an NLI hypothesis must be declarative _and_ carry the
   content being asserted. tweet_offensive's post is entirely in the premise
   and its instruction is a contentless question, so the criteria is a pure
   upgrade; paws puts the second sentence — the thing being compared — inside

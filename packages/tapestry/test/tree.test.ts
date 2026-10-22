@@ -129,9 +129,7 @@ describe('omitted slices', () => {
   it('puts an omitted approvals slice in the cut-through as withheld', () => {
     const sample = view({ approvals: { status: 'omitted', reason: 'protected' } });
     const tree = resolveTree(sample, freshSession('session-1'));
-    assert.deepEqual(tree.regions['cut-through'], [
-      { component: 'approval.pending@1', withheld: 'protected' },
-    ]);
+    assert.deepEqual(tree.regions['cut-through'], [{ component: 'approval.pending@1', withheld: 'protected' }]);
     const shown = present(sample, freshSession('session-1'), tree.regions['cut-through'][0]!);
     assert.deepEqual(shown, { kind: 'omitted', text: withheld('approvals', 'protected') });
   });

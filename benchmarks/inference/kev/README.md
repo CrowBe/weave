@@ -56,16 +56,16 @@ cause a hosted escalation.
 
 ## Pins
 
-| Component | Value |
-| --- | --- |
-| Upstream source | `github.com/jaredpalmer/kev` at `20fa6268c8ceb226530be2fb5266ab2c36b37724` |
-| Adapter + pointer head | `jaredpalmer/kev-4b` at `2bd3bb9a9957aff9a4803be7ce91a521cdff0a31` |
-| Backbone | `Qwen/Qwen3-4B-Base` at `906bfd4b4dc7f14ee4320094d8b41684abff8539` |
-| Checkpoint identity | `v7-rc3/01-trial-1`, per the adapter's `training_config.json` |
-| In-distribution suite | `evals/v4/decision-v4`, manifest sha256 `1b33e566d114f9eafeff55b36c221fadb2a4ae358a1b9cc68006e82c7cfad8f1` |
-| — its split | `development.jsonl`, sha256 `8d5765d7aec4d08c61854f4664ca79ec2ba44ed092e9b967eaf61ed86c496d9c`, 1204 records / 1468 questions / 1264 clean |
-| Out-of-domain suite | `evals/v4/transfer-v4`, manifest sha256 `31677c2256b406222e7d94ffdc0a02a70ce05746b9efe307876024c4e77291d1` |
-| — its split | `development.jsonl`, sha256 `ff374c49c6c9f15f8a56fb274b4a4857d20497eb8dd1ac07ce01560e682a5f2e`, 764 records / 764 questions |
+| Component              | Value                                                                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Upstream source        | `github.com/jaredpalmer/kev` at `20fa6268c8ceb226530be2fb5266ab2c36b37724`                                                                 |
+| Adapter + pointer head | `jaredpalmer/kev-4b` at `2bd3bb9a9957aff9a4803be7ce91a521cdff0a31`                                                                         |
+| Backbone               | `Qwen/Qwen3-4B-Base` at `906bfd4b4dc7f14ee4320094d8b41684abff8539`                                                                         |
+| Checkpoint identity    | `v7-rc3/01-trial-1`, per the adapter's `training_config.json`                                                                              |
+| In-distribution suite  | `evals/v4/decision-v4`, manifest sha256 `1b33e566d114f9eafeff55b36c221fadb2a4ae358a1b9cc68006e82c7cfad8f1`                                 |
+| — its split            | `development.jsonl`, sha256 `8d5765d7aec4d08c61854f4664ca79ec2ba44ed092e9b967eaf61ed86c496d9c`, 1204 records / 1468 questions / 1264 clean |
+| Out-of-domain suite    | `evals/v4/transfer-v4`, manifest sha256 `31677c2256b406222e7d94ffdc0a02a70ce05746b9efe307876024c4e77291d1`                                 |
+| — its split            | `development.jsonl`, sha256 `ff374c49c6c9f15f8a56fb274b4a4857d20497eb8dd1ac07ce01560e682a5f2e`, 764 records / 764 questions                |
 
 The backbone revision is pinned three ways that agree: the adapter's
 `head.pt` records `base_revision`, the suite manifest records the same hash,
@@ -145,12 +145,12 @@ server instead calls `encode(rec, max_state=8192, max_branch=8192)` with
 `strict` left false (`serve.py:46`). Measured against the pinned commit with a
 one-question `noul` request:
 
-| state tokens | in process, strict 384/1024 | served, lax 8192/8192 |
-| ---: | --- | --- |
-| 370 | answered | answered |
-| 401 | `ValueError: state exceeds 384 tokens: 401` | answered |
-| 1001 | `ValueError: state exceeds 384 tokens: 1001` | answered |
-| 9001 | `ValueError: state exceeds 384 tokens: 9001` | `ValueError: branch too long: 12` -> HTTP 422 |
+| state tokens | in process, strict 384/1024                  | served, lax 8192/8192                         |
+| -----------: | -------------------------------------------- | --------------------------------------------- |
+|          370 | answered                                     | answered                                      |
+|          401 | `ValueError: state exceeds 384 tokens: 401`  | answered                                      |
+|         1001 | `ValueError: state exceeds 384 tokens: 1001` | answered                                      |
+|         9001 | `ValueError: state exceeds 384 tokens: 9001` | `ValueError: branch too long: 12` -> HTTP 422 |
 
 This is the most consequential difference between the two paths, and it is not
 a safety hole but a measurement gap. The server will answer a 2000-token state
@@ -200,19 +200,19 @@ figures, per-source breakdowns and the full environment record are in
 the discussion is in
 [`../README.md`](../README.md).
 
-| | decision-v4 (in-distribution) | transfer-v4 (out-of-domain) |
-| --- | ---: | ---: |
-| sample | 129 of 1204 records, 138 clean questions | 125 of 764 records, 104 clean questions |
-| accuracy | **0.884** | **0.808** |
-| always-first stub | 0.370 | 0.490 |
-| margin over stub | +0.514 | +0.318 |
-| author, full split | 0.854 | 0.790 |
-| ECE | 0.082 | 0.081 |
-| Brier | 0.199 | 0.291 |
-| confident error rate | 0.058 | 0.077 |
-| contrastive flip / both-correct | 0.750 / 0.750 (8 pairs) | 0.833 / 0.833 (12 pairs) |
-| latency median / p95 | 8.9 s / 52.0 s | 6.4 s / 20.6 s |
-| throughput | 14.0 tok/s | 14.3 tok/s |
+|                                 |            decision-v4 (in-distribution) |             transfer-v4 (out-of-domain) |
+| ------------------------------- | ---------------------------------------: | --------------------------------------: |
+| sample                          | 129 of 1204 records, 138 clean questions | 125 of 764 records, 104 clean questions |
+| accuracy                        |                                **0.884** |                               **0.808** |
+| always-first stub               |                                    0.370 |                                   0.490 |
+| margin over stub                |                                   +0.514 |                                  +0.318 |
+| author, full split              |                                    0.854 |                                   0.790 |
+| ECE                             |                                    0.082 |                                   0.081 |
+| Brier                           |                                    0.199 |                                   0.291 |
+| confident error rate            |                                    0.058 |                                   0.077 |
+| contrastive flip / both-correct |                  0.750 / 0.750 (8 pairs) |                0.833 / 0.833 (12 pairs) |
+| latency median / p95            |                           8.9 s / 52.0 s |                          6.4 s / 20.6 s |
+| throughput                      |                               14.0 tok/s |                              14.3 tok/s |
 
 Both accuracies are **consistent with the author's published figures, not
 better than them**: +1.1 standard errors in distribution, +0.5 out of domain.
@@ -333,11 +333,11 @@ flags carry no `avx512_bf16` and no AMX, so PyTorch has no vectorised bf16
 GEMM and falls back to scalar emulation. Measured on this machine with a
 1024-cube matmul, four threads, nothing else running:
 
-| dtype | per matmul | throughput |
-| --- | --- | --- |
-| fp32 | 17.8 ms | 120.4 GFLOP/s |
-| bf16 | 2596.4 ms | 0.8 GFLOP/s |
-| fp16 | 2703.8 ms | 0.8 GFLOP/s |
+| dtype | per matmul | throughput    |
+| ----- | ---------- | ------------- |
+| fp32  | 17.8 ms    | 120.4 GFLOP/s |
+| bf16  | 2596.4 ms  | 0.8 GFLOP/s   |
+| fp16  | 2703.8 ms  | 0.8 GFLOP/s   |
 
 That is a 146x penalty, and it is visible end to end: under `KEV_DTYPE=bf16` a
 single 703-token banking77 record took 191 s and a 754-token one took 271 s.

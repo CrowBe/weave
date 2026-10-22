@@ -16,7 +16,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify
-      - run: npm run lint:report
-        continue-on-error: true
-      - run: npm run fmt:report
-        continue-on-error: true
+      - run: npm run lint
+      - run: npm run fmt:check

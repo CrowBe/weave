@@ -224,11 +224,11 @@ top-level `tags: ["user=weave"]` that Nous requires with an API key. The key is
 injected and sent only as a Bearer header. `npm run example:nous-portal` reads
 `NOUS_API_KEY` and makes one public `Reply with the single word: ok` call.
 
-| Routed unit (`weave.routes.example.json`) | Model | Notes |
-| --- | --- | --- |
-| `nous-portal.flash.solar-mini4` | `upstage/solar-mini4:free` | primary; no mandatory reasoning |
-| `nous-portal.flash.longcat-2.0` | `meituan/longcat-2.0:free` | first fallback |
-| `nous-portal.flash.step-3.7-flash` | `stepfun/step-3.7-flash:free` | second fallback; mandatory reasoning, at least 1024 output tokens |
+| Routed unit (`weave.routes.example.json`) | Model                         | Notes                                                             |
+| ----------------------------------------- | ----------------------------- | ----------------------------------------------------------------- |
+| `nous-portal.flash.solar-mini4`           | `upstage/solar-mini4:free`    | primary; no mandatory reasoning                                   |
+| `nous-portal.flash.longcat-2.0`           | `meituan/longcat-2.0:free`    | first fallback                                                    |
+| `nous-portal.flash.step-3.7-flash`        | `stepfun/step-3.7-flash:free` | second fallback; mandatory reasoning, at least 1024 output tokens |
 
 The six default IDs are in the free-model allowlist (`NOUS_PORTAL_FREE_MODELS`).
 LongCat 2.5 Preview (`meituan/longcat-2.5-preview:free`) and Beam

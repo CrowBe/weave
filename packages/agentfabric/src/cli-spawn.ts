@@ -57,7 +57,10 @@ export function createGrantedCliSpawn(options: {
       try {
         const outcome = await invoked.result;
         // A failed outcome carries only its failure; the redacted tails and duration are in the trace.
-        const trace = options.host.shellTraces().filter((record) => record.id === invoked.invocation_id && record.parentId === null).at(-1);
+        const trace = options.host
+          .shellTraces()
+          .filter((record) => record.id === invoked.invocation_id && record.parentId === null)
+          .at(-1);
         return mapShellOutcome(outcome, trace);
       } finally {
         request.signal?.removeEventListener('abort', cancel);
@@ -80,7 +83,10 @@ function mapShellOutcome(outcome: InvocationOutcome, trace: ShellTraceRecord | u
   const failure = outcome.outcome === 'failed' ? outcome.failure : null;
   return {
     status: 'failed',
-    failure: failure === 'timeout' || failure === 'denied' || failure === 'spawn_failed' || failure === 'cancelled' ? failure : 'spawn_failed',
+    failure:
+      failure === 'timeout' || failure === 'denied' || failure === 'spawn_failed' || failure === 'cancelled'
+        ? failure
+        : 'spawn_failed',
     stdout_tail: trace?.stdout_tail ?? '',
     stderr_tail: trace?.stderr_tail ?? '',
     duration_ms: trace?.duration_ms ?? 0,

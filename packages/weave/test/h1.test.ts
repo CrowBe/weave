@@ -24,7 +24,13 @@ import { ALPHA, FailingDecisionLayer, baseGoal, changed, goalOpened, registered,
 
 const MARKER = 'OVERSIZE-MARKER';
 
-function runtimeWith(options: { journal?: MemoryJournal; logBound?: { max_observation_bytes: number }; traceRetention?: TraceRetention } = {}) {
+function runtimeWith(
+  options: {
+    journal?: MemoryJournal;
+    logBound?: { max_observation_bytes: number };
+    traceRetention?: TraceRetention;
+  } = {},
+) {
   const environment = new FixtureEnvironment();
   const host = new FakeHost(environment);
   const journal = options.journal ?? new MemoryJournal();
@@ -103,14 +109,20 @@ describe('H1 bound the log', () => {
       assert.equal(rejected.validation.reason, 'mid_value');
     }
     assert.equal(runtime.state().sources[ALPHA], undefined);
-    const stored = runtime.trace().observations.find((observation) => observation.observation_id === rejected.observation_id);
+    const stored = runtime
+      .trace()
+      .observations.find((observation) => observation.observation_id === rejected.observation_id);
     assert.equal(stored?.validation.status, 'rejected');
   });
 
   it('H1-T03 does not dispatch a candidate that already failed', async () => {
     const { host, journal, runtime } = runtimeWith();
     runtime.observe(registered(ALPHA, 'alpha one'));
-    runtime.operator.submit(goalOpened(baseGoal({ sources: [ALPHA], authority: { read: [ALPHA] }, budget: { actions: 4, judgments: 2, recovery: 2 } })));
+    runtime.operator.submit(
+      goalOpened(
+        baseGoal({ sources: [ALPHA], authority: { read: [ALPHA] }, budget: { actions: 4, judgments: 2, recovery: 2 } }),
+      ),
+    );
     const first = Object.values(runtime.state().actions).find((action) => action.operation === 'source.inspect');
     assert.ok(first);
     await release({ host, runtime } as Parameters<typeof release>[0], first.action_id);
@@ -156,17 +168,24 @@ describe('H1 bound the log', () => {
       observation_id: `${first.observation_id}x`,
     });
     assert.equal(distinct.validation.status, 'accepted');
-    const copies = runtime.trace().observations.filter((observation) => observation.observation_id === first.observation_id);
+    const copies = runtime
+      .trace()
+      .observations.filter((observation) => observation.observation_id === first.observation_id);
     assert.equal(copies.length, 2);
     const rejectedCopy = copies.find((observation) => observation.validation.status === 'rejected');
     assert.equal(rejectedCopy?.validation.status, 'rejected');
     if (rejectedCopy?.validation.status === 'rejected') {
       assert.equal(rejectedCopy.validation.reason, 'duplicate');
     }
-    assert.ok(runtime.trace().observations.some((observation) => observation.observation_id === distinct.observation_id));
+    assert.ok(
+      runtime.trace().observations.some((observation) => observation.observation_id === distinct.observation_id),
+    );
     const durable = journal.snapshot();
     assert.equal(durable.filter((observation) => observation.observation_id === first.observation_id).length, 1);
-    assert.equal(durable.some((observation) => observation.observation_id === distinct.observation_id), true);
+    assert.equal(
+      durable.some((observation) => observation.observation_id === distinct.observation_id),
+      true,
+    );
     assert.equal(JSON.stringify(durable).includes('alpha two'), false);
   });
 
@@ -284,6 +303,9 @@ describe('H1 bound the log', () => {
     assert.equal(runtimeRetention.records.length, 1);
     assert.equal(runtimeRetention.records[0]?.attempt_id.startsWith('result:'), true);
     assert.ok(runtime.trace().observations.length > before);
-    assert.equal(runtime.trace().observations.some((observation) => observation.payload_type === 'action.result'), true);
+    assert.equal(
+      runtime.trace().observations.some((observation) => observation.payload_type === 'action.result'),
+      true,
+    );
   });
 });

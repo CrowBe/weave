@@ -21,27 +21,26 @@ scorer.
 The full run completed on the same 125 IDs as the saved Jev and Kev transfer
 reports. Model accuracy was 96/125 (76.8%); Jev scored 104/125 (83.2%) and Kev
 97/125 (77.6%). Decider 4B was correct where Jev was wrong on 6 cases; Jev was
-correct where Decider 4B was wrong on 14. Against Kev, those counts were 6 and
-7. This is a small exploratory transfer probe, not evidence to change routing.
+correct where Decider 4B was wrong on 14. Against Kev, those counts were 6 and 7. This is a small exploratory transfer probe, not evidence to change routing.
 
-| Type | N | Decider 4B | Jev | Kev |
-| --- | ---: | ---: | ---: | ---: |
-| Choice | 72 | 57 (79.2%) | 59 (81.9%) | 57 (79.2%) |
-| NOUL | 43 | 35 (81.4%) | 36 (83.7%) | 34 (79.1%) |
-| Score | 10 | 4 (40.0%) | 9 (90.0%) | 6 (60.0%) |
+| Type   |   N | Decider 4B |        Jev |        Kev |
+| ------ | --: | ---------: | ---------: | ---------: |
+| Choice |  72 | 57 (79.2%) | 59 (81.9%) | 57 (79.2%) |
+| NOUL   |  43 | 35 (81.4%) | 36 (83.7%) | 34 (79.1%) |
+| Score  |  10 |  4 (40.0%) |  9 (90.0%) |  6 (60.0%) |
 
-| Source | N | Decider 4B | Jev | Kev |
-| --- | ---: | ---: | ---: | ---: |
-| MMLU | 20 | 11 (55.0%) | 16 (80.0%) | 10 (50.0%) |
-| Emotion | 18 | 12 (66.7%) | 10 (55.6%) | 14 (77.8%) |
-| Offensive tweet | 13 | 9 (69.2%) | 9 (69.2%) | 9 (69.2%) |
-| QNLI | 13 | 12 (92.3%) | 11 (84.6%) | 11 (84.6%) |
-| PAWS | 13 | 10 (76.9%) | 12 (92.3%) | 10 (76.9%) |
-| SciQ | 18 | 18 (100%) | 18 (100%) | 18 (100%) |
-| Authorization contrasts | 4 | 4 (100%) | 4 (100%) | 4 (100%) |
-| Deadline score contrasts | 10 | 4 (40.0%) | 9 (90.0%) | 6 (60.0%) |
-| Held composition (and/or) | 8 | 8 (100%) | 7 (87.5%) | 7 (87.5%) |
-| Held composition (or/not) | 8 | 8 (100%) | 8 (100%) | 8 (100%) |
+| Source                    |   N | Decider 4B |        Jev |        Kev |
+| ------------------------- | --: | ---------: | ---------: | ---------: |
+| MMLU                      |  20 | 11 (55.0%) | 16 (80.0%) | 10 (50.0%) |
+| Emotion                   |  18 | 12 (66.7%) | 10 (55.6%) | 14 (77.8%) |
+| Offensive tweet           |  13 |  9 (69.2%) |  9 (69.2%) |  9 (69.2%) |
+| QNLI                      |  13 | 12 (92.3%) | 11 (84.6%) | 11 (84.6%) |
+| PAWS                      |  13 | 10 (76.9%) | 12 (92.3%) | 10 (76.9%) |
+| SciQ                      |  18 |  18 (100%) |  18 (100%) |  18 (100%) |
+| Authorization contrasts   |   4 |   4 (100%) |   4 (100%) |   4 (100%) |
+| Deadline score contrasts  |  10 |  4 (40.0%) |  9 (90.0%) |  6 (60.0%) |
+| Held composition (and/or) |   8 |   8 (100%) |  7 (87.5%) |  7 (87.5%) |
+| Held composition (or/not) |   8 |   8 (100%) |   8 (100%) |   8 (100%) |
 
 On the ten ordinal Score items, absolute error on the rounded ordinal was 6
 levels total (mean 0.60) for Decider 4B, 8 (mean 0.80) for Decider 2B, and 1

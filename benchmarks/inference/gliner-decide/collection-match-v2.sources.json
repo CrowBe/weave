@@ -6,39 +6,27 @@
   "sources": [
     {
       "path": "packages/agentfabric/src/contracts.ts",
-      "covers": [
-        "source.inspect",
-        "report.assemble",
-        "report.publish"
-      ],
+      "covers": ["source.inspect", "report.assemble", "report.publish"],
       "evidence": "Contract purpose, typed input/output, effects, permissions, and failures."
     },
     {
       "path": "packages/weave/src/normalize-author.ts",
-      "covers": [
-        "text.normalize"
-      ],
+      "covers": ["text.normalize"],
       "evidence": "text.normalize r1 purpose, one text input and normalized text output."
     },
     {
       "path": "packages/weave/src/fold-author.ts",
-      "covers": [
-        "report.fold"
-      ],
+      "covers": ["report.fold"],
       "evidence": "report.fold r1 purpose, inspection collection input, canonical digest output."
     },
     {
       "path": "VISION.md",
-      "covers": [
-        "authority boundary"
-      ],
+      "covers": ["authority boundary"],
       "evidence": "Inference outputs are observations; capability admission, execution authority, and policy remain separate."
     },
     {
       "path": "GLOSSARY.md",
-      "covers": [
-        "terminology"
-      ],
+      "covers": ["terminology"],
       "evidence": "Capability contract and observation vocabulary used in this corpus."
     }
   ],
@@ -49,11 +37,7 @@
   },
   "each_group": {
     "variants": 2,
-    "arms": [
-      "base",
-      "relevant",
-      "irrelevant"
-    ]
+    "arms": ["base", "relevant", "irrelevant"]
   },
   "known_ambiguities": [
     "Synthetic unsupported tasks can sometimes be composed from multiple capabilities, but the prompt requires one contract to satisfy the request by itself.",

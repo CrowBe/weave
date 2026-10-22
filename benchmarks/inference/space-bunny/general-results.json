@@ -2,10 +2,7 @@
   "status": "exploratory authored general-reasoning probe; not a model ranking",
   "observed_at": "2026-09-25T04:41:25.824Z",
   "corpus_sha256": "eb082f6641acd00d4d7f7fca97133fd1c7553bf6bb1b8f89e7af1f0799191a24",
-  "models": [
-    "stealth/space-bunny-alpha",
-    "stepfun/step-3.7-flash:free"
-  ],
+  "models": ["stealth/space-bunny-alpha", "stepfun/step-3.7-flash:free"],
   "pricing": {
     "stealth/space-bunny-alpha": {
       "prompt": "0.0000000000",

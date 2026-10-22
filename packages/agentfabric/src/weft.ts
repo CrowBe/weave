@@ -73,7 +73,13 @@ export class FabricWeft {
     }
   }
 
-  private send(record_id: string | null, kind: string, parent_id: string | null, invocation: string | null, fields: Record<string, unknown>): void {
+  private send(
+    record_id: string | null,
+    kind: string,
+    parent_id: string | null,
+    invocation: string | null,
+    fields: Record<string, unknown>,
+  ): void {
     this.sequence += 1;
     this.pending.push({
       schema: 'weft.record@1',
@@ -112,12 +118,18 @@ export class FabricWeft {
     contract_rev: string,
     status: 'succeeded' | 'failed' | 'uncertain' | 'cancelled',
   ): void {
-    this.send(`${this.port.emitter_id}:invoked:${invocation_id}`, 'capability.invoked', this.selectedId(invocation_id), invocation_id, {
-      contract_rev,
-      implementation,
-      status,
-      invocation_ref: invocation_id,
-    });
+    this.send(
+      `${this.port.emitter_id}:invoked:${invocation_id}`,
+      'capability.invoked',
+      this.selectedId(invocation_id),
+      invocation_id,
+      {
+        contract_rev,
+        implementation,
+        status,
+        invocation_ref: invocation_id,
+      },
+    );
   }
 
   rejected(code: string): void {

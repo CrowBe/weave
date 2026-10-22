@@ -31,7 +31,17 @@ import {
 } from '@weave/weave';
 import { FakeHost, FixtureEnvironment } from './fake-host.js';
 import { changed, goalOpened, lastCycle, observationsOfType, registered, tick, type Scenario } from './fixture.js';
-import { ALPHA, BETA, bindingJson, completedText, CONTENT, GAMMA, generateAdapter, scoreAnswers, variantGoal } from './m2-fixture.js';
+import {
+  ALPHA,
+  BETA,
+  bindingJson,
+  completedText,
+  CONTENT,
+  GAMMA,
+  generateAdapter,
+  scoreAnswers,
+  variantGoal,
+} from './m2-fixture.js';
 
 const DELTA = 'source:delta';
 const DEFERRED_REASON = 'frontier deferred by frontier.weigh@1 weights';
@@ -57,7 +67,8 @@ const goalJudge: Judge = (call) => {
   for (const id of Object.keys(call.questions)) {
     const candidate = content.candidates.find((c) => c.candidate_id === id);
     const source = candidate?.inputs['source'];
-    scores[id] = candidate?.operation === 'source.inspect' && typeof source === 'string' && !sources.includes(source) ? 0 : 2;
+    scores[id] =
+      candidate?.operation === 'source.inspect' && typeof source === 'string' && !sources.includes(source) ? 0 : 2;
   }
   return scoreAnswers(scores);
 };
@@ -106,14 +117,17 @@ function fwScenario(
 ): FwScenario {
   const environment = new FixtureEnvironment();
   const host = new FakeHost(environment);
-  const generate = generateAdapter('fixture.generate', [completedText(bindingJson(options.proposal ?? [ALPHA, BETA, DELTA]))]);
+  const generate = generateAdapter('fixture.generate', [
+    completedText(bindingJson(options.proposal ?? [ALPHA, BETA, DELTA])),
+  ]);
   const calls: EvaluationCall[] = [];
   let runtime!: Runtime;
   const clock = { now: () => runtime.state().clock.tick };
   const evaluate = options.judge ? recordingAdapter(options.judge, calls, options.held) : undefined;
   const gateway = fixtureGateway({ clock, generate, ...(evaluate ? { evaluate } : {}) });
   const decisionLayer =
-    options.decisionLayer ?? (evaluate ? new GatewayDecisionLayer(gateway, [LOCAL_DESTINATION]) : new ScriptedDecisionLayer());
+    options.decisionLayer ??
+    (evaluate ? new GatewayDecisionLayer(gateway, [LOCAL_DESTINATION]) : new ScriptedDecisionLayer());
   const runtimeOptions = { host, decisionLayer, gateway, ...(options.journal ? { journal: options.journal } : {}) };
   runtime = new Runtime(runtimeOptions);
   if (options.recorded) {
@@ -213,7 +227,9 @@ describe('frontier.weigh@1', () => {
     for (const observation of weights) {
       const payload = observation.payload as WeightsRecordedPayload;
       assert.equal(payload.contract, FRONTIER_WEIGH_CONTRACT);
-      const requested = weighRequests(s).find((o) => (o.payload as InferenceRequestedPayload).request_id === payload.request_id);
+      const requested = weighRequests(s).find(
+        (o) => (o.payload as InferenceRequestedPayload).request_id === payload.request_id,
+      );
       assert.ok(requested, `no inference.requested for ${payload.request_id}`);
       const request = requested.payload as InferenceRequestedPayload;
       assert.equal(payload.state_revision, requested.seq);
@@ -229,10 +245,7 @@ describe('frontier.weigh@1', () => {
       const content = view.content as WeighContent;
       const ids = content.candidates.map((c) => c.candidate_id);
       assert.equal(candidateSetDigest(ids), payload.candidate_set);
-      assert.deepEqual(
-        payload.weights.map((w) => w.candidate_id).sort(),
-        [...ids].sort(),
-      );
+      assert.deepEqual(payload.weights.map((w) => w.candidate_id).sort(), [...ids].sort());
       assert.ok(payload.weights.every((w) => w.weight >= 0 && w.weight <= 2));
       const call = s.calls.find((c) => JSON.stringify(c.state) === JSON.stringify(view.content));
       assert.ok(call, 'the gateway received exactly the recorded view content');
@@ -256,13 +269,18 @@ describe('frontier.weigh@1', () => {
     const weighed = fwScenario({ judge: goalJudge });
     await drive(weighed);
     assert.equal(weighed.runtime.state().goal?.status, 'complete');
-    assert.equal(started(weighed).some((a) => a.source === DELTA), false);
+    assert.equal(
+      started(weighed).some((a) => a.source === DELTA),
+      false,
+    );
     const deltaIds = deltaCandidateIds(weighed);
     assert.ok(deltaIds.size > 0, 'the proposal formed an inspect of delta');
     assert.ok(
       weighed.runtime
         .trace()
-        .cycles.some((cycle) => cycle.not_selected.some((entry) => deltaIds.has(entry.candidate_id) && entry.reason === 'deferred')),
+        .cycles.some((cycle) =>
+          cycle.not_selected.some((entry) => deltaIds.has(entry.candidate_id) && entry.reason === 'deferred'),
+        ),
     );
     for (const cycle of weighed.runtime.trace().cycles) {
       if (cycle.selected.length === 0) {
@@ -278,7 +296,10 @@ describe('frontier.weigh@1', () => {
 
     const scripted = fwScenario();
     await drive(scripted);
-    assert.equal(started(scripted).some((a) => a.source === DELTA), true);
+    assert.equal(
+      started(scripted).some((a) => a.source === DELTA),
+      true,
+    );
     assert.equal(scripted.runtime.state().goal?.status, 'active');
     assert.deepEqual(lastCycle(scripted).outcome, { status: 'blocked', reason: 'actions budget exhausted' });
   });
@@ -288,7 +309,9 @@ describe('frontier.weigh@1', () => {
     await drive(s);
     assert.deepEqual(started(s), []);
     assert.deepEqual(lastCycle(s).outcome, { status: 'blocked', reason: DEFERRED_REASON });
-    assert.ok(s.runtime.trace().cycles.some((cycle) => cycle.not_selected.some((entry) => entry.reason === 'deferred')));
+    assert.ok(
+      s.runtime.trace().cycles.some((cycle) => cycle.not_selected.some((entry) => entry.reason === 'deferred')),
+    );
     assert.equal(weighRequests(s).length, 1);
     assert.equal(s.runtime.state().goal?.status, 'active');
     assert.equal(s.runtime.state().budget.judgments.spent, 1);
@@ -308,7 +331,9 @@ describe('frontier.weigh@1', () => {
     const s = fwScenario({ judge: constantJudge(7) });
     await drive(s);
     assert.deepEqual(started(s), []);
-    const accepted = observationsOfType(s.runtime.trace(), 'weights.recorded').filter((o) => o.validation.status === 'accepted');
+    const accepted = observationsOfType(s.runtime.trace(), 'weights.recorded').filter(
+      (o) => o.validation.status === 'accepted',
+    );
     assert.equal(accepted.length, 0);
     assert.equal(weighRequests(s).length, 1);
     const outcome = lastCycle(s).outcome;
@@ -388,10 +413,18 @@ describe('frontier.weigh@1', () => {
       goal: fwGoal({ budget: { actions: 2, judgments: 8, cost: 1_000_000 } }),
     });
     await drive(tight);
-    const inspectCycle = tight.runtime.trace().cycles.find((cycle) => cycle.candidates.filter((c) => c.operation === 'source.inspect').length === 2 && cycle.weights_ref !== null);
+    const inspectCycle = tight.runtime
+      .trace()
+      .cycles.find(
+        (cycle) =>
+          cycle.candidates.filter((c) => c.operation === 'source.inspect').length === 2 && cycle.weights_ref !== null,
+      );
     assert.ok(inspectCycle);
     assert.equal(inspectCycle.selected.length, 1);
-    assert.deepEqual(inspectCycle.not_selected.map((entry) => entry.reason), ['budget']);
+    assert.deepEqual(
+      inspectCycle.not_selected.map((entry) => entry.reason),
+      ['budget'],
+    );
 
     // Prohibited: gamma is a goal source without read authority. It is never weighed or dispatched.
     const prohibited = fwScenario({
@@ -407,9 +440,16 @@ describe('frontier.weigh@1', () => {
     const view = request.view as StateView;
     assert.equal(JSON.stringify(view.content).includes(GAMMA), false);
     const candidatesSlice = view.manifest.slices.find((slice) => slice.name === 'candidates');
-    assert.ok(candidatesSlice?.omitted.some((item) => item.name === gammaCandidate?.candidate_id && item.reason === 'prohibited'));
+    assert.ok(
+      candidatesSlice?.omitted.some(
+        (item) => item.name === gammaCandidate?.candidate_id && item.reason === 'prohibited',
+      ),
+    );
     assert.ok(prohibited.calls.every((call) => !Object.keys(call.questions).includes(gammaCandidate!.candidate_id)));
-    assert.equal(started(prohibited).some((a) => a.source === GAMMA), false);
+    assert.equal(
+      started(prohibited).some((a) => a.source === GAMMA),
+      false,
+    );
   });
 
   it('FW-T07 replay reproduces the weighed run from recorded observations without the site', async () => {
@@ -450,12 +490,17 @@ describe('frontier.weigh@1', () => {
     assert.equal(recorded[0]?.validation.status, 'accepted');
     assert.equal((recorded[0]?.payload as { status: string }).status, 'unaccepted');
     const candidate_set = (abandoned.payload as InferenceRequestedPayload).candidate_set;
-    const sameSet = weighRequests(r).filter((o) => (o.payload as InferenceRequestedPayload).candidate_set === candidate_set);
+    const sameSet = weighRequests(r).filter(
+      (o) => (o.payload as InferenceRequestedPayload).candidate_set === candidate_set,
+    );
     assert.equal(sameSet.length, 2, 'one fresh weighing of the abandoned frontier, not a wedge');
     let open: string | null = null;
     for (const o of r.runtime.trace().observations) {
       const id = (o.payload as { request_id?: string }).request_id;
-      if (o.payload_type === 'inference.requested' && (o.payload as InferenceRequestedPayload).site === 'frontier.weigh') {
+      if (
+        o.payload_type === 'inference.requested' &&
+        (o.payload as InferenceRequestedPayload).site === 'frontier.weigh'
+      ) {
         assert.equal(open, null, `${id} was requested while ${open} was still in flight`);
         open = id ?? null;
       } else if (o.payload_type === 'inference.recorded' && id === open) {
@@ -471,7 +516,11 @@ describe('frontier.weigh@1', () => {
     const journal = new MemoryJournal();
     const s = fwScenario({ judge: constantJudge(0), journal });
     for (let i = 0; i < 12; i += 1) {
-      const gap = s.observe({ ...changed(ALPHA, 2, 'unsupported'), observation_id: `test:gap:${i}`, payload_version: 2 });
+      const gap = s.observe({
+        ...changed(ALPHA, 2, 'unsupported'),
+        observation_id: `test:gap:${i}`,
+        payload_version: 2,
+      });
       assert.equal(gap.validation.status, 'rejected');
     }
     await drive(s);
@@ -489,7 +538,10 @@ describe('frontier.weigh@1', () => {
     assert.ok(evidence.seq > high, `seq ${evidence.seq} must follow the loaded high-water mark ${high}`);
     await drive(r);
     const seqs = r.runtime.trace().observations.map((o) => o.seq);
-    assert.deepEqual(seqs, [...seqs].sort((a, b) => a - b));
+    assert.deepEqual(
+      seqs,
+      [...seqs].sort((a, b) => a - b),
+    );
     assert.equal(new Set(seqs).size, seqs.length);
     assert.equal(weighRequests(r).length, 2, 'new evidence earns one more weighing');
     assert.deepEqual(lastCycle(r).outcome, { status: 'blocked', reason: DEFERRED_REASON });

@@ -25,13 +25,13 @@ None of the models or adapters below is admitted as a new route by this work.
 The [Decision Index and BEV review](../../docs/research/jev-decision-index-and-bev.md)
 separates public benchmark rankings from local results.
 
-| Paired 125-case transfer set | Correct | Ordinal cases correct | Evidence |
-| --- | ---: | ---: | --- |
-| Hosted Jev | 104/125 | 9/10 | [existing transfer run](jev/README.md) |
-| Local Kev 4B | 97/125 | 6/10 | [existing local run](kev/README.md) |
-| Decider 4B v2.1 | 96/125 | 4/10 | [paired report](decider-4b/README.md) |
-| Decider 2B v11 | 83/125 | 2/10 | [paired report](decider-2b/README.md) |
-| GLiNER2.5-Decide base | 61/125 | 2/10 | [classification probe](gliner-decide/README.md) |
+| Paired 125-case transfer set | Correct | Ordinal cases correct | Evidence                                        |
+| ---------------------------- | ------: | --------------------: | ----------------------------------------------- |
+| Hosted Jev                   | 104/125 |                  9/10 | [existing transfer run](jev/README.md)          |
+| Local Kev 4B                 |  97/125 |                  6/10 | [existing local run](kev/README.md)             |
+| Decider 4B v2.1              |  96/125 |                  4/10 | [paired report](decider-4b/README.md)           |
+| Decider 2B v11               |  83/125 |                  2/10 | [paired report](decider-2b/README.md)           |
+| GLiNER2.5-Decide base        |  61/125 |                  2/10 | [classification probe](gliner-decide/README.md) |
 
 The transfer set is small and may overlap public model training. It does not
 establish performance on Weave's `capability.match` or `result.evaluate` sites.
@@ -232,14 +232,14 @@ any of this transfers. Details and the reproduced boundary table are in
 
 Ran offline, fp32, 8 threads, 1629 s of wall clock for 129 records.
 
-| metric | this run | always-first stub | uniform stub | author, full split |
-| --- | ---: | ---: | ---: | ---: |
-| accuracy | **0.884** | 0.370 | 0.370 | 0.854 |
-| ECE | 0.082 | 0.630 | 0.067 | 0.065 |
-| Brier | 0.199 | 1.261 | 0.668 | 0.213 |
-| NLL | 0.387 | 13.065 | 1.380 | 0.471 |
-| confident error rate | 0.058 | 0.630 | 0.000 | 0.042 |
-| score MAE | 0.406 | 2.292 | 1.375 | 0.454 |
+| metric               |  this run | always-first stub | uniform stub | author, full split |
+| -------------------- | --------: | ----------------: | -----------: | -----------------: |
+| accuracy             | **0.884** |             0.370 |        0.370 |              0.854 |
+| ECE                  |     0.082 |             0.630 |        0.067 |              0.065 |
+| Brier                |     0.199 |             1.261 |        0.668 |              0.213 |
+| NLL                  |     0.387 |            13.065 |        1.380 |              0.471 |
+| confident error rate |     0.058 |             0.630 |        0.000 |              0.042 |
+| score MAE            |     0.406 |             2.292 |        1.375 |              0.454 |
 
 The accuracy is **consistent with, not better than**, the author's published
 figure. On 138 questions the binomial standard error is 0.027, so the 95%
@@ -261,12 +261,12 @@ difficulty rather than the question type, and eight questions is weak evidence.
 It is still the first thing to measure properly before any boolean judgment
 site is routed here.
 
-| slowest sources | acc | ECE |
-| --- | ---: | ---: |
-| boolq (n=8) | 0.500 | 0.464 |
-| amazon (n=8) | 0.750 | 0.077 |
-| sst5 (n=8) | 0.750 | 0.300 |
-| yelp (n=8) | 0.750 | 0.240 |
+| slowest sources |   acc |   ECE |
+| --------------- | ----: | ----: |
+| boolq (n=8)     | 0.500 | 0.464 |
+| amazon (n=8)    | 0.750 | 0.077 |
+| sst5 (n=8)      | 0.750 | 0.300 |
+| yelp (n=8)      | 0.750 | 0.240 |
 
 **Latency is the finding that decides deployment.** Per record: median 8.9 s,
 p90 19.0 s, p95 52.4 s, max 57.8 s, at 14.0 tokens/second of prefill across
@@ -292,13 +292,13 @@ confidence safely, but must not treat a rounded distribution as a likelihood.
 Same checkpoint, same machine, same settings; nine holdout sources the model
 was never trained on. 978 s of wall clock for 125 records.
 
-| metric | this run | always-first stub | uniform stub | author card |
-| --- | ---: | ---: | ---: | ---: |
-| accuracy | **0.808** | 0.490 | 0.490 | 0.790 |
-| ECE | 0.081 | 0.510 | 0.098 | — |
-| Brier | 0.291 | 1.019 | 0.607 | 0.328 |
-| NLL | 0.644 | 10.561 | 1.000 | — |
-| confident error rate | 0.077 | 0.510 | 0.000 | — |
+| metric               |  this run | always-first stub | uniform stub | author card |
+| -------------------- | --------: | ----------------: | -----------: | ----------: |
+| accuracy             | **0.808** |             0.490 |        0.490 |       0.790 |
+| ECE                  |     0.081 |             0.510 |        0.098 |           — |
+| Brier                |     0.291 |             1.019 |        0.607 |       0.328 |
+| NLL                  |     0.644 |            10.561 |        1.000 |           — |
+| confident error rate |     0.077 |             0.510 |        0.000 |           — |
 
 Again consistent with the author rather than better: 104 questions give a
 standard error of 0.039, so the 95% interval is [0.732, 0.883] and the +0.018
@@ -321,7 +321,7 @@ Two other things degrade out of domain, both relevant to Weave:
   cautious on unfamiliar content; it becomes more often confidently wrong.
 - **Invariance breaks.** On contrastive pairs the checkpoint flips 0.833 of the
   pairs that should flip, which is good. But of the three pairs whose answer
-  should *not* change, it changed one — an invariance rate of 0.667 against
+  should _not_ change, it changed one — an invariance rate of 0.667 against
   1.000 in distribution. Three pairs is far too few to size the effect, and it
   is the measurement to repeat first on a larger sample.
 
@@ -361,7 +361,7 @@ This turned up while re-timing the dtypes and it invalidates several earlier
 numbers, so it comes first. A freshly started process runs well above the rate
 it can hold. Timing a 128-token forward continuously for 200 s, the same call
 goes from 6.12 s to 10.37 s — **69% slower** — and then holds there. Package
-temperature *falls* from 85 °C to 67 °C across that window, so this is the
+temperature _falls_ from 85 °C to 67 °C across that window, so this is the
 package settling from burst to sustained power, not the machine overheating.
 
 A convergence test is not enough to detect it. The burst plateau is itself
@@ -380,10 +380,10 @@ the burst window is a small leading fraction and the medians are sustained.
 
 At sustained clock on a 128-token pair, best configuration each:
 
-| dtype | best threads | 128-token pair | 12-case corpus median | peak RSS |
-| ----- | -----------: | -------------: | --------------------: | -------: |
-| float32  | 2 | 8.83 s  | 2.23 s | 22.1 GiB |
-| bfloat16 | 8 | 33.02 s | 7.26 s |  7.3 GiB |
+| dtype    | best threads | 128-token pair | 12-case corpus median | peak RSS |
+| -------- | -----------: | -------------: | --------------------: | -------: |
+| float32  |            2 |         8.83 s |                2.23 s | 22.1 GiB |
+| bfloat16 |            8 |        33.02 s |                7.26 s |  7.3 GiB |
 
 fp32 wins by 3.7x, confirming the AVX2 dtype trap end to end. The ratio is
 3.2-4.4x depending on length and thread count, not the 146x measured on a
@@ -399,8 +399,8 @@ is actively hurt by them.
 
 **More threads is slower at fp32.** The 128-token reference, by thread count:
 
-| threads | 1 | 2 | 4 | 8 | 12 |
-| ------- | -: | -: | -: | -: | -: |
+| threads |     1 |        2 |     4 |     8 |    12 |
+| ------- | ----: | -------: | ----: | ----: | ----: |
 | seconds | 12.69 | **8.83** | 12.22 | 10.32 | 11.64 |
 
 Two threads wins, and the non-monotonic dip at 4 reproduced across two
@@ -414,8 +414,8 @@ for fp32, which contradicts the `-t 8` that is correct for llama.cpp here.
 
 Measured at 8 threads, three repeats each:
 
-| input tokens | 75 | 137 | 261 | 540 | 1036 |
-| ------------ | -: | --: | --: | --: | ---: |
+| input tokens |   75 |   137 |   261 |   540 |  1036 |
+| ------------ | ---: | ----: | ----: | ----: | ----: |
 | seconds      | 7.25 | 10.44 | 18.88 | 37.90 | 74.51 |
 
 Sustained throughput is a flat 13.1-14.2 tokens/second across a 7.5x span.
@@ -461,28 +461,28 @@ over the floor is unchanged at 5.6 SE, because emotion's floor is low too.)
 Reweighted to Kev's source counts, so the same blend of sources is being
 compared rather than two different subsamples:
 
-| | OpenJev | Kev |
-| --- | ---: | ---: |
-| transfer-v4, 8 shared sources | 0.727 | **0.835** |
+|                               | OpenJev |       Kev |
+| ----------------------------- | ------: | --------: |
+| transfer-v4, 8 shared sources |   0.727 | **0.835** |
 
 The per-source split matters more than the headline:
 
-| source | kind | OpenJev | n | Kev | uniform | majority |
-| ------ | ---- | ------: | -: | --: | ------: | -------: |
-| qnli | noul | **0.950** | 40 | 0.846 | 0.500 | 0.550 |
-| sciq | choice | 0.952 | 42 | 1.000 | 0.245 | 0.333 |
-| composition_held_and_or | choice | 0.875 | 16 | 0.875 | 0.500 | 0.750 |
-| composition_held_or_not | choice | 0.750 | 12 | 1.000 | 0.500 | 0.583 |
-| paws | noul | 0.650 | 40 | 0.769 | 0.500 | 0.625 |
-| tweet_offensive | noul | 0.625 | 40 | 0.692 | 0.500 | 0.625 |
-| contrastive_authorization | noul | 0.500 | 22 | 1.000 | 0.500 | 0.500 |
-| mmlu | choice | 0.326 | 43 | 0.636 | 0.243 | 0.326 |
-| composition_held_conditional | choice | 0.167 | 12 | — | 0.500 | 0.583 |
+| source                       | kind   |   OpenJev |   n |   Kev | uniform | majority |
+| ---------------------------- | ------ | --------: | --: | ----: | ------: | -------: |
+| qnli                         | noul   | **0.950** |  40 | 0.846 |   0.500 |    0.550 |
+| sciq                         | choice |     0.952 |  42 | 1.000 |   0.245 |    0.333 |
+| composition_held_and_or      | choice |     0.875 |  16 | 0.875 |   0.500 |    0.750 |
+| composition_held_or_not      | choice |     0.750 |  12 | 1.000 |   0.500 |    0.583 |
+| paws                         | noul   |     0.650 |  40 | 0.769 |   0.500 |    0.625 |
+| tweet_offensive              | noul   |     0.625 |  40 | 0.692 |   0.500 |    0.625 |
+| contrastive_authorization    | noul   |     0.500 |  22 | 1.000 |   0.500 |    0.500 |
+| mmlu                         | choice |     0.326 |  43 | 0.636 |   0.243 |    0.326 |
+| composition_held_conditional | choice |     0.167 |  12 |     — |   0.500 |    0.583 |
 
 OpenJev **beats Kev on qnli**, the one source that is literally an entailment
 task, and matches it on sciq. It sits exactly on its majority-class floor for
 `tweet_offensive` (0.625) and `mmlu` (0.326), exactly on its floor for
-`contrastive_authorization` (0.500), and *below* chance on
+`contrastive_authorization` (0.500), and _below_ chance on
 `composition_held_conditional` — 2 correct out of 12 (`reject` predicted as
 `accept` 6 times, `accept` as `reject` 4 times).
 
@@ -550,23 +550,23 @@ options, because the per-option scores are independent softmaxes and do not
 sum to one. For a boolean task the decision collapses `contradiction` and
 `neutral` into false, so the confidence in a false answer is their sum.
 
-| set | n | accuracy | mean confidence | ECE (10 bin) | Brier |
-| --- | --: | --: | --: | --: | --: |
-| all | 307 | 0.655 | 0.760 | 0.146 | 0.212 |
-| choice | 165 | 0.612 | 0.648 | 0.089 | 0.194 |
-| boolean | 142 | 0.704 | 0.891 | 0.213 | 0.233 |
+| set     |   n | accuracy | mean confidence | ECE (10 bin) | Brier |
+| ------- | --: | -------: | --------------: | -----------: | ----: |
+| all     | 307 |    0.655 |           0.760 |        0.146 | 0.212 |
+| choice  | 165 |    0.612 |           0.648 |        0.089 | 0.194 |
+| boolean | 142 |    0.704 |           0.891 |        0.213 | 0.233 |
 
 The model is overconfident by 10.5 points overall, and the boolean half is
 two and a half times as miscalibrated as the choice half. The shape matters more than the
 scalar. The boolean reliability table:
 
-| confidence | n | mean confidence | accuracy | gap |
-| --- | --: | --: | --: | --: |
-| 0.5-0.6 | 4 | 0.550 | 1.000 | -0.450 |
-| 0.6-0.7 | 4 | 0.644 | 0.500 | +0.144 |
-| 0.7-0.8 | 9 | 0.750 | 0.556 | +0.195 |
-| 0.8-0.9 | 41 | 0.866 | 0.488 | +0.378 |
-| 0.9-1.0 | 82 | 0.958 | 0.829 | +0.129 |
+| confidence |   n | mean confidence | accuracy |    gap |
+| ---------- | --: | --------------: | -------: | -----: |
+| 0.5-0.6    |   4 |           0.550 |    1.000 | -0.450 |
+| 0.6-0.7    |   4 |           0.644 |    0.500 | +0.144 |
+| 0.7-0.8    |   9 |           0.750 |    0.556 | +0.195 |
+| 0.8-0.9    |  41 |           0.866 |    0.488 | +0.378 |
+| 0.9-1.0    |  82 |           0.958 |    0.829 | +0.129 |
 
 The 0.8-0.9 band is the problem: 41 tasks, stated confidence 0.866, actual
 accuracy 0.488. That is a coin flip wearing an 87% label, and it is the band a
@@ -579,10 +579,10 @@ where the `relevant` arm perturbs a field the policy depends on and the
 `irrelevant` arm perturbs one the policy explicitly says does not affect
 eligibility. Scoring the arms separately asks a sharper question than accuracy.
 
-| behaviour | result |
-| --- | --: |
-| irrelevant change, answer must hold | 10/10 |
-| relevant change, answer must move | 5/10 |
+| behaviour                           | result |
+| ----------------------------------- | -----: |
+| irrelevant change, answer must hold |  10/10 |
+| relevant change, answer must move   |   5/10 |
 
 OpenJev is stable and not discriminating. It is never distracted by the
 routing reference, and half the time changing the value the policy actually
@@ -602,13 +602,13 @@ question being asked, so a source can carry a clean signal and still score at
 its floor. AUC tests for that: it asks whether `p_entailment` ranks true above
 false at all, independent of any threshold.
 
-| source | n | argmax | floor | AUC | 95% CI | perm. p |
-| --- | --: | --: | --: | --: | --- | --: |
-| qnli | 40 | 0.950 | 0.550 | 0.990 | [0.960, 1.000] | 0.00005 |
-| contrastive_authorization | 22 | 0.500 | 0.500 | **1.000** | [1.000, 1.000] | 0.00005 |
-| paws | 40 | 0.650 | 0.625 | 0.803 | [0.648, 0.927] | 0.0005 |
-| tweet_offensive | 40 | 0.625 | 0.625 | 0.619 | [0.438, 0.786] | 0.114 |
-| all boolean | 142 | 0.704 | 0.556 | 0.817 | [0.741, 0.885] | 0.00005 |
+| source                    |   n | argmax | floor |       AUC | 95% CI         | perm. p |
+| ------------------------- | --: | -----: | ----: | --------: | -------------- | ------: |
+| qnli                      |  40 |  0.950 | 0.550 |     0.990 | [0.960, 1.000] | 0.00005 |
+| contrastive_authorization |  22 |  0.500 | 0.500 | **1.000** | [1.000, 1.000] | 0.00005 |
+| paws                      |  40 |  0.650 | 0.625 |     0.803 | [0.648, 0.927] |  0.0005 |
+| tweet_offensive           |  40 |  0.625 | 0.625 |     0.619 | [0.438, 0.786] |   0.114 |
+| all boolean               | 142 |  0.704 | 0.556 |     0.817 | [0.741, 0.885] | 0.00005 |
 
 `contrastive_authorization` is the result worth reading twice. Under the argmax
 rule it scores 0.500 — exactly its floor — because the model answers true to
@@ -640,12 +640,12 @@ first run used the instructions everywhere. Only `tweet_offensive` and `paws`
 carry a `criteria.true`; `qnli` and `contrastive_authorization` have none and
 are unaffected. Re-run on 2026-09-21 with `--noul-from-criteria`:
 
-| source | rendering | argmax | floor | AUC | perm. p |
-| --- | --- | --: | --: | --: | --: |
-| tweet_offensive | instructions | 0.625 | 0.625 | 0.619 | 0.114 |
-| tweet_offensive | criteria.true | 0.675 | 0.625 | **0.827** | 0.0003 |
-| paws | instructions | 0.650 | 0.625 | 0.803 | 0.0005 |
-| paws | criteria.true | 0.625 | 0.625 | 0.661 | 0.045 |
+| source          | rendering     | argmax | floor |       AUC | perm. p |
+| --------------- | ------------- | -----: | ----: | --------: | ------: |
+| tweet_offensive | instructions  |  0.625 | 0.625 |     0.619 |   0.114 |
+| tweet_offensive | criteria.true |  0.675 | 0.625 | **0.827** |  0.0003 |
+| paws            | instructions  |  0.650 | 0.625 |     0.803 |  0.0005 |
+| paws            | criteria.true |  0.625 | 0.625 |     0.661 |   0.045 |
 
 In aggregate this is one task in eighty — a null result. Split by source it is
 two large shifts in opposite directions, and one rule explains both: **an NLI
@@ -658,7 +658,7 @@ case at hand.
   a contentless question. Replacing it with a declarative description of the
   class is a pure upgrade, and the AUC moves from indistinguishable-from-noise
   to 0.827.
-- `paws` puts the *second sentence* — the thing being compared — inside the
+- `paws` puts the _second sentence_ — the thing being compared — inside the
   instruction, and its `criteria.true` is generic boilerplate. Switching
   deletes the content the question is about, leaving the model to compare a
   sentence against "Same meaning, possibly reworded". The AUC falls.
@@ -680,18 +680,18 @@ property of the suite as much as of the model.
 ### The corpus cannot tell the trained checkpoint from the base — 2026-09-22
 
 Kev-4B is Qwen3-4B-Base plus a trained LoRA plus a trained pointer head read off
-hidden states. Scoring the *untrained* base on the same 56 records — no adapter,
+hidden states. Scoring the _untrained_ base on the same 56 records — no adapter,
 no head, the option markers read straight off the next-token distribution —
 gives this. `benchmarks/inference/kev/base_readout.py`, evidence in
 `base-readout-results.json`:
 
-| system | acc | ECE | Brier | pos. bias | stable | McNemar p |
-| --- | --: | --: | --: | --: | --: | --: |
-| Kev-4B, LoRA + pointer head | **47/56** | 0.104 | 0.236 | 0.107 | 15/18 | — |
-| base, "…best advances the goal is:" | 46/56 | 0.144 | 0.223 | 0.125 | 13/18 | 1.000 |
-| base, "Dispatch:" | 44/56 | 0.162 | 0.298 | 0.179 | 13/18 | 0.549 |
-| base, "Answer:" | 43/56 | 0.150 | 0.291 | 0.107 | 14/18 | 0.424 |
-| base, "Answer: " with digits | 43/56 | 0.128 | 0.276 | 0.143 | 14/18 | 0.344 |
+| system                              |       acc |   ECE | Brier | pos. bias | stable | McNemar p |
+| ----------------------------------- | --------: | ----: | ----: | --------: | -----: | --------: |
+| Kev-4B, LoRA + pointer head         | **47/56** | 0.104 | 0.236 |     0.107 |  15/18 |         — |
+| base, "…best advances the goal is:" |     46/56 | 0.144 | 0.223 |     0.125 |  13/18 |     1.000 |
+| base, "Dispatch:"                   |     44/56 | 0.162 | 0.298 |     0.179 |  13/18 |     0.549 |
+| base, "Answer:"                     |     43/56 | 0.150 | 0.291 |     0.107 |  14/18 |     0.424 |
+| base, "Answer: " with digits        |     43/56 | 0.128 | 0.276 |     0.143 |  14/18 |     0.344 |
 
 Floors are always-first 0.389 and best-constant 0.500; every rendering clears
 them comfortably. The records are paired — both systems answer the same 56 — so

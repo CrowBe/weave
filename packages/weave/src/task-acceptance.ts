@@ -30,13 +30,7 @@
  *   the floor and escalates. That is fail-closed, not a calibration claim, and
  *   it is not comparable to `frontier.weigh`.
  */
-import type {
-  BooleanQuestion,
-  EvaluationOutcome,
-  InferenceGateway,
-  InferenceTerms,
-  RoutedUnit,
-} from '@weave/gateway';
+import type { BooleanQuestion, EvaluationOutcome, InferenceGateway, InferenceTerms, RoutedUnit } from '@weave/gateway';
 
 export const ACCEPTANCE_LINE_CONTRACT = 'acceptance.line@2' as const;
 /** The contract before predicates. Its records still replay; nothing new is written under it. */
@@ -73,7 +67,8 @@ export const ACCEPTANCE_LINE_CONTRACT_RECORD = {
   criteria_site: TASK_CRITERIA_SITE,
   validation_site: TASK_VALIDATE_SITE,
   criteria_state: 'the proposed free-text line only: fact, evidence identity, and escape',
-  validation_state: 'the admitted free-text fact plus the body of its named artifact or the output of its named command',
+  validation_state:
+    'the admitted free-text fact plus the body of its named artifact or the output of its named command',
   omitted_from_state: [
     'write_up',
     'task prose',
@@ -83,7 +78,8 @@ export const ACCEPTANCE_LINE_CONTRACT_RECORD = {
     'predicate lines',
   ],
   predicates: ACCEPTANCE_PREDICATES,
-  predicate_rule: 'code renders the fact, admits the predicate only on a fitting evidence kind, and decides it from the recorded evidence; no Noul is asked',
+  predicate_rule:
+    'code renders the fact, admits the predicate only on a fitting evidence kind, and decides it from the recorded evidence; no Noul is asked',
   model: TASK_JEV_MODEL_ID,
 } as const;
 
@@ -224,7 +220,9 @@ export type NoulFixture = Readonly<Record<string, NoulAnswerRecord>>;
 
 interface LexicalEntry {
   readonly line_id: string | null;
-  readonly lexical: { readonly status: 'admitted'; readonly line: AcceptanceLine } | { readonly status: 'rejected'; readonly reason: string };
+  readonly lexical:
+    | { readonly status: 'admitted'; readonly line: AcceptanceLine }
+    | { readonly status: 'rejected'; readonly reason: string };
 }
 
 export interface CriteriaRecord {
@@ -383,7 +381,8 @@ function parseLine(raw: unknown): { readonly status: 'admitted'; readonly line: 
   }
   const predicate = parsePredicate(raw['predicate']);
   if (typeof predicate === 'string') return { status: 'rejected', reason: predicate, line_id };
-  if (!predicateFits(evidence, predicate)) return { status: 'rejected', reason: 'predicate_evidence_mismatch', line_id };
+  if (!predicateFits(evidence, predicate))
+    return { status: 'rejected', reason: 'predicate_evidence_mismatch', line_id };
   return {
     status: 'admitted',
     line: { line_id, fact: renderFact(evidence, predicate), evidence, escape: escape.trim(), predicate },
@@ -396,7 +395,8 @@ function parsePredicate(raw: unknown): AcceptancePredicate | 'unknown_predicate'
   const keys = Object.keys(raw).sort().join(',');
   if (raw['kind'] === 'exit_status') {
     const equals = raw['equals'];
-    if (keys !== 'equals,kind' || typeof equals !== 'number' || !Number.isSafeInteger(equals)) return 'invalid_predicate';
+    if (keys !== 'equals,kind' || typeof equals !== 'number' || !Number.isSafeInteger(equals))
+      return 'invalid_predicate';
     return { kind: 'exit_status', equals };
   }
   if (raw['kind'] === 'contains_literal') {
@@ -418,7 +418,8 @@ function renderFact(evidence: EvidenceRef, predicate: AcceptancePredicate): stri
     return `the exit status of command ${JSON.stringify(id)} is ${predicate.equals}`;
   }
   const literal = JSON.stringify(predicate.literal);
-  if (evidence.kind === 'artifact') return `artifact ${JSON.stringify(evidence.artifact_id)} contains the literal ${literal}`;
+  if (evidence.kind === 'artifact')
+    return `artifact ${JSON.stringify(evidence.artifact_id)} contains the literal ${literal}`;
   return `the output of command ${JSON.stringify(evidence.command_id)} contains the literal ${literal}`;
 }
 
@@ -716,7 +717,11 @@ export function decideValidation(record: ValidationRecord): ValidationDecision {
       continue;
     }
     const answer = record.answers[fact.line_id];
-    if (answer === undefined || !inUnit(answer.probability) || (answer.confidence !== null && !inUnit(answer.confidence))) {
+    if (
+      answer === undefined ||
+      !inUnit(answer.probability) ||
+      (answer.confidence !== null && !inUnit(answer.confidence))
+    ) {
       return validationDecision('malformed', [`unanswered:${fact.line_id}`], lines, constraints);
     }
     if (answer.confidence === null || answer.confidence < record.confidence_floor) {
@@ -756,10 +761,7 @@ function predicateVerdict(
   return exit === predicate.equals ? 'pass' : 'fail';
 }
 
-export async function judgeCriteria(
-  proposed: readonly unknown[],
-  call: JudgmentCall,
-): Promise<CriteriaRecord> {
+export async function judgeCriteria(proposed: readonly unknown[], call: JudgmentCall): Promise<CriteriaRecord> {
   const policy = policyOf(call.policy);
   const lines = lexicalEntries(proposed);
   const asked = askedOf(admittedOf(lines));
@@ -916,7 +918,13 @@ function factsFor(
     if (!predicateFits(line.evidence, predicate)) {
       throw new Error(`predicate does not fit the evidence kind of ${line.line_id}`);
     }
-    return { line_id: line.line_id, fact: renderFact(line.evidence, predicate), evidence, decided_by: 'code', predicate };
+    return {
+      line_id: line.line_id,
+      fact: renderFact(line.evidence, predicate),
+      evidence,
+      decided_by: 'code',
+      predicate,
+    };
   });
 }
 

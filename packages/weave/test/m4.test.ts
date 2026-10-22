@@ -101,7 +101,9 @@ function open(runtime: Runtime, goal: Goal): void {
 function started(runtime: Runtime, operation: string): ActionStartedPayload[] {
   return runtime
     .trace()
-    .observations.filter((observation) => observation.payload_type === 'action.started' && observation.validation.status === 'accepted')
+    .observations.filter(
+      (observation) => observation.payload_type === 'action.started' && observation.validation.status === 'accepted',
+    )
     .map((observation) => observation.payload as ActionStartedPayload)
     .filter((payload) => payload.operation === operation);
 }
@@ -110,7 +112,9 @@ function results(runtime: Runtime, operation: string): ActionResultPayload[] {
   const ids = new Set(started(runtime, operation).map((payload) => payload.action_id));
   return runtime
     .trace()
-    .observations.filter((observation) => observation.payload_type === 'action.result' && observation.validation.status === 'accepted')
+    .observations.filter(
+      (observation) => observation.payload_type === 'action.result' && observation.validation.status === 'accepted',
+    )
     .map((observation) => observation.payload as ActionResultPayload)
     .filter((payload) => ids.has(payload.action_id));
 }
@@ -136,7 +140,9 @@ async function drive(world: { runtime: Runtime; host: AgentFabricHost }): Promis
     for (const action_id of openIds) {
       world.host.release(action_id);
     }
-    const running = Object.values(world.runtime.state().actions).filter((action) => action.state === 'running' || action.state === 'pending');
+    const running = Object.values(world.runtime.state().actions).filter(
+      (action) => action.state === 'running' || action.state === 'pending',
+    );
     if (running.length > 0) {
       await Promise.all(
         running.map(async (action) => {
@@ -152,7 +158,9 @@ async function drive(world: { runtime: Runtime; host: AgentFabricHost }): Promis
     if (openIds.length === 0) {
       await flush(8);
       const after = world.runtime.state();
-      const still = Object.values(after.actions).some((action) => action.state === 'running' || action.state === 'pending');
+      const still = Object.values(after.actions).some(
+        (action) => action.state === 'running' || action.state === 'pending',
+      );
       if (!still && world.host.openActionIds().length === 0) {
         return;
       }
@@ -283,9 +291,15 @@ describe('M4 measure reuse', () => {
     assert.equal(repeat.state().goal?.status, 'complete');
     assert.equal(repeat.state().goal?.framing, undefined);
     assert.equal(started(repeat, 'text.normalize').length, 2);
-    assert.equal(repeat.trace().observations.some((observation) => observation.payload_type === 'inference.requested'), false);
+    assert.equal(
+      repeat.trace().observations.some((observation) => observation.payload_type === 'inference.requested'),
+      false,
+    );
     assert.ok(repeat.trace().cycles.length > 0);
-    assert.equal(repeat.trace().cycles.every((cycle) => cycle.procedure === 'inspect_and_report@1'), true);
+    assert.equal(
+      repeat.trace().cycles.every((cycle) => cycle.procedure === 'inspect_and_report@1'),
+      true,
+    );
   });
 
   it('M4-T02 the same input, read set, and goal reuse the cached conclusion', async () => {
@@ -339,7 +353,11 @@ describe('M4 measure reuse', () => {
       return observation.validation.status === 'accepted' && observation.payload_type.startsWith('conclusion.');
     });
     assert.ok(retained.length > 0, 'the old conclusion remains in the log after the source revision changes');
-    assert.equal(JSON.stringify(retained).includes(firstText), true, 'the retained conclusion still holds the short output');
+    assert.equal(
+      JSON.stringify(retained).includes(firstText),
+      true,
+      'the retained conclusion still holds the short output',
+    );
   });
 
   it('M4-T04 cross-goal reuse requires conclusion.policy', async () => {
@@ -354,10 +372,7 @@ describe('M4 measure reuse', () => {
     register(second, fixture.beta, CONTENT['source:beta'] as string, 'goal2-beta');
     open(second, goalFor(fixture, 'g-normalize-2', [fixture.alpha, fixture.beta]));
     await drive({ runtime: second, host: denied.host });
-    assert.ok(
-      normalizeInvocations(denied.host) > 0,
-      'registry presence of both goals does not permit reuse',
-    );
+    assert.ok(normalizeInvocations(denied.host) > 0, 'registry presence of both goals does not permit reuse');
 
     const allowed = continuedHost(fixture);
     const shared = repeatRuntime(allowed.host, allowed.authority);
@@ -407,7 +422,11 @@ describe('M4 measure reuse', () => {
       'the host retains every admitted implementation; empty reliability and cost do not replace the earlier one',
     );
     const record = host.store.getInvocation(handle.invocation_id) as { implementation_id?: string } | undefined;
-    assert.equal(record?.implementation_id, 'direct', 'an omitted binding runs the earliest admitted implementation and records that id');
+    assert.equal(
+      record?.implementation_id,
+      'direct',
+      'an omitted binding runs the earliest admitted implementation and records that id',
+    );
   });
 
   it('M4-T06 the baseline counts the failing goal before any M5 candidate', async () => {
@@ -456,11 +475,18 @@ describe('M4 measure reuse', () => {
       caused_by: null,
       payload_type: 'output.rejected',
       payload_version: 1,
-      payload: { action_id: started(failing, 'text.normalize')[0]?.action_id, reason: 'empty output on a non-empty source' },
+      payload: {
+        action_id: started(failing, 'text.normalize')[0]?.action_id,
+        reason: 'empty output on a non-empty source',
+      },
     });
 
     const observations = [fixture.runtime, second, failing].flatMap((runtime) => runtime.trace().observations);
-    const laterCandidate = observations.find((observation) => observation.payload_type.startsWith('experiment.') || JSON.stringify(observation.payload).includes('profile.frame.narrow@1'));
+    const laterCandidate = observations.find(
+      (observation) =>
+        observation.payload_type.startsWith('experiment.') ||
+        JSON.stringify(observation.payload).includes('profile.frame.narrow@1'),
+    );
     const baseline = baselinePayload(observations);
     assert.ok(baseline, 'the baseline is recorded before any M5 candidate');
     assert.equal(laterCandidate, undefined);
@@ -472,11 +498,16 @@ describe('M4 measure reuse', () => {
     assert.equal(baseline.human_corrections, 1);
     assert.equal(repeatedNormalize, 0, 'the repeated goal reuses its conclusions');
     const inferenceMicros = observations
-      .filter((observation) => observation.payload_type === 'inference.recorded' && observation.validation.status === 'accepted')
+      .filter(
+        (observation) =>
+          observation.payload_type === 'inference.recorded' && observation.validation.status === 'accepted',
+      )
       .reduce((sum, observation) => sum + ((observation.payload as { spent?: number }).spent ?? 0), 0);
     assert.equal(
       baseline.cost_micros,
-      (fixture.host.invocations.length + repeated.host.invocations.length + missed.host.invocations.length) * HOST_MICROS + inferenceMicros,
+      (fixture.host.invocations.length + repeated.host.invocations.length + missed.host.invocations.length) *
+        HOST_MICROS +
+        inferenceMicros,
       'reuse adds neither a second 1000 host micros nor a second inference reservation',
     );
     assert.equal(typeof baseline.latency_ticks, 'number');

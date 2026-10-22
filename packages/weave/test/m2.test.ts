@@ -212,7 +212,9 @@ describe('M2 novel request', () => {
       | InferenceRequestedPayload
       | undefined;
     assert.equal(disclosedView?.view.profile, 'profile.frame@1');
-    const disclosedCatalogue = (disclosedView?.view as StateView).manifest.slices.find((slice) => slice.name === 'catalogue');
+    const disclosedCatalogue = (disclosedView?.view as StateView).manifest.slices.find(
+      (slice) => slice.name === 'catalogue',
+    );
     assert.equal(disclosedCatalogue?.truncated, false);
     assert.match(JSON.stringify(disclosedView?.view.content), /"source.inspect"/);
   });
@@ -230,7 +232,12 @@ describe('M2 novel request', () => {
       }
       return scoreAnswers(scores);
     });
-    const permitted = novelScenario({ evaluate: local, includeHosted: true, hosted, destinations: [LOCAL_DESTINATION] });
+    const permitted = novelScenario({
+      evaluate: local,
+      includeHosted: true,
+      hosted,
+      destinations: [LOCAL_DESTINATION],
+    });
     await frameThenInspect(permitted);
     await flush();
     const recorded = observationsOfType(permitted.runtime.trace(), 'inference.recorded').filter(
@@ -284,7 +291,9 @@ describe('M2 novel request', () => {
     assert.equal(recorded.attempts.length >= 2, true);
     assert.equal(recordedObs!.validation.status, 'accepted');
     assert.equal(s.runtime.state().budget.judgments.spent >= 1, true);
-    const acceptedWeights = observationsOfType(s.runtime.trace(), 'weights.recorded').filter((o) => o.validation.status === 'accepted' && (o.payload as WeightsRecordedPayload).request_id);
+    const acceptedWeights = observationsOfType(s.runtime.trace(), 'weights.recorded').filter(
+      (o) => o.validation.status === 'accepted' && (o.payload as WeightsRecordedPayload).request_id,
+    );
     assert.equal(acceptedWeights.length, 0);
   });
 
@@ -471,7 +480,12 @@ describe('M2 resolver inference port', () => {
       kind: 'transform',
       role: 'working',
       input: { prompt: 'hello' },
-      terms: { cost_ceiling: 1, destinations: [LOCAL_DESTINATION], max_attempts: 1, deadline: Number.POSITIVE_INFINITY },
+      terms: {
+        cost_ceiling: 1,
+        destinations: [LOCAL_DESTINATION],
+        max_attempts: 1,
+        deadline: Number.POSITIVE_INFINITY,
+      },
     });
     assert.equal(openDeadline.status, 'refused');
 

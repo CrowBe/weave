@@ -73,14 +73,14 @@ omission. It does not delete the observation log.
 Use an in-memory journal and an injected oversize payload. Do not allocate
 multi-megabyte fixtures and do not sleep.
 
-| ID | Scenario | Required evidence |
-| --- | --- | --- |
-| H1-T01 | An observation exceeds `max_observation_bytes` | It is rejected with reason `budget` before it is durable. No transition follows. Replay and recovery do not re-append it. |
-| H1-T02 | A payload is cut mid-value | It is rejected. It is not stored as a successful empty result. |
-| H1-T03 | The same candidate has already failed with the same identity | Recovery does not dispatch it again. Effect reconciliation for an `uncertain` action is unchanged and still bounded. |
-| H1-T04 | A second observation reuses an `observation_id`; another id differs by one character | The reuse is rejected with reason `duplicate`. The distinct id is kept. Neither is dropped silently. |
-| H1-T05 | A second runtime opens the same host store | The attach is refused. The first runtime's admissions and invocations are unchanged. |
-| H1-T06 | Trace retention is over its byte budget | One record exists per attempt. Eviction does not run under the state-transition lock. The observation log is intact. No per-token record is written. |
+| ID     | Scenario                                                                             | Required evidence                                                                                                                                    |
+| ------ | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H1-T01 | An observation exceeds `max_observation_bytes`                                       | It is rejected with reason `budget` before it is durable. No transition follows. Replay and recovery do not re-append it.                            |
+| H1-T02 | A payload is cut mid-value                                                           | It is rejected. It is not stored as a successful empty result.                                                                                       |
+| H1-T03 | The same candidate has already failed with the same identity                         | Recovery does not dispatch it again. Effect reconciliation for an `uncertain` action is unchanged and still bounded.                                 |
+| H1-T04 | A second observation reuses an `observation_id`; another id differs by one character | The reuse is rejected with reason `duplicate`. The distinct id is kept. Neither is dropped silently.                                                 |
+| H1-T05 | A second runtime opens the same host store                                           | The attach is refused. The first runtime's admissions and invocations are unchanged.                                                                 |
+| H1-T06 | Trace retention is over its byte budget                                              | One record exists per attempt. Eviction does not run under the state-transition lock. The observation log is intact. No per-token record is written. |
 
 ## 6. Assumptions recorded
 

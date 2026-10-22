@@ -17,12 +17,12 @@ the local transfer comparison. They cover 72 `choice`, 43 `noul`, and 10
 level. The [runner](transfer.py) checks suite and paired ID hashes and keeps
 the native response in [raw results](transfer-results.json).
 
-| Slice | N | Decider-2B | Jev | Kev 4B |
-| --- | ---: | ---: | ---: | ---: |
+| Slice   |   N |     Decider-2B |         Jev |     Kev 4B |
+| ------- | --: | -------------: | ----------: | ---------: |
 | Overall | 125 | **83 (66.4%)** | 104 (83.2%) | 97 (77.6%) |
-| Choice | 72 | 47 | 59 | 57 |
-| Noul | 43 | 34 | 36 | 34 |
-| Score | 10 | 2 | 9 | 6 |
+| Choice  |  72 |             47 |          59 |         57 |
+| Noul    |  43 |             34 |          36 |         34 |
+| Score   |  10 |              2 |           9 |          6 |
 
 On the exact paired items, Decider and Jev both got 76 right; Decider alone
 got 7, Jev alone 28, and neither 14. Exact two-sided McNemar p = 0.000508.
@@ -30,18 +30,18 @@ Against Kev the corresponding counts are 79, 4, 18, and 24 (p = 0.00434).
 These tests detect paired differences on this suite; they do not establish
 deployment quality on Weave's judgment purposes.
 
-| Source | N | Decider-2B | Jev | Kev 4B |
-| --- | ---: | ---: | ---: | ---: |
-| MMLU | 20 | 6 | 16 | 10 |
-| Emotion | 18 | 12 | 10 | 14 |
-| Offensive tweet | 13 | 9 | 9 | 9 |
-| QNLI | 13 | 11 | 11 | 11 |
-| PAWS | 13 | 10 | 12 | 10 |
-| SciQ | 18 | 17 | 18 | 18 |
-| Authorization contrasts | 4 | 4 | 4 | 4 |
-| Deadline score contrasts | 10 | 2 | 9 | 6 |
-| Held composition (and/or) | 8 | 6 | 7 | 7 |
-| Held composition (or/not) | 8 | 6 | 8 | 8 |
+| Source                    |   N | Decider-2B | Jev | Kev 4B |
+| ------------------------- | --: | ---------: | --: | -----: |
+| MMLU                      |  20 |          6 |  16 |     10 |
+| Emotion                   |  18 |         12 |  10 |     14 |
+| Offensive tweet           |  13 |          9 |   9 |      9 |
+| QNLI                      |  13 |         11 |  11 |     11 |
+| PAWS                      |  13 |         10 |  12 |     10 |
+| SciQ                      |  18 |         17 |  18 |     18 |
+| Authorization contrasts   |   4 |          4 |   4 |      4 |
+| Deadline score contrasts  |  10 |          2 |   9 |      6 |
+| Held composition (and/or) |   8 |          6 |   7 |      7 |
+| Held composition (or/not) |   8 |          6 |   8 |      8 |
 
 The score miss is systematic on this ten-case set: every native expected
 score rounded to level 1, including labels at levels 0 and 2. The MMLU gap is

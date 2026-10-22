@@ -122,11 +122,7 @@ function scored(score: number, confidence?: Record<string, number>): EvaluationP
   };
 }
 
-function failed(
-  code: ProviderFailureCode,
-  retryable: boolean,
-  retryAfterMs?: number,
-): GenerationProviderResult {
+function failed(code: ProviderFailureCode, retryable: boolean, retryAfterMs?: number): GenerationProviderResult {
   return {
     status: 'failed',
     failure: {
@@ -411,9 +407,7 @@ describe('gateway attempts and accounting', () => {
       clock: fakeClock(),
     });
 
-    const outcome = await gateway.generate(
-      request({ terms: { ...TERMS, max_attempts_per_route: 1 } }),
-    );
+    const outcome = await gateway.generate(request({ terms: { ...TERMS, max_attempts_per_route: 1 } }));
 
     assert.equal(outcome.status, 'accepted');
     assert.equal(primary.calls, 1, 'a bound of 1 escalates on the first fault');
@@ -428,9 +422,7 @@ describe('gateway attempts and accounting', () => {
       clock: fakeClock(),
     });
 
-    const outcome = await gateway.generate(
-      request({ terms: { ...TERMS, max_attempts_per_route: 0 } }),
-    );
+    const outcome = await gateway.generate(request({ terms: { ...TERMS, max_attempts_per_route: 0 } }));
 
     assert.equal(outcome.status, 'blocked');
     assert.equal(outcome.status === 'blocked' ? outcome.reason : '', 'invalid_request');
@@ -747,9 +739,11 @@ describe('gateway explicit refusals', () => {
   it('blocks an unknown tier as an invalid request', async () => {
     const a = adapter();
     const gateway = createInferenceGateway({ routes, adapters: [a], clock: fakeClock() });
-    const outcome = await gateway.generate(request({
-      terms: { ...TERMS, tier: 'fast' } as unknown as GenerationRequest['terms'],
-    }));
+    const outcome = await gateway.generate(
+      request({
+        terms: { ...TERMS, tier: 'fast' } as unknown as GenerationRequest['terms'],
+      }),
+    );
 
     assert.equal(outcome.status, 'blocked');
     assert.equal(outcome.status === 'blocked' ? outcome.reason : '', 'invalid_request');
@@ -767,8 +761,7 @@ describe('gateway explicit refusals', () => {
 
     const outcome = await gateway.generate(
       request({
-        accept: (text) =>
-          text.startsWith('{') ? { status: 'accepted' } : { status: 'rejected', reason: 'not_json' },
+        accept: (text) => (text.startsWith('{') ? { status: 'accepted' } : { status: 'rejected', reason: 'not_json' }),
       }),
     );
 
@@ -792,10 +785,10 @@ describe('gateway waiting out a rate limit', () => {
   }
 
   it('waits the spacing its declared limit implies, then succeeds on the same route', async () => {
-    const f = throttled([unit({ routed_unit_id: 'primary', rate_limits: PER_MINUTE })], [
-      failed('rate_limited', true),
-      completed('answered after the wait'),
-    ]);
+    const f = throttled(
+      [unit({ routed_unit_id: 'primary', rate_limits: PER_MINUTE })],
+      [failed('rate_limited', true), completed('answered after the wait')],
+    );
     const gateway = createInferenceGateway({
       routes: f.routes,
       adapters: [f.primary],
@@ -814,10 +807,10 @@ describe('gateway waiting out a rate limit', () => {
   });
 
   it('prefers the delay the provider stated over the one the route declares', async () => {
-    const f = throttled([unit({ routed_unit_id: 'primary', rate_limits: PER_MINUTE })], [
-      failed('rate_limited', true, 500),
-      completed('answered after the stated wait'),
-    ]);
+    const f = throttled(
+      [unit({ routed_unit_id: 'primary', rate_limits: PER_MINUTE })],
+      [failed('rate_limited', true, 500), completed('answered after the stated wait')],
+    );
     const gateway = createInferenceGateway({
       routes: f.routes,
       adapters: [f.primary],
@@ -855,7 +848,7 @@ describe('gateway waiting out a rate limit', () => {
     assert.ok(outcome.uncertainty.some((u) => u.includes('no timer is configured')));
   });
 
-  it('escalates rather than waiting past the caller\'s deadline', async () => {
+  it("escalates rather than waiting past the caller's deadline", async () => {
     const f = throttled(
       [
         unit({ routed_unit_id: 'primary', rate_limits: PER_MINUTE }),
@@ -881,10 +874,10 @@ describe('gateway waiting out a rate limit', () => {
   });
 
   it('retries a transient fault at once, since a rate limit is the only thing worth waiting on', async () => {
-    const f = throttled([unit({ routed_unit_id: 'primary', rate_limits: PER_MINUTE })], [
-      failed('unavailable', true),
-      completed('recovered'),
-    ]);
+    const f = throttled(
+      [unit({ routed_unit_id: 'primary', rate_limits: PER_MINUTE })],
+      [failed('unavailable', true), completed('recovered')],
+    );
     const gateway = createInferenceGateway({
       routes: f.routes,
       adapters: [f.primary],
@@ -901,10 +894,10 @@ describe('gateway waiting out a rate limit', () => {
   });
 
   it('retries a rate limit at once when neither the route nor the provider names a delay', async () => {
-    const f = throttled([unit({ routed_unit_id: 'primary' })], [
-      failed('rate_limited', true),
-      completed('unthrottled'),
-    ]);
+    const f = throttled(
+      [unit({ routed_unit_id: 'primary' })],
+      [failed('rate_limited', true), completed('unthrottled')],
+    );
     const gateway = createInferenceGateway({
       routes: f.routes,
       adapters: [f.primary],
@@ -920,11 +913,10 @@ describe('gateway waiting out a rate limit', () => {
   });
 
   it('counts a wait against the deadline rather than against the attempt budget', async () => {
-    const f = throttled([unit({ routed_unit_id: 'primary', rate_limits: PER_MINUTE })], [
-      failed('rate_limited', true, 4_000),
-      failed('rate_limited', true, 4_000),
-      completed('never reached'),
-    ]);
+    const f = throttled(
+      [unit({ routed_unit_id: 'primary', rate_limits: PER_MINUTE })],
+      [failed('rate_limited', true, 4_000), failed('rate_limited', true, 4_000), completed('never reached')],
+    );
     const gateway = createInferenceGateway({
       routes: f.routes,
       adapters: [f.primary],
@@ -934,9 +926,7 @@ describe('gateway waiting out a rate limit', () => {
 
     // Room for three attempts, but the clock starts near 100 and the deadline
     // is 6s out: the first 4s wait fits, and the second cannot.
-    const outcome = await gateway.generate(
-      request({ terms: { ...TERMS, max_attempts: 3, deadline: 6_000 } }),
-    );
+    const outcome = await gateway.generate(request({ terms: { ...TERMS, max_attempts: 3, deadline: 6_000 } }));
 
     assert.equal(outcome.status, 'unaccepted');
     assert.deepEqual(f.timer.waits, [4_000]);

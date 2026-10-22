@@ -32,11 +32,11 @@ PyTorch 2.14.0+cpu, Transformers 5.15.0, and an offline pinned snapshot.
 
 ## Results
 
-| Fixed slice | Lumma 4B | Paired comparator | Median Lumma call |
-| --- | ---: | ---: | ---: |
-| Transfer, 24 IDs | **19/24** | Kev 18/24; Jev 22/24 | 4.27 s |
-| `capability.match`, 18 cases | **18/18** | tuned GLiNER 15/18 | 7.18 s |
-| `result.evaluate`, 18 cases | 16/18 | tuned GLiNER **18/18** | 6.75 s |
+| Fixed slice                  |  Lumma 4B |      Paired comparator | Median Lumma call |
+| ---------------------------- | --------: | ---------------------: | ----------------: |
+| Transfer, 24 IDs             | **19/24** |   Kev 18/24; Jev 22/24 |            4.27 s |
+| `capability.match`, 18 cases | **18/18** |     tuned GLiNER 15/18 |            7.18 s |
+| `result.evaluate`, 18 cases  |     16/18 | tuned GLiNER **18/18** |            6.75 s |
 
 On transfer, Lumma alone corrected two Kev errors and Kev alone corrected one.
 By kind, Lumma/Kev scored choice **8/12 vs 8/12**, `noul` **6/6 vs 6/6**, and

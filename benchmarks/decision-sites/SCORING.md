@@ -91,7 +91,6 @@ per current binding; retry attempts do not create extra gold items. Token totals
 come from all completed journal calls. An unresolved attempted item is a failed
 observation for coverage, never a reconstructed answer.
 
-
 OpenAI Decisions D5 is an explicit benchmark-only provisional profile from
 `docs/m7-decision-loop.md` §4b, since its generic adapter remains deferred. Its
 baseline accepts p >= .85 as pass or p <= .15 as fail; the middle band is

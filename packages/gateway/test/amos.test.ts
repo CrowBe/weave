@@ -71,7 +71,7 @@ describe('Amos local decision contract', () => {
     assert.equal(resolveAmosBaseURL({}), AMOS_BASE_URL);
     assert.equal(resolveAmosBaseURL({ AMOS_BASE_URL: 'http://localhost:9000' }), 'http://localhost:9000');
   });
-  it('serves intake from the example config: configured base URL, callers\' local destination', async () => {
+  it("serves intake from the example config: configured base URL, callers' local destination", async () => {
     const example = JSON.parse(readFileSync(new URL('../../../../weave.routes.example.json', import.meta.url), 'utf8'));
     // The configured base_url is the only source; a different port proves it is the one used.
     example.decision.providers.amos.base_url = 'http://127.0.0.1:9876';
@@ -79,18 +79,37 @@ describe('Amos local decision contract', () => {
     assert.equal(parsed.ok, true);
     if (!parsed.ok) return;
     const binding = bindDecisionProvider(parsed.decision, 'intake.classify');
-    assert.deepEqual(binding, { provider: 'amos', adapter: 'amos', baseURL: 'http://127.0.0.1:9876', model: 'amos-1-2b' });
-    const amosUnits = parsed.table.filter(unit => unit.adapter === 'amos');
-    assert.deepEqual(amosUnits.map(unit => unit.destination), [AMOS_DESTINATION, AMOS_DESTINATION]);
+    assert.deepEqual(binding, {
+      provider: 'amos',
+      adapter: 'amos',
+      baseURL: 'http://127.0.0.1:9876',
+      model: 'amos-1-2b',
+    });
+    const amosUnits = parsed.table.filter((unit) => unit.adapter === 'amos');
+    assert.deepEqual(
+      amosUnits.map((unit) => unit.destination),
+      [AMOS_DESTINATION, AMOS_DESTINATION],
+    );
 
     const urls: string[] = [];
     const fetch = (async (url: string | URL | Request) => {
       urls.push(String(url));
       return String(url).endsWith('/v1/models')
         ? new Response(JSON.stringify({ models: [{ name: 'amos-1-2b' }] }))
-        : new Response(JSON.stringify({ model: 'amos-1-2b', usage: { input_tokens: 9, output_tokens: 2 }, answers: {
-          decision: { type: 'choice', choice: 'new_thread', probabilities: { new_thread: 0.9, queue: 0.1 }, confidence: 0.9 },
-        } }));
+        : new Response(
+            JSON.stringify({
+              model: 'amos-1-2b',
+              usage: { input_tokens: 9, output_tokens: 2 },
+              answers: {
+                decision: {
+                  type: 'choice',
+                  choice: 'new_thread',
+                  probabilities: { new_thread: 0.9, queue: 0.1 },
+                  confidence: 0.9,
+                },
+              },
+            }),
+          );
     }) as typeof globalThis.fetch;
     const gateway = createInferenceGateway({
       clock: { now: () => 10 },
@@ -99,11 +118,23 @@ describe('Amos local decision contract', () => {
       evaluators: [amosEvaluator({ baseURL: binding.baseURL, fetch })],
     });
     const outcome = await gateway.evaluate({
-      request_id: 'intake', site: 'intake.classify', role: 'working', kind: 'choice', state: 'disclosed',
-      questions: { decision: { type: 'choice', instructions: 'classify', criteria: { new_thread: null, queue: null } } },
+      request_id: 'intake',
+      site: 'intake.classify',
+      role: 'working',
+      kind: 'choice',
+      state: 'disclosed',
+      questions: {
+        decision: { type: 'choice', instructions: 'classify', criteria: { new_thread: null, queue: null } },
+      },
       // Intake callers permit the local destination, as packages/weave does.
-      terms: { quality: 'baseline', destinations: ['local'], max_context_tokens: 1000, deadline: 1_000_000,
-        cost_ceiling: 10, max_attempts: 1 },
+      terms: {
+        quality: 'baseline',
+        destinations: ['local'],
+        max_context_tokens: 1000,
+        deadline: 1_000_000,
+        cost_ceiling: 10,
+        max_attempts: 1,
+      },
     });
     assert.equal(outcome.status, 'accepted');
     if (outcome.status === 'accepted') assert.equal(outcome.routed_unit_id, 'amos.choice');
@@ -217,8 +248,7 @@ describe('Amos local decision contract', () => {
     it(`bounds ${stage} timeout as unavailable and not retryable`, async () => {
       await stub(
         (request, response) => {
-          if (stage !== 'health' && request.url === '/v1/models')
-            serve(response, { models: [{ name: 'amos-1-2b' }] });
+          if (stage !== 'health' && request.url === '/v1/models') serve(response, { models: [{ name: 'amos-1-2b' }] });
           else if (stage === 'body') {
             response.writeHead(200, { 'content-type': 'application/json' });
             response.write('{"model":');
@@ -235,7 +265,9 @@ describe('Amos local decision contract', () => {
       );
     });
   it('keeps a fast connection failure retryable', async () => {
-    const fetch = (async () => { throw new TypeError('fetch failed'); }) as typeof globalThis.fetch;
+    const fetch = (async () => {
+      throw new TypeError('fetch failed');
+    }) as typeof globalThis.fetch;
     const result = await amosEvaluator({ fetch }).evaluate(call);
     assert.equal(result.status === 'failed' && result.failure.retryable, true);
   });
@@ -248,28 +280,57 @@ describe('Amos local decision contract', () => {
       });
     }) as typeof globalThis.fetch;
     const unit: RoutedUnit = {
-      routed_unit_id: 'amos.choice', adapter: 'amos', model: 'amos-1-2b', operation: 'evaluate', kind: 'choice',
-      destination: 'local', quality: 'baseline', context_profile: 'decision', context_profile_version: 1,
-      prompt_template: 'decision.choice', prompt_template_version: 1, settings: { max_output_tokens: 256 },
-      context_limit_tokens: 1000, price: { input_per_mtok: 0, output_per_mtok: 0 },
+      routed_unit_id: 'amos.choice',
+      adapter: 'amos',
+      model: 'amos-1-2b',
+      operation: 'evaluate',
+      kind: 'choice',
+      destination: 'local',
+      quality: 'baseline',
+      context_profile: 'decision',
+      context_profile_version: 1,
+      prompt_template: 'decision.choice',
+      prompt_template_version: 1,
+      settings: { max_output_tokens: 256 },
+      context_limit_tokens: 1000,
+      price: { input_per_mtok: 0, output_per_mtok: 0 },
     };
     const gateway = createInferenceGateway({
       clock: { now: () => 10 },
       routes: [unit],
-      decision: { provider: 'typesafe-jev', fallback: null, sites: { 'intake.classify': 'amos' }, providers: {
-        amos: { base_url: 'http://127.0.0.1:8766', model: 'amos-1-2b' },
-        'typesafe-jev': { base_url: 'https://api.typesafe.ai', model: 'jev-preview' },
-      } },
+      decision: {
+        provider: 'typesafe-jev',
+        fallback: null,
+        sites: { 'intake.classify': 'amos' },
+        providers: {
+          amos: { base_url: 'http://127.0.0.1:8766', model: 'amos-1-2b' },
+          'typesafe-jev': { base_url: 'https://api.typesafe.ai', model: 'jev-preview' },
+        },
+      },
       evaluators: [amosEvaluator({ fetch: hung, timeoutMs: 30 })],
     });
     // The stub holds no socket and AbortSignal.timeout is unref'd, so keep the loop alive.
     const keepAlive = setInterval(() => {}, 1_000);
-    const outcome = await gateway.evaluate({
-      request_id: 'hung', site: 'intake.classify', role: 'working', kind: 'choice', state: 'disclosed',
-      questions: { decision: { type: 'choice', instructions: 'classify', criteria: { new_thread: null, queue: null } } },
-      terms: { quality: 'baseline', destinations: ['local'], max_context_tokens: 100, deadline: 1_000_000,
-        cost_ceiling: 10, max_attempts: 3 },
-    }).finally(() => clearInterval(keepAlive));
+    const outcome = await gateway
+      .evaluate({
+        request_id: 'hung',
+        site: 'intake.classify',
+        role: 'working',
+        kind: 'choice',
+        state: 'disclosed',
+        questions: {
+          decision: { type: 'choice', instructions: 'classify', criteria: { new_thread: null, queue: null } },
+        },
+        terms: {
+          quality: 'baseline',
+          destinations: ['local'],
+          max_context_tokens: 100,
+          deadline: 1_000_000,
+          cost_ceiling: 10,
+          max_attempts: 3,
+        },
+      })
+      .finally(() => clearInterval(keepAlive));
     assert.equal(calls, 1);
     assert.equal(outcome.attempts.length, 1);
     assert.equal(outcome.status, 'blocked');
@@ -307,10 +368,7 @@ describe('Amos local decision contract', () => {
     it(`rejects malformed response ${index} without provider text`, async () => {
       await stub(
         (request, response) =>
-          serve(
-            response,
-            request.url === '/v1/models' ? { models: [{ name: 'amos-1-2b' }] } : value,
-          ),
+          serve(response, request.url === '/v1/models' ? { models: [{ name: 'amos-1-2b' }] } : value),
         async (baseURL) => {
           const result = await amosEvaluator({ baseURL }).evaluate(call);
           assert.equal(result.status === 'failed' && result.failure.code, 'malformed_response');
@@ -331,13 +389,15 @@ describe('Amos local decision contract', () => {
       const fetch = (async (url: string | URL | Request) =>
         String(url).endsWith('/v1/models')
           ? new Response(JSON.stringify({ models: [{ name: 'amos-1-2b' }] }), { status: 200 })
-          : new Response(
-              JSON.stringify({ ...body, answers: { severity: { ...answer, legend } } }),
-              { status: 200 },
-            )) as typeof globalThis.fetch;
+          : new Response(JSON.stringify({ ...body, answers: { severity: { ...answer, legend } } }), {
+              status: 200,
+            })) as typeof globalThis.fetch;
       return amosEvaluator({ fetch }).evaluate(nullLevel);
     };
-    for (const legend of [{ '0': 'low', '1': 'null' }, { '0': 'low', '1': null }]) {
+    for (const legend of [
+      { '0': 'low', '1': 'null' },
+      { '0': 'low', '1': null },
+    ]) {
       const result = await evaluate(legend);
       assert.equal(result.status, 'completed', JSON.stringify(legend));
     }
@@ -348,11 +408,7 @@ describe('Amos local decision contract', () => {
       { '0': 'null', '1': null },
     ]) {
       const result = await evaluate(legend);
-      assert.equal(
-        result.status === 'failed' && result.failure.code,
-        'malformed_response',
-        JSON.stringify(legend),
-      );
+      assert.equal(result.status === 'failed' && result.failure.code, 'malformed_response', JSON.stringify(legend));
     }
   });
   it('refuses a model the server does not list, without a decision call', async () => {
@@ -372,9 +428,10 @@ describe('Amos local decision contract', () => {
     assert.deepEqual(paths, ['/v1/models']);
   });
   it('rejects a response that names a different model than the call', async () => {
-    const fetch = (async (url: string | URL | Request) => String(url).endsWith('/v1/models')
-      ? new Response(JSON.stringify({ models: [{ name: 'amos-1-2b' }, { name: 'amos-1-8b' }] }))
-      : new Response(JSON.stringify(body))) as typeof globalThis.fetch;
+    const fetch = (async (url: string | URL | Request) =>
+      String(url).endsWith('/v1/models')
+        ? new Response(JSON.stringify({ models: [{ name: 'amos-1-2b' }, { name: 'amos-1-8b' }] }))
+        : new Response(JSON.stringify(body))) as typeof globalThis.fetch;
     const result = await amosEvaluator({ fetch }).evaluate({ ...call, model: 'amos-1-8b' });
     assert.equal(result.status === 'failed' && result.failure.code, 'malformed_response');
   });
@@ -385,18 +442,35 @@ describe('Amos local decision contract', () => {
       questions: { severity: { type: 'score', instructions: 'Severity?', criteria: ['low', null] } },
     };
     const answer = { type: 'score', score: 0.8, probabilities: { '0': 0.2, '1': 0.8 } };
-    for (const legend of [{ '0': 'low', '1': 'null' }, { '0': 'low', '1': null }]) {
-      const fetch = (async (url: string | URL | Request) => String(url).endsWith('/v1/models')
-        ? new Response(JSON.stringify({ models: [{ name: 'amos-1-2b' }] }))
-        : new Response(JSON.stringify({ ...body, answers: { severity: { ...answer, legend } } }))) as typeof globalThis.fetch;
+    for (const legend of [
+      { '0': 'low', '1': 'null' },
+      { '0': 'low', '1': null },
+    ]) {
+      const fetch = (async (url: string | URL | Request) =>
+        String(url).endsWith('/v1/models')
+          ? new Response(JSON.stringify({ models: [{ name: 'amos-1-2b' }] }))
+          : new Response(
+              JSON.stringify({ ...body, answers: { severity: { ...answer, legend } } }),
+            )) as typeof globalThis.fetch;
       const result = await amosEvaluator({ fetch }).evaluate(nullLevel);
       assert.equal(result.status, 'completed', JSON.stringify(legend));
-      if (result.status === 'completed') assert.deepEqual(result.answers['severity'], { type: 'score', score: 0.8, probabilities: { '0': 0.2, '1': 0.8 } });
+      if (result.status === 'completed')
+        assert.deepEqual(result.answers['severity'], {
+          type: 'score',
+          score: 0.8,
+          probabilities: { '0': 0.2, '1': 0.8 },
+        });
     }
-    for (const legend of [{ '0': 'low', '1': 'high' }, { '0': 'null', '1': null }]) {
-      const fetch = (async (url: string | URL | Request) => String(url).endsWith('/v1/models')
-        ? new Response(JSON.stringify({ models: [{ name: 'amos-1-2b' }] }))
-        : new Response(JSON.stringify({ ...body, answers: { severity: { ...answer, legend } } }))) as typeof globalThis.fetch;
+    for (const legend of [
+      { '0': 'low', '1': 'high' },
+      { '0': 'null', '1': null },
+    ]) {
+      const fetch = (async (url: string | URL | Request) =>
+        String(url).endsWith('/v1/models')
+          ? new Response(JSON.stringify({ models: [{ name: 'amos-1-2b' }] }))
+          : new Response(
+              JSON.stringify({ ...body, answers: { severity: { ...answer, legend } } }),
+            )) as typeof globalThis.fetch;
       const result = await amosEvaluator({ fetch }).evaluate(nullLevel);
       assert.equal(result.status === 'failed' && result.failure.code, 'malformed_response', JSON.stringify(legend));
     }
@@ -411,19 +485,23 @@ describe('Amos local decision contract', () => {
     let authorization: string | undefined;
     const fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       const target = String(url);
-      if (target.endsWith('/v1/models')) return new Response(JSON.stringify({ models: [{ name: 'amos-1-2b' }] }), { status: 200 });
+      if (target.endsWith('/v1/models'))
+        return new Response(JSON.stringify({ models: [{ name: 'amos-1-2b' }] }), { status: 200 });
       const headers = (init?.headers ?? {}) as Record<string, string>;
       authorization = headers['authorization'];
       posted = JSON.parse(String(init?.body)) as typeof posted;
-      return new Response(JSON.stringify({
-        model: 'amos-1-2b',
-        usage: { input_tokens: 30, output_tokens: 12 },
-        answers: {
-          entry_0: { type: 'noul', noul: 0.91, confidence: 0.8 },
-          entry_1: { type: 'noul', noul: 0.42, confidence: 0.81 },
-          entry_2: { type: 'noul', noul: 0.07, confidence: 0.95 },
-        },
-      }), { status: 200 });
+      return new Response(
+        JSON.stringify({
+          model: 'amos-1-2b',
+          usage: { input_tokens: 30, output_tokens: 12 },
+          answers: {
+            entry_0: { type: 'noul', noul: 0.91, confidence: 0.8 },
+            entry_1: { type: 'noul', noul: 0.42, confidence: 0.81 },
+            entry_2: { type: 'noul', noul: 0.07, confidence: 0.95 },
+          },
+        }),
+        { status: 200 },
+      );
     }) as typeof globalThis.fetch;
     const result = await amosEvaluator({ baseURL: 'http://127.0.0.1:8766', fetch }).evaluate({
       model: 'amos-1-2b',
@@ -454,8 +532,7 @@ it('live Amos intake classification', { skip: process.env['AMOS_LIVE'] !== '1' }
   }).evaluate({
     model: 'amos-1-2b',
     kind: 'choice',
-    state:
-      'Inbound operator message: Please fix the failing unit tests. There are no running threads.',
+    state: 'Inbound operator message: Please fix the failing unit tests. There are no running threads.',
     signal: undefined,
     questions: {
       classification: {

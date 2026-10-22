@@ -66,7 +66,13 @@ export class RequestWeft {
     private readonly request_id: string,
   ) {}
 
-  private push(record_id: string, kind: string, parent_id: string | null, links: { rel: string; record_id: string }[], fields: Record<string, unknown>): void {
+  private push(
+    record_id: string,
+    kind: string,
+    parent_id: string | null,
+    links: { rel: string; record_id: string }[],
+    fields: Record<string, unknown>,
+  ): void {
     this.records.push({
       schema: 'weft.record@1',
       trace_id: this.port.trace_id,
@@ -102,7 +108,9 @@ export class RequestWeft {
       fields['tier'] = unit.tier;
     }
     if (excluded.length > 0) {
-      fields['excluded'] = excluded.slice(0, MAX_EXCLUDED).map((e) => ({ routed_unit: e.routed_unit_id, reason: e.reason }));
+      fields['excluded'] = excluded
+        .slice(0, MAX_EXCLUDED)
+        .map((e) => ({ routed_unit: e.routed_unit_id, reason: e.reason }));
     }
     this.push(this.route, 'route.selected', null, links, fields);
   }
@@ -120,8 +128,13 @@ export class RequestWeft {
     fields['spent_micros'] = Math.ceil(attempt.cost);
     fields['cost_is_upper_bound'] = attempt.cost_is_upper_bound;
     fields['latency_ms'] = Math.max(0, attempt.ended_at - attempt.started_at);
-    this.push(record_id, 'inference.attempt', this.route,
-      this.lastAttempt === null ? [] : [{ rel: 'retry_of', record_id: this.lastAttempt }], fields);
+    this.push(
+      record_id,
+      'inference.attempt',
+      this.route,
+      this.lastAttempt === null ? [] : [{ rel: 'retry_of', record_id: this.lastAttempt }],
+      fields,
+    );
     if (attempt.disposition.status === 'failed') {
       this.push(`${record_id}:error`, 'error', record_id, [], {
         code: attempt.disposition.failure.code,

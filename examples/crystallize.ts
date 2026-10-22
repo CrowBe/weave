@@ -102,7 +102,12 @@ const search = output('gap.search') as { status: string; informed_by: string | n
 const isolation = lifecycle.audit().isolation;
 const greens = results('green.prove').map((result) =>
   result.outcome.outcome === 'succeeded'
-    ? (result.outcome.output as { implementation_id?: string; proven: boolean; visible: { passed: number; failed: number }; held_out: { passed: number; failed: number } })
+    ? (result.outcome.output as {
+        implementation_id?: string;
+        proven: boolean;
+        visible: { passed: number; failed: number };
+        held_out: { passed: number; failed: number };
+      })
     : null,
 );
 const foldStart = started('report.fold')[0];
@@ -112,7 +117,9 @@ console.log('procedure          crystallize_and_report@1');
 console.log(`gap.search         ${search.status}`);
 console.log(`  informed_by      ${search.informed_by ?? 'none'}`);
 console.log(`  reason           ${search.reason}`);
-console.log(`corpus splits      visible ${state.crystallization.visible_ids.join(', ')}; held-out ids retained by the lifecycle`);
+console.log(
+  `corpus splits      visible ${state.crystallization.visible_ids.join(', ')}; held-out ids retained by the lifecycle`,
+);
 console.log(`red                demonstrated under isolation report ${isolation?.report_id ?? 'missing'}`);
 console.log(
   `  probe            filesystem ${isolation?.filesystem}, child_process ${isolation?.child_process}, credentials ${isolation?.credentials}, fetch ${isolation?.evaluated_fetch}`,
@@ -129,9 +136,13 @@ console.log(
 );
 console.log(`  evidence         ${state.crystallization.admission?.evidence_digest}`);
 console.log(`fold               ${fold?.fold}`);
-console.log(`  grant            ${foldStart?.grant?.operation}@${foldStart?.grant?.contract_rev} permissions ${JSON.stringify(foldStart?.grant?.permissions ?? [])}`);
+console.log(
+  `  grant            ${foldStart?.grant?.operation}@${foldStart?.grant?.contract_rev} permissions ${JSON.stringify(foldStart?.grant?.permissions ?? [])}`,
+);
 console.log(`  host invocation  ${host.invocations.some((invocation) => invocation.operation === 'report.fold')}`);
-console.log(`report             ${state.report?.report.entries.map((entry) => `${entry.source} rev ${entry.revision}`).join(', ')}`);
+console.log(
+  `report             ${state.report?.report.entries.map((entry) => `${entry.source} rev ${entry.revision}`).join(', ')}`,
+);
 console.log(`goal               ${state.goal.status}`);
 console.log(`held-out in views  ${author.views.some((view) => JSON.stringify(view).includes('held-digest-unique'))}`);
 console.log(`execute runs       ${lifecycle.audit().execute_runs}`);
@@ -147,7 +158,9 @@ if (!replayed.ok) {
   console.error('replay failed', replayed.failure.reason);
   process.exit(1);
 }
-console.log(`replay             ${replayed.state.goal?.status} fold ${replayed.state.crystallization.fold?.fold === fold?.fold} host invocations ${replayHost.invocations.length}`);
+console.log(
+  `replay             ${replayed.state.goal?.status} fold ${replayed.state.crystallization.fold?.fold === fold?.fold} host invocations ${replayHost.invocations.length}`,
+);
 
 async function drive(): Promise<void> {
   for (let step = 0; step < 50; step += 1) {
@@ -170,7 +183,9 @@ async function drive(): Promise<void> {
     for (const action_id of [...host.openActionIds()].sort()) {
       host.release(action_id);
     }
-    const running = Object.values(runtime.state().actions).filter((action) => action.state === 'running' || action.state === 'pending');
+    const running = Object.values(runtime.state().actions).filter(
+      (action) => action.state === 'running' || action.state === 'pending',
+    );
     if (running.length > 0) {
       await Promise.all(
         running.map(async (action) => {
@@ -185,7 +200,9 @@ async function drive(): Promise<void> {
     }
     await flush(8);
     const after = runtime.state();
-    const still = Object.values(after.actions).some((action) => action.state === 'running' || action.state === 'pending');
+    const still = Object.values(after.actions).some(
+      (action) => action.state === 'running' || action.state === 'pending',
+    );
     if (!still && host.openActionIds().length === 0 && after.crystallization.admission?.status !== 'requested') {
       return;
     }
@@ -239,7 +256,13 @@ function failingAuthor(): ExtensionAuthor {
   const fail = (): never => {
     throw new Error('author must not be invoked');
   };
-  return { implementation: 'unused', variants: [], proposeContract: fail, proposeCases: fail, proposeImplementation: fail };
+  return {
+    implementation: 'unused',
+    variants: [],
+    proposeContract: fail,
+    proposeCases: fail,
+    proposeImplementation: fail,
+  };
 }
 
 function failingLifecycle(): CapabilityLifecycle {

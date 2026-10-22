@@ -196,8 +196,16 @@ export class LoomWeft {
           break;
         }
         // Each accepted cancel request is its own record: an operator may repeat one.
-        this.send(seq, this.id(`thread:${action_id}:cancelled:${seq}`), 'thread.transition', action_id, null,
-          [{ rel: 'cancels', record_id: this.id(`thread:${action_id}:opened`) }], cite(), { transition: 'cancelled' });
+        this.send(
+          seq,
+          this.id(`thread:${action_id}:cancelled:${seq}`),
+          'thread.transition',
+          action_id,
+          null,
+          [{ rel: 'cancels', record_id: this.id(`thread:${action_id}:opened`) }],
+          cite(),
+          { transition: 'cancelled' },
+        );
         if (action.state === 'cancelled' && action.finished_at === seq) {
           this.transition(seq, action, 'cancelled');
         }
@@ -210,8 +218,16 @@ export class LoomWeft {
           break;
         }
         const transition = this.transition(seq, action, action.state);
-        this.send(seq, this.id(`thread:${action_id}:closed`), 'thread.transition', action_id, null,
-          [{ rel: 'caused_by', record_id: transition }], cite(), { transition: 'closed' });
+        this.send(
+          seq,
+          this.id(`thread:${action_id}:closed`),
+          'thread.transition',
+          action_id,
+          null,
+          [{ rel: 'caused_by', record_id: transition }],
+          cite(),
+          { transition: 'closed' },
+        );
         break;
       }
       case 'weights.recorded': {
@@ -238,8 +254,19 @@ export class LoomWeft {
         if (accepted && last) {
           fields['routed_unit'] = last.routed_unit_id;
         }
-        this.send(seq, this.id(`judgment:${recorded.request_id}`), 'judgment', null, null, [],
-          [{ source: 'observation', ref: `seq:${seq}` }, { source: 'inference_request', ref: recorded.request_id }], fields);
+        this.send(
+          seq,
+          this.id(`judgment:${recorded.request_id}`),
+          'judgment',
+          null,
+          null,
+          [],
+          [
+            { source: 'observation', ref: `seq:${seq}` },
+            { source: 'inference_request', ref: recorded.request_id },
+          ],
+          fields,
+        );
         break;
       }
       default:
@@ -259,31 +286,58 @@ export class LoomWeft {
     const action_id = started.action_id;
     const opened = this.id(`thread:${action_id}:opened`);
     const evidence = [{ source: 'observation', ref: `seq:${seq}` }];
-    this.send(seq, opened, 'thread.transition', action_id, this.cycleRecord, [],
-      [...evidence], { transition: 'opened' });
+    this.send(seq, opened, 'thread.transition', action_id, this.cycleRecord, [], [...evidence], {
+      transition: 'opened',
+    });
     if (candidate.dependencies.length > 0) {
-      this.send(seq, this.id(`thread:${action_id}:joined`), 'thread.transition', action_id, null,
+      this.send(
+        seq,
+        this.id(`thread:${action_id}:joined`),
+        'thread.transition',
+        action_id,
+        null,
         candidate.dependencies.map((dep) => ({ rel: 'joins', record_id: this.id(`thread:${dep}:closed`) })),
-        [...evidence], { transition: 'joined' });
+        [...evidence],
+        { transition: 'joined' },
+      );
     }
     const key = supersedeKey(started);
     const previous = this.latest.get(key);
     if (previous !== undefined && previous !== action_id) {
-      this.send(seq, this.id(`thread:${previous}:superseded`), 'thread.transition', previous, null,
-        [{ rel: 'supersedes', record_id: opened }], [...evidence], { transition: 'superseded' });
+      this.send(
+        seq,
+        this.id(`thread:${previous}:superseded`),
+        'thread.transition',
+        previous,
+        null,
+        [{ rel: 'supersedes', record_id: opened }],
+        [...evidence],
+        { transition: 'superseded' },
+      );
     }
     this.latest.set(key, action_id);
   }
 
   private transition(seq: Seq, action: ActionRecord, state: string): string {
     const record_id = this.id(`action:${action.action_id}:${state}`);
-    this.send(seq, record_id, 'action.transition', action.action_id, null, [],
-      [{ source: 'observation', ref: `seq:${seq}` }, { source: 'invocation', ref: action.invocation_id ?? action.action_id }], {
+    this.send(
+      seq,
+      record_id,
+      'action.transition',
+      action.action_id,
+      null,
+      [],
+      [
+        { source: 'observation', ref: `seq:${seq}` },
+        { source: 'invocation', ref: action.invocation_id ?? action.action_id },
+      ],
+      {
         action_ref: action.action_id,
         operation: action.operation,
         state,
         contract_rev: action.contract_rev,
-      });
+      },
+    );
     return record_id;
   }
 

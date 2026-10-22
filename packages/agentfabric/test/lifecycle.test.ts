@@ -51,7 +51,12 @@ function cases(): { visible: TestCase[]; heldOut: TestCase[] } {
     {
       id: 'vis-pair',
       split: 'visible',
-      input: { inspections: [{ source: 'source:beta', digest: 'b' }, { source: 'source:alpha', digest: 'a' }] },
+      input: {
+        inspections: [
+          { source: 'source:beta', digest: 'b' },
+          { source: 'source:alpha', digest: 'a' },
+        ],
+      },
       expected: { kind: 'output', output: { fold: 'fold|source:alpha=a|source:beta=b' } },
     },
     {
@@ -123,7 +128,13 @@ describe('AgentFabric crystallization lifecycle', () => {
       const life = established();
       const red = await life.demonstrateRed();
       assert.equal(red.ok, true);
-      const isolation = outputOf(red)['isolation'] as { supported: boolean; filesystem: string; child_process: string; credentials: string; held_out_mounted: boolean };
+      const isolation = outputOf(red)['isolation'] as {
+        supported: boolean;
+        filesystem: string;
+        child_process: string;
+        credentials: string;
+        held_out_mounted: boolean;
+      };
       assert.equal(isolation.supported, true);
       assert.equal(isolation.filesystem, 'blocked');
       assert.equal(isolation.child_process, 'blocked');

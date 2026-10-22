@@ -40,11 +40,20 @@ export function attemptRecords(runId: string, records: readonly JournalRecord[])
     const prior = previous.get(key);
     const { input_tokens, output_tokens } = r.result;
     const record: Attempt = {
-      schema: 'weft.record@1', trace_id: runId, record_id: r.call_id, emitter: EMITTER, sequence,
-      kind: 'inference.attempt', thread_id: null, parent_id: null,
-      links: prior === undefined ? [] : [{ rel: 'retry_of', record_id: prior }], evidence: [],
+      schema: 'weft.record@1',
+      trace_id: runId,
+      record_id: r.call_id,
+      emitter: EMITTER,
+      sequence,
+      kind: 'inference.attempt',
+      thread_id: null,
+      parent_id: null,
+      links: prior === undefined ? [] : [{ rel: 'retry_of', record_id: prior }],
+      evidence: [],
       fields: {
-        request_ref: r.question_digest, routed_unit: r.provider, attempt_no,
+        request_ref: r.question_digest,
+        routed_unit: r.provider,
+        attempt_no,
         disposition: r.result.status === 'ok' ? 'accepted' : 'failed',
         ...(input_tokens === undefined ? {} : { input_tokens }),
         ...(output_tokens === undefined ? {} : { output_tokens }),

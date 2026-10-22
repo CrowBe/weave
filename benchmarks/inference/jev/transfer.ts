@@ -19,7 +19,15 @@ import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Clock, EvaluationKind, EvaluationQuestion, InferenceGateway } from '@weave/gateway';
-import { createJevGateway, probeTerms, referenceProvenance, failureReason, type ReferenceProvenance, type Credentials, type RouteOptions } from './run.ts';
+import {
+  createJevGateway,
+  probeTerms,
+  referenceProvenance,
+  failureReason,
+  type ReferenceProvenance,
+  type Credentials,
+  type RouteOptions,
+} from './run.ts';
 
 export const KEV_HOME = process.env['WEAVE_KEV_HOME'] ?? join(homedir(), '.local/share/weave/kev');
 export const SUITE = join(KEV_HOME, 'src/evals/v4/transfer-v4');
@@ -273,21 +281,25 @@ export async function runSuiteRecord(
   const { kind, question } = toGatewayQuestion(asked);
   const keys = optionKeys(asked);
   const startedAt = clock.now();
-  const outcome = await gateway.evaluate({
-    request_id: `transfer:${record.id}:${record.questionId}:o${orderingIndex}`,
-    site: `transfer.${record.source}`,
-    role: 'working',
-    kind,
-    state: record.state as never,
-    questions: { [record.questionId]: question } as never,
-    terms: probeTerms(credentials, clock, options),
-  }, signal);
+  const outcome = await gateway.evaluate(
+    {
+      request_id: `transfer:${record.id}:${record.questionId}:o${orderingIndex}`,
+      site: `transfer.${record.source}`,
+      role: 'working',
+      kind,
+      state: record.state as never,
+      questions: { [record.questionId]: question } as never,
+      terms: probeTerms(credentials, clock, options),
+    },
+    signal,
+  );
   const latency = clock.now() - startedAt;
 
   let rateLimited = 0;
   let waited = 0;
   for (const attempt of outcome.attempts) {
-    if (attempt.disposition.status === 'failed' && attempt.disposition.failure.code === 'rate_limited') rateLimited += 1;
+    if (attempt.disposition.status === 'failed' && attempt.disposition.failure.code === 'rate_limited')
+      rateLimited += 1;
     waited += attempt.waited_ms ?? 0;
   }
   const base = {
@@ -344,9 +356,7 @@ export async function runSuiteRecord(
     predicted,
     correct: predicted === label,
     score_error: Math.abs(answer.score - label),
-    ...(answer.probabilities === undefined
-      ? {}
-      : { confidence: answer.probabilities[String(predicted)] ?? 0 }),
+    ...(answer.probabilities === undefined ? {} : { confidence: answer.probabilities[String(predicted)] ?? 0 }),
     routed_unit_id: outcome.routed_unit_id,
     ...(inputTokens === undefined ? {} : { input_tokens: inputTokens }),
   };

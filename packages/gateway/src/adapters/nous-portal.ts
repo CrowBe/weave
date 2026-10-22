@@ -169,7 +169,11 @@ export function nousPortalAdapter(options: NousPortalOptions): GenerationAdapter
     const expiry = PROMO_EXPIRIES.get(model);
     if (!promoModels || expiry === undefined || expired.has(model) || typeof now !== 'function') return false;
     let time: number;
-    try { time = now(); } catch { return false; }
+    try {
+      time = now();
+    } catch {
+      return false;
+    }
     if (!Number.isFinite(time)) return false;
     if (time >= expiry) {
       expired.add(model);
@@ -181,16 +185,25 @@ export function nousPortalAdapter(options: NousPortalOptions): GenerationAdapter
   async function lookup(model: string, signal: AbortSignal): Promise<CatalogueResult> {
     try {
       const response = await doFetch(`${baseURL}/models`, {
-        method: 'GET', headers: { authorization: `Bearer ${apiKey}` }, signal,
+        method: 'GET',
+        headers: { authorization: `Bearer ${apiKey}` },
+        signal,
       });
       if (!response.ok) {
         await response.body?.cancel().catch(() => {});
         const status = response.status;
-        if (status === 401 || status === 403) return { failure: failure('unauthorized', 'provider refused authentication', false) };
-        if (status === 429) return { failure: withDelay(failure('rate_limited', 'provider rate limit refused the catalogue price check', true), (name) => response.headers.get(name)) };
+        if (status === 401 || status === 403)
+          return { failure: failure('unauthorized', 'provider refused authentication', false) };
+        if (status === 429)
+          return {
+            failure: withDelay(
+              failure('rate_limited', 'provider rate limit refused the catalogue price check', true),
+              (name) => response.headers.get(name),
+            ),
+          };
         return { failure: CHECK_FAILED };
       }
-      const verdict = nousPortalCatalogueVerdict(await response.json() as unknown, model);
+      const verdict = nousPortalCatalogueVerdict((await response.json()) as unknown, model);
       return verdict === 'malformed' ? { failure: CHECK_FAILED } : { verdict };
     } catch {
       return { failure: CHECK_FAILED };
@@ -201,8 +214,14 @@ export function nousPortalAdapter(options: NousPortalOptions): GenerationAdapter
   async function checkCatalogue(model: string, signal: AbortSignal | undefined): Promise<ProviderFailure | undefined> {
     let check = checks.get(model);
     if (check === undefined) {
-      const created: CatalogueCheck = { controller: new AbortController(), result: Promise.resolve({ failure: CHECK_FAILED }), waiters: 0, settled: false, accepted: false };
-      created.result = lookup(model, created.controller.signal).then(result => {
+      const created: CatalogueCheck = {
+        controller: new AbortController(),
+        result: Promise.resolve({ failure: CHECK_FAILED }),
+        waiters: 0,
+        settled: false,
+        accepted: false,
+      };
+      created.result = lookup(model, created.controller.signal).then((result) => {
         created.settled = true;
         if (!('verdict' in result) || result.verdict !== 'free') {
           if (checks.get(model) === created) checks.delete(model);
@@ -241,17 +260,29 @@ export function nousPortalAdapter(options: NousPortalOptions): GenerationAdapter
   return {
     id: NOUS_PORTAL_ADAPTER,
     async execute(call: GenerationCall): Promise<GenerationProviderResult> {
-      const refuse = (result: ProviderFailure): GenerationProviderResult => ({ status: 'failed', failure: result, usage: ZERO_USAGE });
+      const refuse = (result: ProviderFailure): GenerationProviderResult => ({
+        status: 'failed',
+        failure: result,
+        usage: ZERO_USAGE,
+      });
       if (call.instructions.includes(contentKey) || call.prompt.includes(contentKey)) {
         return refuse(failure('invalid_request', 'request content contains the adapter credential', false));
       }
       const model = call.model;
       if (!allowlisted(model)) return refuse(NOT_ALLOWLISTED);
       // Route settings validation is adapter-agnostic; enforce this minimum here.
-      if (REASONING.has(model) && (!Number.isInteger(call.settings.max_output_tokens) ||
-          call.settings.max_output_tokens < NOUS_PORTAL_MIN_REASONING_OUTPUT_TOKENS)) {
-        return refuse(failure('invalid_request',
-          `settings.max_output_tokens must be an integer at least ${NOUS_PORTAL_MIN_REASONING_OUTPUT_TOKENS} for a mandatory-reasoning model`, false));
+      if (
+        REASONING.has(model) &&
+        (!Number.isInteger(call.settings.max_output_tokens) ||
+          call.settings.max_output_tokens < NOUS_PORTAL_MIN_REASONING_OUTPUT_TOKENS)
+      ) {
+        return refuse(
+          failure(
+            'invalid_request',
+            `settings.max_output_tokens must be an integer at least ${NOUS_PORTAL_MIN_REASONING_OUTPUT_TOKENS} for a mandatory-reasoning model`,
+            false,
+          ),
+        );
       }
       if (refused.has(model)) return refuse(PRICE_REFUSED);
       if (call.signal?.aborted) return refuse(abortFailure(call.signal));
@@ -282,9 +313,17 @@ export function nousPortalAdapter(options: NousPortalOptions): GenerationAdapter
           return { status: 'failed', failure: COST_REPORTED, usage };
         }
         if (result.text.length === 0) {
-          return { status: 'failed', failure: failure('malformed_response', result.finishReason === 'length'
-            ? 'output token cap exhausted before any text content'
-            : 'response carried no text content', false), usage };
+          return {
+            status: 'failed',
+            failure: failure(
+              'malformed_response',
+              result.finishReason === 'length'
+                ? 'output token cap exhausted before any text content'
+                : 'response carried no text content',
+              false,
+            ),
+            usage,
+          };
         }
         return {
           status: 'completed',
@@ -305,7 +344,11 @@ const PRICE_REFUSED = failure('invalid_request', 'model refused: a non-zero or u
 const NOT_LISTED = failure('unavailable', 'model is not listed in the live catalogue', true);
 const CHECK_FAILED = failure('unavailable', 'catalogue price check failed; no request sent', true);
 const NO_LONGER_SERVED_FREE = failure('unavailable', 'provider no longer serves this model free', true);
-const COST_REPORTED = failure('invalid_request', 'response reported a non-zero or non-numeric usage.cost; model refused from now on', false);
+const COST_REPORTED = failure(
+  'invalid_request',
+  'response reported a non-zero or non-numeric usage.cost; model refused from now on',
+  false,
+);
 
 /** A present `usage.cost` must be exactly the number zero. */
 function zeroOrAbsentCost(body: unknown): boolean {
@@ -321,10 +364,10 @@ const ABORTED = Symbol('aborted');
 function untilAborted<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T | typeof ABORTED> {
   if (signal === undefined) return promise;
   if (signal.aborted) return Promise.resolve(ABORTED);
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     const onAbort = () => resolve(ABORTED);
     signal.addEventListener('abort', onAbort, { once: true });
-    void promise.then(value => {
+    void promise.then((value) => {
       signal.removeEventListener('abort', onAbort);
       resolve(value);
     });
@@ -344,8 +387,9 @@ function withDelay(result: ProviderFailure, header: (name: string) => string | n
     const value = header(name);
     return secondsToMs(typeof value === 'string' ? value : null);
   };
-  const resets = [read('x-ratelimit-reset-requests'), read('x-ratelimit-reset-tokens')]
-    .filter((ms): ms is number => ms !== undefined);
+  const resets = [read('x-ratelimit-reset-requests'), read('x-ratelimit-reset-tokens')].filter(
+    (ms): ms is number => ms !== undefined,
+  );
   const delay = read('retry-after') ?? (resets.length === 0 ? undefined : Math.max(...resets));
   return delay === undefined ? result : { ...result, retry_after_ms: delay };
 }
@@ -356,7 +400,7 @@ function withDelay(result: ProviderFailure, header: (name: string) => string | n
  * relative delays, never the original error or its message.
  */
 function classify(error: unknown, signal: AbortSignal | undefined, modelChanged: () => void): ProviderFailure {
-  const record = typeof error === 'object' && error !== null ? error as Record<string, unknown> : {};
+  const record = typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : {};
   const name = typeof record['name'] === 'string' ? record['name'] : '';
   const reason = signal?.reason as unknown;
   const reasonName = reason instanceof Error ? reason.name : '';
@@ -368,19 +412,24 @@ function classify(error: unknown, signal: AbortSignal | undefined, modelChanged:
   const status = typeof record['statusCode'] === 'number' ? record['statusCode'] : undefined;
   const headers = record['responseHeaders'];
   const header = (key: string): string | undefined => {
-    const value = typeof headers === 'object' && headers !== null ? (headers as Record<string, unknown>)[key] : undefined;
+    const value =
+      typeof headers === 'object' && headers !== null ? (headers as Record<string, unknown>)[key] : undefined;
     return typeof value === 'string' ? value : undefined;
   };
   const body = typeof record['responseBody'] === 'string' ? record['responseBody'] : '';
-  if (status === 429) return withDelay(failure('rate_limited', 'provider rate limit refused the request', true), header);
+  if (status === 429)
+    return withDelay(failure('rate_limited', 'provider rate limit refused the request', true), header);
   if (status === 402 || status === 404 || NO_LONGER_FREE.test(body)) {
     modelChanged();
     return NO_LONGER_SERVED_FREE;
   }
-  if (status === 401 || status === 403) return withDelay(failure('unauthorized', 'provider refused authentication', false), header);
+  if (status === 401 || status === 403)
+    return withDelay(failure('unauthorized', 'provider refused authentication', false), header);
   if (status === 408) return withDelay(failure('timeout', 'provider request timed out', false), header);
-  if (status !== undefined && status >= 500) return withDelay(failure('unavailable', 'provider unavailable', true), header);
-  if (status !== undefined && status >= 400) return withDelay(failure('invalid_request', 'provider refused the request', false), header);
+  if (status !== undefined && status >= 500)
+    return withDelay(failure('unavailable', 'provider unavailable', true), header);
+  if (status !== undefined && status >= 400)
+    return withDelay(failure('invalid_request', 'provider refused the request', false), header);
   if (status !== undefined || name === 'AI_InvalidResponseDataError' || name === 'AI_NoOutputGeneratedError') {
     return failure('malformed_response', 'provider response was malformed', false);
   }

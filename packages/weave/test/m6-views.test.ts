@@ -68,10 +68,11 @@ describe('M6 catalogue slices', () => {
     assert.deepEqual(laterContent['catalogue_schema'], []);
     assert.equal(JSON.stringify(laterContent['catalogue_schema']).includes('ResourceId'), false);
     const laterSlice = later.manifest.slices.find((slice) => slice.name === 'catalogue_schema');
-    assert.deepEqual(
-      laterSlice?.omitted.map((item) => item.name).sort(),
-      ['report.assemble', 'source.inspect', 'text.normalize'],
-    );
+    assert.deepEqual(laterSlice?.omitted.map((item) => item.name).sort(), [
+      'report.assemble',
+      'source.inspect',
+      'text.normalize',
+    ]);
     assert.ok(laterSlice?.omitted.every((item) => item.reason === 'profile'));
 
     const dropped = renderFrameView(

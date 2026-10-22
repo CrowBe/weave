@@ -21,7 +21,7 @@ runtime observations are sent.
 
 Jev agreed with eight proposed labels. It chose `none` for a proposed
 post-fold `report.assemble` row. The request asked the operation to put the
-fold *into* the report, which `report.assemble`'s contract does not promise;
+fold _into_ the report, which `report.assemble`'s contract does not promise;
 the trace only makes assembly depend on the completed fold. The row remains in
 the audit and is excluded from training. This is a useful curation catch, not
 a model accuracy estimate.

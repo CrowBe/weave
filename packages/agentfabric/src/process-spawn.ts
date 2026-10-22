@@ -104,7 +104,7 @@ export async function runProcess(request: ProcessRunRequest): Promise<ProcessRun
 
   const timed = request.timer.sleep(request.timeout_ms, stop.signal).then(
     () => 'timeout' as const,
-    () => (request.signal.aborted ? 'cancelled' as const : 'stopped' as const),
+    () => (request.signal.aborted ? ('cancelled' as const) : ('stopped' as const)),
   );
   const winner = await Promise.race([
     exited.then((info) => ({ kind: 'exit' as const, info })),
@@ -130,7 +130,13 @@ export async function runProcess(request: ProcessRunRequest): Promise<ProcessRun
   }
 
   await terminate(child, closed, request.timer);
-  return failed(winner.kind === 'cancelled' ? 'cancelled' : 'timeout', stdout.value(), stderr.value(), started, request.clock);
+  return failed(
+    winner.kind === 'cancelled' ? 'cancelled' : 'timeout',
+    stdout.value(),
+    stderr.value(),
+    started,
+    request.clock,
+  );
 }
 
 const KILL_GRACE_MS = 30;
@@ -140,7 +146,13 @@ const DRAIN_MS = 100;
 async function ended(closed: Promise<void>, timer: ShellTimer): Promise<boolean> {
   const drain = new AbortController();
   try {
-    return await Promise.race([closed.then(() => true), timer.sleep(DRAIN_MS, drain.signal).then(() => false, () => false)]);
+    return await Promise.race([
+      closed.then(() => true),
+      timer.sleep(DRAIN_MS, drain.signal).then(
+        () => false,
+        () => false,
+      ),
+    ]);
   } finally {
     drain.abort();
   }

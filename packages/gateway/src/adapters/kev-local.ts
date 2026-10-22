@@ -24,9 +24,7 @@ export const KEV_LOCAL_ADAPTER = 'kev-local';
 export const KEV_LOCAL_DESTINATION = 'local';
 export const KEV_LOCAL_BASE_URL = 'http://127.0.0.1:8000';
 
-export type KevReady =
-  | { readonly status: 'ready' }
-  | { readonly status: 'failed'; readonly failure: ProviderFailure };
+export type KevReady = { readonly status: 'ready' } | { readonly status: 'failed'; readonly failure: ProviderFailure };
 
 /** External service lifecycle seam. Installation remains an operator concern. */
 export interface KevRuntime {
@@ -241,11 +239,8 @@ function errorMessage(error: unknown): string {
 
 function startUserUnit(unit: string, signal: AbortSignal | undefined): Promise<void> {
   return new Promise((resolve, reject) => {
-    execFile(
-      'systemctl',
-      ['--user', 'start', unit],
-      signal === undefined ? {} : { signal },
-      (error) => (error === null ? resolve() : reject(error)),
+    execFile('systemctl', ['--user', 'start', unit], signal === undefined ? {} : { signal }, (error) =>
+      error === null ? resolve() : reject(error),
     );
   });
 }

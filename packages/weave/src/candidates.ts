@@ -29,7 +29,12 @@ export const PROCEDURE_FRAME = 'frame_and_report@1' as const;
 export const PROCEDURE_CRYSTALLIZE = 'crystallize_and_report@1' as const;
 
 /** The control-core procedure union. A recorded composition is not a member. */
-export const PROCEDURE_IDS = [PROCEDURE, PROCEDURE_PUBLISH, PROCEDURE_FRAME, PROCEDURE_CRYSTALLIZE] as const satisfies readonly ProcedureId[];
+export const PROCEDURE_IDS = [
+  PROCEDURE,
+  PROCEDURE_PUBLISH,
+  PROCEDURE_FRAME,
+  PROCEDURE_CRYSTALLIZE,
+] as const satisfies readonly ProcedureId[];
 
 const PROCEDURE_UNION: Record<ProcedureId, true> = {
   'inspect_and_report@1': true,
@@ -122,48 +127,53 @@ export function formCandidates(state: State, describe: Describe, canonical: Cano
       return { candidates, unavailable, procedure };
     }
     formProposedInspects(state, proposal, describe, canonical, push, unavailable);
-    if (unavailable.includes('source.inspect') || !goal.sources.every((s) => state.inspections[s] && state.inspections[s]!.result.revision === state.sources[s]?.revision)) {
+    if (
+      unavailable.includes('source.inspect') ||
+      !goal.sources.every(
+        (s) => state.inspections[s] && state.inspections[s]!.result.revision === state.sources[s]?.revision,
+      )
+    ) {
       return { candidates, unavailable, procedure };
     }
     allInspected = true;
   } else {
-  for (const source of goal.sources) {
-    const current = state.sources[source];
-    const inspection = state.inspections[source];
-    if (current && inspection && inspection.result.revision === current.revision) {
-      continue;
+    for (const source of goal.sources) {
+      const current = state.sources[source];
+      const inspection = state.inspections[source];
+      if (current && inspection && inspection.result.revision === current.revision) {
+        continue;
+      }
+      allInspected = false;
+      if (!current) {
+        continue; // an unregistered source has no revision to bind a read set to
+      }
+      const contract = describe('source.inspect');
+      if (!contract) {
+        unavailable.push('source.inspect');
+        continue;
+      }
+      const inputs = { source };
+      const bound = bindSelectors(contract.effects, inputs);
+      const effects: ResourceEffect[] = bound.ok
+        ? bound.bound.map((e) => ({ resource: canonical(e.resource), mode: e.mode }))
+        : [];
+      push({
+        candidate_id: candidateId(contract.id, contract.revision, inputs),
+        operation: contract.id,
+        contract_rev: contract.revision,
+        inputs,
+        evidence: [goal.evidence, current.evidence],
+        read_set: [{ resource: source, revision: current.revision }],
+        dependencies: [],
+        effects,
+        resources: ONE_ACTION,
+        eligibility: inspectEligibility(source, goal.authority.read),
+        weight: null,
+      });
     }
-    allInspected = false;
-    if (!current) {
-      continue; // an unregistered source has no revision to bind a read set to
+    if (!allInspected) {
+      return { candidates, unavailable, procedure };
     }
-    const contract = describe('source.inspect');
-    if (!contract) {
-      unavailable.push('source.inspect');
-      continue;
-    }
-    const inputs = { source };
-    const bound = bindSelectors(contract.effects, inputs);
-    const effects: ResourceEffect[] = bound.ok
-      ? bound.bound.map((e) => ({ resource: canonical(e.resource), mode: e.mode }))
-      : [];
-    push({
-      candidate_id: candidateId(contract.id, contract.revision, inputs),
-      operation: contract.id,
-      contract_rev: contract.revision,
-      inputs,
-      evidence: [goal.evidence, current.evidence],
-      read_set: [{ resource: source, revision: current.revision }],
-      dependencies: [],
-      effects,
-      resources: ONE_ACTION,
-      eligibility: inspectEligibility(source, goal.authority.read),
-      weight: null,
-    });
-  }
-  if (!allInspected) {
-    return { candidates, unavailable, procedure };
-  }
   }
 
   const readSet: ResourceReadSetEntry[] = goal.sources.map((source) => ({
@@ -191,7 +201,9 @@ export function formCandidates(state: State, describe: Describe, canonical: Cano
     for (const source of goal.sources) {
       const inspection = state.inspections[source] as { result: InspectionResult; evidence: number };
       const normalized = state.normalized[source];
-      inspections.push(goal.composition && normalized ? { ...inspection.result, text: normalized.text } : inspection.result);
+      inspections.push(
+        goal.composition && normalized ? { ...inspection.result, text: normalized.text } : inspection.result,
+      );
       evidence.push(inspection.evidence);
       if (normalized) {
         evidence.push(normalized.evidence);
@@ -387,7 +399,9 @@ function completeCandidate(
 }
 
 function inspectEligibility(source: ResourceId, read: readonly ResourceId[]): Eligibility {
-  return read.includes(source) ? { status: 'allowed' } : { status: 'prohibited', reason: `no read authority for ${source}` };
+  return read.includes(source)
+    ? { status: 'allowed' }
+    : { status: 'prohibited', reason: `no read authority for ${source}` };
 }
 
 function publishEligibility(
@@ -415,7 +429,11 @@ export function bindingDigest(inputs: unknown, effects: readonly ResourceEffect[
   return digest({ inputs, effects });
 }
 
-export function matchingApproval(state: State, binding_digest: string, destination: ResourceId): ApprovalRecord | undefined {
+export function matchingApproval(
+  state: State,
+  binding_digest: string,
+  destination: ResourceId,
+): ApprovalRecord | undefined {
   return Object.values(state.approvals).find(
     (record) => record.request.binding_digest === binding_digest && record.request.destination === destination,
   );
@@ -482,7 +500,9 @@ export function successEvidencePresent(state: State): boolean {
         inspection &&
         fold.bound.some(
           (entry) =>
-            entry.source === source && entry.revision === inspection.result.revision && entry.digest === inspection.result.digest,
+            entry.source === source &&
+            entry.revision === inspection.result.revision &&
+            entry.digest === inspection.result.digest,
         )
       );
     });

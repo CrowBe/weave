@@ -42,11 +42,7 @@ import {
   VERCEL_AI_GATEWAY_DESTINATION,
   vercelAiGatewayEvaluator,
 } from '@weave/gateway/vercel-ai-gateway';
-import {
-  TYPESAFE_AI_ADAPTER,
-  TYPESAFE_AI_DESTINATION,
-  typesafeAiEvaluator,
-} from '@weave/gateway/typesafe-ai';
+import { TYPESAFE_AI_ADAPTER, TYPESAFE_AI_DESTINATION, typesafeAiEvaluator } from '@weave/gateway/typesafe-ai';
 
 function repoJson(name: string): unknown {
   return JSON.parse(readFileSync(new URL(`../${name}`, import.meta.url), 'utf8'));
@@ -72,7 +68,9 @@ const decision = loadDecision();
 const apiKey = process.env.AI_GATEWAY_API_KEY?.trim() || undefined;
 const typesafeKey = resolveTypesafeApiKey(process.env);
 if (!apiKey && !typesafeKey) {
-  console.error('Set TYPESAFE_API_KEY (preferred; TYPESAFE_AI_API_KEY is the legacy fallback) or AI_GATEWAY_API_KEY in .env.local (git-ignored) and rerun.');
+  console.error(
+    'Set TYPESAFE_API_KEY (preferred; TYPESAFE_AI_API_KEY is the legacy fallback) or AI_GATEWAY_API_KEY in .env.local (git-ignored) and rerun.',
+  );
   process.exit(1);
 }
 
@@ -100,15 +98,17 @@ function jevRoutes(kind: EvaluationKind): RoutedUnit[] {
     price: { input_per_mtok: 42_000, output_per_mtok: 0 },
   } as const;
 
-  const routes: RoutedUnit[] = apiKey ? [
-    {
-      ...shared,
-      routed_unit_id: `${kind}.candidate@vercel`,
-      adapter: VERCEL_AI_GATEWAY_ADAPTER,
-      model: 'typesafe-ai/jev',
-      destination: VERCEL_AI_GATEWAY_DESTINATION,
-    },
-  ] : [];
+  const routes: RoutedUnit[] = apiKey
+    ? [
+        {
+          ...shared,
+          routed_unit_id: `${kind}.candidate@vercel`,
+          adapter: VERCEL_AI_GATEWAY_ADAPTER,
+          model: 'typesafe-ai/jev',
+          destination: VERCEL_AI_GATEWAY_DESTINATION,
+        },
+      ]
+    : [];
 
   // The composition root decides whether the direct route exists at all.
   if (typesafeKey) {
@@ -150,10 +150,7 @@ const state = {
 const terms = {
   quality: 'baseline',
   // Permit only configured destinations; naming both permits the fallback.
-  destinations: [
-    ...(apiKey ? [VERCEL_AI_GATEWAY_DESTINATION] : []),
-    ...(typesafeKey ? [TYPESAFE_AI_DESTINATION] : []),
-  ],
+  destinations: [...(apiKey ? [VERCEL_AI_GATEWAY_DESTINATION] : []), ...(typesafeKey ? [TYPESAFE_AI_DESTINATION] : [])],
   max_context_tokens: 4_000,
   deadline: Date.now() + 60_000,
   // Worst case is 168 micros an attempt at this context size.

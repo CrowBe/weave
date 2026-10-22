@@ -54,10 +54,16 @@ function Occupant({
   if (node.component === 'project.index@1' && (presentation.kind === 'index' || presentation.kind === 'omitted')) {
     return <ProjectIndex presentation={presentation} theme={theme} onSelect={onSelect} />;
   }
-  if (node.component === 'conversation.thread@1' && (presentation.kind === 'observations' || presentation.kind === 'omitted')) {
+  if (
+    node.component === 'conversation.thread@1' &&
+    (presentation.kind === 'observations' || presentation.kind === 'omitted')
+  ) {
     return <ConversationThread presentation={presentation} theme={theme} />;
   }
-  if (node.component === 'approval.pending@1' && (presentation.kind === 'approval' || presentation.kind === 'omitted')) {
+  if (
+    node.component === 'approval.pending@1' &&
+    (presentation.kind === 'approval' || presentation.kind === 'omitted')
+  ) {
     return <ApprovalPending presentation={presentation} theme={theme} />;
   }
   return null;
@@ -75,7 +81,14 @@ function Segment({
   readonly children: string;
 }) {
   return (
-    <Button type="button" variant="segment" size="segment" aria-pressed={pressed} data-testid={testId} onClick={onClick}>
+    <Button
+      type="button"
+      variant="segment"
+      size="segment"
+      aria-pressed={pressed}
+      data-testid={testId}
+      onClick={onClick}
+    >
       {children}
     </Button>
   );
@@ -107,7 +120,10 @@ export function Host() {
     >
       <header className="col-span-full flex min-h-[var(--bar)] items-center gap-4 border-b border-[var(--hairline)] px-4 max-lg:order-1 xl:h-[var(--bar)]">
         <span className="flex min-w-0 flex-col justify-center leading-tight xl:flex-row xl:items-center xl:gap-4">
-          <span data-testid="project-name" className="text-[15px] leading-5 font-semibold tracking-[-0.01em] whitespace-nowrap">
+          <span
+            data-testid="project-name"
+            className="text-[15px] leading-5 font-semibold tracking-[-0.01em] whitespace-nowrap"
+          >
             {project}
           </span>
           <span className="flex gap-3 text-[11px] leading-4 xl:text-xs">
@@ -135,16 +151,32 @@ export function Host() {
           {JSON.stringify(tree.regions)}
         </span>
         <span className="ml-auto flex items-center gap-3">
-          <span className="flex min-h-7 items-center rounded-md border border-[var(--hairline)] bg-[var(--canvas)] p-[3px]" role="group" aria-label="Theme">
-            <Segment pressed={theme.id === THEME_DEFAULT.id} testId="theme-default" onClick={() => setSession((current) => changeTheme(current, THEME_DEFAULT.id))}>
+          <span
+            className="flex min-h-7 items-center rounded-md border border-[var(--hairline)] bg-[var(--canvas)] p-[3px]"
+            role="group"
+            aria-label="Theme"
+          >
+            <Segment
+              pressed={theme.id === THEME_DEFAULT.id}
+              testId="theme-default"
+              onClick={() => setSession((current) => changeTheme(current, THEME_DEFAULT.id))}
+            >
               Default
             </Segment>
-            <Segment pressed={theme.id === THEME_DAYLIGHT.id} testId="theme-daylight" onClick={() => setSession((current) => changeTheme(current, THEME_DAYLIGHT.id))}>
+            <Segment
+              pressed={theme.id === THEME_DAYLIGHT.id}
+              testId="theme-daylight"
+              onClick={() => setSession((current) => changeTheme(current, THEME_DAYLIGHT.id))}
+            >
               Daylight
             </Segment>
           </span>
           <span className="h-4 w-px bg-[var(--hairline)]" aria-hidden="true" />
-          <span className="flex min-h-7 items-center gap-1.5 rounded-md border border-dashed border-[var(--hairline)] bg-[var(--canvas)] px-1.5 py-[3px]" role="group" aria-label="Fixture">
+          <span
+            className="flex min-h-7 items-center gap-1.5 rounded-md border border-dashed border-[var(--hairline)] bg-[var(--canvas)] px-1.5 py-[3px]"
+            role="group"
+            aria-label="Fixture"
+          >
             <span className="text-[11px] leading-4" style={{ color: 'var(--text-muted)' }}>
               Fixture
             </span>
@@ -203,7 +235,11 @@ export function Host() {
           <span className="text-[12px] leading-4 font-medium">Drawer</span>
           <Occupant node={tree.regions['right.drawer']} view={view} session={session} theme={theme} onSelect={select} />
         </section>
-        <section id="cut-through" data-testid="region-cut-through" className="flex min-h-0 flex-1 flex-col overflow-auto px-[var(--pad)] py-[var(--gap)]">
+        <section
+          id="cut-through"
+          data-testid="region-cut-through"
+          className="flex min-h-0 flex-1 flex-col overflow-auto px-[var(--pad)] py-[var(--gap)]"
+        >
           <div className="mb-2 flex items-baseline justify-between">
             <h2 className="text-[12px] leading-4 font-medium">Cut-through</h2>
             <span className="text-[12px] leading-4 tabular-nums" style={{ color: 'var(--text-muted)' }}>

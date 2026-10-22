@@ -6,12 +6,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_assemble",
-      "c_inspect_beta",
-      "c_complete",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_assemble", "c_inspect_beta", "c_complete", "c_publish"],
     "state_chars": 800,
     "latency_ms": 16321,
     "status": "accepted",
@@ -74,12 +69,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_publish",
-      "c_complete",
-      "c_inspect_beta",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_publish", "c_complete", "c_inspect_beta", "c_assemble"],
     "state_chars": 800,
     "latency_ms": 15624,
     "status": "accepted",
@@ -142,12 +132,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_complete",
-      "c_inspect_beta",
-      "c_publish",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_complete", "c_inspect_beta", "c_publish", "c_assemble"],
     "state_chars": 800,
     "latency_ms": 15521,
     "status": "accepted",
@@ -210,12 +195,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_complete",
-      "c_publish",
-      "c_inspect_beta",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_complete", "c_publish", "c_inspect_beta", "c_assemble"],
     "state_chars": 800,
     "latency_ms": 15554,
     "status": "accepted",
@@ -278,11 +258,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_publish",
-      "c_approval",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_publish", "c_approval", "c_complete"],
     "state_chars": 740,
     "latency_ms": 12261,
     "status": "accepted",
@@ -340,11 +316,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_complete",
-      "c_approval",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_complete", "c_approval", "c_publish"],
     "state_chars": 740,
     "latency_ms": 12262,
     "status": "accepted",
@@ -402,11 +374,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_approval",
-      "c_complete",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_approval", "c_complete", "c_publish"],
     "state_chars": 740,
     "latency_ms": 12300,
     "status": "accepted",
@@ -464,11 +432,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_complete",
-      "c_publish",
-      "c_approval"
-    ],
+    "candidate_ids": ["c_complete", "c_publish", "c_approval"],
     "state_chars": 740,
     "latency_ms": 12277,
     "status": "accepted",
@@ -526,11 +490,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_clarify",
-    "candidate_ids": [
-      "c_assemble",
-      "c_clarify",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_assemble", "c_clarify", "c_complete"],
     "state_chars": 722,
     "latency_ms": 13094,
     "status": "accepted",
@@ -588,11 +548,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_clarify",
-    "candidate_ids": [
-      "c_complete",
-      "c_clarify",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_complete", "c_clarify", "c_assemble"],
     "state_chars": 722,
     "latency_ms": 13437,
     "status": "accepted",
@@ -650,11 +606,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_clarify",
-    "candidate_ids": [
-      "c_clarify",
-      "c_complete",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_clarify", "c_complete", "c_assemble"],
     "state_chars": 722,
     "latency_ms": 13202,
     "status": "accepted",
@@ -712,11 +664,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_clarify",
-    "candidate_ids": [
-      "c_complete",
-      "c_assemble",
-      "c_clarify"
-    ],
+    "candidate_ids": ["c_complete", "c_assemble", "c_clarify"],
     "state_chars": 722,
     "latency_ms": 13157,
     "status": "accepted",
@@ -774,11 +722,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_delete",
-      "c_approval",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_delete", "c_approval", "c_complete"],
     "state_chars": 643,
     "latency_ms": 11361,
     "status": "accepted",
@@ -836,11 +780,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_complete",
-      "c_approval",
-      "c_delete"
-    ],
+    "candidate_ids": ["c_complete", "c_approval", "c_delete"],
     "state_chars": 643,
     "latency_ms": 11333,
     "status": "accepted",
@@ -898,11 +838,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_approval",
-      "c_complete",
-      "c_delete"
-    ],
+    "candidate_ids": ["c_approval", "c_complete", "c_delete"],
     "state_chars": 643,
     "latency_ms": 11368,
     "status": "accepted",
@@ -960,11 +896,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_complete",
-      "c_delete",
-      "c_approval"
-    ],
+    "candidate_ids": ["c_complete", "c_delete", "c_approval"],
     "state_chars": 643,
     "latency_ms": 11412,
     "status": "accepted",
@@ -1022,11 +954,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_publish",
-      "c_complete",
-      "c_inspect_beta"
-    ],
+    "candidate_ids": ["c_publish", "c_complete", "c_inspect_beta"],
     "state_chars": 667,
     "latency_ms": 12128,
     "status": "accepted",
@@ -1084,11 +1012,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_inspect_beta",
-      "c_complete",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_inspect_beta", "c_complete", "c_publish"],
     "state_chars": 667,
     "latency_ms": 12266,
     "status": "accepted",
@@ -1146,11 +1070,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_complete",
-      "c_inspect_beta",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_complete", "c_inspect_beta", "c_publish"],
     "state_chars": 667,
     "latency_ms": 12719,
     "status": "accepted",
@@ -1208,11 +1128,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_inspect_beta",
-      "c_publish",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_inspect_beta", "c_publish", "c_complete"],
     "state_chars": 667,
     "latency_ms": 12652,
     "status": "accepted",
@@ -1270,11 +1186,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_assemble",
-      "c_complete",
-      "c_clarify"
-    ],
+    "candidate_ids": ["c_assemble", "c_complete", "c_clarify"],
     "state_chars": 638,
     "latency_ms": 12754,
     "status": "accepted",
@@ -1332,11 +1244,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_clarify",
-      "c_complete",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_clarify", "c_complete", "c_assemble"],
     "state_chars": 638,
     "latency_ms": 12269,
     "status": "accepted",
@@ -1394,11 +1302,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_complete",
-      "c_clarify",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_complete", "c_clarify", "c_assemble"],
     "state_chars": 638,
     "latency_ms": 12177,
     "status": "accepted",
@@ -1456,11 +1360,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_clarify",
-      "c_assemble",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_clarify", "c_assemble", "c_complete"],
     "state_chars": 638,
     "latency_ms": 12408,
     "status": "accepted",
@@ -1518,10 +1418,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_reuse",
-    "candidate_ids": [
-      "c_reuse",
-      "c_infer"
-    ],
+    "candidate_ids": ["c_reuse", "c_infer"],
     "state_chars": 717,
     "latency_ms": 11730,
     "status": "accepted",
@@ -1574,10 +1471,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_reuse",
-    "candidate_ids": [
-      "c_infer",
-      "c_reuse"
-    ],
+    "candidate_ids": ["c_infer", "c_reuse"],
     "state_chars": 717,
     "latency_ms": 11341,
     "status": "accepted",
@@ -1630,10 +1524,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_infer",
-    "candidate_ids": [
-      "c_reuse",
-      "c_infer"
-    ],
+    "candidate_ids": ["c_reuse", "c_infer"],
     "state_chars": 740,
     "latency_ms": 11643,
     "status": "accepted",
@@ -1686,10 +1577,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_infer",
-    "candidate_ids": [
-      "c_infer",
-      "c_reuse"
-    ],
+    "candidate_ids": ["c_infer", "c_reuse"],
     "state_chars": 740,
     "latency_ms": 11553,
     "status": "accepted",
@@ -1742,10 +1630,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_reuse",
-    "candidate_ids": [
-      "c_reuse",
-      "c_infer"
-    ],
+    "candidate_ids": ["c_reuse", "c_infer"],
     "state_chars": 692,
     "latency_ms": 11311,
     "status": "accepted",
@@ -1798,10 +1683,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_reuse",
-    "candidate_ids": [
-      "c_infer",
-      "c_reuse"
-    ],
+    "candidate_ids": ["c_infer", "c_reuse"],
     "state_chars": 692,
     "latency_ms": 11202,
     "status": "accepted",
@@ -1854,10 +1736,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_reuse",
-    "candidate_ids": [
-      "c_reuse",
-      "c_infer"
-    ],
+    "candidate_ids": ["c_reuse", "c_infer"],
     "state_chars": 694,
     "latency_ms": 11386,
     "status": "accepted",
@@ -1910,10 +1789,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_reuse",
-    "candidate_ids": [
-      "c_infer",
-      "c_reuse"
-    ],
+    "candidate_ids": ["c_infer", "c_reuse"],
     "state_chars": 694,
     "latency_ms": 11347,
     "status": "accepted",
@@ -1966,10 +1842,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_publish",
-    "candidate_ids": [
-      "c_publish",
-      "c_approval"
-    ],
+    "candidate_ids": ["c_publish", "c_approval"],
     "state_chars": 639,
     "latency_ms": 10226,
     "status": "accepted",
@@ -2022,10 +1895,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_publish",
-    "candidate_ids": [
-      "c_approval",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_approval", "c_publish"],
     "state_chars": 639,
     "latency_ms": 10157,
     "status": "accepted",
@@ -2078,10 +1948,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_publish",
-      "c_approval"
-    ],
+    "candidate_ids": ["c_publish", "c_approval"],
     "state_chars": 558,
     "latency_ms": 9356,
     "status": "accepted",
@@ -2134,10 +2001,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_approval",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_approval", "c_publish"],
     "state_chars": 558,
     "latency_ms": 9335,
     "status": "accepted",
@@ -2190,10 +2054,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_publish",
-    "candidate_ids": [
-      "c_publish",
-      "c_approval"
-    ],
+    "candidate_ids": ["c_publish", "c_approval"],
     "state_chars": 692,
     "latency_ms": 11022,
     "status": "accepted",
@@ -2246,10 +2107,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_publish",
-    "candidate_ids": [
-      "c_approval",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_approval", "c_publish"],
     "state_chars": 692,
     "latency_ms": 11164,
     "status": "accepted",
@@ -2302,10 +2160,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_publish",
-    "candidate_ids": [
-      "c_publish",
-      "c_approval"
-    ],
+    "candidate_ids": ["c_publish", "c_approval"],
     "state_chars": 692,
     "latency_ms": 10116,
     "status": "accepted",
@@ -2358,10 +2213,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_publish",
-    "candidate_ids": [
-      "c_approval",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_approval", "c_publish"],
     "state_chars": 692,
     "latency_ms": 7143,
     "status": "accepted",
@@ -2414,12 +2266,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_check",
-    "candidate_ids": [
-      "c_document",
-      "c_check",
-      "c_publish",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_document", "c_check", "c_publish", "c_complete"],
     "state_chars": 822,
     "latency_ms": 9153,
     "status": "accepted",
@@ -2482,12 +2329,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_check",
-    "candidate_ids": [
-      "c_complete",
-      "c_publish",
-      "c_check",
-      "c_document"
-    ],
+    "candidate_ids": ["c_complete", "c_publish", "c_check", "c_document"],
     "state_chars": 822,
     "latency_ms": 9172,
     "status": "accepted",
@@ -2550,12 +2392,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_check",
-    "candidate_ids": [
-      "c_publish",
-      "c_check",
-      "c_complete",
-      "c_document"
-    ],
+    "candidate_ids": ["c_publish", "c_check", "c_complete", "c_document"],
     "state_chars": 822,
     "latency_ms": 9250,
     "status": "accepted",
@@ -2618,12 +2455,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_check",
-    "candidate_ids": [
-      "c_publish",
-      "c_complete",
-      "c_check",
-      "c_document"
-    ],
+    "candidate_ids": ["c_publish", "c_complete", "c_check", "c_document"],
     "state_chars": 822,
     "latency_ms": 9368,
     "status": "accepted",
@@ -2686,11 +2518,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_inspect_alpha",
-    "candidate_ids": [
-      "c_rewrite",
-      "c_inspect_alpha",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_rewrite", "c_inspect_alpha", "c_complete"],
     "state_chars": 707,
     "latency_ms": 8505,
     "status": "accepted",
@@ -2748,11 +2576,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_inspect_alpha",
-    "candidate_ids": [
-      "c_complete",
-      "c_inspect_alpha",
-      "c_rewrite"
-    ],
+    "candidate_ids": ["c_complete", "c_inspect_alpha", "c_rewrite"],
     "state_chars": 707,
     "latency_ms": 9302,
     "status": "accepted",
@@ -2810,11 +2634,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_inspect_alpha",
-    "candidate_ids": [
-      "c_inspect_alpha",
-      "c_complete",
-      "c_rewrite"
-    ],
+    "candidate_ids": ["c_inspect_alpha", "c_complete", "c_rewrite"],
     "state_chars": 707,
     "latency_ms": 13472,
     "status": "accepted",
@@ -2872,11 +2692,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_inspect_alpha",
-    "candidate_ids": [
-      "c_complete",
-      "c_rewrite",
-      "c_inspect_alpha"
-    ],
+    "candidate_ids": ["c_complete", "c_rewrite", "c_inspect_alpha"],
     "state_chars": 707,
     "latency_ms": 13107,
     "status": "accepted",
@@ -2934,12 +2750,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_wait",
-    "candidate_ids": [
-      "c_wait",
-      "c_inspect_beta",
-      "c_assemble",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_wait", "c_inspect_beta", "c_assemble", "c_complete"],
     "state_chars": 877,
     "latency_ms": 15231,
     "status": "accepted",
@@ -3002,12 +2813,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_wait",
-    "candidate_ids": [
-      "c_complete",
-      "c_assemble",
-      "c_inspect_beta",
-      "c_wait"
-    ],
+    "candidate_ids": ["c_complete", "c_assemble", "c_inspect_beta", "c_wait"],
     "state_chars": 877,
     "latency_ms": 11148,
     "status": "accepted",
@@ -3070,12 +2876,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_wait",
-    "candidate_ids": [
-      "c_assemble",
-      "c_inspect_beta",
-      "c_complete",
-      "c_wait"
-    ],
+    "candidate_ids": ["c_assemble", "c_inspect_beta", "c_complete", "c_wait"],
     "state_chars": 877,
     "latency_ms": 10699,
     "status": "accepted",
@@ -3138,12 +2939,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_wait",
-    "candidate_ids": [
-      "c_assemble",
-      "c_complete",
-      "c_inspect_beta",
-      "c_wait"
-    ],
+    "candidate_ids": ["c_assemble", "c_complete", "c_inspect_beta", "c_wait"],
     "state_chars": 877,
     "latency_ms": 10696,
     "status": "accepted",
@@ -3206,12 +3002,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_wait",
-      "c_inspect_beta",
-      "c_assemble",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_wait", "c_inspect_beta", "c_assemble", "c_complete"],
     "state_chars": 790,
     "latency_ms": 9836,
     "status": "accepted",
@@ -3274,12 +3065,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_complete",
-      "c_assemble",
-      "c_inspect_beta",
-      "c_wait"
-    ],
+    "candidate_ids": ["c_complete", "c_assemble", "c_inspect_beta", "c_wait"],
     "state_chars": 790,
     "latency_ms": 10853,
     "status": "accepted",
@@ -3342,12 +3128,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_assemble",
-      "c_inspect_beta",
-      "c_complete",
-      "c_wait"
-    ],
+    "candidate_ids": ["c_assemble", "c_inspect_beta", "c_complete", "c_wait"],
     "state_chars": 790,
     "latency_ms": 15844,
     "status": "accepted",
@@ -3410,12 +3191,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_assemble",
-      "c_complete",
-      "c_inspect_beta",
-      "c_wait"
-    ],
+    "candidate_ids": ["c_assemble", "c_complete", "c_inspect_beta", "c_wait"],
     "state_chars": 790,
     "latency_ms": 15784,
     "status": "accepted",
@@ -3478,12 +3254,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_assemble",
-      "c_inspect_beta",
-      "c_complete",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_assemble", "c_inspect_beta", "c_complete", "c_publish"],
     "state_chars": 800,
     "latency_ms": 19389,
     "status": "accepted",
@@ -3579,12 +3350,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_publish",
-      "c_complete",
-      "c_inspect_beta",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_publish", "c_complete", "c_inspect_beta", "c_assemble"],
     "state_chars": 800,
     "latency_ms": 17578,
     "status": "accepted",
@@ -3680,12 +3446,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_complete",
-      "c_inspect_beta",
-      "c_publish",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_complete", "c_inspect_beta", "c_publish", "c_assemble"],
     "state_chars": 800,
     "latency_ms": 18878,
     "status": "accepted",
@@ -3781,12 +3542,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_complete",
-      "c_publish",
-      "c_inspect_beta",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_complete", "c_publish", "c_inspect_beta", "c_assemble"],
     "state_chars": 800,
     "latency_ms": 27866,
     "status": "accepted",
@@ -3882,11 +3638,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_publish",
-      "c_approval",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_publish", "c_approval", "c_complete"],
     "state_chars": 740,
     "latency_ms": 14050,
     "status": "accepted",
@@ -3967,11 +3719,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_complete",
-      "c_approval",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_complete", "c_approval", "c_publish"],
     "state_chars": 740,
     "latency_ms": 12965,
     "status": "accepted",
@@ -4052,11 +3800,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_approval",
-      "c_complete",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_approval", "c_complete", "c_publish"],
     "state_chars": 740,
     "latency_ms": 13021,
     "status": "accepted",
@@ -4137,11 +3881,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_complete",
-      "c_publish",
-      "c_approval"
-    ],
+    "candidate_ids": ["c_complete", "c_publish", "c_approval"],
     "state_chars": 740,
     "latency_ms": 13442,
     "status": "accepted",
@@ -4222,11 +3962,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_clarify",
-    "candidate_ids": [
-      "c_assemble",
-      "c_clarify",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_assemble", "c_clarify", "c_complete"],
     "state_chars": 722,
     "latency_ms": 20633,
     "status": "accepted",
@@ -4307,11 +4043,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_clarify",
-    "candidate_ids": [
-      "c_complete",
-      "c_clarify",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_complete", "c_clarify", "c_assemble"],
     "state_chars": 722,
     "latency_ms": 21192,
     "status": "accepted",
@@ -4392,11 +4124,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_clarify",
-    "candidate_ids": [
-      "c_clarify",
-      "c_complete",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_clarify", "c_complete", "c_assemble"],
     "state_chars": 722,
     "latency_ms": 14841,
     "status": "accepted",
@@ -4477,11 +4205,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_clarify",
-    "candidate_ids": [
-      "c_complete",
-      "c_assemble",
-      "c_clarify"
-    ],
+    "candidate_ids": ["c_complete", "c_assemble", "c_clarify"],
     "state_chars": 722,
     "latency_ms": 13499,
     "status": "accepted",
@@ -4562,11 +4286,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_delete",
-      "c_approval",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_delete", "c_approval", "c_complete"],
     "state_chars": 643,
     "latency_ms": 12611,
     "status": "accepted",
@@ -4647,11 +4367,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_complete",
-      "c_approval",
-      "c_delete"
-    ],
+    "candidate_ids": ["c_complete", "c_approval", "c_delete"],
     "state_chars": 643,
     "latency_ms": 13123,
     "status": "accepted",
@@ -4732,11 +4448,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_approval",
-      "c_complete",
-      "c_delete"
-    ],
+    "candidate_ids": ["c_approval", "c_complete", "c_delete"],
     "state_chars": 643,
     "latency_ms": 16720,
     "status": "accepted",
@@ -4817,11 +4529,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_complete",
-      "c_delete",
-      "c_approval"
-    ],
+    "candidate_ids": ["c_complete", "c_delete", "c_approval"],
     "state_chars": 643,
     "latency_ms": 20031,
     "status": "accepted",
@@ -4902,11 +4610,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_publish",
-      "c_complete",
-      "c_inspect_beta"
-    ],
+    "candidate_ids": ["c_publish", "c_complete", "c_inspect_beta"],
     "state_chars": 667,
     "latency_ms": 17624,
     "status": "accepted",
@@ -4987,11 +4691,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_inspect_beta",
-      "c_complete",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_inspect_beta", "c_complete", "c_publish"],
     "state_chars": 667,
     "latency_ms": 13213,
     "status": "accepted",
@@ -5072,11 +4772,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_complete",
-      "c_inspect_beta",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_complete", "c_inspect_beta", "c_publish"],
     "state_chars": 667,
     "latency_ms": 12943,
     "status": "accepted",
@@ -5157,11 +4853,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_inspect_beta",
-      "c_publish",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_inspect_beta", "c_publish", "c_complete"],
     "state_chars": 667,
     "latency_ms": 13044,
     "status": "accepted",
@@ -5242,11 +4934,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_assemble",
-      "c_complete",
-      "c_clarify"
-    ],
+    "candidate_ids": ["c_assemble", "c_complete", "c_clarify"],
     "state_chars": 638,
     "latency_ms": 15466,
     "status": "accepted",
@@ -5327,11 +5015,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_clarify",
-      "c_complete",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_clarify", "c_complete", "c_assemble"],
     "state_chars": 638,
     "latency_ms": 21352,
     "status": "accepted",
@@ -5412,11 +5096,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_complete",
-      "c_clarify",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_complete", "c_clarify", "c_assemble"],
     "state_chars": 638,
     "latency_ms": 18473,
     "status": "accepted",
@@ -5497,11 +5177,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_clarify",
-      "c_assemble",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_clarify", "c_assemble", "c_complete"],
     "state_chars": 638,
     "latency_ms": 13290,
     "status": "accepted",
@@ -5582,10 +5258,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_reuse",
-    "candidate_ids": [
-      "c_reuse",
-      "c_infer"
-    ],
+    "candidate_ids": ["c_reuse", "c_infer"],
     "state_chars": 717,
     "latency_ms": 10670,
     "status": "accepted",
@@ -5651,10 +5324,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_reuse",
-    "candidate_ids": [
-      "c_infer",
-      "c_reuse"
-    ],
+    "candidate_ids": ["c_infer", "c_reuse"],
     "state_chars": 717,
     "latency_ms": 10805,
     "status": "accepted",
@@ -5720,10 +5390,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_infer",
-    "candidate_ids": [
-      "c_reuse",
-      "c_infer"
-    ],
+    "candidate_ids": ["c_reuse", "c_infer"],
     "state_chars": 740,
     "latency_ms": 10736,
     "status": "accepted",
@@ -5789,10 +5456,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_infer",
-    "candidate_ids": [
-      "c_infer",
-      "c_reuse"
-    ],
+    "candidate_ids": ["c_infer", "c_reuse"],
     "state_chars": 740,
     "latency_ms": 11568,
     "status": "accepted",
@@ -5858,10 +5522,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_reuse",
-    "candidate_ids": [
-      "c_reuse",
-      "c_infer"
-    ],
+    "candidate_ids": ["c_reuse", "c_infer"],
     "state_chars": 692,
     "latency_ms": 17278,
     "status": "accepted",
@@ -5927,10 +5588,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_reuse",
-    "candidate_ids": [
-      "c_infer",
-      "c_reuse"
-    ],
+    "candidate_ids": ["c_infer", "c_reuse"],
     "state_chars": 692,
     "latency_ms": 17268,
     "status": "accepted",
@@ -5996,10 +5654,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_reuse",
-    "candidate_ids": [
-      "c_reuse",
-      "c_infer"
-    ],
+    "candidate_ids": ["c_reuse", "c_infer"],
     "state_chars": 694,
     "latency_ms": 12937,
     "status": "accepted",
@@ -6065,10 +5720,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_reuse",
-    "candidate_ids": [
-      "c_infer",
-      "c_reuse"
-    ],
+    "candidate_ids": ["c_infer", "c_reuse"],
     "state_chars": 694,
     "latency_ms": 10703,
     "status": "accepted",
@@ -6134,10 +5786,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_publish",
-    "candidate_ids": [
-      "c_publish",
-      "c_approval"
-    ],
+    "candidate_ids": ["c_publish", "c_approval"],
     "state_chars": 639,
     "latency_ms": 9710,
     "status": "accepted",
@@ -6203,10 +5852,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_publish",
-    "candidate_ids": [
-      "c_approval",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_approval", "c_publish"],
     "state_chars": 639,
     "latency_ms": 9747,
     "status": "accepted",
@@ -6272,10 +5918,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_publish",
-      "c_approval"
-    ],
+    "candidate_ids": ["c_publish", "c_approval"],
     "state_chars": 558,
     "latency_ms": 9283,
     "status": "accepted",
@@ -6341,10 +5984,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_approval",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_approval", "c_publish"],
     "state_chars": 558,
     "latency_ms": 10943,
     "status": "accepted",
@@ -6410,10 +6050,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_publish",
-    "candidate_ids": [
-      "c_publish",
-      "c_approval"
-    ],
+    "candidate_ids": ["c_publish", "c_approval"],
     "state_chars": 692,
     "latency_ms": 16777,
     "status": "accepted",
@@ -6479,10 +6116,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_publish",
-    "candidate_ids": [
-      "c_approval",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_approval", "c_publish"],
     "state_chars": 692,
     "latency_ms": 15793,
     "status": "accepted",
@@ -6548,10 +6182,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_publish",
-    "candidate_ids": [
-      "c_publish",
-      "c_approval"
-    ],
+    "candidate_ids": ["c_publish", "c_approval"],
     "state_chars": 692,
     "latency_ms": 11296,
     "status": "accepted",
@@ -6617,10 +6248,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_publish",
-    "candidate_ids": [
-      "c_approval",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_approval", "c_publish"],
     "state_chars": 692,
     "latency_ms": 10230,
     "status": "accepted",
@@ -6686,12 +6314,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_check",
-    "candidate_ids": [
-      "c_document",
-      "c_check",
-      "c_publish",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_document", "c_check", "c_publish", "c_complete"],
     "state_chars": 822,
     "latency_ms": 16681,
     "status": "accepted",
@@ -6787,12 +6410,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_check",
-    "candidate_ids": [
-      "c_complete",
-      "c_publish",
-      "c_check",
-      "c_document"
-    ],
+    "candidate_ids": ["c_complete", "c_publish", "c_check", "c_document"],
     "state_chars": 822,
     "latency_ms": 17628,
     "status": "accepted",
@@ -6888,12 +6506,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_check",
-    "candidate_ids": [
-      "c_publish",
-      "c_check",
-      "c_complete",
-      "c_document"
-    ],
+    "candidate_ids": ["c_publish", "c_check", "c_complete", "c_document"],
     "state_chars": 822,
     "latency_ms": 26498,
     "status": "accepted",
@@ -6989,12 +6602,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_check",
-    "candidate_ids": [
-      "c_publish",
-      "c_complete",
-      "c_check",
-      "c_document"
-    ],
+    "candidate_ids": ["c_publish", "c_complete", "c_check", "c_document"],
     "state_chars": 822,
     "latency_ms": 20519,
     "status": "accepted",
@@ -7090,11 +6698,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_inspect_alpha",
-    "candidate_ids": [
-      "c_rewrite",
-      "c_inspect_alpha",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_rewrite", "c_inspect_alpha", "c_complete"],
     "state_chars": 707,
     "latency_ms": 13196,
     "status": "accepted",
@@ -7175,11 +6779,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_inspect_alpha",
-    "candidate_ids": [
-      "c_complete",
-      "c_inspect_alpha",
-      "c_rewrite"
-    ],
+    "candidate_ids": ["c_complete", "c_inspect_alpha", "c_rewrite"],
     "state_chars": 707,
     "latency_ms": 13253,
     "status": "accepted",
@@ -7260,11 +6860,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_inspect_alpha",
-    "candidate_ids": [
-      "c_inspect_alpha",
-      "c_complete",
-      "c_rewrite"
-    ],
+    "candidate_ids": ["c_inspect_alpha", "c_complete", "c_rewrite"],
     "state_chars": 707,
     "latency_ms": 14613,
     "status": "accepted",
@@ -7345,11 +6941,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_inspect_alpha",
-    "candidate_ids": [
-      "c_complete",
-      "c_rewrite",
-      "c_inspect_alpha"
-    ],
+    "candidate_ids": ["c_complete", "c_rewrite", "c_inspect_alpha"],
     "state_chars": 707,
     "latency_ms": 21667,
     "status": "accepted",
@@ -7430,12 +7022,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_wait",
-    "candidate_ids": [
-      "c_wait",
-      "c_inspect_beta",
-      "c_assemble",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_wait", "c_inspect_beta", "c_assemble", "c_complete"],
     "state_chars": 877,
     "latency_ms": 25078,
     "status": "accepted",
@@ -7531,12 +7118,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_wait",
-    "candidate_ids": [
-      "c_complete",
-      "c_assemble",
-      "c_inspect_beta",
-      "c_wait"
-    ],
+    "candidate_ids": ["c_complete", "c_assemble", "c_inspect_beta", "c_wait"],
     "state_chars": 877,
     "latency_ms": 18025,
     "status": "accepted",
@@ -7632,12 +7214,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_wait",
-    "candidate_ids": [
-      "c_assemble",
-      "c_inspect_beta",
-      "c_complete",
-      "c_wait"
-    ],
+    "candidate_ids": ["c_assemble", "c_inspect_beta", "c_complete", "c_wait"],
     "state_chars": 877,
     "latency_ms": 18038,
     "status": "accepted",
@@ -7733,12 +7310,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_wait",
-    "candidate_ids": [
-      "c_assemble",
-      "c_complete",
-      "c_inspect_beta",
-      "c_wait"
-    ],
+    "candidate_ids": ["c_assemble", "c_complete", "c_inspect_beta", "c_wait"],
     "state_chars": 877,
     "latency_ms": 23378,
     "status": "accepted",
@@ -7834,12 +7406,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_wait",
-      "c_inspect_beta",
-      "c_assemble",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_wait", "c_inspect_beta", "c_assemble", "c_complete"],
     "state_chars": 790,
     "latency_ms": 28094,
     "status": "accepted",
@@ -7935,12 +7502,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_complete",
-      "c_assemble",
-      "c_inspect_beta",
-      "c_wait"
-    ],
+    "candidate_ids": ["c_complete", "c_assemble", "c_inspect_beta", "c_wait"],
     "state_chars": 790,
     "latency_ms": 19905,
     "status": "accepted",
@@ -8036,12 +7598,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_assemble",
-      "c_inspect_beta",
-      "c_complete",
-      "c_wait"
-    ],
+    "candidate_ids": ["c_assemble", "c_inspect_beta", "c_complete", "c_wait"],
     "state_chars": 790,
     "latency_ms": 17376,
     "status": "accepted",
@@ -8137,12 +7694,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_assemble",
-      "c_complete",
-      "c_inspect_beta",
-      "c_wait"
-    ],
+    "candidate_ids": ["c_assemble", "c_complete", "c_inspect_beta", "c_wait"],
     "state_chars": 790,
     "latency_ms": 18190,
     "status": "accepted",
@@ -8238,12 +7790,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_assemble",
-      "c_inspect_beta",
-      "c_complete",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_assemble", "c_inspect_beta", "c_complete", "c_publish"],
     "state_chars": 800,
     "latency_ms": 29604,
     "status": "accepted",
@@ -8309,12 +7856,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_publish",
-      "c_complete",
-      "c_inspect_beta",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_publish", "c_complete", "c_inspect_beta", "c_assemble"],
     "state_chars": 800,
     "latency_ms": 21431,
     "status": "accepted",
@@ -8380,12 +7922,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_complete",
-      "c_inspect_beta",
-      "c_publish",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_complete", "c_inspect_beta", "c_publish", "c_assemble"],
     "state_chars": 800,
     "latency_ms": 18625,
     "status": "accepted",
@@ -8451,12 +7988,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_complete",
-      "c_publish",
-      "c_inspect_beta",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_complete", "c_publish", "c_inspect_beta", "c_assemble"],
     "state_chars": 800,
     "latency_ms": 20630,
     "status": "accepted",
@@ -8522,11 +8054,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_publish",
-      "c_approval",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_publish", "c_approval", "c_complete"],
     "state_chars": 740,
     "latency_ms": 23448,
     "status": "accepted",
@@ -8584,11 +8112,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_complete",
-      "c_approval",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_complete", "c_approval", "c_publish"],
     "state_chars": 740,
     "latency_ms": 19704,
     "status": "accepted",
@@ -8646,11 +8170,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_approval",
-      "c_complete",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_approval", "c_complete", "c_publish"],
     "state_chars": 740,
     "latency_ms": 14267,
     "status": "accepted",
@@ -8708,11 +8228,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_complete",
-      "c_publish",
-      "c_approval"
-    ],
+    "candidate_ids": ["c_complete", "c_publish", "c_approval"],
     "state_chars": 740,
     "latency_ms": 14538,
     "status": "accepted",
@@ -8770,11 +8286,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_clarify",
-    "candidate_ids": [
-      "c_assemble",
-      "c_clarify",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_assemble", "c_clarify", "c_complete"],
     "state_chars": 722,
     "latency_ms": 15744,
     "status": "accepted",
@@ -8832,11 +8344,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_clarify",
-    "candidate_ids": [
-      "c_complete",
-      "c_clarify",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_complete", "c_clarify", "c_assemble"],
     "state_chars": 722,
     "latency_ms": 23699,
     "status": "accepted",
@@ -8894,11 +8402,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_clarify",
-    "candidate_ids": [
-      "c_clarify",
-      "c_complete",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_clarify", "c_complete", "c_assemble"],
     "state_chars": 722,
     "latency_ms": 21247,
     "status": "accepted",
@@ -8956,11 +8460,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_clarify",
-    "candidate_ids": [
-      "c_complete",
-      "c_assemble",
-      "c_clarify"
-    ],
+    "candidate_ids": ["c_complete", "c_assemble", "c_clarify"],
     "state_chars": 722,
     "latency_ms": 14935,
     "status": "accepted",
@@ -9018,11 +8518,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_delete",
-      "c_approval",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_delete", "c_approval", "c_complete"],
     "state_chars": 643,
     "latency_ms": 13181,
     "status": "accepted",
@@ -9080,11 +8576,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_complete",
-      "c_approval",
-      "c_delete"
-    ],
+    "candidate_ids": ["c_complete", "c_approval", "c_delete"],
     "state_chars": 643,
     "latency_ms": 13019,
     "status": "accepted",
@@ -9142,11 +8634,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_approval",
-      "c_complete",
-      "c_delete"
-    ],
+    "candidate_ids": ["c_approval", "c_complete", "c_delete"],
     "state_chars": 643,
     "latency_ms": 15754,
     "status": "accepted",
@@ -9204,11 +8692,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_complete",
-      "c_delete",
-      "c_approval"
-    ],
+    "candidate_ids": ["c_complete", "c_delete", "c_approval"],
     "state_chars": 643,
     "latency_ms": 21194,
     "status": "accepted",
@@ -9266,11 +8750,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_publish",
-      "c_complete",
-      "c_inspect_beta"
-    ],
+    "candidate_ids": ["c_publish", "c_complete", "c_inspect_beta"],
     "state_chars": 667,
     "latency_ms": 21229,
     "status": "accepted",
@@ -9328,11 +8808,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_inspect_beta",
-      "c_complete",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_inspect_beta", "c_complete", "c_publish"],
     "state_chars": 667,
     "latency_ms": 14695,
     "status": "accepted",
@@ -9390,11 +8866,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_complete",
-      "c_inspect_beta",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_complete", "c_inspect_beta", "c_publish"],
     "state_chars": 667,
     "latency_ms": 14138,
     "status": "accepted",
@@ -9452,11 +8924,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_inspect_beta",
-      "c_publish",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_inspect_beta", "c_publish", "c_complete"],
     "state_chars": 667,
     "latency_ms": 14419,
     "status": "accepted",
@@ -9514,11 +8982,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_assemble",
-      "c_complete",
-      "c_clarify"
-    ],
+    "candidate_ids": ["c_assemble", "c_complete", "c_clarify"],
     "state_chars": 638,
     "latency_ms": 19726,
     "status": "accepted",
@@ -9576,11 +9040,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_clarify",
-      "c_complete",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_clarify", "c_complete", "c_assemble"],
     "state_chars": 638,
     "latency_ms": 21677,
     "status": "accepted",
@@ -9638,11 +9098,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_complete",
-      "c_clarify",
-      "c_assemble"
-    ],
+    "candidate_ids": ["c_complete", "c_clarify", "c_assemble"],
     "state_chars": 638,
     "latency_ms": 15768,
     "status": "accepted",
@@ -9700,11 +9156,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_complete",
-    "candidate_ids": [
-      "c_clarify",
-      "c_assemble",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_clarify", "c_assemble", "c_complete"],
     "state_chars": 638,
     "latency_ms": 13555,
     "status": "accepted",
@@ -9762,10 +9214,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_reuse",
-    "candidate_ids": [
-      "c_reuse",
-      "c_infer"
-    ],
+    "candidate_ids": ["c_reuse", "c_infer"],
     "state_chars": 717,
     "latency_ms": 10955,
     "status": "accepted",
@@ -9815,10 +9264,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_reuse",
-    "candidate_ids": [
-      "c_infer",
-      "c_reuse"
-    ],
+    "candidate_ids": ["c_infer", "c_reuse"],
     "state_chars": 717,
     "latency_ms": 10999,
     "status": "accepted",
@@ -9868,10 +9314,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_infer",
-    "candidate_ids": [
-      "c_reuse",
-      "c_infer"
-    ],
+    "candidate_ids": ["c_reuse", "c_infer"],
     "state_chars": 740,
     "latency_ms": 14086,
     "status": "accepted",
@@ -9921,10 +9364,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_infer",
-    "candidate_ids": [
-      "c_infer",
-      "c_reuse"
-    ],
+    "candidate_ids": ["c_infer", "c_reuse"],
     "state_chars": 740,
     "latency_ms": 18040,
     "status": "accepted",
@@ -9974,10 +9414,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_reuse",
-    "candidate_ids": [
-      "c_reuse",
-      "c_infer"
-    ],
+    "candidate_ids": ["c_reuse", "c_infer"],
     "state_chars": 692,
     "latency_ms": 17506,
     "status": "accepted",
@@ -10027,10 +9464,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_reuse",
-    "candidate_ids": [
-      "c_infer",
-      "c_reuse"
-    ],
+    "candidate_ids": ["c_infer", "c_reuse"],
     "state_chars": 692,
     "latency_ms": 12733,
     "status": "accepted",
@@ -10080,10 +9514,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_reuse",
-    "candidate_ids": [
-      "c_reuse",
-      "c_infer"
-    ],
+    "candidate_ids": ["c_reuse", "c_infer"],
     "state_chars": 694,
     "latency_ms": 10879,
     "status": "accepted",
@@ -10133,10 +9564,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_reuse",
-    "candidate_ids": [
-      "c_infer",
-      "c_reuse"
-    ],
+    "candidate_ids": ["c_infer", "c_reuse"],
     "state_chars": 694,
     "latency_ms": 10906,
     "status": "accepted",
@@ -10186,10 +9614,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_publish",
-    "candidate_ids": [
-      "c_publish",
-      "c_approval"
-    ],
+    "candidate_ids": ["c_publish", "c_approval"],
     "state_chars": 639,
     "latency_ms": 10269,
     "status": "accepted",
@@ -10239,10 +9664,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_publish",
-    "candidate_ids": [
-      "c_approval",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_approval", "c_publish"],
     "state_chars": 639,
     "latency_ms": 10257,
     "status": "accepted",
@@ -10292,10 +9714,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_publish",
-      "c_approval"
-    ],
+    "candidate_ids": ["c_publish", "c_approval"],
     "state_chars": 558,
     "latency_ms": 13216,
     "status": "accepted",
@@ -10345,10 +9764,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_approval",
-    "candidate_ids": [
-      "c_approval",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_approval", "c_publish"],
     "state_chars": 558,
     "latency_ms": 15484,
     "status": "accepted",
@@ -10398,10 +9814,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_publish",
-    "candidate_ids": [
-      "c_publish",
-      "c_approval"
-    ],
+    "candidate_ids": ["c_publish", "c_approval"],
     "state_chars": 692,
     "latency_ms": 15903,
     "status": "accepted",
@@ -10451,10 +9864,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_publish",
-    "candidate_ids": [
-      "c_approval",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_approval", "c_publish"],
     "state_chars": 692,
     "latency_ms": 11445,
     "status": "accepted",
@@ -10504,10 +9914,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_publish",
-    "candidate_ids": [
-      "c_publish",
-      "c_approval"
-    ],
+    "candidate_ids": ["c_publish", "c_approval"],
     "state_chars": 692,
     "latency_ms": 10329,
     "status": "accepted",
@@ -10557,10 +9964,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_publish",
-    "candidate_ids": [
-      "c_approval",
-      "c_publish"
-    ],
+    "candidate_ids": ["c_approval", "c_publish"],
     "state_chars": 692,
     "latency_ms": 10366,
     "status": "accepted",
@@ -10610,12 +10014,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_check",
-    "candidate_ids": [
-      "c_document",
-      "c_check",
-      "c_publish",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_document", "c_check", "c_publish", "c_complete"],
     "state_chars": 822,
     "latency_ms": 18403,
     "status": "accepted",
@@ -10681,12 +10080,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_check",
-    "candidate_ids": [
-      "c_complete",
-      "c_publish",
-      "c_check",
-      "c_document"
-    ],
+    "candidate_ids": ["c_complete", "c_publish", "c_check", "c_document"],
     "state_chars": 822,
     "latency_ms": 28111,
     "status": "accepted",
@@ -10752,12 +10146,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_check",
-    "candidate_ids": [
-      "c_publish",
-      "c_check",
-      "c_complete",
-      "c_document"
-    ],
+    "candidate_ids": ["c_publish", "c_check", "c_complete", "c_document"],
     "state_chars": 822,
     "latency_ms": 24550,
     "status": "accepted",
@@ -10823,12 +10212,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_check",
-    "candidate_ids": [
-      "c_publish",
-      "c_complete",
-      "c_check",
-      "c_document"
-    ],
+    "candidate_ids": ["c_publish", "c_complete", "c_check", "c_document"],
     "state_chars": 822,
     "latency_ms": 17726,
     "status": "accepted",
@@ -10894,11 +10278,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_inspect_alpha",
-    "candidate_ids": [
-      "c_rewrite",
-      "c_inspect_alpha",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_rewrite", "c_inspect_alpha", "c_complete"],
     "state_chars": 707,
     "latency_ms": 14304,
     "status": "accepted",
@@ -10956,11 +10336,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_inspect_alpha",
-    "candidate_ids": [
-      "c_complete",
-      "c_inspect_alpha",
-      "c_rewrite"
-    ],
+    "candidate_ids": ["c_complete", "c_inspect_alpha", "c_rewrite"],
     "state_chars": 707,
     "latency_ms": 17217,
     "status": "accepted",
@@ -11018,11 +10394,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_inspect_alpha",
-    "candidate_ids": [
-      "c_inspect_alpha",
-      "c_complete",
-      "c_rewrite"
-    ],
+    "candidate_ids": ["c_inspect_alpha", "c_complete", "c_rewrite"],
     "state_chars": 707,
     "latency_ms": 23490,
     "status": "accepted",
@@ -11080,11 +10452,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_inspect_alpha",
-    "candidate_ids": [
-      "c_complete",
-      "c_rewrite",
-      "c_inspect_alpha"
-    ],
+    "candidate_ids": ["c_complete", "c_rewrite", "c_inspect_alpha"],
     "state_chars": 707,
     "latency_ms": 20572,
     "status": "accepted",
@@ -11142,12 +10510,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_wait",
-    "candidate_ids": [
-      "c_wait",
-      "c_inspect_beta",
-      "c_assemble",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_wait", "c_inspect_beta", "c_assemble", "c_complete"],
     "state_chars": 877,
     "latency_ms": 19598,
     "status": "accepted",
@@ -11213,12 +10576,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_wait",
-    "candidate_ids": [
-      "c_complete",
-      "c_assemble",
-      "c_inspect_beta",
-      "c_wait"
-    ],
+    "candidate_ids": ["c_complete", "c_assemble", "c_inspect_beta", "c_wait"],
     "state_chars": 877,
     "latency_ms": 19311,
     "status": "accepted",
@@ -11284,12 +10642,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_wait",
-    "candidate_ids": [
-      "c_assemble",
-      "c_inspect_beta",
-      "c_complete",
-      "c_wait"
-    ],
+    "candidate_ids": ["c_assemble", "c_inspect_beta", "c_complete", "c_wait"],
     "state_chars": 877,
     "latency_ms": 24474,
     "status": "accepted",
@@ -11355,12 +10708,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_wait",
-    "candidate_ids": [
-      "c_assemble",
-      "c_complete",
-      "c_inspect_beta",
-      "c_wait"
-    ],
+    "candidate_ids": ["c_assemble", "c_complete", "c_inspect_beta", "c_wait"],
     "state_chars": 877,
     "latency_ms": 30112,
     "status": "accepted",
@@ -11426,12 +10774,7 @@
     "repeat": 0,
     "ordering_index": 0,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_wait",
-      "c_inspect_beta",
-      "c_assemble",
-      "c_complete"
-    ],
+    "candidate_ids": ["c_wait", "c_inspect_beta", "c_assemble", "c_complete"],
     "state_chars": 790,
     "latency_ms": 20073,
     "status": "accepted",
@@ -11497,12 +10840,7 @@
     "repeat": 0,
     "ordering_index": 1,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_complete",
-      "c_assemble",
-      "c_inspect_beta",
-      "c_wait"
-    ],
+    "candidate_ids": ["c_complete", "c_assemble", "c_inspect_beta", "c_wait"],
     "state_chars": 790,
     "latency_ms": 18306,
     "status": "accepted",
@@ -11568,12 +10906,7 @@
     "repeat": 0,
     "ordering_index": 2,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_assemble",
-      "c_inspect_beta",
-      "c_complete",
-      "c_wait"
-    ],
+    "candidate_ids": ["c_assemble", "c_inspect_beta", "c_complete", "c_wait"],
     "state_chars": 790,
     "latency_ms": 24278,
     "status": "accepted",
@@ -11639,12 +10972,7 @@
     "repeat": 0,
     "ordering_index": 3,
     "label": "c_inspect_beta",
-    "candidate_ids": [
-      "c_assemble",
-      "c_complete",
-      "c_inspect_beta",
-      "c_wait"
-    ],
+    "candidate_ids": ["c_assemble", "c_complete", "c_inspect_beta", "c_wait"],
     "state_chars": 790,
     "latency_ms": 28209,
     "status": "accepted",

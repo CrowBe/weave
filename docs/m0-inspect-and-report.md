@@ -34,11 +34,11 @@ structural checks live under `checks/`. `npm run verify` runs both.
 Three in-memory text sources exist in the fixture environment. Each has a
 canonical `ResourceId` and a monotonically increasing `revision`.
 
-| ResourceId | Initial revision | Content |
-| --- | --- | --- |
-| `source:alpha` | 1 | three lines of text |
-| `source:beta` | 1 | five lines of text |
-| `source:gamma` | 1 | one line of text |
+| ResourceId     | Initial revision | Content             |
+| -------------- | ---------------- | ------------------- |
+| `source:alpha` | 1                | three lines of text |
+| `source:beta`  | 1                | five lines of text  |
+| `source:gamma` | 1                | one line of text    |
 
 ### Goal
 
@@ -133,16 +133,16 @@ Rules:
 
 ### Payload types used in M0
 
-| `payload_type` | Source kind | Payload |
-| --- | --- | --- |
-| `goal.opened` | operator | `Goal` |
-| `source.registered` | test | `{ resource, revision, content }` |
-| `source.changed` | test | `{ resource, revision, content }` |
-| `clock.tick` | clock | `{ tick: integer }` |
-| `weights.recorded` | judgment | `{ site: "frontier.weigh", implementation: "scripted@1", state_revision, candidate_set: digest, weights: [{ candidate_id, weight }] }` |
-| `action.started` | runtime | `{ action_id, candidate_id, operation, contract_rev, inputs, read_set, effects, reservation, grant }` — everything the fold needs to build the `ActionRecord` (§5) |
-| `action.result` | host or runtime | `{ action_id, outcome: succeeded { output } | failed { failure } | uncertain { reason } }` |
-| `action.cancel_requested` | operator or runtime | `{ action_id, reason }` (defined; unused in M0) |
+| `payload_type`            | Source kind         | Payload                                                                                                                                                            |
+| ------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `goal.opened`             | operator            | `Goal`                                                                                                                                                             |
+| `source.registered`       | test                | `{ resource, revision, content }`                                                                                                                                  |
+| `source.changed`          | test                | `{ resource, revision, content }`                                                                                                                                  |
+| `clock.tick`              | clock               | `{ tick: integer }`                                                                                                                                                |
+| `weights.recorded`        | judgment            | `{ site: "frontier.weigh", implementation: "scripted@1", state_revision, candidate_set: digest, weights: [{ candidate_id, weight }] }`                             |
+| `action.started`          | runtime             | `{ action_id, candidate_id, operation, contract_rev, inputs, read_set, effects, reservation, grant }` — everything the fold needs to build the `ActionRecord` (§5) |
+| `action.result`           | host or runtime     | `{ action_id, outcome: succeeded { output }                                                                                                                        | failed { failure } | uncertain { reason } }` |
+| `action.cancel_requested` | operator or runtime | `{ action_id, reason }` (defined; unused in M0)                                                                                                                    |
 
 Any other `payload_type` is `unknown_type`.
 
@@ -267,11 +267,11 @@ checks below count external arrivals.
    scripted decision layer returns weights, recorded as a `weights.recorded`
    observation. Scripted weights for M0:
 
-   | operation | weight |
-   | --- | --- |
-   | `goal.complete` | 1.0 |
-   | `report.assemble` | 0.9 |
-   | `source.inspect` | 0.8 |
+   | operation         | weight |
+   | ----------------- | ------ |
+   | `goal.complete`   | 1.0    |
+   | `report.assemble` | 0.9    |
+   | `source.inspect`  | 0.8    |
 
 4. **Select.** Order eligible candidates by `(weight desc, candidate_id asc)`.
    Walk the order; select a candidate when its dependencies are satisfied, its

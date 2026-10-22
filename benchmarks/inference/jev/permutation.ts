@@ -194,9 +194,7 @@ export function scorePermutation(views: readonly PermutationRecordView[]): Permu
     }
   }
 
-  const accuracies = [...byOrdering.values()]
-    .filter((b) => b.n > 0)
-    .map((b) => b.correct / b.n);
+  const accuracies = [...byOrdering.values()].filter((b) => b.n > 0).map((b) => b.correct / b.n);
 
   // Within each candidate count, compare where the answer landed against where
   // the label sat, then weight the strata by how many records each holds.

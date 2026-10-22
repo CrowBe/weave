@@ -7,7 +7,14 @@ import { isEffect } from '@weave/agentsop';
 import { candidateSetDigest } from './digest.js';
 import { FRONTIER_WEIGH_CONTRACT, validFrontierWeight } from './frontier-weigh.js';
 import { amendmentMovesProtocol, isCorePatch, promotionRefusal } from './strategy.js';
-import { PAYLOAD_TYPES, type ObservationInput, type PayloadType, type ProvenanceKind, type State, type Validation } from './types.js';
+import {
+  PAYLOAD_TYPES,
+  type ObservationInput,
+  type PayloadType,
+  type ProvenanceKind,
+  type State,
+  type Validation,
+} from './types.js';
 
 const ACCEPTED: Validation = { status: 'accepted' };
 
@@ -83,7 +90,7 @@ function isReadSet(value: unknown): boolean {
       (entry) =>
         isRecord(entry) &&
         isNonNegativeInteger(entry['revision']) &&
-        (isNonEmptyString(entry['resource']) !== isNonEmptyString(entry['state_field'])),
+        isNonEmptyString(entry['resource']) !== isNonEmptyString(entry['state_field']),
     )
   );
 }
@@ -161,7 +168,9 @@ export function validate(input: ObservationInput, state: State): Validation {
     case 'admission.decided':
       return validateAdmission(payload, state);
     case 'implementation.revoked':
-      return isNonEmptyString(payload['operation']) && isNonEmptyString(payload['implementation_id']) && isNonEmptyString(payload['reason'])
+      return isNonEmptyString(payload['operation']) &&
+        isNonEmptyString(payload['implementation_id']) &&
+        isNonEmptyString(payload['reason'])
         ? ACCEPTED
         : rejected('implementation.revoked requires operation, implementation_id, and reason');
     case 'evidence.invalidated':
@@ -320,13 +329,19 @@ function validateWeights(payload: Record<string, unknown>, state: State): Valida
     return rejected('weights require the implementation that produced them');
   }
   if (payload['state_revision'] !== state.state_revision) {
-    return rejected(`weights evaluated state_revision ${String(payload['state_revision'])}, current is ${state.state_revision}`);
+    return rejected(
+      `weights evaluated state_revision ${String(payload['state_revision'])}, current is ${state.state_revision}`,
+    );
   }
   const weights = payload['weights'];
   if (
     !Array.isArray(weights) ||
     !weights.every(
-      (w) => isRecord(w) && isNonEmptyString(w['candidate_id']) && typeof w['weight'] === 'number' && Number.isFinite(w['weight']),
+      (w) =>
+        isRecord(w) &&
+        isNonEmptyString(w['candidate_id']) &&
+        typeof w['weight'] === 'number' &&
+        Number.isFinite(w['weight']),
     )
   ) {
     return rejected('weights must be a list of { candidate_id, finite weight }');
@@ -510,18 +525,26 @@ function validateOutput(operation: string, inputs: unknown, output: unknown): Va
       return ACCEPTED;
     }
     case 'report.fold': {
-      return isRecord(output) && isNonEmptyString(output['fold']) ? ACCEPTED : rejected('report.fold output requires a fold string');
+      return isRecord(output) && isNonEmptyString(output['fold'])
+        ? ACCEPTED
+        : rejected('report.fold output requires a fold string');
     }
     case 'gap.search': {
-      return outputStatus(output, ['reusable', 'composed', 'gap']) ? ACCEPTED : rejected('gap.search output is not a search result');
+      return outputStatus(output, ['reusable', 'composed', 'gap'])
+        ? ACCEPTED
+        : rejected('gap.search output is not a search result');
     }
     case 'contract.establish': {
-      return isRecord(output) && isNonEmptyString(output['contract_id']) && isNonEmptyString(output['contract_revision'])
+      return isRecord(output) &&
+        isNonEmptyString(output['contract_id']) &&
+        isNonEmptyString(output['contract_revision'])
         ? ACCEPTED
         : rejected('contract.establish output requires a contract id and revision');
     }
     case 'corpus.propose': {
-      return isRecord(output) && (output['split'] === 'visible' || output['split'] === 'held_out') && isStringArray(output['case_ids'])
+      return isRecord(output) &&
+        (output['split'] === 'visible' || output['split'] === 'held_out') &&
+        isStringArray(output['case_ids'])
         ? ACCEPTED
         : rejected('corpus.propose output requires a split and case ids');
     }
@@ -536,12 +559,19 @@ function validateOutput(operation: string, inputs: unknown, output: unknown): Va
         : rejected('red.demonstrate output requires demonstrated red and an isolation report');
     }
     case 'implementation.generate': {
-      return isRecord(output) && isNonEmptyString(output['implementation_id']) && isNonEmptyString(output['source_digest']) && isRecord(output['view'])
+      return isRecord(output) &&
+        isNonEmptyString(output['implementation_id']) &&
+        isNonEmptyString(output['source_digest']) &&
+        isRecord(output['view'])
         ? ACCEPTED
         : rejected('implementation.generate output requires an id, digest, and implementer view');
     }
     case 'green.prove': {
-      if (!isRecord(output) || !isNonEmptyString(output['implementation_id']) || typeof output['proven'] !== 'boolean') {
+      if (
+        !isRecord(output) ||
+        !isNonEmptyString(output['implementation_id']) ||
+        typeof output['proven'] !== 'boolean'
+      ) {
         return rejected('green.prove output requires an implementation id and proven flag');
       }
       if (!isCount(output['held_out']) || !isCount(output['visible'])) {
@@ -564,7 +594,12 @@ function outputStatus(output: unknown, allowed: readonly string[]): boolean {
 }
 
 function isCount(value: unknown): boolean {
-  return isRecord(value) && isNonNegativeInteger(value['passed']) && isNonNegativeInteger(value['failed']) && !('cases' in value);
+  return (
+    isRecord(value) &&
+    isNonNegativeInteger(value['passed']) &&
+    isNonNegativeInteger(value['failed']) &&
+    !('cases' in value)
+  );
 }
 
 function isTypeMap(value: unknown): boolean {
@@ -601,7 +636,10 @@ function validateAdmission(payload: Record<string, unknown>, state: State): Vali
   if (!admission || admission.request_id !== request_id || admission.status !== 'requested') {
     return rejected('admission.decided names a request that is not pending');
   }
-  if (payload['implementation_id'] !== admission.implementation_id || payload['evidence_digest'] !== admission.evidence_digest) {
+  if (
+    payload['implementation_id'] !== admission.implementation_id ||
+    payload['evidence_digest'] !== admission.evidence_digest
+  ) {
     return rejected('admission.decided does not match the recorded evidence');
   }
   if (payload['decision'] !== 'admitted' && payload['decision'] !== 'denied') {
@@ -616,7 +654,10 @@ function validateInferenceRequested(payload: Record<string, unknown>, state: Sta
   if (!isNonEmptyString(payload['request_id'])) {
     return rejected('inference.requested requires request_id');
   }
-  if (state.inferences[payload['request_id'] as string]?.recorded === null && state.inferences[payload['request_id'] as string]) {
+  if (
+    state.inferences[payload['request_id'] as string]?.recorded === null &&
+    state.inferences[payload['request_id'] as string]
+  ) {
     return rejected('inference request is already pending');
   }
   const site = payload['site'];
@@ -636,7 +677,11 @@ function validateInferenceRequested(payload: Record<string, unknown>, state: Sta
     return rejected('inference.requested requires state_revision');
   }
   const reservation = payload['reservation'];
-  if (!isRecord(reservation) || !isNonNegativeInteger(reservation['judgments']) || !isNonNegativeInteger(reservation['cost'])) {
+  if (
+    !isRecord(reservation) ||
+    !isNonNegativeInteger(reservation['judgments']) ||
+    !isNonNegativeInteger(reservation['cost'])
+  ) {
     return rejected('inference.requested requires a reservation');
   }
   const { judgments, cost } = state.budget;
@@ -708,7 +753,11 @@ function validateApprovalDecision(payload: Record<string, unknown>, state: State
 }
 
 function validateComposition(payload: Record<string, unknown>): Validation {
-  if (!isNonEmptyString(payload['composition_id']) || !Array.isArray(payload['steps']) || payload['steps'].length === 0) {
+  if (
+    !isNonEmptyString(payload['composition_id']) ||
+    !Array.isArray(payload['steps']) ||
+    payload['steps'].length === 0
+  ) {
     return rejected('composition.recorded requires composition_id and steps');
   }
   const steps = payload['steps'];
@@ -729,7 +778,11 @@ function validateConclusion(payload: Record<string, unknown>): Validation {
   ) {
     return rejected('conclusion.cached requires identity, digest, and output');
   }
-  if (!Array.isArray(payload['evidence']) || payload['evidence'].length === 0 || !payload['evidence'].every(isNonNegativeInteger)) {
+  if (
+    !Array.isArray(payload['evidence']) ||
+    payload['evidence'].length === 0 ||
+    !payload['evidence'].every(isNonNegativeInteger)
+  ) {
     return rejected('conclusion.cached requires evidence seqs');
   }
   if (!isReadSet(payload['read_set'])) {
@@ -741,14 +794,22 @@ function validateConclusion(payload: Record<string, unknown>): Validation {
   }
   const invalidation = payload['invalidation'];
   const allowed = new Set(['read_set', 'contract_rev', 'admission']);
-  if (!Array.isArray(invalidation) || invalidation.length === 0 || !invalidation.every((item) => typeof item === 'string' && allowed.has(item))) {
+  if (
+    !Array.isArray(invalidation) ||
+    invalidation.length === 0 ||
+    !invalidation.every((item) => typeof item === 'string' && allowed.has(item))
+  ) {
     return rejected('conclusion.cached requires invalidation conditions');
   }
   return ACCEPTED;
 }
 
 function validatePolicy(payload: Record<string, unknown>): Validation {
-  if (!isNonEmptyString(payload['policy_id']) || !isStringArray(payload['goals']) || new Set(payload['goals']).size !== payload['goals'].length) {
+  if (
+    !isNonEmptyString(payload['policy_id']) ||
+    !isStringArray(payload['goals']) ||
+    new Set(payload['goals']).size !== payload['goals'].length
+  ) {
     return rejected('policy.recorded requires a policy_id and distinct goals');
   }
   if (payload['goals'].length < 2) {
@@ -840,10 +901,17 @@ function validateExperiment(payload: Record<string, unknown>, state: State): Val
   if (!isNonEmptyString(payload['candidate']) || !state.profiles[payload['candidate']]) {
     return rejected('experiment candidate must be a recorded profile');
   }
-  if (!isNonEmptyString(payload['workload']) || !isNonEmptyString(payload['quality_bar']) || !isNonEmptyString(payload['promotion'])) {
+  if (
+    !isNonEmptyString(payload['workload']) ||
+    !isNonEmptyString(payload['quality_bar']) ||
+    !isNonEmptyString(payload['promotion'])
+  ) {
     return rejected('experiment.recorded requires workload, quality_bar, and promotion');
   }
-  if (!isStringArray(payload['protected_cases']) || new Set(payload['protected_cases']).size !== payload['protected_cases'].length) {
+  if (
+    !isStringArray(payload['protected_cases']) ||
+    new Set(payload['protected_cases']).size !== payload['protected_cases'].length
+  ) {
     return rejected('experiment.protected_cases must be distinct case ids');
   }
   if (!sameMeasures(payload['measures'])) {
@@ -882,7 +950,10 @@ function validateComparison(payload: Record<string, unknown>): Validation {
   if (payload['quality'] !== 'held' && payload['quality'] !== 'missed') {
     return rejected('experiment.compared quality must be held or missed');
   }
-  if (!isStringArray(payload['misses']) && !(Array.isArray(payload['misses']) && payload['misses'].every((item) => typeof item === 'string'))) {
+  if (
+    !isStringArray(payload['misses']) &&
+    !(Array.isArray(payload['misses']) && payload['misses'].every((item) => typeof item === 'string'))
+  ) {
     return rejected('experiment.compared misses must be strings');
   }
   if (
@@ -907,14 +978,20 @@ function validateAmendment(payload: Record<string, unknown>, state: State): Vali
   if (!experiment || payload['experiment_id'] !== experiment.experiment_id) {
     return rejected('experiment.amended names an unknown experiment');
   }
-  const results = state.comparisons.some((comparison) => comparison.experiment_id === experiment.experiment_id && comparison.evidence > experiment.evidence);
+  const results = state.comparisons.some(
+    (comparison) => comparison.experiment_id === experiment.experiment_id && comparison.evidence > experiment.evidence,
+  );
   if (results && amendmentMovesProtocol(experiment, payload)) {
     return rejected('comparison invalidated');
   }
   if (results) {
     return rejected('comparison invalidated');
   }
-  if (payload['protected_cases'] !== undefined && (!isStringArray(payload['protected_cases']) || new Set(payload['protected_cases']).size !== payload['protected_cases'].length)) {
+  if (
+    payload['protected_cases'] !== undefined &&
+    (!isStringArray(payload['protected_cases']) ||
+      new Set(payload['protected_cases']).size !== payload['protected_cases'].length)
+  ) {
     return rejected('experiment.protected_cases must be distinct case ids');
   }
   if (payload['quality_bar'] !== undefined && !isNonEmptyString(payload['quality_bar'])) {

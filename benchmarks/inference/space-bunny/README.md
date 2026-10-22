@@ -50,10 +50,10 @@ default. Exact option-label compliance counted toward the score. The runner
 retains each response, failure, usage record, and end-to-end call latency in
 [`general-results.json`](general-results.json).
 
-| Model | Correct / 20 | Answered | Quantitative | Logic | Code | Reading | Median latency |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Space Bunny Alpha | **19** | 20 | 5/5 | 4/5 | 5/5 | 5/5 | **1.95 s** |
-| Step 3.7 Flash free | 12 | 12 | 5/5 | 2/5 | 2/5 | 3/5 | 4.00 s |
+| Model               | Correct / 20 | Answered | Quantitative | Logic | Code | Reading | Median latency |
+| ------------------- | -----------: | -------: | -----------: | ----: | ---: | ------: | -------------: |
+| Space Bunny Alpha   |       **19** |       20 |          5/5 |   4/5 |  5/5 |     5/5 |     **1.95 s** |
+| Step 3.7 Flash free |           12 |       12 |          5/5 |   2/5 |  2/5 |     3/5 |         4.00 s |
 
 Space Bunny's only miss was the three-box truth-sign question: it chose
 “cannot be determined” where exactly one true sign implies the blue box.

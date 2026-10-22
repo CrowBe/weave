@@ -23,18 +23,8 @@
  * run TypeSafe or Jev without changing the profile. The default is
  * `https://api.typesafe.ai`.
  */
-import type {
-  EvaluationAdapter,
-  EvaluationAnswer,
-  EvaluationCall,
-  EvaluationQuestion,
-  QuestionId,
-} from '../types.js';
-import {
-  evaluationTransport,
-  type DecisionParse,
-  type DecisionWireProfile,
-} from './decision-transport.js';
+import type { EvaluationAdapter, EvaluationAnswer, EvaluationCall, EvaluationQuestion, QuestionId } from '../types.js';
+import { evaluationTransport, type DecisionParse, type DecisionWireProfile } from './decision-transport.js';
 
 export const TYPESAFE_AI_ADAPTER = 'typesafe-ai';
 
@@ -150,7 +140,9 @@ function toWireQuestion(question: EvaluationQuestion, shuffle: false | (() => nu
 // ---------------------------------------------------------------------------
 
 const supportedAnswerTypes = new Map<string, EvaluationAnswer['type']>([
-  ['noul', 'boolean'], ['choice', 'choice'], ['score', 'score'],
+  ['noul', 'boolean'],
+  ['choice', 'choice'],
+  ['score', 'score'],
 ]);
 
 function parseBody(body: unknown, call: EvaluationCall): DecisionParse {
@@ -179,13 +171,18 @@ function parseBody(body: unknown, call: EvaluationCall): DecisionParse {
       if (!Object.hasOwn(question.criteria, answer.choice)) {
         return { status: 'malformed', detail: `answer '${id}' chose an unknown key` };
       }
-      const probabilities = answer.probabilities === undefined ? undefined : Object.fromEntries(
-        Object.keys(question.criteria)
-          .filter(key => Object.hasOwn(answer.probabilities!, key))
-          .map(key => [key, answer.probabilities![key]!]),
-      );
-      answers[id] = probabilities === undefined ? { type: 'choice', choice: answer.choice }
-        : { type: 'choice', choice: answer.choice, probabilities };
+      const probabilities =
+        answer.probabilities === undefined
+          ? undefined
+          : Object.fromEntries(
+              Object.keys(question.criteria)
+                .filter((key) => Object.hasOwn(answer.probabilities!, key))
+                .map((key) => [key, answer.probabilities![key]!]),
+            );
+      answers[id] =
+        probabilities === undefined
+          ? { type: 'choice', choice: answer.choice }
+          : { type: 'choice', choice: answer.choice, probabilities };
     } else {
       answers[id] = answer;
     }
@@ -221,9 +218,7 @@ function toAnswer(raw: unknown): EvaluationAnswer | null {
       const choice = raw['choice'];
       if (typeof choice !== 'string') return null;
       const probabilities = numberMap(raw['probabilities']);
-      return probabilities === undefined
-        ? { type: 'choice', choice }
-        : { type: 'choice', choice, probabilities };
+      return probabilities === undefined ? { type: 'choice', choice } : { type: 'choice', choice, probabilities };
     }
     case 'score': {
       const score = raw['score'];

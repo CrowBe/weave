@@ -32,12 +32,9 @@
       "result": {
         "raw_probabilities": {
           "calculate_pace": 0.9999499320983887,
-          "add_note": 5.012020483263768e-05
+          "add_note": 5.012020483263768e-5
         },
-        "option_keys": [
-          "calculate_pace",
-          "add_note"
-        ],
+        "option_keys": ["calculate_pace", "add_note"],
         "expected": "calculate_pace",
         "predicted": "calculate_pace",
         "correct": true,
@@ -55,13 +52,10 @@
       "elapsed_ms": 7259.3,
       "result": {
         "raw_probabilities": {
-          "add_note": 6.371934432536364e-06,
+          "add_note": 6.371934432536364e-6,
           "calculate_pace": 0.9999936819076538
         },
-        "option_keys": [
-          "add_note",
-          "calculate_pace"
-        ],
+        "option_keys": ["add_note", "calculate_pace"],
         "expected": "calculate_pace",
         "predicted": "calculate_pace",
         "correct": true,
@@ -80,12 +74,9 @@
       "result": {
         "raw_probabilities": {
           "calculate_shipping_cost": 0.9999933242797852,
-          "check_email_availability": 6.660123290203046e-06
+          "check_email_availability": 6.660123290203046e-6
         },
-        "option_keys": [
-          "calculate_shipping_cost",
-          "check_email_availability"
-        ],
+        "option_keys": ["calculate_shipping_cost", "check_email_availability"],
         "expected": "calculate_shipping_cost",
         "predicted": "calculate_shipping_cost",
         "correct": true,
@@ -103,13 +94,10 @@
       "elapsed_ms": 10129.5,
       "result": {
         "raw_probabilities": {
-          "check_email_availability": 2.5777762857615016e-06,
+          "check_email_availability": 2.5777762857615016e-6,
           "calculate_shipping_cost": 0.9999973773956299
         },
-        "option_keys": [
-          "check_email_availability",
-          "calculate_shipping_cost"
-        ],
+        "option_keys": ["check_email_availability", "calculate_shipping_cost"],
         "expected": "calculate_shipping_cost",
         "predicted": "calculate_shipping_cost",
         "correct": true,
@@ -128,12 +116,9 @@
       "result": {
         "raw_probabilities": {
           "execute_program": 0.9999961853027344,
-          "generate_username": 3.8428347579611e-06
+          "generate_username": 3.8428347579611e-6
         },
-        "option_keys": [
-          "execute_program",
-          "generate_username"
-        ],
+        "option_keys": ["execute_program", "generate_username"],
         "expected": "execute_program",
         "predicted": "execute_program",
         "correct": true,
@@ -151,13 +136,10 @@
       "elapsed_ms": 6803.7,
       "result": {
         "raw_probabilities": {
-          "generate_username": 1.7904244486999232e-06,
+          "generate_username": 1.7904244486999232e-6,
           "execute_program": 0.9999982118606567
         },
-        "option_keys": [
-          "generate_username",
-          "execute_program"
-        ],
+        "option_keys": ["generate_username", "execute_program"],
         "expected": "execute_program",
         "predicted": "execute_program",
         "correct": true,
@@ -176,12 +158,9 @@
       "result": {
         "raw_probabilities": {
           "calculate_loan_interest": 0.999995231628418,
-          "calculate_tax": 4.759952389576938e-06
+          "calculate_tax": 4.759952389576938e-6
         },
-        "option_keys": [
-          "calculate_loan_interest",
-          "calculate_tax"
-        ],
+        "option_keys": ["calculate_loan_interest", "calculate_tax"],
         "expected": "calculate_loan_interest",
         "predicted": "calculate_loan_interest",
         "correct": true,
@@ -199,13 +178,10 @@
       "elapsed_ms": 10598.1,
       "result": {
         "raw_probabilities": {
-          "calculate_tax": 1.2222304803799489e-06,
+          "calculate_tax": 1.2222304803799489e-6,
           "calculate_loan_interest": 0.9999988079071045
         },
-        "option_keys": [
-          "calculate_tax",
-          "calculate_loan_interest"
-        ],
+        "option_keys": ["calculate_tax", "calculate_loan_interest"],
         "expected": "calculate_loan_interest",
         "predicted": "calculate_loan_interest",
         "correct": true,
@@ -224,12 +200,9 @@
       "result": {
         "raw_probabilities": {
           "calculate_tax": 0.9999849796295166,
-          "calculate_loan_payment": 1.4961491615395062e-05
+          "calculate_loan_payment": 1.4961491615395062e-5
         },
-        "option_keys": [
-          "calculate_tax",
-          "calculate_loan_payment"
-        ],
+        "option_keys": ["calculate_tax", "calculate_loan_payment"],
         "expected": "calculate_tax",
         "predicted": "calculate_tax",
         "correct": true,
@@ -247,13 +220,10 @@
       "elapsed_ms": 9001.0,
       "result": {
         "raw_probabilities": {
-          "calculate_loan_payment": 3.885363184963353e-06,
+          "calculate_loan_payment": 3.885363184963353e-6,
           "calculate_tax": 0.9999960660934448
         },
-        "option_keys": [
-          "calculate_loan_payment",
-          "calculate_tax"
-        ],
+        "option_keys": ["calculate_loan_payment", "calculate_tax"],
         "expected": "calculate_tax",
         "predicted": "calculate_tax",
         "correct": true,
@@ -272,12 +242,9 @@
       "result": {
         "raw_probabilities": {
           "get_lyrics": 0.9999951124191284,
-          "calculate_bmi": 4.935548986395588e-06
+          "calculate_bmi": 4.935548986395588e-6
         },
-        "option_keys": [
-          "get_lyrics",
-          "calculate_bmi"
-        ],
+        "option_keys": ["get_lyrics", "calculate_bmi"],
         "expected": "get_lyrics",
         "predicted": "get_lyrics",
         "correct": true,
@@ -295,13 +262,10 @@
       "elapsed_ms": 7988.3,
       "result": {
         "raw_probabilities": {
-          "calculate_bmi": 1.8177611309511121e-06,
+          "calculate_bmi": 1.8177611309511121e-6,
           "get_lyrics": 0.9999982118606567
         },
-        "option_keys": [
-          "calculate_bmi",
-          "get_lyrics"
-        ],
+        "option_keys": ["calculate_bmi", "get_lyrics"],
         "expected": "get_lyrics",
         "predicted": "get_lyrics",
         "correct": true,
@@ -320,12 +284,9 @@
       "result": {
         "raw_probabilities": {
           "search_books": 0.9999938011169434,
-          "get_stock_price": 6.151696652523242e-06
+          "get_stock_price": 6.151696652523242e-6
         },
-        "option_keys": [
-          "search_books",
-          "get_stock_price"
-        ],
+        "option_keys": ["search_books", "get_stock_price"],
         "expected": "search_books",
         "predicted": "search_books",
         "correct": true,
@@ -343,13 +304,10 @@
       "elapsed_ms": 7180.0,
       "result": {
         "raw_probabilities": {
-          "get_stock_price": 1.8500774103813455e-06,
+          "get_stock_price": 1.8500774103813455e-6,
           "search_books": 0.9999980926513672
         },
-        "option_keys": [
-          "get_stock_price",
-          "search_books"
-        ],
+        "option_keys": ["get_stock_price", "search_books"],
         "expected": "search_books",
         "predicted": "search_books",
         "correct": true,
@@ -368,12 +326,9 @@
       "result": {
         "raw_probabilities": {
           "get_news": 0.9999808073043823,
-          "search_product": 1.922562842082698e-05
+          "search_product": 1.922562842082698e-5
         },
-        "option_keys": [
-          "get_news",
-          "search_product"
-        ],
+        "option_keys": ["get_news", "search_product"],
         "expected": "get_news",
         "predicted": "get_news",
         "correct": true,
@@ -391,13 +346,10 @@
       "elapsed_ms": 5569.4,
       "result": {
         "raw_probabilities": {
-          "search_product": 3.939975613320712e-06,
+          "search_product": 3.939975613320712e-6,
           "get_news": 0.9999960660934448
         },
-        "option_keys": [
-          "search_product",
-          "get_news"
-        ],
+        "option_keys": ["search_product", "get_news"],
         "expected": "get_news",
         "predicted": "get_news",
         "correct": true,
@@ -416,12 +368,9 @@
       "result": {
         "raw_probabilities": {
           "calculate_shipping_cost": 0.9999756813049316,
-          "calculate_distance": 2.4304876205860637e-05
+          "calculate_distance": 2.4304876205860637e-5
         },
-        "option_keys": [
-          "calculate_shipping_cost",
-          "calculate_distance"
-        ],
+        "option_keys": ["calculate_shipping_cost", "calculate_distance"],
         "expected": "calculate_shipping_cost",
         "predicted": "calculate_shipping_cost",
         "correct": true,
@@ -439,13 +388,10 @@
       "elapsed_ms": 9888.4,
       "result": {
         "raw_probabilities": {
-          "calculate_distance": 7.055889000184834e-06,
+          "calculate_distance": 7.055889000184834e-6,
           "calculate_shipping_cost": 0.9999929666519165
         },
-        "option_keys": [
-          "calculate_distance",
-          "calculate_shipping_cost"
-        ],
+        "option_keys": ["calculate_distance", "calculate_shipping_cost"],
         "expected": "calculate_shipping_cost",
         "predicted": "calculate_shipping_cost",
         "correct": true,
@@ -464,12 +410,9 @@
       "result": {
         "raw_probabilities": {
           "play_music": 0.999996542930603,
-          "calculate_tip": 3.419111635594163e-06
+          "calculate_tip": 3.419111635594163e-6
         },
-        "option_keys": [
-          "play_music",
-          "calculate_tip"
-        ],
+        "option_keys": ["play_music", "calculate_tip"],
         "expected": "play_music",
         "predicted": "play_music",
         "correct": true,
@@ -487,13 +430,10 @@
       "elapsed_ms": 8045.3,
       "result": {
         "raw_probabilities": {
-          "calculate_tip": 1.4367863059305819e-06,
+          "calculate_tip": 1.4367863059305819e-6,
           "play_music": 0.9999985694885254
         },
-        "option_keys": [
-          "calculate_tip",
-          "play_music"
-        ],
+        "option_keys": ["calculate_tip", "play_music"],
         "expected": "play_music",
         "predicted": "play_music",
         "correct": true,
@@ -512,12 +452,9 @@
       "result": {
         "raw_probabilities": {
           "calculate_discount": 0.99998939037323,
-          "convert_currency": 1.0600513633107767e-05
+          "convert_currency": 1.0600513633107767e-5
         },
-        "option_keys": [
-          "calculate_discount",
-          "convert_currency"
-        ],
+        "option_keys": ["calculate_discount", "convert_currency"],
         "expected": "calculate_discount",
         "predicted": "calculate_discount",
         "correct": true,
@@ -535,13 +472,10 @@
       "elapsed_ms": 9926.5,
       "result": {
         "raw_probabilities": {
-          "convert_currency": 4.279918812244432e-06,
+          "convert_currency": 4.279918812244432e-6,
           "calculate_discount": 0.9999957084655762
         },
-        "option_keys": [
-          "convert_currency",
-          "calculate_discount"
-        ],
+        "option_keys": ["convert_currency", "calculate_discount"],
         "expected": "calculate_discount",
         "predicted": "calculate_discount",
         "correct": true,
@@ -560,12 +494,9 @@
       "result": {
         "raw_probabilities": {
           "calculate_discounted_price": 0.9999539852142334,
-          "generate_password": 4.599846579367295e-05
+          "generate_password": 4.599846579367295e-5
         },
-        "option_keys": [
-          "calculate_discounted_price",
-          "generate_password"
-        ],
+        "option_keys": ["calculate_discounted_price", "generate_password"],
         "expected": "calculate_discounted_price",
         "predicted": "calculate_discounted_price",
         "correct": true,
@@ -583,13 +514,10 @@
       "elapsed_ms": 13207.3,
       "result": {
         "raw_probabilities": {
-          "generate_password": 1.1987333891738672e-05,
+          "generate_password": 1.1987333891738672e-5,
           "calculate_discounted_price": 0.9999879598617554
         },
-        "option_keys": [
-          "generate_password",
-          "calculate_discounted_price"
-        ],
+        "option_keys": ["generate_password", "calculate_discounted_price"],
         "expected": "calculate_discounted_price",
         "predicted": "calculate_discounted_price",
         "correct": true,
@@ -608,12 +536,9 @@
       "result": {
         "raw_probabilities": {
           "calculate_sales_tax": 0.999992847442627,
-          "search_news": 7.195595117082121e-06
+          "search_news": 7.195595117082121e-6
         },
-        "option_keys": [
-          "calculate_sales_tax",
-          "search_news"
-        ],
+        "option_keys": ["calculate_sales_tax", "search_news"],
         "expected": "calculate_sales_tax",
         "predicted": "calculate_sales_tax",
         "correct": true,
@@ -631,13 +556,10 @@
       "elapsed_ms": 7390.0,
       "result": {
         "raw_probabilities": {
-          "search_news": 3.7675481507903896e-06,
+          "search_news": 3.7675481507903896e-6,
           "calculate_sales_tax": 0.9999961853027344
         },
-        "option_keys": [
-          "search_news",
-          "calculate_sales_tax"
-        ],
+        "option_keys": ["search_news", "calculate_sales_tax"],
         "expected": "calculate_sales_tax",
         "predicted": "calculate_sales_tax",
         "correct": true,
@@ -656,12 +578,9 @@
       "result": {
         "raw_probabilities": {
           "search_recipes": 0.9999936819076538,
-          "get_lyrics": 6.3380016399605665e-06
+          "get_lyrics": 6.3380016399605665e-6
         },
-        "option_keys": [
-          "search_recipes",
-          "get_lyrics"
-        ],
+        "option_keys": ["search_recipes", "get_lyrics"],
         "expected": "search_recipes",
         "predicted": "search_recipes",
         "correct": true,
@@ -679,13 +598,10 @@
       "elapsed_ms": 7483.1,
       "result": {
         "raw_probabilities": {
-          "get_lyrics": 2.634187012517941e-06,
+          "get_lyrics": 2.634187012517941e-6,
           "search_recipes": 0.9999973773956299
         },
-        "option_keys": [
-          "get_lyrics",
-          "search_recipes"
-        ],
+        "option_keys": ["get_lyrics", "search_recipes"],
         "expected": "search_recipes",
         "predicted": "search_recipes",
         "correct": true,
@@ -704,12 +620,9 @@
       "result": {
         "raw_probabilities": {
           "calculate_mortgage": 0.9999949932098389,
-          "check_website_status": 5.0319235924689565e-06
+          "check_website_status": 5.0319235924689565e-6
         },
-        "option_keys": [
-          "calculate_mortgage",
-          "check_website_status"
-        ],
+        "option_keys": ["calculate_mortgage", "check_website_status"],
         "expected": "calculate_mortgage",
         "predicted": "calculate_mortgage",
         "correct": true,
@@ -727,13 +640,10 @@
       "elapsed_ms": 8505.5,
       "result": {
         "raw_probabilities": {
-          "check_website_status": 1.4400086456589634e-06,
+          "check_website_status": 1.4400086456589634e-6,
           "calculate_mortgage": 0.9999985694885254
         },
-        "option_keys": [
-          "check_website_status",
-          "calculate_mortgage"
-        ],
+        "option_keys": ["check_website_status", "calculate_mortgage"],
         "expected": "calculate_mortgage",
         "predicted": "calculate_mortgage",
         "correct": true,
@@ -752,12 +662,9 @@
       "result": {
         "raw_probabilities": {
           "play_music": 0.9999896287918091,
-          "generate_random_quote": 1.0391786418040283e-05
+          "generate_random_quote": 1.0391786418040283e-5
         },
-        "option_keys": [
-          "play_music",
-          "generate_random_quote"
-        ],
+        "option_keys": ["play_music", "generate_random_quote"],
         "expected": "play_music",
         "predicted": "play_music",
         "correct": true,
@@ -775,13 +682,10 @@
       "elapsed_ms": 6935.7,
       "result": {
         "raw_probabilities": {
-          "generate_random_quote": 7.036046099528903e-06,
+          "generate_random_quote": 7.036046099528903e-6,
           "play_music": 0.9999929666519165
         },
-        "option_keys": [
-          "generate_random_quote",
-          "play_music"
-        ],
+        "option_keys": ["generate_random_quote", "play_music"],
         "expected": "play_music",
         "predicted": "play_music",
         "correct": true,
@@ -800,12 +704,9 @@
       "result": {
         "raw_probabilities": {
           "search_news": 0.9999843835830688,
-          "convert_currency": 1.5595538570778444e-05
+          "convert_currency": 1.5595538570778444e-5
         },
-        "option_keys": [
-          "search_news",
-          "convert_currency"
-        ],
+        "option_keys": ["search_news", "convert_currency"],
         "expected": "search_news",
         "predicted": "search_news",
         "correct": true,
@@ -823,13 +724,10 @@
       "elapsed_ms": 8396.2,
       "result": {
         "raw_probabilities": {
-          "convert_currency": 4.719740445580101e-06,
+          "convert_currency": 4.719740445580101e-6,
           "search_news": 0.999995231628418
         },
-        "option_keys": [
-          "convert_currency",
-          "search_news"
-        ],
+        "option_keys": ["convert_currency", "search_news"],
         "expected": "search_news",
         "predicted": "search_news",
         "correct": true,
@@ -848,12 +746,9 @@
       "result": {
         "raw_probabilities": {
           "search_videos": 0.9999853372573853,
-          "search_jobs": 1.4703183296660427e-05
+          "search_jobs": 1.4703183296660427e-5
         },
-        "option_keys": [
-          "search_videos",
-          "search_jobs"
-        ],
+        "option_keys": ["search_videos", "search_jobs"],
         "expected": "search_videos",
         "predicted": "search_videos",
         "correct": true,
@@ -871,13 +766,10 @@
       "elapsed_ms": 8118.8,
       "result": {
         "raw_probabilities": {
-          "search_jobs": 4.700044883065857e-06,
+          "search_jobs": 4.700044883065857e-6,
           "search_videos": 0.9999953508377075
         },
-        "option_keys": [
-          "search_jobs",
-          "search_videos"
-        ],
+        "option_keys": ["search_jobs", "search_videos"],
         "expected": "search_videos",
         "predicted": "search_videos",
         "correct": true,
@@ -896,12 +788,9 @@
       "result": {
         "raw_probabilities": {
           "calculate_discounted_price": 0.9999643564224243,
-          "calculate_profit_margin": 3.561312405508943e-05
+          "calculate_profit_margin": 3.561312405508943e-5
         },
-        "option_keys": [
-          "calculate_discounted_price",
-          "calculate_profit_margin"
-        ],
+        "option_keys": ["calculate_discounted_price", "calculate_profit_margin"],
         "expected": "calculate_discounted_price",
         "predicted": "calculate_discounted_price",
         "correct": true,
@@ -919,13 +808,10 @@
       "elapsed_ms": 9802.2,
       "result": {
         "raw_probabilities": {
-          "calculate_profit_margin": 8.750859706196934e-06,
+          "calculate_profit_margin": 8.750859706196934e-6,
           "calculate_discounted_price": 0.9999912977218628
         },
-        "option_keys": [
-          "calculate_profit_margin",
-          "calculate_discounted_price"
-        ],
+        "option_keys": ["calculate_profit_margin", "calculate_discounted_price"],
         "expected": "calculate_discounted_price",
         "predicted": "calculate_discounted_price",
         "correct": true,
@@ -944,12 +830,9 @@
       "result": {
         "raw_probabilities": {
           "get_current_time": 0.9999815225601196,
-          "generate_random_quote": 1.8471775547368452e-05
+          "generate_random_quote": 1.8471775547368452e-5
         },
-        "option_keys": [
-          "get_current_time",
-          "generate_random_quote"
-        ],
+        "option_keys": ["get_current_time", "generate_random_quote"],
         "expected": "get_current_time",
         "predicted": "get_current_time",
         "correct": true,
@@ -967,13 +850,10 @@
       "elapsed_ms": 5112.1,
       "result": {
         "raw_probabilities": {
-          "generate_random_quote": 1.770427479641512e-05,
+          "generate_random_quote": 1.770427479641512e-5,
           "get_current_time": 0.9999822378158569
         },
-        "option_keys": [
-          "generate_random_quote",
-          "get_current_time"
-        ],
+        "option_keys": ["generate_random_quote", "get_current_time"],
         "expected": "get_current_time",
         "predicted": "get_current_time",
         "correct": true,
@@ -992,12 +872,9 @@
       "result": {
         "raw_probabilities": {
           "generate_barcode": 0.9999969005584717,
-          "analyze_sentiment": 3.1505162496614503e-06
+          "analyze_sentiment": 3.1505162496614503e-6
         },
-        "option_keys": [
-          "generate_barcode",
-          "analyze_sentiment"
-        ],
+        "option_keys": ["generate_barcode", "analyze_sentiment"],
         "expected": "generate_barcode",
         "predicted": "generate_barcode",
         "correct": true,
@@ -1015,13 +892,10 @@
       "elapsed_ms": 11038.0,
       "result": {
         "raw_probabilities": {
-          "analyze_sentiment": 1.6965259419521317e-06,
+          "analyze_sentiment": 1.6965259419521317e-6,
           "generate_barcode": 0.9999983310699463
         },
-        "option_keys": [
-          "analyze_sentiment",
-          "generate_barcode"
-        ],
+        "option_keys": ["analyze_sentiment", "generate_barcode"],
         "expected": "generate_barcode",
         "predicted": "generate_barcode",
         "correct": true,
@@ -1040,12 +914,9 @@
       "result": {
         "raw_probabilities": {
           "calculate_discount": 0.9999921321868896,
-          "get_definition": 7.895886483311187e-06
+          "get_definition": 7.895886483311187e-6
         },
-        "option_keys": [
-          "calculate_discount",
-          "get_definition"
-        ],
+        "option_keys": ["calculate_discount", "get_definition"],
         "expected": "calculate_discount",
         "predicted": "calculate_discount",
         "correct": true,
@@ -1063,13 +934,10 @@
       "elapsed_ms": 8823.2,
       "result": {
         "raw_probabilities": {
-          "get_definition": 2.336789520995808e-06,
+          "get_definition": 2.336789520995808e-6,
           "calculate_discount": 0.999997615814209
         },
-        "option_keys": [
-          "get_definition",
-          "calculate_discount"
-        ],
+        "option_keys": ["get_definition", "calculate_discount"],
         "expected": "calculate_discount",
         "predicted": "calculate_discount",
         "correct": true,
@@ -1088,12 +956,9 @@
       "result": {
         "raw_probabilities": {
           "get_movie_details": 0.999991774559021,
-          "calculate_age": 8.228072147176135e-06
+          "calculate_age": 8.228072147176135e-6
         },
-        "option_keys": [
-          "get_movie_details",
-          "calculate_age"
-        ],
+        "option_keys": ["get_movie_details", "calculate_age"],
         "expected": "get_movie_details",
         "predicted": "get_movie_details",
         "correct": true,
@@ -1111,13 +976,10 @@
       "elapsed_ms": 6666.4,
       "result": {
         "raw_probabilities": {
-          "calculate_age": 5.170851181901526e-06,
+          "calculate_age": 5.170851181901526e-6,
           "get_movie_details": 0.9999948740005493
         },
-        "option_keys": [
-          "calculate_age",
-          "get_movie_details"
-        ],
+        "option_keys": ["calculate_age", "get_movie_details"],
         "expected": "get_movie_details",
         "predicted": "get_movie_details",
         "correct": true,
@@ -1136,12 +998,9 @@
       "result": {
         "raw_probabilities": {
           "search_images": 0.9999946355819702,
-          "calculate_loan_interest": 5.410648554970976e-06
+          "calculate_loan_interest": 5.410648554970976e-6
         },
-        "option_keys": [
-          "search_images",
-          "calculate_loan_interest"
-        ],
+        "option_keys": ["search_images", "calculate_loan_interest"],
         "expected": "search_images",
         "predicted": "search_images",
         "correct": true,
@@ -1159,13 +1018,10 @@
       "elapsed_ms": 7818.9,
       "result": {
         "raw_probabilities": {
-          "calculate_loan_interest": 2.0689494704129174e-06,
+          "calculate_loan_interest": 2.0689494704129174e-6,
           "search_images": 0.9999979734420776
         },
-        "option_keys": [
-          "calculate_loan_interest",
-          "search_images"
-        ],
+        "option_keys": ["calculate_loan_interest", "search_images"],
         "expected": "search_images",
         "predicted": "search_images",
         "correct": true,

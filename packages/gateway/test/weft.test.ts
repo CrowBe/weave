@@ -19,7 +19,11 @@ import {
 
 const PERMITTED = 'test-destination';
 
-function unit(routed_unit_id: string, adapter: string, destination = PERMITTED): Extract<RoutedUnit, { operation: 'generate' }> {
+function unit(
+  routed_unit_id: string,
+  adapter: string,
+  destination = PERMITTED,
+): Extract<RoutedUnit, { operation: 'generate' }> {
   return {
     operation: 'generate',
     kind: 'transform',
@@ -71,7 +75,14 @@ function request(request_id = 'req_1'): GenerationRequest {
     role: 'working',
     kind: 'transform',
     input: { instructions: 'answer', prompt: 'question' },
-    terms: { quality: 'baseline', destinations: [PERMITTED], max_context_tokens: 10_000, deadline: 10_000, cost_ceiling: 1_000, max_attempts: 3 },
+    terms: {
+      quality: 'baseline',
+      destinations: [PERMITTED],
+      max_context_tokens: 10_000,
+      deadline: 10_000,
+      cost_ceiling: 1_000,
+      max_attempts: 3,
+    },
   };
 }
 
@@ -99,9 +110,12 @@ describe('W5 gateway emission', () => {
   it('W5-T50 a retry and an escalation are explicit links, with exclusions and failure codes only', async () => {
     const records: WeftRecordShape[] = [];
     let emittedDuringRequest = -1;
-    const gw = gateway((r) => void records.push(r), () => {
-      emittedDuringRequest = Math.max(emittedDuringRequest, records.length);
-    });
+    const gw = gateway(
+      (r) => void records.push(r),
+      () => {
+        emittedDuringRequest = Math.max(emittedDuringRequest, records.length);
+      },
+    );
     const outcome = await gw.generate(request());
     assert.equal(outcome.status, 'accepted');
     assert.equal(emittedDuringRequest, 0, 'records reached the sink before the request settled');
@@ -111,13 +125,28 @@ describe('W5 gateway emission', () => {
         ['gw:req_1:route:1', 'route.selected', null, []],
         ['gw:req_1:attempt:1', 'inference.attempt', 'gw:req_1:route:1', []],
         ['gw:req_1:attempt:1:error', 'error', 'gw:req_1:attempt:1', []],
-        ['gw:req_1:attempt:2', 'inference.attempt', 'gw:req_1:route:1', [{ rel: 'retry_of', record_id: 'gw:req_1:attempt:1' }]],
+        [
+          'gw:req_1:attempt:2',
+          'inference.attempt',
+          'gw:req_1:route:1',
+          [{ rel: 'retry_of', record_id: 'gw:req_1:attempt:1' }],
+        ],
         ['gw:req_1:attempt:2:error', 'error', 'gw:req_1:attempt:2', []],
-        ['gw:req_1:route:2', 'route.selected', null, [
-          { rel: 'supersedes', record_id: 'gw:req_1:route:1' },
-          { rel: 'caused_by', record_id: 'gw:req_1:attempt:2' },
-        ]],
-        ['gw:req_1:attempt:3', 'inference.attempt', 'gw:req_1:route:2', [{ rel: 'retry_of', record_id: 'gw:req_1:attempt:2' }]],
+        [
+          'gw:req_1:route:2',
+          'route.selected',
+          null,
+          [
+            { rel: 'supersedes', record_id: 'gw:req_1:route:1' },
+            { rel: 'caused_by', record_id: 'gw:req_1:attempt:2' },
+          ],
+        ],
+        [
+          'gw:req_1:attempt:3',
+          'inference.attempt',
+          'gw:req_1:route:2',
+          [{ rel: 'retry_of', record_id: 'gw:req_1:attempt:2' }],
+        ],
       ],
     );
     assert.deepEqual(records[0]!.fields, {
@@ -134,7 +163,10 @@ describe('W5 gateway emission', () => {
     assert.equal(accepted['cost_is_upper_bound'], false);
     assert.equal(accepted['spent_micros'], 1);
     assert.equal(typeof accepted['latency_ms'], 'number');
-    assert.deepEqual(records.map((r) => r.sequence), [1, 2, 3, 4, 5, 6, 7]);
+    assert.deepEqual(
+      records.map((r) => r.sequence),
+      [1, 2, 3, 4, 5, 6, 7],
+    );
     assert.ok(records.every((r) => r.thread_id === null && r.trace_id === 'bench-1'));
     assert.ok(records.every((r) => r.emitter.kind === 'gateway' && r.emitter.id === 'gw'));
     assert.equal(JSON.stringify(records).includes('upstream said'), false);
@@ -155,13 +187,19 @@ describe('W5 gateway emission', () => {
     }
   });
 
-  it('W5-T52 concurrent requests share one emitter sequence; each request\'s records stay together', async () => {
+  it("W5-T52 concurrent requests share one emitter sequence; each request's records stay together", async () => {
     const records: WeftRecordShape[] = [];
     const gw = gateway((r) => void records.push(r));
     await Promise.all([gw.generate(request('req_a')), gw.generate(request('req_b'))]);
-    assert.deepEqual(records.map((r) => r.sequence), records.map((_, i) => i + 1));
+    assert.deepEqual(
+      records.map((r) => r.sequence),
+      records.map((_, i) => i + 1),
+    );
     const order = records.map((r) => (r.fields['request_ref'] as string | undefined) ?? r.evidence[0]!.ref);
     const firstSwitch = order.findIndex((ref) => ref !== order[0]);
-    assert.ok(order.slice(firstSwitch).every((ref) => ref === order[firstSwitch]), 'records of two requests interleaved');
+    assert.ok(
+      order.slice(firstSwitch).every((ref) => ref === order[firstSwitch]),
+      'records of two requests interleaved',
+    );
   });
 });

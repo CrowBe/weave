@@ -19,7 +19,7 @@ For the paired probe, a `choice` question becomes one classification over its
 described options; a `noul` question becomes yes/no with the source question as
 the classifier prompt; a `score` question becomes classification over its
 described ordinal levels. The state is rendered identically to the existing
-OpenJev transfer probe. This is a tested *mapping*, not native Jev protocol
+OpenJev transfer probe. This is a tested _mapping_, not native Jev protocol
 support. The top class score is retained but is not calibrated confidence.
 
 ## Reproduce
@@ -52,30 +52,30 @@ tokens before schema labels and prompt. The process did not run a sustained
 clock warmup, so latency is an exploratory local measurement. The host has 31
 GiB RAM.
 
-| outcome | GLiNER2.5-Decide | paired reference |
-| --- | ---: | ---: |
-| accuracy | **61/125 = 48.8%** | Jev 104/125 = 83.2%; Kev 97/125 = 77.6% |
-| per-source majority-class baseline | 66/125 = 52.8% | same labels |
-| median / p95 local inference | 640 ms / 1,533 ms | not a like-for-like endpoint latency |
-| peak process RSS | 4.07 GiB | — |
+| outcome                            |   GLiNER2.5-Decide |                        paired reference |
+| ---------------------------------- | -----------------: | --------------------------------------: |
+| accuracy                           | **61/125 = 48.8%** | Jev 104/125 = 83.2%; Kev 97/125 = 77.6% |
+| per-source majority-class baseline |     66/125 = 52.8% |                             same labels |
+| median / p95 local inference       |  640 ms / 1,533 ms |    not a like-for-like endpoint latency |
+| peak process RSS                   |           4.07 GiB |                                       — |
 
 Against Jev on the same IDs, both were right on 54; GLiNER alone was right on
 7; Jev alone was right on 50; both missed 14. Against Kev, those cells are
 55 / 6 / 42 / 22. The differences are large enough that no overall parity
 claim is plausible on this sample, independent of small-sample uncertainty.
 
-| source | n | GLiNER correct | majority floor | interpretation |
-| --- | ---: | ---: | ---: | --- |
-| SciQ science choices | 18 | 17 | 8 | clear narrow signal; Jev and Kev each got 18 |
-| PAWS paraphrase | 13 | 8 | 7 | modest, too small to select a route |
-| QNLI answer presence | 13 | 5 | 8 | below floor |
-| emotion | 18 | 4 | 8 | below floor; 13 predictions were `love` |
-| offensive text | 13 | 8 | 10 | below floor |
-| MMLU choices | 20 | 6 | 7 | below floor |
-| held `and/or` policy | 8 | 4 | 5 | below floor |
-| held `or/not` policy | 8 | 5 | 6 | below floor |
-| authorization | 4 | 2 | 2 | at floor |
-| deadline ordinal score | 10 | 2 | 5 | below floor; every prediction was level `1` |
+| source                 |   n | GLiNER correct | majority floor | interpretation                               |
+| ---------------------- | --: | -------------: | -------------: | -------------------------------------------- |
+| SciQ science choices   |  18 |             17 |              8 | clear narrow signal; Jev and Kev each got 18 |
+| PAWS paraphrase        |  13 |              8 |              7 | modest, too small to select a route          |
+| QNLI answer presence   |  13 |              5 |              8 | below floor                                  |
+| emotion                |  18 |              4 |              8 | below floor; 13 predictions were `love`      |
+| offensive text         |  13 |              8 |             10 | below floor                                  |
+| MMLU choices           |  20 |              6 |              7 | below floor                                  |
+| held `and/or` policy   |   8 |              4 |              5 | below floor                                  |
+| held `or/not` policy   |   8 |              5 |              6 | below floor                                  |
+| authorization          |   4 |              2 |              2 | at floor                                     |
+| deadline ordinal score |  10 |              2 |              5 | below floor; every prediction was level `1`  |
 
 The result suggests a possible fit for **small, closed-label classification
 sites** such as triage or semantic matching where the labels have good
@@ -105,11 +105,11 @@ human-authored exploratory data. The test results have now been inspected,
 so a future fine-tune needs a fresh, independently labeled promotion set.
 
 | split and candidate order | correct | relevant flips | irrelevant holds | false matches on `none` |
-| --- | ---: | ---: | ---: | ---: |
-| development, original | 15/18 | 4/6 | 6/6 | 3/3 |
-| development, reversed | 15/18 | 4/6 | 6/6 | 3/3 |
-| test, original | 17/18 | 6/6 | 6/6 | 1/3 |
-| test, reversed | 16/18 | 6/6 | 6/6 | 2/3 |
+| ------------------------- | ------: | -------------: | ---------------: | ----------------------: |
+| development, original     |   15/18 |            4/6 |              6/6 |                     3/3 |
+| development, reversed     |   15/18 |            4/6 |              6/6 |                     3/3 |
+| test, original            |   17/18 |            6/6 |              6/6 |                     1/3 |
+| test, reversed            |   16/18 |            6/6 |              6/6 |                     2/3 |
 
 The uniform four-label floor is 25%; the best fixed opaque label scores 6/18
 (33.3%) on either split. The base checkpoint clearly reads the described
@@ -179,10 +179,10 @@ a base case, a relevant change that changes the expected answer, and an
 irrelevant change that holds it. Two wording variants are correlated examples
 of one scenario, so group counts are the useful measure of diversity.
 
-| purpose | train | validation | test | independent scenario groups |
-| --- | ---: | ---: | ---: | ---: |
-| `capability.match` | 60 | 18 | 18 | 10 / 3 / 3 |
-| `result.evaluate` | 60 | 18 | 24 | 10 / 3 / 4 |
+| purpose            | train | validation | test | independent scenario groups |
+| ------------------ | ----: | ---------: | ---: | --------------------------: |
+| `capability.match` |    60 |         18 |   18 |                  10 / 3 / 3 |
+| `result.evaluate`  |    60 |         18 |   24 |                  10 / 3 / 4 |
 
 The match set includes near misses in output, input, effects, and multi-step
 requests, with an explicit `none` answer. The evaluation set covers source
@@ -250,10 +250,10 @@ The paired results and exact changed predictions are in
 the `collection-*-adapter-*.json` files. Both adapters were loaded from disk
 into a fresh base model for measurement.
 
-| purpose | validation base → adapter | test base → adapter | changed predictions |
-| --- | ---: | ---: | --- |
-| `capability.match` | 14/18 → 14/18 | 16/18 → 16/18 | 0 across both splits |
-| `result.evaluate` | 16/18 → 17/18 | 18/24 → 20/24 | 1 validation, 4 test |
+| purpose            | validation base → adapter | test base → adapter | changed predictions  |
+| ------------------ | ------------------------: | ------------------: | -------------------- |
+| `capability.match` |             14/18 → 14/18 |       16/18 → 16/18 | 0 across both splits |
+| `result.evaluate`  |             16/18 → 17/18 |       18/24 → 20/24 | 1 validation, 4 test |
 
 For matching, the adapter changed scores but **no answers**; every unsupported
 OCR, composed operation, and destination-creation error remained. For result

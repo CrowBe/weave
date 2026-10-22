@@ -77,7 +77,11 @@ export function sliceAssemblyId(state_revision: number, slices: readonly string[
 
 export const SHARED_ASSEMBLY_MICROS = 1_000;
 
-function stampAssemblies(slices: readonly ViewSliceManifest[], state_revision: number, enabled: boolean): ViewSliceManifest[] {
+function stampAssemblies(
+  slices: readonly ViewSliceManifest[],
+  state_revision: number,
+  enabled: boolean,
+): ViewSliceManifest[] {
   if (!enabled) {
     return [...slices];
   }
@@ -265,7 +269,11 @@ export function renderReviewView(state: State): StateView {
  * eligible candidates. Only scalar inputs are disclosed. Everything left out
  * is named in the manifest; source bodies never enter this profile.
  */
-export function renderWeighView(state: State, eligible: readonly Candidate[], formed: readonly Candidate[] = eligible): StateView {
+export function renderWeighView(
+  state: State,
+  eligible: readonly Candidate[],
+  formed: readonly Candidate[] = eligible,
+): StateView {
   const goal = state.goal;
   const readable = new Set(goal?.authority.read ?? []);
   const goalSources = (goal?.sources ?? []).filter((source) => readable.has(source));
@@ -291,7 +299,8 @@ export function renderWeighView(state: State, eligible: readonly Candidate[], fo
     .filter((resource) => !goalSources.includes(resource) && !(goal?.sources ?? []).includes(resource))
     .map((name) => ({ name, reason: readable.has(name) ? 'profile' : 'authority' }));
   const inFlight = actions.filter(
-    (action) => action.state === 'pending' || action.state === 'running' || (action.state === 'uncertain' && !action.reconciled),
+    (action) =>
+      action.state === 'pending' || action.state === 'running' || (action.state === 'uncertain' && !action.reconciled),
   );
   const report = state.report;
   const progressRevisions: Seq[] = [];
@@ -316,7 +325,9 @@ export function renderWeighView(state: State, eligible: readonly Candidate[], fo
     .map((candidate) => ({ name: candidate.candidate_id, reason: candidate.eligibility.status }));
   const disclosedCandidates = eligible.map((candidate) => {
     const summary = scalarInputs(candidate.inputs);
-    candidateOmitted.push(...summary.omitted.map((key) => ({ name: `${candidate.candidate_id}.inputs.${key}`, reason: 'profile' })));
+    candidateOmitted.push(
+      ...summary.omitted.map((key) => ({ name: `${candidate.candidate_id}.inputs.${key}`, reason: 'profile' })),
+    );
     return { candidate_id: candidate.candidate_id, operation: candidate.operation, inputs: summary.inputs };
   });
 
@@ -334,11 +345,16 @@ export function renderWeighView(state: State, eligible: readonly Candidate[], fo
         revision: state.sources[source]?.revision ?? null,
         inspected_revision: state.inspections[source]?.result.revision ?? null,
       })),
-      in_flight: inFlight.map((action) => ({ operation: action.operation, inputs: scalarInputs(action.inputs).inputs })),
+      in_flight: inFlight.map((action) => ({
+        operation: action.operation,
+        inputs: scalarInputs(action.inputs).inputs,
+      })),
       report: report
         ? {
             covers_sources: goalSources.every((source) => covered.has(source)),
-            current: report.report.read_set.every((entry) => state.sources[entry.resource]?.revision === entry.revision),
+            current: report.report.read_set.every(
+              (entry) => state.sources[entry.resource]?.revision === entry.revision,
+            ),
           }
         : null,
     },
@@ -371,7 +387,9 @@ function scalarInputs(inputs: unknown): { inputs: Record<string, string | number
   if (typeof inputs !== 'object' || inputs === null || Array.isArray(inputs)) {
     return { inputs: out, omitted };
   }
-  for (const [key, value] of Object.entries(inputs as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+  for (const [key, value] of Object.entries(inputs as Record<string, unknown>).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  )) {
     if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
       out[key] = value;
     } else {

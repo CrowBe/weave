@@ -11,10 +11,10 @@ identity. Raw source text and labels remain in ignored `.local/` artifacts.
 `f83fe8b97094112fa305bfc793be07c8f8742282` and its file digests. It
 produced two capability-related proxy slices:
 
-| Slice | Independent units | Presentations | Question | Paired comparator |
-| --- | ---: | ---: | --- | --- |
-| Tool suitability | 72 request groups, 105 request/tool rows | 105 | Is the offered tool suitable? | BEV-tuned GLiNER on exactly these 105 rows |
-| Tool selection | 24 distinct requests | 48 | Choose one of two offered tools | Kev 4B on exactly these 48 presentations |
+| Slice            |                        Independent units | Presentations | Question                        | Paired comparator                          |
+| ---------------- | ---------------------------------------: | ------------: | ------------------------------- | ------------------------------------------ |
+| Tool suitability | 72 request groups, 105 request/tool rows |           105 | Is the offered tool suitable?   | BEV-tuned GLiNER on exactly these 105 rows |
+| Tool selection   |                     24 distinct requests |            48 | Choose one of two offered tools | Kev 4B on exactly these 48 presentations   |
 
 The suitability slice reuses the filtered, frozen GLiNER test partition.
 Some requests occur with multiple offered tools, so the 105 rows are not
@@ -44,12 +44,12 @@ run, based on pinned `Qwen/Qwen3-4B-Base`, also offline with two threads.
 
 ## Results
 
-| Slice | Lumma 4B | Paired comparator | Median CPU call |
-| --- | ---: | ---: | ---: |
-| Tool suitability | **92/105** | BEV-tuned GLiNER **103/105** | Lumma 4.34 s; GLiNER 1.11 s |
-| Tool selection, original order | 24/24 | Kev 24/24 | — |
-| Tool selection, reversed order | 24/24 | Kev 24/24 | — |
-| Tool selection, both orders correct per request | **24/24** | Kev **24/24** | Lumma 8.22 s; Kev 8.20 s per presentation |
+| Slice                                           |   Lumma 4B |            Paired comparator |                           Median CPU call |
+| ----------------------------------------------- | ---------: | ---------------------------: | ----------------------------------------: |
+| Tool suitability                                | **92/105** | BEV-tuned GLiNER **103/105** |               Lumma 4.34 s; GLiNER 1.11 s |
+| Tool selection, original order                  |      24/24 |                    Kev 24/24 |                                         — |
+| Tool selection, reversed order                  |      24/24 |                    Kev 24/24 |                                         — |
+| Tool selection, both orders correct per request |  **24/24** |                Kev **24/24** | Lumma 8.22 s; Kev 8.20 s per presentation |
 
 For suitability, both models got all 45 `call` rows right. Lumma falsely
 called 13 of 60 `skip` rows; GLiNER falsely called two. GLiNER alone corrected

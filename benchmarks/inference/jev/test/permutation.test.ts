@@ -84,12 +84,12 @@ test('a position-locked predictor is caught: stability collapses and bias is hig
     report.stability_rate < 0.5,
     `a first-position stub must not look stable under permutation, got ${report.stability_rate}`,
   );
-  assert.ok(
-    report.position_bias > 0.5,
-    `a first-position stub must show position bias, got ${report.position_bias}`,
+  assert.ok(report.position_bias > 0.5, `a first-position stub must show position bias, got ${report.position_bias}`);
+  assert.equal(
+    report.chosen_position[0],
+    report.chosen_position.reduce((a, b) => a + b, 0),
+    'every selection sat at position 0',
   );
-  assert.equal(report.chosen_position[0], report.chosen_position.reduce((a, b) => a + b, 0),
-    'every selection sat at position 0');
 });
 
 test('position bias is independent of accuracy', () => {
@@ -168,11 +168,7 @@ test('cases asked under one ordering do not count toward stability', () => {
   const report = scorePermutation([...single, ...unstable]);
   assert.equal(report.permuted, 1, 'only one case was actually presented more than one way');
   assert.equal(report.stable_top, 0);
-  assert.equal(
-    report.stability_rate,
-    0,
-    'nine cases that were never permuted must not certify the one that was',
-  );
+  assert.equal(report.stability_rate, 0, 'nine cases that were never permuted must not certify the one that was');
 });
 
 test('ordering accuracy compares the same cases, not whatever each ordering held', () => {

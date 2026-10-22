@@ -10,11 +10,7 @@
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {
-  OPEN_ROUTER_ADAPTER,
-  OPEN_ROUTER_DOCUMENTED_FREE_LIMITS,
-  openRouterAdapter,
-} from '@weave/gateway/open-router';
+import { OPEN_ROUTER_ADAPTER, OPEN_ROUTER_DOCUMENTED_FREE_LIMITS, openRouterAdapter } from '@weave/gateway/open-router';
 import type { GenerationCall } from '@weave/gateway';
 
 /** A live response, trimmed to the fields the adapter reads. */
@@ -104,10 +100,7 @@ describe('open-router adapter: request', () => {
     assert.ok(call);
     assert.equal(call.url, 'https://openrouter.ai/api/v1/chat/completions');
     assert.equal(call.init.method, 'POST');
-    assert.equal(
-      (call.init.headers as Record<string, string>)['authorization'],
-      'Bearer test-key',
-    );
+    assert.equal((call.init.headers as Record<string, string>)['authorization'], 'Bearer test-key');
 
     const body = bodyOf(call);
     assert.equal(body['model'], 'nvidia/nemotron-3-ultra-550b-a55b:free');
@@ -124,9 +117,7 @@ describe('open-router adapter: request', () => {
 
     const call = calls[0];
     assert.ok(call);
-    assert.deepEqual(bodyOf(call)['messages'], [
-      { role: 'user', content: 'Name one traditional food.' },
-    ]);
+    assert.deepEqual(bodyOf(call)['messages'], [{ role: 'user', content: 'Name one traditional food.' }]);
   });
 
   it('sends temperature only when the settings name one', async () => {
@@ -283,9 +274,12 @@ describe('open-router adapter: construction', () => {
     // A minute window of 20 implies 3s spacing, which is what the gateway
     // waits when a refusal states no delay of its own. Documented, not
     // measured: 25 concurrent requests were not refused.
-    assert.deepEqual([...OPEN_ROUTER_DOCUMENTED_FREE_LIMITS], [
-      { requests: 20, window_ms: 60_000 },
-      { requests: 50, window_ms: 86_400_000 },
-    ]);
+    assert.deepEqual(
+      [...OPEN_ROUTER_DOCUMENTED_FREE_LIMITS],
+      [
+        { requests: 20, window_ms: 60_000 },
+        { requests: 50, window_ms: 86_400_000 },
+      ],
+    );
   });
 });

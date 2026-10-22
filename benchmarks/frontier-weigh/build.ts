@@ -165,15 +165,18 @@ export function caseObservations(spec: CaseSpec): Observation[] {
       'runtime',
     );
     if (output !== undefined) {
-      push('action.result', { action_id, outcome: { outcome: 'succeeded', output } }, operation === 'goal.frame' ? 'runtime' : 'host');
+      push(
+        'action.result',
+        { action_id, outcome: { outcome: 'succeeded', output } },
+        operation === 'goal.frame' ? 'runtime' : 'host',
+      );
     }
   };
 
   for (const resource of REGISTERED) {
     push('source.registered', { resource, revision: 1, content: `${resource} line one\n${resource} line two` });
   }
-  const started =
-    (spec.proposal ? 1 : 0) + spec.inspected.length + (spec.assembled ? 1 : 0) + spec.running.length;
+  const started = (spec.proposal ? 1 : 0) + spec.inspected.length + (spec.assembled ? 1 : 0) + spec.running.length;
   const goal: Goal = {
     goal_id: 'g-report-variant',
     purpose: 'Produce a checked report over the listed sources',
@@ -198,10 +201,14 @@ export function caseObservations(spec: CaseSpec): Observation[] {
   }
   if (spec.assembled) {
     const entries = spec.goal_sources.map(inspection);
-    run('report.assemble', { inspections: entries }, {
-      entries,
-      read_set: spec.goal_sources.map((resource) => ({ resource, revision: 1 })),
-    });
+    run(
+      'report.assemble',
+      { inspections: entries },
+      {
+        entries,
+        read_set: spec.goal_sources.map((resource) => ({ resource, revision: 1 })),
+      },
+    );
   }
   for (const resource of spec.changed) {
     push('source.changed', { resource, revision: 2, content: `${resource} revised` });

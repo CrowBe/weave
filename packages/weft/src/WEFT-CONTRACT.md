@@ -39,19 +39,19 @@ not widened to cover it.
 
 A record is a JSON object with exactly these keys, serialized in this order:
 
-| Key | Type | Rule |
-| --- | --- | --- |
-| `schema` | string | `"weft.record@1"` |
-| `trace_id` | id | Correlation scope |
-| `record_id` | id | Unique within the trace |
-| `emitter` | object | `{ "kind": "loom" \| "gateway" \| "fabric" \| "external", "id": id }` |
-| `sequence` | count | Strictly increasing per `(trace_id, emitter.id)`; gaps allowed |
-| `kind` | code | One of the kinds below |
-| `thread_id` | id \| null | Loom Thread, when the record belongs to one |
-| `parent_id` | id \| null | Containing record in the same trace (e.g. attempt → route) |
-| `links` | link[] | At most 32 |
-| `evidence` | evidence[] | At most 64 |
-| `fields` | object | Kind-specific; see below |
+| Key         | Type       | Rule                                                                  |
+| ----------- | ---------- | --------------------------------------------------------------------- |
+| `schema`    | string     | `"weft.record@1"`                                                     |
+| `trace_id`  | id         | Correlation scope                                                     |
+| `record_id` | id         | Unique within the trace                                               |
+| `emitter`   | object     | `{ "kind": "loom" \| "gateway" \| "fabric" \| "external", "id": id }` |
+| `sequence`  | count      | Strictly increasing per `(trace_id, emitter.id)`; gaps allowed        |
+| `kind`      | code       | One of the kinds below                                                |
+| `thread_id` | id \| null | Loom Thread, when the record belongs to one                           |
+| `parent_id` | id \| null | Containing record in the same trace (e.g. attempt → route)            |
+| `links`     | link[]     | At most 32                                                            |
+| `evidence`  | evidence[] | At most 64                                                            |
+| `fields`    | object     | Kind-specific; see below                                              |
 
 Missing keys, extra keys, wrong types and unknown `schema` values are rejected.
 Unlike the observation log, which retains unknown payload types for diagnosis,
@@ -86,16 +86,16 @@ field.
 
 ## Value types
 
-| Type | Rule |
-| --- | --- |
-| id | `^[A-Za-z0-9_.:@-]{1,128}$`, and it fails the credential screen (see Disclosure). `@` is allowed because contract revisions and routed units use it (`boolean.task@jev-1.13.0`); `weave.trace@1` ids remain a subset |
-| code | `^[a-z][a-z0-9_.@:-]{0,63}$`; a closed vocabulary where one is listed |
-| count | Non-negative safe integer |
-| metric | Finite number ≥ 0 |
-| ratio | Finite number in [0, 1] |
-| flag | Boolean |
-| digest | `^sha256:[0-9a-f]{64}$` |
-| content | `{ "content_class": class, "digest": digest }`, optionally plus `"ref": id`, and plus `"text": string` only under an inline content policy |
+| Type    | Rule                                                                                                                                                                                                                 |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| id      | `^[A-Za-z0-9_.:@-]{1,128}$`, and it fails the credential screen (see Disclosure). `@` is allowed because contract revisions and routed units use it (`boolean.task@jev-1.13.0`); `weave.trace@1` ids remain a subset |
+| code    | `^[a-z][a-z0-9_.@:-]{0,63}$`; a closed vocabulary where one is listed                                                                                                                                                |
+| count   | Non-negative safe integer                                                                                                                                                                                            |
+| metric  | Finite number ≥ 0                                                                                                                                                                                                    |
+| ratio   | Finite number in [0, 1]                                                                                                                                                                                              |
+| flag    | Boolean                                                                                                                                                                                                              |
+| digest  | `^sha256:[0-9a-f]{64}$`                                                                                                                                                                                              |
+| content | `{ "content_class": class, "digest": digest }`, optionally plus `"ref": id`, and plus `"text": string` only under an inline content policy                                                                           |
 
 `content_class` uses the existing glossary **content class**: `public`,
 `non_sensitive`, `sensitive`, `private`. By default a content value names and
@@ -108,7 +108,7 @@ the stated type and bound; an element in excess of the bound is rejected.
 
 ## Kinds
 
-Fields not listed for a kind are rejected. *Required* fields must be present.
+Fields not listed for a kind are rejected. _Required_ fields must be present.
 Everything else is optional.
 
 ### `goal.intent`
@@ -151,12 +151,12 @@ policy did with them and which were selected.
   `runCycleOnce`); the others are filtered by policy first. The rules follow
   from that, one disposition per path:
 
-  | `disposition` | Meaning | `eligibility` | `weight` |
-  | --- | --- | --- | --- |
-  | `selected` | Dispatched this cycle | `allowed` | any |
-  | `dependency`, `conflict`, `stale_read_set`, `budget` | Rejected by the scheduler for that reason | `allowed` | any |
-  | `not_reached` | Eligible, but the cycle selected nothing from it: weighing waited, was unaccepted or was blocked | `allowed` | any |
-  | `policy_filtered` | Never weighed or selected. Its eligibility gives the reason, and an `approval_required` candidate waits on an approval request | `approval_required` or `prohibited` | null |
+  | `disposition`                                        | Meaning                                                                                                                        | `eligibility`                       | `weight` |
+  | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- | -------- |
+  | `selected`                                           | Dispatched this cycle                                                                                                          | `allowed`                           | any      |
+  | `dependency`, `conflict`, `stale_read_set`, `budget` | Rejected by the scheduler for that reason                                                                                      | `allowed`                           | any      |
+  | `not_reached`                                        | Eligible, but the cycle selected nothing from it: weighing waited, was unaccepted or was blocked                               | `allowed`                           | any      |
+  | `policy_filtered`                                    | Never weighed or selected. Its eligibility gives the reason, and an `approval_required` candidate waits on an approval request | `approval_required` or `prohibited` | null     |
 
   Any other combination is rejected.
 
@@ -271,11 +271,11 @@ no cross-goal access or disclosure, and nothing here grants either.
 **Disclosure classes.** Every field has a disclosure class that says what it
 can reveal. A field's class follows from its type:
 
-| Class | What it reveals | Types |
-| --- | --- | --- |
-| `metric` | A measure | count, metric, ratio, flag |
-| `reference` | A name or fingerprint of something held elsewhere, not its content | id, code, digest |
-| `content` | Goal content | content |
+| Class       | What it reveals                                                    | Types                      |
+| ----------- | ------------------------------------------------------------------ | -------------------------- |
+| `metric`    | A measure                                                          | count, metric, ratio, flag |
+| `reference` | A name or fingerprint of something held elsewhere, not its content | id, code, digest           |
+| `content`   | Goal content                                                       | content                    |
 
 A list or object takes the class of its most revealing member, so `candidates`,
 which carry weights beside references, is `reference`. In the envelope,
@@ -460,16 +460,16 @@ through a citation.
 **Loom.** A Loom Thread in the reference stack is one dispatched action's line
 of work, and `thread_id` is the action id.
 
-| Loom event | Records |
-| --- | --- |
-| `goal.opened` | `goal.intent`; `statement` is a `private` reference to the purpose's digest, never its text |
-| A cycle ends | `cycle.weighed` with every formed candidate, cited as its candidate id with `#` written `:`. A `deferred` candidate (`frontier.weigh@1`) is `not_reached` |
-| An action is queued or started | `thread.transition` `opened` (parent: the cycle) and `action.transition` `pending` or `running`. A candidate with dependencies adds `joined`, with a `joins` link to each dependency thread's `closed` record. A thread that supersedes an earlier one adds `superseded` to the earlier thread |
-| A queued action starts | `action.transition` `running` |
-| `action.cancel_requested` | `thread.transition` `cancelled` with a `cancels` link to the thread's `opened` record, and `action.transition` `cancelled` if the action was still queued |
-| `action.result` | `action.transition` with the outcome, and `thread.transition` `closed` caused by it |
-| `weights.recorded` from a scripted decision layer, `inference.recorded` | `judgment`. A scripted weighing has no inference request, so its `request_ref` is the observation id (`weights:c<n>`) |
-| The goal completes or is missed | `outcome` for the goal |
+| Loom event                                                              | Records                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `goal.opened`                                                           | `goal.intent`; `statement` is a `private` reference to the purpose's digest, never its text                                                                                                                                                                                                    |
+| A cycle ends                                                            | `cycle.weighed` with every formed candidate, cited as its candidate id with `#` written `:`. A `deferred` candidate (`frontier.weigh@1`) is `not_reached`                                                                                                                                      |
+| An action is queued or started                                          | `thread.transition` `opened` (parent: the cycle) and `action.transition` `pending` or `running`. A candidate with dependencies adds `joined`, with a `joins` link to each dependency thread's `closed` record. A thread that supersedes an earlier one adds `superseded` to the earlier thread |
+| A queued action starts                                                  | `action.transition` `running`                                                                                                                                                                                                                                                                  |
+| `action.cancel_requested`                                               | `thread.transition` `cancelled` with a `cancels` link to the thread's `opened` record, and `action.transition` `cancelled` if the action was still queued                                                                                                                                      |
+| `action.result`                                                         | `action.transition` with the outcome, and `thread.transition` `closed` caused by it                                                                                                                                                                                                            |
+| `weights.recorded` from a scripted decision layer, `inference.recorded` | `judgment`. A scripted weighing has no inference request, so its `request_ref` is the observation id (`weights:c<n>`)                                                                                                                                                                          |
+| The goal completes or is missed                                         | `outcome` for the goal                                                                                                                                                                                                                                                                         |
 
 A dispatched action supersedes the latest earlier thread of the same operation
 over the same resources, revisions ignored: re-inspecting a changed source

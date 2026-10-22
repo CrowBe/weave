@@ -3,7 +3,14 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { COLOR_ROLES, DISTINCT_COLOR_PAIRS, STATUS_COLOR_ROLES, THEME_DAYLIGHT, THEME_DEFAULT, TYPE_ROLES } from '@weave/tapestry';
+import {
+  COLOR_ROLES,
+  DISTINCT_COLOR_PAIRS,
+  STATUS_COLOR_ROLES,
+  THEME_DAYLIGHT,
+  THEME_DEFAULT,
+  TYPE_ROLES,
+} from '@weave/tapestry';
 
 const src = fileURLToPath(new URL('../src', import.meta.url));
 
@@ -21,8 +28,12 @@ describe('tapestry core boundary', () => {
   it('ships no renderer, DOM, or runtime import', () => {
     const sources = files(src);
     assert.ok(sources.length > 0);
-    assert.equal(sources.some((file) => file.endsWith('.tsx') || file.endsWith('.jsx')), false);
-    const forbidden = /\b(from\s+['"]react|react-dom|@radix-ui|vite|@weave\/weave|@weave\/agentfabric|@weave\/gateway|document\.|window\.|HTMLElement|JSX\.)/;
+    assert.equal(
+      sources.some((file) => file.endsWith('.tsx') || file.endsWith('.jsx')),
+      false,
+    );
+    const forbidden =
+      /\b(from\s+['"]react|react-dom|@radix-ui|vite|@weave\/weave|@weave\/agentfabric|@weave\/gateway|document\.|window\.|HTMLElement|JSX\.)/;
     for (const file of sources) {
       const text = readFileSync(file, 'utf8');
       assert.equal(forbidden.test(text), false, file);

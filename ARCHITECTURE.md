@@ -16,14 +16,14 @@ change the rules that authorize execution. Optimisation improves the capabilitie
 and operating strategies used within those rules, including the harness
 implementation when a separately governed release can prove its contracts.
 
-| Vision requirement | Architectural consequence |
-| --- | --- |
-| The runtime is the agent | Loom owns goal state, action lifecycle, and consequential state transitions in the reference stack. |
-| Models provide observations | Proposals and judgments carry provenance; deterministic validation and policy decide which transitions they may support. |
-| Independent work proceeds concurrently | Scheduling is driven by dependencies, resource conflicts, and arriving observations, not batches of model calls. |
-| Familiar work becomes software | Capability contracts are reusable; candidate formation and task procedures can evolve without editing the control core. |
-| Generation, admission, and execution differ | Each has its own evidence, authority check, and recorded outcome. |
-| Improvement is empirical | Versioned experiments compare capabilities and operating strategies against a baseline before scoped promotion. |
+| Vision requirement                          | Architectural consequence                                                                                                |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| The runtime is the agent                    | Loom owns goal state, action lifecycle, and consequential state transitions in the reference stack.                      |
+| Models provide observations                 | Proposals and judgments carry provenance; deterministic validation and policy decide which transitions they may support. |
+| Independent work proceeds concurrently      | Scheduling is driven by dependencies, resource conflicts, and arriving observations, not batches of model calls.         |
+| Familiar work becomes software              | Capability contracts are reusable; candidate formation and task procedures can evolve without editing the control core.  |
+| Generation, admission, and execution differ | Each has its own evidence, authority check, and recorded outcome.                                                        |
+| Improvement is empirical                    | Versioned experiments compare capabilities and operating strategies against a baseline before scoped promotion.          |
 
 The central design is a **small control core with replaceable ways of proposing
 and performing work**. The core needs to understand authority, dependencies,
@@ -37,13 +37,13 @@ Start with Loom as the reference runtime. Keep AgentSOP and Fabric in separate
 packages to enforce their ownership; the other modules need not become
 separate packages.
 
-| Module | Owns | Must not own |
-| --- | --- | --- |
-| State | Observation history, validated transitions, derived entities, versioned views, conclusion validity | Provider calls or deciding that a model's claim is true |
-| Decision layer | Weights and uncertainty for eligible action candidates | Grants, dispatch, or changes to goal success criteria |
-| Policy and scheduler | Eligibility, approvals, budget reservations, dependencies, conflicts, dispatch and cancellation | Domain-specific planning or semantic truth |
-| Inference gateway | Bounded provider execution, deterministic routing, attempt accounting and evaluation | Goal scheduling, ambient state access, or self-defined success |
-| Capability host | Contract lookup, invocation, construction evidence, admission, revocation and execution enforcement | Loom goals, threads, or frontier selection |
+| Module               | Owns                                                                                                | Must not own                                                   |
+| -------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| State                | Observation history, validated transitions, derived entities, versioned views, conclusion validity  | Provider calls or deciding that a model's claim is true        |
+| Decision layer       | Weights and uncertainty for eligible action candidates                                              | Grants, dispatch, or changes to goal success criteria          |
+| Policy and scheduler | Eligibility, approvals, budget reservations, dependencies, conflicts, dispatch and cancellation     | Domain-specific planning or semantic truth                     |
+| Inference gateway    | Bounded provider execution, deterministic routing, attempt accounting and evaluation                | Goal scheduling, ambient state access, or self-defined success |
+| Capability host      | Contract lookup, invocation, construction evidence, admission, revocation and execution enforcement | Loom goals, threads, or frontier selection                     |
 
 Loom owns the first three modules and composes the inference gateway with a
 capability host. The gateway has an explicit inference request interface usable
@@ -538,7 +538,7 @@ Iterate through **thin vertical milestones**, each with a demonstrable goal
 outcome and checks across the modules it touches. Build only the state, policy,
 host, and inference support needed for that milestone; do not finish a
 horizontal layer first. Keep earlier scenarios running as each milestone adds one
-consequential behavior. (*Slice* is reserved for the state-query term in
+consequential behavior. (_Slice_ is reserved for the state-query term in
 [GLOSSARY.md](./GLOSSARY.md).)
 
 - **M0 — inspect and report.** Run the fixture goal with two fixed, read-only

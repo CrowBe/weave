@@ -5,13 +5,7 @@
  * a capability contract says and what a host must check; it executes nothing.
  */
 
-export {
-  EFFECT_VOCABULARY_REVISION,
-  EFFECTS,
-  effectsConflict,
-  isEffect,
-  type Effect,
-} from './effects.js';
+export { EFFECT_VOCABULARY_REVISION, EFFECTS, effectsConflict, isEffect, type Effect } from './effects.js';
 
 export {
   effectSetsEqual,
@@ -23,12 +17,7 @@ export {
   type ResourceRef,
 } from './refs.js';
 
-export {
-  FAILURE_CODES,
-  FAILURE_PRECEDENCE,
-  failurePrecedes,
-  type FailureCode,
-} from './failures.js';
+export { FAILURE_CODES, FAILURE_PRECEDENCE, failurePrecedes, type FailureCode } from './failures.js';
 
 export {
   bindProcessEffects,
@@ -41,13 +30,7 @@ export {
   type ProcessEffectSelector,
 } from './process-effects.js';
 
-export {
-  createGrantAuthority,
-  grantCovers,
-  type Grant,
-  type GrantAuthority,
-  type GrantMatch,
-} from './grants.js';
+export { createGrantAuthority, grantCovers, type Grant, type GrantAuthority, type GrantMatch } from './grants.js';
 
 export {
   bindSelectors,

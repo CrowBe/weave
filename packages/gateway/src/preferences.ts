@@ -55,7 +55,7 @@ export type PreferenceLoad =
 type Obj = Readonly<Record<string, unknown>>;
 const isObject = (x: unknown): x is Obj => typeof x === 'object' && x !== null && !Array.isArray(x);
 const hasExactly = (o: Obj, keys: readonly string[]) =>
-  Object.keys(o).length === keys.length && keys.every(k => Object.hasOwn(o, k));
+  Object.keys(o).length === keys.length && keys.every((k) => Object.hasOwn(o, k));
 const isText = (x: unknown): x is string => typeof x === 'string' && x.length > 0;
 const isNumber = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
 const oneOf = (x: unknown, ...vocabulary: string[]) => typeof x === 'string' && vocabulary.includes(x);
@@ -89,28 +89,45 @@ export function loadPreferenceSet(value: unknown): PreferenceLoad {
   const fail = (reason: string): PreferenceLoad => ({ ok: false, reason });
   if (!isObject(value) || value.schema !== PREFERENCE_SCHEMA) return fail(`not a ${PREFERENCE_SCHEMA} record`);
   if (!hasExactly(value, SET_KEYS)) return fail('unexpected or missing keys');
-  if (!isText(value.preference) || !isText(value.workload) || !isText(value.criteria) || !isText(value.caseset)
-    || !oneOf(value.split, 'tune', 'holdout') || !oneOf(value.mode, 'replay', 'trial', 'live') || !isText(value.accept)) {
+  if (
+    !isText(value.preference) ||
+    !isText(value.workload) ||
+    !isText(value.criteria) ||
+    !isText(value.caseset) ||
+    !oneOf(value.split, 'tune', 'holdout') ||
+    !oneOf(value.mode, 'replay', 'trial', 'live') ||
+    !isText(value.accept)
+  ) {
     return fail('malformed header');
   }
   const entries = value.entries;
-  if (!Array.isArray(entries) || entries.length === 0 || entries.length > MAX_ENTRIES) return fail('entries out of bounds');
+  if (!Array.isArray(entries) || entries.length === 0 || entries.length > MAX_ENTRIES)
+    return fail('entries out of bounds');
   const seen = new Set<string>();
   for (const e of entries as unknown[]) {
-    if (!isObject(e) || !hasExactly(e, ENTRY_KEYS) || !isText(e.routed_unit) || !isText(e.result)
-      || !oneOf(e.verdict, 'meets_bar', 'misses_bar', 'insufficient_evidence')) {
+    if (
+      !isObject(e) ||
+      !hasExactly(e, ENTRY_KEYS) ||
+      !isText(e.routed_unit) ||
+      !isText(e.result) ||
+      !oneOf(e.verdict, 'meets_bar', 'misses_bar', 'insufficient_evidence')
+    ) {
       return fail('malformed entry');
     }
     if (seen.has(e.routed_unit)) return fail(`routed unit ${e.routed_unit} named twice`);
     seen.add(e.routed_unit);
     const measures = e.measures;
-    if (!Array.isArray(measures) || measures.length > MAX_MEASURES || !measures.every(measureShaped)
-      || new Set(measures.map(m => m.measure)).size !== measures.length) {
+    if (
+      !Array.isArray(measures) ||
+      measures.length > MAX_MEASURES ||
+      !measures.every(measureShaped) ||
+      new Set(measures.map((m) => m.measure)).size !== measures.length
+    ) {
       return fail(`malformed measures for ${e.routed_unit}`);
     }
-    const accept = measures.find(m => m.measure === value.accept);
+    const accept = measures.find((m) => m.measure === value.accept);
     if (accept === undefined) return fail(`no ${value.accept} measure for ${e.routed_unit}`);
-    if ([accept.value, ...(accept.interval ?? [])].some(x => x !== null && (x < 0 || x > 1))) {
+    if ([accept.value, ...(accept.interval ?? [])].some((x) => x !== null && (x < 0 || x > 1))) {
       return fail(`accept rate out of range for ${e.routed_unit}`);
     }
     if (e.verdict === 'meets_bar' && accept.interval !== null && !hasWidth(accept.interval)) {
@@ -129,7 +146,7 @@ export function loadPreferenceSet(value: unknown): PreferenceLoad {
  */
 function evidenceOf(entry: PreferenceEntry, accept: string): RouteEvidence | undefined {
   if (entry.verdict !== 'meets_bar') return undefined;
-  const m = entry.measures.find(x => x.measure === accept);
+  const m = entry.measures.find((x) => x.measure === accept);
   if (m === undefined || m.interval === null || !hasWidth(m.interval) || m.n === 0) return undefined;
   const accepted = Math.floor(m.interval[0] * m.n);
   return accepted > 0 ? { attempts: m.n, accepted } : undefined;
@@ -141,8 +158,8 @@ function evidenceOf(entry: PreferenceEntry, accept: string): RouteEvidence | und
  * entry for a unit absent from the table is ignored.
  */
 export function applyPreferences(table: RouteTable, set: PreferenceSet): RouteTable {
-  const entries = new Map(set.entries.map(e => [e.routed_unit, e] as const));
-  return table.map(unit => {
+  const entries = new Map(set.entries.map((e) => [e.routed_unit, e] as const));
+  return table.map((unit) => {
     const entry = entries.get(unit.routed_unit_id);
     if (entry === undefined) return unit;
     const { evidence: _configured, ...rest } = unit;

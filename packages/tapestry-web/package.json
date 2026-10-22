@@ -2,8 +2,8 @@
   "name": "@weave/tapestry-web",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
   "description": "Web renderer for the Tapestry workspace slice. Owns shadcn/ui source and CSS bindings. Imports the presentation core only.",
+  "type": "module",
   "scripts": {
     "dev": "vp dev",
     "build": "vp build",

@@ -1,5 +1,12 @@
 /** Render the paired `frontier.weigh@1` report. Pure: the same rows always give the same text. */
-import { OUTCOME_CLASSES, PROMOTION_RULE, summarize, type CaseResult, type PromotionVerdict, type Summary } from './score.ts';
+import {
+  OUTCOME_CLASSES,
+  PROMOTION_RULE,
+  summarize,
+  type CaseResult,
+  type PromotionVerdict,
+  type Summary,
+} from './score.ts';
 import type { FrontierCase } from './build.ts';
 
 export type JevStatus =
@@ -24,7 +31,9 @@ const SHORT: Readonly<Record<string, string>> = {
 };
 
 export function shortKey(key: string): string {
-  return key.startsWith('source.inspect:source:') ? `inspect ${key.slice('source.inspect:source:'.length)}` : (SHORT[key] ?? key);
+  return key.startsWith('source.inspect:source:')
+    ? `inspect ${key.slice('source.inspect:source:'.length)}`
+    : (SHORT[key] ?? key);
 }
 
 function frontier(keys: readonly string[]): string {
@@ -104,23 +113,31 @@ export function renderReport(input: ReportInput): string {
     lines.push(verdictSection(verdict), '');
   }
   lines.push('## Paired holdout frontiers', '');
-  lines.push('Each cell is the frontier Weave selected from that weigher\'s weights, then its outcome class.', '');
+  lines.push("Each cell is the frontier Weave selected from that weigher's weights, then its outcome class.", '');
   const columns = [...ids.filter((id) => id !== 'jev'), 'jev'];
   lines.push(`| Case | Kind | Adjudicated | ${columns.join(' | ')} |`);
   lines.push(`| --- | --- | --- | ${columns.map(() => '---').join(' | ')} |`);
   for (const frontierCase of input.cases.filter((c) => c.split === 'holdout')) {
     const cells = columns.map((id) => {
       const row = input.results.find((r) => r.weigher === id && r.id === frontierCase.id);
-      return row ? `${frontier(row.selected)} — ${row.outcome}` : id === 'jev' && input.jev.status === 'not_run' ? 'not run' : '—';
+      return row
+        ? `${frontier(row.selected)} — ${row.outcome}`
+        : id === 'jev' && input.jev.status === 'not_run'
+          ? 'not run'
+          : '—';
     });
-    lines.push(`| ${frontierCase.id} | ${frontierCase.label.kind} | ${frontier(frontierCase.label.preferred)} | ${cells.join(' | ')} |`);
+    lines.push(
+      `| ${frontierCase.id} | ${frontierCase.label.kind} | ${frontier(frontierCase.label.preferred)} | ${cells.join(' | ')} |`,
+    );
   }
   lines.push('', '## Cost and correction tradeoff', '');
   lines.push(
-    'A correction is a holdout case where a reviewer applying the rubric would change the selected frontier. No human correction has been recorded yet; these counts are the rubric\'s.',
+    "A correction is a holdout case where a reviewer applying the rubric would change the selected frontier. No human correction has been recorded yet; these counts are the rubric's.",
     '',
   );
-  lines.push('| Weigher | Holdout corrections | Corrections avoided vs scripted@1 | Spend (micros) | Spend per avoided correction |');
+  lines.push(
+    '| Weigher | Holdout corrections | Corrections avoided vs scripted@1 | Spend (micros) | Spend per avoided correction |',
+  );
   lines.push('| --- | --- | --- | --- | --- |');
   const baseline = summarize(input.results, 'scripted@1', 'holdout');
   for (const id of ids) {

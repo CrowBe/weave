@@ -3,7 +3,17 @@ import { digest } from './digest.js';
 import { correlation } from './sites/index.js';
 import { stableStringify } from './stable-json.js';
 
-export const AUDIT_SLICES = ['goal', 'iteration', 'plan', 'decisions', 'artifacts', 'checks', 'evals', 'open_issues', 'budget'] as const;
+export const AUDIT_SLICES = [
+  'goal',
+  'iteration',
+  'plan',
+  'decisions',
+  'artifacts',
+  'checks',
+  'evals',
+  'open_issues',
+  'budget',
+] as const;
 export type AuditSliceName = (typeof AUDIT_SLICES)[number];
 export interface AuditCriterion {
   readonly criterion_id: string;
@@ -58,15 +68,33 @@ export interface AuditIssue {
 export interface AuditBudget {
   readonly spent_micros: number;
   readonly ceiling_micros: number;
-  readonly quota: readonly { readonly provider: string; readonly window: string; readonly percent_remaining: number; readonly resets_at: number | null }[];
+  readonly quota: readonly {
+    readonly provider: string;
+    readonly window: string;
+    readonly percent_remaining: number;
+    readonly resets_at: number | null;
+  }[];
 }
 export interface AuditState {
   readonly schema: 'audit-state@1';
   readonly view: 'view.audit@1';
   readonly goal: AuditGoal;
   readonly iteration: number;
-  readonly plan: readonly { readonly step_id: string; readonly intent: string; readonly tier: string; readonly status: 'done' | 'failed' | 'skipped' }[];
-  readonly decisions: readonly { readonly site: string; readonly question_id: string; readonly choice: string | null; readonly probabilities: Readonly<Record<string, number>>; readonly confidence: number | null; readonly fallback_used: boolean; readonly obs_seq: number }[];
+  readonly plan: readonly {
+    readonly step_id: string;
+    readonly intent: string;
+    readonly tier: string;
+    readonly status: 'done' | 'failed' | 'skipped';
+  }[];
+  readonly decisions: readonly {
+    readonly site: string;
+    readonly question_id: string;
+    readonly choice: string | null;
+    readonly probabilities: Readonly<Record<string, number>>;
+    readonly confidence: number | null;
+    readonly fallback_used: boolean;
+    readonly obs_seq: number;
+  }[];
   readonly artifacts: readonly AuditArtifact[];
   readonly checks: readonly AuditCheck[];
   readonly evals: readonly AuditEval[];
@@ -76,10 +104,13 @@ export interface AuditState {
   readonly source_revisions: Readonly<Record<string, number>>;
   readonly digest: string;
 }
-export type AuditStateInput = Pick<AuditState, 'goal' | 'iteration' | 'source_revisions'> & Partial<Pick<AuditState, 'plan' | 'decisions' | 'artifacts' | 'checks' | 'evals' | 'open_issues' | 'budget' | 'omissions'>> & {
-  readonly authorized_slices: readonly AuditSliceName[];
-  readonly max_body_bytes?: number;
-};
+export type AuditStateInput = Pick<AuditState, 'goal' | 'iteration' | 'source_revisions'> &
+  Partial<
+    Pick<AuditState, 'plan' | 'decisions' | 'artifacts' | 'checks' | 'evals' | 'open_issues' | 'budget' | 'omissions'>
+  > & {
+    readonly authorized_slices: readonly AuditSliceName[];
+    readonly max_body_bytes?: number;
+  };
 
 function boundedUtf8(value: string, cap: number): string {
   let bytes = 0;
@@ -122,65 +153,92 @@ function markerId(id: unknown, index: number): string {
 /** Policy supplies already disclosed, secret-free slices. No inference or IO. */
 export function assembleAuditState(input: AuditStateInput): AuditState {
   const allowed = new Set(input.authorized_slices);
-  if (!allowed.has('goal') || !allowed.has('iteration')) throw new Error('Audit requires authorized goal and iteration slices.');
+  if (!allowed.has('goal') || !allowed.has('iteration'))
+    throw new Error('Audit requires authorized goal and iteration slices.');
   if (!Number.isSafeInteger(input.iteration) || input.iteration < 0) throw new Error('Invalid audit iteration.');
   const cap = input.max_body_bytes ?? 4096;
   if (!Number.isSafeInteger(cap) || cap < 0) throw new Error('Invalid audit body cap.');
   for (const criterion of input.goal.success_criteria) {
-    if (criterion.proof !== undefined && !isCriterionProof(criterion.proof)) throw new Error('Invalid criterion proof.');
+    if (criterion.proof !== undefined && !isCriterionProof(criterion.proof))
+      throw new Error('Invalid criterion proof.');
   }
   const omissions = [...(input.omissions ?? [])];
   for (const slice of AUDIT_SLICES) if (!allowed.has(slice)) omissions.push(`${slice}:authority`);
   const refs = new Set(input.goal.authority_scope);
   const artifacts: AuditArtifact[] = [];
-  if (allowed.has('artifacts')) for (const artifact of input.artifacts ?? []) {
-    if (!refs.has(artifact.ref)) {
-      omissions.push('artifact:authority');
-      continue;
+  if (allowed.has('artifacts'))
+    for (const artifact of input.artifacts ?? []) {
+      if (!refs.has(artifact.ref)) {
+        omissions.push('artifact:authority');
+        continue;
+      }
+      const { body, summary, ...metadata } = artifact;
+      const marker = `artifact:${markerId(artifact.artifact_id, artifacts.length)}`;
+      const boundedSummary = boundedUtf8(summary, 240);
+      if (boundedSummary !== summary) omissions.push(`${marker}:summary_cap`);
+      if (body !== undefined && Buffer.byteLength(body, 'utf8') > cap) {
+        omissions.push(`${marker}:size_cap`);
+        artifacts.push({ ...metadata, summary: boundedSummary });
+      } else artifacts.push({ ...metadata, summary: boundedSummary, ...(body === undefined ? {} : { body }) });
     }
-    const { body, summary, ...metadata } = artifact;
-    const marker = `artifact:${markerId(artifact.artifact_id, artifacts.length)}`;
-    const boundedSummary = boundedUtf8(summary, 240);
-    if (boundedSummary !== summary) omissions.push(`${marker}:summary_cap`);
-    if (body !== undefined && Buffer.byteLength(body, 'utf8') > cap) {
-      omissions.push(`${marker}:size_cap`);
-      artifacts.push({ ...metadata, summary: boundedSummary });
-    } else artifacts.push({ ...metadata, summary: boundedSummary, ...(body === undefined ? {} : { body }) });
-  }
-  const source_revisions = Object.fromEntries(Object.entries(input.source_revisions).filter(([key]) => allowed.has(key as AuditSliceName) || artifacts.some(artifact => artifact.ref === key)));
+  const source_revisions = Object.fromEntries(
+    Object.entries(input.source_revisions).filter(
+      ([key]) => allowed.has(key as AuditSliceName) || artifacts.some((artifact) => artifact.ref === key),
+    ),
+  );
   const boundText = (value: string, cap: number, marker: string): string => {
     const bounded = boundedUtf8(value, cap);
     if (bounded !== value) omissions.push(marker);
     return bounded;
   };
   const content = {
-    schema: 'audit-state@1' as const, view: 'view.audit@1' as const,
-    goal: { ...input.goal,
+    schema: 'audit-state@1' as const,
+    view: 'view.audit@1' as const,
+    goal: {
+      ...input.goal,
       statement: boundText(input.goal.statement, 4096, 'goal:statement_cap'),
-      success_criteria: input.goal.success_criteria.map((criterion, index) => ({ ...criterion,
-        statement: boundText(criterion.statement, 4096, `criterion:${markerId(criterion.criterion_id, index)}:statement_cap`),
+      success_criteria: input.goal.success_criteria.map((criterion, index) => ({
+        ...criterion,
+        statement: boundText(
+          criterion.statement,
+          4096,
+          `criterion:${markerId(criterion.criterion_id, index)}:statement_cap`,
+        ),
       })),
-    }, iteration: input.iteration,
-    plan: allowed.has('plan') ? (input.plan ?? []).map((step, index) => ({ ...step,
-      intent: boundText(step.intent, 4096, `plan:${markerId(step.step_id, index)}:intent_cap`),
-    })) : [],
-    decisions: allowed.has('decisions') ? (input.decisions ?? []).map((decision, index) => ({ ...decision,
-      site: boundText(decision.site, 240, `decision:${index}:site_cap`),
-      question_id: boundText(decision.question_id, 240, `decision:${index}:question_id_cap`),
-      choice: decision.choice === null ? null : boundText(decision.choice, 240, `decision:${index}:choice_cap`),
-    })) : [],
+    },
+    iteration: input.iteration,
+    plan: allowed.has('plan')
+      ? (input.plan ?? []).map((step, index) => ({
+          ...step,
+          intent: boundText(step.intent, 4096, `plan:${markerId(step.step_id, index)}:intent_cap`),
+        }))
+      : [],
+    decisions: allowed.has('decisions')
+      ? (input.decisions ?? []).map((decision, index) => ({
+          ...decision,
+          site: boundText(decision.site, 240, `decision:${index}:site_cap`),
+          question_id: boundText(decision.question_id, 240, `decision:${index}:question_id_cap`),
+          choice: decision.choice === null ? null : boundText(decision.choice, 240, `decision:${index}:choice_cap`),
+        }))
+      : [],
     artifacts,
-    checks: allowed.has('checks') ? (input.checks ?? []).map((check, index) => {
-      const tail = boundedUtf8Tail(check.tail, 240);
-      if (tail !== check.tail) omissions.push(`check:${markerId(check.check_id, index)}:tail_cap`);
-      return { ...check, tail };
-    }) : [],
-    evals: allowed.has('evals') ? input.evals ?? [] : [],
-    open_issues: allowed.has('open_issues') ? (input.open_issues ?? []).map((issue, index) => ({ ...issue,
-      text: boundText(issue.text, 4096, `issue:${markerId(issue.issue_id, index)}:text_cap`),
-    })) : [],
-    budget: allowed.has('budget') ? input.budget ?? null : null,
-    omissions: [...new Set(omissions)].sort(), source_revisions,
+    checks: allowed.has('checks')
+      ? (input.checks ?? []).map((check, index) => {
+          const tail = boundedUtf8Tail(check.tail, 240);
+          if (tail !== check.tail) omissions.push(`check:${markerId(check.check_id, index)}:tail_cap`);
+          return { ...check, tail };
+        })
+      : [],
+    evals: allowed.has('evals') ? (input.evals ?? []) : [],
+    open_issues: allowed.has('open_issues')
+      ? (input.open_issues ?? []).map((issue, index) => ({
+          ...issue,
+          text: boundText(issue.text, 4096, `issue:${markerId(issue.issue_id, index)}:text_cap`),
+        }))
+      : [],
+    budget: allowed.has('budget') ? (input.budget ?? null) : null,
+    omissions: [...new Set(omissions)].sort(),
+    source_revisions,
   };
   // Canonicalize and detach all nested input references before publishing.
   return JSON.parse(stableStringify({ ...content, digest: digest(content) })) as AuditState;

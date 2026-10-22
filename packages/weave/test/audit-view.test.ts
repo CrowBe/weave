@@ -5,9 +5,17 @@ import { digest } from '../src/digest.js';
 
 const fixture = (): AuditStateInput => ({
   authorized_slices: AUDIT_SLICES,
-  goal: { goal_id: 'goal', statement: 'Build', success_criteria: [{ criterion_id: 'c1', statement: 'Works', check_ids: ['test'] }], authority_scope: ['ref_ok'], revision: 1 },
+  goal: {
+    goal_id: 'goal',
+    statement: 'Build',
+    success_criteria: [{ criterion_id: 'c1', statement: 'Works', check_ids: ['test'] }],
+    authority_scope: ['ref_ok'],
+    revision: 1,
+  },
   iteration: 0,
-  artifacts: [{ artifact_id: 'a1', kind: 'report', digest: 'abc', summary: 'report', bytes: 12, ref: 'ref_ok', body: '😀😀😀' }],
+  artifacts: [
+    { artifact_id: 'a1', kind: 'report', digest: 'abc', summary: 'report', bytes: 12, ref: 'ref_ok', body: '😀😀😀' },
+  ],
   source_revisions: { goal: 1, artifacts: 2 },
 });
 
@@ -21,7 +29,15 @@ test('tidy state drops oversized bodies using UTF-8 bytes and records omission',
 
 test('tidy state rejects unauthorized slices and artifact references', () => {
   const input = fixture();
-  const state = assembleAuditState({ ...input, authorized_slices: ['goal', 'iteration', 'artifacts'], artifacts: [...input.artifacts!, { artifact_id: 'hidden', kind: 'file', digest: 'secret', summary: 'private', bytes: 1, ref: 'ref_hidden' }], source_revisions: { ...input.source_revisions, checks: 9 } });
+  const state = assembleAuditState({
+    ...input,
+    authorized_slices: ['goal', 'iteration', 'artifacts'],
+    artifacts: [
+      ...input.artifacts!,
+      { artifact_id: 'hidden', kind: 'file', digest: 'secret', summary: 'private', bytes: 1, ref: 'ref_hidden' },
+    ],
+    source_revisions: { ...input.source_revisions, checks: 9 },
+  });
   assert.equal(state.artifacts.length, 1);
   assert.ok(state.omissions.includes('checks:authority'));
   assert.ok(state.omissions.includes('artifact:authority'));
@@ -34,10 +50,21 @@ test('unauthorized artifacts disclose only one identity-free authority marker', 
   assert.deepEqual(baseline.omissions, []);
   const ids = ['hidden', 'hidden:summary_cap', 'sk-FAKE-NOT-A-CREDENTIAL'];
   for (const count of [1, ids.length]) {
-    const artifacts = ids.slice(0, count).map((artifact_id, index) => ({ ...input.artifacts![0]!,
-      artifact_id, ref: `ref_hidden_${index}`, summary: '界'.repeat(100), body: 'x'.repeat(5000) }));
-    const state = assembleAuditState({ ...input, artifacts: [...input.artifacts!, ...artifacts],
-      source_revisions: { ...input.source_revisions, ...Object.fromEntries(artifacts.map(artifact => [artifact.ref, 99])) } });
+    const artifacts = ids.slice(0, count).map((artifact_id, index) => ({
+      ...input.artifacts![0]!,
+      artifact_id,
+      ref: `ref_hidden_${index}`,
+      summary: '界'.repeat(100),
+      body: 'x'.repeat(5000),
+    }));
+    const state = assembleAuditState({
+      ...input,
+      artifacts: [...input.artifacts!, ...artifacts],
+      source_revisions: {
+        ...input.source_revisions,
+        ...Object.fromEntries(artifacts.map((artifact) => [artifact.ref, 99])),
+      },
+    });
     assert.deepEqual(state.omissions, ['artifact:authority']);
     assert.deepEqual(state.artifacts, baseline.artifacts);
     assert.deepEqual(state.source_revisions, baseline.source_revisions);
@@ -68,18 +95,31 @@ test('artifact summaries obey UTF-8 byte cap and assembled state detaches input'
 
 function textFixture(statement: string, decisionText: string): AuditStateInput {
   const input = fixture();
-  return { ...input,
+  return {
+    ...input,
     goal: { ...input.goal, statement, success_criteria: [{ criterion_id: 'c1', statement, check_ids: ['test'] }] },
     plan: [{ step_id: 's1', intent: statement, tier: 'standard', status: 'done' }],
-    decisions: [{ site: decisionText, question_id: decisionText, choice: decisionText,
-      probabilities: { yes: 1 }, confidence: 1, fallback_used: false, obs_seq: 3 }],
+    decisions: [
+      {
+        site: decisionText,
+        question_id: decisionText,
+        choice: decisionText,
+        probabilities: { yes: 1 },
+        confidence: 1,
+        fallback_used: false,
+        obs_seq: 3,
+      },
+    ],
     open_issues: [{ issue_id: 'i1', source: 'audit', text: statement, severity: 'gap' }],
   };
 }
 
 test('audit text caps preserve empty and exact-cap strings and null choices', () => {
-  for (const [statement, decisionText] of [['', ''], ['x'.repeat(4096), 'x'.repeat(240)],
-    ['😀'.repeat(1024), '界'.repeat(80)]]) {
+  for (const [statement, decisionText] of [
+    ['', ''],
+    ['x'.repeat(4096), 'x'.repeat(240)],
+    ['😀'.repeat(1024), '界'.repeat(80)],
+  ]) {
     const input = textFixture(statement!, decisionText!);
     const state = assembleAuditState(input);
     assert.deepEqual(state.goal, input.goal);
@@ -102,7 +142,11 @@ test('audit text caps bound every field at one byte over and multibyte cuts befo
   ]) {
     const input = textFixture(statement!, decisionText!);
     const state = assembleAuditState(input);
-    assert.equal(Buffer.byteLength(state.goal.statement), Buffer.byteLength(expectedStatement!), 'goal statement UTF-8 cap');
+    assert.equal(
+      Buffer.byteLength(state.goal.statement),
+      Buffer.byteLength(expectedStatement!),
+      'goal statement UTF-8 cap',
+    );
     assert.equal(state.goal.statement, expectedStatement);
     assert.equal(state.goal.success_criteria[0]!.statement, expectedStatement);
     assert.equal(state.plan[0]!.intent, expectedStatement);
@@ -110,11 +154,21 @@ test('audit text caps bound every field at one byte over and multibyte cuts befo
     for (const field of ['site', 'question_id', 'choice'] as const)
       assert.equal(state.decisions[0]![field], expectedDecision, field);
     assert.deepEqual(state.decisions[0]!.probabilities, { yes: 1 });
-    assert.deepEqual(state.omissions, ['criterion:c1:statement_cap', 'decision:0:choice_cap',
-      'decision:0:question_id_cap', 'decision:0:site_cap', 'goal:statement_cap', 'issue:i1:text_cap', 'plan:s1:intent_cap']);
+    assert.deepEqual(state.omissions, [
+      'criterion:c1:statement_cap',
+      'decision:0:choice_cap',
+      'decision:0:question_id_cap',
+      'decision:0:site_cap',
+      'goal:statement_cap',
+      'issue:i1:text_cap',
+      'plan:s1:intent_cap',
+    ]);
     const { digest: stateDigest, ...content } = state;
     assert.equal(stateDigest, digest(content));
-    assert.equal(assembleAuditState(textFixture(statement! + 'discarded', decisionText! + 'discarded')).digest, stateDigest);
+    assert.equal(
+      assembleAuditState(textFixture(statement! + 'discarded', decisionText! + 'discarded')).digest,
+      stateDigest,
+    );
     assert.equal(input.goal.statement, statement);
   }
 });
@@ -122,8 +176,15 @@ test('audit text caps bound every field at one byte over and multibyte cuts befo
 test('audit text caps retain many items and only mark authorized fields', () => {
   const input = textFixture('x'.repeat(4097), 'x'.repeat(241));
   const count = 100;
-  const many = { ...input,
-    goal: { ...input.goal, success_criteria: Array.from({ length: count }, (_, i) => ({ ...input.goal.success_criteria[0]!, criterion_id: `c${i}` })) },
+  const many = {
+    ...input,
+    goal: {
+      ...input.goal,
+      success_criteria: Array.from({ length: count }, (_, i) => ({
+        ...input.goal.success_criteria[0]!,
+        criterion_id: `c${i}`,
+      })),
+    },
     plan: Array.from({ length: count }, (_, i) => ({ ...input.plan![0]!, step_id: `s${i}` })),
     decisions: Array.from({ length: count }, (_, i) => ({ ...input.decisions![0]!, obs_seq: i })),
     open_issues: Array.from({ length: count }, (_, i) => ({ ...input.open_issues![0]!, issue_id: `i${i}` })),
@@ -145,8 +206,9 @@ test('audit text caps retain many items and only mark authorized fields', () => 
   }
   assert.equal(state.omissions.length, 1 + count * 6);
   const restricted = assembleAuditState({ ...many, authorized_slices: ['goal', 'iteration'] });
-  assert.ok(!restricted.omissions.some(marker => /^(plan|decision|issue):.*_cap$/.test(marker)));
-  for (const slice of ['plan', 'decisions', 'open_issues']) assert.ok(restricted.omissions.includes(`${slice}:authority`));
+  assert.ok(!restricted.omissions.some((marker) => /^(plan|decision|issue):.*_cap$/.test(marker)));
+  for (const slice of ['plan', 'decisions', 'open_issues'])
+    assert.ok(restricted.omissions.includes(`${slice}:authority`));
   assert.deepEqual(restricted.plan, []);
   assert.deepEqual(restricted.decisions, []);
   assert.deepEqual(restricted.open_issues, []);
@@ -167,9 +229,13 @@ test('check tail byte cut preserves the end without splitting an astral characte
 
 test('check tails use UTF-8 suffix caps at empty, exact and over-cap boundaries', () => {
   for (const [tail, expected] of [
-    ['', ''], ['x'.repeat(240), 'x'.repeat(240)], ['😀'.repeat(60), '😀'.repeat(60)],
-    ['界'.repeat(80), '界'.repeat(80)], ['x'.repeat(241), 'x'.repeat(240)],
-    ['😀'.repeat(100), '😀'.repeat(60)], ['界'.repeat(81), '界'.repeat(80)],
+    ['', ''],
+    ['x'.repeat(240), 'x'.repeat(240)],
+    ['😀'.repeat(60), '😀'.repeat(60)],
+    ['界'.repeat(80), '界'.repeat(80)],
+    ['x'.repeat(241), 'x'.repeat(240)],
+    ['😀'.repeat(100), '😀'.repeat(60)],
+    ['界'.repeat(81), '界'.repeat(80)],
     ['prefix\n' + '界'.repeat(79) + 'end', '界'.repeat(79) + 'end'],
   ]) {
     const state = assembleAuditState(checkFixture(tail!));
@@ -198,17 +264,31 @@ test('check tails repair existing lone surrogates without crashing or exceeding 
 });
 
 test('audit eval iteration provenance is preserved, detached and canonically digested', () => {
-  const legacy = { criterion_id: 'c1', passed: true, verdict_probability: .8, confidence: .9 };
-  const evals = [{ ...legacy, iteration: 0, passed: false }, { ...legacy, iteration: 1 },
-    { ...legacy, iteration: null }, legacy];
+  const legacy = { criterion_id: 'c1', passed: true, verdict_probability: 0.8, confidence: 0.9 };
+  const evals = [
+    { ...legacy, iteration: 0, passed: false },
+    { ...legacy, iteration: 1 },
+    { ...legacy, iteration: null },
+    legacy,
+  ];
   const input = { ...fixture(), iteration: 1, evals };
   const state = assembleAuditState(input);
   assert.deepEqual(state.evals, evals, 'assembly preserves historical and unknown evidence without relabeling');
   const reordered = { ...legacy, iteration: 1 };
-  const canonical = assembleAuditState({ ...input, evals: [evals[0]!,
-    { iteration: 1, confidence: .9, verdict_probability: .8, passed: true, criterion_id: 'c1' }, evals[2]!, legacy] });
+  const canonical = assembleAuditState({
+    ...input,
+    evals: [
+      evals[0]!,
+      { iteration: 1, confidence: 0.9, verdict_probability: 0.8, passed: true, criterion_id: 'c1' },
+      evals[2]!,
+      legacy,
+    ],
+  });
   assert.deepEqual(state, canonical);
-  assert.notEqual(assembleAuditState({ ...input, evals: [evals[0]!, { ...reordered, iteration: 0 }, evals[2]!, legacy] }).digest, state.digest);
+  assert.notEqual(
+    assembleAuditState({ ...input, evals: [evals[0]!, { ...reordered, iteration: 0 }, evals[2]!, legacy] }).digest,
+    state.digest,
+  );
   const { digest: _digest, ...content } = state;
   assert.equal(state.digest, digest(content));
   evals[0]!.passed = true;
@@ -226,15 +306,29 @@ test('prefix bounds repair lone surrogates like check tails and record the field
   ]) {
     const input = textFixture(statement!, decisionText!);
     const state = assembleAuditState({ ...input, artifacts: [{ ...input.artifacts![0]!, summary: decisionText! }] });
-    for (const text of [state.goal.statement, state.goal.success_criteria[0]!.statement, state.plan[0]!.intent, state.open_issues[0]!.text]) {
+    for (const text of [
+      state.goal.statement,
+      state.goal.success_criteria[0]!.statement,
+      state.plan[0]!.intent,
+      state.open_issues[0]!.text,
+    ]) {
       assert.equal(text, expectedStatement);
       assert.ok(isWellFormed(text), 'prefix must not contain a lone surrogate');
       assert.ok(Buffer.byteLength(text) <= 4096);
     }
-    for (const field of ['site', 'question_id', 'choice'] as const) assert.equal(state.decisions[0]![field], expectedDecision, field);
+    for (const field of ['site', 'question_id', 'choice'] as const)
+      assert.equal(state.decisions[0]![field], expectedDecision, field);
     assert.equal(state.artifacts[0]!.summary, expectedDecision);
-    assert.deepEqual(state.omissions, ['artifact:a1:summary_cap', 'criterion:c1:statement_cap', 'decision:0:choice_cap',
-      'decision:0:question_id_cap', 'decision:0:site_cap', 'goal:statement_cap', 'issue:i1:text_cap', 'plan:s1:intent_cap']);
+    assert.deepEqual(state.omissions, [
+      'artifact:a1:summary_cap',
+      'criterion:c1:statement_cap',
+      'decision:0:choice_cap',
+      'decision:0:question_id_cap',
+      'decision:0:site_cap',
+      'goal:statement_cap',
+      'issue:i1:text_cap',
+      'plan:s1:intent_cap',
+    ]);
   }
 });
 
@@ -242,17 +336,35 @@ test('cap markers name an item by position when its id is not a bounded identifi
   const longId = 'id'.repeat(100);
   const input = textFixture('x'.repeat(4097), 'x');
   const criterion = input.goal.success_criteria[0]!;
-  const state = assembleAuditState({ ...input,
-    goal: { ...input.goal, success_criteria: [criterion, { ...criterion, criterion_id: longId },
-      { ...criterion, criterion_id: 'sk-NOT-A-REAL-KEY' }] },
+  const state = assembleAuditState({
+    ...input,
+    goal: {
+      ...input.goal,
+      success_criteria: [
+        criterion,
+        { ...criterion, criterion_id: longId },
+        { ...criterion, criterion_id: 'sk-NOT-A-REAL-KEY' },
+      ],
+    },
     plan: [{ ...input.plan![0]!, step_id: longId }],
     open_issues: [{ ...input.open_issues![0]!, issue_id: 'bad id with spaces' }],
     artifacts: [{ ...input.artifacts![0]!, artifact_id: longId, summary: 'y'.repeat(241), body: 'z'.repeat(5000) }],
     checks: [{ check_id: longId, argv_digest: 'abc', exit: 0, passed: true, tail: 't'.repeat(241) }],
   });
-  assert.deepEqual(state.omissions, ['artifact:@0:size_cap', 'artifact:@0:summary_cap', 'check:@0:tail_cap',
-    'criterion:@1:statement_cap', 'criterion:@2:statement_cap', 'criterion:c1:statement_cap', 'goal:statement_cap',
-    'issue:@0:text_cap', 'plan:@0:intent_cap']);
+  assert.deepEqual(state.omissions, [
+    'artifact:@0:size_cap',
+    'artifact:@0:summary_cap',
+    'check:@0:tail_cap',
+    'criterion:@1:statement_cap',
+    'criterion:@2:statement_cap',
+    'criterion:c1:statement_cap',
+    'goal:statement_cap',
+    'issue:@0:text_cap',
+    'plan:@0:intent_cap',
+  ]);
   assert.equal(state.goal.success_criteria[1]!.criterion_id, longId, 'item ids are retained unchanged');
-  assert.equal(state.omissions.some(marker => marker.includes('sk-') || marker.includes(longId)), false);
+  assert.equal(
+    state.omissions.some((marker) => marker.includes('sk-') || marker.includes(longId)),
+    false,
+  );
 });

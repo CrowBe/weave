@@ -7,12 +7,27 @@
 import { createHash } from 'node:crypto';
 import { hasCredential } from './credential.js';
 import {
-  SCHEMA, type ContentClass, type DisclosureClass, type InlinePolicy, type Kind, type Rejection, type Verdict,
+  SCHEMA,
+  type ContentClass,
+  type DisclosureClass,
+  type InlinePolicy,
+  type Kind,
+  type Rejection,
+  type Verdict,
 } from './types.js';
 
 export const ENVELOPE_KEYS = [
-  'schema', 'trace_id', 'record_id', 'emitter', 'sequence', 'kind',
-  'thread_id', 'parent_id', 'links', 'evidence', 'fields',
+  'schema',
+  'trace_id',
+  'record_id',
+  'emitter',
+  'sequence',
+  'kind',
+  'thread_id',
+  'parent_id',
+  'links',
+  'evidence',
+  'fields',
 ] as const;
 export const EMITTER_KEYS = ['kind', 'id'] as const;
 export const LINK_KEYS = ['rel', 'record_id'] as const;
@@ -43,13 +58,17 @@ export const isDigest = (x: unknown): x is string => typeof x === 'string' && DI
 type Obj = Readonly<Record<string, unknown>>;
 const isObject = (x: unknown): x is Obj => typeof x === 'object' && x !== null && !Array.isArray(x);
 const hasExactly = (o: Obj, keys: readonly string[], optional: readonly string[] = []): boolean =>
-  keys.every(k => Object.hasOwn(o, k)) && Object.keys(o).every(k => keys.includes(k) || optional.includes(k));
+  keys.every((k) => Object.hasOwn(o, k)) && Object.keys(o).every((k) => keys.includes(k) || optional.includes(k));
 
 /** A content value in its default form: class, digest and optional ref, never text. */
 export function isContent(x: unknown): boolean {
-  return isObject(x) && hasExactly(x, ['content_class', 'digest'], ['ref'])
-    && CONTENT_CLASSES.has(x.content_class as string) && isDigest(x.digest)
-    && (!Object.hasOwn(x, 'ref') || isId(x.ref));
+  return (
+    isObject(x) &&
+    hasExactly(x, ['content_class', 'digest'], ['ref']) &&
+    CONTENT_CLASSES.has(x.content_class as string) &&
+    isDigest(x.digest) &&
+    (!Object.hasOwn(x, 'ref') || isId(x.ref))
+  );
 }
 
 const sha256 = (text: string): string => `sha256:${createHash('sha256').update(text, 'utf8').digest('hex')}`;
@@ -58,29 +77,50 @@ const sha256 = (text: string): string => `sha256:${createHash('sha256').update(t
 function contentHolds(x: unknown, traceId: unknown, inline: InlinePolicy | undefined): boolean {
   if (!isObject(x) || !Object.hasOwn(x, 'text')) return isContent(x);
   const { text, ...value } = x;
-  return isContent(value)
-    && inline !== undefined && inline.trace_id === traceId
-    && inline.classes.includes(value.content_class as ContentClass)
-    && typeof text === 'string' && text.length > 0 && !LONE_SURROGATE.test(text) && !hasCredential(text)
-    && value.digest === sha256(text);
+  return (
+    isContent(value) &&
+    inline !== undefined &&
+    inline.trace_id === traceId &&
+    inline.classes.includes(value.content_class as ContentClass) &&
+    typeof text === 'string' &&
+    text.length > 0 &&
+    !LONE_SURROGATE.test(text) &&
+    !hasCredential(text) &&
+    value.digest === sha256(text)
+  );
 }
 
 /** A malformed inline content policy is a configuration error, not a verdict. */
 export function assertInlinePolicy(inline: unknown): asserts inline is InlinePolicy {
-  if (!(isObject(inline) && hasExactly(inline, ['trace_id', 'classes']) && isId(inline.trace_id)
-    && Array.isArray(inline.classes) && inline.classes.every(c => CONTENT_CLASSES.has(c as string)))) {
+  if (
+    !(
+      isObject(inline) &&
+      hasExactly(inline, ['trace_id', 'classes']) &&
+      isId(inline.trace_id) &&
+      Array.isArray(inline.classes) &&
+      inline.classes.every((c) => CONTENT_CLASSES.has(c as string))
+    )
+  ) {
     throw new TypeError('Invalid inline content policy');
   }
 }
 
 type Scalar = (x: unknown) => boolean;
 const code = (...vocabulary: string[]): Scalar =>
-  vocabulary.length === 0 ? isCode : x => isCode(x) && vocabulary.includes(x);
-const flag: Scalar = x => typeof x === 'boolean';
-const nullable = (inner: Scalar): Scalar => x => x === null || inner(x);
-const list = (inner: Scalar, max: number): Scalar => x => Array.isArray(x) && x.length <= max && x.every(inner);
-const shape = (spec: Readonly<Record<string, Scalar>>): Scalar => x =>
-  isObject(x) && hasExactly(x, Object.keys(spec)) && Object.entries(spec).every(([k, ok]) => ok(x[k]));
+  vocabulary.length === 0 ? isCode : (x) => isCode(x) && vocabulary.includes(x);
+const flag: Scalar = (x) => typeof x === 'boolean';
+const nullable =
+  (inner: Scalar): Scalar =>
+  (x) =>
+    x === null || inner(x);
+const list =
+  (inner: Scalar, max: number): Scalar =>
+  (x) =>
+    Array.isArray(x) && x.length <= max && x.every(inner);
+const shape =
+  (spec: Readonly<Record<string, Scalar>>): Scalar =>
+  (x) =>
+    isObject(x) && hasExactly(x, Object.keys(spec)) && Object.entries(spec).every(([k, ok]) => ok(x[k]));
 
 export interface Field {
   readonly ok: Scalar;
@@ -228,8 +268,10 @@ function crossFieldHolds(kind: Kind, f: Obj): boolean {
     case 'capability.invoked':
       return !Object.hasOwn(f, 'failure') || f.status === 'failed';
     case 'outcome':
-      return !(Object.hasOwn(f, 'criteria_met') && Object.hasOwn(f, 'criteria_total'))
-        || (f.criteria_met as number) <= (f.criteria_total as number);
+      return (
+        !(Object.hasOwn(f, 'criteria_met') && Object.hasOwn(f, 'criteria_total')) ||
+        (f.criteria_met as number) <= (f.criteria_total as number)
+      );
     default:
       return true;
   }
@@ -254,11 +296,18 @@ export function validateRecord(value: unknown, inline?: InlinePolicy): Verdict {
   if (!isObject(r.emitter) || !hasExactly(r.emitter, EMITTER_KEYS) || !EMITTER_KINDS.has(r.emitter.kind as string)) {
     return reject('envelope');
   }
-  if (typeof r.trace_id !== 'string' || typeof r.record_id !== 'string' || typeof r.emitter.id !== 'string'
-    || !(r.thread_id === null || typeof r.thread_id === 'string')
-    || !(r.parent_id === null || typeof r.parent_id === 'string')
-    || typeof r.sequence !== 'number' || typeof r.kind !== 'string'
-    || !Array.isArray(r.links) || !Array.isArray(r.evidence) || !isObject(r.fields)) {
+  if (
+    typeof r.trace_id !== 'string' ||
+    typeof r.record_id !== 'string' ||
+    typeof r.emitter.id !== 'string' ||
+    !(r.thread_id === null || typeof r.thread_id === 'string') ||
+    !(r.parent_id === null || typeof r.parent_id === 'string') ||
+    typeof r.sequence !== 'number' ||
+    typeof r.kind !== 'string' ||
+    !Array.isArray(r.links) ||
+    !Array.isArray(r.evidence) ||
+    !isObject(r.fields)
+  ) {
     return reject('envelope');
   }
   if (UTF8.encode(JSON.stringify(r)).length > MAX_BYTES) return reject('envelope');
@@ -290,7 +339,7 @@ export function validateRecord(value: unknown, inline?: InlinePolicy): Verdict {
   }
   if (kind === 'thread.transition') {
     const needed = REQUIRED_LINK[r.fields.transition as string];
-    if (needed !== undefined && !links.some(l => (l as Obj).rel === needed)) return reject('link');
+    if (needed !== undefined && !links.some((l) => (l as Obj).rel === needed)) return reject('link');
   }
 
   // 6. evidence
@@ -304,13 +353,18 @@ export function validateRecord(value: unknown, inline?: InlinePolicy): Verdict {
     if (evidencePairs.has(pair)) return reject('evidence');
     evidencePairs.add(pair);
   }
-  if (r.emitter.kind === 'loom' && !evidence.some(e => (e as Obj).source === 'observation')) return reject('evidence');
+  if (r.emitter.kind === 'loom' && !evidence.some((e) => (e as Obj).source === 'observation'))
+    return reject('evidence');
 
   // 7. content
   const spec = FIELDS[kind];
   const fields = r.fields;
   for (const [name, field] of Object.entries(spec)) {
-    if (field.disclosure === 'content' && Object.hasOwn(fields, name) && !contentHolds(fields[name], r.trace_id, inline)) {
+    if (
+      field.disclosure === 'content' &&
+      Object.hasOwn(fields, name) &&
+      !contentHolds(fields[name], r.trace_id, inline)
+    ) {
       return reject('content');
     }
   }

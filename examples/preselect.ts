@@ -27,11 +27,18 @@ import {
 import { amosEvaluator } from '@weave/gateway/amos';
 import { typesafeAiEvaluator } from '@weave/gateway/typesafe-ai';
 
-const STEP = 'Keep the catalogue entries needed to narrow a disclosed index to the top few relevant capabilities, and always retain the grant check.';
+const STEP =
+  'Keep the catalogue entries needed to narrow a disclosed index to the top few relevant capabilities, and always retain the grant check.';
 const CATALOGUE = Object.freeze([
   Object.freeze({ id: 'cap.preselect', purpose: 'Keep the highest-scoring disclosed catalogue entries for this step' }),
-  Object.freeze({ id: 'cap.policy', purpose: 'Validate the preselect policy: top-k and an optional probability floor' }),
-  Object.freeze({ id: 'cap.intake', purpose: 'Classify an inbound message as a new thread, a continuation, or a stop' }),
+  Object.freeze({
+    id: 'cap.policy',
+    purpose: 'Validate the preselect policy: top-k and an optional probability floor',
+  }),
+  Object.freeze({
+    id: 'cap.intake',
+    purpose: 'Classify an inbound message as a new thread, a continuation, or a stop',
+  }),
   Object.freeze({ id: 'cap.grant', purpose: 'Refuse a destructive effect unless a grant already covers it' }),
   Object.freeze({ id: 'cap.theme', purpose: 'Paint workspace theme tokens for the operator surface' }),
   Object.freeze({ id: 'cap.fold', purpose: 'Fold a long observation into a retained summary' }),
@@ -65,9 +72,12 @@ function providerFlag(): 'typesafe-jev' | 'amos' {
   return provider;
 }
 function loadDecision(provider: 'typesafe-jev' | 'amos') {
-  const primary = existsSync(new URL('../weave.routes.json', import.meta.url)) ? 'weave.routes.json' : 'weave.routes.example.json';
+  const primary = existsSync(new URL('../weave.routes.json', import.meta.url))
+    ? 'weave.routes.json'
+    : 'weave.routes.example.json';
   let json = repoJson(primary);
-  if (existsSync(new URL('../weave.routes.local.json', import.meta.url))) json = applyRouteOverlay(json, repoJson('weave.routes.local.json'));
+  if (existsSync(new URL('../weave.routes.local.json', import.meta.url)))
+    json = applyRouteOverlay(json, repoJson('weave.routes.local.json'));
   if (!record(json) || !record(json['decision'])) {
     console.error('invalid route config');
     process.exit(1);
@@ -79,13 +89,23 @@ function loadDecision(provider: 'typesafe-jev' | 'amos') {
     console.error(parsed.errors.join('\n'));
     process.exit(1);
   }
-  return { binding: bindDecisionProvider(parsed.decision, 'loop.preselect'), table: parsed.table, decision: parsed.decision };
+  return {
+    binding: bindDecisionProvider(parsed.decision, 'loop.preselect'),
+    table: parsed.table,
+    decision: parsed.decision,
+  };
 }
 
 try {
   const provider = providerFlag();
   const loaded = loadDecision(provider);
-  const destination = loaded.table.find(unit => unit.operation === 'evaluate' && unit.kind === 'boolean' && unit.adapter === loaded.binding.adapter && unit.model === loaded.binding.model)?.destination;
+  const destination = loaded.table.find(
+    (unit) =>
+      unit.operation === 'evaluate' &&
+      unit.kind === 'boolean' &&
+      unit.adapter === loaded.binding.adapter &&
+      unit.model === loaded.binding.model,
+  )?.destination;
   if (destination === undefined) {
     console.error('no matching boolean evaluate unit');
     process.exit(1);
@@ -95,7 +115,9 @@ try {
   else {
     const apiKey = resolveTypesafeApiKey(process.env);
     if (apiKey === undefined) {
-      console.error('Set TYPESAFE_API_KEY (preferred; TYPESAFE_AI_API_KEY is the legacy fallback) in .env.local and rerun.');
+      console.error(
+        'Set TYPESAFE_API_KEY (preferred; TYPESAFE_AI_API_KEY is the legacy fallback) in .env.local and rerun.',
+      );
       process.exit(1);
     }
     evaluators = [typesafeAiEvaluator({ apiKey, baseURL: loaded.binding.baseURL })];
@@ -103,34 +125,44 @@ try {
   const gateway = createInferenceGateway({
     ...localBudgetGate(),
     decision: loaded.decision,
-    routes: loaded.table.filter(unit => unit.operation === 'evaluate' && unit.adapter === loaded.binding.adapter),
+    routes: loaded.table.filter((unit) => unit.operation === 'evaluate' && unit.adapter === loaded.binding.adapter),
     evaluators,
     clock: { now: () => Date.now() },
   });
   const policy = resolvePreselectPolicy(loaded.decision, loaded.binding.provider);
   const state = { state_revision: 1, state_updated_at: Date.now() };
-  const result = await evaluateBooleanSite('loop.preselect', {
-    ...state,
-    request_id: 'req_preselect_example',
-    state: { note: 'disclosed index only' },
-    needs_dispatch: false,
-    terms: {
-      quality: 'baseline',
-      destinations: [destination],
-      max_context_tokens: 4_000,
-      deadline: Date.now() + 180_000,
-      cost_ceiling: 1_000,
-      max_attempts: 1,
+  const result = await evaluateBooleanSite(
+    'loop.preselect',
+    {
+      ...state,
+      request_id: 'req_preselect_example',
+      state: { note: 'disclosed index only' },
+      needs_dispatch: false,
+      terms: {
+        quality: 'baseline',
+        destinations: [destination],
+        max_context_tokens: 4_000,
+        deadline: Date.now() + 180_000,
+        cost_ceiling: 1_000,
+        max_attempts: 1,
+      },
+      preselect_step: STEP,
+      catalogue_index: CATALOGUE,
+      required_entry_ids: ['cap.grant'],
+      preselect_policy: {
+        k: policy.k,
+        floor: policy.floor,
+        max_excluded: policy.max_excluded,
+        min_margin: policy.min_margin,
+        provider: policy.provider,
+      },
     },
-    preselect_step: STEP,
-    catalogue_index: CATALOGUE,
-    required_entry_ids: ['cap.grant'],
-    preselect_policy: {
-      k: policy.k, floor: policy.floor, max_excluded: policy.max_excluded, min_margin: policy.min_margin,
-      provider: policy.provider,
-    },
-  }, gateway, () => ({ ...state, observed_at: Date.now() }));
-  console.log(JSON.stringify({ preselect: result.preselect ?? null, kept: result.catalogue_index.map(entry => entry.id) }));
+    gateway,
+    () => ({ ...state, observed_at: Date.now() }),
+  );
+  console.log(
+    JSON.stringify({ preselect: result.preselect ?? null, kept: result.catalogue_index.map((entry) => entry.id) }),
+  );
 } catch {
   console.error('preselect example failed');
   process.exit(1);

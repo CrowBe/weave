@@ -51,14 +51,14 @@ operator evidence; the readiness probe cannot independently recover that hash.
 There are two services, not two models. Both load the same checkpoint and serve
 the same System One contract; they differ only in what runs the backbone.
 
-| | PyTorch (`weave-kev`) | llama.cpp (`weave-kev-llamacpp`) |
-| --- | --- | --- |
-| port | 8000 | 8001 |
-| backbone | fp32, CPU | Q8\_0, Vulkan |
-| median request | 11,482 ms | 2,640 ms |
-| correct (56 records) | 47/56 | 47/56 |
-| agrees with PyTorch | — | 56/56 |
-| order-stable cases | 15/18, 14 correct | 15/18, 14 correct |
+|                      | PyTorch (`weave-kev`) | llama.cpp (`weave-kev-llamacpp`) |
+| -------------------- | --------------------- | -------------------------------- |
+| port                 | 8000                  | 8001                             |
+| backbone             | fp32, CPU             | Q8\_0, Vulkan                    |
+| median request       | 11,482 ms             | 2,640 ms                         |
+| correct (56 records) | 47/56                 | 47/56                            |
+| agrees with PyTorch  | —                     | 56/56                            |
+| order-stable cases   | 15/18, 14 correct     | 15/18, 14 correct                |
 
 Measured over the 18 judgment-site cases at every presentation ordering; the
 records, the floors they are quoted against and the reference run are in
@@ -167,10 +167,14 @@ const timer = {
   sleep: (ms: number, signal?: AbortSignal) =>
     new Promise<void>((resolve, reject) => {
       const handle = setTimeout(resolve, ms);
-      signal?.addEventListener('abort', () => {
-        clearTimeout(handle);
-        reject(signal.reason);
-      }, { once: true });
+      signal?.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(handle);
+          reject(signal.reason);
+        },
+        { once: true },
+      );
     }),
 };
 
@@ -213,7 +217,7 @@ const gateway = createInferenceGateway({
 For an ordinary request, permit both destinations and Kev is the fallback:
 
 ```ts
-destinations: ['typesafe-ai', KEV_LOCAL_DESTINATION]
+destinations: ['typesafe-ai', KEV_LOCAL_DESTINATION];
 ```
 
 For privacy-required inference, permit only local data. The hosted route is
@@ -221,7 +225,7 @@ removed deterministically before execution, so Kev is preferred and failure is
 closed if it cannot answer:
 
 ```ts
-destinations: [KEV_LOCAL_DESTINATION]
+destinations: [KEV_LOCAL_DESTINATION];
 ```
 
 Keep `quality: 'baseline'` and `max_context_tokens <= 384`. The current

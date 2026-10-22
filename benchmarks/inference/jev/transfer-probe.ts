@@ -11,7 +11,13 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Clock, InferenceGateway } from '@weave/gateway';
-import { createJevGateway, describeRoutes, readCredentials, validateReferenceArgs, ProbeConfigurationError } from './run.ts';
+import {
+  createJevGateway,
+  describeRoutes,
+  readCredentials,
+  validateReferenceArgs,
+  ProbeConfigurationError,
+} from './run.ts';
 import { runReference, readProbeOutput } from './reference.ts';
 import { formatProbeError } from './probe-error.ts';
 import {
@@ -51,9 +57,7 @@ function printPermutation(records: readonly TransferRecord[]): void {
       report.orderings_seen
     } orderings (${(report.stability_rate * 100).toFixed(1)}%)`,
   );
-  console.log(
-    `    not permuted    ${report.cases - report.permuted} record(s) asked one way only — no order evidence`,
-  );
+  console.log(`    not permuted    ${report.cases - report.permuted} record(s) asked one way only — no order evidence`);
   console.log(
     `    accuracy        worst ordering ${(report.worst_ordering_accuracy * 100).toFixed(1)}%   best ${(
       report.best_ordering_accuracy * 100
@@ -109,14 +113,16 @@ function calibration(records: readonly TransferRecord[]): { ece: number; brier: 
   return { ece, brier: brier / pts.length, mean: mean / pts.length };
 }
 
-export async function main(deps: {
-  readonly argv?: readonly string[];
-  readonly env?: NodeJS.ProcessEnv;
-  readonly clock?: Clock;
-  readonly gateway?: InferenceGateway;
-  readonly suite?: readonly SuiteRecord[];
-  readonly signal?: AbortSignal;
-} = {}): Promise<number> {
+export async function main(
+  deps: {
+    readonly argv?: readonly string[];
+    readonly env?: NodeJS.ProcessEnv;
+    readonly clock?: Clock;
+    readonly gateway?: InferenceGateway;
+    readonly suite?: readonly SuiteRecord[];
+    readonly signal?: AbortSignal;
+  } = {},
+): Promise<number> {
   const argv = deps.argv ?? process.argv;
   const env = deps.env ?? process.env;
   const clock: Clock = deps.clock ?? { now: () => Date.now() };
@@ -149,7 +155,7 @@ export async function main(deps: {
       ...(jevModel === undefined ? {} : { model: jevModel }),
     };
     console.log(describeRoutes(credentials, options));
-    const suite = deps.suite ?? await loadSuite(flag('split') ?? 'development');
+    const suite = deps.suite ?? (await loadSuite(flag('split') ?? 'development'));
     const chosen = await selectRecords(suite, has('all'));
     const limit = flag('limit');
     const selected = limit === undefined ? chosen : chosen.slice(0, Number(limit));
@@ -180,12 +186,17 @@ export async function main(deps: {
     }
 
     const runId = reference ? randomUUID() : undefined;
-    const output = flag('output') ?? (reference ? `.local/jev/reference-transfer-results-${runId}.json` : 'benchmarks/inference/jev/transfer-results.json');
+    const output =
+      flag('output') ??
+      (reference
+        ? `.local/jev/reference-transfer-results-${runId}.json`
+        : 'benchmarks/inference/jev/transfer-results.json');
     if (reference) {
       const jobs: (() => Promise<TransferRecord>)[] = [];
-      for (const { record, orders } of plan) for (let o = 0; o < orders.length; o++) {
-        jobs.push(() => runSuiteRecord(gateway, clock, credentials, record, options, orders[o]!, o, deps.signal));
-      }
+      for (const { record, orders } of plan)
+        for (let o = 0; o < orders.length; o++) {
+          jobs.push(() => runSuiteRecord(gateway, clock, credentials, record, options, orders[o]!, o, deps.signal));
+        }
       const result = await runReference({ clock, corpus: selected, output, runId, jobs, signal: deps.signal });
       records = [...result.records];
       exitCode = result.header.pin_mismatch || result.header.status !== 'completed' ? 1 : 0;
@@ -223,7 +234,8 @@ export async function main(deps: {
   console.log(`  floors          uniform ${pct(uni)}   majority-class ${pct(maj)}`);
   console.log(
     `  margin          ${pct(acc - bestFloor)} over the stronger floor  (${(
-      (acc - bestFloor) / Math.max(1e-9, se)
+      (acc - bestFloor) /
+      Math.max(1e-9, se)
     ).toFixed(1)} s.e.)`,
   );
   console.log(
@@ -325,7 +337,9 @@ export async function main(deps: {
   console.log('\n  route and cost');
   console.log(`    answered by   ${JSON.stringify(answered)}`);
   console.log(`    attempts      ${attempts} for ${records.length} requests; ${limited} throttled`);
-  console.log(`    waited        ${(waited / 1000).toFixed(1)} s total on ${reference ? 'the reference route' : 'the free route'}`);
+  console.log(
+    `    waited        ${(waited / 1000).toFixed(1)} s total on ${reference ? 'the reference route' : 'the free route'}`,
+  );
   console.log(`    latency (ms)  median ${q(0.5)}  p90 ${q(0.9)}  p95 ${q(0.95)}  max ${lat[lat.length - 1] ?? 0}`);
   console.log(
     `    spent         ${records.reduce((s, r) => s + r.spent, 0).toFixed(1)} micros accounted (free window; not a bill)`,
@@ -346,10 +360,13 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.a
     process.on('SIGINT', cancel);
     process.on('SIGTERM', cancel);
   }
-  try { process.exitCode = await main({ signal: controller.signal }); }
-  catch (error) {
+  try {
+    process.exitCode = await main({ signal: controller.signal });
+  } catch (error) {
     console.error(`Jev transfer probe failed: ${formatProbeError(error)}`);
     process.exitCode = 1;
+  } finally {
+    process.off('SIGINT', cancel);
+    process.off('SIGTERM', cancel);
   }
-  finally { process.off('SIGINT', cancel); process.off('SIGTERM', cancel); }
 }

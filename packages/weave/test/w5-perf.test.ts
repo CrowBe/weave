@@ -96,7 +96,12 @@ describe('W5 emission on the hot path', () => {
     for (let i = 0; i < TICKS; i += 1) {
       const without = plain.perTick[i] as Work;
       const withSink = traced.perTick[i] as Work;
-      if (withSink.stateClones !== 0 || withSink.clones !== without.clones || withSink.stringifies !== without.stringifies || withSink.logReads !== without.logReads) {
+      if (
+        withSink.stateClones !== 0 ||
+        withSink.clones !== without.clones ||
+        withSink.stringifies !== without.stringifies ||
+        withSink.logReads !== without.logReads
+      ) {
         assert.fail(`tick ${i + 1}: with a sink ${JSON.stringify(withSink)}, without ${JSON.stringify(without)}`);
       }
     }

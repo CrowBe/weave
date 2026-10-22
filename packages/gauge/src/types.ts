@@ -254,7 +254,9 @@ export type Rejection =
 export type Verdict = { readonly ok: true } | { readonly ok: false; readonly reason: Rejection };
 
 /** A producer's outcome: a record that has passed `validate`, or the first rejection. */
-export type Produced<T> = { readonly ok: true; readonly record: T } | { readonly ok: false; readonly reason: Rejection };
+export type Produced<T> =
+  | { readonly ok: true; readonly record: T }
+  | { readonly ok: false; readonly reason: Rejection };
 
 /** Samples for one evaluation result, one list per criteria measure. */
 export interface Run {
@@ -293,7 +295,9 @@ export interface TrackStep {
   readonly regression: boolean;
 }
 
-export type Track = { readonly ok: true; readonly steps: readonly TrackStep[] } | { readonly ok: false; readonly reason: Rejection };
+export type Track =
+  | { readonly ok: true; readonly steps: readonly TrackStep[] }
+  | { readonly ok: false; readonly reason: Rejection };
 
 /**
  * Known criteria sets, case sets, results and revisions, keyed by `criteria`,

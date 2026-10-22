@@ -36,13 +36,13 @@ Raw prompts, answers, batch responses, status, and scoring are saved in
 [`results.json`](results.json) and [`hard-results.json`](hard-results.json).
 The cases remain inspectable; the historical scoring code is in git history.
 
-| Category | Space Bunny | GPT-6 Sol |
-| --- | ---: | ---: |
-| Quantitative | 14/15 | 15/15 |
-| Logic | 13/15 | 15/15 |
-| Code understanding | 14/15 | 15/15 |
-| Evidence reading | 15/15 | 15/15 |
-| **Total** | **56/60** | **60/60** |
+| Category           | Space Bunny | GPT-6 Sol |
+| ------------------ | ----------: | --------: |
+| Quantitative       |       14/15 |     15/15 |
+| Logic              |       13/15 |     15/15 |
+| Code understanding |       14/15 |     15/15 |
+| Evidence reading   |       15/15 |     15/15 |
+| **Total**          |   **56/60** | **60/60** |
 
 The initial 40 cases scored 37/40 and 40/40; the harder 20 scored 19/20 and
 20/20. Every batch from both models contained parseable JSON with every
@@ -50,12 +50,12 @@ requested case ID. On this sample Space Bunny handled short evidence reading
 perfectly and most arithmetic, logic, and code traces correctly. Its four
 misses were:
 
-| Case | Expected | Space Bunny | Failure |
-| --- | --- | --- | --- |
-| `code.alias` | `[[1, 3], [2]]` | `[1, 3]` | Lost the outer-list structure after a shallow copy. |
-| `math.tank` | `17/40` | `1/2` | Miscombined three fractions. |
-| `logic.switches` | `KM` | `LM` | Selected M without its required K. |
-| `hard.logic.knights` | `B` | `none` | Missed the consistent truth-teller assignment. |
+| Case                 | Expected        | Space Bunny | Failure                                             |
+| -------------------- | --------------- | ----------- | --------------------------------------------------- |
+| `code.alias`         | `[[1, 3], [2]]` | `[1, 3]`    | Lost the outer-list structure after a shallow copy. |
+| `math.tank`          | `17/40`         | `1/2`       | Miscombined three fractions.                        |
+| `logic.switches`     | `KM`            | `LM`        | Selected M without its required K.                  |
+| `hard.logic.knights` | `B`             | `none`      | Missed the consistent truth-teller assignment.      |
 
 This is a small, self-authored, mostly short-answer sample. Sol's perfect
 result creates a ceiling; four paired disagreements do not establish a stable

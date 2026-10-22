@@ -223,7 +223,9 @@ export function traceInOrder(record: ShellTraceRecord): ShellTraceRecord {
 }
 
 export function isShellOperation(operation: string): boolean {
-  return operation === 'shell.run@1' || operation === 'repo.test' || operation === 'repo.lint' || operation === 'repo.build';
+  return (
+    operation === 'shell.run@1' || operation === 'repo.test' || operation === 'repo.lint' || operation === 'repo.build'
+  );
 }
 
 export function isRepoOperation(operation: string): boolean {

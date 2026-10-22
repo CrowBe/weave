@@ -23,7 +23,7 @@ const CASES = 'decision-sites.cases@1';
 
 const clone = <T>(x: T): T => structuredClone(x);
 const record = (name: string): Rec => {
-  const found = fixtures.valid.find(v => v.name === name);
+  const found = fixtures.valid.find((v) => v.name === name);
   assert.ok(found, name);
   return found.record;
 };
@@ -34,13 +34,20 @@ const reason = (value: unknown, ctx: Context = context) => {
   const verdict = validate(value, ctx);
   return verdict.ok ? 'ok' : verdict.reason;
 };
-const withEntries = (ctx: Context, key: keyof Context, entries: Readonly<Record<string, unknown>>): Context =>
-  ({ ...ctx, [key]: { ...ctx[key], ...entries } });
+const withEntries = (ctx: Context, key: keyof Context, entries: Readonly<Record<string, unknown>>): Context => ({
+  ...ctx,
+  [key]: { ...ctx[key], ...entries },
+});
 
 /** res-cheap re-asserted as meeting a bar it misses under decision-sites.criteria@1. */
-const cheapClaimingBar = { ...result('res-cheap'), constraints: [
-  { constraint: 'accuracy_bar', status: 'held' }, { constraint: 'cost_cap', status: 'held' },
-], verdict: 'meets_bar' };
+const cheapClaimingBar = {
+  ...result('res-cheap'),
+  constraints: [
+    { constraint: 'accuracy_bar', status: 'held' },
+    { constraint: 'cost_cap', status: 'held' },
+  ],
+  verdict: 'meets_bar',
+};
 
 test('every revision in the fixture context is recorded, except the set edited after recording', () => {
   for (const [name, entry] of Object.entries(context.revisions)) {
@@ -81,7 +88,9 @@ test('a candidate cannot issue a revision of its own criteria', () => {
   const lowered = { ...criteria(C1), criteria: C2 };
   lowered.constraints[0]!.bound = 0.6;
   const issued = {
-    ...revision(C2), digest: recordDigest(lowered), justification: 'bar_lowered',
+    ...revision(C2),
+    digest: recordDigest(lowered),
+    justification: 'bar_lowered',
     issued_by: { kind: 'policy', ref: 'optimiser-2' },
   };
   const ctx = withEntries(withEntries(context, 'criteria', { [C2]: lowered }), 'revisions', { [C2]: issued });
@@ -101,9 +110,16 @@ test('the governor changes success only through a justified new revision', () =>
   assert.equal(reason({ ...revision(C2), evidence: [] }), 'governance');
 
   // res-base under the raised bar: its accuracy interval [0.8, 0.9] no longer clears 0.82.
-  const underC2 = { ...result('res-base'), result: 'res-base-c2', criteria: C2,
-    constraints: [{ constraint: 'accuracy_bar', status: 'unknown' }, { constraint: 'cost_cap', status: 'held' }],
-    verdict: 'insufficient_evidence' };
+  const underC2 = {
+    ...result('res-base'),
+    result: 'res-base-c2',
+    criteria: C2,
+    constraints: [
+      { constraint: 'accuracy_bar', status: 'unknown' },
+      { constraint: 'cost_cap', status: 'held' },
+    ],
+    verdict: 'insufficient_evidence',
+  };
   assert.equal(reason(underC2), 'ok');
   // The result cites @1 and keeps its verdict there.
   assert.equal(reason(result('res-base')), 'ok');
@@ -124,7 +140,9 @@ test('a revision is recorded only when its whole chain holds', () => {
 
   const tampered = withEntries(context, 'revisions', { [C1]: { ...revision(C1), justification: 'Initial' } });
   assert.equal(reason(revision(C2), tampered), 'binding');
-  const misissued = withEntries(context, 'revisions', { [C1]: { ...revision(C1), issued_by: { kind: 'approval', ref: 'appr-50' } } });
+  const misissued = withEntries(context, 'revisions', {
+    [C1]: { ...revision(C1), issued_by: { kind: 'approval', ref: 'appr-50' } },
+  });
   assert.equal(reason(revision(C2), misissued), 'binding');
 });
 
@@ -139,17 +157,26 @@ test('the candidate side cannot change held-out cases', () => {
 
   const cases2 = { ...shrunk, caseset: 'decision-sites.cases@2' };
   const issued = {
-    schema: 'gauge.revision@1', revision: 'decision-sites.cases@2', record: 'caseset', digest: recordDigest(cases2),
-    supersedes: CASES, issued_by: { kind: 'policy', ref: 'optimiser-2' }, justification: 'case_removed',
+    schema: 'gauge.revision@1',
+    revision: 'decision-sites.cases@2',
+    record: 'caseset',
+    digest: recordDigest(cases2),
+    supersedes: CASES,
+    issued_by: { kind: 'policy', ref: 'optimiser-2' },
+    justification: 'case_removed',
     evidence: [{ source: 'observation', ref: 'obs-optimiser-1' }],
   };
-  const ctx = withEntries(withEntries(context, 'casesets', { 'decision-sites.cases@2': cases2 }),
-    'revisions', { 'decision-sites.cases@2': issued });
+  const ctx = withEntries(withEntries(context, 'casesets', { 'decision-sites.cases@2': cases2 }), 'revisions', {
+    'decision-sites.cases@2': issued,
+  });
   assert.equal(reason(issued, ctx), 'governance');
   assert.equal(reason({ ...holdout, caseset: 'decision-sites.cases@2' }, ctx), 'binding');
   // Its governor is approval appr-41, which already issued cases@1: a single-use grant is not issued twice.
   const governed = { ...issued, issued_by: { kind: 'approval', ref: 'appr-41' } };
-  assert.equal(reason(governed, withEntries(ctx, 'revisions', { 'decision-sites.cases@2': governed })), 'approval_reused');
+  assert.equal(
+    reason(governed, withEntries(ctx, 'revisions', { 'decision-sites.cases@2': governed })),
+    'approval_reused',
+  );
 });
 
 // An approval is a single-use grant: it issues exactly one revision. A policy is a standing authority.
@@ -161,19 +188,27 @@ const freshCaseSet = (name: string, governor: Rec) => {
   return { set, issued };
 };
 const withCaseSets = (ctx: Context, ...fresh: readonly { set: Rec; issued: Rec }[]): Context =>
-  withEntries(withEntries(ctx, 'casesets', Object.fromEntries(fresh.map(f => [f.set.caseset as string, f.set]))),
-    'revisions', Object.fromEntries(fresh.map(f => [f.issued.revision as string, f.issued])));
+  withEntries(
+    withEntries(ctx, 'casesets', Object.fromEntries(fresh.map((f) => [f.set.caseset as string, f.set]))),
+    'revisions',
+    Object.fromEntries(fresh.map((f) => [f.issued.revision as string, f.issued])),
+  );
 const appr41 = { kind: 'approval', ref: 'appr-41' };
 
 test('an approval ref reused for a second revision of the same set is refused, and unrecords the set', () => {
   const cases2 = { ...(clone(context.casesets[CASES]) as Rec), caseset: 'decision-sites.cases@2' };
   const reissued: Rec = {
-    ...revision(CASES), revision: 'decision-sites.cases@2', digest: recordDigest(cases2), supersedes: CASES,
-    justification: 'case_added', evidence: [{ source: 'check', ref: 'chk-cases-2' }],
+    ...revision(CASES),
+    revision: 'decision-sites.cases@2',
+    digest: recordDigest(cases2),
+    supersedes: CASES,
+    justification: 'case_added',
+    evidence: [{ source: 'check', ref: 'chk-cases-2' }],
   };
   assert.deepEqual(reissued.issued_by, appr41);
-  const ctx = withEntries(withEntries(context, 'casesets', { 'decision-sites.cases@2': cases2 }),
-    'revisions', { 'decision-sites.cases@2': reissued });
+  const ctx = withEntries(withEntries(context, 'casesets', { 'decision-sites.cases@2': cases2 }), 'revisions', {
+    'decision-sites.cases@2': reissued,
+  });
   assert.deepEqual(validate(reissued, ctx), { ok: false, reason: 'approval_reused' });
   assert.equal(reason({ ...result('res-hold'), caseset: 'decision-sites.cases@2' }, ctx), 'binding');
 });
@@ -183,12 +218,21 @@ test('an approval ref reused across two different sets is refused', () => {
   const ctx = withCaseSets(context, other);
   assert.equal(reason(other.issued, ctx), 'approval_reused');
   // Presented without being in context, it is refused the same way.
-  assert.equal(reason(other.issued, withEntries(context, 'casesets', { 'other-sites.cases@1': other.set })), 'approval_reused');
+  assert.equal(
+    reason(other.issued, withEntries(context, 'casesets', { 'other-sites.cases@1': other.set })),
+    'approval_reused',
+  );
   // A criteria set may not spend it either.
   const crit = { ...criteria(C1), criteria: 'other-sites.criteria@1', governed_by: appr41 };
-  const critRev = { ...revision(C1), revision: 'other-sites.criteria@1', digest: recordDigest(crit), issued_by: appr41 };
-  const critCtx = withEntries(withEntries(context, 'criteria', { 'other-sites.criteria@1': crit }),
-    'revisions', { 'other-sites.criteria@1': critRev });
+  const critRev = {
+    ...revision(C1),
+    revision: 'other-sites.criteria@1',
+    digest: recordDigest(crit),
+    issued_by: appr41,
+  };
+  const critCtx = withEntries(withEntries(context, 'criteria', { 'other-sites.criteria@1': crit }), 'revisions', {
+    'other-sites.criteria@1': critRev,
+  });
   assert.equal(reason(critRev, critCtx), 'approval_reused');
 });
 
@@ -247,20 +291,31 @@ test('the same ref under another kind is a different authority', () => {
 });
 
 test('a protected constraint is a gate, not a term traded against a score', () => {
-  const costly = { ...result('res-cand'), result: 'res-costly', subject: { kind: 'routed_unit', ref: 'boolean.task@jev-2.0.0' },
+  const costly = {
+    ...result('res-cand'),
+    result: 'res-costly',
+    subject: { kind: 'routed_unit', ref: 'boolean.task@jev-2.0.0' },
     measures: [
       { measure: 'accuracy', value: 0.97, n: 120, interval: [0.94, 0.99] },
       { measure: 'cost', value: 250, n: 120, interval: [240, 260] },
       { measure: 'completion', value: 0.9, n: 120, interval: [0.84, 0.95] },
     ],
-    constraints: [{ constraint: 'accuracy_bar', status: 'held' }, { constraint: 'cost_cap', status: 'violated' }],
-    verdict: 'misses_bar' };
+    constraints: [
+      { constraint: 'accuracy_bar', status: 'held' },
+      { constraint: 'cost_cap', status: 'violated' },
+    ],
+    verdict: 'misses_bar',
+  };
   assert.equal(reason(costly), 'ok');
   assert.equal(reason({ ...costly, verdict: 'meets_bar' }), 'verdict');
 
   const ctx = withEntries(context, 'results', { 'res-costly': costly });
   const comparison = {
-    schema: 'gauge.comparison@1', comparison: 'cmp-costly', experiment: 'exp-12', baseline: 'res-base', candidate: 'res-costly',
+    schema: 'gauge.comparison@1',
+    comparison: 'cmp-costly',
+    experiment: 'exp-12',
+    baseline: 'res-base',
+    candidate: 'res-costly',
     deltas: [
       { measure: 'accuracy', delta: 0.97 - 0.85, interval: [0.06, 0.18] },
       { measure: 'cost', delta: 100, interval: [82, 118] },

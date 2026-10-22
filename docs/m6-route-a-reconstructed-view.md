@@ -57,10 +57,10 @@ evidence `attempts: 20`, `accepted: 20`. Context limits sit at or above the
 view under test. Output cap equals the output tokens below, so the comparison
 is exact.
 
-| Routed unit | Destination | Input micros / mtok | Output micros / mtok |
-| --- | --- | --- | --- |
-| `route.strong` | `local` | 5_000_000 | 25_000_000 |
-| `route.cheap` | `hosted.cheap` | 3_000_000 | 15_000_000 |
+| Routed unit    | Destination    | Input micros / mtok | Output micros / mtok |
+| -------------- | -------------- | ------------------- | -------------------- |
+| `route.strong` | `local`        | 5_000_000           | 25_000_000           |
+| `route.cheap`  | `hosted.cheap` | 3_000_000           | 15_000_000           |
 
 ```text
 PrefixCache {
@@ -91,11 +91,11 @@ A cache whose `cached_tokens` exceed `input_tokens` is ignored and the attempt
 is costed cold. The uncertainty is recorded. Expected cost is `attempt_cost`
 times `attempts / accepted`.
 
-| View | Input tokens | Output tokens | `route.strong` | `route.cheap` |
-| --- | --- | --- | --- | --- |
-| Long, digest matches | 770_000 | 120_000 | 3_600_000 warm | 4_110_000 cold |
-| Long, strong cold | 770_000 | 120_000 | 6_850_000 | 4_110_000 |
-| Short, no match | 1_100 | 100 | 8_000 | 4_800 |
+| View                 | Input tokens | Output tokens | `route.strong` | `route.cheap`  |
+| -------------------- | ------------ | ------------- | -------------- | -------------- |
+| Long, digest matches | 770_000      | 120_000       | 3_600_000 warm | 4_110_000 cold |
+| Long, strong cold    | 770_000      | 120_000       | 6_850_000      | 4_110_000      |
+| Short, no match      | 1_100        | 100           | 8_000          | 4_800          |
 
 The long warm total is the uncached 120_000 input tokens plus output. The
 650_000 cached tokens are not added again. Cold `route.strong` on the long
@@ -193,16 +193,16 @@ when its payload names a profile or a grant.
 Retain every M0–M5 check. Use fixture routes, injected ticks, and the prefix
 record above. Do not call a live model.
 
-| ID | Scenario | Required evidence |
-| --- | --- | --- |
-| M6-T01 | Long view, digest matches `route.strong` | First selected unit is `route.strong`. Its expected cost is 3_600_000, below its cold ceiling of 6_850_000. Spent with reported usage does not include the 650_000 cached tokens again. The cheap-then-reload sequence at 10_960_000 is not the selected order. |
-| M6-T02 | Short view, digest does not match | First selected unit is `route.cheap` at 4_800. `route.strong` stays eligible behind it. A `baseline` unit cheaper than both is excluded with `quality_below_bar`. |
-| M6-T03 | No prefix cache record | Expected cost is the cold window. Order matches M2's rule for the same table, evidence, and terms. |
-| M6-T04 | Usage report absent on a warm hit | Reservation was the cold ceiling. Spent is that ceiling with `cost_is_upper_bound`. The hit discount is not applied. |
+| ID     | Scenario                                                                             | Required evidence                                                                                                                                                                                                                                                    |
+| ------ | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M6-T01 | Long view, digest matches `route.strong`                                             | First selected unit is `route.strong`. Its expected cost is 3_600_000, below its cold ceiling of 6_850_000. Spent with reported usage does not include the 650_000 cached tokens again. The cheap-then-reload sequence at 10_960_000 is not the selected order.      |
+| M6-T02 | Short view, digest does not match                                                    | First selected unit is `route.cheap` at 4_800. `route.strong` stays eligible behind it. A `baseline` unit cheaper than both is excluded with `quality_below_bar`.                                                                                                    |
+| M6-T03 | No prefix cache record                                                               | Expected cost is the cold window. Order matches M2's rule for the same table, evidence, and terms.                                                                                                                                                                   |
+| M6-T04 | Usage report absent on a warm hit                                                    | Reservation was the cold ceiling. Spent is that ceiling with `cost_is_upper_bound`. The hit discount is not applied.                                                                                                                                                 |
 | M6-T05 | Frame with `profile.frame.index@1`, then weigh, then a frame with empty `schema_for` | The first frame has the index, including `source.inspect` and `text.normalize`, and schemas only for `schema_for`. The weigh view and the later frame omit those schemas. An index that drops either operation, or an empty content payload, misses the quality bar. |
-| M6-T06 | Short view, read set includes `source:beta` | `inference.requested` destinations are `["local"]` only. The selected unit is `route.strong`. A weight calling beta unlikely does not add `hosted.cheap`. An alpha-only read set still permits `hosted.cheap`. |
-| M6-T07 | `report.review` overlaps framing at one revision | Both views cite one assembly id for `goal` and `registered`. Cycle cost includes 1_000 once. A source write in that read set waits. The review payload does not change the active profile or issue a grant. No child goal is created. |
-| M6-T08 | Replay of the routed run | Observations match. Replay uses the recorded route, view, and assembly. The host and gateway are not invoked. The log contains the original observations; it was not replaced by a summary. |
+| M6-T06 | Short view, read set includes `source:beta`                                          | `inference.requested` destinations are `["local"]` only. The selected unit is `route.strong`. A weight calling beta unlikely does not add `hosted.cheap`. An alpha-only read set still permits `hosted.cheap`.                                                       |
+| M6-T07 | `report.review` overlaps framing at one revision                                     | Both views cite one assembly id for `goal` and `registered`. Cycle cost includes 1_000 once. A source write in that read set waits. The review payload does not change the active profile or issue a grant. No child goal is created.                                |
+| M6-T08 | Replay of the routed run                                                             | Observations match. Replay uses the recorded route, view, and assembly. The host and gateway are not invoked. The log contains the original observations; it was not replaced by a summary.                                                                          |
 
 Record demonstrated red and green against the exact contract revisions.
 

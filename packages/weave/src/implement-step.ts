@@ -9,16 +9,27 @@
  * answer cannot mint a grant, raise the tier past the ceiling, or complete the goal.
  */
 import {
-  appendFileSync, closeSync, existsSync, fstatSync, fsyncSync, mkdirSync, openSync, readFileSync, statSync, truncateSync, writeSync,
+  appendFileSync,
+  closeSync,
+  existsSync,
+  fstatSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  statSync,
+  truncateSync,
+  writeSync,
 } from 'node:fs';
 import { dirname } from 'node:path';
-import { effectSetsEqual, isWellFormedRef, type CapabilityHost, type Grant, type GrantAuthority } from '@weave/agentsop';
-import type {
-  GenerationKind,
-  GenerationOutcome,
-  InferenceGateway,
-  InferenceTerms,
-} from '@weave/gateway';
+import {
+  effectSetsEqual,
+  isWellFormedRef,
+  type CapabilityHost,
+  type Grant,
+  type GrantAuthority,
+} from '@weave/agentsop';
+import type { GenerationKind, GenerationOutcome, InferenceGateway, InferenceTerms } from '@weave/gateway';
 import { nonEmptyText } from '@weave/gateway';
 import { admitCriterionProof, isCriterionProof, type CriterionProof, type ProofAdmission } from './criterion-proof.js';
 import { digest } from './digest.js';
@@ -43,8 +54,15 @@ export const OPEN_ISSUE_SCHEMA = 'open_issue@1' as const;
 const CHECKS = ['repo.test', 'repo.lint', 'repo.build'] as const;
 export type ImplementCheckId = (typeof CHECKS)[number];
 const GENERATION_KINDS: readonly GenerationKind[] = ['classify', 'extract', 'transform', 'draft-contract', 'judge'];
-const PAUSE_REASONS = ['weekly_budget_cap', 'five_hour_budget_low', 'quota_unknown', 'budget_pace_ahead', 'no_budget', 'cancelled',
-  'decision_unavailable'] as const;
+const PAUSE_REASONS = [
+  'weekly_budget_cap',
+  'five_hour_budget_low',
+  'quota_unknown',
+  'budget_pace_ahead',
+  'no_budget',
+  'cancelled',
+  'decision_unavailable',
+] as const;
 export type ImplementPauseReason = (typeof PAUSE_REASONS)[number];
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const KEPT_REF = /^(?:ref_|gen_)[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
@@ -61,8 +79,10 @@ const EVAL_TEXT = 'Output evaluation failed for the listed criteria.';
  */
 function stepId(execution_id: string, suffix: string): string {
   const readable = `${execution_id}${suffix}`;
-  const id = readable.length < 128 ? readable :
-    `${execution_id.slice(0, 128 - suffix.length - 65)}:${digest(execution_id)}${suffix}`;
+  const id =
+    readable.length < 128
+      ? readable
+      : `${execution_id.slice(0, 128 - suffix.length - 65)}:${digest(execution_id)}${suffix}`;
   if (!correlation(id)) throw new Error('Invalid step id');
   return id;
 }
@@ -274,7 +294,7 @@ function isAttempt(entry: JournalEntry): entry is AttemptRecord {
 }
 function pauseOf(reason: unknown, until: unknown): ImplementPause {
   return {
-    reason: PAUSE_REASONS.includes(reason as ImplementPauseReason) ? reason as ImplementPauseReason : 'quota_unknown',
+    reason: PAUSE_REASONS.includes(reason as ImplementPauseReason) ? (reason as ImplementPauseReason) : 'quota_unknown',
     until: typeof until === 'number' && Number.isFinite(until) ? until : null,
   };
 }
@@ -291,10 +311,23 @@ function normalize(input: ImplementStepInput): Normalized | null {
   const execution_id = correlation(input.execution_id);
   const request_id = correlation(input.request_id);
   const retries = input.retries ?? DEFAULT_IMPLEMENT_RETRIES;
-  if (!execution_id || !request_id || !isTier(input.tier) || !isTier(input.ceiling) || rank(input.tier) > rank(input.ceiling)) return null;
+  if (
+    !execution_id ||
+    !request_id ||
+    !isTier(input.tier) ||
+    !isTier(input.ceiling) ||
+    rank(input.tier) > rank(input.ceiling)
+  )
+    return null;
   if (!Number.isSafeInteger(retries) || retries < 0 || retries > MAX_RETRIES) return null;
-  if (!GENERATION_KINDS.includes(input.kind) || typeof input.instructions !== 'string' || typeof input.prompt !== 'string') return null;
-  if (!input.terms || !Array.isArray(input.criteria) || input.criteria.length === 0 || !Array.isArray(input.checks)) return null;
+  if (
+    !GENERATION_KINDS.includes(input.kind) ||
+    typeof input.instructions !== 'string' ||
+    typeof input.prompt !== 'string'
+  )
+    return null;
+  if (!input.terms || !Array.isArray(input.criteria) || input.criteria.length === 0 || !Array.isArray(input.checks))
+    return null;
   const seen = new Set<string>();
   const criteria: ImplementCriterion[] = [];
   for (const criterion of input.criteria) {
@@ -302,11 +335,17 @@ function normalize(input: ImplementStepInput): Normalized | null {
     if (!criterion_id || seen.has(criterion_id) || typeof criterion.statement !== 'string') return null;
     if (criterion.proof !== undefined && !isCriterionProof(criterion.proof)) return null;
     const check_ids = criterion.check_ids;
-    if (check_ids !== undefined && (!Array.isArray(check_ids) || check_ids.length > CHECKS.length ||
-      !check_ids.every(id => typeof id === 'string' && id.length > 0 && id.length <= 128))) return null;
+    if (
+      check_ids !== undefined &&
+      (!Array.isArray(check_ids) ||
+        check_ids.length > CHECKS.length ||
+        !check_ids.every((id) => typeof id === 'string' && id.length > 0 && id.length <= 128))
+    )
+      return null;
     seen.add(criterion_id);
     criteria.push({
-      criterion_id, statement: criterion.statement,
+      criterion_id,
+      statement: criterion.statement,
       ...(criterion.proof === undefined ? {} : { proof: criterion.proof }),
       ...(check_ids === undefined ? {} : { check_ids: [...check_ids] }),
     });
@@ -340,22 +379,28 @@ function normalize(input: ImplementStepInput): Normalized | null {
   }
   if (input.generation_writes !== undefined && !isRefList(input.generation_writes)) return null;
   return {
-    ...input, execution_id, request_id, retries, criteria, checks,
+    ...input,
+    execution_id,
+    request_id,
+    retries,
+    criteria,
+    checks,
     ...(input.generation_writes === undefined ? {} : { generation_writes: [...input.generation_writes] }),
   };
 }
 function isRefList(value: unknown): value is readonly string[] {
-  return Array.isArray(value) && value.length <= 32 && value.every(ref => isWellFormedRef(ref) && ref.length <= 128);
+  return Array.isArray(value) && value.length <= 32 && value.every((ref) => isWellFormedRef(ref) && ref.length <= 128);
 }
 /** Pure; recorded on every attempt so replay never needs the canonical port. */
 function admitProofs(input: Normalized, canonical: ImplementPorts['canonical']): ProofAdmission[] {
-  const checks = input.checks.map(check => ({
+  const checks = input.checks.map((check) => ({
     check_id: check.operation,
     ...(check.oracle_refs === undefined ? {} : { oracle_refs: check.oracle_refs }),
     permissions: check.grant?.permissions ?? null,
   }));
-  return input.criteria.map(criterion => admitCriterionProof(criterion, checks,
-    { generation_writes: input.generation_writes, canonical }));
+  return input.criteria.map((criterion) =>
+    admitCriterionProof(criterion, checks, { generation_writes: input.generation_writes, canonical }),
+  );
 }
 function invalidResult(): ImplementStepResult {
   return {
@@ -385,7 +430,7 @@ function lastFailure(attempts: readonly AttemptRecord[]): AttemptRecord | null {
   return null;
 }
 function actionFor(attempts: readonly AttemptRecord[], input: Normalized, stopped: boolean): Action {
-  if (stopped || attempts.some(attempt => attempt.status === 'passed')) return { type: 'finished' };
+  if (stopped || attempts.some((attempt) => attempt.status === 'passed')) return { type: 'finished' };
   let fails = 0;
   let sawEscalation = false;
   let parentId: string | null = null;
@@ -395,7 +440,7 @@ function actionFor(attempts: readonly AttemptRecord[], input: Normalized, stoppe
     if (attempt.escalated) sawEscalation = true;
     else fails += 1;
   }
-  if (sawEscalation && attempts.some(attempt => attempt.escalated && attempt.status === 'failed')) {
+  if (sawEscalation && attempts.some((attempt) => attempt.escalated && attempt.status === 'failed')) {
     return { type: 'stop', blocked_by: null };
   }
   const feedback = lastFailure(attempts);
@@ -408,7 +453,7 @@ function actionFor(attempts: readonly AttemptRecord[], input: Normalized, stoppe
   return { type: 'generate', attempt, requested: input.tier, escalation: false, parentId, feedback };
 }
 function openIssue(input: Normalized, last: AttemptRecord | null, blocked_by: OpenIssue['blocked_by']): OpenIssue {
-  const criterion_ids = last?.failing_criterion_ids ?? input.criteria.map(criterion => criterion.criterion_id);
+  const criterion_ids = last?.failing_criterion_ids ?? input.criteria.map((criterion) => criterion.criterion_id);
   const check_ids = last?.failing_check_ids ?? [];
   const source = check_ids.length > 0 ? 'check' : 'eval';
   return {
@@ -425,9 +470,9 @@ function openIssue(input: Normalized, last: AttemptRecord | null, blocked_by: Op
 }
 function project(entries: readonly JournalEntry[], input: Normalized, cancelled: boolean): ImplementStepResult {
   const attempts = entries.filter(isAttempt);
-  const stop = entries.find(entry => entry.schema === IMPLEMENT_STOP_SCHEMA) ?? null;
+  const stop = entries.find((entry) => entry.schema === IMPLEMENT_STOP_SCHEMA) ?? null;
   const action = actionFor(attempts, input, stop !== null);
-  const passed = attempts.find(attempt => attempt.status === 'passed') ?? null;
+  const passed = attempts.find((attempt) => attempt.status === 'passed') ?? null;
   const last = attempts.at(-1) ?? null;
   const focus = passed ?? last;
   let status: ImplementStepResult['status'];
@@ -452,17 +497,21 @@ function project(entries: readonly JournalEntry[], input: Normalized, cancelled:
     tier: input.tier,
     ceiling: input.ceiling,
     effective_tier: focus?.effective_tier ?? null,
-    escalated: attempts.some(attempt => attempt.escalated && attempt.status !== 'paused'),
-    attempts: attempts.map(attempt => structuredClone(attempt)),
+    escalated: attempts.some((attempt) => attempt.escalated && attempt.status !== 'paused'),
+    attempts: attempts.map((attempt) => structuredClone(attempt)),
     artifact_refs: [...(focus?.artifact_refs ?? [])],
-    checks: focus?.checks.map(check => structuredClone(check)) ?? [],
-    evals: focus?.evals.map(item => structuredClone(item)) ?? [],
-    observations: focus?.observations.map(item => structuredClone(item)) ?? [],
+    checks: focus?.checks.map((check) => structuredClone(check)) ?? [],
+    evals: focus?.evals.map((item) => structuredClone(item)) ?? [],
+    observations: focus?.observations.map((item) => structuredClone(item)) ?? [],
     open_issue: open_issue === null ? null : structuredClone(open_issue),
-    proofs: (focus?.proofs ?? []).map(item => structuredClone(item)),
+    proofs: (focus?.proofs ?? []).map((item) => structuredClone(item)),
   };
 }
-function stopRecord(input: Normalized, attempts: readonly AttemptRecord[], blocked_by: OpenIssue['blocked_by']): StopRecord {
+function stopRecord(
+  input: Normalized,
+  attempts: readonly AttemptRecord[],
+  blocked_by: OpenIssue['blocked_by'],
+): StopRecord {
   const parent = attempts.at(-1) ?? null;
   return {
     schema: IMPLEMENT_STOP_SCHEMA,
@@ -492,17 +541,25 @@ function generateTerms(terms: InferenceTerms, tier: ImplementTier): InferenceTer
   return { ...decisionTerms(terms), tier };
 }
 function feedbackPrompt(prompt: string, previous: AttemptRecord | null): string {
-  if (!previous || (previous.failing_criterion_ids.length === 0 && previous.failing_check_ids.length === 0)) return prompt;
+  if (!previous || (previous.failing_criterion_ids.length === 0 && previous.failing_check_ids.length === 0))
+    return prompt;
   const lines = ['[impl.feedback]'];
   for (const id of previous.failing_criterion_ids) lines.push(`criterion_id=${id} passed=false`);
   for (const id of previous.failing_check_ids) {
-    const exit = previous.checks.find(check => check.check_id === id)?.exit;
+    const exit = previous.checks.find((check) => check.check_id === id)?.exit;
     lines.push(`check_id=${id} passed=false exit=${exit === undefined || exit === null ? 'none' : String(exit)}`);
   }
   return `${prompt}\n${lines.join('\n')}`;
 }
-function flatEval(transition: { readonly evals: readonly { criterion_id: string; verdict_probability: number | null; confidence: number | null; passed: boolean }[] }): ImplementEval[] {
-  return transition.evals.map(item => ({
+function flatEval(transition: {
+  readonly evals: readonly {
+    criterion_id: string;
+    verdict_probability: number | null;
+    confidence: number | null;
+    passed: boolean;
+  }[];
+}): ImplementEval[] {
+  return transition.evals.map((item) => ({
     criterion_id: item.criterion_id,
     verdict_probability: item.verdict_probability,
     confidence: item.confidence,
@@ -532,7 +589,13 @@ function attemptRecord(fields: AttemptRecord): AttemptRecord {
     ...(fields.proofs === undefined ? {} : { proofs: fields.proofs }),
   };
 }
-async function runChecks(input: Normalized, ports: ImplementPorts, attempt: number, checkRun: string, signal: AbortSignal | undefined): Promise<CheckEvidence[]> {
+async function runChecks(
+  input: Normalized,
+  ports: ImplementPorts,
+  attempt: number,
+  checkRun: string,
+  signal: AbortSignal | undefined,
+): Promise<CheckEvidence[]> {
   const evidence: CheckEvidence[] = [];
   for (const check of input.checks) {
     if (signal?.aborted) break;
@@ -544,11 +607,16 @@ async function runChecks(input: Normalized, ports: ImplementPorts, attempt: numb
     let artifacts: string[] = [];
     let invocation_id: string | null = null;
     try {
-      const invoked = ports.invoke(freshCheckGrant(ports, check.grant), check.operation, {
-        cwd_ref: check.cwd_ref,
-        env_allow: [...check.env_allow],
-        timeout_ms: check.timeout_ms,
-      }, { invocation_id: requested });
+      const invoked = ports.invoke(
+        freshCheckGrant(ports, check.grant),
+        check.operation,
+        {
+          cwd_ref: check.cwd_ref,
+          env_allow: [...check.env_allow],
+          timeout_ms: check.timeout_ms,
+        },
+        { invocation_id: requested },
+      );
       if (invoked.kind === 'rejected') {
         evidence.push({ check_id: check.operation, argv_digest, exit, passed, tail, artifacts, invocation_id });
         continue;
@@ -584,7 +652,8 @@ async function runChecks(input: Normalized, ports: ImplementPorts, attempt: numb
 }
 function generatePaused(outcome: GenerationOutcome): ImplementPause | null {
   if (outcome.paused) return pauseOf(outcome.paused.reason, outcome.paused.until);
-  if (outcome.status === 'blocked' && (PAUSE_REASONS as readonly string[]).includes(outcome.reason)) return pauseOf(outcome.reason, null);
+  if (outcome.status === 'blocked' && (PAUSE_REASONS as readonly string[]).includes(outcome.reason))
+    return pauseOf(outcome.reason, null);
   return null;
 }
 
@@ -593,8 +662,8 @@ function copyGrant(fields: Grant): Grant {
     action_id: fields.action_id,
     operation: fields.operation,
     contract_rev: fields.contract_rev,
-    permissions: fields.permissions.map(effect => ({ resource: effect.resource, mode: effect.mode })),
-    effects: fields.effects.map(effect => ({ resource: effect.resource, mode: effect.mode })),
+    permissions: fields.permissions.map((effect) => ({ resource: effect.resource, mode: effect.mode })),
+    effects: fields.effects.map((effect) => ({ resource: effect.resource, mode: effect.mode })),
     issued_at: fields.issued_at,
     ...(fields.process_effects === undefined ? {} : { process_effects: [...fields.process_effects] }),
   };
@@ -610,11 +679,13 @@ function sameStringSet(left: readonly string[], right: readonly string[]): boole
 }
 /** Equal scope. Action id and issued_at are not scope. A wider set is not equal. */
 function sameGrantScope(held: Grant, issued: Grant): boolean {
-  return held.operation === issued.operation
-    && held.contract_rev === issued.contract_rev
-    && effectSetsEqual(held.permissions, issued.permissions)
-    && effectSetsEqual(held.effects, issued.effects)
-    && sameStringSet(held.process_effects ?? [], issued.process_effects ?? []);
+  return (
+    held.operation === issued.operation &&
+    held.contract_rev === issued.contract_rev &&
+    effectSetsEqual(held.permissions, issued.permissions) &&
+    effectSetsEqual(held.effects, issued.effects) &&
+    sameStringSet(held.process_effects ?? [], issued.process_effects ?? [])
+  );
 }
 function freshCheckGrant(ports: ImplementPorts, held: Grant | null): Grant | null {
   if (!held) return null;
@@ -636,9 +707,13 @@ function freshCheckGrant(ports: ImplementPorts, held: Grant | null): Grant | nul
  * its own action id, `<held action_id>:g<n>`, so release and proceed by action
  * id stay unambiguous among this issuer's grants (#125). Action id is not scope.
  */
-export function createEqualGrantIssuer(authority: GrantAuthority, held: readonly Grant[],
-  limit: number = DEFAULT_IMPLEMENT_RETRIES + 2): EqualGrantIssuer {
-  if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_RETRIES + 2) throw new Error('Invalid grant issue limit');
+export function createEqualGrantIssuer(
+  authority: GrantAuthority,
+  held: readonly Grant[],
+  limit: number = DEFAULT_IMPLEMENT_RETRIES + 2,
+): EqualGrantIssuer {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_RETRIES + 2)
+    throw new Error('Invalid grant issue limit');
   const scopes = new Map<Grant, { readonly scope: Grant; issued: number }>();
   for (const grant of held) {
     if (!authority.isIssued(grant) || !authority.isValid(grant)) continue;
@@ -655,14 +730,25 @@ export function createEqualGrantIssuer(authority: GrantAuthority, held: readonly
 }
 
 /** Rebuild the step result from finished entries. Does not call a provider or the host. */
-export function replayImplementationStep(entries: readonly JournalEntry[], input: ImplementStepInput): ImplementStepResult {
+export function replayImplementationStep(
+  entries: readonly JournalEntry[],
+  input: ImplementStepInput,
+): ImplementStepResult {
   const normalized = normalize(input);
   if (!normalized) return invalidResult();
-  return project(entries.filter(entry => entry.execution_id === normalized.execution_id), normalized, false);
+  return project(
+    entries.filter((entry) => entry.execution_id === normalized.execution_id),
+    normalized,
+    false,
+  );
 }
 
-export async function runImplementationStep(input: ImplementStepInput, ports: ImplementPorts,
-  journal: AttemptJournal, signal?: AbortSignal): Promise<ImplementStepResult> {
+export async function runImplementationStep(
+  input: ImplementStepInput,
+  ports: ImplementPorts,
+  journal: AttemptJournal,
+  signal?: AbortSignal,
+): Promise<ImplementStepResult> {
   const normalized = normalize(input);
   if (!normalized) return invalidResult();
   const history = journal.load(normalized.execution_id);
@@ -673,7 +759,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
   // Earlier pauses do not consume this bound.
   for (let guard = 0; guard <= normalized.retries + 2; guard += 1) {
     const attempts = history.filter(isAttempt);
-    const stopped = history.some(entry => entry.schema === IMPLEMENT_STOP_SCHEMA);
+    const stopped = history.some((entry) => entry.schema === IMPLEMENT_STOP_SCHEMA);
     const action = actionFor(attempts, normalized, stopped);
     if (action.type === 'finished') return finish();
     if (action.type === 'stop') {
@@ -682,8 +768,11 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
     }
     if (signal?.aborted) return project(history, normalized, true);
     const attemptId = stepId(normalized.execution_id, `:a${action.attempt}`);
-    const decision = ports.budget?.({ requested: action.requested, escalation: action.escalation, attempt: action.attempt })
-      ?? { status: 'allow' as const, tier: action.requested };
+    const decision = ports.budget?.({
+      requested: action.requested,
+      escalation: action.escalation,
+      attempt: action.attempt,
+    }) ?? { status: 'allow' as const, tier: action.requested };
     const allowed = decision.status === 'allow' && isTier(decision.tier) ? decision.tier : null;
     // Escalation is exactly one tier, so a downgrade there stops the step. A pause
     // is temporary at either tier: it is recorded and a later run resumes (#128).
@@ -692,65 +781,82 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
         history.push(remember(journal, stopRecord(normalized, attempts, 'budget')));
         return finish();
       }
-      history.push(remember(journal, attemptRecord({
-        schema: IMPLEMENT_ATTEMPT_SCHEMA,
-        id: attemptId,
-        parentId: action.parentId,
-        execution_id: normalized.execution_id,
-        attempt: action.attempt,
-        requested_tier: action.requested,
-        effective_tier: null,
-        escalated: action.escalation,
-        status: 'paused',
-        generate_request_id: null,
-        artifact_refs: [],
-        checks: [],
-        evals: [],
-        observations: [],
-        failing_criterion_ids: [],
-        failing_check_ids: [],
-        pause: pauseOf(decision.status === 'pause' ? decision.reason : 'quota_unknown', decision.status === 'pause' ? decision.until : null),
-        proofs,
-      })));
+      history.push(
+        remember(
+          journal,
+          attemptRecord({
+            schema: IMPLEMENT_ATTEMPT_SCHEMA,
+            id: attemptId,
+            parentId: action.parentId,
+            execution_id: normalized.execution_id,
+            attempt: action.attempt,
+            requested_tier: action.requested,
+            effective_tier: null,
+            escalated: action.escalation,
+            status: 'paused',
+            generate_request_id: null,
+            artifact_refs: [],
+            checks: [],
+            evals: [],
+            observations: [],
+            failing_criterion_ids: [],
+            failing_check_ids: [],
+            pause: pauseOf(
+              decision.status === 'pause' ? decision.reason : 'quota_unknown',
+              decision.status === 'pause' ? decision.until : null,
+            ),
+            proofs,
+          }),
+        ),
+      );
       return finish();
     }
-    const effective = action.escalation ? action.requested
+    const effective = action.escalation
+      ? action.requested
       : IMPLEMENT_TIERS[Math.min(rank(allowed), rank(action.requested), rank(normalized.ceiling))]!;
     const generateId = stepId(normalized.execution_id, `:a${action.attempt}:gen`);
     // Taken before the paid call, so a broken port fails before anything is spent.
     const run = ports.runId();
     if (typeof run !== 'string' || run.length === 0) throw new Error('Invalid implementation run id');
-    const outcome = await ports.generate({
-      request_id: generateId,
-      site: 'impl.generate',
-      role: 'working',
-      kind: normalized.kind,
-      input: { instructions: normalized.instructions, prompt: feedbackPrompt(normalized.prompt, action.feedback) },
-      terms: generateTerms(normalized.terms, effective),
-      accept: nonEmptyText,
-    }, signal);
+    const outcome = await ports.generate(
+      {
+        request_id: generateId,
+        site: 'impl.generate',
+        role: 'working',
+        kind: normalized.kind,
+        input: { instructions: normalized.instructions, prompt: feedbackPrompt(normalized.prompt, action.feedback) },
+        terms: generateTerms(normalized.terms, effective),
+        accept: nonEmptyText,
+      },
+      signal,
+    );
     const held = generatePaused(outcome);
     if (held || signal?.aborted) {
-      history.push(remember(journal, attemptRecord({
-        schema: IMPLEMENT_ATTEMPT_SCHEMA,
-        id: attemptId,
-        parentId: action.parentId,
-        execution_id: normalized.execution_id,
-        attempt: action.attempt,
-        requested_tier: action.requested,
-        effective_tier: effective,
-        escalated: action.escalation,
-        status: 'paused',
-        generate_request_id: generateId,
-        artifact_refs: [],
-        checks: [],
-        evals: [],
-        observations: [],
-        failing_criterion_ids: [],
-        failing_check_ids: [],
-        pause: held ?? pauseOf('cancelled', null),
-        proofs,
-      })));
+      history.push(
+        remember(
+          journal,
+          attemptRecord({
+            schema: IMPLEMENT_ATTEMPT_SCHEMA,
+            id: attemptId,
+            parentId: action.parentId,
+            execution_id: normalized.execution_id,
+            attempt: action.attempt,
+            requested_tier: action.requested,
+            effective_tier: effective,
+            escalated: action.escalation,
+            status: 'paused',
+            generate_request_id: generateId,
+            artifact_refs: [],
+            checks: [],
+            evals: [],
+            observations: [],
+            failing_criterion_ids: [],
+            failing_check_ids: [],
+            pause: held ?? pauseOf('cancelled', null),
+            proofs,
+          }),
+        ),
+      );
       return finish();
     }
     let artifactRefs: string[] = [];
@@ -762,7 +868,7 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
     let evalSkipped: AttemptRecord['eval_skipped'];
     if (outcome.status !== 'accepted') {
       // Generation failed before D5: retain the blocker without fabricating an evaluation.
-      failingCriteria = normalized.criteria.map(criterion => criterion.criterion_id);
+      failingCriteria = normalized.criteria.map((criterion) => criterion.criterion_id);
     } else {
       const digestHex = digest(outcome.text);
       const ref = `gen_${digestHex.slice(0, 32)}`;
@@ -773,37 +879,44 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
       const checkRun = digest({ artifact: digestHex, run }).slice(0, 32);
       checks = await runChecks(normalized, ports, action.attempt, checkRun, signal);
       if (signal?.aborted) {
-        history.push(remember(journal, attemptRecord({
-          schema: IMPLEMENT_ATTEMPT_SCHEMA,
-          id: attemptId,
-          parentId: action.parentId,
-          execution_id: normalized.execution_id,
-          attempt: action.attempt,
-          requested_tier: action.requested,
-          effective_tier: effective,
-          escalated: action.escalation,
-          status: 'paused',
-          generate_request_id: generateId,
-          artifact_refs: artifactRefs,
-          checks,
-          evals: [],
-          observations: [],
-          failing_criterion_ids: [],
-          failing_check_ids: checks.filter(check => !check.passed).map(check => check.check_id),
-          pause: pauseOf('cancelled', null),
-          proofs,
-        })));
+        history.push(
+          remember(
+            journal,
+            attemptRecord({
+              schema: IMPLEMENT_ATTEMPT_SCHEMA,
+              id: attemptId,
+              parentId: action.parentId,
+              execution_id: normalized.execution_id,
+              attempt: action.attempt,
+              requested_tier: action.requested,
+              effective_tier: effective,
+              escalated: action.escalation,
+              status: 'paused',
+              generate_request_id: generateId,
+              artifact_refs: artifactRefs,
+              checks,
+              evals: [],
+              observations: [],
+              failing_criterion_ids: [],
+              failing_check_ids: checks.filter((check) => !check.passed).map((check) => check.check_id),
+              pause: pauseOf('cancelled', null),
+              proofs,
+            }),
+          ),
+        );
         return finish();
       }
-      failingChecks = checks.filter(check => !check.passed).map(check => check.check_id);
+      failingChecks = checks.filter((check) => !check.passed).map((check) => check.check_id);
       // A check-proven criterion is settled by its bound checks; D5 is not asked about it.
       const green = (id: string): boolean => {
-        const ran = checks.filter(check => check.check_id === id);
-        return ran.length > 0 && ran.every(check => check.passed);
+        const ran = checks.filter((check) => check.check_id === id);
+        return ran.length > 0 && ran.every((check) => check.passed);
       };
-      const checkFailed = new Set(normalized.criteria
-        .filter((criterion, index) => proofs[index]?.proof === 'check' && !(criterion.check_ids ?? []).every(green))
-        .map(criterion => criterion.criterion_id));
+      const checkFailed = new Set(
+        normalized.criteria
+          .filter((criterion, index) => proofs[index]?.proof === 'check' && !(criterion.check_ids ?? []).every(green))
+          .map((criterion) => criterion.criterion_id),
+      );
       let transition: OutputEvalTransition = { status: 'pass', evals: [], observations: [], failing_criterion_ids: [] };
       // A red check fails this attempt whatever D5 answers, so D5 is not asked and no eval is recorded.
       if (judged.length > 0 && failingChecks.length > 0) evalSkipped = 'check_failed';
@@ -811,29 +924,80 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
         const live = ports.readState();
         const evalRequest = stepId(normalized.execution_id, `:a${action.attempt}:eval`);
         const disclosed = {
-          criteria: judged.map(criterion => ({ criterion_id: criterion.criterion_id, statement: criterion.statement })),
+          criteria: judged.map((criterion) => ({
+            criterion_id: criterion.criterion_id,
+            statement: criterion.statement,
+          })),
           artifact: { ref, digest: digestHex },
           artifact_text: outcome.text,
-          checks: checks.map(check => ({ check_id: check.check_id, exit: check.exit, passed: check.passed })),
+          checks: checks.map((check) => ({ check_id: check.check_id, exit: check.exit, passed: check.passed })),
         };
-        transition = await evaluateOutputEval({
-          request_id: evalRequest,
-          state_revision: live.state_revision,
-          state_updated_at: live.state_updated_at,
-          state: disclosed,
-          terms: decisionTerms(normalized.terms),
-          needs_dispatch: false,
-          criteria: judged.map(criterion => ({ criterion_id: criterion.criterion_id, statement: criterion.statement })),
-        }, { evaluate: ports.evaluate }, () => ({ ...ports.readState(), observed_at: ports.now() }), signal);
+        transition = await evaluateOutputEval(
+          {
+            request_id: evalRequest,
+            state_revision: live.state_revision,
+            state_updated_at: live.state_updated_at,
+            state: disclosed,
+            terms: decisionTerms(normalized.terms),
+            needs_dispatch: false,
+            criteria: judged.map((criterion) => ({
+              criterion_id: criterion.criterion_id,
+              statement: criterion.statement,
+            })),
+          },
+          { evaluate: ports.evaluate },
+          () => ({ ...ports.readState(), observed_at: ports.now() }),
+          signal,
+        );
       }
       const evalFailed = new Set(transition.failing_criterion_ids);
-      const failingOf = (): string[] => normalized.criteria.map(criterion => criterion.criterion_id)
-        .filter(id => checkFailed.has(id) || evalFailed.has(id));
+      const failingOf = (): string[] =>
+        normalized.criteria
+          .map((criterion) => criterion.criterion_id)
+          .filter((id) => checkFailed.has(id) || evalFailed.has(id));
       // A D5 outage judged nothing: pause rather than spend a retry or the escalation on it (#129).
       // A skipped D5 has no evals, so it is never an outage.
-      const outage = transition.evals.length > 0 && transition.evals.every(item => item.observation.reason === 'decision_unavailable');
+      const outage =
+        transition.evals.length > 0 &&
+        transition.evals.every((item) => item.observation.reason === 'decision_unavailable');
       if (transition.status === 'paused' || outage) {
-        history.push(remember(journal, attemptRecord({
+        history.push(
+          remember(
+            journal,
+            attemptRecord({
+              schema: IMPLEMENT_ATTEMPT_SCHEMA,
+              id: attemptId,
+              parentId: action.parentId,
+              execution_id: normalized.execution_id,
+              attempt: action.attempt,
+              requested_tier: action.requested,
+              effective_tier: effective,
+              escalated: action.escalation,
+              status: 'paused',
+              generate_request_id: generateId,
+              artifact_refs: [...artifactRefs, ...checks.flatMap((check) => check.artifacts)],
+              checks,
+              evals: flatEval(transition),
+              observations: [...transition.observations],
+              failing_criterion_ids: failingOf(),
+              failing_check_ids: failingChecks,
+              pause: pauseOf(transition.status === 'paused' ? 'cancelled' : 'decision_unavailable', null),
+              proofs,
+            }),
+          ),
+        );
+        return finish();
+      }
+      evals = flatEval(transition);
+      observations = [...transition.observations];
+      failingCriteria = failingOf();
+      artifactRefs = [...artifactRefs, ...checks.flatMap((check) => check.artifacts)];
+    }
+    const failed = outcome.status !== 'accepted' || failingChecks.length > 0 || failingCriteria.length > 0;
+    history.push(
+      remember(
+        journal,
+        attemptRecord({
           schema: IMPLEMENT_ATTEMPT_SCHEMA,
           id: attemptId,
           parentId: action.parentId,
@@ -842,52 +1006,27 @@ export async function runImplementationStep(input: ImplementStepInput, ports: Im
           requested_tier: action.requested,
           effective_tier: effective,
           escalated: action.escalation,
-          status: 'paused',
+          status: failed ? 'failed' : 'passed',
           generate_request_id: generateId,
-          artifact_refs: [...artifactRefs, ...checks.flatMap(check => check.artifacts)],
+          artifact_refs: artifactRefs,
           checks,
-          evals: flatEval(transition),
-          observations: [...transition.observations],
-          failing_criterion_ids: failingOf(),
+          evals,
+          observations,
+          failing_criterion_ids: failingCriteria,
           failing_check_ids: failingChecks,
-          pause: pauseOf(transition.status === 'paused' ? 'cancelled' : 'decision_unavailable', null),
+          pause: null,
+          ...(evalSkipped === undefined ? {} : { eval_skipped: evalSkipped }),
           proofs,
-        })));
-        return finish();
-      }
-      evals = flatEval(transition);
-      observations = [...transition.observations];
-      failingCriteria = failingOf();
-      artifactRefs = [...artifactRefs, ...checks.flatMap(check => check.artifacts)];
-    }
-    const failed = outcome.status !== 'accepted' || failingChecks.length > 0 || failingCriteria.length > 0;
-    history.push(remember(journal, attemptRecord({
-      schema: IMPLEMENT_ATTEMPT_SCHEMA,
-      id: attemptId,
-      parentId: action.parentId,
-      execution_id: normalized.execution_id,
-      attempt: action.attempt,
-      requested_tier: action.requested,
-      effective_tier: effective,
-      escalated: action.escalation,
-      status: failed ? 'failed' : 'passed',
-      generate_request_id: generateId,
-      artifact_refs: artifactRefs,
-      checks,
-      evals,
-      observations,
-      failing_criterion_ids: failingCriteria,
-      failing_check_ids: failingChecks,
-      pause: null,
-      ...(evalSkipped === undefined ? {} : { eval_skipped: evalSkipped }),
-      proofs,
-    })));
+        }),
+      ),
+    );
     if (!failed) return finish();
   }
   const attempts = history.filter(isAttempt);
-  const stopped = history.some(entry => entry.schema === IMPLEMENT_STOP_SCHEMA);
+  const stopped = history.some((entry) => entry.schema === IMPLEMENT_STOP_SCHEMA);
   const action = actionFor(attempts, normalized, stopped);
-  if (action.type === 'stop' && !stopped) history.push(remember(journal, stopRecord(normalized, attempts, action.blocked_by)));
+  if (action.type === 'stop' && !stopped)
+    history.push(remember(journal, stopRecord(normalized, attempts, action.blocked_by)));
   return finish();
 }
 function remember(journal: AttemptJournal, entry: JournalEntry): JournalEntry {
@@ -898,10 +1037,10 @@ function remember(journal: AttemptJournal, entry: JournalEntry): JournalEntry {
 export class MemoryAttemptJournal implements AttemptJournal {
   private readonly items: JournalEntry[] = [];
   load(execution_id: string): JournalEntry[] {
-    return this.items.filter(entry => entry.execution_id === execution_id).map(entry => structuredClone(entry));
+    return this.items.filter((entry) => entry.execution_id === execution_id).map((entry) => structuredClone(entry));
   }
   append(entry: JournalEntry): void {
-    if (this.items.some(item => item.id === entry.id)) return;
+    if (this.items.some((item) => item.id === entry.id)) return;
     this.items.push(structuredClone(entry));
   }
 }
@@ -924,20 +1063,30 @@ export class FileAttemptJournal implements AttemptJournal {
     if (!existsSync(directory)) mkdirSync(directory, { recursive: true });
     if (!existsSync(path)) {
       const fd = openSync(path, 'a');
-      try { fsyncSync(fd); } finally { closeSync(fd); }
+      try {
+        fsyncSync(fd);
+      } finally {
+        closeSync(fd);
+      }
       // Make the new directory entry durable too; Windows cannot open a directory to sync it.
       if (process.platform !== 'win32') {
         const dir = openSync(directory, 'r');
-        try { fsyncSync(dir); } finally { closeSync(dir); }
+        try {
+          fsyncSync(dir);
+        } finally {
+          closeSync(dir);
+        }
       }
     }
   }
   load(execution_id: string): JournalEntry[] {
-    return this.view().filter(entry => entry.execution_id === execution_id).map(entry => structuredClone(entry));
+    return this.view()
+      .filter((entry) => entry.execution_id === execution_id)
+      .map((entry) => structuredClone(entry));
   }
   append(entry: JournalEntry): void {
     const entries = this.view();
-    if (entries.some(item => item.id === entry.id)) return;
+    if (entries.some((item) => item.id === entry.id)) return;
     const fd = openSync(this.path, 'a');
     try {
       writeSync(fd, `${JSON.stringify(entry)}\n`);
@@ -995,8 +1144,10 @@ function readEntries(path: string): JournalEntry[] {
     }
     if (!parsed || typeof parsed !== 'object') throw new PersistError('impl.attempt');
     const record = parsed as Partial<JournalEntry>;
-    if (record.schema !== IMPLEMENT_ATTEMPT_SCHEMA && record.schema !== IMPLEMENT_STOP_SCHEMA) throw new PersistError('impl.attempt');
-    if (typeof record.execution_id !== 'string' || typeof record.id !== 'string') throw new PersistError('impl.attempt');
+    if (record.schema !== IMPLEMENT_ATTEMPT_SCHEMA && record.schema !== IMPLEMENT_STOP_SCHEMA)
+      throw new PersistError('impl.attempt');
+    if (typeof record.execution_id !== 'string' || typeof record.id !== 'string')
+      throw new PersistError('impl.attempt');
     entries.push(record as JournalEntry);
   }
   return entries;

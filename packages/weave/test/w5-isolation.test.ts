@@ -5,7 +5,17 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { stableStringify, type ObservationInput } from '@weave/weave';
-import { collector, fingerprint, runW5, settleAsync, w5World, type Rec, type Sink, type W5Sinks, type W5World } from './w5-fixture.js';
+import {
+  collector,
+  fingerprint,
+  runW5,
+  settleAsync,
+  w5World,
+  type Rec,
+  type Sink,
+  type W5Sinks,
+  type W5World,
+} from './w5-fixture.js';
 
 interface RunPrint {
   readonly state: string;
@@ -80,7 +90,11 @@ describe('W5 emission is one-way', () => {
   it('W5-T13 a sink that throws only on some kinds changes nothing', async () => {
     await assertUnchanged(
       everywhere((record) => {
-        if (record.kind === 'thread.transition' || record.kind === 'inference.attempt' || record.kind === 'capability.invoked') {
+        if (
+          record.kind === 'thread.transition' ||
+          record.kind === 'inference.attempt' ||
+          record.kind === 'capability.invoked'
+        ) {
           throw new TypeError('unsupported kind');
         }
       }),
@@ -200,9 +214,18 @@ describe('W5 emission is one-way', () => {
       payload_version: 1,
       payload: { resource: world.beta, revision: 2, content: 'beta changed' },
     });
-    const tick = { observation_id: 'clock:tick:reentrant', caused_by: null, payload_type: 'clock.tick', payload_version: 1, payload: { tick: 7 } } as const;
+    const tick = {
+      observation_id: 'clock:tick:reentrant',
+      caused_by: null,
+      payload_type: 'clock.tick',
+      payload_version: 1,
+      payload: { tick: 7 },
+    } as const;
     const firstRunning = (world: W5World): string =>
-      Object.values(world.runtime.state().actions).filter((a) => a.state === 'running').map((a) => a.action_id).sort()[0] as string;
+      Object.values(world.runtime.state().actions)
+        .filter((a) => a.state === 'running')
+        .map((a) => a.action_id)
+        .sort()[0] as string;
     const print = (world: W5World) => ({
       ...fingerprint(world),
       invocations: stableStringify(world.host.invocations),

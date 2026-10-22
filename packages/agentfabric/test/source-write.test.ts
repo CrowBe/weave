@@ -23,7 +23,11 @@ function fixture(t: TestContext) {
   const write: (content: string, expectedRevision?: number) => ReturnType<AgentFabricHost['tryWriteSource']> =
     host.tryWriteSource.bind(host, source);
   return {
-    host, store, source, path, write,
+    host,
+    store,
+    source,
+    path,
+    write,
     reopen() {
       store.close();
       const reopened = FabricStore.open(path);
@@ -128,18 +132,25 @@ describe('AgentFabric source write journal', () => {
         const result = writeAlias('loser', 1);
         assert.deepEqual(readFileSync(f.path), before);
         f.store.persistInvocationResult({
-          ...invocation(), status: 'committed', outcome: { outcome: 'succeeded', output: { ok: true } },
+          ...invocation(),
+          status: 'committed',
+          outcome: { outcome: 'succeeded', output: { ok: true } },
         });
         return result;
       }),
     ]);
-    assert.deepEqual(results, [{ ok: true, revision: 2 }, { ok: false, reason: 'conflict' }]);
+    assert.deepEqual(results, [
+      { ok: true, revision: 2 },
+      { ok: false, reason: 'conflict' },
+    ]);
     const reopened = f.reopen();
     assert.equal(reopened.content(f.source), 'winner');
     assert.equal(reopened.revision(f.source), 2);
     assert.equal(reopened.store.getInvocation(invocation().invocation_id)?.status, 'committed');
-    assert.deepEqual(reopened.store.getInvocation(invocation().invocation_id)?.outcome,
-      { outcome: 'succeeded', output: { ok: true } });
+    assert.deepEqual(reopened.store.getInvocation(invocation().invocation_id)?.outcome, {
+      outcome: 'succeeded',
+      output: { ok: true },
+    });
     assert.equal(reopened.store.measuredCostMicros(), 17);
   });
 

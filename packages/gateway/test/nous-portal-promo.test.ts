@@ -14,8 +14,11 @@ const PROMOS = {
 const NOT_ALLOWLISTED = 'nous-portal: model is not on the free-model allowlist; no request sent';
 const PRICE_REFUSED = 'nous-portal: model refused: a non-zero or unreadable price was observed';
 const CALL: GenerationCall = {
-  model: '', instructions: 'Be brief.', prompt: 'Reply with ok.',
-  settings: { max_output_tokens: 64 }, signal: undefined,
+  model: '',
+  instructions: 'Be brief.',
+  prompt: 'Reply with ok.',
+  settings: { max_output_tokens: 64 },
+  signal: undefined,
 };
 
 function refused(result: GenerationProviderResult, message = NOT_ALLOWLISTED) {
@@ -30,7 +33,7 @@ it('exports the exact promo map separately from the default free-model allowlist
   assert.deepEqual(nous.NOUS_PORTAL_PROMO_MODELS, PROMOS);
   for (const { id } of Object.values(PROMOS)) {
     assert.equal(nous.isNousPortalFreeModel(id), false);
-    assert.ok(!Object.values(nous.NOUS_PORTAL_FREE_MODELS).some(model => String(model) === id));
+    assert.ok(!Object.values(nous.NOUS_PORTAL_FREE_MODELS).some((model) => String(model) === id));
   }
 });
 
@@ -41,8 +44,12 @@ for (const [name, { id: model }] of Object.entries(PROMOS)) {
     it('refuses without explicit opt-in, before any request', async () => {
       for (const promoModels of [undefined, false]) {
         const endpoint = nousEndpoint();
-        const options = { apiKey: KEY, fetch: endpoint.fetch,
-          ...(promoModels === undefined ? {} : { promoModels }), now: () => EXPIRES_AT - 1 };
+        const options = {
+          apiKey: KEY,
+          fetch: endpoint.fetch,
+          ...(promoModels === undefined ? {} : { promoModels }),
+          now: () => EXPIRES_AT - 1,
+        };
         refused(await nous.nousPortalAdapter(options).execute(call));
         assert.equal(endpoint.sent.length, 0);
       }
@@ -58,9 +65,15 @@ for (const [name, { id: model }] of Object.entries(PROMOS)) {
     });
 
     it('refuses priced catalogue evidence permanently without sending chat', async () => {
-      const endpoint = nousEndpoint({ catalogue: () => json(catalogueWith(model, {
-        prompt: '0.0000000000', completion: '0.0000000001',
-      })) });
+      const endpoint = nousEndpoint({
+        catalogue: () =>
+          json(
+            catalogueWith(model, {
+              prompt: '0.0000000000',
+              completion: '0.0000000001',
+            }),
+          ),
+      });
       const options = { apiKey: KEY, fetch: endpoint.fetch, promoModels: true, now: () => EXPIRES_AT - 1 };
       const adapter = nous.nousPortalAdapter(options);
       refused(await adapter.execute(call), PRICE_REFUSED);
@@ -83,11 +96,22 @@ for (const [name, { id: model }] of Object.entries(PROMOS)) {
     }
 
     it('fails closed with missing, invalid, or throwing injected time', async () => {
-      for (const now of [undefined, () => NaN, () => Infinity, () => -Infinity,
-        () => { throw new Error('clock unavailable'); }]) {
+      for (const now of [
+        undefined,
+        () => NaN,
+        () => Infinity,
+        () => -Infinity,
+        () => {
+          throw new Error('clock unavailable');
+        },
+      ]) {
         const endpoint = nousEndpoint();
-        const options = { apiKey: KEY, fetch: endpoint.fetch, promoModels: true,
-          ...(now === undefined ? {} : { now }) };
+        const options = {
+          apiKey: KEY,
+          fetch: endpoint.fetch,
+          promoModels: true,
+          ...(now === undefined ? {} : { now }),
+        };
         refused(await nous.nousPortalAdapter(options).execute(call));
         assert.equal(endpoint.sent.length, 0);
       }
@@ -95,10 +119,12 @@ for (const [name, { id: model }] of Object.entries(PROMOS)) {
 
     it('shares one in-flight catalogue check for concurrent first calls before expiry', async () => {
       const release = deferred();
-      const endpoint = nousEndpoint({ catalogue: async () => {
-        await release.promise;
-        return json(catalogueWith(model, { prompt: '0.0000000000', completion: '0.0000000000' }));
-      } });
+      const endpoint = nousEndpoint({
+        catalogue: async () => {
+          await release.promise;
+          return json(catalogueWith(model, { prompt: '0.0000000000', completion: '0.0000000000' }));
+        },
+      });
       const options = { apiKey: KEY, fetch: endpoint.fetch, promoModels: true, now: () => EXPIRES_AT - 1 };
       const adapter = nous.nousPortalAdapter(options);
       const pending = [adapter.execute(call), adapter.execute(call)];
@@ -108,7 +134,10 @@ for (const [name, { id: model }] of Object.entries(PROMOS)) {
       const results = await Promise.all(pending);
       assert.equal(checksBeforeRelease, 1);
       assert.equal(chatsBeforeRelease, 0);
-      assert.deepEqual(results.map(result => result.status), ['completed', 'completed']);
+      assert.deepEqual(
+        results.map((result) => result.status),
+        ['completed', 'completed'],
+      );
       assert.equal(endpoint.catalogueRequests.length, 1);
       assert.equal(endpoint.chatRequests.length, 2);
     });
@@ -131,10 +160,12 @@ for (const [name, { id: model }] of Object.entries(PROMOS)) {
 
     it('rechecks expiry after catalogue resolution and refuses chat if the check crossed it', async () => {
       let now = EXPIRES_AT - 1;
-      const endpoint = nousEndpoint({ catalogue: () => {
-        now = EXPIRES_AT;
-        return json(catalogueWith(model, { prompt: '0', completion: '0' }));
-      } });
+      const endpoint = nousEndpoint({
+        catalogue: () => {
+          now = EXPIRES_AT;
+          return json(catalogueWith(model, { prompt: '0', completion: '0' }));
+        },
+      });
       const options = { apiKey: KEY, fetch: endpoint.fetch, promoModels: true, now: () => now };
       const adapter = nous.nousPortalAdapter(options);
       refused(await adapter.execute(call));
@@ -145,9 +176,20 @@ for (const [name, { id: model }] of Object.entries(PROMOS)) {
     });
 
     it('keeps the response usage.cost guard and refuses subsequent calls after a charge', async () => {
-      const endpoint = nousEndpoint({ chat: () => json(completionBody('ok', {
-        prompt_tokens: 12, completion_tokens: 1, cost: 0.01,
-      }, model)) });
+      const endpoint = nousEndpoint({
+        chat: () =>
+          json(
+            completionBody(
+              'ok',
+              {
+                prompt_tokens: 12,
+                completion_tokens: 1,
+                cost: 0.01,
+              },
+              model,
+            ),
+          ),
+      });
       const options = { apiKey: KEY, fetch: endpoint.fetch, promoModels: true, now: () => EXPIRES_AT - 1 };
       const adapter = nous.nousPortalAdapter(options);
       const result = await adapter.execute(call);

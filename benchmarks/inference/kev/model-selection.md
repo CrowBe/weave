@@ -25,13 +25,13 @@ Development and locked-test accuracy are deliberately separate. The current 4B
 and 8B model cards describe newer v7 checkpoints than the older overview table and
 search snippets; this table uses the individual cards' current checkpoint results.
 
-| Candidate | Backbone | Transfer accuracy, development / locked test | Approximate base-weight storage at fp32 / bf16 | Assessment for this PC |
-| --- | --- | --- | --- | --- |
-| 0.5B | Qwen2.5-0.5B | 57.5% / not reported on this common locked suite | 2 / 1 GB | Historical prototype; skip initially |
-| 0.6B | Qwen3-0.6B-Base | 59.8% / 63.1% | 2.4 / 1.2 GB | Useful performance baseline; weak general fallback |
-| 4B, `v7-rc3/01-trial-1` | Qwen3-4B-Base | 79.0% / 80.6% | 16 / 8 GB | Preferred quality/memory tradeoff |
-| 8B, `v7-final/00-trial-0` | Qwen3-8B-Base | 79.6% / 78.0% | 32 / 16 GB | Little development gain, lower locked-test score; defer |
-| Hosted Jev reference | undisclosed | 85.7% / not reported here | remote | Reference, not demonstrated equivalent |
+| Candidate                 | Backbone        | Transfer accuracy, development / locked test     | Approximate base-weight storage at fp32 / bf16 | Assessment for this PC                                  |
+| ------------------------- | --------------- | ------------------------------------------------ | ---------------------------------------------- | ------------------------------------------------------- |
+| 0.5B                      | Qwen2.5-0.5B    | 57.5% / not reported on this common locked suite | 2 / 1 GB                                       | Historical prototype; skip initially                    |
+| 0.6B                      | Qwen3-0.6B-Base | 59.8% / 63.1%                                    | 2.4 / 1.2 GB                                   | Useful performance baseline; weak general fallback      |
+| 4B, `v7-rc3/01-trial-1`   | Qwen3-4B-Base   | 79.0% / 80.6%                                    | 16 / 8 GB                                      | Preferred quality/memory tradeoff                       |
+| 8B, `v7-final/00-trial-0` | Qwen3-8B-Base   | 79.6% / 78.0%                                    | 32 / 16 GB                                     | Little development gain, lower locked-test score; defer |
+| Hosted Jev reference      | undisclosed     | 85.7% / not reported here                        | remote                                         | Reference, not demonstrated equivalent                  |
 
 Sources: [0.6B card](https://huggingface.co/jaredpalmer/kev-0.6b),
 [4B card](https://github.com/jaredpalmer/kev/blob/main/docs/model-cards/kev-4b.md),

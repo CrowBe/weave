@@ -90,8 +90,13 @@ function sentBody(calls: readonly Captured[]): Record<string, unknown> {
 }
 
 describe('TypeSafe danger zone headers', () => {
-  for (const flags of [{}, { longContext: false, images: false },
-    { longContext: true }, { images: true }, { longContext: true, images: true }]) {
+  for (const flags of [
+    {},
+    { longContext: false, images: false },
+    { longContext: true },
+    { images: true },
+    { longContext: true, images: true },
+  ]) {
     it(`sends only enabled headers on every request: ${JSON.stringify(flags)}`, async () => {
       const { fetch, calls } = stubFetch(LIVE_BODY);
       const adapter = typesafeAiEvaluator({ ...options(fetch), ...flags });
@@ -115,14 +120,19 @@ describe('TypeSafe danger zone headers', () => {
     const profile: DecisionWireProfile = {
       ...typesafeWire,
       headers: {
-        authorization: 'lowercase credential', Authorization: 'uppercase credential',
-        AUTHORIZATION: 'all caps credential', 'content-type': 'text/plain',
-        'Content-Type': 'text/html', 'CONTENT-TYPE': 'application/xml',
+        authorization: 'lowercase credential',
+        Authorization: 'uppercase credential',
+        AUTHORIZATION: 'all caps credential',
+        'content-type': 'text/plain',
+        'Content-Type': 'text/html',
+        'CONTENT-TYPE': 'application/xml',
         'X-Profile-Header': 'allowed',
       },
     };
     await evaluationTransport(profile, {
-      credential: 'test-key', defaultBaseURL: 'https://example.test', fetch,
+      credential: 'test-key',
+      defaultBaseURL: 'https://example.test',
+      fetch,
     }).evaluate(CALL);
     const headers = new Headers(calls[0]!.init.headers);
     assert.equal(headers.get('authorization'), 'Bearer test-key');
@@ -133,11 +143,13 @@ describe('TypeSafe danger zone headers', () => {
 
 describe('TypeSafe preview hardening', () => {
   it('ignores box and future answer types on unasked ids', async () => {
-    const { fetch } = stubFetch({ answers: {
-      urgent: { type: 'noul', noul: 0.9 },
-      extra: { type: 'box', box: { top: 0, bottom: 1, left: 0, right: 1 }, confidence: 0.8 },
-      later: { type: 'future', confidence: 0.7 },
-    } });
+    const { fetch } = stubFetch({
+      answers: {
+        urgent: { type: 'noul', noul: 0.9 },
+        extra: { type: 'box', box: { top: 0, bottom: 1, left: 0, right: 1 }, confidence: 0.8 },
+        later: { type: 'future', confidence: 0.7 },
+      },
+    });
     const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
     assert.equal(result.status, 'completed');
     if (result.status !== 'completed') return;
@@ -147,12 +159,21 @@ describe('TypeSafe preview hardening', () => {
 
   it('reports an unsupported answer type on an asked id as malformed, not unanswered', async () => {
     for (const [id, answers] of [
-      ['extra', { urgent: { type: 'noul', noul: 0.9 }, extra: { type: 'box', box: { top: 0, bottom: 1, left: 0, right: 1 }, confidence: 0.8 } }],
+      [
+        'extra',
+        {
+          urgent: { type: 'noul', noul: 0.9 },
+          extra: { type: 'box', box: { top: 0, bottom: 1, left: 0, right: 1 }, confidence: 0.8 },
+        },
+      ],
       ['urgent', { urgent: { type: 'future' } }],
       ['urgent', { urgent: { type: { toString: null } } }],
     ] as const) {
       const { fetch } = stubFetch({ answers });
-      const result = await typesafeAiEvaluator(options(fetch)).evaluate({ ...CALL, questions: { ...CALL.questions, extra: { type: 'boolean', instructions: 'extra?' } } });
+      const result = await typesafeAiEvaluator(options(fetch)).evaluate({
+        ...CALL,
+        questions: { ...CALL.questions, extra: { type: 'boolean', instructions: 'extra?' } },
+      });
       assert.equal(result.status, 'failed');
       if (result.status !== 'failed') continue;
       assert.equal(result.failure.code, 'malformed_response');
@@ -165,48 +186,73 @@ describe('TypeSafe preview hardening', () => {
     const { fetch } = stubFetch({ answers: { urgent: { type: 'noul', noul: 0.9 }, extra: { type: 'noul' } } });
     const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
     assert.equal(result.status, 'completed');
-    assert.deepEqual(result.status === 'completed' && result.answers, { urgent: { type: 'boolean', probability: 0.9 } });
+    assert.deepEqual(result.status === 'completed' && result.answers, {
+      urgent: { type: 'boolean', probability: 0.9 },
+    });
   });
 
   for (const enabled of [false, true]) {
     it(`preserves choice keys with shuffle ${enabled ? 'seeded' : 'disabled'}`, async () => {
       let seed = 0;
-      const shuffle = enabled ? () => {
-        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-        return seed / 4294967296;
-      } : false;
+      const shuffle = enabled
+        ? () => {
+            seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+            return seed / 4294967296;
+          }
+        : false;
       const criteria = { auth: 'authentication', payments: 'payments', ui: 'interface' };
-      const { fetch, calls } = stubFetch({ answers: { area: {
-        type: 'choice', choice: 'payments', probabilities: { ui: 0.1, payments: 0.8, auth: 0.1, unknown: 0.5 },
-      } } });
+      const { fetch, calls } = stubFetch({
+        answers: {
+          area: {
+            type: 'choice',
+            choice: 'payments',
+            probabilities: { ui: 0.1, payments: 0.8, auth: 0.1, unknown: 0.5 },
+          },
+        },
+      });
       const result = await typesafeAiEvaluator({ ...options(fetch), shuffle, dataSharing: false }).evaluate({
-        ...CALL, kind: 'choice', questions: { area: { type: 'choice', instructions: 'area?', criteria } },
+        ...CALL,
+        kind: 'choice',
+        questions: { area: { type: 'choice', instructions: 'area?', criteria } },
       });
       const body = sentBody(calls);
       assert.deepEqual(Object.keys(body).sort(), ['model', 'questions', 'state']);
       const questions = body['questions'] as Record<string, { criteria: object }>;
-      assert.deepEqual(Object.keys(questions['area']!.criteria), shuffle === false ? ['auth', 'payments', 'ui'] : ['payments', 'ui', 'auth']);
+      assert.deepEqual(
+        Object.keys(questions['area']!.criteria),
+        shuffle === false ? ['auth', 'payments', 'ui'] : ['payments', 'ui', 'auth'],
+      );
       assert.deepEqual(Object.keys(criteria), ['auth', 'payments', 'ui']);
       assert.deepEqual(result.status === 'completed' && result.answers['area'], {
-        type: 'choice', choice: 'payments', probabilities: { auth: 0.1, payments: 0.8, ui: 0.1 },
+        type: 'choice',
+        choice: 'payments',
+        probabilities: { auth: 0.1, payments: 0.8, ui: 0.1 },
       });
     });
   }
 
   it('rejects supported answers whose type differs from the asked question', async () => {
-    for (const answer of [{ type: 'noul', noul: 0.9 }, { type: 'score', score: 1 }]) {
+    for (const answer of [
+      { type: 'noul', noul: 0.9 },
+      { type: 'score', score: 1 },
+    ]) {
       const { fetch } = stubFetch({ answers: { area: answer } });
       const result = await typesafeAiEvaluator(options(fetch)).evaluate({
-        ...CALL, kind: 'choice', questions: { area: { type: 'choice', instructions: 'area?', criteria: { auth: 'auth' } } },
+        ...CALL,
+        kind: 'choice',
+        questions: { area: { type: 'choice', instructions: 'area?', criteria: { auth: 'auth' } } },
       });
       assert.equal(result.status === 'failed' && result.failure.code, 'malformed_response');
     }
   });
 
   it('keeps exported wire choice ordering deterministic', () => {
-    const call: EvaluationCall = { ...CALL, questions: {
-      area: { type: 'choice', instructions: 'area?', criteria: { auth: 'auth', payments: 'payments', ui: 'ui' } },
-    } };
+    const call: EvaluationCall = {
+      ...CALL,
+      questions: {
+        area: { type: 'choice', instructions: 'area?', criteria: { auth: 'auth', payments: 'payments', ui: 'ui' } },
+      },
+    };
     for (let i = 0; i < 20; i++) {
       const body = typesafeWire.toBody(call) as { questions: { area: { criteria: object } } };
       assert.deepEqual(Object.keys(body.questions.area.criteria), ['auth', 'payments', 'ui']);
@@ -217,33 +263,52 @@ describe('TypeSafe preview hardening', () => {
     for (const value of [1, 2, -1, NaN, Infinity, -Infinity]) {
       const { fetch, calls } = stubFetch({ answers: {} });
       await typesafeAiEvaluator({ ...options(fetch), shuffle: () => value }).evaluate({
-        ...CALL, questions: { area: { type: 'choice', instructions: 'area?', criteria: { a: 'A', b: 'B', c: 'C' } } },
+        ...CALL,
+        questions: { area: { type: 'choice', instructions: 'area?', criteria: { a: 'A', b: 'B', c: 'C' } } },
       });
       const body = sentBody(calls) as { questions: { area: { criteria: object } } };
-      assert.deepEqual(Object.entries(body.questions.area.criteria).sort(), [['a', 'A'], ['b', 'B'], ['c', 'C']]);
+      assert.deepEqual(Object.entries(body.questions.area.criteria).sort(), [
+        ['a', 'A'],
+        ['b', 'B'],
+        ['c', 'C'],
+      ]);
     }
   });
 
   it('keeps interleaved calls bound to their own questions', async () => {
     let finishFirst: (() => void) | undefined;
-    const firstReady = new Promise<void>(resolve => { finishFirst = resolve; });
+    const firstReady = new Promise<void>((resolve) => {
+      finishFirst = resolve;
+    });
     const fetch = (async (_url: unknown, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as { state: string };
       if (body.state === 'first') await firstReady;
       else finishFirst!();
-      return new Response(JSON.stringify({ answers: {
-        area: { type: 'choice', choice: body.state, probabilities: { first: 0.5, second: 0.5 } },
-      } }));
+      return new Response(
+        JSON.stringify({
+          answers: {
+            area: { type: 'choice', choice: body.state, probabilities: { first: 0.5, second: 0.5 } },
+          },
+        }),
+      );
     }) as typeof globalThis.fetch;
     const adapter = typesafeAiEvaluator({ ...options(fetch), shuffle: false });
-    const results = await Promise.all(['first', 'second'].map(state => adapter.evaluate({
-      ...CALL, state, kind: 'choice',
-      questions: { area: { type: 'choice', instructions: 'which?', criteria: { [state]: state } } },
-    })));
+    const results = await Promise.all(
+      ['first', 'second'].map((state) =>
+        adapter.evaluate({
+          ...CALL,
+          state,
+          kind: 'choice',
+          questions: { area: { type: 'choice', instructions: 'which?', criteria: { [state]: state } } },
+        }),
+      ),
+    );
     for (const [index, result] of results.entries()) {
       const key = index === 0 ? 'first' : 'second';
       assert.deepEqual(result.status === 'completed' && result.answers['area'], {
-        type: 'choice', choice: key, probabilities: { [key]: 0.5 },
+        type: 'choice',
+        choice: key,
+        probabilities: { [key]: 0.5 },
       });
     }
   });
@@ -251,7 +316,9 @@ describe('TypeSafe preview hardening', () => {
   it('rejects a choice outside the asked keys', async () => {
     const { fetch } = stubFetch({ answers: { area: { type: 'choice', choice: 'unknown' } } });
     const result = await typesafeAiEvaluator(options(fetch)).evaluate({
-      ...CALL, kind: 'choice', questions: { area: { type: 'choice', instructions: 'area?', criteria: { auth: 'auth' } } },
+      ...CALL,
+      kind: 'choice',
+      questions: { area: { type: 'choice', instructions: 'area?', criteria: { auth: 'auth' } } },
     });
     assert.equal(result.status === 'failed' && result.failure.code, 'malformed_response');
   });
@@ -261,7 +328,11 @@ const ALL_CALL: EvaluationCall = {
   ...CALL,
   questions: {
     ...CALL.questions,
-    area: { type: 'choice', instructions: 'area?', criteria: { auth: 'auth', payments: 'payments', ui: 'ui', billing: 'billing', technical: 'technical' } },
+    area: {
+      type: 'choice',
+      instructions: 'area?',
+      criteria: { auth: 'auth', payments: 'payments', ui: 'ui', billing: 'billing', technical: 'technical' },
+    },
     severity: { type: 'score', instructions: 'severity?', criteria: ['trivial', 'minor', 'serious', 'critical'] },
     frustration: { type: 'score', instructions: 'frustration?', criteria: ['Calm', 'Frustrated', 'Very angry'] },
   },
@@ -363,11 +434,14 @@ describe('typesafe-ai adapter: response', () => {
   });
 
   it('forwards a published non-number confidence as NaN so a site reads it as invalid, not absent', async () => {
-    const { fetch } = stubFetch({ ...LIVE_BODY, answers: {
-      ...LIVE_BODY.answers,
-      severity: { ...LIVE_BODY.answers.severity, confidence: 'high' },
-      area: { ...LIVE_BODY.answers.area, confidence: null },
-    } });
+    const { fetch } = stubFetch({
+      ...LIVE_BODY,
+      answers: {
+        ...LIVE_BODY.answers,
+        severity: { ...LIVE_BODY.answers.severity, confidence: 'high' },
+        area: { ...LIVE_BODY.answers.area, confidence: null },
+      },
+    });
     const result = await typesafeAiEvaluator(options(fetch)).evaluate(ALL_CALL);
 
     assert.equal(result.status, 'completed');
@@ -446,9 +520,15 @@ describe('typesafe-ai adapter: failures', () => {
   });
 
   it('classifies a 200 body that cannot be read as retryable unavailable, not malformed', async () => {
-    const fetch = (async () => new Response(new ReadableStream({
-      start(controller) { controller.error(new TypeError('terminated')); },
-    }), { status: 200, headers: { 'x-typesafe-request-id': REQUEST_ID } })) as unknown as typeof globalThis.fetch;
+    const fetch = (async () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.error(new TypeError('terminated'));
+          },
+        }),
+        { status: 200, headers: { 'x-typesafe-request-id': REQUEST_ID } },
+      )) as unknown as typeof globalThis.fetch;
 
     const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
     assert.equal(result.status, 'failed');
@@ -552,9 +632,17 @@ describe('TypeSafe decision contract', () => {
       kind: 'choice',
       state: { ticket: 'payouts failing' },
       questions: {
-        urgent: { type: 'boolean', instructions: 'Does this convey urgency?', criteria: { true: 'time-sensitive', false: 'no urgency' } },
+        urgent: {
+          type: 'boolean',
+          instructions: 'Does this convey urgency?',
+          criteria: { true: 'time-sensitive', false: 'no urgency' },
+        },
         area: { type: 'choice', instructions: 'Which area?', criteria: { billing: 'invoices', technical: null } },
-        frustration: { type: 'score', instructions: { ask: 'how frustrated?' }, criteria: ['Calm', 'Frustrated', 'Very angry'] },
+        frustration: {
+          type: 'score',
+          instructions: { ask: 'how frustrated?' },
+          criteria: ['Calm', 'Frustrated', 'Very angry'],
+        },
       },
       signal: undefined,
     });
@@ -574,9 +662,17 @@ describe('TypeSafe decision contract', () => {
     assert.ok(questions && typeof questions === 'object');
     assert.ok(Object.keys(questions as object).length > 0);
     assert.deepEqual(questions, {
-      urgent: { type: 'noul', instructions: 'Does this convey urgency?', criteria: { true: 'time-sensitive', false: 'no urgency' } },
+      urgent: {
+        type: 'noul',
+        instructions: 'Does this convey urgency?',
+        criteria: { true: 'time-sensitive', false: 'no urgency' },
+      },
       area: { type: 'choice', instructions: 'Which area?', criteria: { billing: 'invoices', technical: null } },
-      frustration: { type: 'score', instructions: { ask: 'how frustrated?' }, criteria: ['Calm', 'Frustrated', 'Very angry'] },
+      frustration: {
+        type: 'score',
+        instructions: { ask: 'how frustrated?' },
+        criteria: ['Calm', 'Frustrated', 'Very angry'],
+      },
     });
     const encoded = JSON.stringify(questions);
     assert.equal(encoded.includes('"choices"'), false);
@@ -585,20 +681,23 @@ describe('TypeSafe decision contract', () => {
   });
 
   it('reads noul, choice, and score, and does not invent missing confidence', async () => {
-    const { fetch } = stubFetch({
-      model: 'jev-1.13.0',
-      answers: {
-        urgent: { type: 'noul', noul: 0.95 },
-        area: { type: 'choice', choice: 'billing', probabilities: { billing: 0.9, technical: 0.1 } },
-        frustration: {
-          type: 'score',
-          score: 1.05,
-          legend: { '0': 'Calm', '1': 'Frustrated', '2': 'Very angry' },
-          probabilities: { '0': 0, '1': 0.95, '2': 0.05 },
+    const { fetch } = stubFetch(
+      {
+        model: 'jev-1.13.0',
+        answers: {
+          urgent: { type: 'noul', noul: 0.95 },
+          area: { type: 'choice', choice: 'billing', probabilities: { billing: 0.9, technical: 0.1 } },
+          frustration: {
+            type: 'score',
+            score: 1.05,
+            legend: { '0': 'Calm', '1': 'Frustrated', '2': 'Very angry' },
+            probabilities: { '0': 0, '1': 0.95, '2': 0.05 },
+          },
         },
+        usage: { input_tokens: 388, output_tokens: 73 },
       },
-      usage: { input_tokens: 388, output_tokens: 73 },
-    }, { headers: { 'x-typesafe-request-id': REQUEST_ID } });
+      { headers: { 'x-typesafe-request-id': REQUEST_ID } },
+    );
     const result = await typesafeAiEvaluator(options(fetch)).evaluate(ALL_CALL);
     assert.equal(result.status, 'completed');
     if (result.status !== 'completed') return;
@@ -643,7 +742,13 @@ describe('TypeSafe decision contract', () => {
   }
 
   it('reports a malformed body without inventing an answer', async () => {
-    for (const raw of ['not-json', 'null', '[]', JSON.stringify({ model: 'jev-preview' }), JSON.stringify({ answers: { urgent: { type: 'noul' } } })]) {
+    for (const raw of [
+      'not-json',
+      'null',
+      '[]',
+      JSON.stringify({ model: 'jev-preview' }),
+      JSON.stringify({ answers: { urgent: { type: 'noul' } } }),
+    ]) {
       const { fetch } = stubFetch(undefined, { raw, headers: { 'x-typesafe-request-id': REQUEST_ID } });
       const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
       assert.equal(result.status, 'failed');
@@ -691,7 +796,10 @@ describe('TypeSafe decision contract', () => {
       if (succeeded.status !== 'completed') return;
       assert.equal(succeeded.provider_response_id, 'req_[redacted]');
       assert.equal(JSON.stringify(succeeded).includes(secret), false);
-      assert.equal(logs.some((line) => line.includes(secret)), false);
+      assert.equal(
+        logs.some((line) => line.includes(secret)),
+        false,
+      );
     } finally {
       for (const name of methods) console[name] = originals.get(name) as typeof console.log;
     }
@@ -710,7 +818,8 @@ describe('reference provenance and throttling', () => {
       const { fetch } = stubFetch({ ...LIVE_BODY, model });
       const result = await typesafeAiEvaluator(options(fetch)).evaluate(CALL);
       assert.equal(result.status, 'completed');
-      if (result.status === 'completed') assert.equal(result.resolved_model_id, model === undefined ? undefined : 'model-[redacted]');
+      if (result.status === 'completed')
+        assert.equal(result.resolved_model_id, model === undefined ? undefined : 'model-[redacted]');
     }
   });
   it('honours numeric retry-after on a TypeSafe throttle', async () => {

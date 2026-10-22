@@ -220,7 +220,9 @@ describe('criteria gate', () => {
     assert.equal(state.includes('# Installation'), false);
 
     const decision = decideCriteria(record);
-    const byId = Object.fromEntries(decision.lines.flatMap((line) => (line.line_id === null ? [] : [[line.line_id, line]])));
+    const byId = Object.fromEntries(
+      decision.lines.flatMap((line) => (line.line_id === null ? [] : [[line.line_id, line]])),
+    );
     assert.equal(byId['readme']?.status, 'revise');
     assert.equal(byId['readme']?.reason, 'low_confidence');
     assert.equal(byId['export']?.status, 'rejected');
@@ -249,7 +251,9 @@ describe('criteria gate', () => {
       throw new Error('no request');
     });
     const policy = { ...DECLARED_TASK_POLICY, model: 'jev-latest' } as unknown as TaskJudgmentPolicy;
-    await assert.rejects(() => judgeCriteria([readme()], { request_id: 'bad-model', terms: TERMS, gateway: calls, policy }));
+    await assert.rejects(() =>
+      judgeCriteria([readme()], { request_id: 'bad-model', terms: TERMS, gateway: calls, policy }),
+    );
     assert.equal(calls.calls.length, 0);
   });
 });
@@ -261,7 +265,11 @@ describe('task validation', () => {
     const calls = gateway((request) =>
       accepted(request.site, request.request_id, { readme: { probability: 0.8, confidence: 0.9 } }),
     );
-    const record = await judgeValidation([readme()], body, [], OPEN, { request_id: 'val-pass', terms: TERMS, gateway: calls });
+    const record = await judgeValidation([readme()], body, [], OPEN, {
+      request_id: 'val-pass',
+      terms: TERMS,
+      gateway: calls,
+    });
     const decision = decideValidation(record);
     assert.equal(decision.disposition, 'done');
     assert.equal(decision.done, true);
@@ -277,7 +285,14 @@ describe('task validation', () => {
     const calls = gateway((request) =>
       accepted(request.site, request.request_id, { readme: { probability: 0.15, confidence: 0.98 } }),
     );
-    const record = await judgeValidation([readme()], body, [], OPEN, { request_id: 'val-fail', terms: TERMS, gateway: calls }, writeUp);
+    const record = await judgeValidation(
+      [readme()],
+      body,
+      [],
+      OPEN,
+      { request_id: 'val-fail', terms: TERMS, gateway: calls },
+      writeUp,
+    );
     const decision = decideValidation(record);
     assert.equal(decision.done, false);
     assert.equal(decision.disposition, 'fail');
@@ -289,7 +304,13 @@ describe('task validation', () => {
   it('escalates below the confidence floor, including a missing confidence', () => {
     const low = validationFromFixture([readme()], body, [], { readme: { probability: 0.95, confidence: 0.899 } }, OPEN);
     assert.equal(decideValidation(low).disposition, 'escalate');
-    const missing = validationFromFixture([readme()], body, [], { readme: { probability: 0.95, confidence: null } }, OPEN);
+    const missing = validationFromFixture(
+      [readme()],
+      body,
+      [],
+      { readme: { probability: 0.95, confidence: null } },
+      OPEN,
+    );
     assert.equal(replayValidation(missing).disposition, 'escalate');
     assert.equal(replayValidation(missing).done, false);
   });
@@ -341,7 +362,11 @@ describe('task validation', () => {
     const quiet = gateway(() => {
       throw new Error('escape must not call');
     });
-    const escaped = await judgeValidation([readme()], [], [], OPEN, { request_id: 'val-escape', terms: TERMS, gateway: quiet });
+    const escaped = await judgeValidation([readme()], [], [], OPEN, {
+      request_id: 'val-escape',
+      terms: TERMS,
+      gateway: quiet,
+    });
     assert.equal(quiet.calls.length, 0);
     assert.equal(decideValidation(escaped).disposition, 'escape');
     assert.equal(replayValidation(escaped).done, false);
@@ -357,7 +382,11 @@ describe('task validation', () => {
       spent: 0,
       uncertainty: ['malformed'],
     }));
-    const broken = await judgeValidation([readme()], body, [], OPEN, { request_id: 'bad', terms: TERMS, gateway: malformed });
+    const broken = await judgeValidation([readme()], body, [], OPEN, {
+      request_id: 'bad',
+      terms: TERMS,
+      gateway: malformed,
+    });
     assert.equal(decideValidation(broken).disposition, 'malformed');
     assert.equal(replayValidation(broken).done, false);
 
@@ -504,7 +533,10 @@ describe('predicate lines (acceptance.line@2)', () => {
     assert.deepEqual(exit.predicate, { kind: 'exit_status', equals: 0 });
     assert.equal(admitted(literalLine()).fact, 'artifact "readme" contains the literal "--dry-run"');
     assert.equal(admitted(outputLine).fact, 'the output of command "tests" contains the literal "ok"');
-    assert.equal(admitted(literalLine('say "hi" and 2 more')).fact, 'artifact "readme" contains the literal "say \\"hi\\" and 2 more"');
+    assert.equal(
+      admitted(literalLine('say "hi" and 2 more')).fact,
+      'artifact "readme" contains the literal "say \\"hi\\" and 2 more"',
+    );
   });
 
   it('rejects a predicate on the wrong evidence kind, beside free text, or outside the closed set', () => {
@@ -535,7 +567,11 @@ describe('predicate lines (acceptance.line@2)', () => {
     const calls = gateway((request) =>
       accepted(request.site, request.request_id, { readme: { probability: 0.96, confidence: 0.97 } }),
     );
-    const record = await judgeCriteria([exitLine(), readme(), literalLine()], { request_id: 'crit-mixed', terms: TERMS, gateway: calls });
+    const record = await judgeCriteria([exitLine(), readme(), literalLine()], {
+      request_id: 'crit-mixed',
+      terms: TERMS,
+      gateway: calls,
+    });
     assert.equal(calls.calls.length, 1);
     assert.deepEqual(Object.keys(calls.calls[0]?.questions ?? {}), ['readme']);
     assert.equal(JSON.stringify(calls.calls[0]?.state).includes('--dry-run'), false);
@@ -553,12 +589,19 @@ describe('predicate lines (acceptance.line@2)', () => {
 
   it('sends no criteria request when every line is a predicate', async () => {
     const calls = silent();
-    const record = await judgeCriteria([exitLine(), literalLine()], { request_id: 'crit-code', terms: TERMS, gateway: calls });
+    const record = await judgeCriteria([exitLine(), literalLine()], {
+      request_id: 'crit-code',
+      terms: TERMS,
+      gateway: calls,
+    });
     assert.equal(calls.calls.length, 0);
     assert.equal(record.requested, false);
     const decision = decideCriteria(record);
     assert.equal(decision.malformed, null);
-    assert.deepEqual(decision.entered.map((line) => line.line_id), ['exit', 'flag']);
+    assert.deepEqual(
+      decision.entered.map((line) => line.line_id),
+      ['exit', 'flag'],
+    );
     const fixture = criteriaFromFixture([exitLine(), literalLine()], {});
     assert.deepEqual(decideCriteria(fixture), decision);
   });
@@ -567,7 +610,10 @@ describe('predicate lines (acceptance.line@2)', () => {
     const line = admitted(exitLine());
     const pass = validationFromFixture([line], [], tests(0), {}, OPEN);
     assert.equal(decideValidation(pass).disposition, 'done');
-    assert.deepEqual(pass.facts.map((fact) => fact.decided_by), ['code']);
+    assert.deepEqual(
+      pass.facts.map((fact) => fact.decided_by),
+      ['code'],
+    );
     assert.equal(pass.requested, false);
     const fail = validationFromFixture([line], [], tests(1), {}, OPEN);
     assert.equal(decideValidation(fail).disposition, 'fail');
@@ -584,13 +630,22 @@ describe('predicate lines (acceptance.line@2)', () => {
 
   it('decides a literal in code against an artifact body or a command output', () => {
     const flag = admitted(literalLine());
-    assert.equal(decideValidation(validationFromFixture([flag], docs('Use --dry-run first.\n'), [], {}, OPEN)).disposition, 'done');
-    assert.equal(decideValidation(validationFromFixture([flag], docs('Use --dry run first.\n'), [], {}, OPEN)).disposition, 'fail');
+    assert.equal(
+      decideValidation(validationFromFixture([flag], docs('Use --dry-run first.\n'), [], {}, OPEN)).disposition,
+      'done',
+    );
+    assert.equal(
+      decideValidation(validationFromFixture([flag], docs('Use --dry run first.\n'), [], {}, OPEN)).disposition,
+      'fail',
+    );
     assert.equal(decideValidation(validationFromFixture([flag], [], [], {}, OPEN)).disposition, 'escape');
     const out = admitted(outputLine);
     assert.equal(decideValidation(validationFromFixture([out], [], tests(1, 'ok\n'), {}, OPEN)).disposition, 'done');
     // Only the literal property: "not ok" contains "ok". Whether the run passed is a different fact.
-    assert.equal(decideValidation(validationFromFixture([out], [], tests(0, 'not ok\n'), {}, OPEN)).disposition, 'done');
+    assert.equal(
+      decideValidation(validationFromFixture([out], [], tests(0, 'not ok\n'), {}, OPEN)).disposition,
+      'done',
+    );
     assert.equal(decideValidation(validationFromFixture([out], [], tests(0, 'OK\n'), {}, OPEN)).disposition, 'fail');
   });
 
@@ -600,7 +655,14 @@ describe('predicate lines (acceptance.line@2)', () => {
     const calls = gateway((request) =>
       accepted(request.site, request.request_id, { readme: { probability: 0.95, confidence: 0.95 } }),
     );
-    const record = await judgeValidation(lines, artifacts, tests(0), OPEN, { request_id: 'val-mixed', terms: TERMS, gateway: calls }, 'UNIQUE_MIXED_WRITE_UP');
+    const record = await judgeValidation(
+      lines,
+      artifacts,
+      tests(0),
+      OPEN,
+      { request_id: 'val-mixed', terms: TERMS, gateway: calls },
+      'UNIQUE_MIXED_WRITE_UP',
+    );
     assert.equal(calls.calls.length, 1);
     const request = calls.calls[0];
     assert.deepEqual(Object.keys(request?.questions ?? {}), ['readme']);
@@ -624,9 +686,21 @@ describe('predicate lines (acceptance.line@2)', () => {
     const pass = { readme: { probability: 0.95, confidence: 0.95 } };
     const codeFails = validationFromFixture(lines, artifacts, tests(1), pass, OPEN);
     assert.equal(decideValidation(codeFails).disposition, 'fail');
-    const nounUnsure = validationFromFixture(lines, artifacts, tests(0), { readme: { probability: 0.95, confidence: null } }, OPEN);
+    const nounUnsure = validationFromFixture(
+      lines,
+      artifacts,
+      tests(0),
+      { readme: { probability: 0.95, confidence: null } },
+      OPEN,
+    );
     assert.equal(decideValidation(nounUnsure).disposition, 'escalate');
-    const codeFailsNoulUnsure = validationFromFixture(lines, artifacts, tests(1), { readme: { probability: 0.95, confidence: null } }, OPEN);
+    const codeFailsNoulUnsure = validationFromFixture(
+      lines,
+      artifacts,
+      tests(1),
+      { readme: { probability: 0.95, confidence: null } },
+      OPEN,
+    );
     assert.equal(decideValidation(codeFailsNoulUnsure).disposition, 'fail');
     const codeEscapes = validationFromFixture(lines, artifacts, tests(null), pass, OPEN);
     assert.equal(decideValidation(codeEscapes).disposition, 'escape');
@@ -674,13 +748,24 @@ describe('predicate lines (acceptance.line@2)', () => {
       escape: 'README.md is absent',
       predicate: { kind: 'exit_status', equals: 0 },
     } as AcceptanceLine;
-    await assert.rejects(() => judgeValidation([wrongKind], docs('x'), [], OPEN, { request_id: 'bad-kind', terms: TERMS, gateway: calls }));
+    await assert.rejects(() =>
+      judgeValidation([wrongKind], docs('x'), [], OPEN, { request_id: 'bad-kind', terms: TERMS, gateway: calls }),
+    );
     assert.equal(calls.calls.length, 0);
 
     const record = validationFromFixture([admitted(exitLine())], [], tests(0), {}, OPEN);
     const fact = record.facts[0];
     assert.ok(fact);
-    const tampered: ValidationRecord = { ...record, facts: [{ ...fact, predicate: { kind: 'exit_status', equals: 0 }, evidence: { kind: 'artifact', id: 'readme', body: '0' } }] };
+    const tampered: ValidationRecord = {
+      ...record,
+      facts: [
+        {
+          ...fact,
+          predicate: { kind: 'exit_status', equals: 0 },
+          evidence: { kind: 'artifact', id: 'readme', body: '0' },
+        },
+      ],
+    };
     assert.equal(decideValidation(tampered).disposition, 'malformed');
     const unknown = { ...record, contract: 'acceptance.line@3' } as unknown as ValidationRecord;
     assert.equal(decideValidation(unknown).disposition, 'malformed');
@@ -689,9 +774,15 @@ describe('predicate lines (acceptance.line@2)', () => {
 });
 
 describe('acceptance.line@1 replay', () => {
-  const recorded = JSON.parse(readFileSync(new URL('../../test/fixtures/acceptance-line-v1.json', import.meta.url), 'utf8')) as {
-    readonly criteria: Readonly<Record<string, { readonly record: CriteriaRecord; readonly decision: CriteriaDecision }>>;
-    readonly validation: Readonly<Record<string, { readonly record: ValidationRecord; readonly decision: ValidationDecision }>>;
+  const recorded = JSON.parse(
+    readFileSync(new URL('../../test/fixtures/acceptance-line-v1.json', import.meta.url), 'utf8'),
+  ) as {
+    readonly criteria: Readonly<
+      Record<string, { readonly record: CriteriaRecord; readonly decision: CriteriaDecision }>
+    >;
+    readonly validation: Readonly<
+      Record<string, { readonly record: ValidationRecord; readonly decision: ValidationDecision }>
+    >;
   };
 
   it('reproduces every decision recorded before predicates existed', () => {
@@ -716,14 +807,21 @@ describe('acceptance.line@1 replay', () => {
     assert.ok(first);
     const relabeled: ValidationRecord = {
       ...done.record,
-      facts: [{ ...first, decided_by: 'code', predicate: { kind: 'contains_literal', literal: 'absent literal' } }, ...done.record.facts.slice(1)],
+      facts: [
+        { ...first, decided_by: 'code', predicate: { kind: 'contains_literal', literal: 'absent literal' } },
+        ...done.record.facts.slice(1),
+      ],
     };
     assert.deepEqual(decideValidation(relabeled), done.decision);
   });
 });
 
 describe('frozen set', () => {
-  const tasks = loadFrozenSet(JSON.parse(readFileSync(new URL('../../../../benchmarks/task-acceptance/frozen-set.json', import.meta.url), 'utf8')));
+  const tasks = loadFrozenSet(
+    JSON.parse(
+      readFileSync(new URL('../../../../benchmarks/task-acceptance/frozen-set.json', import.meta.url), 'utf8'),
+    ),
+  );
 
   it('keeps a tune split and a smaller holdout, and scores them with the declared policy', () => {
     assert.ok(tasks.length >= 20 && tasks.length <= 30);
@@ -769,13 +867,19 @@ describe('frozen set', () => {
       assert.ok(code > 0 && code < facts);
       assert.equal(report.share_decided_in_code, code / facts);
       const exit = report.tasks.find((row) => row.id === 't17-exit-status');
-      assert.deepEqual([exit?.facts, exit?.facts_decided_in_code, exit?.disposition, exit?.disagreement], [1, 1, 'done', null]);
+      assert.deepEqual(
+        [exit?.facts, exit?.facts_decided_in_code, exit?.disposition, exit?.disagreement],
+        [1, 1, 'done', null],
+      );
       const mixed = report.tasks.find((row) => row.id === 't19-mixed');
       assert.deepEqual([mixed?.facts, mixed?.facts_decided_in_code, mixed?.disposition], [2, 1, 'done']);
       const absent = report.tasks.find((row) => row.id === 't18-literal-absent');
       assert.deepEqual([absent?.disposition, absent?.validation_agrees, absent?.agent_stop], ['fail', true, 'done']);
       const holdoutExit = report.tasks.find((row) => row.id === 'h09-exit-fail');
-      assert.deepEqual([holdoutExit?.split, holdoutExit?.disposition, holdoutExit?.validation_agrees], ['holdout', 'fail', true]);
+      assert.deepEqual(
+        [holdoutExit?.split, holdoutExit?.disposition, holdoutExit?.validation_agrees],
+        ['holdout', 'fail', true],
+      );
       const reject = report.tasks.find((row) => row.id === 't05-reject-count');
       assert.deepEqual([reject?.facts, reject?.facts_decided_in_code], [0, 0]);
     } finally {
@@ -805,7 +909,10 @@ describe('frozen set', () => {
     });
     const report = await runLiveComparison({
       tasks: selected,
-      transcript: { agent: 'external-coding-agent', tasks: [{ id: 't01-readme-heading', stop: 'done', write_up: 'UNIQUE_LIVE_WRITE_UP' }] },
+      transcript: {
+        agent: 'external-coding-agent',
+        tasks: [{ id: 't01-readme-heading', stop: 'done', write_up: 'UNIQUE_LIVE_WRITE_UP' }],
+      },
       gateway: calls,
       terms: TERMS,
     });
@@ -826,10 +933,14 @@ describe('frozen set', () => {
 
 describe('commands', () => {
   it('runs the offline eval with no network', () => {
-    const result = spawnSync(process.execPath, ['--experimental-strip-types', 'benchmarks/task-acceptance/offline.ts'], {
-      cwd: ROOT,
-      encoding: 'utf8',
-    });
+    const result = spawnSync(
+      process.execPath,
+      ['--experimental-strip-types', 'benchmarks/task-acceptance/offline.ts'],
+      {
+        cwd: ROOT,
+        encoding: 'utf8',
+      },
+    );
     assert.equal(result.status, 0, result.stderr);
     const report = JSON.parse(result.stdout) as {
       live_comparison: string;
@@ -848,11 +959,11 @@ describe('commands', () => {
   });
 
   it('skips the live command when no transcript is configured', () => {
-    const result = spawnSync(
-      process.execPath,
-      ['--experimental-strip-types', 'benchmarks/task-acceptance/live.ts'],
-      { cwd: ROOT, encoding: 'utf8', env: { ...process.env, TYPESAFE_API_KEY: '', TYPESAFE_AI_API_KEY: '' } },
-    );
+    const result = spawnSync(process.execPath, ['--experimental-strip-types', 'benchmarks/task-acceptance/live.ts'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      env: { ...process.env, TYPESAFE_API_KEY: '', TYPESAFE_AI_API_KEY: '' },
+    });
     assert.equal(result.status, 0, result.stderr);
     const report = JSON.parse(result.stdout) as { status: string; live_comparison: string; reason: string };
     assert.equal(report.status, 'skip');

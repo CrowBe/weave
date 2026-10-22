@@ -7,16 +7,13 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { createInferenceGateway, resolveTypesafeApiKey } from '@weave/gateway';
-import {
-  TYPESAFE_AI_ADAPTER,
-  TYPESAFE_AI_DESTINATION,
-  typesafeAiEvaluator,
-} from '@weave/gateway/typesafe-ai';
+import { TYPESAFE_AI_ADAPTER, TYPESAFE_AI_DESTINATION, typesafeAiEvaluator } from '@weave/gateway/typesafe-ai';
 import { loadFrozenSet, loadTranscript, planLiveComparison, runLiveComparison, taskJevRoute } from '@weave/weave';
 
 const flag = process.argv.indexOf('--transcript');
 const transcriptPath = flag >= 0 ? process.argv[flag + 1] : undefined;
-const transcriptProvided = typeof transcriptPath === 'string' && transcriptPath.length > 0 && existsSync(transcriptPath);
+const transcriptProvided =
+  typeof transcriptPath === 'string' && transcriptPath.length > 0 && existsSync(transcriptPath);
 const apiKey = resolveTypesafeApiKey(process.env);
 const jevConfigured = apiKey !== undefined;
 const plan = planLiveComparison({ transcript_provided: transcriptProvided, jev_configured: jevConfigured });

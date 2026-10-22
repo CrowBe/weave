@@ -32,7 +32,11 @@ process.on('exit', () => assert.equal(calls, Number(process.env.TEST_EXPECT_REQU
 `;
 
 function run(key: string | undefined, status: number, requests: number) {
-  const env: NodeJS.ProcessEnv = { ...process.env, TEST_STATUS: String(status), TEST_EXPECT_REQUESTS: String(requests) };
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    TEST_STATUS: String(status),
+    TEST_EXPECT_REQUESTS: String(requests),
+  };
   // The child is an example process, not a test-runner worker.
   delete env.NODE_TEST_CONTEXT;
   delete env.MODEL_API_KEY;
@@ -43,9 +47,20 @@ function run(key: string | undefined, status: number, requests: number) {
   const out = openSync(stdout, 'w');
   const err = openSync(stderr, 'w');
   try {
-    const child = spawnSync(process.execPath, ['--experimental-strip-types', '--import', `data:text/javascript,${encodeURIComponent(preload)}`, 'examples/muse-spark.ts'], {
-      env, stdio: ['ignore', out, err], timeout: 10_000,
-    });
+    const child = spawnSync(
+      process.execPath,
+      [
+        '--experimental-strip-types',
+        '--import',
+        `data:text/javascript,${encodeURIComponent(preload)}`,
+        'examples/muse-spark.ts',
+      ],
+      {
+        env,
+        stdio: ['ignore', out, err],
+        timeout: 10_000,
+      },
+    );
     assert.equal(child.error, undefined);
     return { status: child.status, stdout: readFileSync(stdout, 'utf8'), stderr: readFileSync(stderr, 'utf8') };
   } finally {
@@ -64,17 +79,18 @@ test('Muse example missing or blank key exits with one safe line and no request'
   }
 });
 
-for (const status of [401,402,403]) test(`Muse example ${status} exhausts the shared credential before fallback`, () => {
-  const key = 'sk-test-SENTINEL-example-invalid';
-  const result = run(key, status, 1);
-  assert.equal(result.status, 1);
-  assert.equal(result.stderr, '');
-  assert.ok(!result.stdout.includes(key));
-  const output = JSON.parse(result.stdout);
-  assert.equal(output.outcome, 'blocked');
-  assert.equal(output.attempts.length, 1);
-  assert.equal(output.attempts[0].failure, 'unauthorized');
-});
+for (const status of [401, 402, 403])
+  test(`Muse example ${status} exhausts the shared credential before fallback`, () => {
+    const key = 'sk-test-SENTINEL-example-invalid';
+    const result = run(key, status, 1);
+    assert.equal(result.status, 1);
+    assert.equal(result.stderr, '');
+    assert.ok(!result.stdout.includes(key));
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.outcome, 'blocked');
+    assert.equal(output.attempts.length, 1);
+    assert.equal(output.attempts[0].failure, 'unauthorized');
+  });
 
 test('Muse example performs one public minimal call and prints safe usage and routing', () => {
   const key = 'sk-test-SENTINEL-example-success';
@@ -97,7 +113,11 @@ test('Muse example invalid header key fails construction without a request or cr
   assert.equal(result.stderr, '');
   assert.ok(!result.stdout.includes('SENTINEL'));
   assert.deepEqual(JSON.parse(result.stdout), {
-    outcome: 'failed', routed_unit: null, model: null, usage: null, attempts: [],
+    outcome: 'failed',
+    routed_unit: null,
+    model: null,
+    usage: null,
+    attempts: [],
   });
 });
 

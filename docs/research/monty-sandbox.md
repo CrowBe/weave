@@ -10,11 +10,11 @@ lifecycle) and #30 (composable stack). Read against `VISION.md`,
 `packages/agentfabric/src/isolate.ts`. This is an exploration note. It does
 not change a contract, add a dependency, or decide a build.
 
-Vocabulary. The issues say *AgentFabric resolver* and *sandbox*. In this note
+Vocabulary. The issues say _AgentFabric resolver_ and _sandbox_. In this note
 they are a Fabric **implementation** reached through the **capability host**,
 and an **execution tier** whose containment must be shown, not labelled.
-*Thread* in #29 means the planned Thread with its own operating process from
-#28. That process model is not yet specified. *Jev* is a model type that may
+_Thread_ in #29 means the planned Thread with its own operating process from
+#28. That process model is not yet specified. _Jev_ is a model type that may
 answer a **judgment site**; it is not the site.
 
 ## Evidence and limits
@@ -41,7 +41,7 @@ answer a **judgment site**; it is not the site.
   interpreter: no fuzzing, no adversarial review of the heap or mount code.
   Long-running soak. Jev or any routed unit producing Monty code. No live
   provider exists in this environment.
-- **Labels.** *Measured* means observed here. *Documented* means Monty's own
+- **Labels.** _Measured_ means observed here. _Documented_ means Monty's own
   docs claim it and we did not verify it. The answer, mapping and
   recommendation sections are our inference from both, and cite which.
 
@@ -75,15 +75,15 @@ objects, filesystem mounts and an `os` callback.
 
 ## What Monty is (documented)
 
-| Property | Claim | Source |
-| --- | --- | --- |
-| Model | "A language-level sandbox, not an OS-level one. There is no container, no seccomp filter and no virtual machine." | [Security model](https://github.com/pydantic/monty/blob/e8db9aef41aa/docs/security.md) |
-| Host reach | Opt-in only: host functions (`externalLookup`, `externalModules`), `ClassInstance`/`ClassType` wrappers, mounts plus an `os` callback. Each runs host code "with your process's full authority". | Security model; [host functions](https://github.com/pydantic/monty/blob/e8db9aef41aa/docs/host-functions.md) |
-| Language | Python 3.14 subset. No class inheritance, generators, `del`, user exception classes, `compile`, `__import__` or third-party packages. Partial stdlib; `socket`, `subprocess`, `threading`, `ctypes` absent by design. | [Limitations](https://github.com/pydantic/monty/blob/e8db9aef41aa/docs/limitations/index.md) |
-| Process | Native Python and Node bindings run each session in a `monty` worker subprocess. Workers spawn with an empty environment. The parent treats worker frames as untrusted. The Rust `monty` crate can run in-process. | Security model, crash isolation |
-| Snapshots | `feedStart` suspends at every host call. `dump()` serializes the interpreter, paused stack included. Dumps are versioned CBOR behind a `MONTY\0` magic and are **not authenticated**. | [Snapshots](https://github.com/pydantic/monty/blob/e8db9aef41aa/docs/snapshots.md) |
-| Limits | `maxMemory` (allocator bytes, not RSS), `maxFeedDurationSecs` and `maxTurnDurationSecs` (execution time only, paused during host calls), `maxRecursionDepth`, `maxSuspensions` (default 1000), `maxTotalSleepSecs`. Host backstops: `requestTimeout`, duration-limit grace. No session-lifetime budget. | [Resource limits](https://github.com/pydantic/monty/blob/e8db9aef41aa/docs/resource-limits.md) |
-| Distribution | MIT. npm package depends on `@opentelemetry/api`, `@opentelemetry/api-logs` and `@bytecodealliance/preview2-shim`; unpacked sizes 25.2 MB plus 42.4 MB for the Linux x64 platform package. Full Monty (remote WebSocket workers with OS isolation) is a closed-source container image, and the TypeScript package cannot dial it. | npm registry; [Full Monty](https://github.com/pydantic/monty/blob/e8db9aef41aa/docs/server.md) |
+| Property     | Claim                                                                                                                                                                                                                                                                                                                             | Source                                                                                                       |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Model        | "A language-level sandbox, not an OS-level one. There is no container, no seccomp filter and no virtual machine."                                                                                                                                                                                                                 | [Security model](https://github.com/pydantic/monty/blob/e8db9aef41aa/docs/security.md)                       |
+| Host reach   | Opt-in only: host functions (`externalLookup`, `externalModules`), `ClassInstance`/`ClassType` wrappers, mounts plus an `os` callback. Each runs host code "with your process's full authority".                                                                                                                                  | Security model; [host functions](https://github.com/pydantic/monty/blob/e8db9aef41aa/docs/host-functions.md) |
+| Language     | Python 3.14 subset. No class inheritance, generators, `del`, user exception classes, `compile`, `__import__` or third-party packages. Partial stdlib; `socket`, `subprocess`, `threading`, `ctypes` absent by design.                                                                                                             | [Limitations](https://github.com/pydantic/monty/blob/e8db9aef41aa/docs/limitations/index.md)                 |
+| Process      | Native Python and Node bindings run each session in a `monty` worker subprocess. Workers spawn with an empty environment. The parent treats worker frames as untrusted. The Rust `monty` crate can run in-process.                                                                                                                | Security model, crash isolation                                                                              |
+| Snapshots    | `feedStart` suspends at every host call. `dump()` serializes the interpreter, paused stack included. Dumps are versioned CBOR behind a `MONTY\0` magic and are **not authenticated**.                                                                                                                                             | [Snapshots](https://github.com/pydantic/monty/blob/e8db9aef41aa/docs/snapshots.md)                           |
+| Limits       | `maxMemory` (allocator bytes, not RSS), `maxFeedDurationSecs` and `maxTurnDurationSecs` (execution time only, paused during host calls), `maxRecursionDepth`, `maxSuspensions` (default 1000), `maxTotalSleepSecs`. Host backstops: `requestTimeout`, duration-limit grace. No session-lifetime budget.                           | [Resource limits](https://github.com/pydantic/monty/blob/e8db9aef41aa/docs/resource-limits.md)               |
+| Distribution | MIT. npm package depends on `@opentelemetry/api`, `@opentelemetry/api-logs` and `@bytecodealliance/preview2-shim`; unpacked sizes 25.2 MB plus 42.4 MB for the Linux x64 platform package. Full Monty (remote WebSocket workers with OS isolation) is a closed-source container image, and the TypeScript package cannot dial it. | npm registry; [Full Monty](https://github.com/pydantic/monty/blob/e8db9aef41aa/docs/server.md)               |
 
 ## Experiments (measured)
 
@@ -93,20 +93,20 @@ One session, no host functions, no mounts. `E1_HOST_SECRET` was set in the
 host's environment first. Then each probe was fed in turn, and the host read
 `/proc/<workerPid>` for the worker's process facts.
 
-| Probe | Result |
-| --- | --- |
-| `open('/etc/hostname')`, `Path('/etc/passwd').exists()`, `os.listdir('/')` | `PermissionError` |
-| `os.getenv('HOME')`, `os.getenv('E1_HOST_SECRET')`, `os.environ`, `os.urandom(4)` | `RuntimeError: '…' is not supported in this environment` |
-| `import socket`, `subprocess`, `urllib`, `ctypes` | `ModuleNotFoundError` |
-| `__import__('os')`, `compile(...)` | `NameError` |
-| `exec('y = 2')` | runs, inside the same limits |
-| `class B(A)` | `NotImplementedError` at parse |
-| `time.time()` | readable: the wall clock is on by default |
-| Worker environment | empty (0 variables) |
-| Worker uid, effective capabilities | identical to the host process (root, full capability set here) |
-| Worker seccomp, `NoNewPrivs` | `0`, `0` |
-| Worker net, mnt, pid, user, ipc namespaces | all shared with the host |
-| Worker RSS after the probes | 10.8 MB |
+| Probe                                                                             | Result                                                         |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `open('/etc/hostname')`, `Path('/etc/passwd').exists()`, `os.listdir('/')`        | `PermissionError`                                              |
+| `os.getenv('HOME')`, `os.getenv('E1_HOST_SECRET')`, `os.environ`, `os.urandom(4)` | `RuntimeError: '…' is not supported in this environment`       |
+| `import socket`, `subprocess`, `urllib`, `ctypes`                                 | `ModuleNotFoundError`                                          |
+| `__import__('os')`, `compile(...)`                                                | `NameError`                                                    |
+| `exec('y = 2')`                                                                   | runs, inside the same limits                                   |
+| `class B(A)`                                                                      | `NotImplementedError` at parse                                 |
+| `time.time()`                                                                     | readable: the wall clock is on by default                      |
+| Worker environment                                                                | empty (0 variables)                                            |
+| Worker uid, effective capabilities                                                | identical to the host process (root, full capability set here) |
+| Worker seccomp, `NoNewPrivs`                                                      | `0`, `0`                                                       |
+| Worker net, mnt, pid, user, ipc namespaces                                        | all shared with the host                                       |
+| Worker RSS after the probes                                                       | 10.8 MB                                                        |
 
 The Python binding gave the same denials for `open`, `os.getenv` and
 `import socket` (P1).
@@ -164,17 +164,17 @@ A temporary directory held a file and three symlinks: an absolute one and a
 relative `../` one, both to a file in a sibling directory outside the mount,
 and a relative one to the file inside. It was mounted at `/repo`.
 
-| Case | Result |
-| --- | --- |
-| Read-only read | content returned |
-| Read-only write | `PermissionError: [Errno 30] Read-only file system` |
-| `/repo/../outside/secret.txt` | `PermissionError` (`..` collapsed in the virtual namespace) |
-| Absolute symlink; relative symlink escaping the mount | `PermissionError` |
-| Relative symlink inside the mount | followed |
-| `Path('/repo').glob('*')` | escaping symlinks omitted |
-| `resolve()` | virtual path `/repo/README.md`; no host path leaked |
-| Overlay write, then read | read back within the feed; host directory untouched |
-| Read-write write | written through to the host |
+| Case                                                  | Result                                                      |
+| ----------------------------------------------------- | ----------------------------------------------------------- |
+| Read-only read                                        | content returned                                            |
+| Read-only write                                       | `PermissionError: [Errno 30] Read-only file system`         |
+| `/repo/../outside/secret.txt`                         | `PermissionError` (`..` collapsed in the virtual namespace) |
+| Absolute symlink; relative symlink escaping the mount | `PermissionError`                                           |
+| Relative symlink inside the mount                     | followed                                                    |
+| `Path('/repo').glob('*')`                             | escaping symlinks omitted                                   |
+| `resolve()`                                           | virtual path `/repo/README.md`; no host path leaked         |
+| Overlay write, then read                              | read back within the feed; host directory untouched         |
+| Read-write write                                      | written through to the host                                 |
 
 Overlay writes are discarded at the end of each feed and are not carried by
 a dump (documented). We found no API to read them back. The JavaScript
@@ -184,15 +184,15 @@ sandboxed code plant `.git/hooks/*`, `Makefile`, `.env`, CI config or
 
 ### E5. Resource limits
 
-| Setting | Program | Result |
-| --- | --- | --- |
-| `maxMemory` 10 MB | `[0] * 100_000_000` | `MemoryError` in 5 ms, pre-checked before allocating |
-| `maxMemory` 10 MB | append in a loop | `MemoryError` in 12 ms. The next feed `1 + 1` also failed with `MemoryError`. |
-| `maxFeedDurationSecs` 0.5 | `while True: pass` | `TimeoutError` at 500.6 ms. The next feed ran. |
-| `maxSuspensions` 5 | ten host calls | five calls reached the host, then an uncatchable `RuntimeError` |
-| `maxRecursionDepth` 50 | unbounded recursion | `RecursionError`, catchable |
-| `maxFeedDurationSecs` 0.2 | `await slow()`, host waits 600 ms | completed at 609 ms: host time is not charged |
-| pool `requestTimeout` 1 s, no limits | `while True: pass` | worker killed at 1,008 ms; `MontyCrashedError(timedOut=true)` |
+| Setting                              | Program                           | Result                                                                        |
+| ------------------------------------ | --------------------------------- | ----------------------------------------------------------------------------- |
+| `maxMemory` 10 MB                    | `[0] * 100_000_000`               | `MemoryError` in 5 ms, pre-checked before allocating                          |
+| `maxMemory` 10 MB                    | append in a loop                  | `MemoryError` in 12 ms. The next feed `1 + 1` also failed with `MemoryError`. |
+| `maxFeedDurationSecs` 0.5            | `while True: pass`                | `TimeoutError` at 500.6 ms. The next feed ran.                                |
+| `maxSuspensions` 5                   | ten host calls                    | five calls reached the host, then an uncatchable `RuntimeError`               |
+| `maxRecursionDepth` 50               | unbounded recursion               | `RecursionError`, catchable                                                   |
+| `maxFeedDurationSecs` 0.2            | `await slow()`, host waits 600 ms | completed at 609 ms: host time is not charged                                 |
+| pool `requestTimeout` 1 s, no limits | `while True: pass`                | worker killed at 1,008 ms; `MontyCrashedError(timedOut=true)`                 |
 
 Monty's docs say that after a memory or time limit fires, heap state carries
 no guarantees and the session must be discarded. The pool does not do this.
@@ -216,26 +216,26 @@ no guarantees and the session must be discarded. The pool does not do this.
 
 Node binding, Linux x64, medians unless stated.
 
-| Measure | Result |
-| --- | --- |
-| Pool create (one worker spawned and handshaken) | 4.7 ms first, 0.9 ms after |
-| Checkout + `1 + 1` + close, warm pool, back to back | 0.28 ms (p90 0.54) |
-| Same after 1 s idle | 0.89 ms (p90 1.15) |
-| Feed on an open session | 0.09 ms |
-| Feed with one host call | 0.20 ms; ten host calls 1.41 ms |
-| Idle-session dump / load (12.6 KB) | 0.25 ms / 0.37 ms |
+| Measure                                                 | Result                                                       |
+| ------------------------------------------------------- | ------------------------------------------------------------ |
+| Pool create (one worker spawned and handshaken)         | 4.7 ms first, 0.9 ms after                                   |
+| Checkout + `1 + 1` + close, warm pool, back to back     | 0.28 ms (p90 0.54)                                           |
+| Same after 1 s idle                                     | 0.89 ms (p90 1.15)                                           |
+| Feed on an open session                                 | 0.09 ms                                                      |
+| Feed with one host call                                 | 0.20 ms; ten host calls 1.41 ms                              |
+| Idle-session dump / load (12.6 KB)                      | 0.25 ms / 0.37 ms                                            |
 | Type checking on: first feed / later feeds / worker RSS | 838 ms / 0.64 ms / 23.1 MB (off: 0.66 ms / 0.25 ms / 8.0 MB) |
-| Python binding: checkout + `1 + 1`, back to back | 0.14 ms (pool create, one sample: 449 ms) |
+| Python binding: checkout + `1 + 1`, back to back        | 0.14 ms (pool create, one sample: 449 ms)                    |
 
 Concurrent sessions, one worker each. The workload was a 200,000-step loop,
 a 2,000-item comprehension and one host call, about 31 ms on one worker.
 
 | Sessions | Pool create | Check out all | Workload wall | Worker RSS idle (sum) | After work (sum) |
-| --- | --- | --- | --- | --- | --- |
-| 1 | 0.6 ms | 2.4 ms | 31 ms | 5.4 MB | 10.0 MB |
-| 4 | 9.8 ms | 3.8 ms | 87 ms | 22 MB | 39 MB |
-| 16 | 73 ms | 9.1 ms | 181 ms | 87 MB | 158 MB |
-| 64 | 180 ms | 8.4 ms | 1,047 ms | 352 MB | 631 MB |
+| -------- | ----------- | ------------- | ------------- | --------------------- | ---------------- |
+| 1        | 0.6 ms      | 2.4 ms        | 31 ms         | 5.4 MB                | 10.0 MB          |
+| 4        | 9.8 ms      | 3.8 ms        | 87 ms         | 22 MB                 | 39 MB            |
+| 16       | 73 ms       | 9.1 ms        | 181 ms        | 87 MB                 | 158 MB           |
+| 64       | 180 ms      | 8.4 ms        | 1,047 ms      | 352 MB                | 631 MB           |
 
 Each worker is about 5.5 MB idle and about 10 MB after this small workload.
 Work is CPU-bound, so beyond the core count throughput is shared, not added.
@@ -272,7 +272,7 @@ capability sets. The shape that keeps it safe already exists in the D3
 preselect policy: a closed offered set, top k with an optional floor,
 required entries always kept, a margin gate that falls back to the full
 index, and a selection record that confers no grant. Its answer can only
-narrow what Loom offered. Whether it is *reliable* needs a benchmark with a
+narrow what Loom offered. Whether it is _reliable_ needs a benchmark with a
 tune split and holdout, recorded as a Gauge evaluation result before any
 default depends on it.
 
@@ -363,12 +363,12 @@ those processes then execute.
 
 ## Where capability selection lives
 
-| Layer | Owns | Must not |
-| --- | --- | --- |
-| Fabric | Contracts, resolution status, maturity, declared effects and resources; enforcing the grant on **every** call from the program; failure codes; opportunity notices | Choose capabilities for a goal, or import Loom concepts |
-| Loom | The goal's authority ceiling; the deterministic eligible set (admitted, resolved, effects within the ceiling); the grant for the program-run action; approvals; budgets; snapshot custody | Let a judgment answer issue or widen a grant |
-| Judgment site (Jev may answer) | A proposed subset of the offered eligible ids, recorded as an observation | Add ids, mark anything as approved, or bypass approval gates on high-risk effects |
-| Execution provider (Monty adapter) | Running the program; surfacing each call as a suspension; limits; dump and restore | Know Fabric contracts, grants or Loom goals; expose host state the provider was not given |
+| Layer                              | Owns                                                                                                                                                                                      | Must not                                                                                  |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Fabric                             | Contracts, resolution status, maturity, declared effects and resources; enforcing the grant on **every** call from the program; failure codes; opportunity notices                        | Choose capabilities for a goal, or import Loom concepts                                   |
+| Loom                               | The goal's authority ceiling; the deterministic eligible set (admitted, resolved, effects within the ceiling); the grant for the program-run action; approvals; budgets; snapshot custody | Let a judgment answer issue or widen a grant                                              |
+| Judgment site (Jev may answer)     | A proposed subset of the offered eligible ids, recorded as an observation                                                                                                                 | Add ids, mark anything as approved, or bypass approval gates on high-risk effects         |
+| Execution provider (Monty adapter) | Running the program; surfacing each call as a suspension; limits; dump and restore                                                                                                        | Know Fabric contracts, grants or Loom goals; expose host state the provider was not given |
 
 Pre-enabling in #21's sense is Loom issuing one grant that covers the
 selected set. `delete`, publication, `process.spawn` and destructive repo
@@ -462,18 +462,18 @@ Contract surface:
 
 Red checks to write first:
 
-| ID | Scenario | Required evidence |
-| --- | --- | --- |
-| X-T01 | Program calls an un-offered capability | Fails inside the program. No `invoke`. A gap observation is recorded with a stable signature. |
-| X-T02 | Program passes a grant-shaped argument | Ignored. The call is judged on the host-bound grant only. |
-| X-T03 | Program reaches an approval-gated call | Suspends. The provider holds no worker while paused. Approval invokes once. Refusal raises `DENIED` into the program. |
-| X-T04 | Stored snapshot bytes are edited | Restore is refused before the provider sees them (red against plain Monty: E3b). |
-| X-T05 | Crash after dispatch, then restore re-announces the call | Outcome lookup by invocation identity. No second effect. |
-| X-T06 | Runaway program; memory trip | Ends within the limit. The session is discarded, not fed again. |
-| X-T07 | Provider reports no OS isolation | Untrusted program refused. No downgrade to trusted. |
-| X-T08 | Replay a recorded run | Same observations. Provider and host invocation counts are zero. Clock and seed come from records. |
-| X-T09 | Cancellation while suspended, and while running | Suspended: not resumed, `cancelled`. Running: worker killed, `cancelled` or `uncertain`. Locks held until the outcome is recorded. |
-| X-T10 | Two Threads' programs run concurrently with different grants | Neither sees the other's capabilities. Both progress. Worker slots are a scheduler resource with a checkout deadline. |
+| ID    | Scenario                                                     | Required evidence                                                                                                                  |
+| ----- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| X-T01 | Program calls an un-offered capability                       | Fails inside the program. No `invoke`. A gap observation is recorded with a stable signature.                                      |
+| X-T02 | Program passes a grant-shaped argument                       | Ignored. The call is judged on the host-bound grant only.                                                                          |
+| X-T03 | Program reaches an approval-gated call                       | Suspends. The provider holds no worker while paused. Approval invokes once. Refusal raises `DENIED` into the program.              |
+| X-T04 | Stored snapshot bytes are edited                             | Restore is refused before the provider sees them (red against plain Monty: E3b).                                                   |
+| X-T05 | Crash after dispatch, then restore re-announces the call     | Outcome lookup by invocation identity. No second effect.                                                                           |
+| X-T06 | Runaway program; memory trip                                 | Ends within the limit. The session is discarded, not fed again.                                                                    |
+| X-T07 | Provider reports no OS isolation                             | Untrusted program refused. No downgrade to trusted.                                                                                |
+| X-T08 | Replay a recorded run                                        | Same observations. Provider and host invocation counts are zero. Clock and seed come from records.                                 |
+| X-T09 | Cancellation while suspended, and while running              | Suspended: not resumed, `cancelled`. Running: worker killed, `cancelled` or `uncertain`. Locks held until the outcome is recorded. |
+| X-T10 | Two Threads' programs run concurrently with different grants | Neither sees the other's capabilities. Both progress. Worker slots are a scheduler resource with a checkout deadline.              |
 
 Do not include mounts, the `os` callback, host objects or process work in this
 slice. Code work stays on `shell.run@1` and an OS-level tier.

@@ -66,11 +66,7 @@ export function reuseVerdict(
   return { kind: 'rerun' };
 }
 
-function callerInScope(
-  scope: AuthorityScope,
-  goal_id: string | null,
-  policies: readonly PolicyRecord[],
-): boolean {
+function callerInScope(scope: AuthorityScope, goal_id: string | null, policies: readonly PolicyRecord[]): boolean {
   if (!goal_id) {
     return false;
   }

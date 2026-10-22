@@ -72,7 +72,12 @@ export interface Goal {
    * new `ProcedureId`.
    */
   readonly composition?: RecordedComposition;
-  readonly budget: { readonly actions: number; readonly judgments: number; readonly recovery?: number; readonly cost?: number };
+  readonly budget: {
+    readonly actions: number;
+    readonly judgments: number;
+    readonly recovery?: number;
+    readonly cost?: number;
+  };
   readonly success_evidence: string;
 }
 
@@ -315,7 +320,11 @@ export interface CrystallizationState {
   readonly held_out_ids: readonly string[];
   readonly corpus_revision: string | null;
   readonly corpus_validated: boolean;
-  readonly red: { readonly demonstrated: boolean; readonly corpus_revision: string; readonly contract_revision: string } | null;
+  readonly red: {
+    readonly demonstrated: boolean;
+    readonly corpus_revision: string;
+    readonly contract_revision: string;
+  } | null;
   readonly implementations: readonly { readonly id: string; readonly source_digest: string }[];
   readonly held_out_spent: boolean;
   readonly green: readonly {
@@ -559,7 +568,9 @@ export interface State {
   readonly conclusions: readonly CachedConclusion[];
   readonly policies: readonly PolicyRecord[];
   readonly destination_policies: readonly { readonly resource: string; readonly destinations: readonly string[] }[];
-  readonly normalized: Readonly<Record<ResourceId, { readonly text: string; readonly revision: number; readonly evidence: Seq }>>;
+  readonly normalized: Readonly<
+    Record<ResourceId, { readonly text: string; readonly revision: number; readonly evidence: Seq }>
+  >;
   readonly workload: readonly WorkloadCase[];
   readonly corrections: readonly HumanCorrection[];
   readonly baseline: BaselineRecord | null;

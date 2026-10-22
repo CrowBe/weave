@@ -72,9 +72,11 @@ export function evaluationTransport(
         response = await doFetch(`${baseURL}${profile.path}`, {
           method: 'POST',
           headers: {
-            ...Object.fromEntries(Object.entries(profile.headers ?? {}).filter(([name]) =>
-              !['authorization', 'content-type'].includes(name.trim().toLowerCase()),
-            )),
+            ...Object.fromEntries(
+              Object.entries(profile.headers ?? {}).filter(
+                ([name]) => !['authorization', 'content-type'].includes(name.trim().toLowerCase()),
+              ),
+            ),
             authorization: `Bearer ${credential}`,
             'content-type': 'application/json',
           },

@@ -59,7 +59,10 @@ import {
 import { FabricWeft, type WeftPort } from './weft.js';
 
 export interface PublishInput {
-  readonly report: { readonly entries: readonly unknown[]; readonly read_set: readonly { resource: string; revision: number }[] };
+  readonly report: {
+    readonly entries: readonly unknown[];
+    readonly read_set: readonly { resource: string; revision: number }[];
+  };
   readonly read_set: readonly { resource: string; revision: number }[];
   readonly sources: readonly string[];
   readonly destination: string;
@@ -405,8 +408,7 @@ export class AgentFabricHost implements CapabilityHost {
 
   resolverContext(contract: CapabilityContract): ResolverContext {
     const registered = this.live.get(contract.id);
-    const infer =
-      registered?.inference ? (call: InferCall) => this.infer(registered, call) : undefined;
+    const infer = registered?.inference ? (call: InferCall) => this.infer(registered, call) : undefined;
     return {
       read: () => {
         throw new Error('DENIED');
@@ -462,7 +464,10 @@ export class AgentFabricHost implements CapabilityHost {
     this.inferenceCharged.set(registered.id, charged + call.terms.cost_ceiling);
     const input = call.input;
     const prompt =
-      typeof input === 'object' && input !== null && !Array.isArray(input) && typeof (input as { prompt?: unknown }).prompt === 'string'
+      typeof input === 'object' &&
+      input !== null &&
+      !Array.isArray(input) &&
+      typeof (input as { prompt?: unknown }).prompt === 'string'
         ? (input as { prompt: string }).prompt
         : JSON.stringify(input);
     const request_id = `fabric:${registered.id}:${this.inferenceSeq++}`;
@@ -498,7 +503,10 @@ export class AgentFabricHost implements CapabilityHost {
 
   private revokeStep(operation: string, reason: string): void {
     void reason;
-    this.weft?.revoked(operation, (this.admitted.get(operation) ?? []).map((record) => record.id));
+    this.weft?.revoked(
+      operation,
+      (this.admitted.get(operation) ?? []).map((record) => record.id),
+    );
     this.live.delete(operation);
     this.admitted.delete(operation);
     this.status.set(operation, 'unavailable');
@@ -735,13 +743,15 @@ export class AgentFabricHost implements CapabilityHost {
     }
     const record = this.store.getInvocation(invocation_id);
     const open = this.open.get(invocation_id);
-    const target = record ?? (open
-      ? {
-          action_id: open.action_id,
-          operation: open.operation,
-          inputs: open.inputs,
-        }
-      : null);
+    const target =
+      record ??
+      (open
+        ? {
+            action_id: open.action_id,
+            operation: open.operation,
+            inputs: open.inputs,
+          }
+        : null);
     if (!target) {
       this.lookups.push({ invocation_id, granted: false });
       return { status: 'unresolved', reason: `no durable record for ${invocation_id}` };
@@ -766,8 +776,8 @@ export class AgentFabricHost implements CapabilityHost {
       return this.reject(covered.code, covered.reason);
     }
     this.lookups.push({ invocation_id, granted: true });
-    const status = open?.phase === 'done' && open.outcome?.outcome === 'uncertain'
-      ? 'uncertain' : record?.status ?? 'running';
+    const status =
+      open?.phase === 'done' && open.outcome?.outcome === 'uncertain' ? 'uncertain' : (record?.status ?? 'running');
     const outcome = open?.phase === 'done' ? open.outcome : record?.outcome;
     if (status !== 'committed') {
       const published = this.reconcilePublication(invocation_id, status);
@@ -791,7 +801,8 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   private reconcilePublication(
-    invocation_id: string, status: InvocationRecord['status'],
+    invocation_id: string,
+    status: InvocationRecord['status'],
   ): ReconciliationResult | { status: 'unresolved'; reason: string } | undefined {
     const published = this.store.publishedBy(invocation_id);
     if (!published?.publication) return undefined;
@@ -802,8 +813,11 @@ export class AgentFabricHost implements CapabilityHost {
     if (status === 'stopped') {
       const record = this.store.getInvocation(invocation_id);
       if (record) {
-        try { this.store.persistInvocationResult({ ...record, status: 'committed', outcome: committed.outcome }); }
-        catch { /* The receipt remains authoritative if result persistence fails. */ }
+        try {
+          this.store.persistInvocationResult({ ...record, status: 'committed', outcome: committed.outcome });
+        } catch {
+          /* The receipt remains authoritative if result persistence fails. */
+        }
       }
       return committed;
     }
@@ -812,7 +826,9 @@ export class AgentFabricHost implements CapabilityHost {
       // Persist receipt-based reconciliation before releasing an uncertain hold.
       if (!open || open.phase === 'done') {
         return this.reconcile(invocation_id, {
-          resolution: 'committed', evidence: `publication:${digest(published.publication)}`, output,
+          resolution: 'committed',
+          evidence: `publication:${digest(published.publication)}`,
+          output,
         });
       }
       return committed;
@@ -823,9 +839,13 @@ export class AgentFabricHost implements CapabilityHost {
 
   /** Trusted host-owner API; resolver contexts cannot reconcile external effects. */
   reconcile(invocation_id: string, resolution: ReconciliationResolution): ReconciliationResult {
-    if (!isRecord(resolution) || !['committed', 'not_committed'].includes(resolution.resolution) ||
-        typeof resolution.evidence !== 'string' || resolution.evidence.trim().length === 0 ||
-        (resolution.resolution === 'committed' && !('output' in resolution))) {
+    if (
+      !isRecord(resolution) ||
+      !['committed', 'not_committed'].includes(resolution.resolution) ||
+      typeof resolution.evidence !== 'string' ||
+      resolution.evidence.trim().length === 0 ||
+      (resolution.resolution === 'committed' && !('output' in resolution))
+    ) {
       throw new Error('invalid reconciliation resolution');
     }
     const record = this.store.getInvocation(invocation_id);
@@ -843,9 +863,11 @@ export class AgentFabricHost implements CapabilityHost {
     }
     let outcome: InvocationOutcome;
     try {
-      outcome = normalizeInvocationOutcome(resolution.resolution === 'committed'
-        ? { outcome: 'succeeded', output: resolution.output }
-        : { outcome: 'failed', failure: 'reconciled: not committed' });
+      outcome = normalizeInvocationOutcome(
+        resolution.resolution === 'committed'
+          ? { outcome: 'succeeded', output: resolution.output }
+          : { outcome: 'failed', failure: 'reconciled: not committed' },
+      );
     } catch {
       throw new Error('invalid reconciliation output');
     }
@@ -853,7 +875,9 @@ export class AgentFabricHost implements CapabilityHost {
     this.reconciling.add(invocation_id);
     try {
       this.store.persistInvocationReconciliation({
-        ...record, status, outcome,
+        ...record,
+        status,
+        outcome,
         cancel_requested: open?.cancel_requested ?? record.cancel_requested,
         reconciliation: { resolution: resolution.resolution, evidence: resolution.evidence },
       });
@@ -987,7 +1011,10 @@ export class AgentFabricHost implements CapabilityHost {
           if (open.phase === 'done') {
             return;
           }
-          this.finish(open, this.implementationFault(open, error instanceof Error ? error.message : 'implementation threw'));
+          this.finish(
+            open,
+            this.implementationFault(open, error instanceof Error ? error.message : 'implementation threw'),
+          );
         },
       );
       return;
@@ -1076,9 +1103,7 @@ export class AgentFabricHost implements CapabilityHost {
 
   private implementationFault(open: OpenInvocation, reason: string): InvocationOutcome {
     // A fault does not establish whether execution already produced effects.
-    return hasDeclaredWrites(open.effects)
-      ? { outcome: 'uncertain', reason }
-      : { outcome: 'failed', failure: reason };
+    return hasDeclaredWrites(open.effects) ? { outcome: 'uncertain', reason } : { outcome: 'failed', failure: reason };
   }
 
   private finish(open: OpenInvocation, value: unknown, status?: InvocationRecord['status']): void {
@@ -1094,7 +1119,8 @@ export class AgentFabricHost implements CapabilityHost {
       status = outcome.outcome === 'uncertain' ? 'uncertain' : 'stopped';
     }
     const terminal: InvocationRecord['status'] =
-      status ?? (outcome.outcome === 'succeeded' ? 'committed' : outcome.outcome === 'uncertain' ? 'uncertain' : 'stopped');
+      status ??
+      (outcome.outcome === 'succeeded' ? 'committed' : outcome.outcome === 'uncertain' ? 'uncertain' : 'stopped');
     let persisted = false;
     const record: InvocationRecord = {
       invocation_id: open.invocation_id,
@@ -1123,7 +1149,9 @@ export class AgentFabricHost implements CapabilityHost {
         // implementation must still settle; publications await reconciliation.
         outcome = {
           outcome: 'uncertain',
-          reason: open.committed ? 'failed to persist invocation result after commit' : 'failed to persist invocation result',
+          reason: open.committed
+            ? 'failed to persist invocation result after commit'
+            : 'failed to persist invocation result',
         };
         try {
           this.store.persistInvocationUncertain({ ...record, status: 'uncertain', outcome });
@@ -1208,7 +1236,10 @@ export class AgentFabricHost implements CapabilityHost {
     operation: string,
     inputs: unknown,
     options?: InvokeOptions,
-  ): { kind: 'open'; open: OpenInvocation; record: InvocationRecord } | { kind: 'replay'; handle: InvocationHandle } | InvocationRejected {
+  ):
+    | { kind: 'open'; open: OpenInvocation; record: InvocationRecord }
+    | { kind: 'replay'; handle: InvocationHandle }
+    | InvocationRejected {
     const contract = this.live.get(operation);
     if (!contract) {
       if (this.historical.has(operation)) {
@@ -1278,19 +1309,32 @@ export class AgentFabricHost implements CapabilityHost {
       const published = this.reconcilePublication(invocation_id, existing.status);
       if (published) {
         this.authority.markInvoked(grant as Grant);
-        return { kind: 'replay', handle: this.replayCompleted({
-          ...existing, status: published.status === 'committed' ? 'committed' : 'uncertain',
-          outcome: published.status === 'unresolved' ? { outcome: 'uncertain', reason: published.reason } : published.outcome,
-        }) };
+        return {
+          kind: 'replay',
+          handle: this.replayCompleted({
+            ...existing,
+            status: published.status === 'committed' ? 'committed' : 'uncertain',
+            outcome:
+              published.status === 'unresolved'
+                ? { outcome: 'uncertain', reason: published.reason }
+                : published.outcome,
+          }),
+        };
       }
     }
-    if (existing && (existing.status === 'uncertain' ||
-        (existing.status === 'running' && (!inMemory || inMemory.phase === 'done')))) {
+    if (
+      existing &&
+      (existing.status === 'uncertain' || (existing.status === 'running' && (!inMemory || inMemory.phase === 'done')))
+    ) {
       this.authority.markInvoked(grant as Grant);
-      return { kind: 'replay', handle: this.replayCompleted({
-        ...existing, status: 'uncertain',
-        outcome: inMemory?.outcome ?? existing.outcome ?? { outcome: 'uncertain', reason: RECOVERED_UNCERTAINTY },
-      }) };
+      return {
+        kind: 'replay',
+        handle: this.replayCompleted({
+          ...existing,
+          status: 'uncertain',
+          outcome: inMemory?.outcome ?? existing.outcome ?? { outcome: 'uncertain', reason: RECOVERED_UNCERTAINTY },
+        }),
+      };
     }
     if (inMemory) return this.reject('DENIED', 'invocation is already active');
     if ([...this.unscopedRecovery.values()].includes(operation)) {
@@ -1410,7 +1454,8 @@ export class AgentFabricHost implements CapabilityHost {
         const bound = contract && bindSelectors(contract.effects, record.inputs);
         if (bound?.ok) {
           effects = bound.bound.map((effect) => ({
-            resource: this.store.lookupRef(effect.resource)?.canonical_id ?? effect.resource, mode: effect.mode,
+            resource: this.store.lookupRef(effect.resource)?.canonical_id ?? effect.resource,
+            mode: effect.mode,
           }));
         } else {
           this.unscopedRecovery.set(record.invocation_id, record.operation);
@@ -1421,8 +1466,12 @@ export class AgentFabricHost implements CapabilityHost {
       }
       if (record.status === 'running') {
         try {
-          this.store.persistInvocationUncertain({ ...record, ...(effects ? { reservation: effects } : {}),
-            status: 'uncertain', outcome: { outcome: 'uncertain', reason: RECOVERED_UNCERTAINTY } });
+          this.store.persistInvocationUncertain({
+            ...record,
+            ...(effects ? { reservation: effects } : {}),
+            status: 'uncertain',
+            outcome: { outcome: 'uncertain', reason: RECOVERED_UNCERTAINTY },
+          });
         } catch {
           // Interrupted starts already replay as uncertain. A failed marker
           // cannot wedge construction or remove the recovered protection.
@@ -1483,16 +1532,37 @@ export class AgentFabricHost implements CapabilityHost {
   private async performShell(open: OpenInvocation): Promise<InvocationOutcome> {
     try {
       if (!this.shellOptions) {
-        this.pushShellTrace(open, { exit: null, failure: 'denied', duration_ms: 0, stdout_tail: '', stderr_tail: '', artifacts: [] });
+        this.pushShellTrace(open, {
+          exit: null,
+          failure: 'denied',
+          duration_ms: 0,
+          stdout_tail: '',
+          stderr_tail: '',
+          artifacts: [],
+        });
         return { outcome: 'failed', failure: 'denied' };
       }
       if (open.cancel_requested || open.abort.signal.aborted) {
-        this.pushShellTrace(open, { exit: null, failure: 'cancelled', duration_ms: 0, stdout_tail: '', stderr_tail: '', artifacts: [] });
+        this.pushShellTrace(open, {
+          exit: null,
+          failure: 'cancelled',
+          duration_ms: 0,
+          stdout_tail: '',
+          stderr_tail: '',
+          artifacts: [],
+        });
         return { outcome: 'failed', failure: 'cancelled' };
       }
       const resource = this.resourceFor(open.shellCwdRef);
       if (!resource || resource.kind !== 'workspace') {
-        this.pushShellTrace(open, { exit: null, failure: 'spawn_failed', duration_ms: 0, stdout_tail: '', stderr_tail: '', artifacts: [] });
+        this.pushShellTrace(open, {
+          exit: null,
+          failure: 'spawn_failed',
+          duration_ms: 0,
+          stdout_tail: '',
+          stderr_tail: '',
+          artifacts: [],
+        });
         return { outcome: 'failed', failure: 'spawn_failed' };
       }
       const requested = this.shellOptions.tail_chars;
@@ -1783,7 +1853,13 @@ function publishSetsAgree(
   const sources = (input as PublishInput).sources;
   const read_set = (input as PublishInput).read_set;
   const report = (input as PublishInput).report;
-  if (!Array.isArray(sources) || sources.length === 0 || !Array.isArray(read_set) || !report || !Array.isArray(report.read_set)) {
+  if (
+    !Array.isArray(sources) ||
+    sources.length === 0 ||
+    !Array.isArray(read_set) ||
+    !report ||
+    !Array.isArray(report.read_set)
+  ) {
     return { ok: false, reason: 'publication sources and read sets are required' };
   }
   const sourceIds = uniqueCanonical(sources, canonical);

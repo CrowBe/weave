@@ -30,7 +30,14 @@ export const THRESHOLDS = {
 } as const;
 
 export type OutcomeClass = 'advanced' | 'held' | 'premature' | 'misdirected' | 'stalled' | 'failed';
-export const OUTCOME_CLASSES: readonly OutcomeClass[] = ['advanced', 'held', 'premature', 'misdirected', 'stalled', 'failed'];
+export const OUTCOME_CLASSES: readonly OutcomeClass[] = [
+  'advanced',
+  'held',
+  'premature',
+  'misdirected',
+  'stalled',
+  'failed',
+];
 
 export interface Adjudication {
   readonly preferred: readonly string[];
@@ -52,7 +59,9 @@ export function adjudicate(built: BuiltCase): Adjudication {
   const framed = state.proposal ? proposalCoversSources(state.proposal.proposal, goal.sources) : false;
   const running = new Set(
     Object.values(state.actions)
-      .filter((action) => action.operation === 'source.inspect' && (action.state === 'running' || action.state === 'pending'))
+      .filter(
+        (action) => action.operation === 'source.inspect' && (action.state === 'running' || action.state === 'pending'),
+      )
       .map((action) => (action.inputs as { source: string }).source),
   );
   const needInspect = goal.sources.filter(
@@ -138,7 +147,8 @@ export function scoreCase(built: BuiltCase, weigher: string, outcome: WeighOutco
   } else {
     result = sameSet(selected, preferred) ? 'advanced' : 'misdirected';
   }
-  const remaining = built.state.budget.actions.limit - built.state.budget.actions.reserved - built.state.budget.actions.spent;
+  const remaining =
+    built.state.budget.actions.limit - built.state.budget.actions.reserved - built.state.budget.actions.spent;
   const advancing = selected.filter((key) => label.critical.includes(key)).length;
   const weights: Record<string, number> = {};
   for (const entry of outcome.weights) {
@@ -227,7 +237,9 @@ const fixed = (value: number): string => value.toFixed(2);
 /** Promotion rule frontier-weigh.promotion@1, applied to holdout rows only. */
 export function promotion(results: readonly CaseResult[], weigher: string, baseline = 'scripted@1'): PromotionVerdict {
   const rows = results.filter((row) => row.weigher === weigher && row.split === 'holdout');
-  const base = new Map(results.filter((row) => row.weigher === baseline && row.split === 'holdout').map((row) => [row.id, row]));
+  const base = new Map(
+    results.filter((row) => row.weigher === baseline && row.split === 'holdout').map((row) => [row.id, row]),
+  );
   if (rows.length === 0 || base.size !== rows.length) {
     throw new Error(`promotion needs paired holdout rows for ${weigher} and ${baseline}`);
   }
@@ -235,7 +247,9 @@ export function promotion(results: readonly CaseResult[], weigher: string, basel
   const theirs = summarize(results, baseline, 'holdout');
   const coverage = mine.covered / mine.n;
   const regressions = rows.filter((row) => base.get(row.id)?.agrees && !row.agrees).length;
-  const strayComplete = rows.filter((row) => row.selected.includes('goal.complete') && !row.preferred.includes('goal.complete')).length;
+  const strayComplete = rows.filter(
+    (row) => row.selected.includes('goal.complete') && !row.preferred.includes('goal.complete'),
+  ).length;
   const meanSpent = mine.spent_total / mine.n;
   const checks: PromotionCheck[] = [
     {
@@ -272,6 +286,7 @@ export function promotion(results: readonly CaseResult[], weigher: string, basel
           : `p95 latency ${mine.latency_p95_ms} ms (allowed ${THRESHOLDS.max_p95_latency_ms})`,
     },
   ];
-  const promote = checks.every((check) => check.held !== false) && checks.slice(0, 5).every((check) => check.held === true);
+  const promote =
+    checks.every((check) => check.held !== false) && checks.slice(0, 5).every((check) => check.held === true);
   return { weigher, verdict: promote ? 'promote' : 'retain scripted@1', checks };
 }

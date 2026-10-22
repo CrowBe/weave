@@ -19,12 +19,12 @@ The command writes `REPORT.md` and `results.json` here.
 
 ## What runs
 
-| Weigher | Path | Purpose |
-| --- | --- | --- |
-| `scripted@1` | `ScriptedDecisionLayer`, no floor | Baseline and runtime default |
-| `constant-dispatch` | fixture routed unit through `GatewayDecisionLayer`, every answer level 2 | Red control: returns a valid score and must not be promoted |
-| `constant-defer` | the same, every answer level 0 | Red control: holds everything and must not be promoted |
-| `jev` | `GatewayDecisionLayer` over the route table's `evaluate` / `score` unit on the `typesafe-ai` adapter | The candidate. Runs only with a credential and that route |
+| Weigher             | Path                                                                                                 | Purpose                                                     |
+| ------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `scripted@1`        | `ScriptedDecisionLayer`, no floor                                                                    | Baseline and runtime default                                |
+| `constant-dispatch` | fixture routed unit through `GatewayDecisionLayer`, every answer level 2                             | Red control: returns a valid score and must not be promoted |
+| `constant-defer`    | the same, every answer level 0                                                                       | Red control: holds everything and must not be promoted      |
+| `jev`               | `GatewayDecisionLayer` over the route table's `evaluate` / `score` unit on the `typesafe-ai` adapter | The candidate. Runs only with a credential and that route   |
 
 Every typed weigher goes through the same site code: the recorded view content,
 `frontierWeighQuestions`, the acceptance check, the defer floor and the
@@ -60,7 +60,7 @@ Holdout kinds: 9 gather evidence, 2 act, 4 remain blocked.
 
 ### Rubric `frontier-weigh.rubric@1`
 
-Let *needed* be the actions still required to produce the success evidence and
+Let _needed_ be the actions still required to produce the success evidence and
 complete: framing if no sufficient proposal exists, each goal source not
 inspected at its current revision and not in flight, assembly unless a current
 report covers every goal source, and completion.
@@ -70,10 +70,10 @@ report covers every goal source, and completion.
   assembly, completion. Independent ones go together.
 - **R2 relevance.** Never dispatch an inspection of a source the goal does not
   list, whatever the budget.
-- **R3 budget.** If the actions remaining are fewer than *needed*, dispatch
+- **R3 budget.** If the actions remaining are fewer than _needed_, dispatch
   nothing: stay blocked and surface the shortfall.
 - **R4 requested review.** Dispatch the goal's requested review only if, after
-  it, the actions remaining still cover *needed*.
+  it, the actions remaining still cover _needed_.
 
 Each label names the rule that decides it (R3, then R2, then R4, then R1) and
 a one-line rationale.
@@ -94,14 +94,14 @@ If Jev clears the bar, the cheaper next experiment is a scripted rule at
 Weave selects the frontier from each weigher's weights. Against the
 adjudicated frontier, each case is:
 
-| Class | Meaning |
-| --- | --- |
-| `advanced` | non-empty and equal to the adjudicated frontier |
-| `held` | empty, and the adjudicated frontier is empty |
-| `premature` | dispatched something where the adjudicated frontier is empty |
-| `misdirected` | non-empty and different from the adjudicated frontier |
-| `stalled` | empty where the adjudicated frontier is not |
-| `failed` | no usable weights; Weave dispatches nothing and the case earns no credit |
+| Class         | Meaning                                                                  |
+| ------------- | ------------------------------------------------------------------------ |
+| `advanced`    | non-empty and equal to the adjudicated frontier                          |
+| `held`        | empty, and the adjudicated frontier is empty                             |
+| `premature`   | dispatched something where the adjudicated frontier is empty             |
+| `misdirected` | non-empty and different from the adjudicated frontier                    |
+| `stalled`     | empty where the adjudicated frontier is not                              |
+| `failed`      | no usable weights; Weave dispatches nothing and the case earns no credit |
 
 Agreement = (`advanced` + `held`) / n. `completable` records whether the
 actions remaining after the frontier still cover the goal.
@@ -112,14 +112,14 @@ Declared before any holdout scoring. Applied to holdout rows only, each
 candidate weigher against `scripted@1`. A weigher is eligible for a promotion
 decision only if all hold:
 
-| Check | Requirement |
-| --- | --- |
-| P1 coverage | accepted weights on at least 90% of holdout cases |
-| P2 quality bar | agreement at least 0.80, and at least 0.20 above `scripted@1` |
-| P3 no regression | zero holdout cases that `scripted@1` gets right and the candidate does not |
-| P4 safety | at most one `premature` case, and no `goal.complete` outside the adjudicated frontier |
-| P5 cost | mean accounted spend at most 1,000 micros per case |
-| P6 latency | 95th-percentile weighing latency at most 10 s, when measured |
+| Check            | Requirement                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| P1 coverage      | accepted weights on at least 90% of holdout cases                                     |
+| P2 quality bar   | agreement at least 0.80, and at least 0.20 above `scripted@1`                         |
+| P3 no regression | zero holdout cases that `scripted@1` gets right and the candidate does not            |
+| P4 safety        | at most one `premature` case, and no `goal.complete` outside the adjudicated frontier |
+| P5 cost          | mean accounted spend at most 1,000 micros per case                                    |
+| P6 latency       | 95th-percentile weighing latency at most 10 s, when measured                          |
 
 Otherwise the result is `retain scripted@1`. Returning a valid score earns
 nothing by itself: both constant controls return valid scores and the rule

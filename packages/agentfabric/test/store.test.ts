@@ -22,7 +22,6 @@ function invocation(id: string): InvocationRecord {
 }
 
 describe('FabricStore append-only journal', () => {
-
   it('does not report failure when ownership ends after the append commits', () => {
     const dir = mkdtempSync(join(tmpdir(), 'weave-store-post-commit-'));
     const path = join(dir, 'fabric.json');
@@ -44,26 +43,49 @@ describe('FabricStore append-only journal', () => {
     }
     try {
       const reopened = FabricStore.open(path);
-      try { assert.equal(reopened.getInvocation('committed')?.status, 'running'); }
-      finally { reopened.close(); }
-    } finally { rmSync(dir, { recursive: true, force: true }); }
+      try {
+        assert.equal(reopened.getInvocation('committed')?.status, 'running');
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   const invalidMutations = [
-    { op: 'cost', micros: '5' }, { op: 'cost', micros: -1 },
-    { op: 'put', resource: {} }, { op: 'result', record: {} },
+    { op: 'cost', micros: '5' },
+    { op: 'cost', micros: -1 },
+    { op: 'put', resource: {} },
+    { op: 'result', record: {} },
     { op: 'start', record: invocation('bad-start'), measured_cost_micros: null },
-    { op: 'allocate', id: 'res_no' }, { op: 'allocate', id: 'res_' },
+    { op: 'allocate', id: 'res_no' },
+    { op: 'allocate', id: 'res_' },
     { op: 'allocate', id: 'res_9007199254740991' },
     { op: 'issue', ref: { handle: 'ref_no', canonical_id: 'res_1', kind: 'source' } },
-    { op: 'admission', admission: {} }, { op: 'workload', workload: {} },
-    { op: 'remember', result: {} }, { op: 'conclusion' },
+    { op: 'admission', admission: {} },
+    { op: 'workload', workload: {} },
+    { op: 'remember', result: {} },
+    { op: 'conclusion' },
     { op: 'uncertain', record: invocation('not-uncertain') },
-    { op: 'uncertain', record: { ...invocation('wrong-outcome'), status: 'uncertain', outcome: { outcome: 'failed', failure: 'x' } } },
+    {
+      op: 'uncertain',
+      record: { ...invocation('wrong-outcome'), status: 'uncertain', outcome: { outcome: 'failed', failure: 'x' } },
+    },
     { op: 'reconcile', record: invocation('missing-evidence') },
-    { op: 'reconcile', record: { ...invocation('bad-resolution'), reconciliation: { resolution: 'other', evidence: 'audit' } } },
-    { op: 'reconcile', record: { ...invocation('empty-evidence'), status: 'stopped', outcome: { outcome: 'failed', failure: 'x' },
-      reconciliation: { resolution: 'not_committed', evidence: '' } } },
+    {
+      op: 'reconcile',
+      record: { ...invocation('bad-resolution'), reconciliation: { resolution: 'other', evidence: 'audit' } },
+    },
+    {
+      op: 'reconcile',
+      record: {
+        ...invocation('empty-evidence'),
+        status: 'stopped',
+        outcome: { outcome: 'failed', failure: 'x' },
+        reconciliation: { resolution: 'not_committed', evidence: '' },
+      },
+    },
   ];
   for (const [index, mutation] of invalidMutations.entries()) {
     it(`rejects malformed mutation payload ${index} before append`, () => {
@@ -73,14 +95,24 @@ describe('FabricStore append-only journal', () => {
       try {
         const before = readFileSync(path);
         const state = store.snapshot();
-        assert.throws(() => (store as unknown as { mutate(value: unknown): void }).mutate(mutation), /invalid host store/);
+        assert.throws(
+          () => (store as unknown as { mutate(value: unknown): void }).mutate(mutation),
+          /invalid host store/,
+        );
         assert.deepEqual(readFileSync(path), before);
         assert.deepEqual(store.snapshot(), state);
         (store as unknown as { compact(): void }).compact();
         store.close();
         const reopened = FabricStore.open(path);
-        try { assert.deepEqual(reopened.snapshot(), state); } finally { reopened.close(); }
-      } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+        try {
+          assert.deepEqual(reopened.snapshot(), state);
+        } finally {
+          reopened.close();
+        }
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
     it(`rejects malformed mutation payload ${index} at its physical line without changing bytes`, () => {
       const dir = mkdtempSync(join(tmpdir(), 'weave-store-invalid-mutation-'));
@@ -88,14 +120,20 @@ describe('FabricStore append-only journal', () => {
       let opened: FabricStore | undefined;
       try {
         for (const tail of ['', '{"op":', 'no-newline']) {
-          const bytes = `{"op":"allocate","id":"res_1"}\n\n${JSON.stringify(mutation)}` +
+          const bytes =
+            `{"op":"allocate","id":"res_1"}\n\n${JSON.stringify(mutation)}` +
             (tail === 'no-newline' ? '' : `\n${tail}`);
           writeFileSync(path, bytes);
-          assert.throws(() => { opened = FabricStore.open(path); }, /line 3/);
+          assert.throws(() => {
+            opened = FabricStore.open(path);
+          }, /line 3/);
           assert.equal(readFileSync(path, 'utf8'), bytes);
           assert.equal(existsSync(`${path}.lock`), false);
         }
-      } finally { opened?.close(); rmSync(dir, { recursive: true, force: true }); }
+      } finally {
+        opened?.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
   }
 
@@ -103,11 +141,26 @@ describe('FabricStore append-only journal', () => {
     { ...invocation('bad-output'), outcome: { outcome: 'succeeded', output: undefined } },
     { ...invocation('bad-failure'), outcome: { outcome: 'failed', failure: 42 } },
     { ...invocation('bad-cost'), measured_cost_micros: NaN },
-    { ...invocation('bad-json'), outcome: { outcome: 'succeeded', output: {}, toJSON: () => ({ outcome: 'succeeded' }) } },
+    {
+      ...invocation('bad-json'),
+      outcome: { outcome: 'succeeded', output: {}, toJSON: () => ({ outcome: 'succeeded' }) },
+    },
     { ...invocation('bad-reservation'), reservation: [{ resource: 'res_1', mode: 'other' }] },
-    { ...invocation('bad-reconciliation'), status: 'running', reconciliation: { resolution: 'committed', evidence: 'audit' } },
-    { ...invocation('bad-evidence-json'), status: 'stopped', outcome: { outcome: 'failed', failure: 'x' },
-      reconciliation: { resolution: 'not_committed', evidence: 'audit', toJSON: () => ({ resolution: 'not_committed', evidence: '' }) } },
+    {
+      ...invocation('bad-reconciliation'),
+      status: 'running',
+      reconciliation: { resolution: 'committed', evidence: 'audit' },
+    },
+    {
+      ...invocation('bad-evidence-json'),
+      status: 'stopped',
+      outcome: { outcome: 'failed', failure: 'x' },
+      reconciliation: {
+        resolution: 'not_committed',
+        evidence: 'audit',
+        toJSON: () => ({ resolution: 'not_committed', evidence: '' }),
+      },
+    },
   ] as InvocationRecord[];
   for (const [index, record] of invalidRecords.entries()) {
     it(`rejects unreadable invocation ${index} before append and stays readable after compaction`, () => {
@@ -124,8 +177,15 @@ describe('FabricStore append-only journal', () => {
         (store as unknown as { compact(): void }).compact();
         store.close();
         const reopened = FabricStore.open(path);
-        try { assert.deepEqual(reopened.snapshot(), state); } finally { reopened.close(); }
-      } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+        try {
+          assert.deepEqual(reopened.snapshot(), state);
+        } finally {
+          reopened.close();
+        }
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
     it(`rejects unreadable restore ${index} before creating a journal`, () => {
       const dir = mkdtempSync(join(tmpdir(), 'weave-store-invalid-restore-'));
@@ -133,10 +193,15 @@ describe('FabricStore append-only journal', () => {
       let opened: FabricStore | undefined;
       try {
         const snapshot = { ...new FabricStore().snapshot(), invocations: [record] };
-        assert.throws(() => { opened = FabricStore.restore(snapshot, path); }, /invalid host store/);
+        assert.throws(() => {
+          opened = FabricStore.restore(snapshot, path);
+        }, /invalid host store/);
         assert.equal(existsSync(path), false);
         assert.equal(existsSync(`${path}.lock`), false);
-      } finally { opened?.close(); rmSync(dir, { recursive: true, force: true }); }
+      } finally {
+        opened?.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
   }
 
@@ -155,8 +220,15 @@ describe('FabricStore append-only journal', () => {
       (store as unknown as { compact(): void }).compact();
       store.close();
       const reopened = FabricStore.open(path);
-      try { assert.equal(reopened.measuredCostMicros(), Number.MAX_VALUE); } finally { reopened.close(); }
-    } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+      try {
+        assert.equal(reopened.measuredCostMicros(), Number.MAX_VALUE);
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('validates the serialized snapshot before touching a compaction file', () => {
@@ -174,7 +246,10 @@ describe('FabricStore append-only journal', () => {
       store.close();
       const reopened = FabricStore.open(path);
       reopened.close();
-    } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('round-trips every accepted mutation through append, replay and compaction', () => {
@@ -182,24 +257,58 @@ describe('FabricStore append-only journal', () => {
     const path = join(dir, 'fabric.json');
     const store = FabricStore.open(path);
     try {
-      const contract = { id: 'test', revision: '1', purpose: 'round trip', input: {}, output: {},
-        effects: [], permissions: [], failures: [], depends_on: [] };
-      const payloads = [null, false, 0, '', [], {}, { nested: [1, null, 'value'] },
-        { optional: undefined }, { toJSON: () => ({ normalized: true }) }];
+      const contract = {
+        id: 'test',
+        revision: '1',
+        purpose: 'round trip',
+        input: {},
+        output: {},
+        effects: [],
+        permissions: [],
+        failures: [],
+        depends_on: [],
+      };
+      const payloads = [
+        null,
+        false,
+        0,
+        '',
+        [],
+        {},
+        { nested: [1, null, 'value'] },
+        { optional: undefined },
+        { toJSON: () => ({ normalized: true }) },
+      ];
       const operations = [
         () => store.allocateCanonical(),
         () => store.issue('res_1', 'source'),
-        () => store.putResource({ canonical_id: 'res_1', kind: 'source', locator: 'mem:test',
-          revision: 1, content: 'test', publication: null }),
+        () =>
+          store.putResource({
+            canonical_id: 'res_1',
+            kind: 'source',
+            locator: 'mem:test',
+            revision: 1,
+            content: 'test',
+            publication: null,
+          }),
         () => store.persistInvocationStart(invocation('round-trip'), 7),
         () => store.recordAdmission({ operation: 'test', implementation_id: 'test@1', contract, source: 'test' }),
         () => store.noteWorkload({ goal_id: 'goal', quality: 'held' }),
         () => store.addMeasuredCost(5),
         ...payloads.flatMap((payload, i) => [
-          () => store.persistInvocationResult({ ...invocation(`result-${i}`), outcome: { outcome: 'succeeded', output: payload } }),
+          () =>
+            store.persistInvocationResult({
+              ...invocation(`result-${i}`),
+              outcome: { outcome: 'succeeded', output: payload },
+            }),
           () => store.retainConclusion(payload),
-          () => store.rememberResult({ key: `result-${i}`, operation: 'test', implementation_id: 'test@1',
-            outcome: { outcome: 'succeeded', output: payload } }),
+          () =>
+            store.rememberResult({
+              key: `result-${i}`,
+              operation: 'test',
+              implementation_id: 'test@1',
+              outcome: { outcome: 'succeeded', output: payload },
+            }),
         ]),
       ];
       for (const operation of operations) {
@@ -208,14 +317,25 @@ describe('FabricStore append-only journal', () => {
         const replayPath = join(dir, 'replay.json');
         writeFileSync(replayPath, readFileSync(path));
         const replayed = FabricStore.open(replayPath);
-        try { assert.deepEqual(replayed.snapshot(), expected); } finally { replayed.close(); }
+        try {
+          assert.deepEqual(replayed.snapshot(), expected);
+        } finally {
+          replayed.close();
+        }
         (store as unknown as { compact(): void }).compact();
         const compactPath = join(dir, 'compact.json');
         writeFileSync(compactPath, readFileSync(path));
         const compacted = FabricStore.open(compactPath);
-        try { assert.deepEqual(compacted.snapshot(), expected); } finally { compacted.close(); }
+        try {
+          assert.deepEqual(compacted.snapshot(), expected);
+        } finally {
+          compacted.close();
+        }
       }
-    } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('waits for a live reaper and then lets contenders acquire in turn', () => {
@@ -234,21 +354,27 @@ describe('FabricStore append-only journal', () => {
     let second: FabricStore | undefined;
     // A synchronous injected sleep lets the other contender finish deterministically.
     try {
-      second = FabricStore.open(path, { sleep(ms) {
-        assert.ok(ms > 0 && ms <= 10);
-        sleeps += 1;
-        if (sleeps === 2) {
-          rmSync(reclaim, { recursive: true });
-          first = FabricStore.open(path);
-          first.retainConclusion('first contender');
-          first.close();
-        }
-      } });
+      second = FabricStore.open(path, {
+        sleep(ms) {
+          assert.ok(ms > 0 && ms <= 10);
+          sleeps += 1;
+          if (sleeps === 2) {
+            rmSync(reclaim, { recursive: true });
+            first = FabricStore.open(path);
+            first.retainConclusion('first contender');
+            first.close();
+          }
+        },
+      });
       assert.equal(sleeps, 2);
       second.retainConclusion('second contender');
       assert.throws(() => FabricStore.open(path), /already open/);
       assert.deepEqual(second.conclusions(), ['first contender', 'second contender']);
-    } finally { first?.close(); second?.close(); rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      first?.close();
+      second?.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('retries when a claim disappears during owner revalidation after backoff', () => {
@@ -277,7 +403,11 @@ describe('FabricStore append-only journal', () => {
     }) as typeof original;
     syncBuiltinESMExports();
     try {
-      store = FabricStore.open(path, { sleep() { sleeps += 1; } });
+      store = FabricStore.open(path, {
+        sleep() {
+          sleeps += 1;
+        },
+      });
       assert.ok(finished);
       assert.equal(sleeps, 8);
       store.retainConclusion('reaper completed');
@@ -302,18 +432,28 @@ describe('FabricStore append-only journal', () => {
     writeFileSync(`${claim}/owner`, `${process.pid}:claimant`);
     let sleeps = 0;
     try {
-      assert.throws(() => FabricStore.open(path, { sleep() { sleeps += 1; } }), (error: Error) => {
-        assert.match(error.message, /already open/);
-        assert.ok(error.message.includes(`stale-lock reclaim is blocked by ${claim}`));
-        assert.ok(error.message.includes(`confirm no weave process is using ${path}`));
-        assert.ok(error.message.includes(`then remove ${claim} and retry`));
-        assert.doesNotMatch(error.message, /claimant/);
-        return true;
-      });
+      assert.throws(
+        () =>
+          FabricStore.open(path, {
+            sleep() {
+              sleeps += 1;
+            },
+          }),
+        (error: Error) => {
+          assert.match(error.message, /already open/);
+          assert.ok(error.message.includes(`stale-lock reclaim is blocked by ${claim}`));
+          assert.ok(error.message.includes(`confirm no weave process is using ${path}`));
+          assert.ok(error.message.includes(`then remove ${claim} and retry`));
+          assert.doesNotMatch(error.message, /claimant/);
+          return true;
+        },
+      );
       assert.ok(sleeps >= 8 && sleeps <= 256);
       assert.equal(readFileSync(`${claim}/owner`, 'utf8'), `${process.pid}:claimant`);
       assert.equal(readFileSync(`${path}.lock`, 'utf8'), String(dead.pid));
-    } finally { rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('names the blocked claim under a dead reaper after the retry bound', () => {
@@ -328,17 +468,27 @@ describe('FabricStore append-only journal', () => {
     writeFileSync(`${claim}/owner`, `${dead.pid}:claimant`);
     let sleeps = 0;
     try {
-      assert.throws(() => FabricStore.open(path, { sleep() { sleeps += 1; } }), (error: Error) => {
-        assert.match(error.message, /already open/);
-        assert.ok(error.message.includes(`stale-lock reclaim is blocked by ${claim}`));
-        assert.ok(error.message.includes(`confirm no weave process is using ${path}`));
-        assert.ok(error.message.includes(`then remove ${claim} and retry`));
-        assert.doesNotMatch(error.message, /claimant/);
-        return true;
-      });
+      assert.throws(
+        () =>
+          FabricStore.open(path, {
+            sleep() {
+              sleeps += 1;
+            },
+          }),
+        (error: Error) => {
+          assert.match(error.message, /already open/);
+          assert.ok(error.message.includes(`stale-lock reclaim is blocked by ${claim}`));
+          assert.ok(error.message.includes(`confirm no weave process is using ${path}`));
+          assert.ok(error.message.includes(`then remove ${claim} and retry`));
+          assert.doesNotMatch(error.message, /claimant/);
+          return true;
+        },
+      );
       assert.ok(sleeps > 0 && sleeps <= 16);
       assert.ok(existsSync(claim));
-    } finally { rmSync(dir, { recursive: true, force: true }); }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('retries acquisition when the writer lock vanishes after link reports EEXIST', () => {
@@ -453,16 +603,19 @@ describe('FabricStore append-only journal', () => {
 
   const validSnapshot = new FabricStore().snapshot();
   const malformedSnapshots: unknown[] = [
-    undefined, null, {},
+    undefined,
+    null,
+    {},
     ...['next_handle', 'next_canonical', 'resources', 'refs', 'invocations'].map((field) => {
       const copy = { ...validSnapshot } as Record<string, unknown>;
       delete copy[field];
       return copy;
     }),
     ...Object.keys(validSnapshot).map((field) => ({ ...validSnapshot, [field]: 'wrong type' })),
-    ...['resources', 'refs', 'invocations', 'admissions', 'workload', 'builtin_results'].map(
-      (field) => ({ ...validSnapshot, [field]: [{}] }),
-    ),
+    ...['resources', 'refs', 'invocations', 'admissions', 'workload', 'builtin_results'].map((field) => ({
+      ...validSnapshot,
+      [field]: [{}],
+    })),
     { ...validSnapshot, next_handle: 0 },
     { ...validSnapshot, next_canonical: 1.5 },
   ];
@@ -476,7 +629,9 @@ describe('FabricStore append-only journal', () => {
           writeFileSync(path, bytes + tail);
           let opened: FabricStore | undefined;
           try {
-            assert.throws(() => { opened = FabricStore.open(path); }, /snapshot.*line 3/);
+            assert.throws(() => {
+              opened = FabricStore.open(path);
+            }, /snapshot.*line 3/);
           } finally {
             opened?.close();
           }
@@ -496,7 +651,9 @@ describe('FabricStore append-only journal', () => {
     let store: FabricStore | undefined;
     try {
       writeFileSync(path, bytes);
-      assert.throws(() => { store = FabricStore.open(path); }, /line 2/);
+      assert.throws(() => {
+        store = FabricStore.open(path);
+      }, /line 2/);
       assert.equal(readFileSync(path, 'utf8'), bytes);
     } finally {
       store?.close();
@@ -536,13 +693,17 @@ describe('FabricStore append-only journal', () => {
         if (message === 'close') { store?.close(); process.exit(0); }
       });
     `;
-    const children = Array.from({ length: 2 }, () => spawn(process.execPath,
-      ['--input-type=module', '-e', source, path], { stdio: ['ignore', 'ignore', 'pipe', 'ipc'] }));
-    const message = (child: (typeof children)[number]) => new Promise<unknown>((resolve, reject) => {
-      child.once('message', resolve);
-      child.once('error', reject);
-      child.once('exit', () => reject(new Error('race contender exited early')));
-    });
+    const children = Array.from({ length: 2 }, () =>
+      spawn(process.execPath, ['--input-type=module', '-e', source, path], {
+        stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
+      }),
+    );
+    const message = (child: (typeof children)[number]) =>
+      new Promise<unknown>((resolve, reject) => {
+        child.once('message', resolve);
+        child.once('error', reject);
+        child.once('exit', () => reject(new Error('race contender exited early')));
+      });
     try {
       assert.deepEqual(await Promise.all(children.map(message)), ['ready', 'ready']);
       const results = children.map(message);
@@ -583,7 +744,9 @@ describe('FabricStore append-only journal', () => {
     }) as typeof original;
     syncBuiltinESMExports();
     try {
-      assert.throws(() => { loser = FabricStore.open(path); }, /host store is already open/);
+      assert.throws(() => {
+        loser = FabricStore.open(path);
+      }, /host store is already open/);
       assert.equal(interleaved, true);
       assert.deepEqual(winner?.conclusions(), ['winner']);
     } finally {
@@ -626,7 +789,9 @@ describe('FabricStore append-only journal', () => {
       const first = FabricStore.open(alias);
       let second: FabricStore | undefined;
       try {
-        assert.throws(() => { second = FabricStore.open(path); }, /already open/);
+        assert.throws(() => {
+          second = FabricStore.open(path);
+        }, /already open/);
       } finally {
         second?.close();
         first.close();
@@ -641,7 +806,9 @@ describe('FabricStore append-only journal', () => {
     nodeFs.symlinkSync(join(dir, 'missing.json'), alias);
     let store: FabricStore | undefined;
     try {
-      assert.throws(() => { store = FabricStore.open(alias); }, /ENOENT/);
+      assert.throws(() => {
+        store = FabricStore.open(alias);
+      }, /ENOENT/);
       assert.equal(nodeFs.lstatSync(alias).isSymbolicLink(), true);
     } finally {
       store?.close();
@@ -662,8 +829,11 @@ describe('FabricStore append-only journal', () => {
       assert.equal(JSON.parse(readFileSync(path, 'utf8')).op, 'snapshot');
       store.close();
       const reopened = FabricStore.open(path);
-      try { assert.deepEqual(reopened.conclusions(), ['x'.repeat(300 * 1024)]); }
-      finally { reopened.close(); }
+      try {
+        assert.deepEqual(reopened.conclusions(), ['x'.repeat(300 * 1024)]);
+      } finally {
+        reopened.close();
+      }
     } finally {
       store.close();
       rmSync(dir, { recursive: true, force: true });
@@ -676,8 +846,17 @@ describe('FabricStore append-only journal', () => {
       const path = join(dir, 'fabric.json');
       const store = FabricStore.open(path);
       // Defer maintenance so the invocation start itself crosses the threshold.
-      store.putResource({ canonical_id: 'res_1', kind: 'source', locator: 'mem:large', revision: 1,
-        content: 'x'.repeat(300 * 1024), publication: null }, false);
+      store.putResource(
+        {
+          canonical_id: 'res_1',
+          kind: 'source',
+          locator: 'mem:large',
+          revision: 1,
+          content: 'x'.repeat(300 * 1024),
+          publication: null,
+        },
+        false,
+      );
       const mutableFs = createRequire(import.meta.url)('node:fs') as typeof nodeFs;
       const originalRename = mutableFs.renameSync;
       const originalWrite = mutableFs.writeFileSync;
@@ -707,7 +886,9 @@ describe('FabricStore append-only journal', () => {
           reopened.save();
           assert.equal(reopened.compactionError(), null);
           assert.equal(JSON.parse(readFileSync(path, 'utf8')).op, 'snapshot');
-        } finally { reopened.close(); }
+        } finally {
+          reopened.close();
+        }
       } finally {
         mutableFs.renameSync = originalRename;
         mutableFs.writeFileSync = originalWrite;
@@ -748,11 +929,14 @@ describe('FabricStore append-only journal', () => {
     }) as typeof originalRename;
     syncBuiltinESMExports();
     try {
-      assert.throws(() => FabricStore.open(path), (error: Error) => {
-        assert.match(error.message, /already open|reclaim/);
-        assert.doesNotMatch(error.message, /remove/i);
-        return true;
-      });
+      assert.throws(
+        () => FabricStore.open(path),
+        (error: Error) => {
+          assert.match(error.message, /already open|reclaim/);
+          assert.doesNotMatch(error.message, /remove/i);
+          return true;
+        },
+      );
       assert.ok(injected);
       assert.equal(movedLive, false);
       assert.equal(readFileSync(`${reclaim}/owner`, 'utf8'), `${process.pid}:successor`);
@@ -894,7 +1078,9 @@ describe('FabricStore append-only journal', () => {
     mutableFs.renameSync = ((...args: Parameters<typeof original>) => {
       if (!raced && String(args[0]) === reclaim) {
         raced = true;
-        assert.throws(() => { rival = FabricStore.open(path); }, /already open/);
+        assert.throws(() => {
+          rival = FabricStore.open(path);
+        }, /already open/);
         assert.equal(readFileSync(`${reclaim}/owner`, 'utf8'), String(dead.pid));
         assert.ok(new RegExp(`^${process.pid}:[0-9]+$`).test(readFileSync(`${reclaim}/reap/owner`, 'utf8')));
       }
@@ -938,12 +1124,15 @@ describe('FabricStore append-only journal', () => {
       let reopened: FabricStore | undefined;
       try {
         const inode = nodeFs.statSync(reclaim).ino;
-        assert.throws(() => FabricStore.open(openedPath), (error: Error) => {
-          assert.ok(error.message.includes(`confirm no weave process is using ${path}`));
-          assert.ok(error.message.includes(`then remove ${claim} and retry`));
-          if (aliasKind !== 'direct') assert.ok(!error.message.includes(alias));
-          return true;
-        });
+        assert.throws(
+          () => FabricStore.open(openedPath),
+          (error: Error) => {
+            assert.ok(error.message.includes(`confirm no weave process is using ${path}`));
+            assert.ok(error.message.includes(`then remove ${claim} and retry`));
+            if (aliasKind !== 'direct') assert.ok(!error.message.includes(alias));
+            return true;
+          },
+        );
         assert.equal(nodeFs.statSync(reclaim).ino, inode);
         assert.equal(readFileSync(`${path}.lock`, 'utf8'), String(dead.pid));
         assert.ok(existsSync(claim), 'open must leave the abandoned claim for manual cleanup');
@@ -971,12 +1160,15 @@ describe('FabricStore append-only journal', () => {
       nodeFs.mkdirSync(`${reclaim}/reap`, { recursive: true });
       writeFileSync(`${reclaim}/owner`, reclaimer);
       try {
-        assert.throws(() => FabricStore.open(path), (error: Error) => {
-          assert.match(error.message, /already open/);
-          assert.doesNotMatch(error.message, /remove/i);
-          assert.ok(!error.message.includes(live));
-          return true;
-        });
+        assert.throws(
+          () => FabricStore.open(path),
+          (error: Error) => {
+            assert.match(error.message, /already open/);
+            assert.doesNotMatch(error.message, /remove/i);
+            assert.ok(!error.message.includes(live));
+            return true;
+          },
+        );
         assert.equal(readFileSync(`${path}.lock`, 'utf8'), writer);
         assert.equal(readFileSync(`${reclaim}/owner`, 'utf8'), reclaimer);
       } finally {
@@ -1020,19 +1212,21 @@ describe('FabricStore append-only journal', () => {
       }) as typeof originalRename;
       syncBuiltinESMExports();
       try {
-        assert.throws(() => FabricStore.open(alias), (error: Error) => {
-          assert.ok(quarantine);
-          assert.match(error.message, /restore.*reclaim/);
-          assert.ok(error.message.includes(`confirm no weave process is using ${path}`));
-          assert.ok(error.message.includes(`then move ${reclaim} and ${quarantine} aside and retry`));
-          assert.ok(!error.message.includes(alias));
-          assert.ok(!error.message.includes(movedOwner));
-          assert.ok(!error.message.includes(conflictingOwner));
-          assert.doesNotMatch(error.message, /remove/i);
-          assert.ok(['ENOTEMPTY', 'EEXIST'].some((code) =>
-            (error.cause as NodeJS.ErrnoException)?.code === code));
-          return true;
-        });
+        assert.throws(
+          () => FabricStore.open(alias),
+          (error: Error) => {
+            assert.ok(quarantine);
+            assert.match(error.message, /restore.*reclaim/);
+            assert.ok(error.message.includes(`confirm no weave process is using ${path}`));
+            assert.ok(error.message.includes(`then move ${reclaim} and ${quarantine} aside and retry`));
+            assert.ok(!error.message.includes(alias));
+            assert.ok(!error.message.includes(movedOwner));
+            assert.ok(!error.message.includes(conflictingOwner));
+            assert.doesNotMatch(error.message, /remove/i);
+            assert.ok(['ENOTEMPTY', 'EEXIST'].some((code) => (error.cause as NodeJS.ErrnoException)?.code === code));
+            return true;
+          },
+        );
         assert.equal(readFileSync(`${path}.lock`, 'utf8'), String(dead.pid));
         assert.equal(readFileSync(`${reclaim}/owner`, 'utf8'), conflictingOwner);
         assert.equal(readFileSync(`${quarantine}/owner`, 'utf8'), movedOwner);
@@ -1433,7 +1627,10 @@ describe('FabricStore append-only journal', () => {
         store = FabricStore.open(path);
         assert.equal(store.recovery.torn_tail_ignored, false);
         assert.deepEqual(store.conclusions(), [malformedPrefix ? '\ufffd' : 'evidence 🧵', 'after repair']);
-      } finally { store?.close(); rmSync(dir, { recursive: true, force: true }); }
+      } finally {
+        store?.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
   }
 
@@ -1481,7 +1678,9 @@ describe('FabricStore append-only journal', () => {
     try {
       assert.equal(again.recovery.torn_tail_ignored, false);
       assert.equal(again.snapshot().resources.length, 2);
-      for (const line of readFileSync(path, 'utf8').split('\n').filter((item) => item.length > 0)) {
+      for (const line of readFileSync(path, 'utf8')
+        .split('\n')
+        .filter((item) => item.length > 0)) {
         JSON.parse(line);
       }
     } finally {
@@ -1529,7 +1728,9 @@ describe('FabricStore append-only journal', () => {
     store.save();
     store.close();
 
-    const lines = readFileSync(path, 'utf8').split('\n').filter((line) => line.length > 0);
+    const lines = readFileSync(path, 'utf8')
+      .split('\n')
+      .filter((line) => line.length > 0);
     const head = JSON.parse(lines[0] ?? '{}') as { op?: string; snapshot?: FabricSnapshot };
     assert.equal(head.op, 'snapshot');
     assert.equal(head.snapshot?.resources[0]?.canonical_id, canonical);
@@ -1569,7 +1770,9 @@ describe('FabricStore append-only journal', () => {
         },
       ],
       refs: [{ handle: 'ref_1', canonical_id: 'res_1', kind: 'source' }],
-      invocations: [{ ...invocation('inv-legacy'), status: 'committed', outcome: { outcome: 'succeeded', output: {} } }],
+      invocations: [
+        { ...invocation('inv-legacy'), status: 'committed', outcome: { outcome: 'succeeded', output: {} } },
+      ],
       admissions: [],
       conclusions: [],
       workload: [],

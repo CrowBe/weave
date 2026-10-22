@@ -45,10 +45,16 @@ async function lockOutput(output: string): Promise<() => Promise<void>> {
       const pid = Number(match?.[1]);
       let dead = false;
       if (Number.isSafeInteger(pid) && pid > 0 && pid <= 2_147_483_647) {
-        try { process.kill(pid, 0); }
-        catch (error) { dead = (error as NodeJS.ErrnoException).code === 'ESRCH'; }
+        try {
+          process.kill(pid, 0);
+        } catch (error) {
+          dead = (error as NodeJS.ErrnoException).code === 'ESRCH';
+        }
       }
-      if (!dead) throw new ProbeConfigurationError('reference output is in use; another live or unknown owner holds its sidecar');
+      if (!dead)
+        throw new ProbeConfigurationError(
+          'reference output is in use; another live or unknown owner holds its sidecar',
+        );
       await rm(join(sidecar, other), { force: true });
     }
     return release;
@@ -67,10 +73,19 @@ export async function writeReferenceOutput<T>(output: string, snapshot: Referenc
   try {
     const path = join(staging, 'snapshot.json');
     const file = await open(path, 'wx', 0o600);
-    try { await file.writeFile(json); await file.sync(); } finally { await file.close(); }
+    try {
+      await file.writeFile(json);
+      await file.sync();
+    } finally {
+      await file.close();
+    }
     await rename(path, output);
     const directory = await open(parent, 'r');
-    try { await directory.sync(); } finally { await directory.close(); }
+    try {
+      await directory.sync();
+    } finally {
+      await directory.close();
+    }
   } finally {
     await rm(staging, { recursive: true, force: true });
   }
@@ -95,8 +110,11 @@ export async function runReference<T extends ReferenceProvenance>(config: {
   } as const;
   const records: T[] = [];
   const snapshot = (status: ReferenceHeader['status']): ReferenceOutput<T> => {
-    const count = records.filter(r => r.pin_mismatch !== false).length;
-    return { header: { ...identity, status, pin_mismatch: count > 0, pin_mismatch_count: count }, records: [...records] };
+    const count = records.filter((r) => r.pin_mismatch !== false).length;
+    return {
+      header: { ...identity, status, pin_mismatch: count > 0, pin_mismatch_count: count },
+      records: [...records],
+    };
   };
   const release = await lockOutput(config.output);
   try {
@@ -117,12 +135,17 @@ export async function runReference<T extends ReferenceProvenance>(config: {
     const result = snapshot(config.signal?.aborted ? 'cancelled' : 'completed');
     await writeReferenceOutput(config.output, result);
     return result;
-  } finally { await release(); }
+  } finally {
+    await release();
+  }
 }
 
 /** Recompute mismatch on replay too, so a stale summary cannot mask missing identities. */
-export function readProbeOutput<T extends ReferenceProvenance>(value: T[] | ReferenceOutput<T>): {
-  records: T[]; exitCode: number;
+export function readProbeOutput<T extends ReferenceProvenance>(
+  value: T[] | ReferenceOutput<T>,
+): {
+  records: T[];
+  exitCode: number;
 } {
   if (Array.isArray(value)) return { records: value, exitCode: 0 };
   if (value.header.mode !== 'reference' || value.header.pinned_model_id !== JEV_REFERENCE_MODEL) {
@@ -130,7 +153,11 @@ export function readProbeOutput<T extends ReferenceProvenance>(value: T[] | Refe
   }
   return {
     records: [...value.records],
-    exitCode: value.header.status !== 'completed' || value.header.pin_mismatch ||
-      value.records.some(r => r.pin_mismatch !== false || r.resolved_model_id !== JEV_REFERENCE_MODEL) ? 1 : 0,
+    exitCode:
+      value.header.status !== 'completed' ||
+      value.header.pin_mismatch ||
+      value.records.some((r) => r.pin_mismatch !== false || r.resolved_model_id !== JEV_REFERENCE_MODEL)
+        ? 1
+        : 0,
   };
 }

@@ -21,15 +21,7 @@ import {
   type Goal,
 } from '@weave/weave';
 import { FakeHost, FixtureEnvironment } from './fake-host.js';
-import {
-  ALPHA,
-  BETA,
-  CONTENT,
-  GAMMA,
-  goalOpened,
-  registerAll,
-  type Scenario,
-} from './fixture.js';
+import { ALPHA, BETA, CONTENT, GAMMA, goalOpened, registerAll, type Scenario } from './fixture.js';
 
 export const VARIANT_COST = 1_000_000;
 
@@ -76,7 +68,9 @@ export function generateAdapter(
 
 export function evaluateAdapter(
   id: string,
-  script: readonly EvaluationProviderResult[] | ((call: { questions: Record<string, unknown> }) => EvaluationProviderResult),
+  script:
+    | readonly EvaluationProviderResult[]
+    | ((call: { questions: Record<string, unknown> }) => EvaluationProviderResult),
 ): EvaluationAdapter & { calls: number } {
   let calls = 0;
   return {
@@ -179,16 +173,18 @@ export interface NovelScenario extends Scenario {
   readonly evaluate?: EvaluationAdapter & { calls: number };
 }
 
-export function novelScenario(options: {
-  goal?: Goal;
-  generate?: GenerationAdapter & { calls: number };
-  evaluate?: EvaluationAdapter & { calls: number };
-  decisionLayer?: DecisionLayer;
-  includeHosted?: boolean;
-  destinations?: readonly string[];
-  hosted?: EvaluationAdapter;
-  frameProfile?: FrameProfile;
-} = {}): NovelScenario {
+export function novelScenario(
+  options: {
+    goal?: Goal;
+    generate?: GenerationAdapter & { calls: number };
+    evaluate?: EvaluationAdapter & { calls: number };
+    decisionLayer?: DecisionLayer;
+    includeHosted?: boolean;
+    destinations?: readonly string[];
+    hosted?: EvaluationAdapter;
+    frameProfile?: FrameProfile;
+  } = {},
+): NovelScenario {
   const environment = new FixtureEnvironment();
   const host = new FakeHost(environment);
   const generate = options.generate ?? generateAdapter('fixture.generate', [completedText(bindingJson([ALPHA, BETA]))]);

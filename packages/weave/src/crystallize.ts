@@ -9,14 +9,7 @@
 import { bindSelectors, type CapabilityContract, type ResourceEffect } from '@weave/agentsop';
 import type { Canonical, Describe, Formation } from './candidates.js';
 import { candidateId } from './digest.js';
-import type {
-  ActionId,
-  Candidate,
-  InspectionResult,
-  ResourceId,
-  ResourceReadSetEntry,
-  State,
-} from './types.js';
+import type { ActionId, Candidate, InspectionResult, ResourceId, ResourceReadSetEntry, State } from './types.js';
 
 const ONE_ACTION = { actions: 1, judgments: 0 } as const;
 const DEFAULT_VARIANTS = ['direct', 'aliased'] as const;
@@ -29,7 +22,12 @@ export function formCrystallizeCandidates(state: State, describe: Describe, cano
   }
   const inFlight = new Set(
     Object.values(state.actions)
-      .filter((action) => action.state === 'pending' || action.state === 'running' || (action.state === 'uncertain' && !action.reconciled))
+      .filter(
+        (action) =>
+          action.state === 'pending' ||
+          action.state === 'running' ||
+          (action.state === 'uncertain' && !action.reconciled),
+      )
       .map((action) => action.candidate_id),
   );
   const candidates: Candidate[] = [];
@@ -124,7 +122,8 @@ export function formCrystallizeCandidates(state: State, describe: Describe, cano
       );
     }
   }
-  const proven = crystal.green.find((item) => item.proven && item.id === 'direct') ?? crystal.green.find((item) => item.proven);
+  const proven =
+    crystal.green.find((item) => item.proven && item.id === 'direct') ?? crystal.green.find((item) => item.proven);
   if (proven && !crystal.admission) {
     const green = succeeded(state, 'green.prove', proven.id);
     push(
@@ -168,7 +167,9 @@ function pushReportTail(
       unavailable.push('report.fold');
       return;
     }
-    const inspections = goal.sources.map((source) => (state.inspections[source] as { result: InspectionResult }).result);
+    const inspections = goal.sources.map(
+      (source) => (state.inspections[source] as { result: InspectionResult }).result,
+    );
     const inputs = { inspections };
     const dependencies = goal.sources
       .map((source) => succeededInspect(state, source))
@@ -189,13 +190,19 @@ function pushReportTail(
     return;
   }
   const report = state.report;
-  if (!report || !covers(report.report, goal.sources) || !readSet.every((entry) => state.sources[entry.resource]?.revision === entry.revision)) {
+  if (
+    !report ||
+    !covers(report.report, goal.sources) ||
+    !readSet.every((entry) => state.sources[entry.resource]?.revision === entry.revision)
+  ) {
     const contract = describe('report.assemble');
     if (!contract) {
       unavailable.push('report.assemble');
       return;
     }
-    const inspections = goal.sources.map((source) => (state.inspections[source] as { result: InspectionResult }).result);
+    const inspections = goal.sources.map(
+      (source) => (state.inspections[source] as { result: InspectionResult }).result,
+    );
     const inputs = { inspections };
     const foldAction = succeeded(state, 'report.fold');
     push({
@@ -245,7 +252,10 @@ function successReady(state: State): boolean {
     return (
       inspection &&
       fold.bound.some(
-        (entry) => entry.source === source && entry.revision === inspection.result.revision && entry.digest === inspection.result.digest,
+        (entry) =>
+          entry.source === source &&
+          entry.revision === inspection.result.revision &&
+          entry.digest === inspection.result.digest,
       )
     );
   });
@@ -273,7 +283,17 @@ function pushInspects(
       unavailable.push('source.inspect');
       continue;
     }
-    push(inspectCandidate(goal.evidence, current.evidence, source, current.revision, goal.authority.read, contract, canonical));
+    push(
+      inspectCandidate(
+        goal.evidence,
+        current.evidence,
+        source,
+        current.revision,
+        goal.authority.read,
+        contract,
+        canonical,
+      ),
+    );
   }
 }
 
@@ -288,7 +308,9 @@ function inspectCandidate(
 ): Candidate {
   const inputs = { source };
   const bound = bindSelectors(contract.effects, inputs);
-  const effects: ResourceEffect[] = bound.ok ? bound.bound.map((effect) => ({ resource: canonical(effect.resource), mode: effect.mode })) : [];
+  const effects: ResourceEffect[] = bound.ok
+    ? bound.bound.map((effect) => ({ resource: canonical(effect.resource), mode: effect.mode }))
+    : [];
   return {
     candidate_id: candidateId(contract.id, contract.revision, inputs),
     operation: contract.id,
@@ -299,7 +321,9 @@ function inspectCandidate(
     dependencies: [],
     effects,
     resources: ONE_ACTION,
-    eligibility: read.includes(source) ? { status: 'allowed' } : { status: 'prohibited', reason: `no read authority for ${source}` },
+    eligibility: read.includes(source)
+      ? { status: 'allowed' }
+      : { status: 'prohibited', reason: `no read authority for ${source}` },
     weight: null,
   };
 }
@@ -343,7 +367,11 @@ function succeeded(state: State, operation: string, marker?: string): ActionId |
 
 function succeededInspect(state: State, source: string): ActionId | null {
   for (const action of Object.values(state.actions)) {
-    if (action.state === 'succeeded' && action.operation === 'source.inspect' && (action.inputs as { source?: string }).source === source) {
+    if (
+      action.state === 'succeeded' &&
+      action.operation === 'source.inspect' &&
+      (action.inputs as { source?: string }).source === source
+    ) {
       return action.action_id;
     }
   }

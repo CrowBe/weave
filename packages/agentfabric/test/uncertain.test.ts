@@ -6,18 +6,36 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { describe, it, type TestContext } from 'node:test';
 import { createGrantAuthority, type CapabilityContract, type InvocationOutcome } from '@weave/agentsop';
-import { AgentFabricHost, FabricStore, type ReconciliationResolution, type CapabilityImplementation } from '@weave/agentfabric';
+import {
+  AgentFabricHost,
+  FabricStore,
+  type ReconciliationResolution,
+  type CapabilityImplementation,
+} from '@weave/agentfabric';
 
 const write: CapabilityContract = {
-  id: 'test.write', revision: '1', purpose: 'test uncertain effects',
-  input: { target: 'resource reference' }, output: { ok: 'boolean' },
-  effects: [{ input: 'target', mode: 'write' }], permissions: [{ input: 'target', mode: 'write' }],
-  failures: [], depends_on: [],
+  id: 'test.write',
+  revision: '1',
+  purpose: 'test uncertain effects',
+  input: { target: 'resource reference' },
+  output: { ok: 'boolean' },
+  effects: [{ input: 'target', mode: 'write' }],
+  permissions: [{ input: 'target', mode: 'write' }],
+  failures: [],
+  depends_on: [],
 };
-const read: CapabilityContract = { ...write, id: 'test.read',
-  effects: [{ input: 'target', mode: 'read' }], permissions: [{ input: 'target', mode: 'read' }] };
-const discover: CapabilityContract = { ...read, id: 'test.discover',
-  effects: [{ input: 'target', mode: 'discover' }], permissions: [{ input: 'target', mode: 'discover' }] };
+const read: CapabilityContract = {
+  ...write,
+  id: 'test.read',
+  effects: [{ input: 'target', mode: 'read' }],
+  permissions: [{ input: 'target', mode: 'read' }],
+};
+const discover: CapabilityContract = {
+  ...read,
+  id: 'test.discover',
+  effects: [{ input: 'target', mode: 'discover' }],
+  permissions: [{ input: 'target', mode: 'discover' }],
+};
 const pure: CapabilityContract = { ...write, id: 'test.pure', effects: [], permissions: [] };
 const uncertain: InvocationOutcome = { outcome: 'uncertain', reason: 'external outcome unknown' };
 const succeeded: InvocationOutcome = { outcome: 'succeeded', output: { ok: true } };
@@ -37,31 +55,68 @@ function fixture(t: TestContext, contract = write, run?: CapabilityImplementatio
   const dir = fs.mkdtempSync(join(tmpdir(), 'weave-uncertain-'));
   const path = join(dir, 'fabric.json');
   let store = FabricStore.open(path);
-  t.after(() => { store.close(); fs.rmSync(dir, { recursive: true, force: true }); });
+  t.after(() => {
+    store.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
   const authority = createGrantAuthority();
   let host = new AgentFabricHost({ authority, store, contracts: [contract] });
   const target = host.registerDestination('mem:uncertain');
   let runs = 0;
   let complete!: (outcome: InvocationOutcome) => void;
   let reject!: (error: unknown) => void;
-  const pending = new Promise<InvocationOutcome>((resolve, no) => { complete = resolve; reject = no; });
-  host.installAdmitted(contract, (inputs, context) => { runs += 1; return run ? run(inputs, context) : pending; });
-  const grant = (action_id = 'action') => authority.issue({ action_id, operation: contract.id,
-    contract_rev: contract.revision, permissions: contract.permissions.map((effect) => ({ resource: target, mode: effect.mode })),
-    effects: contract.effects.map((effect) => ({ resource: target, mode: effect.mode })), issued_at: 1 });
+  const pending = new Promise<InvocationOutcome>((resolve, no) => {
+    complete = resolve;
+    reject = no;
+  });
+  host.installAdmitted(contract, (inputs, context) => {
+    runs += 1;
+    return run ? run(inputs, context) : pending;
+  });
+  const grant = (action_id = 'action') =>
+    authority.issue({
+      action_id,
+      operation: contract.id,
+      contract_rev: contract.revision,
+      permissions: contract.permissions.map((effect) => ({ resource: target, mode: effect.mode })),
+      effects: contract.effects.map((effect) => ({ resource: target, mode: effect.mode })),
+      issued_at: 1,
+    });
   const originalGrant = grant();
-  const invoke = (id = 'inv', issued = originalGrant) => host.invoke(issued, contract.id, { target }, { invocation_id: id });
+  const invoke = (id = 'inv', issued = originalGrant) =>
+    host.invoke(issued, contract.id, { target }, { invocation_id: id });
   const handle = invoke();
   assert.equal(handle.kind, 'handle');
   if (handle.kind !== 'handle') throw new Error('expected handle');
   const reopen = (install = true) => {
-    store.close(); store = FabricStore.open(path);
+    store.close();
+    store = FabricStore.open(path);
     host = new AgentFabricHost({ authority, store, contracts: [contract] });
-    if (install) host.installAdmitted(contract, () => { runs += 1; return succeeded; });
+    if (install)
+      host.installAdmitted(contract, () => {
+        runs += 1;
+        return succeeded;
+      });
     return host;
   };
-  return { get host() { return host; }, get store() { return store; }, path, target, grant, originalGrant,
-    invoke, handle, complete, reject, reopen, runs: () => runs };
+  return {
+    get host() {
+      return host;
+    },
+    get store() {
+      return store;
+    },
+    path,
+    target,
+    grant,
+    originalGrant,
+    invoke,
+    handle,
+    complete,
+    reject,
+    reopen,
+    runs: () => runs,
+  };
 }
 
 async function assertReplay(f: ReturnType<typeof fixture>, expected: InvocationOutcome) {
@@ -75,10 +130,16 @@ async function assertReplay(f: ReturnType<typeof fixture>, expected: InvocationO
 
 describe('uncertain invocation contract', () => {
   const faults: Record<string, CapabilityImplementation> = {
-    'sync throw': () => { throw new Error('implementation fault'); },
-    'async throw': async () => { throw new Error('implementation fault'); },
+    'sync throw': () => {
+      throw new Error('implementation fault');
+    },
+    'async throw': async () => {
+      throw new Error('implementation fault');
+    },
     'async reject': () => Promise.reject(new Error('implementation fault')),
-    'non-Error throw': () => { throw null; },
+    'non-Error throw': () => {
+      throw null;
+    },
     'malformed outcome': () => undefined as unknown as InvocationOutcome,
     'malformed success': () => ({ outcome: 'succeeded', output: 1n }) as unknown as InvocationOutcome,
     'malformed failure': () => ({ outcome: 'failed', failure: 42 }) as unknown as InvocationOutcome,
@@ -117,7 +178,10 @@ describe('uncertain invocation contract', () => {
 
   for (const mode of ['create', 'append', 'delete', 'write'] as const) {
     it(`a fault retains the entire read/${mode} reservation until reconciliation`, async (t) => {
-      const effects = [{ input: 'target', mode: 'read' as const }, { input: 'target', mode }];
+      const effects = [
+        { input: 'target', mode: 'read' as const },
+        { input: 'target', mode },
+      ];
       const contract = { ...write, id: `test.read-${mode}`, effects, permissions: effects };
       const f = fixture(t, contract, faults['async throw']);
       const holds = structuredClone(f.host.coordinator.held());
@@ -168,13 +232,21 @@ describe('uncertain invocation contract', () => {
   for (const cancel of ['before reject', 'after reject', 'inside run'] as const) {
     it(`settles a declared-write rejection once with concurrent invocations and cancellation ${cancel}`, async (t) => {
       let f: ReturnType<typeof fixture>;
-      f = fixture(t, write, cancel === 'inside run' ? () => {
-        f.handle.requestCancel();
-        f.host.releaseAll();
-        throw new Error('implementation fault');
-      } : undefined);
+      f = fixture(
+        t,
+        write,
+        cancel === 'inside run'
+          ? () => {
+              f.handle.requestCancel();
+              f.host.releaseAll();
+              throw new Error('implementation fault');
+            }
+          : undefined,
+      );
       let settlements = 0;
-      void f.handle.result.then(() => { settlements += 1; });
+      void f.handle.result.then(() => {
+        settlements += 1;
+      });
       f.host.release('action');
       f.host.release('action');
       assert.equal(f.invoke().kind, 'rejected');
@@ -187,7 +259,10 @@ describe('uncertain invocation contract', () => {
       assert.equal(settlements, 1);
       assert.equal(f.runs(), 1);
       assert.equal(f.store.getInvocation('inv')?.cancel_requested, true);
-      const markers = fs.readFileSync(f.path, 'utf8').split('\n').filter((line) => line.includes('"op":"uncertain"'));
+      const markers = fs
+        .readFileSync(f.path, 'utf8')
+        .split('\n')
+        .filter((line) => line.includes('"op":"uncertain"'));
       assert.equal(markers.length, 1);
       assert.equal(f.host.coordinator.held().length, 1);
       await assertReplay(f, result);
@@ -220,7 +295,9 @@ describe('uncertain invocation contract', () => {
 
   it('consumes a fresh replay grant after restart without granting another execution', async (t) => {
     const f = fixture(t);
-    f.host.release('action'); f.complete(uncertain); await f.handle.result;
+    f.host.release('action');
+    f.complete(uncertain);
+    await f.handle.result;
     f.reopen();
     const fresh = f.grant();
     const replay = f.invoke('inv', fresh);
@@ -234,8 +311,11 @@ describe('uncertain invocation contract', () => {
     const f = fixture(t);
     const persist = f.store.persistInvocationUncertain.bind(f.store);
     f.store.persistResult = false;
-    f.store.persistInvocationUncertain = () => { throw new Error('marker append refused'); };
-    f.host.release('action'); f.complete(succeeded);
+    f.store.persistInvocationUncertain = () => {
+      throw new Error('marker append refused');
+    };
+    f.host.release('action');
+    f.complete(succeeded);
     const result = await f.handle.result;
     assert.equal(result.outcome, 'uncertain');
     if (result.outcome === 'uncertain') assert.match(result.reason, /marker.*persist/);
@@ -247,17 +327,33 @@ describe('uncertain invocation contract', () => {
     assert.equal(f.host.coordinator.held().length, 0);
   });
 
-  const crashPoints = ['marker before', 'marker partial', 'marker after',
-    'compact temp before', 'compact temp after', 'compact rename before', 'compact rename after',
-    'reconcile before', 'reconcile partial', 'reconcile after',
-    'resolved compact rename before', 'resolved compact rename after'];
-  for (const [source, point] of ['result write failure', 'sync throw', 'async reject', 'malformed outcome']
-    .flatMap((source) => crashPoints.map((point) => [source, point] as const))) {
+  const crashPoints = [
+    'marker before',
+    'marker partial',
+    'marker after',
+    'compact temp before',
+    'compact temp after',
+    'compact rename before',
+    'compact rename after',
+    'reconcile before',
+    'reconcile partial',
+    'reconcile after',
+    'resolved compact rename before',
+    'resolved compact rename after',
+  ];
+  for (const [source, point] of ['result write failure', 'sync throw', 'async reject', 'malformed outcome'].flatMap(
+    (source) => crashPoints.map((point) => [source, point] as const),
+  )) {
     it(`${source}: crash at ${point} recovers uncertainty or the durable resolution, never a rerun`, async (t) => {
       const dir = fs.mkdtempSync(join(tmpdir(), 'weave-uncertain-crash-'));
       const path = join(dir, 'fabric.json');
       t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-      const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      const child = spawnSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `
         import * as fs from 'node:fs';
         import { createRequire, syncBuiltinESMExports } from 'node:module';
         import { createGrantAuthority } from '@weave/agentsop';
@@ -315,17 +411,32 @@ describe('uncertain invocation contract', () => {
         syncBuiltinESMExports();
         store.compact();
         throw new Error('crash injection was not reached');
-      `, path, point, JSON.stringify(write), source], { encoding: 'utf8', timeout: 10_000 });
+      `,
+          path,
+          point,
+          JSON.stringify(write),
+          source,
+        ],
+        { encoding: 'utf8', timeout: 10_000 },
+      );
       assert.equal(child.status, 86, child.stderr || String(child.error));
       const store = FabricStore.open(path);
       t.after(() => store.close());
       const authority = createGrantAuthority();
       const host = new AgentFabricHost({ authority, store, contracts: [write] });
       const record = store.getInvocation('inv')!;
-      host.installAdmitted(write, () => { throw new Error('recovery must never rerun'); });
+      host.installAdmitted(write, () => {
+        throw new Error('recovery must never rerun');
+      });
       const target = (record.inputs as { target: string }).target;
-      const grant = authority.issue({ action_id: 'action', operation: write.id, contract_rev: '1',
-        permissions: [{ resource: target, mode: 'write' }], effects: [{ resource: target, mode: 'write' }], issued_at: 1 });
+      const grant = authority.issue({
+        action_id: 'action',
+        operation: write.id,
+        contract_rev: '1',
+        permissions: [{ resource: target, mode: 'write' }],
+        effects: [{ resource: target, mode: 'write' }],
+        issued_at: 1,
+      });
       const resolved = point === 'reconcile after' || point.startsWith('resolved ');
       const found = host.lookup('inv', grant);
       assert.equal('status' in found && found.status, resolved ? 'stopped' : 'unresolved');
@@ -337,7 +448,6 @@ describe('uncertain invocation contract', () => {
       if (!resolved) reconcile(host, absent);
     });
   }
-
 
   for (const contract of [write, read, discover, pure]) {
     for (const failedResult of [false, true]) {
@@ -353,27 +463,42 @@ describe('uncertain invocation contract', () => {
         await assertReplay(f, outcome);
         f.reopen();
         assert.equal(f.host.coordinator.held().length, contract === write ? 1 : 0);
-        assert.deepEqual(f.host.lookup('inv', f.originalGrant), { status: 'unresolved', reason: (outcome as { reason: string }).reason });
+        assert.deepEqual(f.host.lookup('inv', f.originalGrant), {
+          status: 'unresolved',
+          reason: (outcome as { reason: string }).reason,
+        });
         await assertReplay(f, outcome);
         const conflict = f.invoke('conflict', f.grant('conflict'));
         assert.equal(conflict.kind, contract === write ? 'rejected' : 'handle');
-        if (conflict.kind === 'handle') { f.host.release('conflict'); await conflict.result; }
+        if (conflict.kind === 'handle') {
+          f.host.release('conflict');
+          await conflict.result;
+        }
         reconcile(f.host, absent);
         assert.equal(f.host.coordinator.held().length, 0);
         assert.equal((f.host as unknown as { open: Map<string, unknown> }).open.size, 0);
         const after = f.invoke('after', f.grant('after'));
         assert.equal(after.kind, 'handle');
-        if (after.kind === 'handle') { f.host.release('after'); await after.result; }
+        if (after.kind === 'handle') {
+          f.host.release('after');
+          await after.result;
+        }
       });
     }
   }
 
   for (const mode of ['create', 'append', 'delete'] as const) {
     it(`retains a ${mode} reservation across recovery until reconciliation`, async (t) => {
-      const contract: CapabilityContract = { ...write, id: `test.${mode}`,
-        effects: [{ input: 'target', mode }], permissions: [{ input: 'target', mode }] };
+      const contract: CapabilityContract = {
+        ...write,
+        id: `test.${mode}`,
+        effects: [{ input: 'target', mode }],
+        permissions: [{ input: 'target', mode }],
+      };
       const f = fixture(t, contract);
-      f.host.release('action'); f.complete(uncertain); await f.handle.result;
+      f.host.release('action');
+      f.complete(uncertain);
+      await f.handle.result;
       assert.equal(f.host.coordinator.held().length, 1);
       f.reopen();
       assert.equal(f.host.coordinator.held().length, 1);
@@ -388,7 +513,10 @@ describe('uncertain invocation contract', () => {
     f.host.release('action');
     const snapshot = f.store.snapshot();
     f.store.close();
-    const old = { ...snapshot, invocations: snapshot.invocations.map(({ reservation: _reservation, ...record }) => record) };
+    const old = {
+      ...snapshot,
+      invocations: snapshot.invocations.map(({ reservation: _reservation, ...record }) => record),
+    };
     fs.writeFileSync(f.path, JSON.stringify(old) + '\n');
     f.reopen();
     assert.equal(f.host.coordinator.held().length, 1);
@@ -407,9 +535,13 @@ describe('uncertain invocation contract', () => {
         const { reservation, ...record } = snapshot.invocations[0]!;
         const recovered = storedScopes ? { ...record, reservation } : record;
         f.store.close();
-        fs.writeFileSync(f.path, JSON.stringify({ ...snapshot,
-          invocations: [recovered, { ...recovered, invocation_id: 'orphan', action_id: 'orphan' }],
-        }) + '\n');
+        fs.writeFileSync(
+          f.path,
+          JSON.stringify({
+            ...snapshot,
+            invocations: [recovered, { ...recovered, invocation_id: 'orphan', action_id: 'orphan' }],
+          }) + '\n',
+        );
         f.reopen();
         for (const id of ['inv', 'orphan']) assert.equal(f.store.getInvocation(id)?.status, 'uncertain');
         assert.equal(f.host.coordinator.held().length, 2);
@@ -450,8 +582,14 @@ describe('uncertain invocation contract', () => {
       }
       // Independent operations remain usable while the missing contract is unresolved.
       host.installAdmitted(pure, () => succeeded);
-      const grant = host.authority.issue({ action_id: 'pure', operation: pure.id, contract_rev: pure.revision,
-        permissions: [], effects: [], issued_at: 1 });
+      const grant = host.authority.issue({
+        action_id: 'pure',
+        operation: pure.id,
+        contract_rev: pure.revision,
+        permissions: [],
+        effects: [],
+        issued_at: 1,
+      });
       const independent = host.invoke(grant, pure.id, { target: f.target });
       assert.equal(independent.kind, 'handle');
       host.release('pure');
@@ -469,15 +607,21 @@ describe('uncertain invocation contract', () => {
     const f = fixture(t);
     const snapshot = f.store.snapshot();
     const { reservation: _reservation, ...record } = snapshot.invocations[0]!;
-    const store = FabricStore.restore({ ...snapshot, invocations: [record,
-      { ...record, invocation_id: 'orphan', action_id: 'orphan' }] });
-    store.persistInvocationUncertain = () => { throw new Error('marker write refused'); };
+    const store = FabricStore.restore({
+      ...snapshot,
+      invocations: [record, { ...record, invocation_id: 'orphan', action_id: 'orphan' }],
+    });
+    store.persistInvocationUncertain = () => {
+      throw new Error('marker write refused');
+    };
     const host = new AgentFabricHost({ authority: f.host.authority, store, contracts: [] });
     host.installAdmitted(write, () => succeeded);
     assert.equal(store.getInvocation('inv')?.status, 'running');
     assert.equal(host.invoke(f.grant('blocked'), write.id, { target: f.target }).kind, 'rejected');
     const persist = store.persistInvocationReconciliation.bind(store);
-    store.persistInvocationReconciliation = () => { throw new Error('resolution write refused'); };
+    store.persistInvocationReconciliation = () => {
+      throw new Error('resolution write refused');
+    };
     assert.throws(() => reconcile(host, absent), /resolution write refused/);
     assert.equal(host.invoke(f.grant('still-blocked'), write.id, { target: f.target }).kind, 'rejected');
     store.persistInvocationReconciliation = persist;
@@ -506,13 +650,25 @@ describe('uncertain invocation contract', () => {
   it('canonical recovery holds block aliases even with the contract absent', async (t) => {
     const f = fixture(t);
     const alias = f.host.alias(f.target);
-    f.host.release('action'); f.complete(uncertain); await f.handle.result;
+    f.host.release('action');
+    f.complete(uncertain);
+    await f.handle.result;
     const snapshot = f.store.snapshot();
-    const host = new AgentFabricHost({ authority: f.host.authority, store: FabricStore.restore(snapshot), contracts: [] });
+    const host = new AgentFabricHost({
+      authority: f.host.authority,
+      store: FabricStore.restore(snapshot),
+      contracts: [],
+    });
     assert.equal(host.coordinator.isHeld(f.store.lookupRef(alias)!.canonical_id), true);
     host.installAdmitted(write, () => succeeded);
-    const issued = host.authority.issue({ action_id: 'alias', operation: write.id, contract_rev: '1',
-      permissions: [{ resource: alias, mode: 'write' }], effects: [{ resource: alias, mode: 'write' }], issued_at: 1 });
+    const issued = host.authority.issue({
+      action_id: 'alias',
+      operation: write.id,
+      contract_rev: '1',
+      permissions: [{ resource: alias, mode: 'write' }],
+      effects: [{ resource: alias, mode: 'write' }],
+      issued_at: 1,
+    });
     const blocked = host.invoke(issued, write.id, { target: alias });
     assert.equal(blocked.kind, 'rejected');
     if (blocked.kind === 'rejected') assert.match(blocked.reason, /effect conflict/);
@@ -524,27 +680,37 @@ describe('uncertain invocation contract', () => {
     it(`rolls back a partial ${op} append without releasing reservations`, async (t) => {
       const f = fixture(t);
       f.host.release('action');
-      if (op === 'reconcile') { f.complete(uncertain); await f.handle.result; }
-      else f.store.persistResult = false;
+      if (op === 'reconcile') {
+        f.complete(uncertain);
+        await f.handle.result;
+      } else f.store.persistResult = false;
       const before = fs.readFileSync(f.path);
       const mutable = createRequire(import.meta.url)('node:fs') as typeof fs;
       const original = mutable.writeSync;
       let partial = false;
       mutable.writeSync = ((...args: Parameters<typeof original>) => {
         if (String(args[1]).includes(`"op":"${op}"`)) {
-          if (!partial) { partial = true; return original(args[0], args[1] as unknown as Buffer, 0, 13); }
+          if (!partial) {
+            partial = true;
+            return original(args[0], args[1] as unknown as Buffer, 0, 13);
+          }
           throw new Error('injected partial append failure');
         }
         return original(...args);
       }) as typeof original;
       syncBuiltinESMExports();
       try {
-        if (op === 'uncertain') { f.complete(succeeded); assert.equal((await f.handle.result).outcome, 'uncertain'); }
-        else assert.throws(() => reconcile(f.host, absent), /partial append/);
+        if (op === 'uncertain') {
+          f.complete(succeeded);
+          assert.equal((await f.handle.result).outcome, 'uncertain');
+        } else assert.throws(() => reconcile(f.host, absent), /partial append/);
         assert.equal(partial, true);
         assert.deepEqual(fs.readFileSync(f.path), before);
         assert.equal(f.host.coordinator.held().length, 1);
-      } finally { mutable.writeSync = original; syncBuiltinESMExports(); }
+      } finally {
+        mutable.writeSync = original;
+        syncBuiltinESMExports();
+      }
       reconcile(f.host, absent);
       assert.equal(f.host.coordinator.held().length, 0);
       f.reopen();
@@ -559,7 +725,9 @@ describe('uncertain invocation contract', () => {
     assert.equal(f.host.coordinator.held().length, 1);
     assert.equal(lookupStatus(f.host, 'inv', f.originalGrant), 'unresolved');
     // Install only after verifying that restoration does not depend on it.
-    f.host.installAdmitted(write, () => { throw new Error('must not run'); });
+    f.host.installAdmitted(write, () => {
+      throw new Error('must not run');
+    });
     const replay = f.invoke();
     assert.equal(replay.kind, 'handle');
     if (replay.kind === 'handle') assert.equal((await replay.result).outcome, 'uncertain');
@@ -591,14 +759,21 @@ describe('uncertain invocation contract', () => {
     });
   }
 
-  for (const resolution of [absent, { resolution: 'committed', evidence: 'receipt 42', output: { ok: true } } as const]) {
+  for (const resolution of [
+    absent,
+    { resolution: 'committed', evidence: 'receipt 42', output: { ok: true } } as const,
+  ]) {
     it(`durably records ${resolution.resolution}, refuses double resolution, and never renews the grant`, async (t) => {
       const f = fixture(t);
-      f.host.release('action'); f.complete(uncertain); await f.handle.result;
+      f.host.release('action');
+      f.complete(uncertain);
+      await f.handle.result;
       reconcile(f.host, resolution);
       const record = f.store.getInvocation('inv')!;
-      assert.deepEqual((record as unknown as { reconciliation: unknown }).reconciliation,
-        { resolution: resolution.resolution, evidence: resolution.evidence });
+      assert.deepEqual((record as unknown as { reconciliation: unknown }).reconciliation, {
+        resolution: resolution.resolution,
+        evidence: resolution.evidence,
+      });
       const snapshot = f.store.snapshot();
       assert.throws(() => reconcile(f.host, resolution), /already reconciled/);
       assert.deepEqual(f.store.snapshot(), snapshot);
@@ -615,29 +790,43 @@ describe('uncertain invocation contract', () => {
     assert.throws(() => reconcile(f.host, absent), /active/);
     f.host.release('action');
     assert.throws(() => reconcile(f.host, absent), /active/);
-    f.complete(uncertain); await f.handle.result;
-    for (const bad of [null, {}, { resolution: 'other', evidence: 'audit' },
-      { resolution: 'not_committed', evidence: '' }, { resolution: 'not_committed', evidence: '   ' },
-      { resolution: 'committed', evidence: 'audit' }, { resolution: 'committed', evidence: 'audit', output: 1n }]) {
-      const snapshot = f.store.snapshot(); const bytes = fs.readFileSync(f.path);
+    f.complete(uncertain);
+    await f.handle.result;
+    for (const bad of [
+      null,
+      {},
+      { resolution: 'other', evidence: 'audit' },
+      { resolution: 'not_committed', evidence: '' },
+      { resolution: 'not_committed', evidence: '   ' },
+      { resolution: 'committed', evidence: 'audit' },
+      { resolution: 'committed', evidence: 'audit', output: 1n },
+    ]) {
+      const snapshot = f.store.snapshot();
+      const bytes = fs.readFileSync(f.path);
       assert.throws(() => reconcile(f.host, bad as Resolution), /invalid/);
-      assert.deepEqual(f.store.snapshot(), snapshot); assert.deepEqual(fs.readFileSync(f.path), bytes);
+      assert.deepEqual(f.store.snapshot(), snapshot);
+      assert.deepEqual(fs.readFileSync(f.path), bytes);
       assert.equal(f.host.coordinator.held().length, 1);
     }
     assert.throws(() => reconcile(f.host, absent, 'missing'), /unknown/);
-    const persist = (f.store as unknown as { persistInvocationReconciliation: (record: unknown) => void });
+    const persist = f.store as unknown as { persistInvocationReconciliation: (record: unknown) => void };
     const original = persist.persistInvocationReconciliation;
-    persist.persistInvocationReconciliation = () => { throw new Error('injected write failure'); };
+    persist.persistInvocationReconciliation = () => {
+      throw new Error('injected write failure');
+    };
     const snapshot = f.store.snapshot();
     assert.throws(() => reconcile(f.host, absent), /write failure/);
-    assert.deepEqual(f.store.snapshot(), snapshot); assert.equal(f.host.coordinator.held().length, 1);
+    assert.deepEqual(f.store.snapshot(), snapshot);
+    assert.equal(f.host.coordinator.held().length, 1);
     persist.persistInvocationReconciliation = original;
     reconcile(f.host, absent);
   });
 
   it('keeps conflicts blocked and prevents reentrant reconciliation until its append commits', async (t) => {
     const f = fixture(t);
-    f.host.release('action'); f.complete(uncertain); await f.handle.result;
+    f.host.release('action');
+    f.complete(uncertain);
+    await f.handle.result;
     const persist = f.store.persistInvocationReconciliation.bind(f.store);
     const snapshot = f.store.snapshot();
     f.store.persistInvocationReconciliation = (record) => {
@@ -659,7 +848,10 @@ describe('uncertain invocation contract', () => {
 
   it('cancellation during a pending run and reconciliation cannot resolve uncertainty or overwrite resolution', async (t) => {
     const f = fixture(t);
-    f.host.release('action'); f.handle.requestCancel(); f.complete(uncertain); await f.handle.result;
+    f.host.release('action');
+    f.handle.requestCancel();
+    f.complete(uncertain);
+    await f.handle.result;
     assert.equal(f.store.getInvocation('inv')?.cancel_requested, true);
     assert.equal(f.host.coordinator.held().length, 1);
     const mutable = createRequire(import.meta.url)('node:fs') as typeof fs;
@@ -667,12 +859,19 @@ describe('uncertain invocation contract', () => {
     let cancelled = false;
     mutable.writeSync = ((...args: Parameters<typeof original>) => {
       const count = original(...args);
-      if (String(args[1]).includes('"op":"reconcile"')) { cancelled = true; f.handle.requestCancel(); }
+      if (String(args[1]).includes('"op":"reconcile"')) {
+        cancelled = true;
+        f.handle.requestCancel();
+      }
       return count;
     }) as typeof original;
     syncBuiltinESMExports();
-    try { reconcile(f.host, absent); }
-    finally { mutable.writeSync = original; syncBuiltinESMExports(); }
+    try {
+      reconcile(f.host, absent);
+    } finally {
+      mutable.writeSync = original;
+      syncBuiltinESMExports();
+    }
     assert.equal(cancelled, true);
     assert.equal(f.store.getInvocation('inv')?.status, 'stopped');
     f.handle.requestCancel();

@@ -36,11 +36,7 @@ import {
   KEV_LOCAL_DESTINATION,
   kevLocalEvaluator,
 } from '@weave/gateway/kev-local';
-import {
-  TYPESAFE_AI_ADAPTER,
-  TYPESAFE_AI_DESTINATION,
-  typesafeAiEvaluator,
-} from '@weave/gateway/typesafe-ai';
+import { TYPESAFE_AI_ADAPTER, TYPESAFE_AI_DESTINATION, typesafeAiEvaluator } from '@weave/gateway/typesafe-ai';
 import type { DecisionCase } from './corpus.ts';
 import { reduceAnswers, renderQuestions, renderState, type Ranking } from './shapes.ts';
 
@@ -130,7 +126,9 @@ export interface Credentials {
 export function jevRouteTable(credentials: Credentials, options: RouteOptions): RoutedUnit[] {
   validateReferenceOptions(options);
   if (options.reference === true && !credentials.typesafe?.trim()) {
-    throw new ProbeConfigurationError('reference mode requires a TypeSafe API key (TYPESAFE_API_KEY or TYPESAFE_AI_API_KEY)');
+    throw new ProbeConfigurationError(
+      'reference mode requires a TypeSafe API key (TYPESAFE_API_KEY or TYPESAFE_AI_API_KEY)',
+    );
   }
   return EVALUATION_KINDS.flatMap((kind) => jevRoutes(kind, credentials, options));
 }
@@ -139,7 +137,9 @@ export function jevRouteTable(credentials: Credentials, options: RouteOptions): 
 export function validateReferenceOptions(options: RouteOptions): void {
   if (options.reference !== true) return;
   if (options.local === true || (options.model !== undefined && options.model.trim() !== JEV_REFERENCE_MODEL)) {
-    throw new ProbeConfigurationError(`reference mode requires model ${JEV_REFERENCE_MODEL}; conflicting model/local option`);
+    throw new ProbeConfigurationError(
+      `reference mode requires model ${JEV_REFERENCE_MODEL}; conflicting model/local option`,
+    );
   }
 }
 
@@ -149,14 +149,17 @@ export function validateReferenceArgs(argv: readonly string[]): void {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
     if (arg === '--model' || arg.startsWith('--model=')) {
-      const model = arg === '--model' ? argv[i + 1] ?? '' : arg.slice('--model='.length);
+      const model = arg === '--model' ? (argv[i + 1] ?? '') : arg.slice('--model='.length);
       validateReferenceOptions({ preferFree: false, reference: true, model });
     }
   }
 }
 
 /** Read from the environment by the composition root only. Never logged. */
-export function readCredentials(env: NodeJS.ProcessEnv, options?: RouteOptions): Credentials | { readonly error: string } {
+export function readCredentials(
+  env: NodeJS.ProcessEnv,
+  options?: RouteOptions,
+): Credentials | { readonly error: string } {
   if (options?.reference === true) {
     const typesafe = resolveTypesafeApiKey(env);
     return typesafe === undefined
@@ -239,10 +242,14 @@ export function createJevGateway(
       ...(options.reference === true || credentials.vercel === undefined
         ? []
         : [vercelAiGatewayEvaluator({ apiKey: credentials.vercel })]),
-      ...(credentials.typesafe === undefined ? [] : [typesafeAiEvaluator({
-        apiKey: credentials.typesafe,
-        shuffle: TYPESAFE_REQUEST_PARAMS.shuffle,
-      })]),
+      ...(credentials.typesafe === undefined
+        ? []
+        : [
+            typesafeAiEvaluator({
+              apiKey: credentials.typesafe,
+              shuffle: TYPESAFE_REQUEST_PARAMS.shuffle,
+            }),
+          ]),
     ],
     clock,
     timer: realTimer,
@@ -255,11 +262,16 @@ export function probeTerms(
   options: RouteOptions = { preferFree: false },
 ): InferenceTerms {
   validateReferenceOptions(options);
-  if (options.reference === true) return {
-    quality: 'baseline', destinations: [TYPESAFE_AI_DESTINATION],
-    max_context_tokens: 8_000, deadline: clock.now() + 120_000, cost_ceiling: 5_000,
-    max_attempts: 4, max_attempts_per_route: 4,
-  };
+  if (options.reference === true)
+    return {
+      quality: 'baseline',
+      destinations: [TYPESAFE_AI_DESTINATION],
+      max_context_tokens: 8_000,
+      deadline: clock.now() + 120_000,
+      cost_ceiling: 5_000,
+      max_attempts: 4,
+      max_attempts_per_route: 4,
+    };
   if (options.local === true) return kevTerms(clock);
   return {
     quality: 'baseline',
@@ -292,7 +304,9 @@ export interface ReferenceProvenance {
 
 /** Missing identity, including a failed request with no response, is a mismatch. */
 export function referenceProvenance(
-  outcome: EvaluationOutcome, options: RouteOptions, order: readonly string[],
+  outcome: EvaluationOutcome,
+  options: RouteOptions,
+  order: readonly string[],
 ): ReferenceProvenance & { readonly routed_unit_id?: string } {
   if (options.reference !== true) return {};
   const last = outcome.attempts.at(-1);
@@ -300,17 +314,23 @@ export function referenceProvenance(
   return {
     ...(last === undefined ? {} : { routed_unit_id: last.routed_unit_id }),
     resolved_model_id: resolved ?? null,
-    provider_response_id: (outcome.status === 'accepted' ? outcome.provider_response_id : last?.provider_response_id) ?? null,
-    pin_mismatch: resolved !== JEV_REFERENCE_MODEL || outcome.attempts.some(a =>
-      a.resolved_model_id !== undefined && a.resolved_model_id !== JEV_REFERENCE_MODEL),
+    provider_response_id:
+      (outcome.status === 'accepted' ? outcome.provider_response_id : last?.provider_response_id) ?? null,
+    pin_mismatch:
+      resolved !== JEV_REFERENCE_MODEL ||
+      outcome.attempts.some((a) => a.resolved_model_id !== undefined && a.resolved_model_id !== JEV_REFERENCE_MODEL),
     request_params: { ...TYPESAFE_REQUEST_PARAMS, presentation_order: [...order] },
   };
 }
 
 export function failureReason(outcome: EvaluationOutcome, options: RouteOptions): string | undefined {
   if (outcome.status === 'accepted') return undefined;
-  if (options.reference === true && outcome.attempts.length > 0 && outcome.attempts.every(a =>
-    a.disposition.status === 'failed' && a.disposition.failure.code === 'rate_limited')) return 'throttle_exhausted';
+  if (
+    options.reference === true &&
+    outcome.attempts.length > 0 &&
+    outcome.attempts.every((a) => a.disposition.status === 'failed' && a.disposition.failure.code === 'rate_limited')
+  )
+    return 'throttle_exhausted';
   return outcome.reason;
 }
 
@@ -375,19 +395,26 @@ export async function runCase(
   const state = renderState(decision);
   const questions = renderQuestions(kind, decision);
   const startedAt = clock.now();
-  const outcome = await gateway.evaluate({
-    request_id: `probe:${decision.id}:${kind}:${repeat}:o${orderingIndex}`,
-    site: `probe.${decision.source}`,
-    role: 'working',
-    kind,
-    state,
-    questions,
-    terms: probeTerms(credentials, clock, options),
-  }, signal);
+  const outcome = await gateway.evaluate(
+    {
+      request_id: `probe:${decision.id}:${kind}:${repeat}:o${orderingIndex}`,
+      site: `probe.${decision.source}`,
+      role: 'working',
+      kind,
+      state,
+      questions,
+      terms: probeTerms(credentials, clock, options),
+    },
+    signal,
+  );
   const latency = clock.now() - startedAt;
 
   const base = {
-    ...referenceProvenance(outcome, options, decision.candidates.map(c => c.candidate_id)),
+    ...referenceProvenance(
+      outcome,
+      options,
+      decision.candidates.map((c) => c.candidate_id),
+    ),
     case_id: decision.id,
     source: decision.source,
     kind,
