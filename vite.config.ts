@@ -29,6 +29,9 @@ export default defineConfig({
       'benchmarks/inference/space-bunny/sol-compare/cases.json',
       'benchmarks/inference/space-bunny/sol-compare/hard-cases.json',
       'benchmarks/frontier-weigh/REPORT.md',
+      // Generated decision-sites reports are re-rendered and compared byte-for-byte.
+      'benchmarks/decision-sites/REPORT.md',
+      'benchmarks/decision-sites/results/**',
       // Wrapping this call separates @ts-expect-error from its expected diagnostic.
       'packages/weave/test/p5.test.ts',
     ],
