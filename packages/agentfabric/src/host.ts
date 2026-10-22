@@ -294,10 +294,18 @@ export class AgentFabricHost implements CapabilityHost {
         const legacy = [...this.unscopedRecovery.values()].includes(SHELL_RUN.id);
         if ((conflict?.uncertain || legacy) && !this.reconciling.size) await this.checkUncertainCliGenerations(cwd_ref);
       }
-      if (this.pendingCliCancel.has(invocation_id) && this.store.getInvocation(invocation_id) === undefined) {
+      const existing = this.store.getInvocation(invocation_id);
+      // A re-run of a stopped generation is cancelled before reconciling or superseding it.
+      if (this.pendingCliCancel.has(invocation_id) && (existing === undefined || existing.status === 'stopped')) {
         const checked = this.validateInvocation(grant, SHELL_RUN.id, inputs);
         if (checked.kind === 'rejected') return checked;
         // Mirror preparation's order: pre-consumption gates, consumption, then resource checks.
+        if (existing && existing.action_id !== grant.action_id) {
+          return this.reject('DENIED', 'grant does not name this invocation');
+        }
+        if (existing && existing.binding_digest !== digest({ operation: SHELL_RUN.id, inputs: checked.boundInputs })) {
+          return this.reject('DENIED', 'invocation identity is bound to a different input');
+        }
         const unresolved = this.resolutionRejection(SHELL_RUN.id);
         if (unresolved) return unresolved;
         const preparedShell = this.prepareShell(SHELL_RUN.id, checked.boundInputs);
@@ -337,9 +345,17 @@ export class AgentFabricHost implements CapabilityHost {
       if (!this.authority.isValid(grant)) {
         return this.reject('DENIED', 'grant was revoked during workspace inspection');
       }
-      prepared.record.cancel_requested = prepared.open.cancel_requested;
       prepared.record.cli_generation = { cwd_ref: prepared.open.shellCwdRef, before_snapshot };
-      return this.step(() => this.startPrepared(prepared, SHELL_RUN.id));
+      return this.step(() => {
+        const stopped = this.store.getInvocation(invocation_id);
+        if (stopped && !stopped.reconciliation) {
+          const failed = this.reconcileStoppedRun(stopped);
+          if (failed) return failed;
+        }
+        // Read after reconciliation: cancellation during it applies to the fresh attempt.
+        prepared.record.cancel_requested = prepared.open.cancel_requested;
+        return this.startPrepared(prepared, SHELL_RUN.id);
+      });
     } finally {
       this.reservedCliIds.delete(invocation_id);
       this.preparingCli.delete(invocation_id);
@@ -1108,7 +1124,8 @@ export class AgentFabricHost implements CapabilityHost {
       return { status: 'committed', outcome };
     }
     if (status === 'stopped' && outcome) {
-      this.coordinator.release(invocation_id);
+      // A re-run being prepared holds this id's reservation for its fresh attempt.
+      if (!this.preparingCli.has(invocation_id)) this.coordinator.release(invocation_id);
       return { status: 'stopped', outcome };
     }
     if (status === 'uncertain' && outcome) {
@@ -1199,46 +1216,83 @@ export class AgentFabricHost implements CapabilityHost {
       throw new Error('invalid reconciliation output');
     }
     const status = resolution.resolution === 'committed' ? 'committed' : 'stopped';
-    this.reconciling.add(invocation_id);
+    this.appendReconciliation({
+      ...record,
+      status,
+      outcome,
+      cancel_requested: open?.cancel_requested ?? record.cancel_requested,
+      reconciliation: {
+        resolution: resolution.resolution,
+        evidence:
+          resolution.resolution === 'not_committed' && resolution.force_with_evidence === true
+            ? `forced process-group override: ${resolution.evidence}`
+            : resolution.evidence,
+      },
+    });
+    this.coordinator.release(invocation_id);
+    this.unscopedRecovery.delete(invocation_id);
+    this.open.delete(invocation_id);
+    return { status, outcome };
+  }
+
+  /** The durable gate: a validated append, guarded against reentrant cancellation, precedes any release. */
+  private appendReconciliation(record: InvocationRecord): void {
+    this.reconciling.add(record.invocation_id);
     try {
-      this.store.persistInvocationReconciliation({
+      this.store.persistInvocationReconciliation(record);
+    } finally {
+      this.reconciling.delete(record.invocation_id);
+    }
+  }
+
+  /**
+   * Before a re-run supersedes a stopped CLI generation, record that the stopped
+   * run did not commit. It retains no reservation: the id's current hold belongs
+   * to the fresh attempt, which the caller releases if this append fails.
+   */
+  private reconcileStoppedRun(record: InvocationRecord): InvocationRejected | undefined {
+    const failure = record.outcome?.outcome === 'failed' ? record.outcome.failure : 'no outcome';
+    try {
+      this.appendReconciliation({
         ...record,
-        status,
-        outcome,
-        cancel_requested: open?.cancel_requested ?? record.cancel_requested,
         reconciliation: {
-          resolution: resolution.resolution,
-          evidence:
-            resolution.resolution === 'not_committed' && resolution.force_with_evidence === true
-              ? `forced process-group override: ${resolution.evidence}`
-              : resolution.evidence,
+          resolution: 'not_committed',
+          evidence: `automatic reconciliation on re-run: attempt ${record.attempt ?? 1} settled stopped (${failure})`,
         },
       });
-      this.coordinator.release(invocation_id);
-      this.unscopedRecovery.delete(invocation_id);
-      this.open.delete(invocation_id);
-      return { status, outcome };
-    } finally {
-      this.reconciling.delete(invocation_id);
+      return undefined;
+    } catch {
+      return this.reject('RESOLVER_ERROR', 'failed to persist automatic reconciliation of the stopped run');
     }
   }
 
   requestCancel(invocation_id: string): { readonly acknowledged: true } {
+    const record = this.store.getInvocation(invocation_id);
+    const preparing = this.preparingCli.get(invocation_id);
+    // A re-run superseding a stopped generation owns its id's cancellation; the
+    // earlier attempt's terminal record is not marked.
+    const rerun = record?.status === 'stopped' && this.preparingCli.has(invocation_id);
     // Resolution records facts, not new execution. A reentrant cancellation
-    // cannot append an obsolete running record over a reconciliation write.
-    if (this.reconciling.has(invocation_id)) return { acknowledged: true };
-    const open = this.open.get(invocation_id) ?? this.preparingCli.get(invocation_id);
+    // cannot append an obsolete running record over a reconciliation write,
+    // but a fresh attempt prepared behind that reconciliation observes it.
+    if (this.reconciling.has(invocation_id)) {
+      if (rerun && preparing) {
+        preparing.cancel_requested = true;
+        preparing.abort.abort();
+      }
+      return { acknowledged: true };
+    }
+    const open = this.open.get(invocation_id) ?? preparing;
     if (open) {
       open.cancel_requested = true;
       open.abort.abort();
     } else if (
-      this.store.getInvocation(invocation_id) === undefined &&
+      (record === undefined || rerun) &&
       (this.reservedCliIds.has(invocation_id) || this.preparingCli.has(invocation_id))
     ) {
       this.pendingCliCancel.add(invocation_id);
     }
-    const record = this.store.getInvocation(invocation_id);
-    if (record && !record.reconciliation) {
+    if (record && !record.reconciliation && !rerun) {
       this.store.writeInvocation({ ...record, cancel_requested: true });
     }
     return { acknowledged: true };
@@ -1713,7 +1767,9 @@ export class AgentFabricHost implements CapabilityHost {
     if (existing && existing.binding_digest !== binding_digest) {
       return this.reject('DENIED', 'invocation identity is bound to a different input');
     }
-    if (existing && (existing.status === 'committed' || existing.reconciliation) && existing.outcome) {
+    // A CLI generation re-run supersedes a stopped attempt instead of replaying it (WV-040).
+    const rerun = existing?.status === 'stopped' && reservedCliId === invocation_id;
+    if (existing && (existing.status === 'committed' || (existing.reconciliation && !rerun)) && existing.outcome) {
       this.authority.markInvoked(grant as Grant);
       return { kind: 'replay', handle: this.replayCompleted(existing) };
     }
@@ -1833,6 +1889,7 @@ export class AgentFabricHost implements CapabilityHost {
         resource: this.store.lookupRef(effect.resource)?.canonical_id ?? effect.resource,
         mode: effect.mode,
       })),
+      ...(rerun && existing ? { attempt: (existing.attempt ?? 1) + 1 } : {}),
     };
     return { kind: 'open', open, record };
   }
