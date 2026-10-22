@@ -58,6 +58,12 @@ describe('FabricStore append-only journal', () => {
     { op: 'issue', ref: { handle: 'ref_no', canonical_id: 'res_1', kind: 'source' } },
     { op: 'admission', admission: {} }, { op: 'workload', workload: {} },
     { op: 'remember', result: {} }, { op: 'conclusion' },
+    { op: 'uncertain', record: invocation('not-uncertain') },
+    { op: 'uncertain', record: { ...invocation('wrong-outcome'), status: 'uncertain', outcome: { outcome: 'failed', failure: 'x' } } },
+    { op: 'reconcile', record: invocation('missing-evidence') },
+    { op: 'reconcile', record: { ...invocation('bad-resolution'), reconciliation: { resolution: 'other', evidence: 'audit' } } },
+    { op: 'reconcile', record: { ...invocation('empty-evidence'), status: 'stopped', outcome: { outcome: 'failed', failure: 'x' },
+      reconciliation: { resolution: 'not_committed', evidence: '' } } },
   ];
   for (const [index, mutation] of invalidMutations.entries()) {
     it(`rejects malformed mutation payload ${index} before append`, () => {
@@ -98,6 +104,10 @@ describe('FabricStore append-only journal', () => {
     { ...invocation('bad-failure'), outcome: { outcome: 'failed', failure: 42 } },
     { ...invocation('bad-cost'), measured_cost_micros: NaN },
     { ...invocation('bad-json'), outcome: { outcome: 'succeeded', output: {}, toJSON: () => ({ outcome: 'succeeded' }) } },
+    { ...invocation('bad-reservation'), reservation: [{ resource: 'res_1', mode: 'other' }] },
+    { ...invocation('bad-reconciliation'), status: 'running', reconciliation: { resolution: 'committed', evidence: 'audit' } },
+    { ...invocation('bad-evidence-json'), status: 'stopped', outcome: { outcome: 'failed', failure: 'x' },
+      reconciliation: { resolution: 'not_committed', evidence: 'audit', toJSON: () => ({ resolution: 'not_committed', evidence: '' }) } },
   ] as InvocationRecord[];
   for (const [index, record] of invalidRecords.entries()) {
     it(`rejects unreadable invocation ${index} before append and stays readable after compaction`, () => {

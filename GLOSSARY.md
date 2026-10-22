@@ -60,6 +60,13 @@ Restoring unfinished work from durable records, preserving reservations and reco
 
 Authorized, resource-bounded gathering of evidence about an existing invocation's external outcome without blindly repeating its effect. It may confirm a committed effect, confirm stopped execution without that effect, or leave uncertainty explicit.
 
+Fabric records an uncertain invocation durably and retains its effect reservation
+when it declared writes. An interrupted start without a terminal record also
+recovers as uncertain. The trusted host owner supplies reconciliation evidence
+and a committed output or confirms no committed effect; Fabric records that
+resolution before releasing the reservation. Reconciliation never renews a
+grant or authorizes repeating the invocation id.
+
 ### Action
 
 A typed operation Loom may execute to advance a goal. Retrieval, execution, inference, clarification, approval, communication, waiting, and completion are all actions.

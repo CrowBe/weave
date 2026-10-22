@@ -118,6 +118,15 @@ export type CapabilityImplementation = (
   context: ResolverContext,
 ) => Promise<InvocationOutcome> | InvocationOutcome;
 
+export type ReconciliationResolution =
+  | { readonly resolution: 'committed'; readonly evidence: string; readonly output: unknown }
+  | { readonly resolution: 'not_committed'; readonly evidence: string };
+
+export type ReconciliationResult = {
+  readonly status: 'committed' | 'stopped';
+  readonly outcome: InvocationOutcome;
+};
+
 export interface ImplementationProfile {
   readonly id: string;
   readonly reliability: { readonly successes: number; readonly failures: number } | null;
@@ -172,6 +181,7 @@ export class AgentFabricHost implements CapabilityHost {
   private readonly historical = new Map<string, CapabilityContract>();
   private readonly status = new Map<string, ResolutionStatus>();
   private readonly open = new Map<string, OpenInvocation>();
+  private readonly reconciling = new Set<string>();
 
   constructor(options: {
     authority: GrantAuthority;
@@ -201,6 +211,7 @@ export class AgentFabricHost implements CapabilityHost {
       this.status.set(contract.id, trustedBuiltin(contract.id) ? 'resolved' : 'unresolved');
     }
     this.restoreAdmissions();
+    this.restoreReservations();
   }
 
   snapshot(): FabricSnapshot {
@@ -729,23 +740,27 @@ export class AgentFabricHost implements CapabilityHost {
     this.lookups.push({ invocation_id, granted: true });
     const status = open?.phase === 'done' && open.outcome?.outcome === 'uncertain'
       ? 'uncertain' : record?.status ?? 'running';
-    const outcome = record?.outcome ?? open?.outcome;
+    const outcome = open?.phase === 'done' ? open.outcome : record?.outcome;
     if (status !== 'committed') {
       const published = this.store.publishedBy(invocation_id);
       if (published?.publication) {
-        this.coordinator.release(invocation_id);
-        return {
-          status: 'committed',
-          outcome: { outcome: 'succeeded', output: this.receiptFrom(published.publication) },
-        };
+        try {
+          // The receipt is host-owned evidence. Use the same durable gate as
+          // explicit reconciliation before releasing an uncertain reservation.
+          if (!open || open.phase === 'done') {
+            return this.reconcile(invocation_id, {
+              resolution: 'committed', evidence: `publication:${digest(published.publication)}`,
+              output: this.receiptFrom(published.publication),
+            });
+          }
+          return { status: 'committed', outcome: { outcome: 'succeeded', output: this.receiptFrom(published.publication) } };
+        } catch {
+          return { status: 'unresolved', reason: 'failed to persist publication reconciliation' };
+        }
       }
     }
     if (status === 'running' && !open) {
-      this.coordinator.release(invocation_id);
-      return {
-        status: 'stopped',
-        outcome: { outcome: 'failed', failure: 'execution stopped without commit' },
-      };
+      return { status: 'unresolved', reason: RECOVERED_UNCERTAINTY };
     }
     if (status === 'committed' && outcome) {
       this.coordinator.release(invocation_id);
@@ -761,16 +776,62 @@ export class AgentFabricHost implements CapabilityHost {
     return { status: 'unresolved', reason: `invocation ${invocation_id} is ${status}` };
   }
 
+  /** Trusted host-owner API; resolver contexts cannot reconcile external effects. */
+  reconcile(invocation_id: string, resolution: ReconciliationResolution): ReconciliationResult {
+    if (!isRecord(resolution) || !['committed', 'not_committed'].includes(resolution.resolution) ||
+        typeof resolution.evidence !== 'string' || resolution.evidence.trim().length === 0 ||
+        (resolution.resolution === 'committed' && !('output' in resolution))) {
+      throw new Error('invalid reconciliation resolution');
+    }
+    const record = this.store.getInvocation(invocation_id);
+    if (!record) throw new Error('unknown invocation for reconciliation');
+    if (record.reconciliation) throw new Error('invocation already reconciled');
+    const open = this.open.get(invocation_id);
+    if (this.reconciling.has(invocation_id) || (open && open.phase !== 'done')) {
+      throw new Error('cannot reconcile an active invocation');
+    }
+    if (record.status !== 'running' && record.status !== 'uncertain') {
+      throw new Error('invocation does not require reconciliation');
+    }
+    if (resolution.resolution === 'not_committed' && this.store.publishedBy(invocation_id)) {
+      throw new Error('invalid not_committed resolution for a durable publication');
+    }
+    let outcome: InvocationOutcome;
+    try {
+      outcome = normalizeInvocationOutcome(resolution.resolution === 'committed'
+        ? { outcome: 'succeeded', output: resolution.output }
+        : { outcome: 'failed', failure: 'reconciled: not committed' });
+    } catch {
+      throw new Error('invalid reconciliation output');
+    }
+    const status = resolution.resolution === 'committed' ? 'committed' : 'stopped';
+    this.reconciling.add(invocation_id);
+    try {
+      this.store.persistInvocationReconciliation({
+        ...record, status, outcome,
+        cancel_requested: open?.cancel_requested ?? record.cancel_requested,
+        reconciliation: { resolution: resolution.resolution, evidence: resolution.evidence },
+      });
+      this.coordinator.release(invocation_id);
+      this.open.delete(invocation_id);
+      return { status, outcome };
+    } finally {
+      this.reconciling.delete(invocation_id);
+    }
+  }
+
   requestCancel(invocation_id: string): { readonly acknowledged: true } {
+    // Resolution records facts, not new execution. A reentrant cancellation
+    // cannot append an obsolete running record over a reconciliation write.
+    if (this.reconciling.has(invocation_id)) return { acknowledged: true };
     const open = this.open.get(invocation_id);
     if (open) {
       open.cancel_requested = true;
       open.abort.abort();
     }
     const record = this.store.getInvocation(invocation_id);
-    if (record) {
-      record.cancel_requested = true;
-      this.store.writeInvocation(record);
+    if (record && !record.reconciliation) {
+      this.store.writeInvocation({ ...record, cancel_requested: true });
     }
     return { acknowledged: true };
   }
@@ -977,37 +1038,45 @@ export class AgentFabricHost implements CapabilityHost {
     }
     const terminal: InvocationRecord['status'] =
       status ?? (outcome.outcome === 'succeeded' ? 'committed' : outcome.outcome === 'uncertain' ? 'uncertain' : 'stopped');
-    let releaseReservation = terminal !== 'uncertain';
     let persisted = false;
+    const record: InvocationRecord = {
+      invocation_id: open.invocation_id,
+      action_id: open.action_id,
+      operation: open.operation,
+      implementation_id: open.implementation_id,
+      binding_digest: open.binding_digest,
+      inputs: open.inputs,
+      status: terminal,
+      outcome,
+      cancel_requested: open.cancel_requested,
+    };
     try {
-      this.store.persistInvocationResult({
-        invocation_id: open.invocation_id,
-        action_id: open.action_id,
-        operation: open.operation,
-        implementation_id: open.implementation_id,
-        binding_digest: open.binding_digest,
-        inputs: open.inputs,
-        status: terminal,
-        outcome,
-        cancel_requested: open.cancel_requested,
-      });
+      if (terminal === 'uncertain') this.store.persistInvocationUncertain(record);
+      else this.store.persistInvocationResult(record);
       persisted = true;
     } catch {
       // Store guards and validation can fail as well as append. A completed
       // implementation must still settle; publications await reconciliation.
-      releaseReservation = releaseReservation && !open.committed;
       outcome = {
         outcome: 'uncertain',
         reason: open.committed ? 'failed to persist invocation result after commit' : 'failed to persist invocation result',
       };
+      try {
+        this.store.persistInvocationUncertain({ ...record, status: 'uncertain', outcome });
+        persisted = true;
+      } catch {
+        // A closed/poisoned store or lost lock cannot record the marker. Keep
+        // the settled entry; its durable start also recovers as uncertain.
+        outcome = { ...outcome, reason: `${outcome.reason}; uncertain marker was not persisted` };
+      }
     }
-    if (releaseReservation) {
+    if (outcome.outcome !== 'uncertain' || !hasDeclaredWrites(open.effects)) {
       this.coordinator.release(open.invocation_id);
     }
     open.outcome = outcome;
     open.phase = 'done';
-    // A failed result write leaves a running durable record. Retain the
-    // settled uncertainty so lookup cannot mistake completed effects for stopped work.
+    // A failed marker write leaves a running durable record. Retain the
+    // settled uncertainty until durable reconciliation removes it.
     if (persisted) this.open.delete(open.invocation_id);
     if (outcome.outcome === 'succeeded') {
       try {
@@ -1076,9 +1145,6 @@ export class AgentFabricHost implements CapabilityHost {
       }
       return this.reject('UNKNOWN_CAPABILITY', `unknown operation ${operation}`);
     }
-    if (this.status.get(operation) !== 'resolved') {
-      return this.reject('UNRESOLVED', `${operation} is ${this.status.get(operation)}`);
-    }
     if (!isRecord(inputs)) {
       return this.reject('INVALID_INPUT', 'inputs must be a record');
     }
@@ -1129,8 +1195,22 @@ export class AgentFabricHost implements CapabilityHost {
     if (existing && existing.binding_digest !== binding_digest) {
       return this.reject('DENIED', 'invocation identity is bound to a different input');
     }
-    if (existing?.status === 'committed' && existing.outcome) {
+    if (existing && (existing.status === 'committed' || existing.reconciliation) && existing.outcome) {
+      this.authority.markInvoked(grant as Grant);
       return { kind: 'replay', handle: this.replayCompleted(existing) };
+    }
+    const inMemory = this.open.get(invocation_id);
+    if (existing && (existing.status === 'uncertain' ||
+        (existing.status === 'running' && (!inMemory || inMemory.phase === 'done')))) {
+      this.authority.markInvoked(grant as Grant);
+      return { kind: 'replay', handle: this.replayCompleted({
+        ...existing, status: 'uncertain',
+        outcome: inMemory?.outcome ?? existing.outcome ?? { outcome: 'uncertain', reason: RECOVERED_UNCERTAINTY },
+      }) };
+    }
+    if (inMemory) return this.reject('DENIED', 'invocation is already active');
+    if (this.status.get(operation) !== 'resolved') {
+      return this.reject('UNRESOLVED', `${operation} is ${this.status.get(operation)}`);
     }
     const cached = this.cachedBuiltin(operation, boundInputs);
     if (cached && grant) {
@@ -1224,8 +1304,33 @@ export class AgentFabricHost implements CapabilityHost {
       status: 'running',
       outcome: null,
       cancel_requested: false,
+      reservation: declared.bound.map((effect) => ({
+        resource: this.store.lookupRef(effect.resource)?.canonical_id ?? effect.resource,
+        mode: effect.mode,
+      })),
     };
     return { kind: 'open', open, record };
+  }
+
+  private restoreReservations(): void {
+    for (const record of this.store.invocationRecords()) {
+      if (record.status !== 'running' && record.status !== 'uncertain') continue;
+      let effects = record.reservation;
+      if (effects === undefined) {
+        // Legacy journals did not retain scopes. Rebind from the historical
+        // contract; missing evidence is a recovery error, never permission.
+        const contract = this.historical.get(record.operation);
+        if (!contract) throw new Error('cannot recover invocation without its effect contract');
+        const bound = bindSelectors(contract.effects, record.inputs);
+        if (!bound.ok) throw new Error('cannot recover invocation effect reservation');
+        effects = bound.bound.map((effect) => ({
+          resource: this.store.lookupRef(effect.resource)?.canonical_id ?? effect.resource, mode: effect.mode,
+        }));
+      }
+      if (!hasDeclaredWrites(effects)) continue;
+      const conflict = this.coordinator.acquire(record.invocation_id, effects, (ref) => ref);
+      if (conflict) throw new Error('conflicting uncertain reservations in recovered store');
+    }
   }
 
   private configuredArgv(operation: string): readonly string[] | null {
@@ -1627,6 +1732,11 @@ function sameSet(left: readonly string[], right: readonly string[]): boolean {
 }
 
 const HOST_INVOCATION_MICROS = 1_000;
+const RECOVERED_UNCERTAINTY = 'execution outcome requires reconciliation after restart';
+
+function hasDeclaredWrites(effects: readonly ResourceEffect[]): boolean {
+  return effects.some((effect) => effect.mode !== 'read' && effect.mode !== 'discover');
+}
 
 const TRUSTED_BUILTINS: ReadonlySet<string> = new Set([
   SOURCE_INSPECT.id,

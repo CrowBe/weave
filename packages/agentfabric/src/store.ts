@@ -20,7 +20,7 @@ import {
   writeSync,
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import type { CapabilityContract, InvocationOutcome } from '@weave/agentsop';
+import { isEffect, type CapabilityContract, type InvocationOutcome, type ResourceEffect } from '@weave/agentsop';
 
 const openStores = new Map<string, FabricStore>();
 const COMPACT_BYTES = 256 * 1024;
@@ -57,6 +57,11 @@ export interface StoredResource {
 
 export type InvocationStatus = 'running' | 'committed' | 'stopped' | 'uncertain';
 
+export interface InvocationReconciliation {
+  readonly resolution: 'committed' | 'not_committed';
+  readonly evidence: string;
+}
+
 export interface InvocationRecord {
   invocation_id: string;
   action_id: string;
@@ -68,6 +73,9 @@ export interface InvocationRecord {
   outcome: InvocationOutcome | null;
   cancel_requested: boolean;
   measured_cost_micros?: number;
+  /** Canonical effect scopes persisted before execution; absent in old journals. */
+  reservation?: readonly ResourceEffect[];
+  reconciliation?: InvocationReconciliation;
 }
 
 export interface IssuedRef {
@@ -118,6 +126,8 @@ type FabricMutation =
   | { readonly op: 'put'; readonly resource: StoredResource }
   | { readonly op: 'start'; readonly record: InvocationRecord; readonly measured_cost_micros: number }
   | { readonly op: 'result'; readonly record: InvocationRecord }
+  | { readonly op: 'uncertain'; readonly record: InvocationRecord }
+  | { readonly op: 'reconcile'; readonly record: InvocationRecord }
   | { readonly op: 'cost'; readonly micros: number }
   | { readonly op: 'admission'; readonly admission: StoredAdmission }
   | { readonly op: 'conclusion'; readonly conclusion: unknown }
@@ -306,6 +316,10 @@ export class FabricStore {
     return this.invocations.get(id);
   }
 
+  invocationRecords(): readonly InvocationRecord[] {
+    return [...this.invocations.values()].map((record) => structuredClone(record));
+  }
+
   persistInvocationStart(record: InvocationRecord, measuredCostMicros = 0): void {
     if (!this.persistStart) {
       throw new PersistFailure('invocation start');
@@ -319,6 +333,16 @@ export class FabricStore {
       throw new PersistFailure('invocation result');
     }
     this.mutate({ op: 'result', record });
+    this.save();
+  }
+
+  persistInvocationUncertain(record: InvocationRecord): void {
+    this.mutate({ op: 'uncertain', record });
+    this.save();
+  }
+
+  persistInvocationReconciliation(record: InvocationRecord): void {
+    this.mutate({ op: 'reconcile', record });
     this.save();
   }
 
@@ -407,6 +431,7 @@ export class FabricStore {
     // the detached value that replay will see, including allowed JSON normalization.
     const encoded = encodeMutation(mutation);
     mutation = encoded.mutation;
+    this.validateTransition(mutation);
     let cost = this.measured_cost_micros;
     if (mutation.op === 'cost') cost += mutation.micros;
     if (mutation.op === 'start') {
@@ -515,6 +540,7 @@ export class FabricStore {
   }
 
   private applyMutation(mutation: FabricMutation): void {
+    this.validateTransition(mutation);
     switch (mutation.op) {
       case 'snapshot':
         this.applySnapshot(mutation.snapshot);
@@ -537,6 +563,8 @@ export class FabricStore {
         this.applyStart(mutation.record, mutation.measured_cost_micros);
         return;
       case 'result':
+      case 'uncertain':
+      case 'reconcile':
         this.setInvocation(mutation.record);
         return;
       case 'cost':
@@ -554,6 +582,16 @@ export class FabricStore {
       case 'remember':
         this.applyRemember(mutation.result);
         return;
+    }
+  }
+
+  private validateTransition(mutation: FabricMutation): void {
+    if (mutation.op !== 'uncertain' && mutation.op !== 'reconcile') return;
+    const previous = this.invocations.get(mutation.record.invocation_id);
+    if (!previous || previous.binding_digest !== mutation.record.binding_digest ||
+        previous.action_id !== mutation.record.action_id || previous.operation !== mutation.record.operation ||
+        previous.reconciliation || (previous.status !== 'running' && previous.status !== 'uncertain')) {
+      throw new Error(`invalid host store ${mutation.op} transition`);
     }
   }
 
@@ -668,6 +706,9 @@ export class FabricStore {
     const stored: InvocationRecord = { ...record, inputs: structuredClone(record.inputs) };
     if (stored.measured_cost_micros === undefined && previous?.measured_cost_micros !== undefined) {
       stored.measured_cost_micros = previous.measured_cost_micros;
+    }
+    if (stored.reservation === undefined && previous?.reservation !== undefined) {
+      stored.reservation = structuredClone(previous.reservation);
     }
     this.invocations.set(record.invocation_id, stored);
   }
@@ -1033,6 +1074,11 @@ function isMutation(value: unknown): value is FabricMutation {
     case 'put': return isResource(value.resource);
     case 'start': return isInvocation(value.record) && isNonNegativeNumber(value.measured_cost_micros);
     case 'result': return isInvocation(value.record);
+    case 'uncertain': return isInvocation(value.record) && isRecord(value.record) &&
+      value.record.status === 'uncertain' && isRecord(value.record.outcome) &&
+      value.record.outcome.outcome === 'uncertain' && value.record.reconciliation === undefined;
+    case 'reconcile': return isInvocation(value.record) && isRecord(value.record) &&
+      isReconciliation(value.record.reconciliation);
     case 'cost': return isNonNegativeNumber(value.micros);
     case 'admission': return isAdmission(value.admission);
     case 'conclusion': return 'conclusion' in value;
@@ -1111,7 +1157,18 @@ function isInvocation(value: unknown): boolean {
     isString(value.binding_digest) && 'inputs' in value &&
     ['running', 'committed', 'stopped', 'uncertain'].includes(value.status as string) &&
     (value.outcome === null || isOutcome(value.outcome)) && typeof value.cancel_requested === 'boolean' &&
-    (value.measured_cost_micros === undefined || isNonNegativeNumber(value.measured_cost_micros));
+    (value.measured_cost_micros === undefined || isNonNegativeNumber(value.measured_cost_micros)) &&
+    (value.reservation === undefined || arrayOf(value.reservation, (effect) =>
+      isRecord(effect) && isString(effect.resource) && effect.resource.length > 0 && isEffect(effect.mode))) &&
+    (value.reconciliation === undefined || (isReconciliation(value.reconciliation) &&
+      isRecord(value.outcome) && (value.reconciliation.resolution === 'committed'
+        ? value.status === 'committed' && value.outcome.outcome === 'succeeded'
+        : value.status === 'stopped' && value.outcome.outcome === 'failed')));
+}
+
+function isReconciliation(value: unknown): value is InvocationReconciliation {
+  return isRecord(value) && (value.resolution === 'committed' || value.resolution === 'not_committed') &&
+    isString(value.evidence) && value.evidence.trim().length > 0;
 }
 
 function isContract(value: unknown): boolean {

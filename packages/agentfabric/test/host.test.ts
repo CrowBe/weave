@@ -108,7 +108,9 @@ describe('admitted implementation single-use release', () => {
         if (fault === 'persistence refusal') f.store.persistResult = false;
         const before = readFileSync(f.path);
         first.resolve(succeeded);
-        const uncertain = { outcome: 'uncertain', reason: 'failed to persist invocation result' };
+        const markerPersisted = fault === 'persistence refusal';
+        const uncertain = { outcome: 'uncertain', reason: 'failed to persist invocation result' +
+          (markerPersisted ? '' : '; uncertain marker was not persisted') };
         assert.deepEqual(await f.result, uncertain);
         const holds = structuredClone(f.host.coordinator.held());
         const releases = f.counts.reservationReleases;
@@ -132,8 +134,9 @@ describe('admitted implementation single-use release', () => {
         assert.deepEqual(f.host.lookup(f.handle.invocation_id, f.grant), {
           status: 'unresolved', reason: uncertain.reason,
         });
-        assert.equal(f.store.getInvocation(f.handle.invocation_id)?.status, 'running');
-        assert.deepEqual(readFileSync(f.path), before);
+        assert.equal(f.store.getInvocation(f.handle.invocation_id)?.status, markerPersisted ? 'uncertain' : 'running');
+        if (markerPersisted) assert.notDeepEqual(readFileSync(f.path), before);
+        else assert.deepEqual(readFileSync(f.path), before);
         assert.equal(f.records().length, 0);
       });
     }
@@ -253,15 +256,20 @@ describe('AgentFabric host authority', () => {
             assert.equal(cacheAttempts, 1);
             assert.equal(store.getInvocation('settle-invocation').status, 'committed');
           } else {
-            assert.deepEqual(result, { outcome: 'uncertain', reason: 'failed to persist invocation result' });
-            assert.deepEqual(readFileSync(path), before);
+            const markerPersisted = ['validation error', 'persistence refusal', 'uncertain implementation'].includes(fault);
+            assert.deepEqual(result, fault === 'uncertain implementation' ? completed : { outcome: 'uncertain',
+              reason: 'failed to persist invocation result' + (markerPersisted ? '' : '; uncertain marker was not persisted') });
+            if (markerPersisted) {
+              assert.notDeepEqual(readFileSync(path), before);
+              assert.equal(store.getInvocation('settle-invocation').status, 'uncertain');
+            } else assert.deepEqual(readFileSync(path), before);
             assert.deepEqual(host.lookup('settle-invocation', grant), {
               status: 'unresolved', reason: result.reason,
             });
           }
           assert.equal(host.openCount(), 0);
           assert.deepEqual(host.openInvocationIds(), []);
-          assert.equal(host.coordinator.held().length, fault === 'uncertain implementation' ? 1 : 0);
+          assert.equal(host.coordinator.held().length, 0);
           store.close();
           if (fault === 'replaced lock') assert.equal(readFileSync(path + '.lock', 'utf8'), 'replacement owner');
           await new Promise((resolve) => setImmediate(resolve));
@@ -378,7 +386,8 @@ describe('AgentFabric host authority', () => {
         const before = readFileSync(path);
         if (late === 'completion') {
           host.release('late-action');
-          assert.deepEqual(await handle.result, { outcome: 'uncertain', reason: 'failed to persist invocation result' });
+          assert.deepEqual(await handle.result, { outcome: 'uncertain',
+            reason: 'failed to persist invocation result; uncertain marker was not persisted' });
           assert.equal(host.openCount(), 0);
           assert.deepEqual(host.coordinator.held(), []);
         } else {
@@ -944,11 +953,11 @@ describe('Fabric store indexes', () => {
       authority,
       store: FabricStore.restore(uncommittedWithoutPublication),
     });
-    const stopped = absent.lookup(
+    const uncertain = absent.lookup(
       'inv-index-lookup',
       publishGrant(authority, source, destination, 'a:index:2', 4),
     );
-    assert.equal('status' in stopped && stopped.status, 'stopped');
+    assert.equal('status' in uncertain && uncertain.status, 'unresolved');
   });
 
   for (const fault of ['closed store', 'replaced lock', 'validation error', 'persistence refusal'] as const) {
@@ -992,18 +1001,32 @@ describe('Fabric store indexes', () => {
             handle.result,
             new Promise((resolve) => setImmediate(() => resolve('unsettled'))),
           ]);
-          assert.deepEqual(result, { outcome: 'uncertain', reason: 'failed to persist invocation result after commit' });
+          const markerPersisted = fault === 'validation error' || fault === 'persistence refusal';
+          assert.deepEqual(result, { outcome: 'uncertain', reason: 'failed to persist invocation result after commit' +
+            (markerPersisted ? '' : '; uncertain marker was not persisted') });
           assert.equal(host.openCount(), 0);
           assert.deepEqual(host.openInvocationIds(), []);
           assert.equal(host.coordinator.held().length, 2);
-          assert.deepEqual(readFileSync(path), before);
+          if (markerPersisted) {
+            assert.notDeepEqual(readFileSync(path), before);
+            assert.equal(store.getInvocation('note-invocation')?.status, 'uncertain');
+          } else assert.deepEqual(readFileSync(path), before);
           const reconciled = host.lookup('note-invocation', issued);
-          assert.equal('status' in reconciled && reconciled.status, 'committed');
-          assert.deepEqual(host.coordinator.held(), []);
+          assert.equal('status' in reconciled && reconciled.status, markerPersisted ? 'committed' : 'unresolved');
+          assert.equal(host.coordinator.held().length, markerPersisted ? 0 : 2);
+          store.close();
           if (fault === 'replaced lock') {
-            store.close();
             assert.equal(readFileSync(`${path}.lock`, 'utf8'), `${process.pid}:replacement`);
+            rmSync(`${path}.lock`);
           }
+          const reopened = FabricStore.open(path);
+          try {
+            const recovered = new AgentFabricHost({ authority, store: reopened });
+            const found = recovered.lookup('note-invocation', issued);
+            assert.equal('status' in found && found.status, 'committed');
+            assert.deepEqual(recovered.coordinator.held(), []);
+            assert.equal(reopened.getInvocation('note-invocation')?.status, 'committed');
+          } finally { reopened.close(); }
         } finally {
           store.close();
           rmSync(dir, { recursive: true, force: true });
@@ -1052,6 +1075,10 @@ describe('Fabric store indexes', () => {
     assert.equal(firstOutcome.outcome, 'uncertain');
 
     const restarted = new AgentFabricHost({ authority, store: FabricStore.restore(host.snapshot()) });
+    assert.equal(restarted.coordinator.held().length, 2);
+    const firstReconciled = restarted.lookup('inv-replaced-a', firstGrant);
+    assert.equal('status' in firstReconciled && firstReconciled.status, 'committed');
+    assert.deepEqual(restarted.coordinator.held(), []);
     const secondGrant = publishGrant(authority, source, destination, 'a:replaced:2', 2);
     const second = restarted.invoke(
       secondGrant,
@@ -1069,7 +1096,7 @@ describe('Fabric store indexes', () => {
 
     const lookupGrant = publishGrant(authority, source, destination, 'a:replaced:1', 3);
     const recovered = restarted.lookup('inv-replaced-a', lookupGrant);
-    assert.equal('status' in recovered && recovered.status, 'stopped');
+    assert.equal('status' in recovered && recovered.status, 'committed');
 
     const restored = FabricStore.restore(restarted.snapshot());
     assert.equal(restored.publishedBy('inv-replaced-a'), undefined);
