@@ -888,6 +888,8 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   conclusionsSince(cursor: number): readonly unknown[] {
+    // slice() would read a negative cursor from the end and truncate a fraction.
+    if (!Number.isInteger(cursor) || cursor < 0 || cursor > this.retainedConclusions.length) return [];
     return this.retainedConclusions.slice(cursor).map((conclusion) => structuredClone(conclusion));
   }
 

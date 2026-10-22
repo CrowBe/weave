@@ -37,6 +37,25 @@ describe('WV-N275 retained conclusion reads', () => {
     assert.deepEqual(empty, [], 'an earlier read stays a snapshot after a writer appends');
   });
 
+  it('reads nothing for a cursor outside the non-negative integer offsets up to the retained length', (t) => {
+    const host = new AgentFabricHost({ authority: createGrantAuthority() });
+    for (const id of ['a', 'b', 'c']) host.retainConclusion({ conclusion_id: `conc:${id}` });
+    const clone = structuredClone;
+    let clones = 0;
+    t.mock.method(globalThis, 'structuredClone', (value: unknown) => {
+      clones++;
+      return clone(value);
+    });
+    for (const cursor of [-1, -3, -Infinity, 0.5, 2.5, Number.NaN, 4, Infinity, Number.MAX_SAFE_INTEGER + 2]) {
+      assert.deepEqual(host.conclusionsSince(cursor), [], `cursor ${cursor}`);
+    }
+    assert.equal(clones, 0, 'an out-of-range cursor clones nothing');
+    assert.deepEqual(host.conclusionsSince(3), []);
+    assert.deepEqual(host.conclusionsSince(2), [{ conclusion_id: 'conc:c' }]);
+    assert.deepEqual(host.conclusionsSince(-0), host.conclusions());
+    assert.equal(host.conclusions().length, 3);
+  });
+
   it('rebuilds the same ordered suffixes after torn-tail repair and refuses a second writer', () => {
     const dir = mkdtempSync(join(tmpdir(), 'wv-n275-conclusions-'));
     const path = join(dir, 'fabric.jsonl');
