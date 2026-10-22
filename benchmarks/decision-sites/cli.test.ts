@@ -221,6 +221,72 @@ test('cancellation during quota preflight acknowledges an uncalled competitor it
   }
 });
 
+for (const first of ['SIGINT', 'SIGTERM'])
+  for (const second of ['SIGINT', 'SIGTERM'])
+    test(`${first} then ${second} force-quits with 130 when abort hangs, releasing lock and temp`, () => {
+      const temp = mkdtempSync(join(tmpdir(), 'p10-force-quit-')),
+        id = `force-quit-${first}-${second}-${process.pid}`,
+        dir = join(testRoot, 'results', id);
+      try {
+        // The provider ignores the graceful abort, so only a second signal can end the run.
+        const driver = `
+          import { main } from ${JSON.stringify(pathToFileURL(cliPath).href)};
+          setInterval(() => {}, 1000);
+          await main(['--providers', 'fake', '--sites', 'loop.route', '--run-id', ${JSON.stringify(id)}], {
+            providers: [{
+              id: 'fake', model: 'hang-fake', price: 0, serialize: JSON.stringify,
+              request: (_request, signal) => new Promise(() => {
+                signal.addEventListener('abort', () => {
+                  process.stdout.write('aborted\\n');
+                  process.kill(process.pid, ${JSON.stringify(second)});
+                }, { once: true });
+                process.kill(process.pid, ${JSON.stringify(first)});
+              }),
+            }],
+          });
+          process.exit(0); // Reached only if the abort did not hang.
+        `;
+        const result = spawnSync(
+          process.execPath,
+          ['--experimental-strip-types', '--input-type=module', '--eval', driver],
+          // SIGKILL: without a force-quit the driver would absorb a SIGTERM timeout too.
+          { env: { ...process.env, TMPDIR: temp }, encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' },
+        );
+        assert.equal(result.stdout, 'aborted\n', 'first signal must request graceful abort');
+        assert.equal(result.status, 130, 'second signal must force-quit pending work');
+        assert.equal(existsSync(join(dir, 'lock')), false, 'force-quit must release the run lock');
+        assert.deepEqual(readdirSync(temp), [], 'force-quit must remove the run temp directory');
+        const records = readFileSync(join(dir, 'journal.jsonl'), 'utf8')
+          .trim()
+          .split('\n')
+          .map((line) => JSON.parse(line));
+        assert.ok(records.some((r) => r.type === 'intent'));
+        assert.equal(
+          records.some((r) => r.type === 'call'),
+          false,
+        );
+        const resumed = spawnSync(
+          process.execPath,
+          [
+            '--experimental-strip-types',
+            cliPath,
+            '--providers',
+            'fake',
+            '--sites',
+            'loop.route',
+            '--run-id',
+            id,
+            '--resume',
+          ],
+          { env: { ...process.env, TMPDIR: temp }, encoding: 'utf8', timeout: 15000 },
+        );
+        assert.equal(resumed.status, 0, resumed.stderr);
+      } finally {
+        rmSync(temp, { recursive: true, force: true });
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
 test('resume re-renders completed results; render-only never dispatches or mutates the journal', async () => {
   const id = `render-${process.pid}`;
   const dir = join(testRoot, 'results', id);
