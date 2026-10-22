@@ -96,6 +96,18 @@ test('a zero-width measure interval in either result is insufficient evidence', 
   assert.equal(reason({ ...improvement, verdict: 'insufficient_evidence' }, ctx), 'ok');
 });
 
+test('a preference entry cannot carry a meets_bar result with a zero-width accept interval', () => {
+  const preference = record('a routing preference set over recorded results') as { entries: readonly Record<string, unknown>[] };
+  const cand = context.results['res-cand'] as { measures: readonly { measure: string }[] };
+  const pin = <T extends { measure: string }>(m: T) => (m.measure === 'accuracy' ? { ...m, value: 0.91, interval: [0.91, 0.91] } : m);
+  const pinned = { ...cand, measures: cand.measures.map(pin) };
+  const ctx = { ...context, results: { ...context.results, 'res-cand': pinned } };
+  assert.equal(reason(pinned, ctx), 'ok', 'the result itself is valid');
+  const entries = preference.entries.map(e => (e.result === 'res-cand'
+    ? { ...e, measures: (e.measures as readonly { measure: string }[]).map(pin) } : e));
+  assert.equal(reason({ ...preference, entries }, ctx), 'measure');
+});
+
 test('an unconstrained measure below min_samples makes a comparison insufficient evidence', () => {
   const cand = context.results['res-cand'] as { measures: readonly { measure: string }[] };
   const thin = { ...cand, measures: cand.measures.map(m => (m.measure === 'completion' ? { ...m, n: 12 } : m)) };

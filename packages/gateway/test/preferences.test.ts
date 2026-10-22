@@ -134,6 +134,28 @@ test('an entry without a decided verdict earns no preference, whatever its inter
   assert.deepEqual(ids(route(applyPreferences(table, SET), TARGET, terms(), 20).order), [SECOND, UNDECIDED]);
 });
 
+test('a meets_bar entry with a zero-width accept interval is refused, never credited', () => {
+  // As in Gauge's G5 rule, an interval with lo = hi (one sample, or all-equal samples) is insufficient evidence.
+  const set = fixture as PreferenceSet;
+  const pinned = (e: PreferenceSet['entries'][number], interval: readonly [number, number]) => ({
+    ...e, measures: e.measures.map(m => (m.measure === 'accuracy' ? { ...m, interval } : m)),
+  });
+  const zeroWidth = { ...set, entries: [pinned(set.entries[0]!, [0.91, 0.91]), ...set.entries.slice(1)] };
+  const refused = loadPreferenceSet(zeroWidth);
+  assert.equal(refused.ok, false);
+  assert.match(refused.ok ? '' : refused.reason, /zero-width/);
+  // Other measures, and entries that earn nothing anyway, may still carry a zero-width interval.
+  const cost = { ...set, entries: [{ ...set.entries[0]!, measures: set.entries[0]!.measures.map(m =>
+    (m.measure === 'cost' ? { ...m, interval: [120, 120] } : m)) }, ...set.entries.slice(1)] };
+  assert.equal(loadPreferenceSet(cost).ok, true, 'a zero-width non-accept measure');
+  const misses = set.entries.findIndex(e => e.verdict === 'misses_bar');
+  const missed = { ...set, entries: set.entries.map((e, i) => (i === misses ? pinned(e, [0.7, 0.7]) : e)) };
+  assert.equal(loadPreferenceSet(missed).ok, true, 'a zero-width accept interval on a misses_bar entry');
+  // A set built without the loader still earns no evidence from it.
+  const table: RouteTable = [unit(PREFERRED, 'vendor', { evidence: { attempts: 100, accepted: 100 } })];
+  assert.equal(applyPreferences(table, zeroWidth as PreferenceSet)[0]!.evidence, undefined);
+});
+
 test('among admitted units, a preference orders by expected cost', () => {
   // Configured evidence alone: the stale perfect record leads, unevidenced units follow in table order.
   assert.deepEqual(ids(route(TABLE, TARGET, terms(), 20).order), [MISSES, LOCAL, SECOND, PREFERRED]);

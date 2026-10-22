@@ -675,6 +675,9 @@ function validatePreference(r: Obj, context: Context): Verdict {
       const own = results[i]!.measures.find(x => x.measure === m.measure)!;
       if (m.value !== own.value || m.n !== own.n || !sameInterval(m.interval, own.interval)) return reject('measure');
     }
+    // A zero-width accept interval is insufficient evidence, so a meets_bar entry cannot offer it as routing evidence.
+    const rate = (e.measures as EvaluationResult['measures']).find(m => m.measure === r.accept)!;
+    if (e.verdict === 'meets_bar' && rate.interval !== null && !hasWidth(rate.interval)) return reject('measure');
   }
 
   // 9. verdict

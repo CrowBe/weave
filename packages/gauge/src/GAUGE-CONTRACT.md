@@ -354,14 +354,18 @@ Rules:
 - **Measure.** `accept` names a criteria measure with aggregate `rate` and
   `better: "higher"`. Every entry measure equals the result's: same value,
   `n` and interval. The figures are copied from a recomputed result, never
-  asserted.
+  asserted. A `meets_bar` entry whose accept interval has zero width
+  (`lo = hi`, as from one sample or all-equal samples) is rejected: as in
+  `gauge.comparison@1`, a zero-width interval is insufficient evidence, so it
+  earns no routing evidence.
 - **Verdict.** Each entry's verdict is its result's.
 
 What a consumer may do with it is the consumer's contract. The reference
 gateway (`packages/gateway/src/preferences.ts`) credits a unit named by a
 `meets_bar` entry with the low end of its accept interval, and gives any other
 named unit no evidence, so routing falls back to its configured order and
-records the uncertainty.
+records the uncertainty. It refuses to load a set with a zero-width `meets_bar`
+accept interval, and credits no evidence from one if handed such a set.
 
 ## Statistics
 
@@ -456,7 +460,8 @@ first applicable reason, in this order:
 8. `measure`: a bad measure definition (unknown Weft kind or field, a
    duplicate measure, `wilson@1` on a non-rate aggregate), or a measure entry
    or delta that breaks its rules; a preference `accept` that is not a
-   higher-is-better rate, or an entry measure that differs from its result's
+   higher-is-better rate, an entry measure that differs from its result's, or
+   a `meets_bar` entry whose accept interval has zero width
 9. `constraint`: a bad constraint definition (a duplicate, or an unknown
    measure), or a status that does not match recomputation
 10. `verdict`: a verdict that does not match recomputation

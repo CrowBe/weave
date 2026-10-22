@@ -59,6 +59,8 @@ const hasExactly = (o: Obj, keys: readonly string[]) =>
 const isText = (x: unknown): x is string => typeof x === 'string' && x.length > 0;
 const isNumber = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
 const oneOf = (x: unknown, ...vocabulary: string[]) => typeof x === 'string' && vocabulary.includes(x);
+/** An interval with width. A zero-width one (one sample, or all-equal samples) is insufficient evidence, as in Gauge. */
+const hasWidth = (interval: readonly [number, number]): boolean => interval[0] < interval[1];
 
 const SET_KEYS = ['schema', 'preference', 'workload', 'criteria', 'caseset', 'split', 'mode', 'accept', 'entries'];
 const ENTRY_KEYS = ['routed_unit', 'result', 'verdict', 'measures'];
@@ -111,6 +113,9 @@ export function loadPreferenceSet(value: unknown): PreferenceLoad {
     if ([accept.value, ...(accept.interval ?? [])].some(x => x !== null && (x < 0 || x > 1))) {
       return fail(`accept rate out of range for ${e.routed_unit}`);
     }
+    if (e.verdict === 'meets_bar' && accept.interval !== null && !hasWidth(accept.interval)) {
+      return fail(`zero-width accept interval for ${e.routed_unit}`);
+    }
   }
   return { ok: true, set: value as unknown as PreferenceSet };
 }
@@ -118,13 +123,14 @@ export function loadPreferenceSet(value: unknown): PreferenceLoad {
 /**
  * Evidence an entry supports. Only an entry whose result met its bar earns
  * any, and it is credited with the low end of its accept interval, so a thin
- * or uncertain sample earns little. No interval, or a low end of zero, earns
- * none: routing then keeps its configured order and records the uncertainty.
+ * or uncertain sample earns little. No interval, a zero-width one, or a low
+ * end of zero, earns none: routing then keeps its configured order and
+ * records the uncertainty.
  */
 function evidenceOf(entry: PreferenceEntry, accept: string): RouteEvidence | undefined {
   if (entry.verdict !== 'meets_bar') return undefined;
   const m = entry.measures.find(x => x.measure === accept);
-  if (m === undefined || m.interval === null || m.n === 0) return undefined;
+  if (m === undefined || m.interval === null || !hasWidth(m.interval) || m.n === 0) return undefined;
   const accepted = Math.floor(m.interval[0] * m.n);
   return accepted > 0 ? { attempts: m.n, accepted } : undefined;
 }
