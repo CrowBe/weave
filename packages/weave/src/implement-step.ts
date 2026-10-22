@@ -1128,9 +1128,11 @@ export class MemoryAttemptJournal implements AttemptJournal {
  * file since, it fails closed rather than repairing or appending over that
  * writer's records. This detects a second writer; it is not a lock, so the
  * composition root must still give each journal file one writer.
+ * Indexes are rebuilt from the log and updated after each durable append;
+ * duplicate checks and execution lookups do not scan unrelated records.
  */
 export class FileAttemptJournal implements AttemptJournal {
-  private entries: JournalEntry[] | null = null;
+  private index: AttemptJournalIndex | null = null;
   private seen: { readonly size: number; readonly ino: number } | null = null;
   constructor(readonly path: string) {
     const directory = dirname(path);
@@ -1154,13 +1156,11 @@ export class FileAttemptJournal implements AttemptJournal {
     }
   }
   load(execution_id: string): JournalEntry[] {
-    return this.view()
-      .filter((entry) => entry.execution_id === execution_id)
-      .map((entry) => structuredClone(entry));
+    return (this.view().byExecution.get(execution_id) ?? []).map((entry) => structuredClone(entry));
   }
   append(entry: JournalEntry): void {
-    const entries = this.view();
-    if (entries.some((item) => item.id === entry.id)) return;
+    const index = this.view();
+    if (index.ids.has(entry.id)) return;
     const fd = openSync(this.path, 'a');
     try {
       writeSync(fd, `${JSON.stringify(entry)}\n`);
@@ -1170,19 +1170,19 @@ export class FileAttemptJournal implements AttemptJournal {
     } finally {
       closeSync(fd);
     }
-    entries.push(structuredClone(entry));
+    indexEntry(index, structuredClone(entry));
   }
-  private view(): JournalEntry[] {
+  private view(): AttemptJournalIndex {
     const { size, ino } = statSync(this.path);
-    if (this.entries && this.seen) {
-      if (size === this.seen.size && ino === this.seen.ino) return this.entries;
+    if (this.index && this.seen) {
+      if (size === this.seen.size && ino === this.seen.ino) return this.index;
       throw new Error('impl.attempt journal was changed by another writer');
     }
-    const entries = readEntries(this.path);
+    const index = readEntries(this.path);
     const repaired = statSync(this.path);
-    this.entries = entries;
+    this.index = index;
     this.seen = { size: repaired.size, ino: repaired.ino };
-    return entries;
+    return index;
   }
 }
 /**
@@ -1202,11 +1202,21 @@ function repairTornTail(path: string): void {
   }
   appendFileSync(path, '\n');
 }
-function readEntries(path: string): JournalEntry[] {
+interface AttemptJournalIndex {
+  readonly ids: Set<string>;
+  readonly byExecution: Map<string, JournalEntry[]>;
+}
+function indexEntry(index: AttemptJournalIndex, entry: JournalEntry): void {
+  index.ids.add(entry.id);
+  const entries = index.byExecution.get(entry.execution_id);
+  if (entries) entries.push(entry);
+  else index.byExecution.set(entry.execution_id, [entry]);
+}
+function readEntries(path: string): AttemptJournalIndex {
   repairTornTail(path);
   const lines = readFileSync(path, 'utf8').split('\n');
   if (lines.at(-1) === '') lines.pop();
-  const entries: JournalEntry[] = [];
+  const result: AttemptJournalIndex = { ids: new Set(), byExecution: new Map() };
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? '';
     let parsed: unknown;
@@ -1222,7 +1232,7 @@ function readEntries(path: string): JournalEntry[] {
       throw new PersistError('impl.attempt');
     if (typeof record.execution_id !== 'string' || typeof record.id !== 'string')
       throw new PersistError('impl.attempt');
-    entries.push(record as JournalEntry);
+    indexEntry(result, record as JournalEntry);
   }
-  return entries;
+  return result;
 }
