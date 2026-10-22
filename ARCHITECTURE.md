@@ -74,7 +74,13 @@ inspection and evaluation; Loom, Fabric and the gateway emit to it through
 a Weft port each receives at composition (W5). Each package declares the port
 as its own type, so Weft imports nothing in-repo, none of them imports Weft,
 and Weft never reaches back into runtime, scheduling or capability-host
-concerns. Emission is one-way and replay emits nothing; Weave's tests may
+concerns. Optional `@weave/weft/sqlite` stores validated, redacted projections
+in a versioned SQLite schema using Node 22's built-in driver; core never imports
+it. `@weave/weft/intake` maps local OTLP/JSON through the same serializer boundary
+and creates a loopback-only listener only through an injected HTTP factory.
+Atomic batches reject identity conflicts and roll back on failure or cancellation.
+Neither storage nor intake participates in runtime replay or recovery: the
+per-subsystem journals remain their source. Emission is one-way and replay emits nothing; Weave's tests may
 import Weft to validate what the stack emits, Weave's source may not. Gauge
 (`packages/gauge`) owns evaluation records and recomputes their verdicts. It
 depends on Weft's public contract only, never on Loom, Fabric, AgentSOP or the

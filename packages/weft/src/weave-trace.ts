@@ -14,9 +14,13 @@ export interface TraceRecord {
   readonly sequence: number;
   readonly payload: Readonly<Partial<Record<'spent_micros' | 'latency_ms' | 'input_tokens' | 'output_tokens' | 'confidence' | 'passed', number | boolean>>>;
 }
+export type TraceWriteResult = { readonly ok: true; readonly inserted: number; readonly torn: boolean } |
+  { readonly ok: false; readonly reason: 'input' | 'config' | 'disclosure' | 'conflict' | 'cancelled' | 'busy' | 'storage' | 'schema' };
 export interface TraceImportPort {
-  /** A store keys rows by UNIQUE(run_id, id) and upserts, so re-import is idempotent. */
-  upsert(record: TraceRecord): Promise<void>;
+  /** Identical canonical content is a no-op; different content must conflict. */
+  upsert(record: TraceRecord): Promise<void | TraceWriteResult>;
+  /** Transactional adapters validate and commit the entire batch atomically. */
+  upsertBatch?(records: readonly TraceRecord[], signal?: AbortSignal): Promise<TraceWriteResult>;
 }
 const keys = ['schema', 'id', 'parentId', 'run_id', 'kind', 'sequence', 'payload'];
 const metrics = ['spent_micros', 'latency_ms', 'input_tokens', 'output_tokens', 'confidence', 'passed'];
@@ -52,5 +56,13 @@ export async function importTraceLines(jsonl: string, port: TraceImportPort): Pr
     if (!validateTrace(value)) throw new Error('Invalid trace record');
     rows.push(value);
   }
-  for (const row of rows) await port.upsert(row);
+  if (port.upsertBatch) {
+    const result = await port.upsertBatch(rows);
+    if (!result.ok) throw new Error(`Trace import rejected: ${result.reason}`);
+  } else {
+    for (const row of rows) {
+      const result = await port.upsert(row);
+      if (result && !result.ok) throw new Error(`Trace import rejected: ${result.reason}`);
+    }
+  }
 }

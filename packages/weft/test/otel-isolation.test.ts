@@ -12,11 +12,13 @@ const weft = join(root, 'packages/weft');
 test('OTel is an explicit package subpath with no runtime dependencies', () => {
   const manifest = JSON.parse(readFileSync(join(weft, 'package.json'), 'utf8'));
   assert.equal(manifest.exports['./otel'], './dist/src/otel.js');
+  assert.equal(manifest.exports['./sqlite'], './dist/src/sqlite.js');
+  assert.equal(manifest.exports['./intake'], './dist/src/sqlite-intake.js');
   assert.deepEqual(Object.keys(manifest.dependencies ?? {}), []);
   assert.deepEqual(Object.keys(manifest.optionalDependencies ?? {}), []);
 });
 
-test('core builds, passes its tests and imports with the adapter physically absent', () => {
+test('core builds, passes its tests and imports with the OTel and SQLite adapters physically absent', () => {
   const directory = mkdtempSync(join(tmpdir(), 'weft-core-only-'));
   try {
     const manifest = JSON.parse(readFileSync(join(weft, 'package.json'), 'utf8'));
@@ -25,10 +27,10 @@ test('core builds, passes its tests and imports with the adapter physically abse
     cpSync(join(weft, 'fixtures'), join(directory, 'fixtures'), { recursive: true });
     cpSync(join(weft, 'src'), join(directory, 'src'), { recursive: true });
     for (const name of readdirSync(join(directory, 'src'))) {
-      if (name.startsWith('otel')) rmSync(join(directory, 'src', name), { recursive: true });
+      if (name.startsWith('otel') || name.startsWith('sqlite')) rmSync(join(directory, 'src', name), { recursive: true });
     }
     for (const name of readdirSync(join(weft, 'test'))) {
-      if (!name.startsWith('otel') && name.endsWith('.test.ts')) {
+      if (!name.startsWith('otel') && !name.startsWith('sqlite') && name.endsWith('.test.ts')) {
         cpSync(join(weft, 'test', name), join(directory, 'test', name), { recursive: true });
       }
     }
