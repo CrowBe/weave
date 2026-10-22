@@ -1,7 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { compare, costed, validate, type Comparison, type Context, type EvaluationResult } from '@weave/gauge';
+import {
+  compare,
+  costed,
+  recordDigest,
+  validate,
+  type Comparison,
+  type Context,
+  type CriteriaSet,
+  type EvaluationResult,
+  type Revision,
+} from '@weave/gauge';
 
 const fixtures = JSON.parse(readFileSync(new URL('../../fixtures/records.json', import.meta.url), 'utf8')) as {
   context: Context;
@@ -122,4 +132,64 @@ test('a forged interval cannot turn an inconclusive effect into candidate_better
   };
   assert.deepEqual(validate(forged, ctx), { ok: false, reason: 'measure' });
   assert.deepEqual(costed(forged, [], ctx), { ok: false, reason: 'measure' });
+});
+
+test('EPSILON-sized claims across zero or min_effect cannot change the validated verdict or cost gate', () => {
+  for (const [baseId, candId] of [
+    ['res-hi-a', 'res-hi-b'],
+    ['res-lo-a', 'res-lo-b'],
+  ] as const) {
+    for (const sign of [-1, 1]) {
+      for (const boundary of [0, 0.125]) {
+        const base = context.results[baseId] as EvaluationResult;
+        const cand = context.results[candId] as EvaluationResult;
+        const criteria = context.criteria[base.criteria] as CriteriaSet;
+        const candidateValue = 0.5 + sign * (0.125 + boundary);
+        const set = {
+          ...criteria,
+          measures: criteria.measures.map((m) => ({ ...m, min_effect: boundary === 0 ? 0 : boundary + 0.5e-9 })),
+        };
+        const ctx: Context = {
+          ...context,
+          criteria: {
+            ...context.criteria,
+            [base.criteria]: set,
+          },
+          revisions: {
+            ...context.revisions,
+            [base.criteria]: { ...(context.revisions[base.criteria] as Revision), digest: recordDigest(set) },
+          },
+          results: {
+            ...context.results,
+            [baseId]: { ...base, measures: [{ ...base.measures[0]!, value: 0.5, interval: [0.375, 0.625] }] },
+            [candId]: {
+              ...cand,
+              measures: [
+                {
+                  ...cand.measures[0]!,
+                  value: candidateValue,
+                  interval:
+                    sign > 0 ? [candidateValue, candidateValue + 0.125] : [candidateValue - 0.125, candidateValue],
+                },
+              ],
+            },
+          },
+        };
+        const out = compare({ ...request, baseline: baseId, candidate: candId }, ctx);
+        assert.ok(out.ok, JSON.stringify({ baseId, sign, boundary, out }));
+        assert.equal(out.record.verdict, 'no_difference');
+        assert.deepEqual(validate(out.record, ctx), { ok: true });
+        const interval: [number, number] = [...out.record.deltas[0]!.interval!];
+        const bound = sign > 0 ? 0 : 1;
+        assert.equal(interval[bound], boundary === 0 ? 0 : sign * boundary);
+        interval[bound] += sign * 0.75e-9;
+        const shifted = { ...out.record, deltas: out.record.deltas.map((d) => ({ ...d, interval })) };
+        const improving = sign > 0 === (criteria.measures[0]!.better === 'higher');
+        const forged = { ...shifted, verdict: improving ? 'candidate_better' : 'candidate_worse' };
+        assert.deepEqual(validate(forged, ctx), { ok: false, reason: 'verdict' });
+        assert.deepEqual(costed(forged, [], ctx), { ok: false, reason: 'verdict' });
+        assert.deepEqual(validate(shifted, ctx), { ok: true });
+      }
+    }
+  }
 });
