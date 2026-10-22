@@ -18,6 +18,7 @@ import {
   type AttemptRecord,
   type Clock,
   type EvaluationKind,
+  type EvaluationOutcome,
   type InferenceGateway,
   type InferenceTerms,
   type RoutedUnit,
@@ -43,6 +44,13 @@ import type { DecisionCase } from './corpus.ts';
 import { reduceAnswers, renderQuestions, renderState, type Ranking } from './shapes.ts';
 
 export const EVALUATION_KINDS: readonly EvaluationKind[] = ['choice', 'score', 'boolean'];
+export const JEV_REFERENCE_MODEL = 'jev-1.14.0';
+
+/** Effective TypeSafe request settings. null records a field the adapter cannot send. */
+const TYPESAFE_REQUEST_PARAMS = { max_output_tokens: null, shuffle: false } as const;
+
+/** Only fixed configuration messages may be printed by the CLI error boundary. */
+export class ProbeConfigurationError extends Error {}
 
 /** Jev bills input only, at $0.042 per million tokens. */
 const JEV_PRICE = { input_per_mtok: 42_000, output_per_mtok: 0 } as const;
@@ -56,7 +64,12 @@ const JEV_PRICE = { input_per_mtok: 42_000, output_per_mtok: 0 } as const;
  */
 const VERCEL_DECLARED_LIMIT = { requests: 60, window_ms: 60_000 } as const;
 
+/** Conservative retry spacing for the reference route, not a measured quota. */
+const REFERENCE_DECLARED_LIMIT = { requests: 60, window_ms: 60_000 } as const;
+
 export interface RouteOptions {
+  /** One pinned TypeSafe direct routed unit per kind, with no fallback. */
+  readonly reference?: boolean;
   /** Wait out a throttle on the free route instead of escalating to the billed one. */
   readonly preferFree: boolean;
   /**
@@ -82,7 +95,7 @@ function jevRoutes(kind: EvaluationKind, includeDirect: boolean, options: RouteO
     price: JEV_PRICE,
   } as const;
 
-  const routes: RoutedUnit[] = [
+  const routes: RoutedUnit[] = options.reference === true ? [] : [
     {
       ...shared,
       routed_unit_id: `${kind}@vercel`,
@@ -98,8 +111,9 @@ function jevRoutes(kind: EvaluationKind, includeDirect: boolean, options: RouteO
       routed_unit_id: `${kind}@typesafe`,
       adapter: TYPESAFE_AI_ADAPTER,
       // The direct API names the model differently than the gateway catalogue.
-      model: options.model?.trim() || 'jev-preview',
+      model: options.reference === true ? JEV_REFERENCE_MODEL : options.model?.trim() || 'jev-preview',
       destination: TYPESAFE_AI_DESTINATION,
+      ...(options.reference === true ? { rate_limits: [REFERENCE_DECLARED_LIMIT] } : {}),
     });
   }
   return routes;
@@ -112,12 +126,42 @@ export interface Credentials {
 
 /** Every hosted route the credentials allow, in the order the gateway tries them. */
 export function jevRouteTable(credentials: Credentials, options: RouteOptions): RoutedUnit[] {
+  validateReferenceOptions(options);
+  if (options.reference === true && !credentials.typesafe?.trim()) {
+    throw new ProbeConfigurationError('reference mode requires a TypeSafe API key (TYPESAFE_API_KEY or TYPESAFE_AI_API_KEY)');
+  }
   const includeDirect = credentials.typesafe !== undefined;
   return EVALUATION_KINDS.flatMap((kind) => jevRoutes(kind, includeDirect, options));
 }
 
+/** Reject conflicting programmatic reference settings without echoing their values. */
+export function validateReferenceOptions(options: RouteOptions): void {
+  if (options.reference !== true) return;
+  if (options.local === true || (options.model !== undefined && options.model.trim() !== JEV_REFERENCE_MODEL)) {
+    throw new ProbeConfigurationError(`reference mode requires model ${JEV_REFERENCE_MODEL}; conflicting model/local option`);
+  }
+}
+
+/** Validate every occurrence so duplicate flags cannot hide a conflicting model. */
+export function validateReferenceArgs(argv: readonly string[]): void {
+  if (!argv.includes('--reference')) return;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!;
+    if (arg === '--model' || arg.startsWith('--model=')) {
+      const model = arg === '--model' ? argv[i + 1] ?? '' : arg.slice('--model='.length);
+      validateReferenceOptions({ preferFree: false, reference: true, model });
+    }
+  }
+}
+
 /** Read from the environment by the composition root only. Never logged. */
-export function readCredentials(env: NodeJS.ProcessEnv): Credentials | { readonly error: string } {
+export function readCredentials(env: NodeJS.ProcessEnv, options?: RouteOptions): Credentials | { readonly error: string } {
+  if (options?.reference === true) {
+    const typesafe = resolveTypesafeApiKey(env);
+    return typesafe === undefined
+      ? { error: 'reference mode requires a TypeSafe API key (TYPESAFE_API_KEY or TYPESAFE_AI_API_KEY)' }
+      : { vercel: '', typesafe };
+  }
   const vercel = env['AI_GATEWAY_API_KEY'];
   if (vercel === undefined || vercel.trim().length === 0) {
     return { error: 'AI_GATEWAY_API_KEY is not set. Put it in .env.local (git-ignored) and rerun.' };
@@ -156,15 +200,15 @@ export const realTimer: Timer = {
   sleep(ms, signal) {
     return new Promise((resolve, reject) => {
       if (signal?.aborted === true) return reject(new Error('aborted'));
-      const id = setTimeout(resolve, ms);
-      signal?.addEventListener(
-        'abort',
-        () => {
-          clearTimeout(id);
-          reject(new Error('aborted'));
-        },
-        { once: true },
-      );
+      const abort = () => {
+        clearTimeout(id);
+        reject(new Error('aborted'));
+      };
+      const id = setTimeout(() => {
+        signal?.removeEventListener('abort', abort);
+        resolve();
+      }, ms);
+      signal?.addEventListener('abort', abort, { once: true });
     });
   },
 };
@@ -177,8 +221,11 @@ export function createJevGateway(
   return createInferenceGateway({
     routes: jevRouteTable(credentials, options),
     evaluators: [
-      vercelAiGatewayEvaluator({ apiKey: credentials.vercel }),
-      ...(credentials.typesafe === undefined ? [] : [typesafeAiEvaluator({ apiKey: credentials.typesafe, shuffle: false })]),
+      ...(options.reference === true ? [] : [vercelAiGatewayEvaluator({ apiKey: credentials.vercel })]),
+      ...(credentials.typesafe === undefined ? [] : [typesafeAiEvaluator({
+        apiKey: credentials.typesafe,
+        shuffle: TYPESAFE_REQUEST_PARAMS.shuffle,
+      })]),
     ],
     clock,
     timer: realTimer,
@@ -190,6 +237,12 @@ export function probeTerms(
   clock: Clock,
   options: RouteOptions = { preferFree: false },
 ): InferenceTerms {
+  validateReferenceOptions(options);
+  if (options.reference === true) return {
+    quality: 'baseline', destinations: [TYPESAFE_AI_DESTINATION],
+    max_context_tokens: 8_000, deadline: clock.now() + 120_000, cost_ceiling: 5_000,
+    max_attempts: 4, max_attempts_per_route: 4,
+  };
   if (options.local === true) return kevTerms(clock);
   return {
     quality: 'baseline',
@@ -207,8 +260,45 @@ export function probeTerms(
   };
 }
 
+/** Request and provider evidence attached only to reference-mode records. */
+export interface ReferenceProvenance {
+  readonly resolved_model_id?: string | null;
+  readonly provider_response_id?: string | null;
+  readonly pin_mismatch?: boolean;
+  readonly request_params?: {
+    /** null means not sent: the System One wire does not send this setting. */
+    readonly max_output_tokens: typeof TYPESAFE_REQUEST_PARAMS.max_output_tokens;
+    readonly shuffle: typeof TYPESAFE_REQUEST_PARAMS.shuffle;
+    readonly presentation_order: readonly string[];
+  };
+}
+
+/** Missing identity, including a failed request with no response, is a mismatch. */
+export function referenceProvenance(
+  outcome: EvaluationOutcome, options: RouteOptions, order: readonly string[],
+): ReferenceProvenance & { readonly routed_unit_id?: string } {
+  if (options.reference !== true) return {};
+  const last = outcome.attempts.at(-1);
+  const resolved = outcome.status === 'accepted' ? outcome.resolved_model_id : last?.resolved_model_id;
+  return {
+    ...(last === undefined ? {} : { routed_unit_id: last.routed_unit_id }),
+    resolved_model_id: resolved ?? null,
+    provider_response_id: (outcome.status === 'accepted' ? outcome.provider_response_id : last?.provider_response_id) ?? null,
+    pin_mismatch: resolved !== JEV_REFERENCE_MODEL || outcome.attempts.some(a =>
+      a.resolved_model_id !== undefined && a.resolved_model_id !== JEV_REFERENCE_MODEL),
+    request_params: { ...TYPESAFE_REQUEST_PARAMS, presentation_order: [...order] },
+  };
+}
+
+export function failureReason(outcome: EvaluationOutcome, options: RouteOptions): string | undefined {
+  if (outcome.status === 'accepted') return undefined;
+  if (options.reference === true && outcome.attempts.length > 0 && outcome.attempts.every(a =>
+    a.disposition.status === 'failed' && a.disposition.failure.code === 'rate_limited')) return 'throttle_exhausted';
+  return outcome.reason;
+}
+
 /** One executed record. Raw enough that scoring never needs the gateway again. */
-export interface ProbeRecord {
+export interface ProbeRecord extends ReferenceProvenance {
   readonly case_id: string;
   readonly source: string;
   readonly kind: EvaluationKind;
@@ -263,6 +353,7 @@ export async function runCase(
   repeat: number,
   options: RouteOptions = { preferFree: false },
   orderingIndex = 0,
+  signal?: AbortSignal,
 ): Promise<ProbeRecord> {
   const state = renderState(decision);
   const questions = renderQuestions(kind, decision);
@@ -275,10 +366,11 @@ export async function runCase(
     state,
     questions,
     terms: probeTerms(credentials, clock, options),
-  });
+  }, signal);
   const latency = clock.now() - startedAt;
 
   const base = {
+    ...referenceProvenance(outcome, options, decision.candidates.map(c => c.candidate_id)),
     case_id: decision.id,
     source: decision.source,
     kind,
@@ -294,7 +386,7 @@ export async function runCase(
   };
 
   if (outcome.status !== 'accepted') {
-    return { ...base, reason: outcome.reason };
+    return { ...base, reason: failureReason(outcome, options)! };
   }
   return {
     ...base,

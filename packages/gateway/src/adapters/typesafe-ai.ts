@@ -198,6 +198,7 @@ function parseBody(body: unknown, call: EvaluationCall): DecisionParse {
   const usage = isRecord(body['usage']) ? body['usage'] : {};
   return {
     status: 'completed',
+    ...(typeof body['model'] === 'string' ? { resolved_model_id: body['model'] } : {}),
     answers,
     confidence: Object.keys(confidence).length > 0 ? confidence : undefined,
     usage: {

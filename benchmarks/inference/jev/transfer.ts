@@ -19,7 +19,7 @@ import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Clock, EvaluationKind, EvaluationQuestion, InferenceGateway } from '@weave/gateway';
-import { createJevGateway, probeTerms, type Credentials, type RouteOptions } from './run.ts';
+import { createJevGateway, probeTerms, referenceProvenance, failureReason, type ReferenceProvenance, type Credentials, type RouteOptions } from './run.ts';
 
 export const KEV_HOME = process.env['WEAVE_KEV_HOME'] ?? join(homedir(), '.local/share/weave/kev');
 export const SUITE = join(KEV_HOME, 'src/evals/v4/transfer-v4');
@@ -228,7 +228,7 @@ export function optionKeys(question: SuiteQuestion): readonly string[] {
   return ((question.criteria ?? []) as readonly unknown[]).map((_, i) => String(i));
 }
 
-export interface TransferRecord {
+export interface TransferRecord extends ReferenceProvenance {
   readonly id: string;
   /** Which presentation order this record used; 0 is the suite's own order. */
   readonly ordering_index: number;
@@ -265,6 +265,7 @@ export async function runSuiteRecord(
   options: RouteOptions,
   ordering: readonly number[] = [],
   orderingIndex = 0,
+  signal?: AbortSignal,
 ): Promise<TransferRecord> {
   // Only `choice` has a presentational order; the helper returns the other
   // kinds unchanged, so this is a no-op for them.
@@ -280,7 +281,7 @@ export async function runSuiteRecord(
     state: record.state as never,
     questions: { [record.questionId]: question } as never,
     terms: probeTerms(credentials, clock, options),
-  });
+  }, signal);
   const latency = clock.now() - startedAt;
 
   let rateLimited = 0;
@@ -290,6 +291,7 @@ export async function runSuiteRecord(
     waited += attempt.waited_ms ?? 0;
   }
   const base = {
+    ...referenceProvenance(outcome, options, keys),
     id: record.id,
     source: record.source,
     ordering_index: orderingIndex,
@@ -308,7 +310,7 @@ export async function runSuiteRecord(
     waited_ms: waited,
     spent: outcome.spent,
   };
-  if (outcome.status !== 'accepted') return { ...base, reason: outcome.reason };
+  if (outcome.status !== 'accepted') return { ...base, reason: failureReason(outcome, options)! };
 
   const answer = outcome.answers[record.questionId];
   const inputTokens = outcome.attempts[outcome.attempts.length - 1]?.usage.input_tokens;

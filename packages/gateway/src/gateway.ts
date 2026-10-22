@@ -220,13 +220,21 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
             questions: request.questions,
             signal: attemptSignal,
           });
-          if (result.status === 'failed') return failedAttempt(result.failure);
+          if (result.status === 'failed') return {
+            ...failedAttempt(result.failure),
+            ...(result.provider_response_id === undefined ? {} : { provider_response_id: result.provider_response_id }),
+          };
+          const provenance = {
+            ...(result.resolved_model_id === undefined ? {} : { resolved_model_id: result.resolved_model_id }),
+            ...(result.provider_response_id === undefined ? {} : { provider_response_id: result.provider_response_id }),
+          };
 
           // Structural first: an answer set that does not match the questions
           // is a malformed response, and the caller's bar never sees it.
           const structural = answersMatchQuestions(request.kind, request.questions, result.answers);
           if (structural.status === 'rejected') {
             return {
+              ...provenance,
               usage: result.usage,
               disposition: { status: 'unaccepted', reason: structural.reason },
             };
@@ -236,12 +244,13 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
           const answers = result.answers as EvaluationAnswers<K>;
           const verdict = accept?.(answers) ?? { status: 'accepted' as const };
           return {
+            ...provenance,
             usage: result.usage,
             disposition:
               verdict.status === 'accepted'
                 ? {
                     status: 'accepted',
-                    value: { answers, confidence: result.confidence },
+                    value: { answers, confidence: result.confidence, ...provenance },
                     provider_response_id: result.provider_response_id,
                   }
                 : { status: 'unaccepted', reason: verdict.reason },
@@ -261,6 +270,7 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
             ...base,
             status: 'accepted',
             kind: request.kind,
+            ...(bounded.settled.value.resolved_model_id === undefined ? {} : { resolved_model_id: bounded.settled.value.resolved_model_id }),
             answers: bounded.settled.value.answers as EvaluationAnswers<K>,
             confidence: bounded.settled.value.confidence,
             routed_unit_id: bounded.settled.routed_unit_id,
@@ -280,12 +290,15 @@ interface GenerationValue {
 }
 
 interface EvaluationValue {
+  readonly resolved_model_id?: string;
   readonly answers: EvaluationAnswers;
   readonly confidence: Readonly<Record<QuestionId, number>> | undefined;
 }
 
 /** What one provider attempt produced, before it is priced and recorded. */
 interface AttemptResult<T> {
+  readonly resolved_model_id?: string;
+  readonly provider_response_id?: string;
   readonly usage: ProviderUsage;
   readonly disposition:
     | { readonly status: 'accepted'; readonly value: T; readonly provider_response_id: string | undefined }
@@ -450,6 +463,8 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
       attempt: attempts.length + 1,
       routed_unit_id: unit.routed_unit_id,
       model: unit.model,
+      ...(result.resolved_model_id === undefined ? {} : { resolved_model_id: result.resolved_model_id }),
+      ...(result.provider_response_id === undefined ? {} : { provider_response_id: result.provider_response_id }),
       started_at,
       ended_at,
       usage: result.usage,

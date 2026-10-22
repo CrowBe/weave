@@ -453,6 +453,8 @@ export interface EvaluationCall {
 export type EvaluationProviderResult =
   | {
       readonly status: 'completed';
+      /** Provider-reported model identity, independent of the requested id or alias. */
+      readonly resolved_model_id?: string;
       readonly answers: EvaluationAnswers;
       readonly usage: ProviderUsage;
       readonly provider_response_id: string | undefined;
@@ -464,7 +466,7 @@ export type EvaluationProviderResult =
        */
       readonly confidence: Readonly<Record<QuestionId, number>> | undefined;
     }
-  | { readonly status: 'failed'; readonly failure: ProviderFailure };
+  | { readonly status: 'failed'; readonly failure: ProviderFailure; readonly provider_response_id?: string };
 
 export interface EvaluationAdapter {
   readonly id: AdapterId;
@@ -485,6 +487,8 @@ export interface AttemptRecord {
   readonly attempt: number;
   readonly routed_unit_id: RoutedUnitId;
   readonly model: string;
+  readonly resolved_model_id?: string;
+  readonly provider_response_id?: string;
   readonly started_at: Timestamp;
   readonly ended_at: Timestamp;
   readonly usage: ProviderUsage;
@@ -542,6 +546,7 @@ export type GenerationOutcome =
 export type EvaluationOutcome<K extends EvaluationKind = EvaluationKind> =
   | (OutcomeBase & {
       readonly status: 'accepted';
+      readonly resolved_model_id?: string;
       readonly kind: K;
       readonly answers: EvaluationAnswers<K>;
       readonly confidence: Readonly<Record<QuestionId, number>> | undefined;

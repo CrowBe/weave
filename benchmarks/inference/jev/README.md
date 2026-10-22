@@ -3,6 +3,81 @@
 Status: experimental. No admitted judgment site, no default route, no
 capability. Everything here is measurement.
 
+## Pinned reference mode
+
+Use `--reference` on either probe to measure `JEV_REFERENCE_MODEL = 'jev-1.14.0'`
+through TypeSafe direct. There is exactly one routed unit per inference kind.
+The mode requires `TYPESAFE_API_KEY` (or legacy `TYPESAFE_AI_API_KEY`), needs no
+Vercel key, and never adds a Vercel routed unit even when both keys exist.
+Credentials stay in the environment; never put them on the command line.
+
+```sh
+node --env-file-if-exists=.env.local benchmarks/inference/jev/probe.ts --reference --output .local/jev/reference.json
+node --env-file-if-exists=.env.local benchmarks/inference/jev/transfer-probe.ts --reference --output .local/jev/reference-transfer.json
+```
+
+Programmatic callers use `RouteOptions.reference: true`. A conflicting
+`RouteOptions.model` or `--model` is refused, including `--model kev`.
+`JEV_MODEL` does not change the reference pin. `--prefer-free` does not change
+reference routing. Throttles retry only that TypeSafe unit, up to four attempts,
+using the gateway's existing delay handling with numeric `Retry-After` seconds.
+Without a usable `Retry-After`, the reference unit declares 60 requests per
+60 seconds to give each retry a conservative 1-second delay. This is a retry
+estimate, not a measured provider quota. The shared `decision-transport.ts`
+parser accepts finite non-negative numeric seconds (including zero and
+fractions); absent, blank, invalid, negative, or HTTP-date values supply no
+delay and therefore use the declared limit. This shared parsing is unchanged.
+Exhausted throttles produce `throttle_exhausted` failure records with no fallback.
+
+Reference output is `{ "header": ..., "records": [...] }`. The reference run
+header contains `mode`, `run_id`, `pinned_model_id`, `route`, `run_date` (from
+the injected clock), `corpus_hash`, `status`, `pin_mismatch` and
+`pin_mismatch_count`. The corpus hash is SHA-256 of `JSON.stringify` applied to
+the selected corpus records in plan order, including labels. Each record
+captures the routed unit, `resolved_model_id` from the response's `model`,
+`provider_response_id` where available, and `request_params`: actual
+`presentation_order`, `shuffle: false`, and `max_output_tokens: null` to mean
+**not sent**. The existing route setting of 512 is an accounting setting;
+the System One wire sends no `max_output_tokens`. No guardrail or shuffle
+option is added to that request. `--permute` can still explicitly choose
+presentation orders, each of which is recorded.
+
+A missing or different resolved model id is a pin mismatch, including a failed
+request without an identity. The safer choice is to flag it, retain the record,
+and exit 1 after writing results. Model identity is provider-reported evidence.
+Rescoring with `--from` accepts both legacy arrays and reference output, issues
+no inference, and preserves a non-zero result for mismatches or incomplete runs.
+
+Reference output is checkpointed before inference and after each completed
+record using a synced staging file, atomic rename, and directory sync. A crash
+leaves a complete snapshot; staging remnants are never replay input. SIGINT,
+SIGTERM, or an injected abort signal saves completed records with a `cancelled`
+header and exits 1, discarding the interrupted record. An unexpected error
+marks the last snapshot `interrupted`. Reruns start a new `run_id` and replace
+the output, so they neither duplicate nor reuse prior records. Default output
+filenames include the header's `run_id`, isolating concurrent runs. Every
+reference output also has a `<output>.lock` sidecar directory: a unique PID
+marker is published before checking for other owners and before inference or
+snapshot replacement. A live or unknown owner refuses a new run. Markers from
+dead processes are reclaimed by PID check; permission-denied PID checks are
+treated as live. Claims are removed on completion, cancellation, or error.
+The empty sidecar directory remains to avoid a race with a new claimant;
+overlapping acquisitions may both refuse, but cannot both write.
+
+Without `--reference`, route order, Vercel preference, `--prefer-free`, local
+Kev selection, and the legacy JSON array format remain as before. Reference
+defaults use `.local/jev/reference-results-<run_id>.json` and
+`.local/jev/reference-transfer-results-<run_id>.json` so they do not replace legacy
+results accidentally.
+
+Both modes print the error name, a recognized error code (or `none`/`unknown`),
+and a fixed diagnostic cause for file access, JSON input, and HTTP header
+failures. Untrusted exception messages and JSON excerpts are never printed.
+
+These HTTP benchmark routes do not consume Fabric grants or request an audit
+tier. Grant renewal and live budget resume behavior stay outside this change;
+the existing gateway still applies its budget gate before every attempt.
+
 ## What is under test
 
 GLOSSARY.md defines a **judgment site** as "a named place where bounded judgment

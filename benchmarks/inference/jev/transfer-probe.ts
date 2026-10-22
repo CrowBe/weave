@@ -6,10 +6,14 @@
  *
  *   node benchmarks/inference/jev/transfer-probe.ts --from <file>   # rescore only
  */
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import type { Clock } from '@weave/gateway';
-import { createJevGateway, readCredentials } from './run.ts';
+import { pathToFileURL } from 'node:url';
+import type { Clock, InferenceGateway } from '@weave/gateway';
+import { createJevGateway, readCredentials, validateReferenceArgs, ProbeConfigurationError } from './run.ts';
+import { runReference, readProbeOutput } from './reference.ts';
+import { formatProbeError } from './probe-error.ts';
 import {
   comparePaired,
   loadKevOutcomes,
@@ -18,6 +22,7 @@ import {
   optionKeys,
   selectRecords,
   type TransferRecord,
+  type SuiteRecord,
 } from './transfer.ts';
 import { orderingsFor, scorePermutation, type PermutationRecordView } from './permutation.ts';
 
@@ -59,13 +64,6 @@ function printPermutation(records: readonly TransferRecord[]): void {
   console.log(`    label position  ${JSON.stringify(report.label_position)}`);
 }
 
-function flag(name: string): string | undefined {
-  const i = process.argv.indexOf(`--${name}`);
-  return i === -1 ? undefined : process.argv[i + 1];
-}
-const has = (name: string): boolean => process.argv.includes(`--${name}`);
-
-const clock: Clock = { now: () => Date.now() };
 const pct = (v: number): string => (v * 100).toFixed(1).padStart(5) + '%';
 
 /** Wilson score interval: honest at the sample sizes a per-source split gives. */
@@ -111,35 +109,55 @@ function calibration(records: readonly TransferRecord[]): { ece: number; brier: 
   return { ece, brier: brier / pts.length, mean: mean / pts.length };
 }
 
-async function main(): Promise<void> {
+export async function main(deps: {
+  readonly argv?: readonly string[];
+  readonly env?: NodeJS.ProcessEnv;
+  readonly clock?: Clock;
+  readonly gateway?: InferenceGateway;
+  readonly suite?: readonly SuiteRecord[];
+  readonly signal?: AbortSignal;
+} = {}): Promise<number> {
+  const argv = deps.argv ?? process.argv;
+  const env = deps.env ?? process.env;
+  const clock: Clock = deps.clock ?? { now: () => Date.now() };
+  const flag = (name: string): string | undefined => {
+    const i = argv.indexOf(`--${name}`);
+    return i === -1 ? undefined : argv[i + 1];
+  };
+  const has = (name: string): boolean => argv.includes(`--${name}`);
+  const reference = has('reference');
+  validateReferenceArgs(argv);
+  let exitCode = 0;
   const from = flag('from');
   let records: TransferRecord[];
 
   if (from !== undefined) {
-    records = JSON.parse(await readFile(from, 'utf8')) as TransferRecord[];
+    const replay = readProbeOutput<TransferRecord>(JSON.parse(await readFile(from, 'utf8')));
+    records = replay.records;
+    exitCode = replay.exitCode;
     console.log(`rescoring ${records.length} recorded results from ${from}; no inference issued`);
   } else {
-    const credentials = readCredentials(process.env);
+    const credentials = readCredentials(env, { preferFree: false, reference });
     if ('error' in credentials) {
-      console.error(credentials.error);
-      process.exit(1);
+      throw new ProbeConfigurationError(credentials.error);
     }
     // The composition root reads the direct-route model; run.ts reads no env.
-    const jevModel = process.env['JEV_MODEL'];
+    const jevModel = reference ? flag('model') : env['JEV_MODEL'];
     const options = {
+      reference,
       preferFree: has('prefer-free'),
       ...(jevModel === undefined ? {} : { model: jevModel }),
     };
-    const suite = await loadSuite(flag('split') ?? 'development');
+    const suite = deps.suite ?? await loadSuite(flag('split') ?? 'development');
     const chosen = await selectRecords(suite, has('all'));
     const limit = flag('limit');
     const selected = limit === undefined ? chosen : chosen.slice(0, Number(limit));
     console.log(
       `${selected.length} records from transfer-v4 (${has('all') ? 'full split' : 'paired with Kev’s run'})` +
-        `; free route ${options.preferFree ? 'preferred, throttles waited out' : 'escalates on throttle'}`,
+        (reference ? '; pinned TypeSafe direct, no fallback' : `; free route ${options.preferFree ? 'preferred, throttles waited out' : 'escalates on throttle'}`),
     );
 
-    const gateway = createJevGateway(credentials, clock, options);
+    const gateway = deps.gateway ?? createJevGateway(credentials, clock, options);
     const permute = Math.max(1, Number(flag('permute') ?? 1));
     records = [];
 
@@ -160,20 +178,31 @@ async function main(): Promise<void> {
       );
     }
 
-    let done = 0;
-    for (const { record, orders } of plan) {
-      for (let o = 0; o < orders.length; o += 1) {
-        records.push(await runSuiteRecord(gateway, clock, credentials, record, options, orders[o]!, o));
-        done += 1;
-        const last = records[records.length - 1]!;
-        process.stdout.write(last.status !== 'accepted' ? '!' : last.correct === true ? '·' : '✗');
-        if (done % 60 === 0) process.stdout.write(` ${done}/${total}\n`);
+    const runId = reference ? randomUUID() : undefined;
+    const output = flag('output') ?? (reference ? `.local/jev/reference-transfer-results-${runId}.json` : 'benchmarks/inference/jev/transfer-results.json');
+    if (reference) {
+      const jobs: (() => Promise<TransferRecord>)[] = [];
+      for (const { record, orders } of plan) for (let o = 0; o < orders.length; o++) {
+        jobs.push(() => runSuiteRecord(gateway, clock, credentials, record, options, orders[o]!, o, deps.signal));
       }
+      const result = await runReference({ clock, corpus: selected, output, runId, jobs, signal: deps.signal });
+      records = [...result.records];
+      exitCode = result.header.pin_mismatch || result.header.status !== 'completed' ? 1 : 0;
+    } else {
+      let done = 0;
+      for (const { record, orders } of plan) {
+        for (let o = 0; o < orders.length; o += 1) {
+          records.push(await runSuiteRecord(gateway, clock, credentials, record, options, orders[o]!, o));
+          done += 1;
+          const last = records[records.length - 1]!;
+          process.stdout.write(last.status !== 'accepted' ? '!' : last.correct === true ? '·' : '✗');
+          if (done % 60 === 0) process.stdout.write(` ${done}/${total}\n`);
+        }
+      }
+      process.stdout.write('\n');
+      await mkdir(dirname(output), { recursive: true });
+      await writeFile(output, JSON.stringify(records, null, 2));
     }
-    process.stdout.write('\n');
-    const output = flag('output') ?? 'benchmarks/inference/jev/transfer-results.json';
-    await mkdir(dirname(output), { recursive: true });
-    await writeFile(output, JSON.stringify(records, null, 2));
     console.log(`\n${records.length} records written to ${output}`);
   }
 
@@ -295,7 +324,7 @@ async function main(): Promise<void> {
   console.log('\n  route and cost');
   console.log(`    answered by   ${JSON.stringify(answered)}`);
   console.log(`    attempts      ${attempts} for ${records.length} requests; ${limited} throttled`);
-  console.log(`    waited        ${(waited / 1000).toFixed(1)} s total on the free route`);
+  console.log(`    waited        ${(waited / 1000).toFixed(1)} s total on ${reference ? 'the reference route' : 'the free route'}`);
   console.log(`    latency (ms)  median ${q(0.5)}  p90 ${q(0.9)}  p95 ${q(0.95)}  max ${lat[lat.length - 1] ?? 0}`);
   console.log(
     `    spent         ${records.reduce((s, r) => s + r.spent, 0).toFixed(1)} micros accounted (free window; not a bill)`,
@@ -306,6 +335,20 @@ async function main(): Promise<void> {
     for (const r of failed) reasons[r.reason ?? r.status] = (reasons[r.reason ?? r.status] ?? 0) + 1;
     console.log(`    unaccepted    ${failed.length} ${JSON.stringify(reasons)}`);
   }
+  return exitCode;
 }
 
-await main();
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  if (process.argv.includes('--reference')) {
+    process.on('SIGINT', cancel);
+    process.on('SIGTERM', cancel);
+  }
+  try { process.exitCode = await main({ signal: controller.signal }); }
+  catch (error) {
+    console.error(`Jev transfer probe failed: ${formatProbeError(error)}`);
+    process.exitCode = 1;
+  }
+  finally { process.off('SIGINT', cancel); process.off('SIGTERM', cancel); }
+}
