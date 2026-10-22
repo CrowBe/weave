@@ -4,7 +4,7 @@
  * so a criteria set's `seed` reproduces every interval. Internal to the
  * package; the producers are the public surface.
  */
-import type { Aggregate, Interval } from './types.js';
+import type { Aggregate, InfoAggregate, Interval, Pair } from './types.js';
 
 export const BOOTSTRAP_RESAMPLES = 2000;
 
@@ -54,6 +54,52 @@ export function aggregate(kind: Aggregate, samples: readonly number[]): number {
     case 'p95': {
       const sorted = [...samples].sort((a, b) => a - b);
       return sorted[Math.ceil(0.95 * sorted.length) - 1]!;
+    }
+  }
+}
+
+/** `sorted[floor(q·(n - 1))]` over a non-empty sample sorted ascending. */
+function floorQuantile(q: number, samples: readonly number[]): number {
+  const sorted = [...samples].sort((a, b) => a - b);
+  return sorted[Math.floor(q * (sorted.length - 1))]!;
+}
+
+/** Expected calibration error over ten equal-width bins of `[p, y]` samples. */
+function ece10(samples: readonly Pair[]): number {
+  const bins = Array.from({ length: 10 }, () => ({ n: 0, p: 0, y: 0 }));
+  for (const [p, y] of samples) {
+    const bin = bins[Math.min(9, Math.floor(p * 10))]!;
+    bin.n += 1;
+    bin.p += p;
+    bin.y += y;
+  }
+  return bins.reduce((total, bin) => total + (bin.n ? Math.abs(bin.p - bin.y) / samples.length : 0), 0);
+}
+
+/**
+ * An info-only measure over its samples, in sample order. `n` counts samples,
+ * except for `auc`, which counts (positive, negative) pairs; `value` is null
+ * exactly when `n` is 0, for the caller to replace with the declared empty value.
+ */
+export function infoAggregate(kind: InfoAggregate, samples: readonly number[] | readonly Pair[]): { n: number; value: number | null } {
+  switch (kind) {
+    case 'ece10':
+      return { n: samples.length, value: samples.length ? ece10(samples as readonly Pair[]) : null };
+    case 'auc': {
+      const pairs = samples as readonly Pair[];
+      const positives = pairs.filter(([, y]) => y === 1);
+      const negatives = pairs.filter(([, y]) => y === 0);
+      const n = positives.length * negatives.length;
+      let wins = 0;
+      for (const [a] of positives) for (const [b] of negatives) wins += a > b ? 1 : a === b ? 0.5 : 0;
+      return { n, value: n ? wins / n : null };
+    }
+    default: {
+      const xs = samples as readonly number[];
+      if (xs.length === 0) return { n: 0, value: null };
+      if (kind === 'p50_floor') return { n: xs.length, value: floorQuantile(0.5, xs) };
+      if (kind === 'p90_floor') return { n: xs.length, value: floorQuantile(0.9, xs) };
+      return { n: xs.length, value: aggregate(kind, xs) };
     }
   }
 }

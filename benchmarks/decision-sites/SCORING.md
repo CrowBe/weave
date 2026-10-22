@@ -101,3 +101,12 @@ runtime D5. Tune pass grid: .7,.8,.85,.9,.95; fail grid: .05,.1,.15,.2,.3;
 confidence uses the declared grid. A lower pass cutoff, higher fail cutoff, or
 lower confidence floor is marked `not_applied: needs captain (#142)`. Reports
 label this profile explicitly, separately from the existing production Jev D5.
+
+Gauge (G4, #192) reproduces every number of every report row from the same
+observations: per site, the info-only criteria sets
+`decision-sites.<site>.report@1` and, for guards and D5,
+`decision-sites.<site>.probability-only@1` (`gauge.ts`), governed by this rule.
+Every measure in them is info-only: none is an objective, a gate or routing
+evidence, and the benchmark stays non-gating. Changing what this rule measures
+needs a new criteria revision issued by its authority, with evidence; editing a
+set in place unbinds every Gauge result that cites it.
