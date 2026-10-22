@@ -8,6 +8,7 @@
   "references": [
     { "path": "../agentsop" },
     { "path": "../agentfabric" },
-    { "path": "../gateway" }
+    { "path": "../gateway" },
+    { "path": "../weft" }
   ]
 }

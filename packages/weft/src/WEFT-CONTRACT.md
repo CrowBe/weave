@@ -7,7 +7,8 @@ fixtures in `fixtures/records.json` against the compiled package as part of
 in-repo (`checks/import-direction.mjs`). W3 (#185) moved `weave.trace@1` here
 as a supported version (see `weave.trace@1` below). W4 (#186) added disclosure
 classes, the inline content policy and the redacting serializer (see
-Disclosure).
+Disclosure). W5 (#187) wired Loom, the gateway and the Fabric host to emit
+through a port and added `capability.lifecycle` (see Emission).
 
 ## What a Weft trace is
 
@@ -202,6 +203,17 @@ One gateway attempt. A retry links to the attempt it repeats with `retry_of`.
 - `failure` code. Present only when `status` is `failed`.
 - `latency_ms` metric
 
+### `capability.lifecycle`
+
+A Fabric host's capability events that are not an invocation: which
+implementation an accepted invocation runs, and admission and revocation.
+
+- `operation` code, required
+- `implementation` id. A revocation of an operation with no admitted
+  implementation names none.
+- `event` code, required: `selected`, `admitted`, `revoked`
+- `contract_rev` id | null
+
 ### `action.transition`
 
 - `action_ref` id, required
@@ -379,6 +391,114 @@ totals, and `passed` have no v1 home at all. A conversion would have to invent
 those values. Carrying these records as `weft.record@1` needs a contract
 revision and emitters that record the missing fields at the source, not values
 filled in on import.
+
+## Emission
+
+Status: W5 (#187). Loom, the gateway and the Fabric host emit `weft.record@1`
+records through a port each receives at composition. None of them imports
+Weft.
+
+**Port.** Each package declares its own `WeftPort` type:
+`{ trace_id, emitter_id, emit(record) }`. Loom takes it as
+`RuntimeOptions.weft`, the gateway as `GatewayConfig.weft` and the Fabric host
+as the `weft` constructor option. The composition root chooses the trace and
+the emitter ids; one gateway or host instance is one emitter. With no port,
+nothing is emitted and no record is built. There is no ambient sink: no global,
+registry or environment variable attaches one, so a benchmark or example gets
+records only when its own composition passes a port.
+
+**Redaction before the sink.** `createWeftSink({ redact, inline?, write })` is
+Weft's sink for a port. It runs `serializeRecord` on every record and hands
+`write` only the resulting line. A record the redactor or the validator
+rejects is counted in `rejected` and not written. So the store, file or
+exporter behind `write` never sees an unredacted or invalid record.
+
+**One-way.** Emitting never changes state, scheduling, budgets or outcomes:
+
+- `emit` is called synchronously, after the transition it reports. Its result
+  is ignored. A throw is caught, a returned promise is never awaited and its
+  rejection is handled.
+- Loom and the Fabric host queue a step's records and hand them to the port
+  only once the step has completed: for Loom, the outermost append or ingress
+  arrival, with the cycle and dispatches it triggers; for the host, the whole
+  invocation, settlement, lookup or revocation. A sink that calls back into
+  the Runtime or the host from `emit` therefore starts a new step after the
+  one being reported, never inside it, and its records follow in the same
+  delivery. The run is the one where the same calls were made after that step.
+- A record is a fresh object of strings, numbers, flags and fresh arrays. It
+  holds no reference to state, grants, contracts, views, inputs, outputs or
+  provider text, so a sink that keeps or mutates it changes nothing, and no
+  grant can be re-presented from it.
+- The gateway hands a request's records to the port after the request has
+  settled, so even a slow synchronous sink cannot spend its deadline.
+- Emitting reads no clock and no store, and scans no log.
+
+**Replay.** `replay()` suppresses emission: in replay mode Loom calls no port,
+whether or not one is configured. The live run already emitted these records,
+and a replay that diverged would otherwise submit a different record under an
+existing identity. `recover()` loads the journal without emitting; emission
+resumes with the first observation appended after the load. Loading indexes
+the journaled dispatches, so a dispatch after recovery still supersedes a
+thread opened before the crash, and a queued action that starts after
+recovery is not opened a second time. Replay invokes
+neither the gateway nor the host, so they emit nothing either.
+
+**Identity and order.** Loom's record ids are derived from the log, so a run
+yields the same ids every time: `<emitter>:goal:<goal.opened seq>` (a run may
+open another goal after one completes or is missed),
+`<emitter>:cycle:<cycle_no>:<trigger seq>` (Loom may reuse a cycle number after
+recovery; the trigger keeps the id unique), `<emitter>:thread:<action_id>:<transition>`
+(`cancelled` adds the request's seq, since a cancel may be repeated),
+`<emitter>:action:<action_id>:<state>`, `<emitter>:judgment:<ref>` and
+`<emitter>:outcome:goal:<goal.opened seq>`. Loom's `sequence` is the highest observation seq
+times 1024 plus an offset, so it keeps increasing across recovery. Gateway and
+Fabric sequences count per emitter instance; a restarted gateway or host takes
+a new emitter id. Loom evidence cites an observation by its seq (`seq:<n>`),
+never by its observation id, so text a source chose does not enter a record
+through a citation.
+
+**Loom.** A Loom Thread in the reference stack is one dispatched action's line
+of work, and `thread_id` is the action id.
+
+| Loom event | Records |
+| --- | --- |
+| `goal.opened` | `goal.intent`; `statement` is a `private` reference to the purpose's digest, never its text |
+| A cycle ends | `cycle.weighed` with every formed candidate, cited as its candidate id with `#` written `:`. A `deferred` candidate (`frontier.weigh@1`) is `not_reached` |
+| An action is queued or started | `thread.transition` `opened` (parent: the cycle) and `action.transition` `pending` or `running`. A candidate with dependencies adds `joined`, with a `joins` link to each dependency thread's `closed` record. A thread that supersedes an earlier one adds `superseded` to the earlier thread |
+| A queued action starts | `action.transition` `running` |
+| `action.cancel_requested` | `thread.transition` `cancelled` with a `cancels` link to the thread's `opened` record, and `action.transition` `cancelled` if the action was still queued |
+| `action.result` | `action.transition` with the outcome, and `thread.transition` `closed` caused by it |
+| `weights.recorded` from a scripted decision layer, `inference.recorded` | `judgment`. A scripted weighing has no inference request, so its `request_ref` is the observation id (`weights:c<n>`) |
+| The goal completes or is missed | `outcome` for the goal |
+
+A dispatched action supersedes the latest earlier thread of the same operation
+over the same resources, revisions ignored: re-inspecting a changed source
+supersedes the earlier inspection. The `superseded` record belongs to the
+earlier thread; its `supersedes` link names the `opened` record of the thread
+that took over. Joins, supersession and cancellation are always these links,
+never inferred from order or timing.
+
+**Gateway.** Each time a request routes to a unit other than the one before,
+the gateway emits `route.selected` with the exclusions behind it (the first
+64, in routing order). An
+escalation `supersedes` the previous route and is `caused_by` the attempt that
+ended it. Every attempt emits `inference.attempt`, child of its route, with
+tokens, `spent_micros` (rounded up), `cost_is_upper_bound` and `latency_ms`
+from the injected clock; every attempt after the first has a `retry_of` link to
+the one before. A failed attempt adds an `error` child carrying the provider
+failure code and `retryable`, never the provider's message.
+
+**Fabric.** An accepted invocation emits `capability.lifecycle` `selected`
+naming the implementation, and `capability.invoked` when it settles; a settled
+invocation whose cancellation was requested and that did not succeed is
+`cancelled`. A rejected invocation emits `error` with the failure code.
+Installing an admitted implementation emits `admitted`; revoking an operation
+emits `revoked` for each implementation it had.
+
+**Across emitters.** Gateway and Fabric records carry no `thread_id`. They are
+correlated with Loom's by evidence refs: `inference_request` (the gateway
+request id; Loom's framing request uses the same id) and `invocation` (Loom's
+action id is the invocation id). A citation is an index, not a causal claim.
 
 ## OpenTelemetry
 

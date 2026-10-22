@@ -15,6 +15,7 @@
     "@weave/gateway": "*"
   },
   "devDependencies": {
-    "@weave/agentfabric": "*"
+    "@weave/agentfabric": "*",
+    "@weave/weft": "*"
   }
 }

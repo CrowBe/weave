@@ -567,6 +567,62 @@
           }
         }
       }
+    },
+    {
+      "name": "Fabric admission of an implementation",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-capability.lifecycle",
+        "emitter": {
+          "kind": "fabric",
+          "id": "fabric.host"
+        },
+        "sequence": 9,
+        "kind": "capability.lifecycle",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "invocation",
+            "ref": "a-3"
+          }
+        ],
+        "fields": {
+          "operation": "report.fold",
+          "implementation": "impl-2",
+          "event": "admitted",
+          "contract_rev": "report.fold@2"
+        }
+      }
+    },
+    {
+      "name": "Fabric revocation naming no implementation",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-capability.revoked",
+        "emitter": {
+          "kind": "fabric",
+          "id": "fabric.host"
+        },
+        "sequence": 9,
+        "kind": "capability.lifecycle",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "invocation",
+            "ref": "a-3"
+          }
+        ],
+        "fields": {
+          "operation": "report.fold",
+          "event": "revoked"
+        }
+      }
     }
   ],
   "invalid": [
@@ -2390,6 +2446,63 @@
             "c63",
             "c64"
           ]
+        }
+      }
+    },
+    {
+      "name": "an unknown capability lifecycle event",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-capability.lifecycle",
+        "emitter": {
+          "kind": "fabric",
+          "id": "fabric.host"
+        },
+        "sequence": 9,
+        "kind": "capability.lifecycle",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "invocation",
+            "ref": "a-3"
+          }
+        ],
+        "fields": {
+          "operation": "report.fold",
+          "implementation": "impl-2",
+          "event": "promoted"
+        }
+      }
+    },
+    {
+      "name": "a capability lifecycle record with no operation",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "r-capability.lifecycle",
+        "emitter": {
+          "kind": "fabric",
+          "id": "fabric.host"
+        },
+        "sequence": 9,
+        "kind": "capability.lifecycle",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "invocation",
+            "ref": "a-3"
+          }
+        ],
+        "fields": {
+          "implementation": "impl-2",
+          "event": "selected"
         }
       }
     }

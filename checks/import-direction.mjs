@@ -15,6 +15,8 @@
  *   tapestry-web imports tapestry only
  *   loom-binding imports tapestry and weave only; its tests may compose the
  *                reference host to exercise the read port
+ *   weave tests  may import weft to validate what the reference stack emits;
+ *                weave source never does (W5)
  *   the fake host (weave test code) depends only on the host interface (agentsop)
  *
  * Consumers (benchmarks/, examples/) are leaves. They may import any package —
@@ -51,6 +53,7 @@ const ALLOWED = {
 /** Test-only edges. Production source stays on ALLOWED. */
 const TEST_EXTRA = {
   'loom-binding': new Set(['agentfabric', 'agentsop']),
+  weave: new Set(['weft']),
 };
 
 const TAPESTRY_TOOLKIT =

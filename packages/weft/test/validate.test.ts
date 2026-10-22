@@ -107,8 +107,9 @@ test('optional fields are typed when present', () => {
 
 test('every v1 kind lists its fields', () => {
   assert.deepEqual(Object.keys(KIND_FIELDS).sort(), [
-    'action.transition', 'budget', 'capability.invoked', 'context.assembled', 'cycle.weighed', 'error',
+    'action.transition', 'budget', 'capability.invoked', 'capability.lifecycle', 'context.assembled', 'cycle.weighed', 'error',
     'goal.intent', 'inference.attempt', 'judgment', 'outcome', 'route.selected', 'thread.transition',
   ]);
   assert.deepEqual(KIND_FIELDS.judgment, ['site', 'request_ref', 'accepted', 'confidence', 'routed_unit']);
+  assert.deepEqual(KIND_FIELDS['capability.lifecycle'], ['operation', 'implementation', 'event', 'contract_rev']);
 });

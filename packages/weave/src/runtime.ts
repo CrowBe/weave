@@ -75,6 +75,7 @@ import type {
 } from './types.js';
 import { hasMidValue, payloadBytes, type TraceRetention } from './log-bound.js';
 import { validate } from './validation.js';
+import { LoomWeft, type WeftPort } from './weft.js';
 
 export { ScriptedDecisionLayer } from './decision.js';
 export { GatewayDecisionLayer, fixtureGateway, HOSTED_DESTINATION, LOCAL_DESTINATION } from './gateway-decision.js';
@@ -125,6 +126,8 @@ export interface RuntimeOptions {
   /** Canonical payload bound. An observation over it is rejected before it is durable. */
   readonly logBound?: { readonly max_observation_bytes: number };
   readonly traceRetention?: TraceRetention;
+  /** Weft emission port (WEFT-CONTRACT.md, Emission). Absent: nothing is emitted. */
+  readonly weft?: WeftPort;
 }
 
 const RUNTIME_SOURCE = { kind: 'runtime', id: 'weave' } as const;
@@ -222,6 +225,7 @@ export class Runtime {
   /** Conclusion ids already applied to State, so an import can skip without scanning. */
   private readonly importedConclusions = new Set<string>();
   private transitionLock = false;
+  private readonly weft: LoomWeft | null;
 
   constructor(
     private readonly options: RuntimeOptions,
@@ -231,6 +235,8 @@ export class Runtime {
     this.slots = options.executionSlots ?? Number.POSITIVE_INFINITY;
     this.frameProfile = options.frameProfile ?? DEFAULT_FRAME_PROFILE;
     this.replayLog = recorded;
+    // Replay re-derives what the live run already emitted: it emits nothing (WEFT-CONTRACT.md, Emission).
+    this.weft = options.weft && recorded === null ? new LoomWeft(options.weft) : null;
     runtimeLogs.set(this, this.log);
     if (recorded) {
       for (const observation of recorded) {
@@ -466,7 +472,28 @@ export class Runtime {
   // Log
   // -------------------------------------------------------------------------
 
+  /**
+   * Run one Loom step. Weft records it builds reach the port once the
+   * outermost step has completed, never mid-transition (weft.ts).
+   */
+  private step<T>(run: () => T): T {
+    const weft = this.weft;
+    if (!weft) {
+      return run();
+    }
+    weft.enter();
+    try {
+      return run();
+    } finally {
+      weft.leave();
+    }
+  }
+
   private admit(input: ObservationInput, triggerCycle: boolean): Observation {
+    return this.step(() => this.admitStep(input, triggerCycle));
+  }
+
+  private admitStep(input: ObservationInput, triggerCycle: boolean): Observation {
     const observation = this.append(input);
     if (
       triggerCycle &&
@@ -484,7 +511,11 @@ export class Runtime {
     return this.seqHigh + 1;
   }
 
-  private append(
+  private append(input: ObservationInput & { forced?: Observation['validation'] }): Observation {
+    return this.step(() => this.appendStep(input));
+  }
+
+  private appendStep(
     input: ObservationInput & { forced?: Observation['validation'] },
   ): Observation {
     this.transitionLock = true;
@@ -544,10 +575,12 @@ export class Runtime {
       this.seqHigh = observation.seq;
       this.observationIds.add(observation.observation_id);
       if (observation.validation.status === 'accepted') {
+        const goalBefore = this.weft ? this.current.goal?.status : undefined;
         applyAccepted(this.current, observation);
         if (observation.payload_type === 'conclusion.cached') {
           this.importedConclusions.add((observation.payload as { conclusion_id: string }).conclusion_id);
         }
+        this.weft?.observed(observation, this.view(), goalBefore);
         this.followAccepted(observation);
       } else {
         this.noteRejectedAmendment(observation);
@@ -595,6 +628,7 @@ export class Runtime {
     const cycle_no = this.nextCycleNo();
     const state_revision = this.current.state_revision;
     const state = this.view();
+    this.weft?.cycleStarted(cycle_no, trigger);
 
     const formation = formCandidates(state, this.describe, (ref) =>
       this.replayMode ? ref : this.options.host.canonicalResource(ref),
@@ -643,7 +677,7 @@ export class Runtime {
       outcome = { status: 'blocked', reason: 'profile record missing' };
     }
 
-    this.cycles.push({
+    const record: CycleRecord = {
       cycle_no,
       state_revision,
       procedure: formation.procedure,
@@ -653,7 +687,9 @@ export class Runtime {
       not_selected: selection.not_selected,
       outcome,
       cost_micros: this.cycleAssemblyCost,
-    });
+    };
+    this.cycles.push(record);
+    this.weft?.cycle(record, trigger, this.seqHigh);
     this.cycleAssemblyCost = 0;
     this.preparedViews.clear();
   }
@@ -991,6 +1027,10 @@ export class Runtime {
   }
 
   private onGatewayWeigh(request_id: string, request: WeighRequest, result: WeighResult): void {
+    this.step(() => this.onGatewayWeighStep(request_id, request, result));
+  }
+
+  private onGatewayWeighStep(request_id: string, request: WeighRequest, result: WeighResult): void {
     this.inferAbort.delete(request_id);
     const recordedPayload: InferenceRecordedPayload = {
       request_id,
@@ -1185,7 +1225,7 @@ export class Runtime {
           },
           controller.signal,
         )
-        .then((outcome) => {
+        .then((outcome) => this.step(() => {
           this.inferAbort.delete(request_id);
           this.gatewayIngress.submit({
             observation_id: `inference:recorded:${request_id}`,
@@ -1211,7 +1251,7 @@ export class Runtime {
           }
           const proposal = validateProposal(parsed.bindings, this.view(), this.describe);
           this.recordResult(started.action_id, { outcome: 'succeeded', output: proposal }, GATEWAY_SOURCE);
-        }),
+        })),
     );
     return null;
   }
@@ -1245,6 +1285,7 @@ export class Runtime {
     }
     const running = Object.values(this.current.actions).filter((a) => a.state === 'running').length;
     const queued = running >= this.slots;
+    this.weft?.dispatch(candidate);
     const recorded = this.append({
       observation_id: `${queued ? 'queued' : 'started'}:${action_id}`,
       source: RUNTIME_SOURCE,
@@ -1253,6 +1294,7 @@ export class Runtime {
       payload_version: 1,
       payload: started,
     });
+    this.weft?.dispatch(null);
     if (recorded.validation.status !== 'accepted') {
       if (recorded.payload_type === 'action.started') {
         return null;
@@ -1304,6 +1346,20 @@ export class Runtime {
       cited_evidence?: readonly Seq[];
     },
   ): void {
+    this.step(() => this.recordResultStep(action_id, outcome, source, extra));
+  }
+
+  private recordResultStep(
+    action_id: ActionId,
+    outcome: ActionOutcome,
+    source: typeof RUNTIME_SOURCE | typeof HOST_SOURCE | typeof GATEWAY_SOURCE,
+    extra?: {
+      implementation_id?: string;
+      cost_micros?: number;
+      conclusion_id?: string;
+      cited_evidence?: readonly Seq[];
+    },
+  ): void {
     const payload: {
       action_id: ActionId;
       outcome: ActionOutcome;
@@ -1342,6 +1398,10 @@ export class Runtime {
   }
 
   private recordReconciled(action: ActionRecord, outcome: ActionOutcome): void {
+    this.step(() => this.recordReconciledStep(action, outcome));
+  }
+
+  private recordReconciledStep(action: ActionRecord, outcome: ActionOutcome): void {
     const payload: ActionReconciledPayload = {
       action_id: action.action_id,
       invocation_id: action.invocation_id ?? action.action_id,
@@ -1630,6 +1690,10 @@ export class Runtime {
   }
 
   reconcile(): void {
+    this.step(() => this.reconcileStep());
+  }
+
+  private reconcileStep(): void {
     this.abandonUnrecordedWeighs();
     const unfinished = Object.values(this.current.actions).filter(
       (a) => a.state === 'running' || a.state === 'pending' || (a.state === 'uncertain' && !a.reconciled),
@@ -1713,6 +1777,7 @@ export class Runtime {
         if (observation.payload_type === 'conclusion.cached') {
           this.importedConclusions.add((observation.payload as { conclusion_id: string }).conclusion_id);
         }
+        this.weft?.loaded(observation);
       }
     }
   }

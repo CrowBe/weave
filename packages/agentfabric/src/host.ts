@@ -56,6 +56,7 @@ import {
   type InvocationRecord,
   type PublicationRecord,
 } from './store.js';
+import { FabricWeft, type WeftPort } from './weft.js';
 
 export interface PublishInput {
   readonly report: { readonly entries: readonly unknown[]; readonly read_set: readonly { resource: string; revision: number }[] };
@@ -184,6 +185,7 @@ export class AgentFabricHost implements CapabilityHost {
   private readonly reconciling = new Set<string>();
   /** Legacy invocations whose resource scopes cannot be reconstructed. */
   private readonly unscopedRecovery = new Map<string, string>();
+  private readonly weft: FabricWeft | null;
 
   constructor(options: {
     authority: GrantAuthority;
@@ -192,6 +194,8 @@ export class AgentFabricHost implements CapabilityHost {
     contracts?: readonly CapabilityContract[];
     gateway?: InferenceGateway;
     shell?: ShellHostOptions;
+    /** Weft emission port (WEFT-CONTRACT.md, Emission). Absent: nothing is emitted. */
+    weft?: WeftPort;
   }) {
     this.authority = options.authority;
     this.store = options.store ?? new FabricStore();
@@ -214,6 +218,8 @@ export class AgentFabricHost implements CapabilityHost {
     }
     this.restoreAdmissions();
     this.restoreReservations();
+    // Restored admissions were reported when they happened; emission starts here.
+    this.weft = options.weft ? new FabricWeft(options.weft) : null;
   }
 
   snapshot(): FabricSnapshot {
@@ -487,7 +493,12 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   revoke(operation: string, reason = 'revoked'): void {
+    this.step(() => this.revokeStep(operation, reason));
+  }
+
+  private revokeStep(operation: string, reason: string): void {
     void reason;
+    this.weft?.revoked(operation, (this.admitted.get(operation) ?? []).map((record) => record.id));
     this.live.delete(operation);
     this.admitted.delete(operation);
     this.status.set(operation, 'unavailable');
@@ -539,6 +550,7 @@ export class AgentFabricHost implements CapabilityHost {
       records.push(fresh);
     }
     this.admitted.set(contract.id, records);
+    this.weft?.admitted(contract.id, implementationId, contract.revision);
   }
 
   implementationRecords(operation: string): ImplementationProfile[] {
@@ -658,6 +670,15 @@ export class AgentFabricHost implements CapabilityHost {
     inputs: unknown,
     options?: InvokeOptions,
   ): InvocationHandle | InvocationRejected {
+    return this.step(() => this.invokeStep(grant, operation, inputs, options));
+  }
+
+  private invokeStep(
+    grant: Grant | null,
+    operation: string,
+    inputs: unknown,
+    options?: InvokeOptions,
+  ): InvocationHandle | InvocationRejected {
     const prepared = this.prepare(grant, operation, inputs, options);
     if (prepared.kind === 'rejected') {
       return prepared;
@@ -682,6 +703,7 @@ export class AgentFabricHost implements CapabilityHost {
       implementation_id: open.implementation_id,
       inputs: open.inputs,
     });
+    this.weft?.selected(open.invocation_id, operation, open.implementation_id, open.grant.contract_rev);
     this.open.set(open.invocation_id, open);
     const result = new Promise<InvocationOutcome>((resolve) => {
       open.resolve = resolve;
@@ -699,6 +721,10 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   lookup(invocation_id: string, grant: Grant | null): LookupResult {
+    return this.step(() => this.lookupStep(invocation_id, grant));
+  }
+
+  private lookupStep(invocation_id: string, grant: Grant | null): LookupResult {
     if (this.faults.lookupUnavailable) {
       this.lookups.push({ invocation_id, granted: false });
       return this.reject('RESOLVER_UNAVAILABLE', 'outcome lookup unavailable');
@@ -1056,6 +1082,10 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   private finish(open: OpenInvocation, value: unknown, status?: InvocationRecord['status']): void {
+    this.step(() => this.finishStep(open, value, status));
+  }
+
+  private finishStep(open: OpenInvocation, value: unknown, status?: InvocationRecord['status']): void {
     let outcome: InvocationOutcome;
     try {
       outcome = normalizeInvocationOutcome(value);
@@ -1110,6 +1140,12 @@ export class AgentFabricHost implements CapabilityHost {
     }
     open.outcome = outcome;
     open.phase = 'done';
+    this.weft?.invoked(
+      open.invocation_id,
+      open.implementation_id,
+      open.grant.contract_rev,
+      open.cancel_requested && outcome.outcome !== 'succeeded' ? 'cancelled' : outcome.outcome,
+    );
     // A failed marker write leaves a running durable record. Retain the
     // settled uncertainty until durable reconciliation removes it.
     if (persisted) this.open.delete(open.invocation_id);
@@ -1716,9 +1752,18 @@ export class AgentFabricHost implements CapabilityHost {
     this.resourceAccesses.push({ handle, operation });
   }
 
+  /**
+   * Run one host step. Weft records it builds reach the port once the
+   * outermost step has completed, never mid-invocation or mid-settlement.
+   */
+  private step<T>(run: () => T): T {
+    return this.weft ? this.weft.step(run) : run();
+  }
+
   private reject(code: FailureCode, reason: string): InvocationRejected {
     const rejection: InvocationRejected = { kind: 'rejected', code, reason };
     this.rejections.push(rejection);
+    this.weft?.rejected(code);
     return rejection;
   }
 
