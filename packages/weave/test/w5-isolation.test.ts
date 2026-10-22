@@ -4,8 +4,8 @@
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { stableStringify } from '@weave/weave';
-import { collector, fingerprint, runW5, w5World, type Rec, type Sink, type W5Sinks, type W5World } from './w5-fixture.js';
+import { stableStringify, type ObservationInput } from '@weave/weave';
+import { collector, fingerprint, runW5, settleAsync, w5World, type Rec, type Sink, type W5Sinks, type W5World } from './w5-fixture.js';
 
 interface RunPrint {
   readonly state: string;
@@ -190,5 +190,66 @@ describe('W5 emission is one-way', () => {
     );
     const loomOnly = reference.records.filter((r) => r.emitter.kind === 'loom');
     assert.equal(stableStringify(clean.records), stableStringify(loomOnly));
+  });
+  it('W5-T19 a sink that calls back into the Runtime is served after the transition, never inside it', async () => {
+    const changed = (world: W5World): ObservationInput => ({
+      observation_id: 'test:source.changed:beta',
+      source: { kind: 'test', id: 'w5-reentrant' },
+      caused_by: null,
+      payload_type: 'source.changed',
+      payload_version: 1,
+      payload: { resource: world.beta, revision: 2, content: 'beta changed' },
+    });
+    const tick = { observation_id: 'clock:tick:reentrant', caused_by: null, payload_type: 'clock.tick', payload_version: 1, payload: { tick: 7 } } as const;
+    const firstRunning = (world: W5World): string =>
+      Object.values(world.runtime.state().actions).filter((a) => a.state === 'running').map((a) => a.action_id).sort()[0] as string;
+    const print = (world: W5World) => ({
+      ...fingerprint(world),
+      invocations: stableStringify(world.host.invocations),
+      fabric: stableStringify(world.host.snapshot()),
+    });
+
+    // Reference: the same calls, made once the action's result has been recorded.
+    const reference = w5World({ loom: () => {} });
+    await settleAsync(reference);
+    const referenceId = firstRunning(reference);
+    reference.host.release(referenceId);
+    await reference.runtime.settle(referenceId);
+    const afterTransition = stableStringify(reference.runtime.state());
+    assert.equal(reference.runtime.observe(changed(reference)).validation.status, 'accepted');
+    assert.equal(reference.runtime.clock.submit(tick).validation.status, 'accepted');
+    await settleAsync(reference);
+
+    let armed = false;
+    let seen: string | null = null;
+    const world: W5World = w5World({
+      loom: (record) => {
+        // The action's result is reported while Loom records it, before the queue drains.
+        if (!armed || record.kind !== 'action.transition' || record.fields['state'] !== 'succeeded') return;
+        armed = false;
+        seen = stableStringify(world.runtime.state());
+        assert.equal(world.runtime.observe(changed(world)).validation.status, 'accepted');
+        assert.equal(world.runtime.clock.submit(tick).validation.status, 'accepted');
+      },
+    });
+    await settleAsync(world);
+    const id = firstRunning(world);
+    assert.equal(id, referenceId);
+    armed = true;
+    world.host.release(id);
+    await world.runtime.settle(id);
+    assert.ok(seen !== null, 'the sink never ran');
+    // The sink saw the state the transition left, not a half-applied one.
+    assert.equal(seen, afterTransition, 'nested call ran mid-transition');
+    await settleAsync(world);
+    const actual = print(world);
+    const expected = print(reference);
+    assert.equal(actual.state, expected.state, 'state differs');
+    assert.equal(actual.trace, expected.trace, 'Loom trace differs');
+    assert.equal(actual.invocations, expected.invocations, 'host invocations differ');
+    assert.equal(actual.fabric, expected.fabric, 'host store differs');
+    // No grant is presented twice: every host invocation is its own action.
+    const ids = world.host.invocations.map((i) => i.invocation_id);
+    assert.equal(new Set(ids).size, ids.length);
   });
 });

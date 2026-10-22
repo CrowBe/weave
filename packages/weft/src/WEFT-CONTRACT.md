@@ -418,6 +418,13 @@ exporter behind `write` never sees an unredacted or invalid record.
 - `emit` is called synchronously, after the transition it reports. Its result
   is ignored. A throw is caught, a returned promise is never awaited and its
   rejection is handled.
+- Loom and the Fabric host queue a step's records and hand them to the port
+  only once the step has completed: for Loom, the outermost append or ingress
+  arrival, with the cycle and dispatches it triggers; for the host, the whole
+  invocation, settlement, lookup or revocation. A sink that calls back into
+  the Runtime or the host from `emit` therefore starts a new step after the
+  one being reported, never inside it, and its records follow in the same
+  delivery. The run is the one where the same calls were made after that step.
 - A record is a fresh object of strings, numbers, flags and fresh arrays. It
   holds no reference to state, grants, contracts, views, inputs, outputs or
   provider text, so a sink that keeps or mutates it changes nothing, and no

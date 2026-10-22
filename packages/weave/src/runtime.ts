@@ -472,7 +472,28 @@ export class Runtime {
   // Log
   // -------------------------------------------------------------------------
 
+  /**
+   * Run one Loom step. Weft records it builds reach the port once the
+   * outermost step has completed, never mid-transition (weft.ts).
+   */
+  private step<T>(run: () => T): T {
+    const weft = this.weft;
+    if (!weft) {
+      return run();
+    }
+    weft.enter();
+    try {
+      return run();
+    } finally {
+      weft.leave();
+    }
+  }
+
   private admit(input: ObservationInput, triggerCycle: boolean): Observation {
+    return this.step(() => this.admitStep(input, triggerCycle));
+  }
+
+  private admitStep(input: ObservationInput, triggerCycle: boolean): Observation {
     const observation = this.append(input);
     if (
       triggerCycle &&
@@ -490,7 +511,11 @@ export class Runtime {
     return this.seqHigh + 1;
   }
 
-  private append(
+  private append(input: ObservationInput & { forced?: Observation['validation'] }): Observation {
+    return this.step(() => this.appendStep(input));
+  }
+
+  private appendStep(
     input: ObservationInput & { forced?: Observation['validation'] },
   ): Observation {
     this.transitionLock = true;
@@ -1002,6 +1027,10 @@ export class Runtime {
   }
 
   private onGatewayWeigh(request_id: string, request: WeighRequest, result: WeighResult): void {
+    this.step(() => this.onGatewayWeighStep(request_id, request, result));
+  }
+
+  private onGatewayWeighStep(request_id: string, request: WeighRequest, result: WeighResult): void {
     this.inferAbort.delete(request_id);
     const recordedPayload: InferenceRecordedPayload = {
       request_id,
@@ -1196,7 +1225,7 @@ export class Runtime {
           },
           controller.signal,
         )
-        .then((outcome) => {
+        .then((outcome) => this.step(() => {
           this.inferAbort.delete(request_id);
           this.gatewayIngress.submit({
             observation_id: `inference:recorded:${request_id}`,
@@ -1222,7 +1251,7 @@ export class Runtime {
           }
           const proposal = validateProposal(parsed.bindings, this.view(), this.describe);
           this.recordResult(started.action_id, { outcome: 'succeeded', output: proposal }, GATEWAY_SOURCE);
-        }),
+        })),
     );
     return null;
   }
@@ -1317,6 +1346,20 @@ export class Runtime {
       cited_evidence?: readonly Seq[];
     },
   ): void {
+    this.step(() => this.recordResultStep(action_id, outcome, source, extra));
+  }
+
+  private recordResultStep(
+    action_id: ActionId,
+    outcome: ActionOutcome,
+    source: typeof RUNTIME_SOURCE | typeof HOST_SOURCE | typeof GATEWAY_SOURCE,
+    extra?: {
+      implementation_id?: string;
+      cost_micros?: number;
+      conclusion_id?: string;
+      cited_evidence?: readonly Seq[];
+    },
+  ): void {
     const payload: {
       action_id: ActionId;
       outcome: ActionOutcome;
@@ -1355,6 +1398,10 @@ export class Runtime {
   }
 
   private recordReconciled(action: ActionRecord, outcome: ActionOutcome): void {
+    this.step(() => this.recordReconciledStep(action, outcome));
+  }
+
+  private recordReconciledStep(action: ActionRecord, outcome: ActionOutcome): void {
     const payload: ActionReconciledPayload = {
       action_id: action.action_id,
       invocation_id: action.invocation_id ?? action.action_id,
@@ -1643,6 +1690,10 @@ export class Runtime {
   }
 
   reconcile(): void {
+    this.step(() => this.reconcileStep());
+  }
+
+  private reconcileStep(): void {
     this.abandonUnrecordedWeighs();
     const unfinished = Object.values(this.current.actions).filter(
       (a) => a.state === 'running' || a.state === 'pending' || (a.state === 'uncertain' && !a.reconciled),

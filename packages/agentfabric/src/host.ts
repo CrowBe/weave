@@ -493,6 +493,10 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   revoke(operation: string, reason = 'revoked'): void {
+    this.step(() => this.revokeStep(operation, reason));
+  }
+
+  private revokeStep(operation: string, reason: string): void {
     void reason;
     this.weft?.revoked(operation, (this.admitted.get(operation) ?? []).map((record) => record.id));
     this.live.delete(operation);
@@ -666,6 +670,15 @@ export class AgentFabricHost implements CapabilityHost {
     inputs: unknown,
     options?: InvokeOptions,
   ): InvocationHandle | InvocationRejected {
+    return this.step(() => this.invokeStep(grant, operation, inputs, options));
+  }
+
+  private invokeStep(
+    grant: Grant | null,
+    operation: string,
+    inputs: unknown,
+    options?: InvokeOptions,
+  ): InvocationHandle | InvocationRejected {
     const prepared = this.prepare(grant, operation, inputs, options);
     if (prepared.kind === 'rejected') {
       return prepared;
@@ -708,6 +721,10 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   lookup(invocation_id: string, grant: Grant | null): LookupResult {
+    return this.step(() => this.lookupStep(invocation_id, grant));
+  }
+
+  private lookupStep(invocation_id: string, grant: Grant | null): LookupResult {
     if (this.faults.lookupUnavailable) {
       this.lookups.push({ invocation_id, granted: false });
       return this.reject('RESOLVER_UNAVAILABLE', 'outcome lookup unavailable');
@@ -1065,6 +1082,10 @@ export class AgentFabricHost implements CapabilityHost {
   }
 
   private finish(open: OpenInvocation, value: unknown, status?: InvocationRecord['status']): void {
+    this.step(() => this.finishStep(open, value, status));
+  }
+
+  private finishStep(open: OpenInvocation, value: unknown, status?: InvocationRecord['status']): void {
     let outcome: InvocationOutcome;
     try {
       outcome = normalizeInvocationOutcome(value);
@@ -1729,6 +1750,14 @@ export class AgentFabricHost implements CapabilityHost {
 
   private noteAccess(handle: string, operation: string): void {
     this.resourceAccesses.push({ handle, operation });
+  }
+
+  /**
+   * Run one host step. Weft records it builds reach the port once the
+   * outermost step has completed, never mid-invocation or mid-settlement.
+   */
+  private step<T>(run: () => T): T {
+    return this.weft ? this.weft.step(run) : run();
   }
 
   private reject(code: FailureCode, reason: string): InvocationRejected {

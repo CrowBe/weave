@@ -87,4 +87,96 @@ describe('W5 Fabric emission', () => {
     assert.equal(restored.implementationAdmitted(SOURCE_INSPECT.id, 'impl.stored'), true);
     assert.deepEqual(records, []);
   });
+  it('W5-T58 a sink that invokes the host from inside an invocation is served after the invocation step', async () => {
+    const run = async (reenter: boolean) => {
+      const authority = createGrantAuthority();
+      let host!: AgentFabricHost;
+      let source = '';
+      let grant!: Grant;
+      let nested: unknown = null;
+      let armed = false;
+      host = new AgentFabricHost({
+        authority,
+        weft: {
+          trace_id: 'run-1',
+          emitter_id: 'fab',
+          emit: (record) => {
+            if (!armed || record.fields['event'] !== 'selected') return;
+            armed = false;
+            // The same grant presented again from inside the sink.
+            nested = host.invoke(grant, SOURCE_INSPECT.id, { source }, { invocation_id: 'a:1:1' });
+          },
+        },
+      });
+      source = host.registerSource('mem:w5', 'one\ntwo');
+      host.installAdmitted(SOURCE_INSPECT, () => ({ outcome: 'succeeded', output: { line_count: 2 } }), 'impl.one');
+      grant = inspectGrant(authority, source, 'a:1:1');
+      armed = reenter;
+      const handle = host.invoke(grant, SOURCE_INSPECT.id, { source }, { invocation_id: 'a:1:1' });
+      if (!reenter) nested = host.invoke(grant, SOURCE_INSPECT.id, { source }, { invocation_id: 'a:1:1' });
+      assert.equal(handle.kind, 'handle');
+      if (handle.kind !== 'handle') throw new Error('expected a handle');
+      host.release('a:1:1');
+      const outcome = await handle.result;
+      return JSON.stringify({
+        nested,
+        outcome,
+        rejections: host.rejections,
+        invocations: host.invocations,
+        store: host.snapshot(),
+        open: host.openInvocationIds(),
+        // A consumed grant cannot be marked invoked again.
+        reusable: authority.markInvoked(grant),
+      });
+    };
+    const after = await run(false);
+    assert.match(after, /invocation is already active/);
+    assert.equal(await run(true), after);
+  });
+
+  it('W5-T59 a sink that invokes the host while an invocation settles is served after it settles', async () => {
+    const run = async (reenter: boolean) => {
+      const authority = createGrantAuthority();
+      let host!: AgentFabricHost;
+      let source = '';
+      let nested: unknown = null;
+      let armed = reenter;
+      const again = (): void => {
+        const grant = inspectGrant(authority, source, 'a:1:2');
+        nested = host.invoke(grant, SOURCE_INSPECT.id, { source }, { invocation_id: 'a:1:2' });
+        // After the first settles its result is cached: the second may complete without a release.
+        if (host.openActionIds().includes('a:1:2')) host.release('a:1:2');
+      };
+      host = new AgentFabricHost({
+        authority,
+        weft: {
+          trace_id: 'run-1',
+          emitter_id: 'fab',
+          emit: (record) => {
+            if (!armed || record.kind !== 'capability.invoked') return;
+            armed = false;
+            again();
+          },
+        },
+      });
+      source = host.registerSource('mem:w5', 'one\ntwo');
+      host.installAdmitted(SOURCE_INSPECT, () => ({ outcome: 'succeeded', output: { line_count: 2 } }), 'impl.one');
+      const handle = host.invoke(inspectGrant(authority, source, 'a:1:1'), SOURCE_INSPECT.id, { source }, { invocation_id: 'a:1:1' });
+      if (handle.kind !== 'handle') throw new Error('expected a handle');
+      host.release('a:1:1');
+      const outcome = await handle.result;
+      if (!reenter) again();
+      const second = nested as { kind: string; result?: Promise<unknown> } | null;
+      const secondOutcome = second?.kind === 'handle' ? await second.result : null;
+      return JSON.stringify({
+        outcome,
+        secondOutcome,
+        rejections: host.rejections,
+        invocations: host.invocations,
+        store: host.snapshot(),
+        open: host.openInvocationIds(),
+      });
+    };
+    assert.equal(await run(true), await run(false));
+  });
 });

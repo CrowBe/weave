@@ -3,7 +3,9 @@
  *
  * The port is declared here so Loom never imports Weft. Records are a
  * projection of what Loom already recorded: built after the transition they
- * report, from fresh values, and never read back.
+ * report, from fresh values, and never read back. They reach the port only
+ * once Loom's step has completed, so a sink that calls back into the Runtime
+ * never sees, or changes, a half-applied transition.
  */
 import { createHash } from 'node:crypto';
 import type {
@@ -56,8 +58,47 @@ export class LoomWeft {
   private goalSeq: Seq | null = null;
   /** Latest thread per operation and resources, revisions ignored: the thread a new dispatch supersedes. */
   private readonly latest = new Map<string, ActionId>();
+  /** Records built during the running step, in order, delivered when it completes. */
+  private readonly pending: WeftRecordShape[] = [];
+  /** Nesting of Loom steps: an observation appended while a cycle runs is part of the cycle's step. */
+  private depth = 0;
+  /** Set while records are delivered: a step a sink starts is delivered by the same loop. */
+  private flushing = false;
 
   constructor(private readonly port: WeftPort) {}
+
+  /** A Loom step begins. Steps nest; records wait for the outermost to end. */
+  enter(): void {
+    this.depth += 1;
+  }
+
+  /** A Loom step ends. At the outermost, its records reach the port. */
+  leave(): void {
+    this.depth -= 1;
+    if (this.depth === 0) {
+      this.flush();
+    }
+  }
+
+  /**
+   * Deliver pending records. A sink may call back into the Runtime: that call
+   * runs as its own step after the one being reported, and its records are
+   * delivered here, after the ones already pending.
+   */
+  private flush(): void {
+    if (this.flushing) {
+      return;
+    }
+    this.flushing = true;
+    try {
+      for (let i = 0; i < this.pending.length; i += 1) {
+        deliver(this.port, this.pending[i] as WeftRecordShape);
+      }
+    } finally {
+      this.pending.length = 0;
+      this.flushing = false;
+    }
+  }
 
   private id(suffix: string): string {
     return `${this.port.emitter_id}:${suffix}`;
@@ -74,7 +115,7 @@ export class LoomWeft {
     fields: Record<string, unknown>,
   ): void {
     this.sequence = Math.max(this.sequence + 1, seqHigh * SEQ_STRIDE);
-    deliver(this.port, {
+    this.pending.push({
       schema: 'weft.record@1',
       trace_id: this.port.trace_id,
       record_id,
@@ -87,6 +128,9 @@ export class LoomWeft {
       evidence,
       fields,
     });
+    if (this.depth === 0) {
+      this.flush();
+    }
   }
 
   /** A cycle has started; threads it dispatches are its children. */

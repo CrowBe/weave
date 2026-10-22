@@ -3,6 +3,8 @@
  *
  * Declared here because AgentFabric does not import Weft. Records carry ids
  * and codes only: never inputs, outputs, grants, environment or failure text.
+ * They reach the port only once the host step that built them has completed,
+ * so a sink that calls back into the host never sees a half-applied one.
  */
 
 /** A `weft.record@1` as the host builds it. Weft's validator decides whether it is valid. */
@@ -29,12 +31,51 @@ export interface WeftPort {
 
 export class FabricWeft {
   private sequence = 0;
+  /** Records built during the running host step, in order, delivered when it completes. */
+  private readonly pending: WeftRecordShape[] = [];
+  /** Nesting of host steps: a rejection inside invoke is part of invoke's step. */
+  private depth = 0;
+  /** Set while records are delivered: a step a sink starts is delivered by the same loop. */
+  private flushing = false;
 
   constructor(private readonly port: WeftPort) {}
 
+  /** Run one host step. Steps nest; records wait for the outermost to end. */
+  step<T>(run: () => T): T {
+    this.depth += 1;
+    try {
+      return run();
+    } finally {
+      this.depth -= 1;
+      if (this.depth === 0) {
+        this.flush();
+      }
+    }
+  }
+
+  /**
+   * Deliver pending records. A sink may call back into the host: that call
+   * runs as its own step after the one being reported, and its records are
+   * delivered here, after the ones already pending.
+   */
+  private flush(): void {
+    if (this.flushing) {
+      return;
+    }
+    this.flushing = true;
+    try {
+      for (let i = 0; i < this.pending.length; i += 1) {
+        deliver(this.port, this.pending[i] as WeftRecordShape);
+      }
+    } finally {
+      this.pending.length = 0;
+      this.flushing = false;
+    }
+  }
+
   private send(record_id: string | null, kind: string, parent_id: string | null, invocation: string | null, fields: Record<string, unknown>): void {
     this.sequence += 1;
-    deliver(this.port, {
+    this.pending.push({
       schema: 'weft.record@1',
       trace_id: this.port.trace_id,
       record_id: record_id ?? `${this.port.emitter_id}:event:${this.sequence}`,
@@ -47,6 +88,9 @@ export class FabricWeft {
       evidence: invocation === null ? [] : [{ source: 'invocation', ref: invocation }],
       fields,
     });
+    if (this.depth === 0) {
+      this.flush();
+    }
   }
 
   private selectedId(invocation_id: string): string {

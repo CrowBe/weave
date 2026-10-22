@@ -434,7 +434,7 @@ The function the composition root must supply before Weft serializes a record. I
 
 ### Weft port
 
-What Loom, the inference gateway and a Fabric host each receive at composition to emit Weft records: a trace id, an emitter id and an `emit` function. Each package declares the port as its own type, so none imports Weft. Without a port nothing is emitted, and nothing attaches one ambiently. Emitting is one-way: a sink that fails, stalls or mutates what it receives changes no state, scheduling, budget or outcome, and replay emits nothing. Weft's `createWeftSink` redacts and validates every record before anything is written.
+What Loom, the inference gateway and a Fabric host each receive at composition to emit Weft records: a trace id, an emitter id and an `emit` function. Each package declares the port as its own type, so none imports Weft. Without a port nothing is emitted, and nothing attaches one ambiently. Emitting is one-way: a sink that fails, stalls or mutates what it receives changes no state, scheduling, budget or outcome, and replay emits nothing. Records reach the port only after the step that built them has completed, so a sink that calls back into the Runtime or host is served after that step, never inside it. Weft's `createWeftSink` redacts and validates every record before anything is written.
 
 ### Gauge
 
