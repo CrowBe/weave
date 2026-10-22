@@ -83,30 +83,16 @@ export async function runProcess(request: ProcessRunRequest): Promise<ProcessRun
     // The child may already have exited. The exit status still decides the outcome.
   }
 
+  // The direct child's 'exit' decides the outcome; a descendant holding the pipes
+  // must not turn a finished run into a timeout. 'error' covers a spawn that never
+  // becomes a process (ENOENT, EACCES): it arrives without 'exit'.
   const exited = new Promise<ExitInfo>((resolveExit) => {
-    let settled = false;
-    let failed = false;
-    let closed: { code: number | null; signal: NodeJS.Signals | null } | null = null;
-    const finish = (info: ExitInfo): void => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      resolveExit(info);
-    };
-    // 'close' waits until stdio ends, so the tail includes the child's last write.
-    // 'error' covers a spawn that never becomes a process (ENOENT). It can arrive
-    // before or without 'close'.
-    child.once('error', () => {
-      failed = true;
-      queueMicrotask(() => finish(closed ? { ...closed, failed: true } : { code: null, signal: null, failed: true }));
-    });
-    child.once('close', (code, exitSignal) => {
-      closed = { code, signal: exitSignal };
-      if (!failed) {
-        finish({ code, signal: exitSignal, failed: false });
-      }
-    });
+    child.on('error', () => resolveExit({ code: null, signal: null, failed: true }));
+    child.once('exit', (code, exitSignal) => resolveExit({ code, signal: exitSignal, failed: false }));
+  });
+  // 'close' means every stdio pipe reached end-of-file, so the tails hold the last writes.
+  const closed = new Promise<void>((resolveClose) => {
+    child.once('close', () => resolveClose());
   });
 
   const stop = new AbortController();
@@ -127,34 +113,54 @@ export async function runProcess(request: ProcessRunRequest): Promise<ProcessRun
   stop.abort();
 
   if (winner.kind === 'exit') {
+    // Pipes still open after the bounded drain mean a descendant holds them: terminate it as on timeout.
+    const drained = (await ended(closed, request.timer)) || (await terminate(child, closed, request.timer));
     if (winner.info.failed || winner.info.code === null) {
       return failed('spawn_failed', stdout.value(), stderr.value(), started, request.clock);
     }
     return {
       ok: true,
       exit: winner.info.code,
-      stdout_truncated: stdout.truncated,
+      // Detached before end-of-file: stdout may be incomplete, so it is not reported as whole.
+      stdout_truncated: stdout.truncated || !drained,
       stdout_tail: stdout.value(),
       stderr_tail: stderr.value(),
       duration_ms: elapsed(started, request.clock),
     };
   }
 
-  kill(child, 'SIGTERM');
-  await request.timer.sleep(30).catch(() => undefined);
-  kill(child, 'SIGKILL');
+  await terminate(child, closed, request.timer);
+  return failed(winner.kind === 'cancelled' ? 'cancelled' : 'timeout', stdout.value(), stderr.value(), started, request.clock);
+}
+
+const KILL_GRACE_MS = 30;
+const DRAIN_MS = 100;
+
+/** Whether stdio reaches end-of-file within the bounded drain. */
+async function ended(closed: Promise<void>, timer: ShellTimer): Promise<boolean> {
   const drain = new AbortController();
   try {
-    await Promise.race([exited, request.timer.sleep(100, drain.signal).catch(() => undefined)]);
+    return await Promise.race([closed.then(() => true), timer.sleep(DRAIN_MS, drain.signal).then(() => false, () => false)]);
   } finally {
     drain.abort();
-    // A descendant can escape the process group and retain inherited pipes.
-    child.stdin?.destroy();
-    child.stdout?.destroy();
-    child.stderr?.destroy();
-    child.unref();
   }
-  return failed(winner.kind === 'cancelled' ? 'cancelled' : 'timeout', stdout.value(), stderr.value(), started, request.clock);
+}
+
+/**
+ * Signals the process group (SIGTERM, then SIGKILL), waits the bounded drain,
+ * and detaches from the pipes. Returns whether stdio reached end-of-file.
+ */
+async function terminate(child: ChildProcess, closed: Promise<void>, timer: ShellTimer): Promise<boolean> {
+  kill(child, 'SIGTERM');
+  await timer.sleep(KILL_GRACE_MS).catch(() => undefined);
+  kill(child, 'SIGKILL');
+  const drained = await ended(closed, timer);
+  // A descendant that left the process group is not signalled and can keep inherited pipes open.
+  child.stdin?.destroy();
+  child.stdout?.destroy();
+  child.stderr?.destroy();
+  child.unref();
+  return drained;
 }
 
 export function snapshotFiles(root: string): string[] {
