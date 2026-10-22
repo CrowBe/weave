@@ -689,13 +689,21 @@ function canonicalStorePath(path: string): string {
   } catch (error) {
     if (!isErrno(error, 'ENOENT')) throw error;
     try {
-      // A dangling symlink is an existing alias, not a new journal filename.
       lstatSync(absolute);
     } catch (missing) {
       if (!isErrno(missing, 'ENOENT')) throw missing;
       // A new journal has no inode yet; resolve directory aliases before locking.
       return join(realpathSync(directory), basename(absolute));
     }
+    // Another opener may have created the journal after realpath missed it.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return realpathSync(absolute);
+      } catch (retryError) {
+        if (!isErrno(retryError, 'ENOENT')) throw retryError;
+      }
+    }
+    // A dangling symlink is an existing alias, not a new journal filename.
     throw error;
   }
 }

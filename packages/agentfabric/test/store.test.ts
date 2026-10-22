@@ -549,6 +549,61 @@ describe('FabricStore append-only journal', () => {
     }
   });
 
+  it('reports an already-open store when the journal appears after realpath misses it', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-store-canonical-race-'));
+    const path = join(dir, 'fabric.json');
+    const mutableFs = createRequire(import.meta.url)('node:fs') as typeof nodeFs;
+    const original = mutableFs.realpathSync;
+    let interleaved = false;
+    let winner: FabricStore | undefined;
+    let loser: FabricStore | undefined;
+    mutableFs.realpathSync = ((...args: Parameters<typeof original>) => {
+      try {
+        return original(...args);
+      } catch (error) {
+        if (!interleaved && String(args[0]) === path) {
+          assert.equal((error as NodeJS.ErrnoException).code, 'ENOENT');
+          interleaved = true;
+          // The winner creates the journal before the loser's lstat fallback.
+          winner = FabricStore.open(path);
+          winner.retainConclusion('winner');
+        }
+        throw error;
+      }
+    }) as typeof original;
+    syncBuiltinESMExports();
+    try {
+      assert.throws(() => { loser = FabricStore.open(path); }, /host store is already open/);
+      assert.equal(interleaved, true);
+      assert.deepEqual(winner?.conclusions(), ['winner']);
+    } finally {
+      mutableFs.realpathSync = original;
+      syncBuiltinESMExports();
+      loser?.close();
+      winner?.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('resolves a brand-new journal through its real directory before locking', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-store-new-alias-'));
+    const real = join(dir, 'real');
+    const alias = join(dir, 'alias');
+    nodeFs.mkdirSync(real);
+    nodeFs.symlinkSync(real, alias);
+    const path = join(real, 'fabric.json');
+    let store: FabricStore | undefined;
+    try {
+      assert.equal(existsSync(path), false);
+      store = FabricStore.open(join(alias, 'fabric.json'));
+      assert.equal(existsSync(`${path}.lock`), true);
+      assert.throws(() => FabricStore.open(path), /host store is already open/);
+    } finally {
+      store?.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   for (const aliasKind of ['file', 'parent'] as const) {
     it(`refuses a second writer through a ${aliasKind} symlink`, () => {
       const dir = mkdtempSync(join(tmpdir(), 'weave-store-alias-'));
