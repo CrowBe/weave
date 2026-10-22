@@ -183,4 +183,135 @@ describe('Loom read port', () => {
     const port = openReadPort({ read: runtime, project });
     assert.deepEqual(port.workspaceView(), port.workspaceView());
   });
+
+  it('reads only the observation window and indexed approval sequences, never the full trace', async () => {
+    const { runtime } = await pendingPublish();
+    for (let i = 0; i < 30; i++) {
+      runtime.observe({
+        observation_id: `unknown:${i}`,
+        source: { kind: 'test', id: 'binding' },
+        caused_by: null,
+        payload_type: 'unknown',
+        payload_version: 1,
+        payload: {},
+      });
+    }
+    const trace = runtime.trace();
+    const record = Object.values(runtime.state().approvals).find((item) => item.status === 'pending')!;
+    const request = record.request;
+    // Independent expected disclosure from the former full-trace projection.
+    const expected = {
+      id: 'view.workspace@1',
+      revision: runtime.state().state_revision,
+      project_name: { status: 'disclosed', name: project.name },
+      availability: { status: 'disclosed', items: project.attachments, truncated: false },
+      observations: {
+        status: 'disclosed',
+        truncated: true,
+        items: trace.observations.slice(-24).map((observation) => ({
+          sequence: observation.seq,
+          type: 'unknown',
+          provenance: 'untrusted',
+          validation: { status: 'unknown' },
+          cause: null,
+        })),
+      },
+      approvals: {
+        status: 'disclosed',
+        truncated: false,
+        items: [
+          {
+            request_id: request.request_id,
+            sequence: trace.observations.find(
+              (observation) =>
+                observation.payload_type === 'approval.requested' &&
+                (observation.payload as { request_id: string }).request_id === request.request_id,
+            )!.seq,
+            operation: request.operation,
+            contract_revision: request.contract_rev,
+            destination: request.destination,
+            effects: request.effects,
+            expected_revision: request.expected_revision,
+            reservation: request.budget,
+            valid_from_tick: request.valid_from_tick,
+            valid_until_tick: request.valid_until_tick,
+            binding_digest: request.binding_digest,
+            report_digest: request.report_digest,
+          },
+        ],
+      },
+    };
+    assert.deepEqual(openReadPort({ read: runtime, project }).workspaceView(), expected);
+    let windows = 0;
+    let lookups = 0;
+    const read = {
+      state: () => runtime.state(),
+      trace() {
+        assert.fail('workspaceView must not clone the full trace');
+      },
+      recentObservations(limit: number) {
+        assert.equal(limit, 24);
+        windows++;
+        return { observations: trace.observations.slice(-limit), total: trace.observations.length };
+      },
+      approvalRequestSeq(request_id: string) {
+        lookups++;
+        return trace.observations.find(
+          (observation) =>
+            observation.payload_type === 'approval.requested' &&
+            (observation.payload as { request_id: string }).request_id === request_id,
+        )?.seq;
+      },
+    };
+    assert.deepEqual(openReadPort({ read, project }).workspaceView(), expected);
+    assert.equal(windows, 1);
+    assert.equal(lookups, 1);
+  });
+
+  it('keeps omitted reads undisclosed and returned views defensive while arrivals interleave', async () => {
+    const { runtime } = await pendingPublish();
+    const read = {
+      state: () => runtime.state(),
+      recentObservations() {
+        assert.fail('omitted observations must not be read');
+      },
+      approvalRequestSeq() {
+        assert.fail('omitted approvals must not be read');
+      },
+    };
+    const omitted = openReadPort({
+      read,
+      project,
+      disclosure: {
+        observations: { reason: 'policy' },
+        approvals: { reason: 'policy' },
+      },
+    }).workspaceView();
+    assert.deepEqual(omitted.observations, { status: 'omitted', reason: 'policy' });
+    assert.deepEqual(omitted.approvals, { status: 'omitted', reason: 'policy' });
+
+    const port = openReadPort({ read: runtime, project });
+    const before = port.workspaceView();
+    const saved = structuredClone(before);
+    await Promise.all([
+      Promise.resolve().then(() =>
+        runtime.clock.submit({
+          observation_id: 'interleaved:tick',
+          caused_by: null,
+          payload_type: 'clock.tick',
+          payload_version: 1,
+          payload: { tick: 0 },
+        }),
+      ),
+      Promise.resolve().then(() => {
+        const view = port.workspaceView();
+        if (view.approvals.status === 'disclosed') Reflect.set(view.approvals.items, 'length', 0);
+        if (view.observations.status === 'disclosed') Reflect.set(view.observations.items, 'length', 0);
+      }),
+    ]);
+    assert.deepEqual(before, saved);
+    const after = port.workspaceView();
+    assert.equal(after.approvals.status === 'disclosed' && after.approvals.items.length, 1);
+    assert.equal(after.observations.status === 'disclosed' && after.observations.items.at(-1)?.type, 'clock.tick');
+  });
 });
