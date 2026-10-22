@@ -21,6 +21,8 @@ test('verify cache ignores removed Python cache directories but tracks source ch
     mkdirSync(join(dir, 'benchmarks', '__pycache__'), { recursive: true });
     writeFileSync(join(dir, 'benchmarks', '__pycache__', 'probe.pyc'), 'ignored');
     writeFileSync(join(dir, 'benchmarks', 'probe.py'), '# source\n');
+    mkdirSync(join(dir, '.github', 'workflows'), { recursive: true });
+    writeFileSync(join(dir, '.github', 'workflows', 'verify.yml'), 'name: original\n');
     const run = () => {
       const result = spawnSync(join(root, 'node_modules', '.bin', 'vp'), ['run', 'verify-cached'], {
         cwd: dir,
@@ -35,6 +37,9 @@ test('verify cache ignores removed Python cache directories but tracks source ch
     assert.equal(run(), 'run\n');
     writeFileSync(join(dir, 'benchmarks', 'probe.py'), '# changed source\n');
     assert.equal(run(), 'run\nrun\n');
+    writeFileSync(join(dir, '.github', 'workflows', 'verify.yml'), 'name: changed\n');
+    assert.equal(run(), 'run\nrun\nrun\n');
+    assert.equal(run(), 'run\nrun\nrun\n');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

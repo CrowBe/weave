@@ -18,6 +18,16 @@ export default defineConfig({
       '**/fixtures/**/*.jsonl',
       // Frozen corpus digest and generated report bytes are asserted by the harness.
       'benchmarks/frontier-weigh/cases.json',
+      // These exact bytes are referenced by checked-in benchmark recordings.
+      'benchmarks/decision-sites/sets/**/*.jsonl',
+      'benchmarks/inference/gliner-decide/capability-match-cases.json',
+      'benchmarks/inference/gliner-decide/jev-curation-source.json',
+      'benchmarks/inference/gliner-decide/weave-v2-results.json',
+      'benchmarks/inference/jev/transfer-results.json',
+      'benchmarks/inference/openjev/cases.json',
+      'benchmarks/inference/space-bunny/general-cases.json',
+      'benchmarks/inference/space-bunny/sol-compare/cases.json',
+      'benchmarks/inference/space-bunny/sol-compare/hard-cases.json',
       'benchmarks/frontier-weigh/REPORT.md',
       // Wrapping this call separates @ts-expect-error from its expected diagnostic.
       'packages/weave/test/p5.test.ts',
@@ -40,6 +50,7 @@ export default defineConfig({
           input: [
             '*.json',
             '*.ts',
+            '.github/**',
             'checks/**',
             'scripts/**',
             'packages/**',

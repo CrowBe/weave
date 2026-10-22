@@ -8,7 +8,7 @@
   "scripts": {
     "build": "tsc -b",
     "test": "npm run build && node --test \"packages/*/dist/test/**/*.test.js\"",
-    "check": "node --test scripts/verify-cached.test.mjs && node checks/import-direction.mjs && node checks/no-ambient-clock.mjs && node checks/no-ambient-entropy.mjs",
+    "check": "node --test scripts/verify-cached.test.mjs scripts/benchmark-digests.test.mjs && node checks/import-direction.mjs && node checks/no-ambient-clock.mjs && node checks/no-ambient-entropy.mjs",
     "typecheck:examples": "tsc -p tsconfig.examples.json",
     "test:entailment": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s benchmarks/inference/openjev -p 'test_*.py'",
     "test:decision": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s benchmarks/inference/kev -p 'test_*.py'",
