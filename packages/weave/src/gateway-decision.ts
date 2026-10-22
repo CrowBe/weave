@@ -1,14 +1,15 @@
 /**
  * Frontier weighing through the inference gateway (evaluation, kind `score`).
+ * The questions, criteria and valid output are the `frontier.weigh@1` site
+ * contract (FRONTIER-WEIGH-CONTRACT.md); this class only routes them.
  */
 import type { EvaluationAdapter, EvaluationContent, GenerationAdapter, InferenceGateway, RoutedUnit } from '@weave/gateway';
 import { createInferenceGateway } from '@weave/gateway';
-import type { Candidate, InferenceAttemptRecord, WeighRequest, WeighResult, WeightEntry } from './types.js';
+import { FRONTIER_WEIGH_CONTRACT, frontierWeighQuestions, frontierWeights } from './frontier-weigh.js';
+import type { Candidate, InferenceAttemptRecord, WeighRequest, WeighResult } from './types.js';
 
 export const LOCAL_DESTINATION = 'local';
 export const HOSTED_DESTINATION = 'hosted.vendor';
-
-const SCORE_CRITERIA = ['defer', 'consider', 'dispatch'] as const;
 
 export class GatewayDecisionLayer {
   readonly implementation = 'gateway.evaluate@1';
@@ -20,12 +21,14 @@ export class GatewayDecisionLayer {
   ) {}
 
   async weigh(request: WeighRequest): Promise<WeighResult> {
-    const questions: Record<string, { type: 'score'; instructions: string; criteria: readonly (string | null)[] }> = {};
-    for (const candidate of request.candidates) {
-      questions[candidate.candidate_id] = {
-        type: 'score',
-        instructions: `How useful is ${candidate.operation} for the authorized goal?`,
-        criteria: SCORE_CRITERIA,
+    if (!request.view) {
+      return {
+        weights: [],
+        attempts: [],
+        spent: 0,
+        status: 'blocked',
+        reason: `${FRONTIER_WEIGH_CONTRACT} requires a state view`,
+        implementation: this.implementation,
       };
     }
     const outcome = await this.gateway.evaluate({
@@ -33,8 +36,12 @@ export class GatewayDecisionLayer {
       site: 'frontier.weigh',
       role: 'working',
       kind: 'score',
-      state: (request.view?.content as EvaluationContent) ?? { candidates: request.candidates.map((c) => c.candidate_id) },
-      questions,
+      state: request.view.content as EvaluationContent,
+      questions: frontierWeighQuestions(request.candidates),
+      accept: (answers) => {
+        const checked = frontierWeights(request.candidates, answers);
+        return checked.ok ? { status: 'accepted' } : { status: 'rejected', reason: checked.reason };
+      },
       terms: {
         quality: 'baseline',
         destinations: [...this.destinations],
@@ -45,27 +52,24 @@ export class GatewayDecisionLayer {
       },
     });
     const attempts = toAttempts(outcome.attempts);
-    if (outcome.status !== 'accepted') {
+    const checked = outcome.status === 'accepted' ? frontierWeights(request.candidates, outcome.answers) : null;
+    if (outcome.status !== 'accepted' || !checked?.ok) {
       return {
         weights: [],
         attempts,
         spent: toMicros(outcome.spent),
-        status: outcome.status,
-        reason: outcome.reason,
+        status: outcome.status === 'accepted' ? 'unaccepted' : outcome.status,
+        reason: outcome.status === 'accepted' ? (checked && !checked.ok ? checked.reason : 'invalid weights') : outcome.reason,
         implementation: this.implementation,
       };
     }
-    const weights: WeightEntry[] = request.candidates.map((candidate) => {
-      const answer = outcome.answers[candidate.candidate_id];
-      const score = answer && answer.type === 'score' ? answer.score / (SCORE_CRITERIA.length - 1) : 0;
-      return { candidate_id: candidate.candidate_id, weight: score };
-    });
     return {
-      weights,
+      weights: checked.weights,
       attempts,
       spent: toMicros(outcome.spent),
       status: 'accepted',
       implementation: outcome.routed_unit_id,
+      contract: FRONTIER_WEIGH_CONTRACT,
     };
   }
 }
@@ -141,7 +145,7 @@ export function localEvaluateUnit(overrides: {
     operation: 'evaluate',
     kind: 'score',
     context_profile: 'profile.frontier-weigh',
-    context_profile_version: 1,
+    context_profile_version: 2,
     prompt_template: 'template.weigh.score',
     prompt_template_version: 1,
     adapter: overrides.adapter ?? 'fixture.evaluate',

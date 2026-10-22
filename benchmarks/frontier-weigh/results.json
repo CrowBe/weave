@@ -1,0 +1,1684 @@
+{
+  "digest": "19b5efd87bbfb8bfa4f19796141b58e00d629cc73dbb23b55743e4d97ff2ebc1",
+  "jev": {
+    "status": "not_run",
+    "reason": "no_credential"
+  },
+  "verdicts": [
+    {
+      "weigher": "constant-dispatch",
+      "verdict": "retain scripted@1",
+      "checks": [
+        {
+          "id": "P1",
+          "held": true,
+          "detail": "coverage 15/15 = 1.00 (needs >= 0.9)"
+        },
+        {
+          "id": "P2",
+          "held": false,
+          "detail": "agreement 0.40 vs scripted@1 0.40 (needs >= 0.8 and +0.2)"
+        },
+        {
+          "id": "P3",
+          "held": true,
+          "detail": "0 regression(s) on cases scripted@1 gets right (allowed 0)"
+        },
+        {
+          "id": "P4",
+          "held": false,
+          "detail": "4 premature dispatch(es) (allowed 1); 0 goal.complete outside the adjudicated frontier (allowed 0)"
+        },
+        {
+          "id": "P5",
+          "held": true,
+          "detail": "mean spend 0.00 micros per case (allowed 1000)"
+        },
+        {
+          "id": "P6",
+          "held": null,
+          "detail": "latency not measured (offline fixture)"
+        }
+      ]
+    },
+    {
+      "weigher": "constant-defer",
+      "verdict": "retain scripted@1",
+      "checks": [
+        {
+          "id": "P1",
+          "held": true,
+          "detail": "coverage 15/15 = 1.00 (needs >= 0.9)"
+        },
+        {
+          "id": "P2",
+          "held": false,
+          "detail": "agreement 0.27 vs scripted@1 0.40 (needs >= 0.8 and +0.2)"
+        },
+        {
+          "id": "P3",
+          "held": false,
+          "detail": "6 regression(s) on cases scripted@1 gets right (allowed 0)"
+        },
+        {
+          "id": "P4",
+          "held": true,
+          "detail": "0 premature dispatch(es) (allowed 1); 0 goal.complete outside the adjudicated frontier (allowed 0)"
+        },
+        {
+          "id": "P5",
+          "held": true,
+          "detail": "mean spend 0.00 micros per case (allowed 1000)"
+        },
+        {
+          "id": "P6",
+          "held": null,
+          "detail": "latency not measured (offline fixture)"
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "fw-t01",
+      "split": "tune",
+      "kind": "gather",
+      "weigher": "scripted@1",
+      "preferred": [
+        "goal.frame"
+      ],
+      "selected": [
+        "goal.frame"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 0.85
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t02",
+      "split": "tune",
+      "kind": "gather",
+      "weigher": "scripted@1",
+      "preferred": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta"
+      ],
+      "selected": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta",
+        "source.inspect:source:delta"
+      ],
+      "outcome": "misdirected",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 0.8,
+        "source.inspect:source:beta": 0.8,
+        "source.inspect:source:delta": 0.8
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t03",
+      "split": "tune",
+      "kind": "hold",
+      "weigher": "scripted@1",
+      "preferred": [],
+      "selected": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta"
+      ],
+      "outcome": "premature",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 0.8,
+        "source.inspect:source:beta": 0.8
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t04",
+      "split": "tune",
+      "kind": "gather",
+      "weigher": "scripted@1",
+      "preferred": [
+        "goal.frame",
+        "report.review"
+      ],
+      "selected": [
+        "goal.frame",
+        "report.review"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 0.85,
+        "report.review": 0
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t05",
+      "split": "tune",
+      "kind": "act",
+      "weigher": "scripted@1",
+      "preferred": [
+        "report.assemble"
+      ],
+      "selected": [
+        "report.assemble"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "report.assemble": 0.9
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t06",
+      "split": "tune",
+      "kind": "hold",
+      "weigher": "scripted@1",
+      "preferred": [],
+      "selected": [
+        "source.inspect:source:delta"
+      ],
+      "outcome": "premature",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:delta": 0.8
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t07",
+      "split": "tune",
+      "kind": "gather",
+      "weigher": "scripted@1",
+      "preferred": [
+        "source.inspect:source:beta"
+      ],
+      "selected": [
+        "source.inspect:source:beta"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:beta": 0.8
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t08",
+      "split": "tune",
+      "kind": "act",
+      "weigher": "scripted@1",
+      "preferred": [
+        "goal.complete"
+      ],
+      "selected": [
+        "goal.complete"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:epsilon": 0.8,
+        "goal.complete": 1
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h01",
+      "split": "holdout",
+      "kind": "hold",
+      "weigher": "scripted@1",
+      "preferred": [],
+      "selected": [
+        "goal.frame"
+      ],
+      "outcome": "premature",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 0.85
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h02",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "scripted@1",
+      "preferred": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta"
+      ],
+      "selected": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta",
+        "source.inspect:source:delta",
+        "source.inspect:source:epsilon"
+      ],
+      "outcome": "misdirected",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 0.8,
+        "source.inspect:source:beta": 0.8,
+        "source.inspect:source:delta": 0.8,
+        "source.inspect:source:epsilon": 0.8
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h03",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "scripted@1",
+      "preferred": [
+        "source.inspect:source:beta"
+      ],
+      "selected": [
+        "source.inspect:source:beta",
+        "source.inspect:source:delta"
+      ],
+      "outcome": "misdirected",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:beta": 0.8,
+        "source.inspect:source:delta": 0.8
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h04",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "scripted@1",
+      "preferred": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta"
+      ],
+      "selected": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 0.8,
+        "source.inspect:source:beta": 0.8
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h05",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "scripted@1",
+      "preferred": [
+        "goal.frame"
+      ],
+      "selected": [
+        "goal.frame",
+        "report.review"
+      ],
+      "outcome": "misdirected",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 0.85,
+        "report.review": 0
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h06",
+      "split": "holdout",
+      "kind": "hold",
+      "weigher": "scripted@1",
+      "preferred": [],
+      "selected": [
+        "goal.frame",
+        "report.review"
+      ],
+      "outcome": "premature",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 0.85,
+        "report.review": 0
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h07",
+      "split": "holdout",
+      "kind": "act",
+      "weigher": "scripted@1",
+      "preferred": [
+        "report.assemble"
+      ],
+      "selected": [
+        "report.assemble",
+        "source.inspect:source:delta"
+      ],
+      "outcome": "misdirected",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:delta": 0.8,
+        "report.assemble": 0.9
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h08",
+      "split": "holdout",
+      "kind": "act",
+      "weigher": "scripted@1",
+      "preferred": [
+        "goal.complete"
+      ],
+      "selected": [
+        "goal.complete"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.complete": 1
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h09",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "scripted@1",
+      "preferred": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta"
+      ],
+      "selected": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 0.8,
+        "source.inspect:source:beta": 0.8
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h10",
+      "split": "holdout",
+      "kind": "hold",
+      "weigher": "scripted@1",
+      "preferred": [],
+      "selected": [
+        "report.assemble"
+      ],
+      "outcome": "premature",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "report.assemble": 0.9
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h11",
+      "split": "holdout",
+      "kind": "hold",
+      "weigher": "scripted@1",
+      "preferred": [],
+      "selected": [
+        "source.inspect:source:epsilon"
+      ],
+      "outcome": "premature",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:epsilon": 0.8
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h12",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "scripted@1",
+      "preferred": [
+        "source.inspect:source:alpha"
+      ],
+      "selected": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:delta"
+      ],
+      "outcome": "misdirected",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 0.8,
+        "source.inspect:source:delta": 0.8
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h13",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "scripted@1",
+      "preferred": [
+        "goal.frame"
+      ],
+      "selected": [
+        "goal.frame"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 0.85
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h14",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "scripted@1",
+      "preferred": [
+        "goal.frame",
+        "report.review"
+      ],
+      "selected": [
+        "goal.frame",
+        "report.review"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 0.85,
+        "report.review": 0
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h15",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "scripted@1",
+      "preferred": [
+        "source.inspect:source:alpha"
+      ],
+      "selected": [
+        "source.inspect:source:alpha"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 0.8
+      },
+      "spent": 0,
+      "attempts": 0,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t01",
+      "split": "tune",
+      "kind": "gather",
+      "weigher": "constant-dispatch",
+      "preferred": [
+        "goal.frame"
+      ],
+      "selected": [
+        "goal.frame"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t02",
+      "split": "tune",
+      "kind": "gather",
+      "weigher": "constant-dispatch",
+      "preferred": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta"
+      ],
+      "selected": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta",
+        "source.inspect:source:delta"
+      ],
+      "outcome": "misdirected",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 2,
+        "source.inspect:source:beta": 2,
+        "source.inspect:source:delta": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t03",
+      "split": "tune",
+      "kind": "hold",
+      "weigher": "constant-dispatch",
+      "preferred": [],
+      "selected": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta"
+      ],
+      "outcome": "premature",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 2,
+        "source.inspect:source:beta": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t04",
+      "split": "tune",
+      "kind": "gather",
+      "weigher": "constant-dispatch",
+      "preferred": [
+        "goal.frame",
+        "report.review"
+      ],
+      "selected": [
+        "goal.frame",
+        "report.review"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 2,
+        "report.review": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t05",
+      "split": "tune",
+      "kind": "act",
+      "weigher": "constant-dispatch",
+      "preferred": [
+        "report.assemble"
+      ],
+      "selected": [
+        "report.assemble"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "report.assemble": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t06",
+      "split": "tune",
+      "kind": "hold",
+      "weigher": "constant-dispatch",
+      "preferred": [],
+      "selected": [
+        "source.inspect:source:delta"
+      ],
+      "outcome": "premature",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:delta": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t07",
+      "split": "tune",
+      "kind": "gather",
+      "weigher": "constant-dispatch",
+      "preferred": [
+        "source.inspect:source:beta"
+      ],
+      "selected": [
+        "source.inspect:source:beta"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:beta": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t08",
+      "split": "tune",
+      "kind": "act",
+      "weigher": "constant-dispatch",
+      "preferred": [
+        "goal.complete"
+      ],
+      "selected": [
+        "goal.complete"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:epsilon": 2,
+        "goal.complete": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h01",
+      "split": "holdout",
+      "kind": "hold",
+      "weigher": "constant-dispatch",
+      "preferred": [],
+      "selected": [
+        "goal.frame"
+      ],
+      "outcome": "premature",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h02",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "constant-dispatch",
+      "preferred": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta"
+      ],
+      "selected": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta",
+        "source.inspect:source:delta",
+        "source.inspect:source:epsilon"
+      ],
+      "outcome": "misdirected",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 2,
+        "source.inspect:source:beta": 2,
+        "source.inspect:source:delta": 2,
+        "source.inspect:source:epsilon": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h03",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "constant-dispatch",
+      "preferred": [
+        "source.inspect:source:beta"
+      ],
+      "selected": [
+        "source.inspect:source:beta",
+        "source.inspect:source:delta"
+      ],
+      "outcome": "misdirected",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:beta": 2,
+        "source.inspect:source:delta": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h04",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "constant-dispatch",
+      "preferred": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta"
+      ],
+      "selected": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 2,
+        "source.inspect:source:beta": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h05",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "constant-dispatch",
+      "preferred": [
+        "goal.frame"
+      ],
+      "selected": [
+        "goal.frame",
+        "report.review"
+      ],
+      "outcome": "misdirected",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 2,
+        "report.review": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h06",
+      "split": "holdout",
+      "kind": "hold",
+      "weigher": "constant-dispatch",
+      "preferred": [],
+      "selected": [
+        "goal.frame",
+        "report.review"
+      ],
+      "outcome": "premature",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 2,
+        "report.review": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h07",
+      "split": "holdout",
+      "kind": "act",
+      "weigher": "constant-dispatch",
+      "preferred": [
+        "report.assemble"
+      ],
+      "selected": [
+        "report.assemble",
+        "source.inspect:source:delta"
+      ],
+      "outcome": "misdirected",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:delta": 2,
+        "report.assemble": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h08",
+      "split": "holdout",
+      "kind": "act",
+      "weigher": "constant-dispatch",
+      "preferred": [
+        "goal.complete"
+      ],
+      "selected": [
+        "goal.complete"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.complete": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h09",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "constant-dispatch",
+      "preferred": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta"
+      ],
+      "selected": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 2,
+        "source.inspect:source:beta": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h10",
+      "split": "holdout",
+      "kind": "hold",
+      "weigher": "constant-dispatch",
+      "preferred": [],
+      "selected": [
+        "report.assemble"
+      ],
+      "outcome": "premature",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "report.assemble": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h11",
+      "split": "holdout",
+      "kind": "hold",
+      "weigher": "constant-dispatch",
+      "preferred": [],
+      "selected": [
+        "source.inspect:source:epsilon"
+      ],
+      "outcome": "premature",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:epsilon": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h12",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "constant-dispatch",
+      "preferred": [
+        "source.inspect:source:alpha"
+      ],
+      "selected": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:delta"
+      ],
+      "outcome": "misdirected",
+      "agrees": false,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 2,
+        "source.inspect:source:delta": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h13",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "constant-dispatch",
+      "preferred": [
+        "goal.frame"
+      ],
+      "selected": [
+        "goal.frame"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h14",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "constant-dispatch",
+      "preferred": [
+        "goal.frame",
+        "report.review"
+      ],
+      "selected": [
+        "goal.frame",
+        "report.review"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 2,
+        "report.review": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h15",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "constant-dispatch",
+      "preferred": [
+        "source.inspect:source:alpha"
+      ],
+      "selected": [
+        "source.inspect:source:alpha"
+      ],
+      "outcome": "advanced",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 2
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t01",
+      "split": "tune",
+      "kind": "gather",
+      "weigher": "constant-defer",
+      "preferred": [
+        "goal.frame"
+      ],
+      "selected": [],
+      "outcome": "stalled",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t02",
+      "split": "tune",
+      "kind": "gather",
+      "weigher": "constant-defer",
+      "preferred": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta"
+      ],
+      "selected": [],
+      "outcome": "stalled",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 0,
+        "source.inspect:source:beta": 0,
+        "source.inspect:source:delta": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t03",
+      "split": "tune",
+      "kind": "hold",
+      "weigher": "constant-defer",
+      "preferred": [],
+      "selected": [],
+      "outcome": "held",
+      "agrees": true,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 0,
+        "source.inspect:source:beta": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t04",
+      "split": "tune",
+      "kind": "gather",
+      "weigher": "constant-defer",
+      "preferred": [
+        "goal.frame",
+        "report.review"
+      ],
+      "selected": [],
+      "outcome": "stalled",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 0,
+        "report.review": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t05",
+      "split": "tune",
+      "kind": "act",
+      "weigher": "constant-defer",
+      "preferred": [
+        "report.assemble"
+      ],
+      "selected": [],
+      "outcome": "stalled",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "report.assemble": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t06",
+      "split": "tune",
+      "kind": "hold",
+      "weigher": "constant-defer",
+      "preferred": [],
+      "selected": [],
+      "outcome": "held",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:delta": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t07",
+      "split": "tune",
+      "kind": "gather",
+      "weigher": "constant-defer",
+      "preferred": [
+        "source.inspect:source:beta"
+      ],
+      "selected": [],
+      "outcome": "stalled",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:beta": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-t08",
+      "split": "tune",
+      "kind": "act",
+      "weigher": "constant-defer",
+      "preferred": [
+        "goal.complete"
+      ],
+      "selected": [],
+      "outcome": "stalled",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:epsilon": 0,
+        "goal.complete": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h01",
+      "split": "holdout",
+      "kind": "hold",
+      "weigher": "constant-defer",
+      "preferred": [],
+      "selected": [],
+      "outcome": "held",
+      "agrees": true,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h02",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "constant-defer",
+      "preferred": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta"
+      ],
+      "selected": [],
+      "outcome": "stalled",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 0,
+        "source.inspect:source:beta": 0,
+        "source.inspect:source:delta": 0,
+        "source.inspect:source:epsilon": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h03",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "constant-defer",
+      "preferred": [
+        "source.inspect:source:beta"
+      ],
+      "selected": [],
+      "outcome": "stalled",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:beta": 0,
+        "source.inspect:source:delta": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h04",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "constant-defer",
+      "preferred": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta"
+      ],
+      "selected": [],
+      "outcome": "stalled",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 0,
+        "source.inspect:source:beta": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h05",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "constant-defer",
+      "preferred": [
+        "goal.frame"
+      ],
+      "selected": [],
+      "outcome": "stalled",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 0,
+        "report.review": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h06",
+      "split": "holdout",
+      "kind": "hold",
+      "weigher": "constant-defer",
+      "preferred": [],
+      "selected": [],
+      "outcome": "held",
+      "agrees": true,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 0,
+        "report.review": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h07",
+      "split": "holdout",
+      "kind": "act",
+      "weigher": "constant-defer",
+      "preferred": [
+        "report.assemble"
+      ],
+      "selected": [],
+      "outcome": "stalled",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:delta": 0,
+        "report.assemble": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h08",
+      "split": "holdout",
+      "kind": "act",
+      "weigher": "constant-defer",
+      "preferred": [
+        "goal.complete"
+      ],
+      "selected": [],
+      "outcome": "stalled",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.complete": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h09",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "constant-defer",
+      "preferred": [
+        "source.inspect:source:alpha",
+        "source.inspect:source:beta"
+      ],
+      "selected": [],
+      "outcome": "stalled",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 0,
+        "source.inspect:source:beta": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h10",
+      "split": "holdout",
+      "kind": "hold",
+      "weigher": "constant-defer",
+      "preferred": [],
+      "selected": [],
+      "outcome": "held",
+      "agrees": true,
+      "completable": false,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "report.assemble": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h11",
+      "split": "holdout",
+      "kind": "hold",
+      "weigher": "constant-defer",
+      "preferred": [],
+      "selected": [],
+      "outcome": "held",
+      "agrees": true,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:epsilon": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h12",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "constant-defer",
+      "preferred": [
+        "source.inspect:source:alpha"
+      ],
+      "selected": [],
+      "outcome": "stalled",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 0,
+        "source.inspect:source:delta": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h13",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "constant-defer",
+      "preferred": [
+        "goal.frame"
+      ],
+      "selected": [],
+      "outcome": "stalled",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h14",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "constant-defer",
+      "preferred": [
+        "goal.frame",
+        "report.review"
+      ],
+      "selected": [],
+      "outcome": "stalled",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "goal.frame": 0,
+        "report.review": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    },
+    {
+      "id": "fw-h15",
+      "split": "holdout",
+      "kind": "gather",
+      "weigher": "constant-defer",
+      "preferred": [
+        "source.inspect:source:alpha"
+      ],
+      "selected": [],
+      "outcome": "stalled",
+      "agrees": false,
+      "completable": true,
+      "status": "accepted",
+      "reason": null,
+      "weights": {
+        "source.inspect:source:alpha": 0
+      },
+      "spent": 0,
+      "attempts": 1,
+      "latency_ms": null
+    }
+  ]
+}

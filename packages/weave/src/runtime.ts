@@ -38,6 +38,7 @@ import { narrowDestinations } from './destinations.js';
 import { measureCandidate, stablePrefixBytes } from './strategy.js';
 import { DEFAULT_FRAME_PROFILE, renderFrameView, renderReviewView, SHARED_ASSEMBLY_MICROS, renderWeighView, type FrameProfile } from './views.js';
 import { toAttempts, toMicros } from './gateway-decision.js';
+import { defersEverything, selectFrontier } from './frontier-weigh.js';
 import type {
   ActionId,
   ActionOutcome,
@@ -131,9 +132,20 @@ const HOST_SOURCE = { kind: 'host', id: 'capability-host' } as const;
 const OPERATOR_SOURCE = { kind: 'operator', id: 'operator' } as const;
 const CLOCK_SOURCE = { kind: 'clock', id: 'clock' } as const;
 const GATEWAY_SOURCE = { kind: 'gateway', id: 'inference-gateway' } as const;
+const ABANDONED_WEIGH = 'abandoned at recovery: no inference.recorded before the restart';
 
 /** Cost envelope reserved for one gateway weigh; framing must still have remaining budget. */
 const GATEWAY_WEIGH_COST = 10_000;
+
+/** Observations that are not new evidence for a `frontier.weigh@1` deferral. */
+const WEIGH_CONTROL_RECORDS: readonly string[] = [
+  'clock.tick',
+  'action.started',
+  'action.queued',
+  'inference.requested',
+  'inference.recorded',
+  'weights.recorded',
+];
 
 const PRIVILEGED_KINDS: readonly ProvenanceKind[] = ['operator', 'host', 'runtime', 'judgment', 'clock', 'gateway'];
 
@@ -178,6 +190,8 @@ const runtimeLogs = new WeakMap<Runtime, readonly Observation[]>();
 
 export class Runtime {
   private readonly log: Observation[] = [];
+  /** Highest seq in the log. A loaded journal holds only accepted observations, so its length is not a seq. */
+  private seqHigh: Seq = 0;
   private readonly cycles: CycleRecord[] = [];
   private readonly current: MutableState = initialState();
   private readonly settled = new Map<ActionId, Promise<void>>();
@@ -467,7 +481,7 @@ export class Runtime {
   }
 
   private nextSeq(): Seq {
-    return this.log.length + 1;
+    return this.seqHigh + 1;
   }
 
   private append(
@@ -527,6 +541,7 @@ export class Runtime {
         }
       }
       this.log.push(observation);
+      this.seqHigh = observation.seq;
       this.observationIds.add(observation.observation_id);
       if (observation.validation.status === 'accepted') {
         applyAccepted(this.current, observation);
@@ -720,9 +735,10 @@ export class Runtime {
       return {
         weights_ref: ready.seq,
         outcome: null,
-        selection: select(
+        selection: selectFrontier(
           candidates.filter((c) => c.eligibility.status === 'allowed' && c.weight !== null),
           this.view(),
+          ready.payload.contract,
         ),
       };
     }
@@ -736,6 +752,13 @@ export class Runtime {
         return {
           weights_ref: null,
           outcome: { status: 'blocked', reason: status.reason },
+          selection: { selected: [], not_selected: [] },
+        };
+      }
+      if (status.kind === 'deferred') {
+        return {
+          weights_ref: null,
+          outcome: this.anyInFlight() ? { status: 'waiting' } : { status: 'blocked', reason: REASON_TEXT.deferred },
           selection: { selected: [], not_selected: [] },
         };
       }
@@ -757,7 +780,7 @@ export class Runtime {
           selection: { selected: [], not_selected: [] },
         };
       }
-      const view = renderWeighView(state, eligible);
+      const view = renderWeighView(state, eligible, candidates);
       const request_id = `inf:c${cycle_no}:weigh`;
       const requested = this.appendInferenceRequested({
         request_id,
@@ -884,16 +907,18 @@ export class Runtime {
 
   private frontierWeighStatus(
     candidate_set: string,
-  ): { kind: 'needed' } | { kind: 'in_flight' } | { kind: 'finished'; reason: string } {
-    const records = Object.values(this.current.inferences).filter(
-      (record) => record.request.site === 'frontier.weigh' && record.request.candidate_set === candidate_set,
-    );
-    const latest = records.at(-1);
-    if (!latest) {
+  ): { kind: 'needed' } | { kind: 'in_flight' } | { kind: 'finished'; reason: string } | { kind: 'deferred' } {
+    const weighs = Object.values(this.current.inferences).filter((record) => record.request.site === 'frontier.weigh');
+    // One frontier weighing at a time: a second would make the first stale on arrival.
+    if (weighs.some((record) => !record.recorded)) {
+      return { kind: 'in_flight' };
+    }
+    const latest = weighs.filter((record) => record.request.candidate_set === candidate_set).at(-1);
+    if (!latest?.recorded) {
       return { kind: 'needed' };
     }
-    if (!latest.recorded) {
-      return { kind: 'in_flight' };
+    if (latest.recorded.reason === ABANDONED_WEIGH) {
+      return { kind: 'needed' };
     }
     if (latest.recorded.status !== 'accepted') {
       return { kind: 'finished', reason: latest.recorded.reason ?? latest.recorded.status };
@@ -904,10 +929,37 @@ export class Runtime {
         o.validation.status === 'accepted' &&
         (o.payload as WeightsRecordedPayload).request_id === latest.request_id,
     );
+    const evidence = this.evidenceSince(latest.evidence[0] ?? 0);
     if (!weights) {
-      return { kind: 'finished', reason: 'stale judgment' };
+      return evidence ? { kind: 'needed' } : { kind: 'finished', reason: 'stale judgment' };
+    }
+    if (defersEverything(weights.payload as WeightsRecordedPayload) && !evidence) {
+      return { kind: 'deferred' };
     }
     return { kind: 'needed' };
+  }
+
+  /**
+   * A stale or fully deferred weighing stands until new evidence arrives: an
+   * accepted observation that is not a clock tick, not Weave's own dispatch
+   * and not a weighing record.
+   */
+  private evidenceSince(seq: Seq): boolean {
+    // The log is append-only in seq order, so only its tail after `seq` is read.
+    for (let i = this.log.length - 1; i >= 0; i -= 1) {
+      const observation = this.log[i] as Observation;
+      if (observation.seq <= seq) {
+        return false;
+      }
+      if (observation.validation.status === 'accepted' && !WEIGH_CONTROL_RECORDS.includes(observation.payload_type)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private anyInFlight(): boolean {
+    return Object.values(this.current.actions).some((action) => action.state === 'running' || action.state === 'pending');
   }
 
   private appendInferenceRequested(payload: InferenceRequestedPayload): Observation {
@@ -961,6 +1013,7 @@ export class Runtime {
           candidate_set: request.candidate_set,
           weights: result.weights,
           request_id,
+          ...(result.contract ? { contract: result.contract } : {}),
         } satisfies WeightsRecordedPayload,
       });
     }
@@ -1423,6 +1476,13 @@ export class Runtime {
         max = Math.max(max, Number(match[1]));
       }
     }
+    // A recovered run has no cycle records; its weighings still name their cycle.
+    for (const request_id of Object.keys(this.current.inferences)) {
+      const match = /^inf:c(\d+):weigh$/.exec(request_id);
+      if (match) {
+        max = Math.max(max, Number(match[1]));
+      }
+    }
     return max + 1;
   }
 
@@ -1570,6 +1630,7 @@ export class Runtime {
   }
 
   reconcile(): void {
+    this.abandonUnrecordedWeighs();
     const unfinished = Object.values(this.current.actions).filter(
       (a) => a.state === 'running' || a.state === 'pending' || (a.state === 'uncertain' && !a.reconciled),
     );
@@ -1615,10 +1676,37 @@ export class Runtime {
     this.drainQueue();
   }
 
+  /**
+   * A frontier weighing requested before a restart has no live gateway call
+   * left to record it. Record it as abandoned so its slot and reservation are
+   * freed; the whole reservation is charged, since the provider may have spent it.
+   */
+  private abandonUnrecordedWeighs(): void {
+    for (const record of Object.values(this.current.inferences)) {
+      if (record.request.site !== 'frontier.weigh' || record.recorded || this.inferAbort.has(record.request_id)) {
+        continue;
+      }
+      this.gatewayIngress.submit({
+        observation_id: `inference:recorded:${record.request_id}`,
+        caused_by: null,
+        payload_type: 'inference.recorded',
+        payload_version: 1,
+        payload: {
+          request_id: record.request_id,
+          attempts: [],
+          spent: record.request.reservation.cost,
+          status: 'unaccepted',
+          reason: ABANDONED_WEIGH,
+        } satisfies InferenceRecordedPayload,
+      });
+    }
+  }
+
   load(observations: readonly Observation[]): void {
     for (const observation of observations) {
       const stored = structuredClone(observation);
       this.log.push(stored);
+      this.seqHigh = Math.max(this.seqHigh, stored.seq);
       this.observationIds.add(stored.observation_id);
       if (observation.validation.status === 'accepted') {
         applyAccepted(this.current, observation);
@@ -2297,7 +2385,7 @@ function blockedReason(
     for (const entry of not_selected) {
       counts.set(entry.reason, (counts.get(entry.reason) ?? 0) + 1);
     }
-    const order: NotSelectedReason[] = ['budget', 'dependency', 'conflict', 'stale_read_set'];
+    const order: NotSelectedReason[] = ['budget', 'dependency', 'conflict', 'stale_read_set', 'deferred'];
     let dominant: NotSelectedReason = order[0] as NotSelectedReason;
     let best = -1;
     for (const reason of order) {
@@ -2354,6 +2442,7 @@ const REASON_TEXT: Readonly<Record<NotSelectedReason, string>> = {
   dependency: 'dependencies unsatisfied',
   conflict: 'effect conflict with running work',
   stale_read_set: 'read set is stale',
+  deferred: 'frontier deferred by frontier.weigh@1 weights',
 };
 
 // ---------------------------------------------------------------------------
