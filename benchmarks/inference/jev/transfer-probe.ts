@@ -6,12 +6,14 @@
  *
  *   node benchmarks/inference/jev/transfer-probe.ts --from <file>   # rescore only
  */
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Clock, InferenceGateway } from '@weave/gateway';
 import { createJevGateway, readCredentials, validateReferenceArgs, ProbeConfigurationError } from './run.ts';
 import { runReference, readProbeOutput } from './reference.ts';
+import { formatProbeError } from './probe-error.ts';
 import {
   comparePaired,
   loadKevOutcomes,
@@ -176,13 +178,14 @@ export async function main(deps: {
       );
     }
 
-    const output = flag('output') ?? (reference ? '.local/jev/reference-transfer-results.json' : 'benchmarks/inference/jev/transfer-results.json');
+    const runId = reference ? randomUUID() : undefined;
+    const output = flag('output') ?? (reference ? `.local/jev/reference-transfer-results-${runId}.json` : 'benchmarks/inference/jev/transfer-results.json');
     if (reference) {
       const jobs: (() => Promise<TransferRecord>)[] = [];
       for (const { record, orders } of plan) for (let o = 0; o < orders.length; o++) {
         jobs.push(() => runSuiteRecord(gateway, clock, credentials, record, options, orders[o]!, o, deps.signal));
       }
-      const result = await runReference({ clock, corpus: selected, output, jobs, signal: deps.signal });
+      const result = await runReference({ clock, corpus: selected, output, runId, jobs, signal: deps.signal });
       records = [...result.records];
       exitCode = result.header.pin_mismatch || result.header.status !== 'completed' ? 1 : 0;
     } else {
@@ -344,7 +347,7 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.a
   }
   try { process.exitCode = await main({ signal: controller.signal }); }
   catch (error) {
-    console.error(error instanceof ProbeConfigurationError ? error.message : 'Jev transfer probe failed; check output and recorded results.');
+    console.error(`Jev transfer probe failed: ${formatProbeError(error)}`);
     process.exitCode = 1;
   }
   finally { process.off('SIGINT', cancel); process.off('SIGTERM', cancel); }

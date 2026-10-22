@@ -73,6 +73,33 @@ test('reference throttle exhaustion records failure with bounded attempts and no
   assert.equal(record.pin_mismatch, true);
 });
 
+test('reference 429 without Retry-After waits before every retry then records throttle_exhausted', async () => {
+  let now = 1_000;
+  const fakeClock = { now: () => now };
+  const started: number[] = [];
+  const waits: number[] = [];
+  const gw = createInferenceGateway({
+    clock: fakeClock, routes: jevRouteTable(credentials, options),
+    timer: { sleep: async (ms, signal) => {
+      // Deadline timers remain pending until their attempt finishes.
+      if (ms >= 100_000) return new Promise<void>((_resolve, reject) => {
+        signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      });
+      waits.push(ms);
+      now += ms;
+    } },
+    evaluators: [typesafeAiEvaluator({ apiKey: credentials.typesafe, shuffle: false,
+      fetch: async () => { started.push(now); return new Response('{}', { status: 429 }); },
+    })],
+  });
+  const record = await runCase(gw, fakeClock, credentials, decision, 'choice', 0, options);
+  assert.equal(started.length, 4);
+  assert.deepEqual(started.slice(1).map((time, i) => time - started[i]!), [1_000, 1_000, 1_000]);
+  assert.ok(waits.every(ms => ms === 1_000));
+  assert.deepEqual(record.attempts.slice(1).map(a => a.waited_ms), [1_000, 1_000, 1_000]);
+  assert.equal(record.reason, 'throttle_exhausted');
+});
+
 for (const model of [PIN, 'jev-1.15.0', 'jev-preview', undefined]) {
   test(`reference records resolved model ${String(model)} and flags pin mismatch on both corpora`, async () => {
     const calls: Record<string, unknown>[] = [];
@@ -111,6 +138,8 @@ test('reference gateway factory sends the pin and corpus order with no guardrail
     assert.equal(record.pin_mismatch, false);
     assert.deepEqual(Object.keys(bodies[0]!).sort(), ['model', 'questions', 'state']);
     assert.equal(bodies[0]!['model'], PIN);
+    assert.equal(record.request_params?.max_output_tokens, bodies[0]!['max_output_tokens'] ?? null);
+    assert.equal(record.request_params?.shuffle, false);
     const questions = bodies[0]!['questions'] as { best: { criteria: Record<string, unknown> } };
     assert.deepEqual(Object.keys(questions.best.criteria), decision.candidates.map(c => c.candidate_id));
   } finally { globalThis.fetch = original; }

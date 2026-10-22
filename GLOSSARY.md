@@ -187,6 +187,10 @@ A reference-mode record whose resolved model id differs from the pinned id or is
 
 The Jev benchmark output's run identity and summary beside its records: reference mode, unique run id, pinned model id, TypeSafe route, date from the injected clock, corpus hash, completion status, and pin mismatch flag/count. The corpus hash is SHA-256 of the selected corpus records serialized as JSON in execution-plan order, including labels. Atomic snapshots bind records to this header; a rerun starts a fresh run and replaces the output rather than appending or mixing generations.
 
+Default output filenames include the run id. A reference run exclusively holds
+its output through a PID sidecar before inference or snapshot replacement;
+live or unknown owners refuse another run, while dead owners are recoverable.
+
 ### Training-allowed destination
 
 A data destination whose provider may train on disclosed content. A routed unit marks it with `destination_training_allowed: true`; the mark applies to every unit sharing that destination. Routing excludes it unless the caller explicitly classifies the request as `public` or `non_sensitive`, even when the destination is otherwise permitted. Before routing the gateway screens content for the repository's credential markers at token starts. A match excludes every unit at that destination with reason `credential_content`, also recorded as a content-free note in outcome `uncertainty`, without consuming attempts. A permitted non-training destination may still receive the original content. When only excluded training destinations remain, the outcome is blocked with `no_route` and nothing is dispatched. Screening is a final safeguard, not permission to send sensitive or private material.

@@ -46,6 +46,9 @@ import { reduceAnswers, renderQuestions, renderState, type Ranking } from './sha
 export const EVALUATION_KINDS: readonly EvaluationKind[] = ['choice', 'score', 'boolean'];
 export const JEV_REFERENCE_MODEL = 'jev-1.14.0';
 
+/** Effective TypeSafe request settings. null records a field the adapter cannot send. */
+const TYPESAFE_REQUEST_PARAMS = { max_output_tokens: null, shuffle: false } as const;
+
 /** Only fixed configuration messages may be printed by the CLI error boundary. */
 export class ProbeConfigurationError extends Error {}
 
@@ -60,6 +63,9 @@ const JEV_PRICE = { input_per_mtok: 42_000, output_per_mtok: 0 } as const;
  * than escalated past onto the billed route.
  */
 const VERCEL_DECLARED_LIMIT = { requests: 60, window_ms: 60_000 } as const;
+
+/** Conservative retry spacing for the reference route, not a measured quota. */
+const REFERENCE_DECLARED_LIMIT = { requests: 60, window_ms: 60_000 } as const;
 
 export interface RouteOptions {
   /** One pinned TypeSafe direct routed unit per kind, with no fallback. */
@@ -107,6 +113,7 @@ function jevRoutes(kind: EvaluationKind, includeDirect: boolean, options: RouteO
       // The direct API names the model differently than the gateway catalogue.
       model: options.reference === true ? JEV_REFERENCE_MODEL : options.model?.trim() || 'jev-preview',
       destination: TYPESAFE_AI_DESTINATION,
+      ...(options.reference === true ? { rate_limits: [REFERENCE_DECLARED_LIMIT] } : {}),
     });
   }
   return routes;
@@ -215,7 +222,10 @@ export function createJevGateway(
     routes: jevRouteTable(credentials, options),
     evaluators: [
       ...(options.reference === true ? [] : [vercelAiGatewayEvaluator({ apiKey: credentials.vercel })]),
-      ...(credentials.typesafe === undefined ? [] : [typesafeAiEvaluator({ apiKey: credentials.typesafe, shuffle: false })]),
+      ...(credentials.typesafe === undefined ? [] : [typesafeAiEvaluator({
+        apiKey: credentials.typesafe,
+        shuffle: TYPESAFE_REQUEST_PARAMS.shuffle,
+      })]),
     ],
     clock,
     timer: realTimer,
@@ -257,8 +267,8 @@ export interface ReferenceProvenance {
   readonly pin_mismatch?: boolean;
   readonly request_params?: {
     /** null means not sent: the System One wire does not send this setting. */
-    readonly max_output_tokens: null;
-    readonly shuffle: false;
+    readonly max_output_tokens: typeof TYPESAFE_REQUEST_PARAMS.max_output_tokens;
+    readonly shuffle: typeof TYPESAFE_REQUEST_PARAMS.shuffle;
     readonly presentation_order: readonly string[];
   };
 }
@@ -276,7 +286,7 @@ export function referenceProvenance(
     provider_response_id: (outcome.status === 'accepted' ? outcome.provider_response_id : last?.provider_response_id) ?? null,
     pin_mismatch: resolved !== JEV_REFERENCE_MODEL || outcome.attempts.some(a =>
       a.resolved_model_id !== undefined && a.resolved_model_id !== JEV_REFERENCE_MODEL),
-    request_params: { max_output_tokens: null, shuffle: false, presentation_order: [...order] },
+    request_params: { ...TYPESAFE_REQUEST_PARAMS, presentation_order: [...order] },
   };
 }
 

@@ -21,6 +21,12 @@ Programmatic callers use `RouteOptions.reference: true`. A conflicting
 `JEV_MODEL` does not change the reference pin. `--prefer-free` does not change
 reference routing. Throttles retry only that TypeSafe unit, up to four attempts,
 using the gateway's existing delay handling with numeric `Retry-After` seconds.
+Without a usable `Retry-After`, the reference unit declares 60 requests per
+60 seconds to give each retry a conservative 1-second delay. This is a retry
+estimate, not a measured provider quota. The shared `decision-transport.ts`
+parser accepts finite non-negative numeric seconds (including zero and
+fractions); absent, blank, invalid, negative, or HTTP-date values supply no
+delay and therefore use the declared limit. This shared parsing is unchanged.
 Exhausted throttles produce `throttle_exhausted` failure records with no fallback.
 
 Reference output is `{ "header": ..., "records": [...] }`. The reference run
@@ -48,14 +54,25 @@ leaves a complete snapshot; staging remnants are never replay input. SIGINT,
 SIGTERM, or an injected abort signal saves completed records with a `cancelled`
 header and exits 1, discarding the interrupted record. An unexpected error
 marks the last snapshot `interrupted`. Reruns start a new `run_id` and replace
-the output, so they neither duplicate nor reuse prior records. Concurrent runs
-have separate headers and provenance; use a distinct output path per run.
+the output, so they neither duplicate nor reuse prior records. Default output
+filenames include the header's `run_id`, isolating concurrent runs. Every
+reference output also has a `<output>.lock` sidecar directory: a unique PID
+marker is published before checking for other owners and before inference or
+snapshot replacement. A live or unknown owner refuses a new run. Markers from
+dead processes are reclaimed by PID check; permission-denied PID checks are
+treated as live. Claims are removed on completion, cancellation, or error.
+The empty sidecar directory remains to avoid a race with a new claimant;
+overlapping acquisitions may both refuse, but cannot both write.
 
 Without `--reference`, route order, Vercel preference, `--prefer-free`, local
 Kev selection, and the legacy JSON array format remain as before. Reference
-defaults use `.local/jev/reference-results.json` and
-`.local/jev/reference-transfer-results.json` so they do not replace legacy
+defaults use `.local/jev/reference-results-<run_id>.json` and
+`.local/jev/reference-transfer-results-<run_id>.json` so they do not replace legacy
 results accidentally.
+
+Both modes print the error name, a recognized error code (or `none`/`unknown`),
+and a fixed diagnostic cause for file access, JSON input, and HTTP header
+failures. Untrusted exception messages and JSON excerpts are never printed.
 
 These HTTP benchmark routes do not consume Fabric grants or request an audit
 tier. Grant renewal and live budget resume behavior stay outside this change;

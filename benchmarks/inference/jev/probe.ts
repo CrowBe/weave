@@ -11,6 +11,7 @@
  *
  * The second form rescores an existing file and issues no inference.
  */
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -29,6 +30,7 @@ import {
   type ProbeRecord,
 } from './run.ts';
 import { runReference, readProbeOutput } from './reference.ts';
+import { formatProbeError } from './probe-error.ts';
 import { scoreShape, type ShapeReport } from './score.ts';
 import { applyOrdering, orderingsFor, scorePermutation, type PermutationRecordView } from './permutation.ts';
 
@@ -208,7 +210,8 @@ export async function main(deps: {
         (reference ? '; pinned TypeSafe direct, no fallback' : options.preferFree ? '; preferring the free route (will wait on throttle)' : ''),
     );
 
-    const output = flag('output') ?? (reference ? '.local/jev/reference-results.json' : '.local/jev/results.json');
+    const runId = reference ? randomUUID() : undefined;
+    const output = flag('output') ?? (reference ? `.local/jev/reference-results-${runId}.json` : '.local/jev/results.json');
     if (reference) {
       const jobs: (() => Promise<ProbeRecord>)[] = [];
       for (let repeat = 0; repeat < repeats; repeat++) for (const kind of kinds) {
@@ -216,7 +219,7 @@ export async function main(deps: {
           jobs.push(() => runCase(gateway, clock, credentials, applyOrdering(decision, orders[o]!), kind, repeat, options, o, deps.signal));
         }
       }
-      const result = await runReference({ clock, corpus, output, jobs, signal: deps.signal });
+      const result = await runReference({ clock, corpus, output, runId, jobs, signal: deps.signal });
       records = [...result.records];
       exitCode = result.header.pin_mismatch || result.header.status !== 'completed' ? 1 : 0;
     } else {
@@ -264,7 +267,7 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.a
   }
   try { process.exitCode = await main({ signal: controller.signal }); }
   catch (error) {
-    console.error(error instanceof ProbeConfigurationError ? error.message : 'Jev probe failed; check output and recorded results.');
+    console.error(`Jev probe failed: ${formatProbeError(error)}`);
     process.exitCode = 1;
   }
   finally { process.off('SIGINT', cancel); process.off('SIGTERM', cancel); }

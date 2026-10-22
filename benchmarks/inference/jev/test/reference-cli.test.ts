@@ -3,6 +3,8 @@ import test from 'node:test';
 import { mkdtemp, readFile, writeFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Worker } from 'node:worker_threads';
 import type { InferenceGateway, EvaluationOutcome, EvaluationKind, EvaluationRequest } from '@weave/gateway';
 import { CORPUS } from '../corpus.ts';
 import type { SuiteRecord } from '../transfer.ts';
@@ -42,6 +44,47 @@ async function temporary(run: (dir: string) => Promise<void>) {
 }
 
 for (const cli of [probe, transferProbe]) {
+  test(`${cli === probe ? 'probe' : 'transfer'} concurrent default outputs include their run ids`, async () => temporary(async dir => {
+    const previous = process.cwd();
+    process.chdir(dir);
+    try {
+      const config = { argv: ['--reference', '--kinds', 'choice', '--all'], env,
+        clock: { now: () => 1_000 }, gateway: fake(PIN), corpus: [CORPUS[0]!], suite };
+      assert.deepEqual(await Promise.all([cli.main(config), cli.main(config)]), [0, 0]);
+      const folder = join(dir, '.local/jev');
+      const outputs = (await readdir(folder)).filter(n => n.endsWith('.json'));
+      assert.equal(outputs.length, 2, 'concurrent reference runs must have separate default outputs');
+      const ids = [];
+      for (const name of outputs) {
+        const saved = JSON.parse(await readFile(join(folder, name), 'utf8'));
+        assert.ok(name.includes(saved.header.run_id), 'default filename must contain the header run_id');
+        assert.equal(saved.records.length, 1);
+        ids.push(saved.header.run_id);
+      }
+      assert.notEqual(ids[0], ids[1]);
+    } finally { process.chdir(previous); }
+  }));
+
+  test(`${cli === probe ? 'probe' : 'transfer'} refuses an output held by a live reference run before inference`, async () => temporary(async dir => {
+    const output = join(dir, 'shared.json');
+    const config = { argv: ['--reference', '--kinds', 'choice', '--all', '--output', output], env,
+      clock: { now: () => 1_000 }, corpus: [CORPUS[0]!], suite };
+    let entered!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const owner = cli.main({ ...config, gateway: fake(PIN, async () => { entered(); await gate; }) });
+    await started;
+    const checkpoint = await readFile(output, 'utf8');
+    let calls = 0;
+    try {
+      await assert.rejects(cli.main({ ...config, gateway: fake(PIN, async () => { calls++; }) }), /output.*in use/i);
+      assert.equal(calls, 0);
+      assert.equal(await readFile(output, 'utf8'), checkpoint, 'contender must not replace the live checkpoint');
+    } finally { release(); await owner; }
+    assert.equal(await cli.main({ ...config, gateway: fake(PIN) }), 0, 'release permits a fresh run');
+  }));
+
   for (const model of [PIN, 'jev-1.15.0', 'jev-preview', undefined]) {
     test(`${cli === probe ? 'probe' : 'transfer'} CLI writes header and exits for resolved ${String(model)}`, async () => temporary(async dir => {
       const output = join(dir, 'result.json');
@@ -88,6 +131,58 @@ for (const cli of [probe, transferProbe]) {
     assert.equal(saved.records.length, 1);
     assert.equal(saved.header.pin_mismatch_count, 0);
     assert.equal(calls, 2);
+    assert.deepEqual(await readdir(`${output}.lock`), [], 'cancellation releases the output claim');
+  }));
+}
+
+for (const script of ['probe.ts', 'transfer-probe.ts']) for (const reference of [false, true]) {
+  test(`${script} ${reference ? 'reference' : 'legacy'} errors identify cause without exposing secrets`, async () => temporary(async dir => {
+    const path = fileURLToPath(new URL(`../${script}`, import.meta.url));
+    const secret = 'fake-only-diagnostic-credential';
+    const input = join(dir, 'input.json');
+    const invoke = (preload?: string): Promise<{ status: number; stderr: string; stdout: string }> => new Promise((resolve, reject) => {
+      const worker = new Worker(`
+        const { workerData } = require('node:worker_threads');
+        const { pathToFileURL } = require('node:url');
+        process.argv = [process.execPath, workerData.path, '--from', workerData.input, ...(workerData.reference ? ['--reference'] : [])];
+        (async () => {
+          if (workerData.preload) await import(pathToFileURL(workerData.preload).href);
+          await import(pathToFileURL(workerData.path).href);
+        })();
+      `, { eval: true, stderr: true, stdout: true, workerData: { path, input, reference, preload },
+        env: { TYPESAFE_API_KEY: secret, AI_GATEWAY_API_KEY: secret } });
+      let stderr = '';
+      let stdout = '';
+      worker.stderr.on('data', chunk => { stderr += chunk; });
+      worker.stdout.on('data', chunk => { stdout += chunk; });
+      worker.on('error', reject);
+      worker.on('exit', status => resolve({ status, stderr, stdout }));
+    });
+    const check = (result: Awaited<ReturnType<typeof invoke>>, expected: RegExp) => {
+      assert.equal(result.status, 1, result.stderr);
+      assert.match(result.stderr, expected);
+      assert.ok(!`${result.stderr}${result.stdout}`.includes(secret), 'diagnostics must not reveal credentials');
+    };
+    check(await invoke(), /Error.*ENOENT.*file or directory.*not found/i);
+    await writeFile(input, `{ "credential": "${secret}" BROKEN }`);
+    check(await invoke(), /SyntaxError.*code=none.*invalid JSON/i);
+    await writeFile(input, '{"header":{"mode":"invalid"}}');
+    check(await invoke(), /Error.*invalid reference run header/i);
+    const preload = join(dir, 'header-error.mjs');
+    await writeFile(preload, `
+      import fs from 'node:fs/promises';
+      import { syncBuiltinESMExports } from 'node:module';
+      fs.readFile = async () => { throw Object.assign(new TypeError('header invalid: ' + process.env.TYPESAFE_API_KEY), { code: 'ERR_INVALID_CHAR' }); };
+      syncBuiltinESMExports();
+    `);
+    check(await invoke(preload), /TypeError.*ERR_INVALID_CHAR.*invalid.*header/i);
+    await writeFile(preload, `
+      import fs from 'node:fs/promises';
+      import { syncBuiltinESMExports } from 'node:module';
+      fs.readFile = async () => { throw Object.assign(new Error(process.env.TYPESAFE_API_KEY), { name: process.env.TYPESAFE_API_KEY, code: process.env.TYPESAFE_API_KEY }); };
+      syncBuiltinESMExports();
+    `);
+    check(await invoke(preload), /Error.*code=unknown.*probe execution failed/i);
   }));
 }
 
@@ -123,6 +218,7 @@ test('crash during inference leaves a parseable checkpoint and rerun binds new r
   const partial = JSON.parse(await readFile(output, 'utf8'));
   assert.equal(partial.records.length, 1);
   assert.equal(partial.header.status, 'interrupted');
+  assert.deepEqual(await readdir(`${output}.lock`), [], 'an inference error releases the output claim');
   await probe.main({ argv: ['--reference', '--kinds', 'choice', '--output', output], env,
     clock: { now: () => 1_000 }, corpus: [CORPUS[2]!], gateway: fake(PIN) });
   const rerun = JSON.parse(await readFile(output, 'utf8'));
