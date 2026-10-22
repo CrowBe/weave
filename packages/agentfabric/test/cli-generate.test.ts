@@ -262,7 +262,11 @@ describe('stub CLI generate adapters', () => {
           invocation_id: 'shell-replay',
           result: Promise.resolve(outcome),
         }),
-        release: () => undefined,
+        // A replayed handle has no open invocation, so the real host's release throws.
+        openActionIds: () => [],
+        release: () => {
+          throw new Error('agentfabric: no open invocation for shell-replay');
+        },
         shellTraces: () => [],
       } as unknown as AgentFabricHost;
       const spawn = createGrantedCliSpawn({ host, authority: createGrantAuthority() });

@@ -225,8 +225,24 @@ retained as pending: it marks that record `cancel_requested` (unless already
 reconciled), and the invocation continues to prepare/replay. After preparation
 it seeds the ordinary pre-start cancellation path,
 which settles stopped and releases its reservation without an uncertain marker.
+A durable `cancel_requested` is never overwritten by the start record (#296).
+Before the prepared invocation is installed, a cancellation for an id without a
+record is retained as pending and copied into the start record; after it is
+installed, the same call sets the in-memory flag the start record is built from.
+A durable cancellation on an existing record cannot be replaced either: the store
+refuses a CLI generation start over any existing record, so such a re-invocation
+fails with that guard's error, spawns nothing and releases its reservation.
+If awaiting `cliRecoveryReady` or the uncertain startup check rejects while a
+cancellation is pending, the recovery error wins: `invokeCliGeneration` rejects
+with it rather than returning `cancelled`. Like any pre-consumption failure, the
+grant stays unconsumed, and nothing is spawned or recorded. No reservation is
+retained either.
 Completion, rejection and startup failure clear the placeholder, identity
 reservation and pending cancellation; later reuse cannot inherit that request.
+When an invocation id names a durable record, `invokeCliGeneration` returns a
+handle that replays the recorded outcome, with no open invocation. `host.release` still throws for an id
+without an open invocation, so callers release only open handles. The CLI bridge
+releases only when the action is open, and otherwise returns the replayed outcome.
 Unknown-id cancellation keeps its existing acknowledgement behavior and retains
 no request for future execution. Hosts await `cliRecoveryReady` to inspect completed startup
 checks; the CLI bridge and operator command do so automatically. Snapshot equality
