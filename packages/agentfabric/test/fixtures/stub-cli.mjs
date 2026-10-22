@@ -4,7 +4,7 @@
  */
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
-import { argv, env, exit, pid } from 'node:process';
+import { argv, env, exit, pid, stdin } from 'node:process';
 
 const args = argv.slice(2);
 const mode = args[0];
@@ -66,7 +66,13 @@ if (mode === '--subprocess') {
   writeSync(1, env['CANARY'] ?? '');
   exit(0);
 } else if (mode === '--report') {
-  const text = readFileSync(0, 'utf8');
+  // The spawned child's fd 0 is a non-blocking pipe (libuv spawn stdio). A synchronous
+  // read fails with EAGAIN if the host's end-of-file has not arrived yet, so wait for it.
+  const chunks = [];
+  for await (const chunk of stdin) {
+    chunks.push(chunk);
+  }
+  const text = Buffer.concat(chunks).toString('utf8');
   writeSync(
     1,
     JSON.stringify({
