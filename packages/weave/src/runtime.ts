@@ -2301,24 +2301,24 @@ export class Runtime {
     const host = this.options.host as CapabilityHost & { conclusions?: () => readonly unknown[] };
     const incremental = host.conclusionsSince !== undefined;
     const items = host.conclusionsSince?.(this.conclusionCursor) ?? host.conclusions?.() ?? [];
-    let acceptedPrefix = true;
     for (const item of items) {
       if (isCachedConclusion(item) && !this.importedConclusions.has(item.conclusion_id)) {
-        const observation = this.append({
-          observation_id: `conclusion:imported:${item.conclusion_id}`,
-          source: RUNTIME_SOURCE,
-          caused_by: null,
-          payload_type: 'conclusion.cached',
-          payload_version: 1,
-          payload: item,
-        });
-        if (observation.validation.status !== 'accepted') {
-          acceptedPrefix = false;
+        const observation_id = `conclusion:imported:${item.conclusion_id}`;
+        // A returned rejection is terminal: re-appending the same observation_id
+        // can only be rejected as a duplicate, so each import is attempted once.
+        if (!this.observationIds.has(observation_id)) {
+          this.append({
+            observation_id,
+            source: RUNTIME_SOURCE,
+            caused_by: null,
+            payload_type: 'conclusion.cached',
+            payload_version: 1,
+            payload: item,
+          });
         }
       }
-      // Never consume an unaccepted append, even if later items are accepted.
-      // A thrown persistence failure also leaves that position for the retry.
-      if (incremental && acceptedPrefix) {
+      // A thrown persistence failure exits before this, leaving the position for the retry.
+      if (incremental) {
         this.conclusionCursor += 1;
       }
     }

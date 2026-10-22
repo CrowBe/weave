@@ -86,6 +86,11 @@ function ids(runtime: Runtime) {
   return runtime.state().conclusions.map((item) => item.conclusion_id);
 }
 
+function attempts(runtime: Runtime, conclusion_id: string) {
+  return runtime.trace().observations.filter((item) => item.observation_id === `conclusion:imported:${conclusion_id}`)
+    .length;
+}
+
 describe('WV-N275 incremental conclusion import', () => {
   it('reads only the delta on repeated cycles and when another writer appends', () => {
     const { host, runtime } = setup();
@@ -194,6 +199,51 @@ describe('WV-N275 incremental conclusion import', () => {
     legacy.clock.submit(tick(2));
     assert.deepEqual(restored.state(), legacy.state());
     assert.deepEqual(restored.trace(), legacy.trace());
+  });
+
+  it('attempts a retained item that fails validation once, then reads only new items', () => {
+    for (const incremental of [false, true]) {
+      const { host, runtime } = setup(incremental, undefined, [conclusion('a'), { conclusion_id: 'invalid' }]);
+      host.retained.push(conclusion('b'));
+      host.cursors.length = 0;
+      runtime.clock.submit(tick(1));
+      runtime.clock.submit(tick(2));
+      host.retained.push(conclusion('c'));
+      runtime.clock.submit(tick(3));
+      runtime.clock.submit(tick(4));
+      assert.equal(attempts(runtime, 'invalid'), 1, `incremental=${incremental}`);
+      if (incremental) {
+        assert.deepEqual(host.cursors, [2, 3, 3, 4], 'a terminal rejection is consumed like an accepted append');
+      }
+      assert.deepEqual(ids(runtime), ['a', 'b', 'c']);
+    }
+  });
+
+  it('consumes a terminal rejection but retries a thrown persistence failure after it', () => {
+    const journal = new Journal();
+    const { host, runtime } = setup(true, journal);
+    host.retained.push({ conclusion_id: 'invalid' }, conclusion('c'), conclusion('d'));
+    journal.interrupt = 'c';
+    assert.throws(() => runtime.clock.submit(tick(1)), /cycle cancelled/);
+    assert.deepEqual(ids(runtime), ['a', 'b']);
+    const restored = recover(journal.snapshot(), { host, decisionLayer: quiet });
+    host.cursors.length = 0;
+    runtime.clock.submit(tick(2));
+    assert.deepEqual(host.cursors, [5], 'the thrown append is retried; the rejection before it is not');
+    assert.deepEqual(ids(runtime), ['a', 'b', 'c', 'd']);
+    assert.equal(attempts(runtime, 'invalid'), 1);
+
+    // The journal holds only accepted observations, so recovery re-attempts the
+    // rejection once from position 0 and must land on the same cursor.
+    restored.clock.submit(tick(2));
+    assert.deepEqual(ids(restored), ['a', 'b', 'c', 'd']);
+    assert.equal(attempts(restored, 'invalid'), 1);
+    host.retained.push(conclusion('e'));
+    host.cursors.length = 0;
+    runtime.clock.submit(tick(3));
+    restored.clock.submit(tick(3));
+    assert.deepEqual(host.cursors, [7, 7]);
+    assert.deepEqual(runtime.state().conclusions, restored.state().conclusions);
   });
 
   it('replays identically without reading either host accessor', () => {
