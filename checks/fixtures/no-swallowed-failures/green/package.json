@@ -1,0 +1,9 @@
+{
+  "name": "green-fixture",
+  "private": true,
+  "scripts": {
+    "lint": "vp lint --deny-warnings",
+    "either": "node a.mjs || node b.mjs",
+    "check": "node checks/a.mjs && node checks/b.mjs"
+  }
+}

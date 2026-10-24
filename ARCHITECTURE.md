@@ -90,7 +90,10 @@ governed decision.
 Package-direction, no-ambient-clock and no-ambient-entropy checks live under
 `checks/` and run without Loom's tests. Loom takes fresh identities from injected
 ports, as it takes time. The direction check fails on a package directory it has
-no rule for, so a new package cannot go unchecked. The external AgentFabric repository
+no rule for, so a new package cannot go unchecked. Package source reads no
+environment (`checks/no-ambient-env.mjs`): configuration enters from the root
+that composes it. Scripts and CI steps may not swallow a failure
+(`checks/no-swallowed-failures.mjs`). The external AgentFabric repository
 is a conceptual reference, not a dependency or a code source: the contract
 invariants it established (durable contracts, opaque references separated from
 locators and from authority, a closed effect vocabulary, grant matching, failure

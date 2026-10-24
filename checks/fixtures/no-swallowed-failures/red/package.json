@@ -1,0 +1,9 @@
+{
+  "name": "red-fixture",
+  "private": true,
+  "scripts": {
+    "lint:report": "vp lint || true",
+    "fmt:report": "vp fmt --check || exit 0",
+    "check": "node checks/a.mjs || : && node checks/b.mjs"
+  }
+}
