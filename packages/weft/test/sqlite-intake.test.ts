@@ -355,13 +355,30 @@ test('canonical identity survives native import, W6 export and intake with nulls
   }
 });
 
-test('listener accepts only the configured authority for IPv6 and localhost bindings', async () => {
-  const store = memory();
-  try {
-    for (const host of ['::1', 'localhost']) {
-      const listener = await createOtlpListener({ createServer, store, redact: identity, host });
+for (const host of ['::1', 'localhost']) {
+  test(`listener accepts the configured authority for ${host}`, async (t) => {
+    const store = memory();
+    try {
+      let ipv6Unavailable = false;
+      const listener = await createOtlpListener({
+        createServer: (handler) => {
+          const server = createServer(handler);
+          server.once('error', (error: NodeJS.ErrnoException) => {
+            ipv6Unavailable =
+              host === '::1' && ['EAFNOSUPPORT', 'EPROTONOSUPPORT', 'EADDRNOTAVAIL'].includes(error.code ?? '');
+          });
+          return server;
+        },
+        store,
+        redact: identity,
+        host,
+      });
+      if (ipv6Unavailable) {
+        t.skip('IPv6 loopback is unavailable on this host');
+        return;
+      }
       assert.ok(listener.ok);
-      if (!listener.ok) continue;
+      if (!listener.ok) return;
       try {
         const response = await fetch(listener.url + '/v1/traces', {
           method: 'POST',
@@ -372,8 +389,8 @@ test('listener accepts only the configured authority for IPv6 and localhost bind
       } finally {
         await listener.close();
       }
+    } finally {
+      store.close();
     }
-  } finally {
-    store.close();
-  }
-});
+  });
+}
