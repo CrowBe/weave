@@ -139,7 +139,14 @@ function generationAdapter(
           ...(call.signal === undefined ? {} : { abortSignal: call.signal }),
         });
 
-        const cost = free ? reportedCost(result.providerMetadata) : undefined;
+        const evidence = free
+          ? costEvidence(
+              result.providerMetadata,
+              // The summed usage drops each step's raw provider usage; read it per step.
+              result.steps.map((step) => step.usage.raw),
+            )
+          : undefined;
+        const cost = evidence === undefined ? undefined : reportedCost(result.providerMetadata, evidence);
         const usage = {
           input_tokens: free ? tokenCount(result.usage.inputTokens) : result.usage.inputTokens,
           output_tokens: free ? tokenCount(result.usage.outputTokens) : result.usage.outputTokens,
@@ -147,7 +154,7 @@ function generationAdapter(
         };
         if (free && call.signal?.aborted)
           return { status: 'failed', failure: freeFailure('cancelled', 'request cancelled'), usage };
-        if (free && !freeCost(result.providerMetadata)) {
+        if (free && !freeCost(result.providerMetadata, evidence!)) {
           return {
             status: 'failed',
             failure: freeFailure(
@@ -243,28 +250,72 @@ async function freePreflight(
   }
 }
 
-function freeCost(metadata: unknown): boolean {
-  if (!record(metadata) || !record(metadata.gateway)) return false;
-  const gateway = metadata.gateway;
-  return (
-    zero(gateway.cost) && ['marketCost', 'gatewayCost'].every((field) => !(field in gateway) || zero(gateway[field]))
-  );
+/** A key that names a charge, in any provider's spelling. */
+const COST_KEY = /cost/i;
+/** Deeper cost evidence than this is unreadable, and unreadable is not zero. */
+const COST_DEPTH = 8;
+
+interface CostEvidence {
+  /** Every value at or below a cost-like key, with whether its own key is cost-like. */
+  readonly values: readonly { readonly value: unknown; readonly named: boolean }[];
+  readonly complete: boolean;
 }
 
-/** Gateway bills in currency units; the provider-neutral port meters in micros. */
-function reportedCost(metadata: unknown): number | undefined {
-  if (!record(metadata) || !record(metadata.gateway)) return undefined;
+/**
+ * Collect cost evidence from the whole response: every provider metadata
+ * namespace and each step's raw provider usage. A value is cost evidence when its
+ * key matches /cost/i or it sits anywhere beneath such a key. The known
+ * gateway fields are not special here: the set is closed by rule, so a cost
+ * field added later is checked rather than ignored (#227).
+ */
+function costEvidence(metadata: unknown, rawUsage: unknown): CostEvidence {
+  const values: { value: unknown; named: boolean }[] = [];
+  let complete = true;
+  const walk = (value: unknown, depth: number, under: boolean, named: boolean) => {
+    if (depth > COST_DEPTH) {
+      complete = false;
+      return;
+    }
+    if (record(value) || Array.isArray(value)) {
+      for (const [key, child] of Object.entries(value)) {
+        const costly = COST_KEY.test(key);
+        walk(child, depth + 1, under || costly, costly);
+      }
+      return;
+    }
+    if (under) values.push({ value, named });
+  };
+  walk(metadata, 0, false, false);
+  walk(rawUsage, 0, false, false);
+  return { values, complete };
+}
+
+/**
+ * Zero only when the gateway states a zero `cost` and every piece of cost
+ * evidence anywhere in the response is an exact zero. Absent, negative,
+ * non-numeric or unreadable evidence is not zero.
+ */
+function freeCost(metadata: unknown, evidence: CostEvidence): boolean {
+  if (!record(metadata) || !record(metadata.gateway)) return false;
+  return zero(metadata.gateway.cost) && evidence.complete && evidence.values.every(({ value }) => zero(value));
+}
+
+/**
+ * Gateway bills in currency units; the provider-neutral port meters in micros.
+ * The fields can overlap (total, market price, gateway price), so use the
+ * largest charge evidence rather than assuming they are additive components.
+ * A field read as a charge is one whose own key is cost-like.
+ */
+function reportedCost(metadata: unknown, evidence: CostEvidence): number | undefined {
   let reported: number | undefined;
-  // These fields can overlap (total, market price, gateway price). Use the
-  // largest charge evidence rather than assuming they are additive components.
-  for (const field of ['cost', 'marketCost', 'gatewayCost']) {
-    const value = metadata.gateway[field];
+  for (const { value, named } of evidence.values) {
+    if (!named) continue;
     if (typeof value !== 'number' && !(typeof value === 'string' && /^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value)))
       continue;
     const cost = Number(value) * 1_000_000;
     if (Number.isFinite(cost) && cost > 0) reported = Math.max(reported ?? 0, cost);
   }
-  return reported ?? (freeCost(metadata) ? 0 : undefined);
+  return reported ?? (freeCost(metadata, evidence) ? 0 : undefined);
 }
 
 function freeFault(error: unknown, signal: AbortSignal | undefined): ProviderFailure {

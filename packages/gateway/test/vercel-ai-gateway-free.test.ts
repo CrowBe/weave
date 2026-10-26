@@ -683,6 +683,74 @@ describe('Vercel promotional free contract', () => {
     });
   }
 
+  // #227: cost evidence is closed-set like the catalogue price. Any field whose
+  // key matches /cost/i in provider metadata or raw usage, and anything nested
+  // under one, must read as zero, or the route is refused.
+  const zeroGateway = { cost: '0', marketCost: '0', gatewayCost: '0' };
+  for (const [name, providerMetadata, raw] of [
+    ['unknown gateway cost field', { gateway: { ...zeroGateway, upstreamInferenceCost: 0.01 } }, undefined],
+    ['unknown cost field as text', { gateway: { ...zeroGateway, inputCost: '0.01' } }, undefined],
+    ['nested under a cost key', { gateway: { ...zeroGateway, costBreakdown: { input: '0.01' } } }, undefined],
+    ['nested in routing metadata', { gateway: { ...zeroGateway, routing: { attempts: [{ cost: 0.01 }] } } }, undefined],
+    ['another metadata namespace', { gateway: zeroGateway, upstream: { totalCost: 0.01 } }, undefined],
+    ['raw usage', { gateway: zeroGateway }, { cost: 0.01 }],
+    [
+      'unknown cost field that is not a number',
+      { gateway: { ...zeroGateway, upstreamInferenceCost: null } },
+      undefined,
+    ],
+  ] as const) {
+    it(`refuses a free response with nonzero cost evidence: ${name} (#227)`, async () => {
+      const result = await adapter(async () => {
+        const body = (await completion().json()) as { usage: Record<string, unknown> };
+        return Response.json({
+          ...body,
+          usage: { ...body.usage, ...(raw === undefined ? {} : { raw }) },
+          providerMetadata,
+        });
+      }).execute(call);
+      assert.ok(result.status === 'failed', name);
+      assert.equal(result.failure.code, 'invalid_request');
+      assert.equal(result.failure.retryable, false);
+      assert.match(result.failure.message, /cost/);
+    });
+  }
+
+  it('meters an unknown positive cost field and stops at the ceiling instead of falling back (#227)', async () => {
+    let calls = 0;
+    const result = await gateway(async () => {
+      calls++;
+      const body = (await completion().json()) as Record<string, unknown>;
+      return Response.json({ ...body, providerMetadata: { gateway: { ...zeroGateway, upstreamInferenceCost: 0.01 } } });
+    }).generate(request());
+    assert.equal(result.spent, 10_000);
+    assert.equal(result.attempts[0]?.usage.cost, 10_000);
+    assert.equal(result.attempts[0]?.cost_is_upper_bound, false);
+    assert.equal(result.status === 'unaccepted' && result.reason, 'budget_exhausted');
+    assert.equal(calls, 1);
+  });
+
+  it('accepts zero cost evidence in unknown fields and ignores numeric fields that are not cost-like (#227)', async () => {
+    const result = await adapter(async () => {
+      const body = (await completion().json()) as { usage: Record<string, unknown> };
+      return Response.json({
+        ...body,
+        usage: { ...body.usage, raw: { prompt_tokens: 2, completion_tokens: 1, cost: 0 } },
+        providerMetadata: {
+          gateway: {
+            ...zeroGateway,
+            upstreamInferenceCost: 0,
+            costBreakdown: { input: '0.0' },
+            routing: { attempts: 3 },
+          },
+          upstream: { latencyMs: 120 },
+        },
+      });
+    }).execute(call);
+    assert.equal(result.status, 'completed');
+    assert.equal(result.usage.cost, 0);
+  });
+
   it('keeps a cost refusal local to one invocation and checks again on resubmission', async () => {
     let calls = 0;
     let reads = 0;
