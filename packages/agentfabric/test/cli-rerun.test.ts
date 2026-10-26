@@ -6,7 +6,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, type TestContext } from 'node:test';
 import { createGrantAuthority, type Grant } from '@weave/agentsop';
-import { AgentFabricHost, FabricStore, SHELL_RUN, type InvocationRecord } from '@weave/agentfabric';
+import {
+  AgentFabricHost,
+  FabricStore,
+  SHELL_RUN,
+  type InvocationRecord,
+  type WeftRecordShape,
+} from '@weave/agentfabric';
 import { digest } from '../src/digest.js';
 
 type RecoveryChecks = { checkUncertainCliGenerations(cwd_ref?: string): Promise<void> };
@@ -43,7 +49,11 @@ async function fixture(t: TestContext) {
         }),
     },
   };
-  const open = () => new AgentFabricHost({ authority, store, shell, cliProcessGroupProbe: () => 'unknown' as const });
+  /** Weft records from every host this fixture opens, as one trace. */
+  const records: WeftRecordShape[] = [];
+  const weft = { trace_id: 'run-1', emitter_id: 'fab', emit: (record: WeftRecordShape) => void records.push(record) };
+  const open = () =>
+    new AgentFabricHost({ authority, store, shell, weft, cliProcessGroupProbe: () => 'unknown' as const });
   let store = new FabricStore(undefined, path);
   let host = open();
   await host.cliRecoveryReady;
@@ -123,6 +133,7 @@ async function fixture(t: TestContext) {
       return store;
     },
     authority,
+    records,
     spawn,
     cwd_ref,
     request,
@@ -172,6 +183,38 @@ describe('CLI generation re-run of a stopped record (WV-040)', () => {
     assert.deepEqual(f.store.getInvocation(id), current);
     assert.deepEqual(f.host.listUncertainCliGenerations(), []);
     assert.equal(f.host.coordinator.held().length, 0);
+  });
+
+  it('gives each attempt distinct Weft record ids, linked to its own selection, in one host and after reopen', async (t) => {
+    const check = async (id: string, reopen: boolean) => {
+      // A fresh fixture each time: the first stopped run needs its tool missing.
+      const f = await fixture(t);
+      const from = f.records.length;
+      await f.stopped(id);
+      if (reopen) await f.reopen();
+      const result = await f.finish(await f.host.invokeCliGeneration(f.grant(id), f.request()));
+      assert.equal(result.outcome, 'succeeded');
+      const own = f.records.slice(from).filter((r) => r.evidence.some((e) => e.ref === id));
+      assert.deepEqual(
+        own.map((r) => [r.kind, r.fields['event'] ?? r.fields['status']]),
+        [
+          ['capability.lifecycle', 'selected'],
+          ['capability.invoked', 'failed'],
+          ['capability.lifecycle', 'selected'],
+          ['capability.invoked', 'succeeded'],
+        ],
+      );
+      // Weft identifies a record by (trace_id, record_id): a repeat would be refused as a conflict on import.
+      assert.equal(new Set(own.map((r) => r.record_id)).size, own.length, JSON.stringify(own.map((r) => r.record_id)));
+      for (const at of [0, 2]) {
+        const selected = own[at]!;
+        const invoked = own[at + 1]!;
+        assert.equal(invoked.parent_id, selected.record_id, 'an invocation points at its own attempt');
+        assert.deepEqual(invoked.evidence, [{ source: 'invocation', ref: id }], 'correlation by invocation id stays');
+      }
+    };
+    await check('shell-cli:weft', false);
+    await check('shell-cli:weft-reopen', true);
   });
 
   it('starts a fresh attempt over an already reconciled stopped run without reconciling it again', async (t) => {

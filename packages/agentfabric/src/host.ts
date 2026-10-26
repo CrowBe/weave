@@ -117,6 +117,8 @@ interface OpenInvocation {
   resolve: (outcome: InvocationOutcome) => void;
   committed: PublicationRecord | null;
   outcome: InvocationOutcome | null;
+  /** The store's attempt number; absent for the first attempt. */
+  readonly attempt?: number;
 }
 
 export type CapabilityImplementation = (
@@ -1042,7 +1044,7 @@ export class AgentFabricHost implements CapabilityHost {
       implementation_id: open.implementation_id,
       inputs: open.inputs,
     });
-    this.weft?.selected(open.invocation_id, operation, open.implementation_id, open.grant.contract_rev);
+    this.weft?.selected(open.invocation_id, operation, open.implementation_id, open.grant.contract_rev, open.attempt);
     this.open.set(open.invocation_id, open);
     const result = new Promise<InvocationOutcome>((resolve) => {
       open.resolve = resolve;
@@ -1579,6 +1581,7 @@ export class AgentFabricHost implements CapabilityHost {
       open.implementation_id,
       open.grant.contract_rev,
       open.cancel_requested && outcome.outcome !== 'succeeded' ? 'cancelled' : outcome.outcome,
+      open.attempt,
     );
     // A failed marker write leaves a running durable record. Retain the
     // settled uncertainty until durable reconciliation removes it.
@@ -1874,6 +1877,7 @@ export class AgentFabricHost implements CapabilityHost {
       resolve: () => undefined,
       committed: null,
       outcome: null,
+      ...(rerun && existing ? { attempt: (existing.attempt ?? 1) + 1 } : {}),
     };
     const record: InvocationRecord = {
       invocation_id,
@@ -1889,7 +1893,7 @@ export class AgentFabricHost implements CapabilityHost {
         resource: this.store.lookupRef(effect.resource)?.canonical_id ?? effect.resource,
         mode: effect.mode,
       })),
-      ...(rerun && existing ? { attempt: (existing.attempt ?? 1) + 1 } : {}),
+      ...(open.attempt === undefined ? {} : { attempt: open.attempt }),
     };
     return { kind: 'open', open, record };
   }

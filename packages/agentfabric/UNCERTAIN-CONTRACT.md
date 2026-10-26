@@ -305,6 +305,13 @@ mutation and kept by compaction and snapshots as `superseded_invocations`
 current record keep its attempt. A re-run with different inputs remains `DENIED`
 (identity bound to a different input) before consuming the grant.
 
+Weft: a superseding attempt's `selected` and `invoked` records carry the
+attempt in their record ids (`<emitter>:selected:<id>:attempt-N`; the first
+attempt keeps `<emitter>:selected:<id>`), and its `invoked` record's parent is
+its own selection. Weft identifies records by `(trace_id, record_id)`, so the
+attempts never collide on import, including when the re-run is a new process.
+Evidence still correlates every attempt by invocation id.
+
 Grants: the old run's grant stays consumed, so reusing it is `DENIED` before any
 reconciliation. The fresh grant is consumed once, by preparation. A failed
 automatic reconciliation fails closed: there is no interface to test a grant's

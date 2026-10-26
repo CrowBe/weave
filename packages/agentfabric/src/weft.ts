@@ -99,12 +99,24 @@ export class FabricWeft {
     }
   }
 
-  private selectedId(invocation_id: string): string {
-    return `${this.port.emitter_id}:selected:${invocation_id}`;
+  /**
+   * A re-run supersedes a stopped attempt under the same invocation id (WV-040). Weft identifies a
+   * record by `(trace_id, record_id)`, so a later attempt's ids carry the store's durable attempt
+   * number; the first attempt keeps the plain id. Evidence still correlates by invocation id.
+   */
+  private attemptId(event: string, invocation_id: string, attempt: number | undefined): string {
+    const base = `${this.port.emitter_id}:${event}:${invocation_id}`;
+    return attempt === undefined || attempt <= 1 ? base : `${base}:attempt-${attempt}`;
   }
 
-  selected(invocation_id: string, operation: string, implementation: string, contract_rev: string): void {
-    this.send(this.selectedId(invocation_id), 'capability.lifecycle', null, invocation_id, {
+  selected(
+    invocation_id: string,
+    operation: string,
+    implementation: string,
+    contract_rev: string,
+    attempt?: number,
+  ): void {
+    this.send(this.attemptId('selected', invocation_id, attempt), 'capability.lifecycle', null, invocation_id, {
       operation,
       implementation,
       event: 'selected',
@@ -117,11 +129,12 @@ export class FabricWeft {
     implementation: string,
     contract_rev: string,
     status: 'succeeded' | 'failed' | 'uncertain' | 'cancelled',
+    attempt?: number,
   ): void {
     this.send(
-      `${this.port.emitter_id}:invoked:${invocation_id}`,
+      this.attemptId('invoked', invocation_id, attempt),
       'capability.invoked',
-      this.selectedId(invocation_id),
+      this.attemptId('selected', invocation_id, attempt),
       invocation_id,
       {
         contract_rev,
