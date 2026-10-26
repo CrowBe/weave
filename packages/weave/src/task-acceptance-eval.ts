@@ -23,6 +23,7 @@ import {
   decideValidation,
   judgeCriteria,
   judgeValidation,
+  parsePredicate,
   validationFromFixture,
   type AcceptancePredicate,
   type CommandRecord,
@@ -414,7 +415,8 @@ function parseTask(raw: unknown, index: number): FrozenTask {
 
 /**
  * Structure only. A frozen line may be vague, or carry a predicate on the
- * wrong evidence kind: admission, not this loader, rejects those.
+ * wrong evidence kind: admission, not this loader, rejects those. A predicate
+ * itself must have the runtime's closed shape.
  */
 function parseLine(raw: unknown, taskId: string): ProposedLine {
   if (!isRecord(raw)) throw new Error(`${taskId} has a line that is not an object`);
@@ -439,14 +441,12 @@ function parseEvidenceRef(evidence: unknown, label: string): EvidenceRef {
   throw new Error(`${label} evidence kind is unknown`);
 }
 
+/** The runtime's closed shapes: an empty literal or an extra key is refused, not dropped (#246). */
 function parsePredicateShape(raw: unknown, label: string): AcceptancePredicate {
-  if (isRecord(raw) && raw['kind'] === 'exit_status' && Number.isSafeInteger(raw['equals'])) {
-    return { kind: 'exit_status', equals: raw['equals'] as number };
-  }
-  if (isRecord(raw) && raw['kind'] === 'contains_literal' && typeof raw['literal'] === 'string') {
-    return { kind: 'contains_literal', literal: raw['literal'] };
-  }
-  throw new Error(`${label} predicate is not exit_status or contains_literal`);
+  const predicate = parsePredicate(raw);
+  if (typeof predicate === 'string')
+    throw new Error(`${label} predicate is not a closed exit_status or contains_literal shape`);
+  return predicate;
 }
 
 function parseArtifacts(raw: unknown, taskId: string): FrozenTask['artifacts'] {
