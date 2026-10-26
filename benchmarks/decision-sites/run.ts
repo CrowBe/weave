@@ -8,7 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { buildProviders } from './providers.ts';
 import { buildCompetitors, museSparkCompetitor, quotaAllowsCompetitors } from './competitors.ts';
 import type { ProcessRunner } from './competitors.ts';
-import { Journal, acquireLock } from './journal.ts';
+import { Journal, acquireLock, ledger } from './journal.ts';
 import { SITES } from './questions.ts';
 import { countCompetitorCalls, execute } from './engine.ts';
 import { bindObservations } from './observations.ts';
@@ -278,10 +278,27 @@ export async function main(
       },
       reportRecords,
     );
-    Object.assign(report.summary, { metered_call_cost_usd: callCost, reserved_usd: journal.spent() - callCost });
+    // Reserved spend may over-state the bill (a usage-less 429 is charged at projection), never under-state it.
+    const spend = ledger(records);
+    Object.assign(report.summary, {
+      metered_call_cost_usd: callCost,
+      observed_usd: spend.observed_usd,
+      reserved_usd: spend.reserved_usd,
+      pending_reservation_usd: spend.pending_reservation_usd,
+    });
     writeFileSync(join(dir, 'summary.json'), JSON.stringify(report.summary, null, 2) + '\n', { mode: 0o600 });
     const markdown =
-      report.markdown + '\n\nLedger spend (including pending reservations): $' + journal.spent().toFixed(8) + '\n';
+      report.markdown +
+      '\n\nLedger spend (including pending reservations): $' +
+      journal.spent().toFixed(8) +
+      '\n' +
+      'Observed spend (usage receipts): $' +
+      spend.observed_usd.toFixed(8) +
+      '. Reserved spend (no usage receipt): $' +
+      spend.reserved_usd.toFixed(8) +
+      ', of which pending reservations: $' +
+      spend.pending_reservation_usd.toFixed(8) +
+      '. The budget stop uses the ledger total.\n';
     writeFileSync(join(dir, 'REPORT.md'), markdown);
     if (publish && reportRecords.some((r) => r.result.status === 'ok'))
       writeFileSync(join(root, 'REPORT.md'), markdown);

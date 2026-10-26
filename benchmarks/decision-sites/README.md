@@ -55,7 +55,14 @@ The default metered decision-spend ceiling is **USD 2.00 per run**. Each HTTP
 attempt reserves `serialized_request_utf8_bytes * input_price / 1e6` before
 calling. Actual `usage.input_tokens` replaces the reservation after receipt.
 Missing usage retains that conservative estimate; skips before inference cost
-zero. Prices are TypeSafe $0.042/M input (output free) and OpenAI Decisions
+zero. A 429 without usage is therefore charged at its projection on each of its
+up to three attempts, which can over-state the bill and reach `budget_stop`
+early; no provider here documents usage-less 429s as unbilled, so the budget
+keeps that charge. Reports separate it instead: `summary.json` and the run
+report give `observed_usd` (priced from usage receipts) and `reserved_usd`
+(charged without a receipt: usage-less completed calls plus
+`pending_reservation_usd` for unacknowledged calls) beside the conservative
+ledger total `spent_usd`, which the budget stop uses. Prices are TypeSafe $0.042/M input (output free) and OpenAI Decisions
 $0.10/M input with output tokens assumed unbilled and no cache charges, based on the
 [Decisions guide](https://developers.openai.com/api/docs/guides/decisions).
 The OpenAI price remains unconfirmed until a credentialed run; [code](providers.ts)
