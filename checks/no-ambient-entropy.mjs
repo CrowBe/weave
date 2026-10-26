@@ -7,11 +7,19 @@
  * time enters through `now` and `clock.tick` (M0-C2), so a run can be replayed
  * from its inputs. The check scans Loom and Weft source (not tests) for entropy APIs.
  * Composition roots, tests and other packages may still use them.
+ *
+ * Comments and template text are blanked by the shared scanner
+ * (checks/source-scan.mjs), so a `//` inside a string or a template does not
+ * hide the code after it (#249).
+ *
+ * Usage: node checks/no-ambient-entropy.mjs [root]. The root defaults to the
+ * repository; checks/test passes a fixture tree.
  */
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
+import { blankComments } from './source-scan.mjs';
 
-const root = resolve(new URL('..', import.meta.url).pathname);
+const root = resolve(process.argv[2] ?? new URL('..', import.meta.url).pathname);
 const SCANNED = ['packages/weave/src', 'packages/weft/src'];
 
 const FORBIDDEN = [
@@ -40,9 +48,8 @@ let filesChecked = 0;
 for (const dir of SCANNED) {
   for (const file of walk(join(root, dir))) {
     filesChecked += 1;
-    const lines = readFileSync(file, 'utf8').split('\n');
-    lines.forEach((line, index) => {
-      const code = line.replace(/\/\/.*$/, '');
+    const lines = blankComments(readFileSync(file, 'utf8')).split('\n');
+    lines.forEach((code, index) => {
       for (const [pattern, name] of FORBIDDEN) {
         if (pattern.test(code)) {
           violations.push(`${relative(root, file)}:${index + 1}: ${name}`);
