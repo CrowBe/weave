@@ -1,5 +1,6 @@
 /** Pure validation of composition-root data. No credentials are resolved here. */
 import {
+  BILLINGS,
   EVALUATION_KINDS,
   GENERATION_KINDS,
   QUALITY_BARS,
@@ -320,6 +321,7 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
           'tier',
           'operation',
           'kind',
+          'billing',
           'quota_provider',
         ],
         path,
@@ -340,6 +342,13 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
         `${path}.kind: operation/kind pair`,
       );
       check(unit.quota_provider === undefined || identifier(unit.quota_provider), `${path}.quota_provider`);
+      // Billing has no default (#77): a missing declaration could only be read
+      // as a guess, and the guess that skips the weekly cap is the silent one.
+      check(member(unit.billing, BILLINGS), `${path}.billing: expected subscription, metered or local`);
+      check(
+        unit.billing !== 'subscription' || unit.quota_provider !== undefined,
+        `${path}.quota_provider: required for subscription billing`,
+      );
       check(
         unit.destination_training_allowed === undefined || typeof unit.destination_training_allowed === 'boolean',
         `${path}.destination_training_allowed`,

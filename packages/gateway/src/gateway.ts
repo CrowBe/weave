@@ -21,6 +21,7 @@ import { containsCredentialContent, trainingAllowedDestinations } from './privac
 import { GatewayWeft, type RequestWeft, type WeftPort } from './weft.js';
 import {
   answersMatchQuestions,
+  BILLINGS,
   nonEmptyText,
   TIERS,
   CONTENT_CLASSES,
@@ -115,6 +116,14 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
     const pool = unit.operation === 'generate' ? generators : evaluators;
     if (!pool.has(unit.adapter)) {
       throw new Error(`routed unit '${unit.routed_unit_id}' names unknown ${unit.operation} adapter '${unit.adapter}'`);
+    }
+    // A hand-built table may omit billing, but one it declares is held to the
+    // document rule: a subscription unit outside the weekly cap fails here.
+    if (unit.billing !== undefined && !BILLINGS.includes(unit.billing)) {
+      throw new Error(`routed unit '${unit.routed_unit_id}' declares unknown billing`);
+    }
+    if (unit.billing === 'subscription' && unit.quota_provider === undefined) {
+      throw new Error(`routed unit '${unit.routed_unit_id}' declares subscription billing without quota_provider`);
     }
     // parseRouteConfig validates the document form; a hand-built table gets the
     // same rule here, so pacing and retry timing never see an invalid limit.

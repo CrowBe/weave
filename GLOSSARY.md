@@ -339,7 +339,11 @@ An implementation of a capability contract that depends on inference. Its admiss
 
 ### Quota snapshot
 
-An injected observation of whole-account quota-axi provider totals, with collection time, provider status, quota windows, reset times and pace. A provider reading reused from quota-axi's cache carries its own, earlier observation time, and its age counts from that time. It is data for deterministic budget policy, not authority to execute. A routed unit's `quota_provider` names the account provider independently of adapter and destination.
+An injected observation of whole-account quota-axi provider totals, with collection time, provider status, quota windows, reset times and pace. A provider reading reused from quota-axi's cache carries its own, earlier observation time, and its age counts from that time. It is data for deterministic budget policy, not authority to execute. A routed unit's `quota_provider` names the account provider independently of adapter and destination. A unit with `billing: 'subscription'` must name it.
+
+### Billing declaration
+
+How a routed unit is paid for, declared on every unit in a route document as `subscription`, `metered` or `local`, with no default. A subscription unit draws on a whole-account plan allowance and must name its `quota_provider`, so the weekly cap of the budget gate reaches it; a metered unit is billed per use and bounded by the cost ceiling; a local unit runs on the operator's own hardware. A zero token price does not distinguish them. The declaration is configuration data, not authority to execute.
 
 ### Budget gate
 

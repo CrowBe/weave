@@ -443,16 +443,22 @@ and a Vercel decision route are deferred. There is no second decision adapter.
 
 `budget.policy@1` applies after routing's operation, kind, tier, destination,
 quality, context and cost constraints, before each generation or evaluation
-attempt, including retries, waits and fallbacks. `quota_provider` is an optional
+attempt, including retries, waits and fallbacks. `quota_provider` is a
 routed-unit attribute naming the whole-account quota-axi provider, independent
 of its adapter and destination. A strong unit without that mapping fails closed.
 The weekly cap reaches only units that declare it, and a standard unit without
 it does not fail closed, so every unit that draws on a subscription account
-must declare its `quota_provider`. `parseRouteConfig` cannot enforce this: a
-route table records no billing, and a zero token price also describes local
-units and unpriced placeholders such as the Muse Spark entries. Requiring the
-mapping needs a billing declaration on routed units, which is not decided yet
-(#77); a test pins the current gap.
+must declare its `quota_provider`. A zero token price cannot show this: it also
+describes local units and unpriced placeholders such as the Muse Spark entries.
+Every routed unit in a route document therefore declares
+`billing: 'subscription' | 'metered' | 'local'` (#77). The field has no
+default, because a missing declaration could only be guessed and the guess that
+skips the weekly cap is the silent one: `parseRouteConfig` rejects a unit
+without it, and rejects a `subscription` unit without `quota_provider`.
+`metered` units are bounded by the gateway cost ceiling and `local` units run on
+the operator's hardware; neither needs a mapping. A hand-built table may omit
+`billing`, but `createInferenceGateway` refuses an unknown value and a
+`subscription` unit without `quota_provider`. The cap itself is unchanged.
 The example subscription units name `codex`, `claude` and `grok`. quota-axi
 0.1.64 lists all three provider ids. Its Grok reading reports the allowance as
 window `credits` (kind `weekly` or `monthly` by plan period), and no Grok

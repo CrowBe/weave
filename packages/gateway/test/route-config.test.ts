@@ -390,11 +390,13 @@ it('a target tier that conflicts with the terms tier is invalid, not a routing m
     assert.equal(decision.order.length > 0, true);
   }
 });
-it('config cannot tell subscription billing, so an unmapped unit escapes the weekly cap (#77)', () => {
-  // Pins the documented gap: only a declared quota_provider ties a unit to its
-  // account's weekly cap, and parseRouteConfig has no billing field to require it from.
+it('a subscription unit must name its quota_provider, so no unit escapes the weekly cap (#77)', () => {
+  // Was the pinned gap: an unmapped subscription unit parsed and dispatched
+  // past a capped account. Billing is now declared, and subscription billing
+  // requires the mapping that ties a unit to its account's weekly cap.
   const input = example();
   const codex = input.units.find((unit: { routed_unit_id: string }) => unit.routed_unit_id === 'codex.flash');
+  assert.equal(codex.billing, 'subscription');
   const capped = {
     observed_at: 0,
     providers: [
@@ -405,26 +407,82 @@ it('config cannot tell subscription billing, so an unmapped unit escapes the wee
       },
     ],
   };
-  for (const tier of ['flash', 'standard'] as const) {
-    for (const mapped of [true, false]) {
-      const unit = { ...codex, tier };
-      if (!mapped) delete unit.quota_provider;
-      const parsed = parseRouteConfig({
-        ...input,
-        units: [...input.units.filter((u: { routed_unit_id: string }) => u !== codex), unit],
-      });
-      assert.equal(parsed.ok, true);
-      if (!parsed.ok) return;
-      const parsedUnit = parsed.table.filter((u) => u.routed_unit_id === 'codex.flash');
-      assert.equal(parsedUnit[0]?.quota_provider, mapped ? 'codex' : undefined);
-      const decision = budgetRoute(parsedUnit, { ...target, tier }, { ...terms, tier }, 20, undefined, capped, 0);
-      assert.deepEqual(
-        decision.order.map((u) => u.routed_unit_id),
-        mapped ? [] : ['codex.flash'],
-        `${tier} mapped=${mapped}`,
-      );
-    }
+  const index = input.units.indexOf(codex);
+  const parse = (unit: Record<string, unknown>) =>
+    parseRouteConfig({ ...input, units: input.units.map((u: unknown) => (u === codex ? unit : u)) });
+  for (const tier of ['flash', 'standard', 'strong'] as const) {
+    const mapped = parse({ ...codex, tier });
+    assert.equal(mapped.ok, true);
+    if (!mapped.ok) return;
+    const parsedUnit = mapped.table.filter((u) => u.routed_unit_id === 'codex.flash');
+    const decision = budgetRoute(parsedUnit, { ...target, tier }, { ...terms, tier }, 20, undefined, capped, 0);
+    assert.deepEqual(decision.order, [], `${tier}: the weekly cap reaches a mapped subscription unit`);
+
+    const { quota_provider: _dropped, ...unmapped } = { ...codex, tier };
+    const refused = parse(unmapped);
+    assert.equal(refused.ok, false, `${tier}: an unmapped subscription unit is rejected`);
+    if (!refused.ok)
+      assert.deepEqual(refused.errors, [`invalid units[${index}].quota_provider: required for subscription billing`]);
   }
+});
+it('every routed unit declares its billing; there is no default (#77)', () => {
+  const input = example();
+  for (const billing of [undefined, 'free', 'Subscription', null]) {
+    const units = input.units.map((unit: Record<string, unknown>, i: number) => {
+      if (i !== 0) return unit;
+      const { billing: _omitted, ...rest } = unit;
+      return billing === undefined ? rest : { ...rest, billing };
+    });
+    const result = parseRouteConfig({ ...input, units });
+    assert.equal(result.ok, false, String(billing));
+    if (!result.ok)
+      assert.ok(
+        result.errors.includes('invalid units[0].billing: expected subscription, metered or local'),
+        result.errors.join('; '),
+      );
+  }
+  // Metered and local units need no mapping; every subscription unit has one.
+  const parsed = parseRouteConfig(input);
+  assert.ok(parsed.ok);
+  const billing = Object.fromEntries(parsed.table.map((u) => [u.routed_unit_id, u.billing]));
+  assert.deepEqual(billing, {
+    'grok-build.flash': 'subscription',
+    'codex.flash': 'subscription',
+    'claude-code.strong': 'subscription',
+    'typesafe-jev.boolean': 'metered',
+    'typesafe-jev.choice': 'metered',
+    'typesafe-jev.score': 'metered',
+    'amos.choice': 'local',
+    'amos.boolean': 'local',
+    'muse-spark.flash.1.3': 'metered',
+    'muse-spark.flash.1.2': 'metered',
+    'nous-portal.flash.solar-mini4': 'metered',
+    'nous-portal.flash.longcat-2.0': 'metered',
+    'nous-portal.flash.step-3.7-flash': 'metered',
+  });
+  for (const unit of parsed.table) {
+    assert.equal(unit.billing === 'subscription', unit.quota_provider !== undefined, unit.routed_unit_id);
+  }
+});
+it('a hand-built subscription unit without quota_provider fails gateway construction (#77)', () => {
+  const units = table();
+  const codex = units.find((unit) => unit.routed_unit_id === 'codex.flash')!;
+  const { quota_provider: _dropped, ...unmapped } = codex;
+  const adapters = [{ id: 'codex', execute: async () => assert.fail('no dispatch') }];
+  assert.throws(
+    () => createInferenceGateway({ routes: [unmapped], adapters, clock: { now: () => 0 } }),
+    /routed unit 'codex\.flash' declares subscription billing without quota_provider/,
+  );
+  assert.throws(
+    () =>
+      createInferenceGateway({
+        routes: [{ ...codex, billing: 'free' as never }],
+        adapters,
+        clock: { now: () => 0 },
+      }),
+    /routed unit 'codex\.flash' declares unknown billing/,
+  );
+  createInferenceGateway({ routes: [codex], adapters, clock: { now: () => 0 } });
 });
 it('availability retains evidence tie order and exclusion declaration order', () => {
   const units = table().map((unit) => ({ ...unit, evidence: { attempts: 20, accepted: 20 } }));

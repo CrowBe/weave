@@ -87,6 +87,15 @@ export type ContentClass = (typeof CONTENT_CLASSES)[number];
 export const TIERS = ['decision', 'flash', 'standard', 'strong'] as const;
 export type Tier = (typeof TIERS)[number];
 
+/**
+ * How a routed unit is paid for. `subscription` draws on a whole-account plan
+ * allowance and must name its `quota_provider`, so the weekly cap reaches it;
+ * `metered` is billed per use and bounded by the cost ceiling; `local` runs on
+ * the operator's own hardware. A zero token price cannot tell these apart.
+ */
+export const BILLINGS = ['subscription', 'metered', 'local'] as const;
+export type Billing = (typeof BILLINGS)[number];
+
 export type ProviderStatus = 'available' | 'exhausted' | 'auth_required' | 'unavailable';
 /** Caller-supplied status keyed by exact routed-unit adapter ids, not provider
  * or destination ids. The composition root must map quota-provider ids to adapters.
@@ -348,7 +357,17 @@ export interface RouteEvidence {
 }
 
 export interface RoutedUnitBase {
-  /** Whole-account quota-axi provider id; independent of adapter and destination. */
+  /**
+   * Required in a route document, with no default: `parseRouteConfig` rejects
+   * a unit without it, so no unit can reach dispatch as an unclassified
+   * subscription. Optional here only for hand-built tables, which
+   * `createInferenceGateway` still checks when it is present.
+   */
+  readonly billing?: Billing;
+  /**
+   * Whole-account quota-axi provider id; independent of adapter and
+   * destination. Required with `billing: 'subscription'`.
+   */
   readonly quota_provider?: string;
   readonly tier?: Tier;
   readonly routed_unit_id: RoutedUnitId;
