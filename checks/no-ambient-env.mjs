@@ -25,7 +25,7 @@ const repository = resolve(new URL('..', import.meta.url).pathname);
 const root = resolve(process.argv[2] ?? repository);
 
 const FORBIDDEN = [
-  [/\bprocess\s*(?:\.\s*env\b|\[\s*['"`]env['"`]\s*\])/, 'process.env'],
+  [/\bprocess\s*(?:\??\.\s*env\b|(?:\?\.\s*)?\[\s*['"`]env['"`]\s*\])/, 'process.env'],
   [/\{\s*[^}]*\benv\b[^}]*\}\s*=\s*process\b/, 'env destructured from process'],
   [/import\s*\{[^}]*\benv\b[^}]*\}\s*from\s*['"](?:node:)?process['"]/, "env imported from 'node:process'"],
   [/\bimport\.meta\.env\b/, 'import.meta.env'],

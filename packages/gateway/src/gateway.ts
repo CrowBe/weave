@@ -731,16 +731,20 @@ async function attemptBeforeDeadline<T>(params: BoundedParams<T>, unit: RoutedUn
       // grace, but a transport ignoring abort must not hold the outcome open.
       const failure = await interrupted;
       const grace = new AbortController();
+      const timer = params.timer;
       try {
         const usage = await Promise.race([
           attempt.then(
             (settled) => settled.usage,
             () => failure.usage,
           ),
-          params.timer.sleep(100, grace.signal).then(
-            () => failure.usage,
-            () => failure.usage,
-          ),
+          // A Timer that throws synchronously must not turn the outcome into an exception.
+          Promise.resolve()
+            .then(() => timer.sleep(100, grace.signal))
+            .then(
+              () => failure.usage,
+              () => failure.usage,
+            ),
         ]);
         return { ...failure, usage };
       } finally {

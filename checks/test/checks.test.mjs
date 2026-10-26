@@ -32,6 +32,8 @@ test('no-ambient-env is red on package source that reads the environment', () =>
     'packages/demo/src/destructured.ts:2: env destructured from process',
     "packages/demo/src/multiline.ts:2: env imported from 'node:process'",
     'packages/demo/src/multiline.ts:5: env destructured from process',
+    'packages/demo/src/optional.ts:2: process.env',
+    'packages/demo/src/optional.ts:3: process.env',
     'packages/demo/src/template.ts:4: process.env',
     'packages/demo/src/template.ts:6: process.env',
   ]);

@@ -355,10 +355,21 @@ test('canonical identity survives native import, W6 export and intake with nulls
   }
 });
 
-test('listener accepts only the configured authority for IPv6 and localhost bindings', async () => {
+/** Whether this host can bind the IPv6 loopback; containers without IPv6 cannot. */
+function ipv6Loopback(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const probe = createServer();
+    probe.once('error', () => resolve(false));
+    probe.listen(0, '::1', () => probe.close(() => resolve(true)));
+  });
+}
+test('listener accepts only the configured authority for IPv6 and localhost bindings', async (t) => {
   const store = memory();
+  const hosts = ['localhost'];
+  if (await ipv6Loopback()) hosts.unshift('::1');
+  else t.diagnostic('::1 skipped: this host has no IPv6 loopback (#283)');
   try {
-    for (const host of ['::1', 'localhost']) {
+    for (const host of hosts) {
       const listener = await createOtlpListener({ createServer, store, redact: identity, host });
       assert.ok(listener.ok);
       if (!listener.ok) continue;
