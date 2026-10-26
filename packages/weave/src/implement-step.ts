@@ -1136,16 +1136,25 @@ export class MemoryAttemptJournal implements AttemptJournal {
  * the file once, repairing a torn final line; later calls use that view and
  * append without rereading. Each append is fsynced before it returns, and a
  * new file is synced with its directory. The instance remembers the file's
- * size and inode after its own read or write: if another writer changed the
- * file since, it fails closed rather than repairing or appending over that
- * writer's records. This detects a second writer; it is not a lock, so the
- * composition root must still give each journal file one writer.
+ * size and inode after its own read or write. It checks them on every call,
+ * again on the open descriptor just before writing, and after writing that
+ * the file grew by exactly its own record: if another writer changed the file,
+ * it fails closed rather than repairing or appending over that writer's
+ * records. This detection is best effort, not a lock. It cannot see a change
+ * that keeps the size and inode (an in-place rewrite of equal length), and a
+ * write by another instance that lands between that instance's own checks is
+ * that instance's to detect. The composition root must still give each
+ * journal file one writer.
+ * An append that fails after writing part of its record (for example ENOSPC)
+ * leaves the instance refusing further calls as an incomplete append (#249);
+ * opening the journal again repairs the torn tail.
  * Indexes are rebuilt from the log and updated after each durable append;
  * duplicate checks and execution lookups do not scan unrelated records.
  */
 export class FileAttemptJournal implements AttemptJournal {
   private index: AttemptJournalIndex | null = null;
   private seen: { readonly size: number; readonly ino: number } | null = null;
+  private incomplete: Error | null = null;
   constructor(readonly path: string) {
     const directory = dirname(path);
     if (!existsSync(directory)) mkdirSync(directory, { recursive: true });
@@ -1173,22 +1182,42 @@ export class FileAttemptJournal implements AttemptJournal {
   append(entry: JournalEntry): void {
     const index = this.view();
     if (index.ids.has(entry.id)) return;
+    const bytes = Buffer.from(`${JSON.stringify(entry)}\n`, 'utf8');
     const fd = openSync(this.path, 'a');
     try {
-      writeSync(fd, `${JSON.stringify(entry)}\n`);
-      fsyncSync(fd);
-      const { size, ino } = fstatSync(fd);
-      this.seen = { size, ino };
+      const before = fstatSync(fd);
+      this.assertUnchanged(before);
+      try {
+        for (let written = 0; written < bytes.length;) written += writeSync(fd, bytes, written);
+        fsyncSync(fd);
+      } catch (error) {
+        // Bytes may be on disk that this instance cannot vouch for: refuse
+        // further calls as an incomplete append rather than as another writer.
+        if (fstatSync(fd).size !== before.size) {
+          this.incomplete = new Error('impl.attempt journal append did not complete; open the journal again', {
+            cause: error,
+          });
+        }
+        throw error;
+      }
+      const after = fstatSync(fd);
+      // O_APPEND puts this record at the end; any other growth is another writer's.
+      if (after.ino !== before.ino || after.size !== before.size + bytes.length) throw changedByAnotherWriter();
+      this.seen = { size: after.size, ino: after.ino };
     } finally {
       closeSync(fd);
     }
     indexEntry(index, structuredClone(entry));
   }
+  private assertUnchanged({ size, ino }: { readonly size: number; readonly ino: number }): void {
+    if (this.seen && (size !== this.seen.size || ino !== this.seen.ino)) throw changedByAnotherWriter();
+  }
   private view(): AttemptJournalIndex {
-    const { size, ino } = statSync(this.path);
+    if (this.incomplete) throw this.incomplete;
+    const stat = statSync(this.path);
     if (this.index && this.seen) {
-      if (size === this.seen.size && ino === this.seen.ino) return this.index;
-      throw new Error('impl.attempt journal was changed by another writer');
+      this.assertUnchanged(stat);
+      return this.index;
     }
     const index = readEntries(this.path);
     const repaired = statSync(this.path);
@@ -1196,6 +1225,9 @@ export class FileAttemptJournal implements AttemptJournal {
     this.seen = { size: repaired.size, ino: repaired.ino };
     return index;
   }
+}
+function changedByAnotherWriter(): Error {
+  return new Error('impl.attempt journal was changed by another writer');
 }
 /**
  * A crash can end the file mid-record. Drop that unparseable tail so the next

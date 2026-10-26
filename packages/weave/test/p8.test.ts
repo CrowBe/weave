@@ -1886,6 +1886,87 @@ test('a rejected file journal write leaves indexes unchanged and can be retried 
   assert.deepEqual(new FileAttemptJournal(path).load('exec-1'), [entry]);
 });
 
+// #249: a write that fails part-way (ENOSPC) is reported as an incomplete
+// append, not as another writer, and a fresh journal repairs its torn tail.
+test('a part-written file journal append is reported as incomplete, not as another writer (#249)', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-p8-torn-append-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const source = driver({ evaluations: [{ c1: { p: 0.2, conf: 1 } }, { c1: { p: 1, conf: 1 } }] });
+  await runImplementationStep(source.input, source.ports, source.journal);
+  const [first, second] = source.journal.load('exec-1');
+  assert.ok(first && second);
+  const path = join(dir, 'attempts.jsonl');
+  const journal = new FileAttemptJournal(path);
+  journal.append(first);
+  const fsModule = createRequire(import.meta.url)('node:fs') as typeof import('node:fs');
+  const write = fsModule.writeSync;
+  try {
+    fsModule.writeSync = ((fd: number, data: string | NodeJS.ArrayBufferView) => {
+      const text = typeof data === 'string' ? data : Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+      write(fd, text.slice(0, 10) as string);
+      throw Object.assign(new Error('ENOSPC: no space left on device, write'), { code: 'ENOSPC' });
+    }) as typeof write;
+    syncBuiltinESMExports();
+    assert.throws(() => journal.append(second), /ENOSPC/);
+  } finally {
+    fsModule.writeSync = write;
+    syncBuiltinESMExports();
+  }
+  for (const call of [() => journal.load('exec-1'), () => journal.append(second)]) {
+    assert.throws(call, (error: Error) => {
+      assert.doesNotMatch(error.message, /another writer/);
+      assert.match(error.message, /did not complete/);
+      return true;
+    });
+  }
+  const reopened = new FileAttemptJournal(path);
+  assert.deepEqual(
+    reopened.load('exec-1').map((entry) => entry.id),
+    [first.id],
+    'the torn tail is repaired on the next open',
+  );
+  reopened.append(second);
+  assert.deepEqual(
+    new FileAttemptJournal(path).load('exec-1').map((entry) => entry.id),
+    [first.id, second.id],
+  );
+});
+
+// #249: a writer that appends between this journal's check and its own write
+// is detected after the write, not absorbed into the remembered size.
+test('a file journal detects another writer appending during its own append (#249)', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-p8-interleave-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const source = driver({
+    evaluations: [{ c1: { p: 0.2, conf: 1 } }, { c1: { p: 0.2, conf: 1 } }, { c1: { p: 1, conf: 1 } }],
+  });
+  await runImplementationStep(source.input, source.ports, source.journal);
+  const [first, second, third] = source.journal.load('exec-1');
+  assert.ok(first && second && third);
+  const path = join(dir, 'attempts.jsonl');
+  const owner = new FileAttemptJournal(path);
+  owner.append(first);
+  const fsModule = createRequire(import.meta.url)('node:fs') as typeof import('node:fs');
+  const write = fsModule.writeSync;
+  let intruded = false;
+  try {
+    fsModule.writeSync = ((...args: Parameters<typeof write>) => {
+      if (!intruded) {
+        intruded = true;
+        appendFileSync(path, `${JSON.stringify(second)}\n`);
+      }
+      return (write as (...rest: unknown[]) => number)(...args);
+    }) as typeof write;
+    syncBuiltinESMExports();
+    assert.throws(() => owner.append(third), /another writer/);
+  } finally {
+    fsModule.writeSync = write;
+    syncBuiltinESMExports();
+  }
+  assert.ok(intruded);
+  assert.throws(() => owner.load('exec-1'), /another writer/);
+});
+
 // #130: escalation is relative to the D2-routed tier; the budget gate re-checks it.
 test('escalation steps up from the routed tier, not from a budget-lowered tier (#130)', async () => {
   const fail = { c1: { p: 0.1, conf: 1 } };
