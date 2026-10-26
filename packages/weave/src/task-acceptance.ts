@@ -389,8 +389,12 @@ function parseLine(raw: unknown): { readonly status: 'admitted'; readonly line: 
   };
 }
 
-/** Closed shapes only. Returns the rejection reason for anything else. */
-function parsePredicate(raw: unknown): AcceptancePredicate | 'unknown_predicate' | 'invalid_predicate' {
+/**
+ * Closed shapes only. Returns the rejection reason for anything else.
+ * Admission, replay and the frozen-set loader all read a predicate through
+ * this one parser, so a recorded shape is never trusted (#246).
+ */
+export function parsePredicate(raw: unknown): AcceptancePredicate | 'unknown_predicate' | 'invalid_predicate' {
   if (!isRecord(raw) || typeof raw['kind'] !== 'string') return 'invalid_predicate';
   const keys = Object.keys(raw).sort().join(',');
   if (raw['kind'] === 'exit_status') {
@@ -644,8 +648,12 @@ export function decideCriteria(record: CriteriaRecord): CriteriaDecision {
     }
     const line = entry.lexical.line;
     if (line.predicate !== undefined && inCode(record.contract, line)) {
-      // Code checked the fit at admission. Replay checks it again rather than trust the record.
-      if (predicateFits(line.evidence, line.predicate)) {
+      // Code checked the shape and the fit at admission. Replay checks both
+      // again rather than trust the record (#246).
+      const predicate = parsePredicate(line.predicate);
+      if (typeof predicate === 'string') {
+        decisions.push({ line_id: line.line_id, status: 'rejected', reason: predicate });
+      } else if (predicateFits(line.evidence, predicate)) {
         decisions.push({ line_id: line.line_id, status: 'admitted', reason: 'predicate' });
         entered.push(line);
       } else {
@@ -748,13 +756,15 @@ export function replayValidation(record: ValidationRecord): ValidationDecision {
 
 /**
  * Exact comparison on recorded evidence. A missing exit status escapes. A
- * predicate that is absent or does not fit its evidence is malformed (null).
+ * predicate that is absent, outside the closed shapes, or does not fit its
+ * evidence is malformed (null): replay re-validates the shape (#246).
  */
 function predicateVerdict(
-  predicate: AcceptancePredicate | undefined,
+  recorded: AcceptancePredicate | undefined,
   evidence: FactEvidence,
 ): 'pass' | 'fail' | 'escape' | null {
-  if (predicate === undefined || !predicateFits(evidence, predicate)) return null;
+  const predicate = parsePredicate(recorded);
+  if (typeof predicate === 'string' || !predicateFits(evidence, predicate)) return null;
   if (predicate.kind === 'contains_literal') return evidence.body.includes(predicate.literal) ? 'pass' : 'fail';
   const exit = evidence.kind === 'command' ? evidence.exit : undefined;
   if (typeof exit !== 'number' || !Number.isSafeInteger(exit)) return 'escape';

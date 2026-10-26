@@ -771,6 +771,62 @@ describe('predicate lines (acceptance.line@2)', () => {
     assert.equal(decideValidation(unknown).disposition, 'malformed');
     assert.equal(decideValidation(unknown).done, false);
   });
+
+  // #246: replay re-validates the predicate's closed shape, not only its fit.
+  const badShapes: readonly (readonly [string, unknown])[] = [
+    ['flag', { kind: 'contains_literal', literal: '' }],
+    ['flag', { kind: 'contains_literal', literal: 7 }],
+    ['flag', { kind: 'contains_literal', literal: 'x', regex: true }],
+    ['exit', { kind: 'exit_status', equals: 1.5 }],
+    ['exit', { kind: 'exit_status', equals: 0, at_least: 0 }],
+    ['exit', { kind: 'matches_regex', pattern: '.*' }],
+  ];
+
+  it('maps a tampered predicate shape to malformed on validation replay (#246)', () => {
+    for (const [id, predicate] of badShapes) {
+      const line = id === 'flag' ? admitted(literalLine()) : admitted(exitLine());
+      const record =
+        id === 'flag'
+          ? validationFromFixture([line], docs('Use --dry-run first.\n'), [], {}, OPEN)
+          : validationFromFixture([line], [], tests(0), {}, OPEN);
+      assert.equal(decideValidation(record).disposition, 'done');
+      const fact = record.facts[0];
+      assert.ok(fact);
+      const tampered = { ...record, facts: [{ ...fact, predicate }] } as unknown as ValidationRecord;
+      const decision = decideValidation(tampered);
+      assert.equal(decision.disposition, 'malformed', JSON.stringify(predicate));
+      assert.deepEqual(decision.reasons, [`predicate:${id}`], JSON.stringify(predicate));
+      assert.deepEqual(replayValidation(tampered), decision);
+    }
+  });
+
+  it('rejects a tampered predicate shape on criteria replay rather than admitting it (#246)', () => {
+    const record = criteriaFromFixture([exitLine(), literalLine()], {});
+    assert.deepEqual(
+      decideCriteria(record).entered.map((line) => line.line_id),
+      ['exit', 'flag'],
+    );
+    for (const [id, predicate] of badShapes) {
+      const tampered = {
+        ...record,
+        lines: record.lines.map((entry) =>
+          entry.lexical.status === 'admitted' && entry.lexical.line.line_id === id
+            ? { ...entry, lexical: { ...entry.lexical, line: { ...entry.lexical.line, predicate } } }
+            : entry,
+        ),
+      } as unknown as CriteriaRecord;
+      const decision = decideCriteria(tampered);
+      assert.deepEqual(
+        decision.entered.map((line) => line.line_id),
+        ['exit', 'flag'].filter((other) => other !== id),
+        JSON.stringify(predicate),
+      );
+      const rejected = decision.lines.find((line) => line.line_id === id);
+      assert.equal(rejected?.status, 'rejected', JSON.stringify(predicate));
+      assert.match(rejected?.reason ?? '', /^(?:invalid|unknown)_predicate$/, JSON.stringify(predicate));
+      assert.deepEqual(replayCriteria(tampered), decision);
+    }
+  });
 });
 
 describe('acceptance.line@1 replay', () => {
@@ -822,6 +878,26 @@ describe('frozen set', () => {
       readFileSync(new URL('../../../../benchmarks/task-acceptance/frozen-set.json', import.meta.url), 'utf8'),
     ),
   );
+
+  // #246: the loader reads a predicate with the runtime's closed shape, so it
+  // neither admits an empty literal nor drops an unknown key.
+  it('refuses a frozen predicate the runtime parser would refuse (#246)', () => {
+    const raw = JSON.parse(
+      readFileSync(new URL('../../../../benchmarks/task-acceptance/frozen-set.json', import.meta.url), 'utf8'),
+    ) as { proposed_lines: { predicate?: { kind: string } }[] }[];
+    const at = raw.findIndex((task) => task.proposed_lines.some((line) => line.predicate?.kind === 'contains_literal'));
+    assert.ok(at >= 0);
+    for (const predicate of [
+      { kind: 'contains_literal', literal: '' },
+      { kind: 'contains_literal', literal: '--dry-run', regex: true },
+      { kind: 'exit_status', equals: 0, at_least: 0 },
+    ]) {
+      const copy = structuredClone(raw);
+      const line = copy[at]!.proposed_lines.find((item) => item.predicate?.kind === 'contains_literal')!;
+      line.predicate = predicate;
+      assert.throws(() => loadFrozenSet(copy), /predicate/, JSON.stringify(predicate));
+    }
+  });
 
   it('keeps a tune split and a smaller holdout, and scores them with the declared policy', () => {
     assert.ok(tasks.length >= 20 && tasks.length <= 30);

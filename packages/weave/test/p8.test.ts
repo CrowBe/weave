@@ -418,6 +418,28 @@ function driver(options: {
   return found;
 }
 
+// #244: the check-tail screen uses the repository's shared credential markers (#158).
+test('a check tail carrying any shared credential marker is dropped; an ordinary tail is kept', async () => {
+  for (const tail of [
+    'Authorization: Bearer\tabc123',
+    'Authorization: Bearer\nabc123',
+    'key=AIzaSyA1234567890',
+    'token xoxb-123-456',
+    '-----BEGIN RSA PRIVATE KEY-----',
+    'export OPENAI=sk-SECRETVALUE',
+  ]) {
+    const world = driver({ tail });
+    const result = await runImplementationStep(world.input, world.ports, world.journal);
+    assert.equal(result.checks[0]?.tail, '', JSON.stringify(tail));
+    assert.equal(JSON.stringify(world.journal.load('exec-1')).includes(tail.slice(-6)), false, JSON.stringify(tail));
+  }
+  for (const tail of ['12 tests passed', 'bearer_token_id rotated']) {
+    const world = driver({ tail });
+    const result = await runImplementationStep(world.input, world.ports, world.journal);
+    assert.equal(result.checks[0]?.tail, tail);
+  }
+});
+
 test('a passing toy goal records evidence and does not complete the goal', async () => {
   const world = driver({
     text: 'CANARY_OUTPUT',
@@ -579,7 +601,7 @@ test('the equal issuer refuses a wider grant and the step does not invoke one', 
     process_effects: ['process.spawn', 'fs.write:workspace-1'],
     issued_at: 1,
   });
-  const issuer = createEqualGrantIssuer(authority, [held]);
+  const issuer = createEqualGrantIssuer(authority, [held], {});
   (held.permissions as { resource: string; mode: string }[]).push({ resource: 'ref_late', mode: 'read' });
   const first = issuer.issue(held);
   assert.ok(first);
@@ -676,7 +698,7 @@ test('a real host accepts a fresh grant when a green check is retried after D5 f
       process_effects: ['process.spawn', `fs.write:${cwd}`],
       issued_at: 1,
     });
-    const issuer = createEqualGrantIssuer(authority, [template]);
+    const issuer = createEqualGrantIssuer(authority, [template], {});
     const world = driver({ evaluations: [{ c1: { p: 0.2, conf: 0.95 } }, { c1: { p: 0.95, conf: 0.95 } }] });
     const used: Grant[] = [];
     const ports: ImplementPorts = {
@@ -770,7 +792,7 @@ for (const sameText of [false, true]) {
         process_effects: ['process.spawn', `fs.write:${cwd}`],
         issued_at: 1,
       });
-      const issuer = createEqualGrantIssuer(authority, [template]);
+      const issuer = createEqualGrantIssuer(authority, [template], { retries: 0 });
       const work = input({
         ceiling: 'flash',
         retries: 0,
@@ -1864,6 +1886,87 @@ test('a rejected file journal write leaves indexes unchanged and can be retried 
   assert.deepEqual(new FileAttemptJournal(path).load('exec-1'), [entry]);
 });
 
+// #249: a write that fails part-way (ENOSPC) is reported as an incomplete
+// append, not as another writer, and a fresh journal repairs its torn tail.
+test('a part-written file journal append is reported as incomplete, not as another writer (#249)', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-p8-torn-append-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const source = driver({ evaluations: [{ c1: { p: 0.2, conf: 1 } }, { c1: { p: 1, conf: 1 } }] });
+  await runImplementationStep(source.input, source.ports, source.journal);
+  const [first, second] = source.journal.load('exec-1');
+  assert.ok(first && second);
+  const path = join(dir, 'attempts.jsonl');
+  const journal = new FileAttemptJournal(path);
+  journal.append(first);
+  const fsModule = createRequire(import.meta.url)('node:fs') as typeof import('node:fs');
+  const write = fsModule.writeSync;
+  try {
+    fsModule.writeSync = ((fd: number, data: string | NodeJS.ArrayBufferView) => {
+      const text = typeof data === 'string' ? data : Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+      write(fd, text.slice(0, 10) as string);
+      throw Object.assign(new Error('ENOSPC: no space left on device, write'), { code: 'ENOSPC' });
+    }) as typeof write;
+    syncBuiltinESMExports();
+    assert.throws(() => journal.append(second), /ENOSPC/);
+  } finally {
+    fsModule.writeSync = write;
+    syncBuiltinESMExports();
+  }
+  for (const call of [() => journal.load('exec-1'), () => journal.append(second)]) {
+    assert.throws(call, (error: Error) => {
+      assert.doesNotMatch(error.message, /another writer/);
+      assert.match(error.message, /did not complete/);
+      return true;
+    });
+  }
+  const reopened = new FileAttemptJournal(path);
+  assert.deepEqual(
+    reopened.load('exec-1').map((entry) => entry.id),
+    [first.id],
+    'the torn tail is repaired on the next open',
+  );
+  reopened.append(second);
+  assert.deepEqual(
+    new FileAttemptJournal(path).load('exec-1').map((entry) => entry.id),
+    [first.id, second.id],
+  );
+});
+
+// #249: a writer that appends between this journal's check and its own write
+// is detected after the write, not absorbed into the remembered size.
+test('a file journal detects another writer appending during its own append (#249)', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-p8-interleave-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const source = driver({
+    evaluations: [{ c1: { p: 0.2, conf: 1 } }, { c1: { p: 0.2, conf: 1 } }, { c1: { p: 1, conf: 1 } }],
+  });
+  await runImplementationStep(source.input, source.ports, source.journal);
+  const [first, second, third] = source.journal.load('exec-1');
+  assert.ok(first && second && third);
+  const path = join(dir, 'attempts.jsonl');
+  const owner = new FileAttemptJournal(path);
+  owner.append(first);
+  const fsModule = createRequire(import.meta.url)('node:fs') as typeof import('node:fs');
+  const write = fsModule.writeSync;
+  let intruded = false;
+  try {
+    fsModule.writeSync = ((...args: Parameters<typeof write>) => {
+      if (!intruded) {
+        intruded = true;
+        appendFileSync(path, `${JSON.stringify(second)}\n`);
+      }
+      return (write as (...rest: unknown[]) => number)(...args);
+    }) as typeof write;
+    syncBuiltinESMExports();
+    assert.throws(() => owner.append(third), /another writer/);
+  } finally {
+    fsModule.writeSync = write;
+    syncBuiltinESMExports();
+  }
+  assert.ok(intruded);
+  assert.throws(() => owner.load('exec-1'), /another writer/);
+});
+
 // #130: escalation is relative to the D2-routed tier; the budget gate re-checks it.
 test('escalation steps up from the routed tier, not from a budget-lowered tier (#130)', async () => {
   const fail = { c1: { p: 0.1, conf: 1 } };
@@ -1936,7 +2039,7 @@ test('the equal issuer gives each fresh grant its own action id and stops at its
   };
   const held = authority.issue(fields);
   const other = authority.issue({ ...fields, action_id: 'act-2' });
-  const issuer = createEqualGrantIssuer(authority, [held, other], 2);
+  const issuer = createEqualGrantIssuer(authority, [held, other], { retries: 0 });
   const first = issuer.issue(held);
   const second = issuer.issue(held);
   assert.ok(first && second);
@@ -1950,7 +2053,7 @@ test('the equal issuer gives each fresh grant its own action id and stops at its
   const third = issuer.issue(other);
   assert.ok(third, 'each held grant has its own count');
   assert.equal(new Set([first.action_id, second.action_id, third.action_id]).size, 3);
-  const defaults = createEqualGrantIssuer(authority, [held]);
+  const defaults = createEqualGrantIssuer(authority, [held], {});
   const minted = Array.from({ length: DEFAULT_IMPLEMENT_RETRIES + 3 }, () => defaults.issue(held));
   assert.equal(
     minted.filter((item) => item !== null).length,
@@ -1958,9 +2061,42 @@ test('the equal issuer gives each fresh grant its own action id and stops at its
     'by default one fresh grant per generation run of a step: retries, the first attempt and the escalation',
   );
   assert.equal(minted.at(-1), null);
-  for (const bad of [0, -1, 1.5, 11, Number.NaN]) {
-    assert.throws(() => createEqualGrantIssuer(authority, [held], bad), /limit/);
+  for (const bad of [-1, 1.5, 9, Number.NaN, '2']) {
+    assert.throws(() => createEqualGrantIssuer(authority, [held], { retries: bad as number }), /limit/, String(bad));
   }
+});
+
+// #249: the issuer is sized from the step's own retries, so a step configured
+// with more retries than the default still gets a grant on every run.
+test('an issuer sized from the step input grants every generation run its checks (#249)', async () => {
+  const authority = createGrantAuthority();
+  const template = authority.issue({
+    action_id: 'act-1',
+    operation: 'repo.test',
+    contract_rev: 'r1',
+    permissions: [{ resource: 'workspace-1', mode: 'write' }],
+    effects: [{ resource: 'workspace-1', mode: 'write' }],
+    process_effects: ['process.spawn', 'fs.write:workspace-1'],
+    issued_at: 1,
+  });
+  const base = input();
+  const work = input({ retries: 4, checks: base.checks.map((check) => ({ ...check, grant: template })) });
+  const world = driver({ input: work, exits: Array.from({ length: 8 }, () => 1) });
+  const issuer = createEqualGrantIssuer(authority, [template], work);
+  const result = await runImplementationStep(
+    work,
+    { ...world.ports, issueCheckGrant: (held) => issuer.issue(held) },
+    world.journal,
+  );
+  assert.equal(result.attempts.length, 6, 'the first attempt, four retries and the escalation');
+  assert.equal(world.invokes.length, 6);
+  assert.ok(
+    world.invokes.every((call) => call.grant !== null),
+    'no run is denied its check grant',
+  );
+  assert.ok(result.attempts.every((attempt) => attempt.checks[0]?.exit === 1));
+  assert.equal(result.open_issue?.source, 'check');
+  assert.equal(issuer.issue(template), null, 'the bound still holds past the last run');
 });
 
 test('uncertain generation records its invocation and stalls without checks, evaluation, or implicit retry', async () => {

@@ -46,6 +46,26 @@ test('no-ambient-env is green when configuration is passed in and only tests rea
   assert.match(stdout, /in 2 package source files/);
 });
 
+// #249: a `//` inside a string or template no longer hides the code after it.
+test('no-ambient-entropy is red on Loom source that draws entropy after a // in a string or template', () => {
+  const { status, findings } = run('no-ambient-entropy', 'red');
+  assert.equal(status, 1);
+  assert.deepEqual(findings, [
+    'packages/weave/src/url.ts:2: randomUUID',
+    'packages/weave/src/url.ts:3: randomUUID',
+    'packages/weave/src/url.ts:4: Math.random',
+    'packages/weave/src/url.ts:5: getRandomValues',
+    'packages/weave/src/url.ts:6: Math.random',
+  ]);
+});
+
+test('no-ambient-entropy is green when entropy is only named in comments, template text and tests', () => {
+  const { status, findings, stdout } = run('no-ambient-entropy', 'green');
+  assert.deepEqual(findings, []);
+  assert.equal(status, 0);
+  assert.match(stdout, /in 2 Loom files/);
+});
+
 test('no-swallowed-failures is red on scripts and CI steps that cannot fail', () => {
   const { status, findings } = run('no-swallowed-failures', 'red');
   assert.equal(status, 1);

@@ -66,7 +66,15 @@ const PAUSE_REASONS = [
 export type ImplementPauseReason = (typeof PAUSE_REASONS)[number];
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const KEPT_REF = /^(?:ref_|gen_)[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
-const CREDENTIAL = /sk[-_]|Bearer |eyJ|gh[pousr]_|github_pat_|AKIA/i;
+/**
+ * The repository's credential markers (`packages/gateway/src/privacy.ts`,
+ * `packages/weft/src/credential.ts`), kept equal by checks/test (#158, #244).
+ * The gateway does not export its screen, so Loom keeps this copy. It drops
+ * the token-start guard those screens use: a check tail is untrusted process
+ * output, and dropping a tail on a marker inside a word loses no authority.
+ */
+const CREDENTIAL =
+  /(?:sk[-_]|Bearer\s+|eyJ|gh[pousr]_|github_pat_|AKIA|AIza|xox[abp]-|-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----)/i;
 const TAIL_CHARS = 240;
 const MAX_RETRIES = 8;
 const CHECK_TEXT = 'Deterministic checks failed.';
@@ -724,20 +732,24 @@ function freshCheckGrant(ports: ImplementPorts, held: Grant | null): Grant | nul
  * Object identity is the hold: a field-equal copy, a wider grant, or a
  * decision answer is refused. The held grant is not consumed.
  *
- * `limit` bounds fresh grants per held grant (#124). One step run invokes each
- * check once per generation run, at most `retries + 2` times, so the default
- * fits the default retries; bind one issuer per step run and pass
- * `retries + 2` when the step is configured with more. Each fresh grant gets
- * its own action id, `<held action_id>:g<n>`, so release and proceed by action
- * id stay unambiguous among this issuer's grants (#125). Action id is not scope.
+ * The issuer bounds fresh grants per held grant (#124). One step run invokes
+ * each check once per generation run, at most `retries + 2` times, so the
+ * limit is sized from the step's own `retries` (pass the step input, or the
+ * same `retries`) rather than set beside it, where a step configured with
+ * more retries would get null grants on its later runs (#249). Bind one
+ * issuer per step run. Each fresh grant gets its own action id,
+ * `<held action_id>:g<n>`, so release and proceed by action id stay
+ * unambiguous among this issuer's grants (#125). Action id is not scope.
  */
 export function createEqualGrantIssuer(
   authority: GrantAuthority,
   held: readonly Grant[],
-  limit: number = DEFAULT_IMPLEMENT_RETRIES + 2,
+  step: Pick<ImplementStepInput, 'retries'>,
 ): EqualGrantIssuer {
-  if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_RETRIES + 2)
-    throw new Error('Invalid grant issue limit');
+  const retries = step.retries ?? DEFAULT_IMPLEMENT_RETRIES;
+  if (!Number.isSafeInteger(retries) || retries < 0 || retries > MAX_RETRIES)
+    throw new Error('Invalid grant issue limit: retries must match a valid implementation step');
+  const limit = retries + 2;
   const scopes = new Map<Grant, { readonly scope: Grant; issued: number }>();
   for (const grant of held) {
     if (!authority.isIssued(grant) || !authority.isValid(grant)) continue;
@@ -1124,16 +1136,25 @@ export class MemoryAttemptJournal implements AttemptJournal {
  * the file once, repairing a torn final line; later calls use that view and
  * append without rereading. Each append is fsynced before it returns, and a
  * new file is synced with its directory. The instance remembers the file's
- * size and inode after its own read or write: if another writer changed the
- * file since, it fails closed rather than repairing or appending over that
- * writer's records. This detects a second writer; it is not a lock, so the
- * composition root must still give each journal file one writer.
+ * size and inode after its own read or write. It checks them on every call,
+ * again on the open descriptor just before writing, and after writing that
+ * the file grew by exactly its own record: if another writer changed the file,
+ * it fails closed rather than repairing or appending over that writer's
+ * records. This detection is best effort, not a lock. It cannot see a change
+ * that keeps the size and inode (an in-place rewrite of equal length), and a
+ * write by another instance that lands between that instance's own checks is
+ * that instance's to detect. The composition root must still give each
+ * journal file one writer.
+ * An append that fails after writing part of its record (for example ENOSPC)
+ * leaves the instance refusing further calls as an incomplete append (#249);
+ * opening the journal again repairs the torn tail.
  * Indexes are rebuilt from the log and updated after each durable append;
  * duplicate checks and execution lookups do not scan unrelated records.
  */
 export class FileAttemptJournal implements AttemptJournal {
   private index: AttemptJournalIndex | null = null;
   private seen: { readonly size: number; readonly ino: number } | null = null;
+  private incomplete: Error | null = null;
   constructor(readonly path: string) {
     const directory = dirname(path);
     if (!existsSync(directory)) mkdirSync(directory, { recursive: true });
@@ -1161,22 +1182,42 @@ export class FileAttemptJournal implements AttemptJournal {
   append(entry: JournalEntry): void {
     const index = this.view();
     if (index.ids.has(entry.id)) return;
+    const bytes = Buffer.from(`${JSON.stringify(entry)}\n`, 'utf8');
     const fd = openSync(this.path, 'a');
     try {
-      writeSync(fd, `${JSON.stringify(entry)}\n`);
-      fsyncSync(fd);
-      const { size, ino } = fstatSync(fd);
-      this.seen = { size, ino };
+      const before = fstatSync(fd);
+      this.assertUnchanged(before);
+      try {
+        for (let written = 0; written < bytes.length;) written += writeSync(fd, bytes, written);
+        fsyncSync(fd);
+      } catch (error) {
+        // Bytes may be on disk that this instance cannot vouch for: refuse
+        // further calls as an incomplete append rather than as another writer.
+        if (fstatSync(fd).size !== before.size) {
+          this.incomplete = new Error('impl.attempt journal append did not complete; open the journal again', {
+            cause: error,
+          });
+        }
+        throw error;
+      }
+      const after = fstatSync(fd);
+      // O_APPEND puts this record at the end; any other growth is another writer's.
+      if (after.ino !== before.ino || after.size !== before.size + bytes.length) throw changedByAnotherWriter();
+      this.seen = { size: after.size, ino: after.ino };
     } finally {
       closeSync(fd);
     }
     indexEntry(index, structuredClone(entry));
   }
+  private assertUnchanged({ size, ino }: { readonly size: number; readonly ino: number }): void {
+    if (this.seen && (size !== this.seen.size || ino !== this.seen.ino)) throw changedByAnotherWriter();
+  }
   private view(): AttemptJournalIndex {
-    const { size, ino } = statSync(this.path);
+    if (this.incomplete) throw this.incomplete;
+    const stat = statSync(this.path);
     if (this.index && this.seen) {
-      if (size === this.seen.size && ino === this.seen.ino) return this.index;
-      throw new Error('impl.attempt journal was changed by another writer');
+      this.assertUnchanged(stat);
+      return this.index;
     }
     const index = readEntries(this.path);
     const repaired = statSync(this.path);
@@ -1184,6 +1225,9 @@ export class FileAttemptJournal implements AttemptJournal {
     this.seen = { size: repaired.size, ino: repaired.ino };
     return index;
   }
+}
+function changedByAnotherWriter(): Error {
+  return new Error('impl.attempt journal was changed by another writer');
 }
 /**
  * A crash can end the file mid-record. Drop that unparseable tail so the next

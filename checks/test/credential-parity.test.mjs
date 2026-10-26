@@ -12,3 +12,18 @@ test('Weft and gateway use the same credential marker expression and flags', () 
   });
   assert.equal(expressions[0], expressions[1]);
 });
+
+// #244: the implementation step's check-tail screen carries the same markers.
+// It omits only the token-start guard, so it drops at least what they drop.
+test('the implementation step check-tail screen uses the shared credential markers', () => {
+  const read = (path) => {
+    const source = readFileSync(new URL(`../../packages/${path}`, import.meta.url), 'utf8');
+    const match = /const CREDENTIAL\s*=\s*(\/[^\r\n]+\/[a-z]*);/.exec(source);
+    assert.ok(match, `Missing credential expression in ${path}`);
+    return match[1];
+  };
+  const shared = read('gateway/src/privacy.ts');
+  const guard = '(?<![A-Za-z0-9])';
+  assert.ok(shared.startsWith(`/${guard}(?:`), shared);
+  assert.equal(read('weave/src/implement-step.ts'), `/${shared.slice(1 + guard.length)}`);
+});
