@@ -9,7 +9,7 @@ Input contains request_id, state_revision, state_updated_at, state and terms.
 
 D1 requires confidence >= .80 and selected probability >= .6, with the selected
 option at the maximum of a valid distribution. Fallback is implement with strong
-as the safest tier (provisional interpretation: quality safest, still subject to
+as the safest tier (decided in #89: safest means quality-safe, still subject to
 budget/authority). D2 requires .75, fallback standard. D8 requires .70, fallback
 stalled. Intake requires .80 (provisional, until P10 calibration), fallback
 ask_user / needs_human. Intake state contains a disclosed message and running
