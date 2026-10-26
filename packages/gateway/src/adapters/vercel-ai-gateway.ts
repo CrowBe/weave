@@ -29,6 +29,7 @@ import type {
   ProviderFailure,
   QuestionId,
 } from '../types.js';
+import { secondsToMs } from './openai-compatible.js';
 
 export const VERCEL_AI_GATEWAY_ADAPTER = 'vercel-ai-gateway';
 
@@ -273,17 +274,35 @@ function freeFault(error: unknown, signal: AbortSignal | undefined): ProviderFai
   let current: unknown = error;
   let status: number | undefined;
   let retryable = false;
+  let retryAfterMs: number | undefined;
   for (let depth = 0; depth < 8 && record(current); depth++) {
     if (current.name === 'AbortError') return freeFailure('cancelled', 'request cancelled');
     if (current.name === 'TimeoutError') return freeFailure('timeout', 'provider request timed out');
     const candidate = statusOf(current);
-    if (candidate !== undefined && candidate >= 400) status = candidate;
+    if (candidate !== undefined && candidate >= 400) {
+      status = candidate;
+      if (candidate === 429) {
+        const delay = secondsToMs(headerValue(current.responseHeaders, 'retry-after'));
+        if (delay !== undefined) retryAfterMs = Math.min(delay, 60_000);
+      }
+    }
     retryable ||= isRetryable(current);
     current = current.cause;
   }
   if (status === 404) return freeFailure('unavailable', 'model is unavailable');
   const failure = classify({ statusCode: status, isRetryable: retryable });
-  return { ...failure, message: `vercel-ai-gateway-free: provider request failed (${failure.code})` };
+  return {
+    ...failure,
+    message: `vercel-ai-gateway-free: provider request failed (${failure.code})`,
+    ...(status === 429 && retryAfterMs !== undefined ? { retry_after_ms: retryAfterMs } : {}),
+  };
+}
+
+function headerValue(headers: unknown, name: string): string | null {
+  if (headers instanceof Headers) return headers.get(name);
+  if (!record(headers)) return null;
+  const value = Object.entries(headers).find(([key]) => key.toLowerCase() === name)?.[1];
+  return typeof value === 'string' ? value : null;
 }
 
 /**
