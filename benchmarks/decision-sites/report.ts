@@ -73,7 +73,7 @@ export function finalObservations(records: readonly BoundCall[]): BoundCall[] {
   return [...latest.values()];
 }
 export const isCompetitor = (provider: string): boolean =>
-  provider === 'pi' || provider === 'fx-ask' || provider === 'nous-portal';
+  provider === 'pi' || provider === 'fx-ask' || provider === 'nous-portal' || provider === 'muse-spark';
 /** Competitors are scored without a gate, on holdout calls that were not provider-level skips. */
 export const COMPETITOR_THRESHOLDS: Thresholds = { confidence: 0, ungated: true };
 export const competitorCalls = (holdout: readonly BoundCall[]): BoundCall[] =>
@@ -201,7 +201,10 @@ export function makeReport(metadata: ReportMetadata, records: readonly BoundCall
     '',
     '## Competitors',
     '',
-    'Holdout only; no threshold tuning. Provider-level skips are not attempted inference calls. Self-reported confidence is separate from probability calibration. Competitor served model ids are unobserved; chatgpt-sign-in is an authentication profile, not a served model id.',
+    'Holdout only; no threshold tuning. Provider-level skips are not attempted inference calls. Self-reported confidence is separate from probability calibration. Competitor served model ids are unobserved; chatgpt-sign-in is an authentication profile, not a served model id.' +
+      (providers.includes('muse-spark')
+        ? " muse-spark records the requested model of the routed unit that answered (1.3 contributor, or its declared 1.2 fallback); the response's own model id is not checked."
+        : ''),
     '',
     '| Competitor | Site | Attempted | Accuracy | Parse-failure rate | Confidence coverage | Answer coverage | Skip reason |',
     '| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |',

@@ -2,7 +2,8 @@
 
 This non-gating experiment compares the nine production judgment sites across
 TypeSafe Jev, local Amos, and the benchmark-local OpenAI Decisions profile.
-It also supports pi and fx ask as generic ChatGPT-sign-in competitor harnesses.
+It also supports pi and fx ask as generic ChatGPT-sign-in competitor harnesses,
+and the Meta Muse Spark contributor model as an opt-in competitor.
 It does not change production behavior, defaults, thresholds or provider routing.
 Read [SCORING.md](SCORING.md) before running. The 424 committed cases and
 [provenance](sets/PROVENANCE.md) are frozen by scenario and SHA-256; tune is used
@@ -33,7 +34,7 @@ ChatGPT sign-in is discovered through their local authentication configuration.
 All providers dispatch sequentially.
 No grants, guardrail middleware, shuffle, routing tiers, or gateway budget
 downgrades participate. Requests are captured from the actual production site
-builders through a port, then sent directly to adapters. Dispatch emits no
+builders through a port, then sent directly to adapters (Muse Spark excepted, below). Dispatch emits no
 trace; the journal can be read as a Weft trace afterwards (see Gauge and Weft below).
 
 `typesafe-jev` pins `jev-1.14.0`, sets `shuffle:false`, batches every item's
@@ -124,6 +125,32 @@ It shares the competitor holdout-only schedule and 40-call cap. Benchmark
 content is synthetic and public; Nous may store and train on it. The Nous terms
 restrict automated and performance-monitoring use (scout report WV-016), so the
 captain decides whether to run it.
+
+Meta Muse Spark contributor (`muse-spark`) is opt-in: it is never in the default
+provider set or the headline coverage requirement. Its destination may train on
+content, so the operator must classify the benchmark content with
+`--content-class public` or `--content-class non_sensitive`; the CLI refuses
+`muse-spark` without one, including on resume and render-only, and records the
+class in the run record. Never classify private repository work, operator or
+captain data, or sensitive content that way. `MODEL_API_KEY` is read only by
+`run.ts` and sent only as a Bearer header; a missing key skips with
+`no_credential`. It is the one benchmark route that goes through the gateway
+(`@weave/gateway/muse-spark`): routing admits the training-allowed destination
+only for the declared class and excludes credential-shaped content before
+dispatch, which fails that item as `credential_content`. Both units keep the
+1024-token output budget that default reasoning needs and send no reasoning
+parameter. Each makes one SDK attempt: the 1.3 contributor first, then the
+declared 1.2 fallback once, except after a refused credential, which skips the
+provider. The answering unit's requested model is recorded as the served model;
+the response's own model id is not checked. When both models are rate limited
+the item surfaces as HTTP 429 for the bounded retries above. Its price is
+unknown and recorded as zero, which is not a claim of free use. It receives the
+same strict-JSON prompt as pi and fx, holdout only, under the same 40-call cap.
+The cap bounds HTTP dispatches, not requests: each Muse Spark request reserves
+two (the contributor and its fallback) in its journal intent, and its receipt
+records how many it made. The cap is checked before every attempt, 429 retries
+included, so no run or resume dispatches a 41st call.
+No live Muse Spark run has been made; its tests use a stubbed `fetch` only.
 
 Other flags: `--sites intake.classify,loop.route`, `--split tune|holdout|all`
 (default all), `--providers ...`, `--run-id NAME`, and `--resume`. A holdout-only

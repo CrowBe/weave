@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { buildProviders } from './providers.ts';
-import { buildCompetitors, quotaAllowsCompetitors } from './competitors.ts';
+import { buildCompetitors, museSparkCompetitor, quotaAllowsCompetitors } from './competitors.ts';
 import type { ProcessRunner } from './competitors.ts';
 import { Journal, acquireLock } from './journal.ts';
 import { SITES } from './questions.ts';
@@ -18,7 +18,9 @@ import type { Provider } from './types.ts';
 const DEFAULT_PROVIDERS = ['typesafe-jev', 'amos-small', 'openai-decisions', 'pi', 'fx-ask'];
 // Selectable with --providers, never implied: Nous terms flag automated and
 // performance-monitoring use for a captain decision (WV-016 scout report).
-const OPT_IN_PROVIDERS = ['nous-portal'];
+// Muse Spark's destination may train on content, so the operator must classify the sets.
+const OPT_IN_PROVIDERS = ['nous-portal', 'muse-spark'];
+const CONTENT_CLASS_REQUIRED = 'Muse Spark requires --content-class public or non_sensitive';
 export function flags(args: string[]) {
   const values: Record<string, string> = {};
   const booleans = new Set<string>();
@@ -29,7 +31,7 @@ export function flags(args: string[]) {
       continue;
     }
     if (
-      !['--providers', '--sites', '--split', '--max-spend-usd', '--run-id'].includes(flag) ||
+      !['--providers', '--sites', '--split', '--max-spend-usd', '--run-id', '--content-class'].includes(flag) ||
       !args[i + 1] ||
       args[i + 1]!.startsWith('--')
     )
@@ -46,6 +48,10 @@ export function flags(args: string[]) {
   const providers = (values['--providers'] ?? DEFAULT_PROVIDERS.join(',')).split(',');
   if (providers.some((p) => ![...DEFAULT_PROVIDERS, ...OPT_IN_PROVIDERS, 'fake'].includes(p)))
     throw new Error('Unknown provider');
+  const contentClass = values['--content-class'];
+  if (contentClass !== undefined && contentClass !== 'public' && contentClass !== 'non_sensitive')
+    throw new Error(CONTENT_CLASS_REQUIRED);
+  if (providers.includes('muse-spark') && contentClass === undefined) throw new Error(CONTENT_CLASS_REQUIRED);
   const split = values['--split'] ?? 'all';
   if (!['all', 'tune', 'holdout'].includes(split)) throw new Error('Invalid split');
   return {
@@ -59,6 +65,7 @@ export function flags(args: string[]) {
     split,
     resume: booleans.has('--resume'),
     renderOnly: booleans.has('--render-only'),
+    ...(contentClass === undefined ? {} : { contentClass: contentClass as 'public' | 'non_sensitive' }),
   };
 }
 const runProcess: ProcessRunner = async (command, args, options) => {
@@ -185,6 +192,7 @@ export async function main(
         set_digests: digests,
         providers: options.providers,
         sites: options.sites,
+        ...(options.contentClass ? { content_class: options.contentClass } : {}),
       });
     const configs = {
       ...((process.env.TYPESAFE_API_KEY ?? process.env.TYPESAFE_AI_API_KEY)
@@ -222,9 +230,13 @@ export async function main(
         },
       }),
     );
-    const providers = [...(injected?.providers ?? [...buildProviders(configs), ...competitors, fakeProvider()])].filter(
-      (p) => options.providers.includes(p.id),
-    );
+    // MODEL_API_KEY is read here only; the competitor sends it solely as a Bearer header.
+    const muse = options.contentClass
+      ? [museSparkCompetitor({ apiKey: process.env.MODEL_API_KEY, contentClass: options.contentClass, now: Date.now })]
+      : [];
+    const providers = [
+      ...(injected?.providers ?? [...buildProviders(configs), ...competitors, ...muse, fakeProvider()]),
+    ].filter((p) => options.providers.includes(p.id));
     if (!options.renderOnly)
       await execute({
         entries,
@@ -303,6 +315,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
           'Invalid original run ceiling',
           'Corrupt journal before final line',
           'Frozen set digest mismatch',
+          CONTENT_CLASS_REQUIRED,
         ].includes(message)
           ? message
           : 'Decision benchmark failed; inspect flags, lock, sets and journal.') + '\n',

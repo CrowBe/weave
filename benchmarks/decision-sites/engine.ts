@@ -33,6 +33,12 @@ export function persistentProviderSkip(result: Result): boolean {
 export function retryableCancellation(result: Result): boolean {
   return result.status !== 'ok' && (result.reason === 'cancelled' || result.reason === 'not_sent');
 }
+/** Hard bound on a competitor's HTTP dispatches across a run, including resumes. */
+export const COMPETITOR_CALL_CAP = 40;
+/**
+ * Durable HTTP dispatches for a competitor. A receipt that reports its dispatches counts those; an intent
+ * without one counts the reservation it was made under (one, or the provider's declared maximum).
+ */
 export function countCompetitorCalls(records: readonly JournalRecord[], provider: string): number {
   const uncalled = new Set(
     records
@@ -45,7 +51,14 @@ export function countCompetitorCalls(records: readonly JournalRecord[], provider
       )
       .map((r) => r.call_id),
   );
-  return records.filter((r) => r.type === 'intent' && r.provider === provider && !uncalled.has(r.call_id)).length;
+  const dispatched = new Map(
+    records
+      .filter((r) => r.type === 'call' && Number.isSafeInteger(r.result?.dispatches) && r.result.dispatches >= 0)
+      .map((r) => [r.call_id, r.result.dispatches as number]),
+  );
+  return records
+    .filter((r) => r.type === 'intent' && r.provider === provider && !uncalled.has(r.call_id))
+    .reduce((sum, r) => sum + (dispatched.get(r.call_id) ?? r.dispatch_reservation ?? 1), 0);
 }
 export async function execute(options: {
   entries: readonly Entry[];
@@ -73,7 +86,7 @@ export async function execute(options: {
     if (skipped.has(provider.id)) continue;
     const scheduled = provider.competitor ? competitorEntries(entries) : entries;
     items: for (const entry of scheduled) {
-      if (provider.competitor && countCompetitorCalls(journal.read(), provider.id) >= 40) {
+      if (provider.competitor && countCompetitorCalls(journal.read(), provider.id) >= COMPETITOR_CALL_CAP) {
         journal.append({
           type: 'provider_status',
           provider: provider.id,
@@ -134,6 +147,19 @@ export async function execute(options: {
           journal.append({ type: 'cancelled' });
           return;
         }
+        // Every attempt, retries included, must fit its whole reservation under the cap.
+        const reservation = provider.max_dispatches ?? 1;
+        if (
+          provider.competitor &&
+          countCompetitorCalls(journal.read(), provider.id) + reservation > COMPETITOR_CALL_CAP
+        ) {
+          journal.append({
+            type: 'provider_status',
+            provider: provider.id,
+            result: { status: 'skipped', reason: 'call_cap' },
+          });
+          break items;
+        }
         const projected = projectedCost(serialized, provider.price);
         if (journal.spent() + projected > options.maxSpend) {
           journal.append({
@@ -145,7 +171,14 @@ export async function execute(options: {
           break items;
         }
         const call_id = digest(JSON.stringify([binding, history.length, attempt, journal.read().length]));
-        journal.append({ type: 'intent', ...binding, split: entry.split, call_id, projected_usd: projected });
+        journal.append({
+          type: 'intent',
+          ...binding,
+          split: entry.split,
+          call_id,
+          projected_usd: projected,
+          ...(reservation > 1 ? { dispatch_reservation: reservation } : {}),
+        });
         const started = options.now();
         let result: Result;
         try {

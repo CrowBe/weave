@@ -811,3 +811,61 @@ test('quota checks that made no inference call do not exhaust the competitor cal
     await execute({ entries: [entry], providers: [p], journal, maxSpend: 2, ...clock });
     assert.equal(calls, 1);
   }));
+
+test('the competitor cap is checked before every attempt, so 429 retries cannot pass 40', async () =>
+  fixture(async (journal) => {
+    for (let i = 0; i < 39; i++) {
+      journal.append({ type: 'intent', provider: 'fake', call_id: `paid-${i}`, projected_usd: 0 });
+      journal.append({
+        type: 'call',
+        provider: 'fake',
+        call_id: `paid-${i}`,
+        result: { status: 'ok' },
+        terminal: true,
+        cost_usd: 0,
+      });
+    }
+    let n = 0;
+    const p = {
+      ...provider(async () => {
+        n++;
+        return { status: 'failed' as const, http_status: 429, reason: 'rate_limited' };
+      }),
+      competitor: true,
+    };
+    await execute({ entries: [entry], providers: [p], journal, maxSpend: 2, ...clock });
+    assert.equal(n, 1, 'one attempt fits under the cap; its retries do not');
+    assert.equal(countCompetitorCalls(journal.read(), 'fake'), 40);
+    assert.ok(journal.read().some((r) => r.type === 'provider_status' && r.result.reason === 'call_cap'));
+  }));
+
+test('a request that may dispatch twice reserves both against the cap, and counts what it dispatched', async () =>
+  fixture(async (journal) => {
+    for (let i = 0; i < 37; i++) {
+      journal.append({ type: 'intent', provider: 'fake', call_id: `paid-${i}`, projected_usd: 0 });
+      journal.append({
+        type: 'call',
+        provider: 'fake',
+        call_id: `paid-${i}`,
+        result: { status: 'ok' },
+        terminal: true,
+        cost_usd: 0,
+      });
+    }
+    const entries = ['a', 'b', 'c'].map((id) => ({ ...entry, item: { ...item, id, state: { task: id } } }));
+    let n = 0;
+    const p = {
+      ...provider(async () => {
+        n++;
+        return { status: 'ok' as const, input_tokens: 7, answers: {}, dispatches: 2 };
+      }),
+      competitor: true,
+      max_dispatches: 2,
+    };
+    await execute({ entries, providers: [p], journal, maxSpend: 2, ...clock });
+    assert.equal(n, 1, '37 + 2 fits; a second request could reach 41');
+    assert.equal(countCompetitorCalls(journal.read(), 'fake'), 39);
+    // An intent with no receipt (a crash mid-request) counts its full reservation.
+    journal.append({ type: 'intent', provider: 'fake', call_id: 'lost', projected_usd: 0, dispatch_reservation: 2 });
+    assert.equal(countCompetitorCalls(journal.read(), 'fake'), 41);
+  }));
