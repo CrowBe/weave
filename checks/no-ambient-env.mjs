@@ -39,17 +39,68 @@ const ALLOWED = [
 ];
 const allowanceUses = new Map(ALLOWED.map((entry) => [entry, 0]));
 
-/** Replaces comments with spaces, keeping every newline and offset. */
+/**
+ * Blanks comments and template-literal text with spaces, keeping every newline
+ * and offset. A scanner, not a regex: a `/*` or `//` inside a string or a
+ * template is text, and a template's text is not code, while its `${...}`
+ * expressions are. Quoted strings are kept, since `process['env']` and
+ * `from 'node:process'` are matched through them. A regex literal containing a
+ * quote or comment marker is not modelled.
+ */
 function blankComments(source) {
-  const blank = (text) => text.replace(/[^\n]/g, ' ');
-  return (
-    source
-      // Only block comments that open a line: a `/*` inside a string such as
-      // 'packages/*/src' must not blank the code after it.
-      .replace(/^([ \t]*)(\/\*[\s\S]*?\*\/)/gm, (_, indent, comment) => indent + blank(comment))
-      // A URL's `://` is not a comment; stripping from there would hide the rest of the line.
-      .replace(/(^|[^:])(\/\/[^\n]*)/gm, (_, before, comment) => before + blank(comment))
-  );
+  const out = source.split('');
+  const blank = (from, to) => {
+    for (let k = from; k < to; k += 1) if (out[k] !== '\n') out[k] = ' ';
+  };
+  // One entry per open template: the brace depth of its innermost `${` expression, or -1 in its text.
+  const templates = [];
+  let i = 0;
+  while (i < source.length) {
+    const c = source[i];
+    const inText = templates.length > 0 && templates[templates.length - 1] === -1;
+    if (inText) {
+      if (c === '\\') {
+        blank(i, i + 2);
+        i += 2;
+      } else if (c === '`') {
+        templates.pop();
+        i += 1;
+      } else if (c === '$' && source[i + 1] === '{') {
+        templates[templates.length - 1] = 0;
+        i += 2;
+      } else {
+        blank(i, i + 1);
+        i += 1;
+      }
+      continue;
+    }
+    if (c === '/' && source[i + 1] === '/') {
+      const stop = source.indexOf('\n', i);
+      const to = stop === -1 ? source.length : stop;
+      blank(i, to);
+      i = to;
+    } else if (c === '/' && source[i + 1] === '*') {
+      const stop = source.indexOf('*/', i + 2);
+      const to = stop === -1 ? source.length : stop + 2;
+      blank(i, to);
+      i = to;
+    } else if (c === "'" || c === '"') {
+      let k = i + 1;
+      while (k < source.length && source[k] !== c && source[k] !== '\n') k += source[k] === '\\' ? 2 : 1;
+      i = k + 1;
+    } else if (c === '`') {
+      templates.push(-1);
+      i += 1;
+    } else {
+      if (templates.length > 0) {
+        const top = templates.length - 1;
+        if (c === '{') templates[top] += 1;
+        else if (c === '}') templates[top] = templates[top] === 0 ? -1 : templates[top] - 1;
+      }
+      i += 1;
+    }
+  }
+  return out.join('');
 }
 
 function walk(dir) {

@@ -32,6 +32,8 @@ test('no-ambient-env is red on package source that reads the environment', () =>
     'packages/demo/src/destructured.ts:2: env destructured from process',
     "packages/demo/src/multiline.ts:2: env imported from 'node:process'",
     'packages/demo/src/multiline.ts:5: env destructured from process',
+    'packages/demo/src/template.ts:4: process.env',
+    'packages/demo/src/template.ts:6: process.env',
   ]);
 });
 
@@ -39,7 +41,7 @@ test('no-ambient-env is green when configuration is passed in and only tests rea
   const { status, findings, stdout } = run('no-ambient-env', 'green');
   assert.deepEqual(findings, []);
   assert.equal(status, 0);
-  assert.match(stdout, /in 1 package source files/);
+  assert.match(stdout, /in 2 package source files/);
 });
 
 test('no-swallowed-failures is red on scripts and CI steps that cannot fail', () => {
