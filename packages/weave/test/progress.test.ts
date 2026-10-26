@@ -535,3 +535,34 @@ test('recovery of a legacy dispatched capture without a progress record asks no 
   assert.equal(result.progress, null);
   assert.deepEqual(sites, []);
 });
+
+test('same-input resume keeps durable progress when it crashes after refreshing its checkpoint', async () => {
+  const journal = new MemoryAuditJournal();
+  const id = 'progress-resume-crash';
+  const { ports, d8: calls } = loopPorts([base], 'progressing');
+  let budgetReads = 0;
+  const pausedPorts: AuditPorts = {
+    ...ports,
+    budget: () => (++budgetReads === 2 ? 'pause' : 'allow'),
+  };
+  const paused = await runAuditLoop({ execution_id: id, terms }, pausedPorts, journal);
+  assert.equal(paused.outcome, 'budget');
+  assert.equal(calls.length, 1);
+  const saved = journal.loadCheckpoint(id, 1)!.progress;
+  assert.ok(saved);
+  const checkpoint = journal.checkpoint.bind(journal);
+  journal.checkpoint = (entry) => {
+    checkpoint(entry);
+    throw new Error('crash after durable resume capture');
+  };
+  await assert.rejects(
+    runAuditLoop({ execution_id: id, terms, resume: true }, ports, journal),
+    /crash after durable resume capture/,
+  );
+  assert.deepEqual(journal.loadCheckpoint(id, 1)!.progress, saved);
+  assert.equal(calls.length, 1);
+  journal.checkpoint = checkpoint;
+  const recovered = await runAuditLoop({ execution_id: id, terms, resume: true, max_iterations: 1 }, ports, journal);
+  assert.equal(recovered.outcome, 'iteration_cap');
+  assert.equal(calls.length, 1, 'recovery reuses the saved D8 decision');
+});

@@ -282,7 +282,8 @@ export async function runAuditLoop(
           ...(sameInput && checkpoint!.progress ? { progress: checkpoint!.progress } : {}),
         };
       }
-      const persist = (savedReport: AuditReport | null, savedDisposal?: AuditDisposal, dispatched?: string) =>
+      const persist = (savedReport: AuditReport | null, savedDisposal?: AuditDisposal, dispatched?: string) => {
+        const savedProgress = progress ?? checkpoint?.progress;
         journal.checkpoint({
           execution_id: input.execution_id,
           round,
@@ -290,9 +291,10 @@ export async function runAuditLoop(
           report: savedReport,
           ...(resume_from === undefined ? {} : { resume_from }),
           ...(savedDisposal ? { disposal: savedDisposal } : {}),
-          ...(progress ? { progress } : {}),
+          ...(savedProgress ? { progress: savedProgress } : {}),
           ...(dispatched === undefined ? {} : { dispatched }),
         });
+      };
       const overBudget =
         observed.state.budget !== null && observed.state.budget.spent_micros >= observed.state.budget.ceiling_micros;
       // A new pause is observed live; crash recovery within that resumption reuses its checkpoint.
