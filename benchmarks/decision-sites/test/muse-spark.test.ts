@@ -4,12 +4,17 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   MUSE_SPARK_FALLBACK_MODEL,
   MUSE_SPARK_MIN_OUTPUT_TOKENS,
   MUSE_SPARK_PRIMARY_MODEL,
 } from '@weave/gateway/muse-spark';
 import { competitorPrompt, museSparkCompetitor } from '../competitors.ts';
+import { countCompetitorCalls, execute } from '../engine.ts';
+import { Journal } from '../journal.ts';
 import { flags } from '../run.ts';
 import type { Request } from '../types.ts';
 
@@ -68,6 +73,7 @@ test('Muse Spark is a zero-price competitor that sends the shared competitor pro
     answers,
     input_tokens: 40,
     output_tokens: 300,
+    dispatches: 1,
   });
   assert.equal(seen.length, 1);
   assert.equal(seen[0]!.url, 'https://api.meta.ai/v1/chat/completions');
@@ -103,7 +109,7 @@ test('credential-shaped content is never sent to the contributor destination', a
   const { seen, fetch } = stub(() => completion(JSON.stringify({ answers })));
   const leaky: Request = { ...request, state: { text: 'deploy with Bearer abc123' } };
   const result = await make(fetch).request(leaky, new AbortController().signal);
-  assert.deepEqual(result, { status: 'failed', reason: 'credential_content' });
+  assert.deepEqual(result, { status: 'failed', reason: 'credential_content', dispatches: 0 });
   assert.equal(seen.length, 0);
 });
 
@@ -128,8 +134,12 @@ test('a refused credential skips the provider without trying the fallback, and s
     const { seen, fetch } = stub(() => refused(status));
     const p = make(fetch);
     const first = await p.request(request, new AbortController().signal);
-    assert.deepEqual(first, { status: 'skipped', reason: 'unauthorized' });
-    assert.deepEqual(await p.request(request, new AbortController().signal), first);
+    assert.deepEqual(first, { status: 'skipped', reason: 'unauthorized', dispatches: 1 });
+    // Later requests reuse the skip and dispatch nothing.
+    assert.deepEqual(await p.request(request, new AbortController().signal), {
+      status: 'skipped',
+      reason: 'unauthorized',
+    });
     assert.equal(seen.length, 1);
   }
   const { seen, fetch } = stub(() => completion('{}'));
@@ -145,7 +155,13 @@ test('a refused credential skips the provider without trying the fallback, and s
 test('rate limits on both models surface as HTTP 429 with the delay so the engine bounds retries', async () => {
   const { seen, fetch } = stub(() => refused(429, { 'retry-after': '2' }));
   const result = await make(fetch).request(request, new AbortController().signal);
-  assert.deepEqual(result, { status: 'failed', reason: 'rate_limited', http_status: 429, retry_after_ms: 2000 });
+  assert.deepEqual(result, {
+    status: 'failed',
+    reason: 'rate_limited',
+    http_status: 429,
+    retry_after_ms: 2000,
+    dispatches: 2,
+  });
   assert.equal(seen.length, 2);
 });
 
@@ -158,6 +174,7 @@ test('unparseable output is a parse failure, not an answer', async () => {
     model: MUSE_SPARK_PRIMARY_MODEL,
     input_tokens: 40,
     output_tokens: 300,
+    dispatches: 1,
   });
 });
 
@@ -179,6 +196,7 @@ test('cancellation before dispatch is retryable; after dispatch it is terminal; 
   assert.deepEqual(await make(dispatched).request(request, during.signal), {
     status: 'failed',
     reason: 'cancelled_after_dispatch',
+    dispatches: 1,
   });
   const slow: typeof globalThis.fetch = async (_url, init) => hanging(init?.signal);
   // Keep a fake transport handle alive, like a real socket; AbortSignal timeout alone is unref'ed.
@@ -187,8 +205,43 @@ test('cancellation before dispatch is retryable; after dispatch it is terminal; 
     assert.deepEqual(await make(slow, { timeoutMs: 5 }).request(request, new AbortController().signal), {
       status: 'failed',
       reason: 'timeout',
+      dispatches: 1,
     });
   } finally {
     clearTimeout(keeper);
+  }
+});
+
+test('fallback dispatches count against the durable 40-call competitor cap', async () => {
+  // Reproduction from the #315 review: 1.3 fails, 1.2 answers, for every item.
+  const { seen, fetch } = stub((body) =>
+    body['model'] === MUSE_SPARK_PRIMARY_MODEL ? refused(503) : completion(JSON.stringify({ answers })),
+  );
+  const entries = Array.from({ length: 41 }, (_, n) => ({
+    item: {
+      id: `i-${String(n).padStart(2, '0')}`,
+      scenario_id: `s-${n}`,
+      site: 'loop.route' as const,
+      state: { task: `read ${n}` },
+      gold: { decision: 'flash' },
+    },
+    split: 'holdout' as const,
+    set_digest: 's',
+  }));
+  const dir = await mkdtemp(join(tmpdir(), 'muse-cap-'));
+  try {
+    const journal = new Journal(join(dir, 'journal.jsonl'));
+    const run = () =>
+      execute({ entries, providers: [make(fetch)], journal, maxSpend: 2, now: () => 0, sleep: async () => {} });
+    await run();
+    assert.ok(seen.length <= 40, `${seen.length} HTTP dispatches`);
+    assert.equal(countCompetitorCalls(journal.read(), 'muse-spark'), seen.length, 'the journal counts every dispatch');
+    assert.ok(journal.read().some((r) => r.type === 'provider_status' && r.result.reason === 'call_cap'));
+    // Resume reads the same durable count and dispatches nothing more.
+    const before = seen.length;
+    await run();
+    assert.equal(seen.length, before);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });

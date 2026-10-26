@@ -243,6 +243,8 @@ export function museSparkCompetitor(config: MuseSparkCompetitorConfig): Provider
     model: MUSE_SPARK_PRIMARY_MODEL,
     price: 0,
     competitor: true,
+    // The 1.3 contributor and its declared 1.2 fallback: up to two dispatches per request.
+    max_dispatches: 2,
     serialize: competitorPrompt,
     async request(request, external): Promise<Result> {
       if (external.aborted) return { status: 'failed', reason: 'cancelled' };
@@ -307,7 +309,9 @@ export function museSparkCompetitor(config: MuseSparkCompetitorConfig): Provider
           reason: external.aborted ? 'cancelled_after_dispatch' : timeout.aborted ? 'timeout' : 'gateway_error',
         };
       }
-      const usage = attemptUsage(outcome.attempts);
+      // Each attempt is one HTTP dispatch; the engine counts them against the competitor cap.
+      const dispatches = outcome.attempts.length;
+      const usage = { ...attemptUsage(outcome.attempts), dispatches };
       if (outcome.status === 'accepted') {
         const model = outcome.attempts.at(-1)?.model ?? MUSE_SPARK_PRIMARY_MODEL;
         const answers = parseCompetitorOutput(outcome.text, request);
@@ -316,13 +320,15 @@ export function museSparkCompetitor(config: MuseSparkCompetitorConfig): Provider
           : { status: 'failed', reason: 'non_json_output', parse_failure: true, model, ...usage };
       }
       if (external.aborted)
-        return { status: 'failed', reason: outcome.attempts.length ? 'cancelled_after_dispatch' : 'cancelled' };
+        return { status: 'failed', reason: dispatches ? 'cancelled_after_dispatch' : 'cancelled', dispatches };
       if (timeout.aborted) return { status: 'failed', reason: 'timeout', ...usage };
       const failures = outcome.attempts.flatMap((attempt) =>
         attempt.disposition.status === 'failed' ? [attempt.disposition.failure] : [],
       );
-      if (failures.some((failure) => failure.code === 'unauthorized'))
-        return (skipped = { status: 'skipped', reason: 'unauthorized' });
+      if (failures.some((failure) => failure.code === 'unauthorized')) {
+        skipped = { status: 'skipped', reason: 'unauthorized' };
+        return { ...skipped, dispatches };
+      }
       // Routing refused before dispatch; the outcome's note names the reason without content.
       if (outcome.status === 'blocked')
         return {
@@ -330,6 +336,7 @@ export function museSparkCompetitor(config: MuseSparkCompetitorConfig): Provider
           reason: outcome.uncertainty.some((note) => note.includes('(credential_content)'))
             ? 'credential_content'
             : `blocked_${outcome.reason}`,
+          dispatches,
         };
       const last = failures.at(-1);
       // The adapter maps exactly HTTP 429 to rate_limited; the engine bounds its retries.

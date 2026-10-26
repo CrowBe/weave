@@ -146,6 +146,10 @@ the response's own model id is not checked. When both models are rate limited
 the item surfaces as HTTP 429 for the bounded retries above. Its price is
 unknown and recorded as zero, which is not a claim of free use. It receives the
 same strict-JSON prompt as pi and fx, holdout only, under the same 40-call cap.
+The cap bounds HTTP dispatches, not requests: each Muse Spark request reserves
+two (the contributor and its fallback) in its journal intent, and its receipt
+records how many it made. The cap is checked before every attempt, 429 retries
+included, so no run or resume dispatches a 41st call.
 No live Muse Spark run has been made; its tests use a stubbed `fetch` only.
 
 Other flags: `--sites intake.classify,loop.route`, `--split tune|holdout|all`

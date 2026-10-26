@@ -34,6 +34,8 @@ export interface Result {
   /** Bounded queued-dispatch delay, recorded only when the provider delay was capped. */
   retry_after_applied_ms?: number;
   parse_failure?: boolean;
+  /** HTTP dispatches this request made, from a provider that may make more than one per request. */
+  dispatches?: number;
 }
 export interface Provider {
   id: string;
@@ -41,6 +43,8 @@ export interface Provider {
   /** USD per million input tokens; output free in the declared profiles. */
   price: number;
   competitor?: boolean;
+  /** Most HTTP dispatches one request can make (a fallback model), reserved against the competitor cap. */
+  max_dispatches?: number;
   serialize(request: Request): string;
   request(request: Request, signal: AbortSignal): Promise<Result>;
 }
