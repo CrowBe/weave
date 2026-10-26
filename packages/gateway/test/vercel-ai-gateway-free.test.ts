@@ -149,6 +149,23 @@ function controlledTime() {
 }
 
 describe('Vercel promotional free contract', () => {
+  for (const [header, delay] of [
+    ['2.5', 2_500],
+    ['90', 60_000],
+    ['tomorrow', undefined],
+  ] as const) {
+    it(`carries Retry-After ${header} through a 429${delay === 60_000 ? ', capped at 60 seconds' : ''}`, async () => {
+      const result = await adapter(async () =>
+        Response.json({ error: { message: 'rate limited' } }, { status: 429, headers: { 'retry-after': header } }),
+      ).execute(call);
+      assert.equal(result.status, 'failed');
+      if (result.status === 'failed') {
+        assert.equal(result.failure.code, 'rate_limited');
+        assert.equal(result.failure.retry_after_ms, delay);
+      }
+    });
+  }
+
   it('exports only the five verified IDs and a distinct training destination', () => {
     assert.deepEqual(Object.values(VERCEL_AI_GATEWAY_FREE_MODELS).sort(), [...IDS].sort());
     assert.equal(VERCEL_AI_GATEWAY_FREE_ADAPTER, primary.adapter);
