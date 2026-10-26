@@ -469,6 +469,41 @@ describe('Vercel promotional free contract', () => {
     assert.ok(failure?.status === 'failed' && failure.failure.code === 'cancelled');
   });
 
+  it('settles with the failure when the Timer throws synchronously during the usage grace (#226)', async () => {
+    const time = controlledTime();
+    const timer: Timer = {
+      sleep(ms, signal) {
+        if (ms === 100) throw new Error('timer broke');
+        return time.timer.sleep(ms, signal);
+      },
+    };
+    const controller = new AbortController();
+    const entered = deferred();
+    const instance = createInferenceGateway({
+      routes: [primary, fallback],
+      clock: time.clock,
+      timer,
+      adapters: [
+        adapter(() => {
+          entered.resolve();
+          // Deliberately ignore abort and never release this transport.
+          return new Promise<Response>(() => {});
+        }),
+      ],
+    });
+    const pending = instance.generate(request('stuck'), controller.signal);
+    await entered.promise;
+    await setImmediate();
+    controller.abort();
+    const result = await pending;
+    assert.equal(result.status === 'unaccepted' && result.reason, 'provider_failed');
+    assert.equal(result.attempts.length, 1);
+    const disposition = result.attempts[0]?.disposition;
+    assert.ok(disposition?.status === 'failed');
+    assert.equal(disposition.failure.code, 'cancelled');
+    assert.deepEqual(result.attempts[0]?.usage, { input_tokens: undefined, output_tokens: undefined });
+  });
+
   for (const interruption of ['cancel', 'deadline'] as const) {
     it(`settles after the usage grace on ${interruption} when transport never settles`, async () => {
       const time = controlledTime();

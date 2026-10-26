@@ -174,9 +174,10 @@ recorded gateway outcome and the same state readings without a provider call.
 D1 also validates a normalized distribution and that its selected option is
 at the top with probability at least 0.6.
 
-Two explicit provisional assumptions need calibration: intake confidence is
-0.80, and D1's safest fallback tier is `strong` for quality, subject to all
-budget and authority gates. D2's accepted/fallback tier is the ceiling for P4;
+One explicit provisional assumption needs calibration: intake confidence is
+0.80. D1's safest fallback tier is `strong`, meaning quality-safe, subject to
+all budget and authority gates. This is decided, not provisional
+([#89](https://github.com/CrowBe/weave/issues/89)). D2's accepted/fallback tier is the ceiling for P4;
 the budget gate can downgrade or pause and cannot choose a higher tier.
 An unavailable evaluate port (including a thrown exception) uses deterministic
 fallbacks for read-only work and returns paused for dispatch-dependent work.
