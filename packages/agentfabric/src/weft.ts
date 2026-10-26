@@ -7,6 +7,8 @@
  * so a sink that calls back into the host never sees a half-applied one.
  */
 
+import type { FailureCode } from '@weave/agentsop';
+
 /** A `weft.record@1` as the host builds it. Weft's validator decides whether it is valid. */
 export interface WeftRecordShape {
   readonly schema: 'weft.record@1';
@@ -145,8 +147,8 @@ export class FabricWeft {
     );
   }
 
-  rejected(code: string): void {
-    this.send(null, 'error', null, null, { code: code.toLowerCase(), retryable: false });
+  rejected(code: FailureCode): void {
+    this.send(null, 'error', null, null, { code: code.toLowerCase(), retryable: code === 'RESOLVER_UNAVAILABLE' });
   }
 
   admitted(operation: string, implementation: string, contract_rev: string): void {

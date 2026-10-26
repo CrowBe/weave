@@ -544,11 +544,21 @@ export class Runtime {
     if (!weft) {
       return run();
     }
-    weft.enter();
+    this.emitWeft((weft) => weft.enter());
     try {
       return run();
     } finally {
-      weft.leave();
+      this.emitWeft((weft) => weft.leave());
+    }
+  }
+
+  /** Projection construction cannot interrupt an accepted transition or its follow-up work. */
+  private emitWeft(project: (weft: LoomWeft) => void): void {
+    if (!this.weft) return;
+    try {
+      project(this.weft);
+    } catch {
+      // Tracing is observational; its construction failure cannot change the run.
     }
   }
 
@@ -644,7 +654,7 @@ export class Runtime {
         if (observation.payload_type === 'conclusion.cached') {
           this.importedConclusions.add((observation.payload as { conclusion_id: string }).conclusion_id);
         }
-        this.weft?.observed(observation, this.view(), goalBefore);
+        this.emitWeft((weft) => weft.observed(observation, this.view(), goalBefore));
         this.followAccepted(observation);
       } else {
         this.noteRejectedAmendment(observation);
@@ -696,7 +706,7 @@ export class Runtime {
     const cycle_no = this.nextCycleNo();
     const state_revision = this.current.state_revision;
     const state = this.view();
-    this.weft?.cycleStarted(cycle_no, trigger);
+    this.emitWeft((weft) => weft.cycleStarted(cycle_no, trigger));
 
     const formation = formCandidates(state, this.describe, (ref) =>
       this.replayMode ? ref : this.options.host.canonicalResource(ref),
@@ -763,7 +773,7 @@ export class Runtime {
       cost_micros: this.cycleAssemblyCost,
     };
     this.cycles.push(record);
-    this.weft?.cycle(record, trigger, this.seqHigh);
+    this.emitWeft((weft) => weft.cycle(record, trigger, this.seqHigh));
     this.cycleAssemblyCost = 0;
     this.preparedViews.clear();
   }
@@ -1353,16 +1363,20 @@ export class Runtime {
     }
     const running = Object.values(this.current.actions).filter((a) => a.state === 'running').length;
     const queued = running >= this.slots;
-    this.weft?.dispatch(candidate);
-    const recorded = this.append({
-      observation_id: `${queued ? 'queued' : 'started'}:${action_id}`,
-      source: RUNTIME_SOURCE,
-      caused_by: weights_ref,
-      payload_type: queued ? 'action.queued' : 'action.started',
-      payload_version: 1,
-      payload: started,
-    });
-    this.weft?.dispatch(null);
+    this.emitWeft((weft) => weft.dispatch(candidate));
+    let recorded: Observation;
+    try {
+      recorded = this.append({
+        observation_id: `${queued ? 'queued' : 'started'}:${action_id}`,
+        source: RUNTIME_SOURCE,
+        caused_by: weights_ref,
+        payload_type: queued ? 'action.queued' : 'action.started',
+        payload_version: 1,
+        payload: started,
+      });
+    } finally {
+      this.emitWeft((weft) => weft.dispatch(null));
+    }
     if (recorded.validation.status !== 'accepted') {
       if (recorded.payload_type === 'action.started') {
         return null;
@@ -1860,7 +1874,7 @@ export class Runtime {
         if (observation.payload_type === 'conclusion.cached') {
           this.importedConclusions.add((observation.payload as { conclusion_id: string }).conclusion_id);
         }
-        this.weft?.loaded(observation);
+        this.emitWeft((weft) => weft.loaded(observation));
       }
     }
   }

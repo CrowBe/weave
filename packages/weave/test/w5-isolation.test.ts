@@ -4,7 +4,14 @@
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { stableStringify, type ObservationInput } from '@weave/weave';
+import {
+  Runtime,
+  MemoryJournal,
+  ScriptedDecisionLayer,
+  stableStringify,
+  type Candidate,
+  type ObservationInput,
+} from '@weave/weave';
 import {
   collector,
   fingerprint,
@@ -16,6 +23,10 @@ import {
   type W5Sinks,
   type W5World,
 } from './w5-fixture.js';
+
+import { LoomWeft } from '../src/weft.js';
+import { FakeHost, FixtureEnvironment } from './fake-host.js';
+import { ALPHA, baseGoal, goalOpened, registered } from './fixture.js';
 
 interface RunPrint {
   readonly state: string;
@@ -275,4 +286,48 @@ describe('W5 emission is one-way', () => {
     const ids = world.host.invocations.map((i) => i.invocation_id);
     assert.equal(new Set(ids).size, ids.length);
   });
+});
+
+for (const method of ['enter', 'leave', 'observed', 'cycleStarted', 'cycle', 'dispatch'] as const) {
+  it(`tracing construction failure in ${method} cannot alter execution`, async (t) => {
+    await unobserved();
+    t.mock.method(LoomWeft.prototype, method, () => {
+      throw Error('trace construction failed');
+    });
+    await assertUnchanged({ loom: () => {} });
+  });
+}
+
+it('failed action persistence clears tracing dispatch context while preserving the failure', (t) => {
+  const environment = new FixtureEnvironment();
+  const host = new FakeHost(environment);
+  const journal = new MemoryJournal();
+  const persist = journal.persist.bind(journal);
+  journal.persist = (observation) => {
+    if (observation.payload_type === 'action.started') throw Error('journal interrupted');
+    persist(observation);
+  };
+  let dispatching: Candidate | null = null;
+  let dispatches = 0;
+  const dispatch = LoomWeft.prototype.dispatch;
+  t.mock.method(LoomWeft.prototype, 'dispatch', function (this: LoomWeft, candidate: Candidate | null) {
+    dispatching = candidate;
+    if (candidate) dispatches++;
+    dispatch.call(this, candidate);
+  });
+  const runtime = new Runtime({
+    host,
+    journal,
+    decisionLayer: new ScriptedDecisionLayer(),
+    weft: { trace_id: 'run', emitter_id: 'loom', emit() {} },
+  });
+  environment.register(ALPHA, 'alpha');
+  runtime.observe(registered(ALPHA, 'alpha'));
+  assert.throws(
+    () => runtime.operator.submit(goalOpened(baseGoal({ sources: [ALPHA], authority: { read: [ALPHA] } }))),
+    /journal interrupted/,
+  );
+  assert.equal(dispatches, 1);
+  assert.equal(dispatching, null);
+  assert.equal(host.invocations.length, 0);
 });

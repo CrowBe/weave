@@ -218,3 +218,22 @@ describe('W5 Fabric emission', () => {
     assert.equal(await run(true), await run(false));
   });
 });
+
+it('lookup unavailability is retryable trace evidence, while denial remains terminal', () => {
+  const records: WeftRecordShape[] = [];
+  const host = new AgentFabricHost({
+    authority: createGrantAuthority(),
+    weft: { trace_id: 'run', emitter_id: 'fabric', emit: (r) => void records.push(r) },
+  });
+  host.faults.lookupUnavailable = true;
+  host.lookup('missing', null);
+  host.faults.lookupUnavailable = false;
+  host.lookup('missing', null);
+  assert.deepEqual(
+    records.map((r) => r.fields),
+    [
+      { code: 'resolver_unavailable', retryable: true },
+      { code: 'denied', retryable: false },
+    ],
+  );
+});
