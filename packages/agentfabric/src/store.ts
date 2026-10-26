@@ -21,6 +21,7 @@ import {
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { isEffect, type CapabilityContract, type InvocationOutcome, type ResourceEffect } from '@weave/agentsop';
+import { stableStringify } from './stable-json.js';
 
 const openStores = new Map<string, FabricStore>();
 const COMPACT_BYTES = 256 * 1024;
@@ -78,6 +79,8 @@ export interface InvocationRecord {
   /** Host-owned snapshot captured before spawn; pgid appended once after spawn. */
   cli_generation?: { readonly cwd_ref: string; readonly before_snapshot: string | null; readonly pgid?: number };
   reconciliation?: InvocationReconciliation;
+  /** Absent for the first attempt. A later attempt supersedes a reconciled stopped CLI generation. */
+  attempt?: number;
 }
 
 export interface IssuedRef {
@@ -117,6 +120,8 @@ export interface FabricSnapshot {
   readonly workload?: readonly StoredWorkload[];
   readonly measured_cost_micros?: number;
   readonly builtin_results?: readonly StoredBuiltinResult[];
+  /** Earlier attempts of re-run invocation ids, oldest first. */
+  readonly superseded_invocations?: readonly InvocationRecord[];
 }
 
 interface MutableResource extends StoredResource {}
@@ -158,6 +163,7 @@ export class FabricStore {
   private readonly canonicalPrimary = new Map<string, string>();
   private readonly publicationOwners = new Map<string, string>();
   private readonly invocations = new Map<string, InvocationRecord>();
+  private superseded: InvocationRecord[] = [];
   private admissions: StoredAdmission[] = [];
   private conclusionRecords: unknown[] = [];
   private workloadRecords: StoredWorkload[] = [];
@@ -263,6 +269,9 @@ export class FabricStore {
         ...item,
         outcome: structuredClone(item.outcome),
       })),
+      ...(this.superseded.length
+        ? { superseded_invocations: this.superseded.map((record) => structuredClone(record)) }
+        : {}),
     };
   }
 
@@ -319,6 +328,11 @@ export class FabricStore {
 
   invocationRecords(): readonly InvocationRecord[] {
     return [...this.invocations.values()].map((record) => structuredClone(record));
+  }
+
+  /** Superseded attempts of an invocation id, oldest first; `getInvocation` holds the current attempt. */
+  supersededInvocations(id: string): readonly InvocationRecord[] {
+    return this.superseded.filter((record) => record.invocation_id === id).map((record) => structuredClone(record));
   }
 
   persistInvocationStart(record: InvocationRecord, measuredCostMicros = 0): void {
@@ -442,10 +456,13 @@ export class FabricStore {
     if (mutation.op === 'cost') cost += mutation.micros;
     if (mutation.op === 'start') {
       const previous = this.invocations.get(mutation.record.invocation_id);
-      if (mutation.op === 'start' && previous?.cli_generation !== undefined) {
+      const superseding = supersedes(previous, mutation.record);
+      if (previous?.cli_generation !== undefined && !superseding) {
         throw new Error('invalid host store CLI generation evidence transition');
       }
-      const previousCost = previous ? (previous.measured_cost_micros ?? mutation.measured_cost_micros) : 0;
+      // A superseded attempt keeps its measured cost.
+      const previousCost =
+        previous && !superseding ? (previous.measured_cost_micros ?? mutation.measured_cost_micros) : 0;
       cost += mutation.measured_cost_micros - previousCost;
     }
     if (!isNonNegativeNumber(cost)) throw new Error('invalid host store measured cost');
@@ -614,8 +631,18 @@ export class FabricStore {
     }
     if ('record' in mutation && ['start', 'result', 'uncertain', 'reconcile'].includes(mutation.op)) {
       const previous = this.invocations.get(mutation.record.invocation_id);
+      // Only a superseding start sets an attempt; later mutations keep (or omit and inherit) it.
+      if (
+        mutation.record.attempt !== undefined &&
+        (mutation.op === 'start'
+          ? !supersedes(previous, mutation.record)
+          : previous?.attempt !== mutation.record.attempt)
+      ) {
+        throw new Error('invalid host store attempt transition');
+      }
       if (
         mutation.record.cli_generation !== undefined &&
+        !(mutation.op === 'start' && supersedes(previous, mutation.record)) &&
         (previous
           ? previous.cli_generation?.cwd_ref !== mutation.record.cli_generation.cwd_ref ||
             previous.cli_generation.before_snapshot !== mutation.record.cli_generation.before_snapshot ||
@@ -627,13 +654,20 @@ export class FabricStore {
     }
     if (mutation.op !== 'uncertain' && mutation.op !== 'reconcile') return;
     const previous = this.invocations.get(mutation.record.invocation_id);
+    // A stopped record may only gain not_committed evidence; its terminal outcome is unchanged.
+    const stoppedEvidence =
+      mutation.op === 'reconcile' &&
+      previous?.status === 'stopped' &&
+      mutation.record.status === 'stopped' &&
+      mutation.record.reconciliation?.resolution === 'not_committed' &&
+      stableStringify(previous.outcome) === stableStringify(mutation.record.outcome);
     if (
       !previous ||
       previous.binding_digest !== mutation.record.binding_digest ||
       previous.action_id !== mutation.record.action_id ||
       previous.operation !== mutation.record.operation ||
       previous.reconciliation ||
-      (previous.status !== 'running' && previous.status !== 'uncertain')
+      (previous.status !== 'running' && previous.status !== 'uncertain' && !stoppedEvidence)
     ) {
       throw new Error(`invalid host store ${mutation.op} transition`);
     }
@@ -666,6 +700,7 @@ export class FabricStore {
     for (const record of snapshot?.invocations ?? []) {
       this.invocations.set(record.invocation_id, structuredClone(record));
     }
+    this.superseded = (snapshot?.superseded_invocations ?? []).map((record) => structuredClone(record));
     this.admissions = (snapshot?.admissions ?? []).map((admission) => ({
       ...admission,
       contract: { ...admission.contract },
@@ -711,7 +746,9 @@ export class FabricStore {
 
   private applyStart(record: InvocationRecord, measuredCostMicros: number): void {
     const previous = this.invocations.get(record.invocation_id);
-    const previousCost = previous ? (previous.measured_cost_micros ?? measuredCostMicros) : 0;
+    const superseding = supersedes(previous, record);
+    if (superseding) this.superseded.push(previous!);
+    const previousCost = previous && !superseding ? (previous.measured_cost_micros ?? measuredCostMicros) : 0;
     this.invocations.set(record.invocation_id, {
       ...record,
       inputs: structuredClone(record.inputs),
@@ -756,6 +793,9 @@ export class FabricStore {
     }
     if (stored.cli_generation === undefined && previous?.cli_generation !== undefined) {
       stored.cli_generation = structuredClone(previous.cli_generation);
+    }
+    if (stored.attempt === undefined && previous?.attempt !== undefined) {
+      stored.attempt = previous.attempt;
     }
     this.invocations.set(record.invocation_id, stored);
   }
@@ -1272,12 +1312,34 @@ function isInvocation(value: unknown): boolean {
         (value.cli_generation.before_snapshot === null ||
           (typeof value.cli_generation.before_snapshot === 'string' &&
             /^[a-f0-9]{64}$/.test(value.cli_generation.before_snapshot))))) &&
+    (value.attempt === undefined ||
+      (typeof value.attempt === 'number' && Number.isSafeInteger(value.attempt) && value.attempt >= 2)) &&
     (value.reconciliation === undefined ||
       (isReconciliation(value.reconciliation) &&
         isRecord(value.outcome) &&
         (value.reconciliation.resolution === 'committed'
           ? value.status === 'committed' && value.outcome.outcome === 'succeeded'
           : value.status === 'stopped' && value.outcome.outcome === 'failed')))
+  );
+}
+
+/**
+ * One invocation id holds one current record. A CLI generation start may replace
+ * a stopped attempt reconciled as not_committed only with the next attempt
+ * number; the replaced record is retained as superseded history.
+ */
+function supersedes(previous: InvocationRecord | undefined, record: InvocationRecord): boolean {
+  return (
+    previous !== undefined &&
+    previous.status === 'stopped' &&
+    previous.reconciliation?.resolution === 'not_committed' &&
+    record.attempt === (previous.attempt ?? 1) + 1 &&
+    record.cli_generation !== undefined &&
+    record.status === 'running' &&
+    record.reconciliation === undefined &&
+    record.action_id === previous.action_id &&
+    record.operation === previous.operation &&
+    record.binding_digest === previous.binding_digest
   );
 }
 
@@ -1357,7 +1419,8 @@ function isSnapshot(value: unknown): value is FabricSnapshot {
     (value.conclusions === undefined || Array.isArray(value.conclusions)) &&
     (value.workload === undefined || arrayOf(value.workload, isWorkload)) &&
     (value.measured_cost_micros === undefined || isNonNegativeNumber(value.measured_cost_micros)) &&
-    (value.builtin_results === undefined || arrayOf(value.builtin_results, isBuiltinResult))
+    (value.builtin_results === undefined || arrayOf(value.builtin_results, isBuiltinResult)) &&
+    (value.superseded_invocations === undefined || arrayOf(value.superseded_invocations, isInvocation))
   );
 }
 
