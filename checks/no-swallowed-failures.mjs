@@ -44,6 +44,15 @@ function checkPackageJson(file) {
   }
 }
 
+/** Decodes a single- or double-quoted YAML scalar; anything else is returned as is. */
+function unquote(value) {
+  if (value.length >= 2 && value.startsWith("'") && value.endsWith("'")) return value.slice(1, -1).replace(/''/g, "'");
+  if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+    return value.slice(1, -1).replace(/\\(["\\])/g, '$1');
+  }
+  return value;
+}
+
 function checkWorkflow(file) {
   filesChecked += 1;
   const path = relative(root, file);
@@ -70,9 +79,13 @@ function checkWorkflow(file) {
     }
     const body = item ? item[2] : line;
     const run = /^\s*run:\s*(.*)$/.exec(body);
-    if (run && step) step.run = run[1].trim();
-    // Any line, so a multi-line `run: |` block is covered too.
-    if (SWALLOW.test(line)) violations.push(`${path}:${index + 1}: command swallows its failure: ${line.trim()}`);
+    const command = run ? unquote(run[1].trim()) : line;
+    if (run && step) step.run = command;
+    // Any line, so a multi-line `run: |` block is covered too. A quoted `run:`
+    // scalar is decoded first, or its closing quote would hide the swallow.
+    if (SWALLOW.test(command)) {
+      violations.push(`${path}:${index + 1}: command swallows its failure: ${run ? command : line.trim()}`);
+    }
     if (/^\s*continue-on-error:\s*(?:true|'true'|"true")\s*$/.test(body)) {
       // A job-level (or any non-step) continue-on-error is never allowed.
       if (step) step.continueOnError = true;

@@ -39,6 +39,19 @@ const ALLOWED = [
 ];
 const allowanceUses = new Map(ALLOWED.map((entry) => [entry, 0]));
 
+/** Replaces comments with spaces, keeping every newline and offset. */
+function blankComments(source) {
+  const blank = (text) => text.replace(/[^\n]/g, ' ');
+  return (
+    source
+      // Only block comments that open a line: a `/*` inside a string such as
+      // 'packages/*/src' must not blank the code after it.
+      .replace(/^([ \t]*)(\/\*[\s\S]*?\*\/)/gm, (_, indent, comment) => indent + blank(comment))
+      // A URL's `://` is not a comment; stripping from there would hide the rest of the line.
+      .replace(/(^|[^:])(\/\/[^\n]*)/gm, (_, before, comment) => before + blank(comment))
+  );
+}
+
 function walk(dir) {
   if (!existsSync(dir)) return [];
   const out = [];
@@ -61,21 +74,23 @@ for (const name of packages) {
     filesChecked += 1;
     const path = relative(root, file);
     const allowed = ALLOWED.filter((entry) => entry.file === path);
-    const lines = readFileSync(file, 'utf8').split('\n');
-    lines.forEach((line, index) => {
-      // A URL's `://` is not a comment; stripping from there would hide the rest of the line.
-      let code = line.replace(/(^|[^:])\/\/.*$/, '$1');
-      // Doc comment lines name the API without reading it.
-      if (/^\s*(?:\/\*|\*)/.test(code)) return;
-      for (const entry of allowed) {
-        const parts = code.split(entry.expression);
-        allowanceUses.set(entry, allowanceUses.get(entry) + parts.length - 1);
-        code = parts.join(' ');
+    // Match whole-source constructs, so a formatter splitting an import or a
+    // destructuring across lines cannot hide it. Comments and allowed
+    // expressions are blanked with spaces, keeping offsets and line numbers.
+    let code = blankComments(readFileSync(file, 'utf8'));
+    for (const entry of allowed) {
+      const parts = code.split(entry.expression);
+      allowanceUses.set(entry, allowanceUses.get(entry) + parts.length - 1);
+      code = parts.join(' '.repeat(entry.expression.length));
+    }
+    const found = [];
+    for (const [pattern, label] of FORBIDDEN) {
+      for (const match of code.matchAll(new RegExp(pattern.source, 'g'))) {
+        found.push({ line: code.slice(0, match.index).split('\n').length, label });
       }
-      for (const [pattern, label] of FORBIDDEN) {
-        if (pattern.test(code)) violations.push(`${path}:${index + 1}: ${label}`);
-      }
-    });
+    }
+    found.sort((a, b) => a.line - b.line);
+    for (const { line, label } of found) violations.push(`${path}:${line}: ${label}`);
   }
 }
 

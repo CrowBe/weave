@@ -30,6 +30,8 @@ test('no-ambient-env is red on package source that reads the environment', () =>
     'packages/demo/src/config.ts:5: process.env',
     'packages/demo/src/config.ts:6: process.env',
     'packages/demo/src/destructured.ts:2: env destructured from process',
+    "packages/demo/src/multiline.ts:2: env imported from 'node:process'",
+    'packages/demo/src/multiline.ts:5: env destructured from process',
   ]);
 });
 
@@ -51,7 +53,9 @@ test('no-swallowed-failures is red on scripts and CI steps that cannot fail', ()
     '.github/workflows/ci.yml:11: step sets continue-on-error: true (npm run lint)',
     '.github/workflows/ci.yml:13: step sets continue-on-error: true (npm run audit)',
     '.github/workflows/ci.yml:17: command swallows its failure: npm run docs || true',
-    '.github/workflows/ci.yml:20: job sets continue-on-error: true',
+    '.github/workflows/ci.yml:18: command swallows its failure: npm run lint || true',
+    '.github/workflows/ci.yml:19: command swallows its failure: npm run check || exit 0',
+    '.github/workflows/ci.yml:22: job sets continue-on-error: true',
   ]);
 });
 
