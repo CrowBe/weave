@@ -1,0 +1,7 @@
+{
+  "name": "@red/demo",
+  "private": true,
+  "scripts": {
+    "test": "node --test || true"
+  }
+}

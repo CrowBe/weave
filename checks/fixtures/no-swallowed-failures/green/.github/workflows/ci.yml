@@ -1,0 +1,16 @@
+# Green fixture for checks/no-swallowed-failures.mjs: every step gates.
+name: verify
+on:
+  pull_request:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    continue-on-error: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - run: npm run verify
+      - run: |
+          npm run lint
+          npm run docs || npm run docs:fallback

@@ -89,6 +89,8 @@ npm run fmt:report       # vp fmt --check; exits non-zero on unformatted files, 
 npm run verify:cached    # same checks as verify, replayed by Vite Task when inputs match
 ```
 
+`npm run check` also runs repository checks for findings that reviews kept repeating (#203): `checks/no-ambient-env.mjs` keeps environment reads out of package source, and `checks/no-swallowed-failures.mjs` keeps scripts and CI steps from swallowing a failure. `npm run test:checks` shows each one red on a fixture that has the pattern and green on one without it.
+
 `lint:report` and `fmt:report` print Oxlint and Oxfmt findings and exit non-zero when they find a problem. They do not rewrite files and they are not part of `npm run verify`. CI runs them after verify with `continue-on-error`, so a finding, or a crashed or missing `vp`, shows as a soft failure rather than green. Do not treat a green verify run as a clean lint or format result.
 
 `verify:cached` runs the same `npm run verify` command through `vp run` so a repeat can be replayed from the Vite Task cache. `npm run verify` itself stays uncached, and CI uses that command. The cache key covers the files verify reads, the node, npm and python3 versions and paths (passed as `WEAVE_TOOLCHAIN` by `scripts/verify-cached.mjs`), `PATH`, and the variables that gate optional suites (`WEAVE_KEV_*`, `HF_HUB_OFFLINE`, `TRANSFORMERS_OFFLINE`). Vite Task runs tasks in a clean environment, so any other variable, including provider credentials, is not visible to a cached run; use plain `npm run verify` when a suite needs one. The Python suites run with `PYTHONDONTWRITEBYTECODE=1`, so they leave no `__pycache__` in the tree to invalidate the cache.

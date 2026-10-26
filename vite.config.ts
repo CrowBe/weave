@@ -16,6 +16,8 @@ export default defineConfig({
       'benchmarks/**/*.py',
       '**/fixtures/**/*.json',
       '**/fixtures/**/*.jsonl',
+      // Check fixtures pin source layouts (e.g. a multiline import) that formatting would erase.
+      'checks/fixtures/**',
       // Frozen corpus digest and generated report bytes are asserted by the harness.
       'benchmarks/frontier-weigh/cases.json',
       // These exact bytes are referenced by checked-in benchmark recordings.
