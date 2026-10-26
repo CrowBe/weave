@@ -1,13 +1,19 @@
 /**
  * `frontier.weigh@1`: one typed judgment site, end to end
- * (packages/weave/src/FRONTIER-WEIGH-CONTRACT.md §8, FW-T01..FW-T07).
+ * (packages/weave/src/FRONTIER-WEIGH-CONTRACT.md §8, FW-T01..FW-T13).
  *
  * The fixture judge stands in for a routed unit. It is not evidence about any
  * model; it proves the wiring and the control boundary only.
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { EvaluationAdapter, EvaluationCall, EvaluationProviderResult, EvaluationQuestion } from '@weave/gateway';
+import type {
+  EvaluationAdapter,
+  EvaluationCall,
+  EvaluationProviderResult,
+  EvaluationQuestion,
+  GenerationAdapter,
+} from '@weave/gateway';
 import {
   candidateSetDigest,
   FRONTIER_WEIGH_CONTRACT,
@@ -111,15 +117,17 @@ function fwScenario(
     decisionLayer?: DecisionLayer;
     proposal?: readonly string[];
     journal?: MemoryJournal;
+    /** Replaces the framing adapter, e.g. to hold framing in flight. */
+    generate?: GenerationAdapter;
     /** Recover from this journal snapshot instead of opening a fresh run. */
     recorded?: readonly Observation[];
   } = {},
 ): FwScenario {
   const environment = new FixtureEnvironment();
   const host = new FakeHost(environment);
-  const generate = generateAdapter('fixture.generate', [
-    completedText(bindingJson(options.proposal ?? [ALPHA, BETA, DELTA])),
-  ]);
+  const generate =
+    options.generate ??
+    generateAdapter('fixture.generate', [completedText(bindingJson(options.proposal ?? [ALPHA, BETA, DELTA]))]);
   const calls: EvaluationCall[] = [];
   let runtime!: Runtime;
   const clock = { now: () => runtime.state().clock.tick };
@@ -186,6 +194,17 @@ async function drive(s: FwScenario, rounds = 80): Promise<void> {
     stable = length === last && s.host.openActionIds().length === 0 ? stable + 1 : 0;
     last = length;
   }
+}
+
+/** A decision layer that must never be invoked. */
+function guardLayer(): DecisionLayer {
+  return {
+    implementation: 'replay-guard@1',
+    async: true,
+    weigh() {
+      throw new Error('the judgment site must not be invoked');
+    },
+  };
 }
 
 function weighRequests(s: Scenario): Observation[] {
@@ -545,5 +564,124 @@ describe('frontier.weigh@1', () => {
     assert.equal(new Set(seqs).size, seqs.length);
     assert.equal(weighRequests(r).length, 2, 'new evidence earns one more weighing');
     assert.deepEqual(lastCycle(r).outcome, { status: 'blocked', reason: DEFERRED_REASON });
+  });
+
+  it('FW-T10 a recovered run numbers its cycles past a scripted weighing that dispatched nothing', async () => {
+    const journal = new MemoryJournal();
+    // One action: framing spends it, so the next weighing selects nothing.
+    const goal = fwGoal({ budget: { actions: 1, judgments: 24, cost: 1_000_000 } });
+    const s = fwScenario({ goal, journal });
+    await drive(s);
+    const last = lastCycle(s);
+    assert.notEqual(last.weights_ref, null, 'the last cycle recorded a scripted weighing');
+    assert.deepEqual(last.selected, [], 'and dispatched nothing from it');
+
+    const r = fwScenario({ recorded: journal.snapshot() });
+    for (let revision = 2; revision <= 4; revision += 1) {
+      r.observe(changed(ALPHA, revision, `alpha revision ${revision}`));
+      await drive(r);
+      const cycle = lastCycle(r);
+      assert.notEqual(cycle.weights_ref, null, `revision ${revision}: ${JSON.stringify(cycle.outcome)}`);
+    }
+    const rejected = r.runtime.trace().observations.filter((o) => o.validation.status === 'rejected');
+    assert.deepEqual(
+      rejected.map((o) => o.observation_id),
+      [],
+    );
+    const numbers = r.runtime.trace().cycles.map((cycle) => cycle.cycle_no);
+    assert.ok(
+      numbers.every((n) => n > last.cycle_no),
+      `recovered cycles ${numbers.join(',')} follow ${last.cycle_no}`,
+    );
+  });
+
+  it('FW-T11 load rejects a journal whose seqs are not strictly increasing, and loads nothing from it', async () => {
+    const journal = new MemoryJournal();
+    const s = fwScenario({ judge: goalJudge, journal });
+    await drive(s);
+    const loaded = journal.snapshot();
+    assert.ok(loaded.length > 3);
+    const fresh = () => new Runtime({ host: new FakeHost(new FixtureEnvironment()), decisionLayer: guardLayer() });
+
+    const swapped = [...loaded];
+    [swapped[1], swapped[2]] = [swapped[2]!, swapped[1]!];
+    const out = fresh();
+    assert.throws(() => out.load(swapped), /journal seq \d+ does not follow seq \d+/);
+    assert.equal(out.trace().observations.length, 0, 'an out-of-order journal loads nothing');
+    assert.equal(out.state().goal, null);
+
+    const repeated = [...loaded.slice(0, 2), { ...loaded[2]!, seq: loaded[1]!.seq }, ...loaded.slice(3)];
+    assert.throws(() => fresh().load(repeated), /journal seq \d+ does not follow seq \d+/);
+
+    const ordered = fresh();
+    ordered.load(loaded);
+    assert.equal(ordered.trace().observations.length, loaded.length);
+    assert.throws(() => ordered.load(loaded.slice(-1)), /does not follow/, 'a second load cannot rewind the log');
+  });
+
+  it('FW-T12 replay of a journal that ends in an unrecorded weighing reports it unfinished', async () => {
+    const s = fwScenario({ judge: goalJudge, held: new Promise<void>(() => {}) });
+    await macrotask();
+    const [pending] = weighRequests(s);
+    assert.ok(pending);
+    const request_id = (pending.payload as InferenceRequestedPayload).request_id;
+    const host = new FakeHost(new FixtureEnvironment());
+    const result = replay(s.runtime.trace().observations, { host, decisionLayer: guardLayer() });
+    assert.equal(result.ok, false, 'an unfinished weighing is not a clean replay');
+    if (!result.ok) {
+      assert.equal(result.failure.reason, `missing recorded inference.recorded for ${request_id}`);
+      assert.equal(result.failure.action_id, null);
+    }
+    assert.equal(host.invocations.length, 0);
+  });
+
+  it('FW-T13 recovery records every unrecorded inference as abandoned, not only weighings', async () => {
+    const journal = new MemoryJournal();
+    const held: GenerationAdapter = { id: 'fixture.generate', execute: () => new Promise(() => {}) };
+    const s = fwScenario({ generate: held, journal });
+    await macrotask();
+    const framing = observationsOfType(s.runtime.trace(), 'inference.requested').filter(
+      (o) => (o.payload as InferenceRequestedPayload).site === 'goal.frame',
+    );
+    assert.equal(framing.length, 1);
+    const request_id = (framing[0]!.payload as InferenceRequestedPayload).request_id;
+    assert.ok(s.runtime.state().budget.cost.reserved > 0, 'framing holds a cost reservation');
+
+    const r = fwScenario({ generate: held, recorded: journal.snapshot() });
+    const record = r.runtime.state().inferences[request_id];
+    assert.equal(record?.recorded?.status, 'unaccepted');
+    assert.match(record?.recorded?.reason ?? '', /abandoned at recovery/);
+    assert.equal(record?.recorded?.spent, record?.request.reservation.cost, 'the whole reservation is charged');
+    assert.equal(r.runtime.state().budget.cost.reserved, 0, 'no reservation outlives the restart');
+  });
+
+  it('FW-T14 deciding whether a deferral stands does not rescan the ticks since the weighing', async () => {
+    const s = fwScenario({ judge: constantJudge(0) });
+    await drive(s);
+    assert.deepEqual(lastCycle(s).outcome, { status: 'blocked', reason: DEFERRED_REASON });
+    for (let i = 1; i <= 512; i += 1) {
+      s.runtime.clock.submit(tick(i));
+    }
+    await drive(s);
+    assert.equal(weighRequests(s).length, 1, 'ticks are not new evidence');
+    const candidate_set = (weighRequests(s)[0]!.payload as InferenceRequestedPayload).candidate_set as string;
+    const inner = s.runtime as unknown as {
+      log: Observation[];
+      frontierWeighStatus(set: string): { kind: string };
+    };
+    const log = inner.log;
+    let reads = 0;
+    inner.log = new Proxy(log, {
+      get(target, property, receiver) {
+        if (typeof property === 'string' && /^\d+$/.test(property)) reads += 1;
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    try {
+      assert.deepEqual(inner.frontierWeighStatus(candidate_set), { kind: 'deferred' });
+    } finally {
+      inner.log = log;
+    }
+    assert.ok(reads <= 8, `the deferral check read ${reads} log entries; expected at most 8`);
   });
 });

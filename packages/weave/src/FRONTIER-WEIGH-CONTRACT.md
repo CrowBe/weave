@@ -130,7 +130,29 @@ Admission (`validation.ts`) rejects a `weights.recorded` with an unknown
   `stale judgment`.
 - **Replay** resolves `inference.requested`, `weights.recorded` and
   `inference.recorded` from the log. Invoking the decision layer in replay is
-  an error.
+  an error. A log that ends with a `frontier.weigh` request and no
+  `inference.recorded` for it is an unfinished replay, reported like a missing
+  `action.result`: `ok: false`, `at_seq` = the request's seq, reason
+  `missing recorded inference.recorded for <request_id>` (FW-T12).
+- **Recovery.** Reconciliation records every inference requested before the
+  restart that has no `inference.recorded` and no live call in this process,
+  at any site (`frontier.weigh` or `goal.frame`), as `inference.recorded`
+  with status `unaccepted`, reason `abandoned at recovery: no
+  inference.recorded before the restart`, and `spent` = the whole cost
+  reservation, since the provider may have spent it. Its slot and reservation
+  are freed (FW-T08, FW-T13). An abandoned weighing is not re-sent and, unlike
+  an unusable result, does not finish its candidate set: the set is weighed
+  once more (FW-T08). A framing action's own outcome is reconciled separately.
+- **Recovered numbering and order.** A loaded journal must have strictly
+  increasing seqs, past anything already logged; otherwise `load` throws and
+  loads nothing (FW-T11). New observations continue past the loaded
+  high-water mark, so evidence after recovery can lift a deferral (FW-T09).
+  A recovered run has no cycle records; its next cycle number follows the
+  highest one named by a dispatched action (`a:<N>:<i>`) or a weighing id
+  (`weights:c<N>`, `inference:inf:c<N>:weigh`), so a scripted weighing that
+  dispatched nothing is never re-appended as a duplicate (FW-T10). Whether a
+  deferral stands is read from the seq of the latest evidence, not by
+  scanning the ticks since the weighing (FW-T14).
 
 There is no fallback to scripted weighing inside a run. An unusable judgment
 is an explicit blocked outcome, never permission to execute.
@@ -158,6 +180,13 @@ injected ticks. The fixture judge is a stand-in, not evidence about a model.
 | FW-T05 | Tick while weighing is held                                                              | The late weight is rejected as stale; nothing dispatches; `blocked / stale judgment`.                                                                                                                                                    |
 | FW-T06 | Forged and policy-bound weights                                                          | A weight set naming a non-candidate is ignored; an out-of-range weight is rejected; `dispatch` on every candidate still leaves one `budget` exclusion; a prohibited candidate is never weighed, sent or dispatched.                      |
 | FW-T07 | Replay of FW-T02's weighed run                                                           | Replay succeeds with a decision layer that throws; zero host invocations; identical cycle records.                                                                                                                                       |
+| FW-T08 | Crash while a gateway weighing is in flight, then recovery                               | The abandoned request is recorded `unaccepted` once; the same candidate set is weighed exactly once more; never two weighings in flight; the abandoned one is not re-sent; no judgment stays reserved; the goal completes.               |
+| FW-T09 | Recovery over a journal with seq gaps left by rejected observations                      | Recovery alone does not re-weigh; new evidence takes a seq past the loaded high-water mark; seqs stay strictly increasing and unique; the evidence earns one more weighing.                                                              |
+| FW-T10 | Recovery after a scripted weighing that dispatched nothing                               | Every recovered cycle numbers past the last recorded one and is weighed; no observation is rejected as a duplicate.                                                                                                                      |
+| FW-T11 | Journal whose seqs swap or repeat                                                        | `load` throws `journal seq … does not follow seq …` and loads nothing; an ordered journal loads; a second load cannot rewind the log.                                                                                                    |
+| FW-T12 | Replay of a log ending in an unrecorded weighing                                         | `ok: false` with `missing recorded inference.recorded for <request_id>`; zero host invocations.                                                                                                                                          |
+| FW-T13 | Crash while framing inference is in flight, then recovery                                | The framing request is recorded `unaccepted`, abandoned at recovery, charged its whole reservation; no cost stays reserved.                                                                                                              |
+| FW-T14 | 512 ticks during a deferral                                                              | The deferral stands, and deciding so reads at most 8 log entries.                                                                                                                                                                        |
 
 M0–M2 checks, including M2-T03 and M2-T05–T10, stay green.
 
@@ -174,6 +203,11 @@ A first green attempt then failed FW-T02, FW-T06 and FW-T07: two gateway
 weighings in flight made each other stale, and a stale result blocked its
 candidate set for good. §8's one-at-a-time and new-evidence rules are that
 fix. The full package suite is green with them.
+
+FW-T10–T14 (#256) were red on main before their fixes: FW-T10 at its second
+recovered revision with `weights rejected: duplicate`; FW-T11 loaded both
+journals; FW-T12 replayed `ok: true`; FW-T13 left the framing request
+unrecorded; FW-T14 read 515 log entries.
 
 ## 11. Assumptions
 
