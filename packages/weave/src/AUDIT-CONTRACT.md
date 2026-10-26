@@ -106,8 +106,8 @@ term apart from the tier override. The audit purpose applies only to generation.
 
 ## Request identity
 
-Generation and D6 derive request ids from the execution id, round and purpose
-(`audit` or `dispose`), plus the resumption entry number when resuming a pause.
+Generation, D6 and D8 derive request ids from the execution id, round and purpose
+(`audit`, `dispose` or `progress`), plus the resumption entry number when resuming a pause.
 Short ids are `<execution>:r<round>[:e<entry>]:<purpose>`. A fresh resumption
 gets a distinct entry suffix; crash recovery within it keeps the same suffix.
 When the full id would exceed 128 characters, the execution portion becomes a
@@ -158,7 +158,7 @@ Every explicit resume of a persisted pause captures live state, revision, and
 budget before proceeding, unless the live budget port still pauses the loop; it
 replaces the paused observation. A checkpoint's optional `resume_from` binds
 that capture to the pause entry. Recovery of that
-same resumption reuses its durable capture, accepted report, and D6 disposal,
+same resumption reuses its durable capture, D8 progress record, accepted report, and D6 disposal,
 so a crash before round append does not repeat completed inference. A previous
 report may be retained only when both the disclosed-state digest and revision
 are unchanged. Changed inputs receive a distinct request id; recovery keeps it

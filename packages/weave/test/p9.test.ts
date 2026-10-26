@@ -58,6 +58,14 @@ const decisionUnit: RoutedUnit = {
   context_limit_tokens: 1_000_000,
   price: { input_per_mtok: 0, output_per_mtok: 0 },
 };
+/** The D8 answer for every `loop.continue` question in these fixtures, so no fallback counts toward a stop. */
+const progressingAnswer = {
+  status: 'completed' as const,
+  answers: { decision: { type: 'choice' as const, choice: 'progressing', probabilities: { progressing: 1 } } },
+  confidence: { decision: 1 },
+  usage: { input_tokens: 1, output_tokens: 1 },
+  provider_response_id: undefined,
+};
 function replayGateway() {
   const calls = {
     prompts: [] as string[],
@@ -113,6 +121,8 @@ function replayGateway() {
       {
         id: 'fake',
         async evaluate(request) {
+          // D8 (#202) is asked in the first round and whenever the evidence does not decide progress.
+          if ('decision' in request.questions) return progressingAnswer;
           calls.states.push(structuredClone(request.state));
           return {
             status: 'completed',
@@ -148,6 +158,7 @@ function fixture(
 ) {
   let generates = 0;
   let observes = 0;
+  let d8s = 0;
   const journal = new MemoryAuditJournal();
   const input: AuditLoopInput = { execution_id: 'audit1', terms, max_iterations: options.max ?? 4 };
   const ports: AuditPorts = {
@@ -159,7 +170,6 @@ function fixture(
       return {
         revision,
         issue_fix_attempts: Object.fromEntries(issues.map((issue) => [issue.issue_id, observes - 1])),
-        progress: options.progress ?? [],
         state: assembleAuditState({
           authorized_slices: AUDIT_SLICES,
           goal: {
@@ -204,20 +214,25 @@ function fixture(
         uncertainty: [],
       };
     },
-    evaluate: (async (request) =>
-      ({
+    evaluate: (async (request) => {
+      // D8 answers in order from `progress`, then progressing; every other question is D6.
+      const d8 = request.site === 'loop.continue' ? (options.progress?.[d8s++] ?? 'progressing') : null;
+      return {
         status: 'accepted',
         kind: 'choice',
         request_id: request.request_id,
         site: request.site,
-        answers: { finding_0: { type: 'choice', choice: 'fix_now', probabilities: { fix_now: 1 } } },
-        confidence: { finding_0: 1 },
+        answers: d8
+          ? { decision: { type: 'choice', choice: d8, probabilities: { [d8]: 1 } } }
+          : { finding_0: { type: 'choice', choice: 'fix_now', probabilities: { fix_now: 1 } } },
+        confidence: d8 ? { decision: 1 } : { finding_0: 1 },
         routed_unit_id: 'fake',
         provider_response_id: 'fake1',
         attempts: [],
         spent: 0,
         uncertainty: [],
-      }) as EvaluationOutcome<'choice'>) as AuditPorts['evaluate'],
+      } as EvaluationOutcome<'choice'>;
+    }) as AuditPorts['evaluate'],
   };
   return { input, ports, journal, generates: () => generates, observes: () => observes };
 }
@@ -247,21 +262,21 @@ test('long execution request ids are bounded, deterministic and distinct across 
         },
         evaluate: (request, signal) => {
           ids.push(request.request_id);
-          assert.equal(correlation(request.request_id), request.request_id, 'D6 id must be a valid correlation');
+          assert.equal(correlation(request.request_id), request.request_id, 'D6/D8 id must be a valid correlation');
           return f.ports.evaluate(request, signal);
         },
       },
       f.journal,
     );
     assert.equal(result.outcome, 'done');
-    assert.equal(ids.length, 3); // generate and D6 in round 1, generate in round 2
-    assert.equal(new Set(ids).size, 3);
+    assert.equal(ids.length, 5); // D8, generate and D6 in round 1, D8 and generate in round 2
+    assert.equal(new Set(ids).size, 5);
     assert.ok(ids.every((id) => id.length <= 128));
     return ids;
   };
   const executions = [prefix.slice(0, 120), `${prefix}a`, `${prefix}b`];
   const ids = await Promise.all(executions.map(run));
-  assert.equal(new Set(ids.flat()).size, 9);
+  assert.equal(new Set(ids.flat()).size, 15);
   assert.deepEqual(await Promise.all(executions.map(run)), ids);
 });
 test('long resumed request ids are bounded, distinct and stable across checkpoint recovery', async () => {
@@ -292,6 +307,7 @@ test('long resumed request ids are bounded, distinct and stable across checkpoin
         assert.equal(correlation(request.request_id), request.request_id);
         const result = await f.ports.evaluate(request, signal);
         assert.equal(result.status, 'accepted');
+        if (request.site === 'loop.continue') return result;
         return {
           ...result,
           answers: { finding_0: { type: 'choice', choice: 'defer', probabilities: { defer: 1 } } },
@@ -315,21 +331,23 @@ test('long resumed request ids are bounded, distinct and stable across checkpoin
     await assert.rejects(runAuditLoop({ ...input, resume: true }, ports, f.journal), /crash after resumed D6/);
     assert.equal(f.observes(), 2);
     assert.equal(f.generates(), 1);
-    assert.equal(ids.length, 3);
-    assert.equal(new Set(ids).size, 3);
+    assert.equal(ids.length, 5);
+    assert.equal(new Set(ids).size, 5);
     assert.ok(ids.every((id) => id.length <= 128));
-    assert.ok(ids[1]!.endsWith(':r1:e2:audit'));
-    assert.ok(ids[2]!.endsWith(':r1:e2:dispose'));
+    assert.ok(ids[0]!.endsWith(':r1:progress'));
+    assert.ok(ids[2]!.endsWith(':r1:e2:progress'));
+    assert.ok(ids[3]!.endsWith(':r1:e2:audit'));
+    assert.ok(ids[4]!.endsWith(':r1:e2:dispose'));
     f.journal.append = append;
     assert.equal((await runAuditLoop({ ...input, resume: true }, ports, f.journal)).outcome, 'done');
     assert.equal(f.observes(), 2);
     assert.equal(f.generates(), 1);
-    assert.equal(ids.length, 3);
+    assert.equal(ids.length, 5);
     return ids;
   };
   const executions = [`${prefix}a`, `${prefix}b`];
   const ids = await Promise.all(executions.map(run));
-  assert.equal(new Set(ids.flat()).size, 6);
+  assert.equal(new Set(ids.flat()).size, 10);
   assert.deepEqual(await Promise.all(executions.map(run)), ids);
 });
 test('bad generation response ids fail as audit_unavailable before D6', async () => {
@@ -360,7 +378,7 @@ test('audit claim with red check cannot complete', async () => {
 test('audit cap, D8 no progress, repeated issue and budget stops persist', async () => {
   for (const [options, expected] of [
     [{ gaps: 10, max: 1 }, 'iteration_cap'],
-    [{ progress: ['stalled', 'regressing'] }, 'no_progress'],
+    [{ gaps: 10, progress: ['stalled', 'regressing'] }, 'no_progress'],
     [{ gaps: 10 }, 'repeated_issue'],
     [{ budget: true }, 'budget'],
   ] as const) {
@@ -886,6 +904,7 @@ for (const phase of ['observe', 'generate', 'D6'] as const) {
         return generated;
       },
       evaluate: async (request, signal) => {
+        if (request.site === 'loop.continue') return f.ports.evaluate(request, signal);
         evaluates++;
         assert.equal(signal, controller.signal);
         const evaluated = await f.ports.evaluate(request, signal);
@@ -907,6 +926,7 @@ for (const phase of ['observe', 'generate', 'D6'] as const) {
           ...f.ports,
           observe: async () => await fixture().ports.observe([]),
           evaluate: async (request, signal) => {
+            if (request.site === 'loop.continue') return f.ports.evaluate(request, signal);
             const result = await f.ports.evaluate(request, signal);
             assert.equal(result.status, 'accepted');
             return {
@@ -1158,6 +1178,7 @@ test('abort during resume observation, generation or D6 preserves pre-abort evid
         return result;
       },
       evaluate: async (request, signal) => {
+        if (request.site === 'loop.continue') return f.ports.evaluate(request, signal);
         assert.equal(phase, 'D6', 'D6 after cancellation');
         const result = await f.ports.evaluate(request, signal);
         cancel();
@@ -1177,6 +1198,7 @@ test('abort during resume observation, generation or D6 preserves pre-abort evid
         {
           ...f.ports,
           evaluate: async (request, signal) => {
+            if (request.site === 'loop.continue') return f.ports.evaluate(request, signal);
             const result = await f.ports.evaluate(request, signal);
             assert.equal(result.status, 'accepted');
             return {
@@ -1217,10 +1239,12 @@ test('resume crash after D6 reuses its checkpointed decision instead of spending
   const f = fixture({ gaps: 1 });
   await runAuditLoop(f.input, { ...f.ports, budget: () => 'pause' }, f.journal);
   let evaluations = 0;
+  let progressQuestions = 0;
   const ports: AuditPorts = {
     ...f.ports,
     evaluate: async (request, signal) => {
-      evaluations++;
+      if (request.site === 'loop.continue') progressQuestions++;
+      else evaluations++;
       return f.ports.evaluate(request, signal);
     },
   };
@@ -1230,10 +1254,13 @@ test('resume crash after D6 reuses its checkpointed decision instead of spending
   };
   await assert.rejects(runAuditLoop({ ...f.input, resume: true }, ports, f.journal));
   assert.equal(evaluations, 1);
+  assert.equal(progressQuestions, 1);
   assert.equal(f.generates(), 1);
   f.journal.append = append;
   assert.equal((await runAuditLoop({ ...f.input, resume: true }, ports, f.journal)).outcome, 'done');
   assert.equal(evaluations, 1);
+  // Recovery reuses round 1's checkpointed D8 answer; round 2 asks its own.
+  assert.equal(progressQuestions, 2);
   assert.equal(f.generates(), 2);
 });
 
@@ -1686,7 +1713,6 @@ function retainedObserve(proof: 'check' | 'judgment', tagCurrent: boolean) {
     return {
       revision,
       issue_fix_attempts: {},
-      progress: [],
       state: assembleAuditState({
         authorized_slices: AUDIT_SLICES,
         iteration,

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { EvaluationOutcome, InferenceGateway } from '@weave/gateway';
-import { createGrantAuthority, type Grant } from '@weave/agentsop';
+import { createGrantAuthority, grantCovers, type Grant } from '@weave/agentsop';
 import { AgentFabricHost, SOURCE_INSPECT } from '@weave/agentfabric';
 import { renderFrameView } from '../src/views.js';
 import { scenario } from './fixture.js';
@@ -85,6 +85,8 @@ for (const site of ['guard.input', 'guard.output'] as const) {
     assert.ok(blocked.approval_requests.every((request) => request.reason === 'violation'));
     // A guard transition has a closed shape: nothing in it can serve as a grant.
     assert.deepEqual(Object.keys(pass), ['status', 'catalogue_index', 'approval_requests', 'observations']);
+    // A clean guard is no grant: without one, deterministic coverage still refuses the effect (#244).
+    assert.equal(grantCovers(null, 'write', '1', [{ resource: 'file', mode: 'write' }]).ok, false);
   });
   test(`${site} rejects uncertainty, malformed, stale, mismatched, refusal and outage`, () => {
     const good = recorded(site, keys);
