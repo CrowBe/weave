@@ -365,8 +365,36 @@ transition, or null when the rule decided). A rule decision makes no provider
 call, so a decision outage cannot turn it into a fallback. `transitionProgress`
 rebuilds the record from its recorded delta and D8 transition without a
 provider; replay uses that. The rule produces only D8's options and adds no stop
-condition. The Observe port supplies `progress` from these records' choices,
-so two consecutive rule-decided `stalled` rounds still stop as `no_progress`.
+condition.
+
+The audit loop decides each round's progress itself, after the cancellation,
+budget, authority and decision-outage stops and before the no-progress stop
+and the audit call. The previous tidy state is the previous round's
+checkpointed observation; the first round has none and asks D8. D8 is asked
+with the request id `<execution>:r<round>[:e<entry>]:progress`, discloses
+`{ audit: <tidy state> }`, and never pauses on an outage (`needs_dispatch`
+false), so an outage takes the `stalled` fallback. The record is checkpointed
+with the round's capture, so recovery reuses it instead of asking D8 again,
+and it is stored as the round's `progress` (null when none was decided,
+absent on legacy rounds). A legacy capture that holds an unconfirmed dispatch
+and no record pauses as `audit_unconfirmed` without asking D8, so recovery
+spends nothing first. The no-progress history is the choices recorded on
+earlier rounds that returned to Observe, plus this round's; the Observe port
+no longer supplies it. Two consecutive rule-decided `stalled` rounds therefore
+stop as `no_progress`, while a decision outage cannot turn a round the rule
+decides into a fallback.
+
+Cancellation is checked before the rule decides (#244). An aborted signal
+skips the rule: `decideProgress` takes D8's path, which makes no call and
+records a `paused` cancellation, and `transitionProgress` keeps a cancelled D8
+transition over the rule on replay. The loop records no progress for a
+cancelled round, so it counts toward no history.
+
+The equal-digest shortcut compares evidence only. When the criterion ids are
+unchanged but a criterion is re-bound (different `check_ids` or `proof`) and
+the checks, evals and artifacts are identical, the rule still answers
+`stalled`. This errs conservative: re-binding a criterion without new evidence
+is not progress, and the next round with new evidence decides again (#244).
 
 The journal also checkpoints the detached tidy-state observation before generation
 and its accepted report before D6. Recovery reuses that report instead of

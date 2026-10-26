@@ -115,9 +115,12 @@ export function progressDelta(previous: AuditState, state: AuditState): Progress
   };
   return { ...delta, rule: progressRule(delta) };
 }
-/** Pure record construction, also the replay path: a recorded delta and D8 transition rebuild the record. */
+/**
+ * Pure record construction, also the replay path: a recorded delta and D8 transition rebuild the record.
+ * A cancelled D8 transition wins over the rule, because cancellation is checked before the rule decides.
+ */
 export function transitionProgress(delta: ProgressDelta | null, site: SiteTransition | null): ProgressRecord {
-  if (delta !== null && delta.rule !== null) {
+  if (delta !== null && delta.rule !== null && site?.observation.reason !== 'cancelled') {
     return {
       schema: 'progress.record@1',
       delta,
@@ -139,7 +142,11 @@ export function transitionProgress(delta: ProgressDelta | null, site: SiteTransi
     site,
   };
 }
-/** Applies the rule first; asks D8 through the injected port only when the evidence does not decide. */
+/**
+ * Applies the rule first; asks D8 through the injected port only when the evidence does not decide.
+ * Cancellation is checked before the rule (#244): an aborted round never records a rule `transition`.
+ * It takes D8's path, which makes no call and records a `paused` cancellation that counts toward nothing.
+ */
 export async function decideProgress(
   previous: AuditState | null,
   state: AuditState,
@@ -149,6 +156,6 @@ export async function decideProgress(
   signal?: AbortSignal,
 ): Promise<ProgressRecord> {
   const delta = previous === null ? null : progressDelta(previous, state);
-  if (delta !== null && delta.rule !== null) return transitionProgress(delta, null);
+  if (delta !== null && delta.rule !== null && !signal?.aborted) return transitionProgress(delta, null);
   return transitionProgress(delta, await evaluateSite('loop.continue', input, port, now, signal));
 }

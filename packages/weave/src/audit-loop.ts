@@ -2,7 +2,8 @@
 import type { InferenceGateway, InferenceTerms } from '@weave/gateway';
 import { digest } from './digest.js';
 import type { AuditState } from './audit-view.js';
-import { correlation, stopForNoProgress, type ProgressChoice, type SiteState } from './sites/index.js';
+import { decideProgress, type ProgressRecord } from './progress.js';
+import { correlation, stopForNoProgress, type SiteState } from './sites/index.js';
 import { evaluateAuditDispose, type AuditDisposal } from './sites/audit-dispose.js';
 export interface AuditFinding {
   readonly criterion_id: string | null;
@@ -114,6 +115,8 @@ export interface AuditRound {
   readonly open_issues: readonly AuditIssue[];
   readonly outcome: 'observe' | AuditStop;
   readonly goal_done: boolean;
+  /** This round's `progress.record@1`; null when no progress was decided, absent on legacy rounds. */
+  readonly progress?: ProgressRecord | null;
 }
 export interface AuditCheckpoint {
   readonly execution_id: string;
@@ -123,6 +126,8 @@ export interface AuditCheckpoint {
   /** The pause entry whose resumption captured this input; absent on legacy checkpoints. */
   readonly resume_from?: string;
   readonly disposal?: AuditDisposal;
+  /** This round's decided progress (#202), so recovery does not ask D8 again. */
+  readonly progress?: ProgressRecord;
   /** Request id of an audit generation dispatched from this capture before any report was durable (#165). */
   readonly dispatched?: string;
 }
@@ -157,7 +162,6 @@ export interface AuditLoopInput {
 export interface AuditObservation {
   readonly state: AuditState;
   readonly revision: SiteState;
-  readonly progress?: readonly ProgressChoice[];
   readonly authority_blocked?: boolean;
   readonly needs_dispatch?: boolean;
   readonly decision_unavailable?: boolean;
@@ -213,7 +217,7 @@ function complete(observed: AuditObservation): boolean {
 function auditRequestId(
   execution_id: string,
   round: number,
-  purpose: 'audit' | 'dispose',
+  purpose: 'audit' | 'dispose' | 'progress',
   resume_entry?: number,
 ): string {
   const suffix = `:r${round}${resume_entry === undefined ? '' : `:e${resume_entry}`}:${purpose}`;
@@ -253,6 +257,7 @@ export async function runAuditLoop(
     let observed: AuditObservation | null = null;
     let report: AuditReport | null = null;
     let disposal: AuditDisposal | null = null;
+    let progress: ProgressRecord | null = null;
     let next: AuditIssue[] = [...issues];
     let outcome: AuditRound['outcome'];
     if (signal?.aborted) outcome = 'cancelled';
@@ -274,6 +279,7 @@ export async function runAuditLoop(
           observation: observed,
           report: sameInput ? checkpoint!.report : null,
           resume_from,
+          ...(sameInput && checkpoint!.progress ? { progress: checkpoint!.progress } : {}),
         };
       }
       const persist = (savedReport: AuditReport | null, savedDisposal?: AuditDisposal, dispatched?: string) =>
@@ -284,6 +290,7 @@ export async function runAuditLoop(
           report: savedReport,
           ...(resume_from === undefined ? {} : { resume_from }),
           ...(savedDisposal ? { disposal: savedDisposal } : {}),
+          ...(progress ? { progress } : {}),
           ...(dispatched === undefined ? {} : { dispatched }),
         });
       const overBudget =
@@ -296,7 +303,44 @@ export async function runAuditLoop(
         !(observed.needs_dispatch && observed.decision_unavailable)
       )
         persist(checkpoint?.report ?? null);
-      const noProgress = stopForNoProgress(observed.progress ?? [], []);
+      const resume_entry = resume_from === undefined ? undefined : history.length + 1;
+      let noProgress: ReturnType<typeof stopForNoProgress> = null;
+      // Progress is decided from evidence before D8 (#202), after every earlier stop. Cancellation is
+      // checked first, so a cancelled round records no progress and counts toward nothing (#244). A legacy
+      // capture with an unconfirmed dispatch and no record pauses as audit_unconfirmed without asking D8.
+      const unconfirmedLegacy = !checkpoint?.report && checkpoint?.dispatched !== undefined && !checkpoint.progress;
+      if (
+        !signal?.aborted &&
+        !unconfirmedLegacy &&
+        !overBudget &&
+        !observed.authority_blocked &&
+        !(observed.needs_dispatch && observed.decision_unavailable)
+      ) {
+        const decided =
+          checkpoint?.progress ??
+          (await decideProgress(
+            round > 1 ? (journal.loadCheckpoint(input.execution_id, round - 1)?.observation.state ?? null) : null,
+            observed.state,
+            {
+              ...observed.revision,
+              request_id: auditRequestId(input.execution_id, round, 'progress', resume_entry),
+              state: { audit: observed.state },
+              terms: input.terms,
+              needs_dispatch: false,
+            },
+            { evaluate: ports.evaluate },
+            ports.current,
+            signal,
+          ));
+        if (!signal?.aborted && decided.status === 'transition') {
+          progress = decided;
+          if (!checkpoint?.progress) persist(checkpoint?.report ?? null, checkpoint?.disposal, checkpoint?.dispatched);
+          const earlier = history.flatMap((entry) =>
+            entry.outcome === 'observe' && entry.round < round && entry.progress ? [entry.progress.choice] : [],
+          );
+          noProgress = stopForNoProgress([...earlier, progress.choice], []);
+        }
+      }
       if (signal?.aborted) outcome = 'cancelled';
       else if (overBudget) outcome = 'budget';
       else if (observed.authority_blocked) outcome = 'authority';
@@ -305,7 +349,6 @@ export async function runAuditLoop(
       // A generation dispatched from this capture may have been paid without a durable report (#165).
       else if (!checkpoint?.report && checkpoint?.dispatched !== undefined) outcome = 'audit_unconfirmed';
       else {
-        const resume_entry = resume_from === undefined ? undefined : history.length + 1;
         const request_id = auditRequestId(input.execution_id, round, 'audit', resume_entry);
         let generated;
         if (checkpoint?.report) report = { ...checkpoint.report, findings: uniqueFindings(checkpoint.report.findings) };
@@ -426,6 +469,7 @@ export async function runAuditLoop(
       open_issues: next,
       outcome,
       goal_done: outcome === 'done',
+      progress,
     };
     // Signal cancellation returns to the caller without any further durable writes.
     if (signal?.aborted) return structuredClone(entry);

@@ -10,7 +10,6 @@ import {
   type AuditState,
 } from '../src/audit-view.js';
 import { MemoryAuditJournal, runAuditLoop, type AuditPorts } from '../src/audit-loop.js';
-import { stopForNoProgress } from '../src/sites/index.js';
 import {
   decideProgress,
   progressDelta,
@@ -338,7 +337,10 @@ test('with every check green, all criteria settled exactly when the audit loop c
         spent: 0,
         uncertainty: [],
       }),
-      evaluate: async () => assert.fail('no finding needs D6'),
+      evaluate: async (request) => {
+        assert.equal(request.site, 'loop.continue', 'no finding needs D6');
+        return d8('progressing').port.evaluate(request);
+      },
     };
     const round = await runAuditLoop({ execution_id: `progress-agree-${n}`, terms }, ports, new MemoryAuditJournal());
     const allSettled = progressDelta(state, state).criteria.every((item) => item.after);
@@ -346,34 +348,190 @@ test('with every check green, all criteria settled exactly when the audit loop c
   }
 });
 
-test('two consecutive rule-decided stalled rounds still stop the audit loop as no_progress', async () => {
+test('a cancelled round decides nothing: the rule records no transition once the signal is aborted (#244)', async () => {
+  const same = tidy(2, { checks: base.checks, evals: base.evals });
+  const controller = new AbortController();
+  controller.abort();
+  const { port, calls } = d8('progressing');
+  const record = await decideProgress(base, same, d8Input, port, now, controller.signal);
+  assert.equal(calls.length, 0);
+  assert.notEqual(record.status, 'transition');
+  assert.equal(record.decided_by, 'site');
+  assert.equal(record.site?.observation.reason, 'cancelled');
+  assert.deepEqual(record.delta, progressDelta(base, same));
+  // Replay keeps the cancellation even though the recorded delta alone would decide stalled.
+  const stored: ProgressRecord = JSON.parse(JSON.stringify(record));
+  assert.deepEqual(transitionProgress(stored.delta, stored.site), record);
+});
+
+const finding = { criterion_id: 'c2', kind: 'gap', evidence_ref: 'ref_lint', proposed_fix: 'Fix lint' };
+/**
+ * Audit loop ports over a fixed sequence of tidy states. Every audit reports one finding that D6 disposes
+ * fix_now, so the loop keeps returning to Observe until a stop. D8 answers through `progress`.
+ */
+function loopPorts(states: readonly AuditState[], progress: Parameters<typeof d8>[0], signal?: AbortController) {
+  const sites: string[] = [];
+  const d8Port = d8(progress);
+  let observes = 0;
+  const ports: AuditPorts = {
+    current: now,
+    budget: () => 'allow',
+    observe: async () => {
+      const state = states[Math.min(observes++, states.length - 1)]!;
+      if (signal && observes === 2) signal.abort();
+      return { revision, state };
+    },
+    generate: async (request) => {
+      sites.push(request.site);
+      return {
+        status: 'accepted',
+        request_id: request.request_id,
+        site: request.site,
+        text: JSON.stringify({ findings: [finding], goal_met_claim: false }),
+        routed_unit_id: 'strong',
+        provider_response_id: 'a1',
+        attempts: [],
+        spent: 0,
+        uncertainty: [],
+      };
+    },
+    evaluate: async (request) => {
+      sites.push(request.site);
+      if (request.site === 'loop.continue') return d8Port.port.evaluate(request);
+      assert.equal(request.site, 'audit.dispose');
+      return {
+        status: 'accepted',
+        kind: 'choice',
+        request_id: request.request_id,
+        site: request.site,
+        answers: { finding_0: { type: 'choice', choice: 'fix_now', probabilities: { fix_now: 1 } } },
+        confidence: { finding_0: 1 },
+        routed_unit_id: 'd6',
+        provider_response_id: 'p6',
+        attempts: [],
+        spent: 0,
+        uncertainty: [],
+      } as EvaluationOutcome<'choice'> as never;
+    },
+  };
+  return { ports, sites, d8: d8Port.calls };
+}
+function decided(journal: MemoryAuditJournal, id: string) {
+  return journal.load(id).map((round) => [round.round, round.progress?.decided_by, round.progress?.choice]);
+}
+
+test('two consecutive rule-decided stalled rounds stop the audit loop as no_progress; replay uses the records', async () => {
   const states = [
     base,
     tidy(2, { checks: base.checks, evals: base.evals }),
     tidy(3, { checks: base.checks, evals: base.evals }),
   ];
-  const records: ProgressRecord[] = [];
-  for (let n = 1; n < states.length; n++) {
-    const { port } = d8('progressing');
-    records.push(await decideProgress(states[n - 1]!, states[n]!, d8Input, port, now));
+  const journal = new MemoryAuditJournal();
+  const { ports, sites, d8: calls } = loopPorts(states, 'progressing');
+  const result = await runAuditLoop({ execution_id: 'progress-loop', terms }, ports, journal);
+  assert.equal(result.outcome, 'no_progress');
+  assert.equal(result.goal_done, false);
+  // Only the first round, which has no previous tidy state, asks D8; the stop precedes the third audit call.
+  assert.equal(calls.length, 1);
+  assert.deepEqual(sites, ['loop.continue', 'audit.generate', 'audit.dispose', 'audit.generate', 'audit.dispose']);
+  assert.deepEqual(decided(journal, 'progress-loop'), [
+    [1, 'site', 'progressing'],
+    [2, 'rule', 'stalled'],
+    [3, 'rule', 'stalled'],
+  ]);
+  for (const round of journal.load('progress-loop')) {
+    const stored: ProgressRecord = JSON.parse(JSON.stringify(round.progress));
+    assert.deepEqual(transitionProgress(stored.delta, stored.site), round.progress);
   }
-  assert.deepEqual(
-    records.map((record) => [record.decided_by, record.choice]),
-    [
-      ['rule', 'stalled'],
-      ['rule', 'stalled'],
-    ],
+  assert.equal(
+    journal.load('progress-loop')[1]?.progress?.delta?.previous_digest,
+    progressDelta(base, base).current_digest,
   );
-  const history = records.map((record) => record.choice);
-  assert.equal(stopForNoProgress(history, []), 'no_progress');
-  const ports: AuditPorts = {
-    current: now,
-    budget: () => 'allow',
-    observe: async () => ({ revision, state: states[2]!, progress: history }),
-    generate: async () => assert.fail('a no_progress stop precedes the audit call'),
-    evaluate: async () => assert.fail('a no_progress stop precedes D6'),
-  };
-  const round = await runAuditLoop({ execution_id: 'progress-loop', terms }, ports, new MemoryAuditJournal());
-  assert.equal(round.outcome, 'no_progress');
-  assert.equal(round.goal_done, false);
+  // Replay of the stopped execution asks nothing.
+  const replay = loopPorts(states, 'throw');
+  assert.deepEqual(await runAuditLoop({ execution_id: 'progress-loop', terms }, replay.ports, journal), result);
+  assert.deepEqual(replay.sites, []);
+});
+
+test('in the loop each rule branch decides without D8 and the mixed case asks it', async () => {
+  const progressing = tidy(2, {
+    checks: [check('repo.test', 2), check('repo.lint', 2)],
+    evals: [evaluation('c1', 2), evaluation('c2', 2)],
+  });
+  const regressing = tidy(2, { checks: [check('repo.test', 2, false), check('repo.lint', 2, false)], evals: [] });
+  const mixed = tidy(2, {
+    checks: [check('repo.test', 2, false), check('repo.lint', 2)],
+    evals: [evaluation('c2', 2)],
+  });
+  const stalled = tidy(2, { checks: base.checks, evals: base.evals });
+  for (const [state, by, choice, asked] of [
+    [stalled, 'rule', 'stalled', 1],
+    [progressing, 'rule', 'progressing', 1],
+    [regressing, 'rule', 'regressing', 1],
+    [mixed, 'site', 'progressing', 2],
+  ] as const) {
+    const journal = new MemoryAuditJournal();
+    const { ports, d8: calls } = loopPorts([base, state], 'progressing');
+    const result = await runAuditLoop({ execution_id: 'progress-branch', terms, max_iterations: 2 }, ports, journal);
+    assert.equal(result.outcome, 'iteration_cap');
+    assert.deepEqual(decided(journal, 'progress-branch').slice(0, 2), [
+      [1, 'site', 'progressing'],
+      [2, by, choice],
+    ]);
+    assert.equal(calls.length, asked);
+    const record = journal.load('progress-branch')[1]!.progress!;
+    assert.equal(record.site?.observation.request_id ?? null, by === 'site' ? 'progress-branch:r2:progress' : null);
+  }
+});
+
+test('in the loop a decision outage still lets the rule decide; only undecided rounds take the fallback', async () => {
+  const next = tidy(2, {
+    checks: [check('repo.test', 2), check('repo.lint', 2)],
+    evals: [evaluation('c1', 2), evaluation('c2', 2)],
+  });
+  const settledAgain = tidy(3, {
+    checks: [check('repo.test', 3), check('repo.lint', 3)],
+    evals: [evaluation('c1', 3), evaluation('c2', 3)],
+  });
+  const journal = new MemoryAuditJournal();
+  const { ports, d8: calls } = loopPorts([base, next, settledAgain], 'outage');
+  const result = await runAuditLoop({ execution_id: 'progress-outage', terms, max_iterations: 3 }, ports, journal);
+  // Outage fallbacks alone would stop at round 2; here the rule decides round 2 from evidence.
+  assert.equal(result.outcome, 'iteration_cap');
+  assert.deepEqual(decided(journal, 'progress-outage').slice(0, 3), [
+    [1, 'site', 'stalled'],
+    [2, 'rule', 'progressing'],
+    [3, 'site', 'stalled'],
+  ]);
+  assert.equal(journal.load('progress-outage')[0]?.progress?.site?.observation.reason, 'decision_unavailable');
+  assert.equal(calls.length, 2);
+});
+
+test('a round cancelled before progress is decided records nothing and asks no one', async () => {
+  const controller = new AbortController();
+  const journal = new MemoryAuditJournal();
+  const same = tidy(2, { checks: base.checks, evals: base.evals });
+  const { ports, sites } = loopPorts([base, same], 'progressing', controller);
+  const result = await runAuditLoop({ execution_id: 'progress-cancel', terms }, ports, journal, controller.signal);
+  assert.equal(result.outcome, 'cancelled');
+  assert.equal(result.progress ?? null, null);
+  assert.deepEqual(decided(journal, 'progress-cancel'), [[1, 'site', 'progressing']]);
+  assert.deepEqual(sites, ['loop.continue', 'audit.generate', 'audit.dispose']);
+  assert.equal(journal.loadCheckpoint('progress-cancel', 2), null);
+});
+
+test('recovery of a legacy dispatched capture without a progress record asks no D8 before audit_unconfirmed', async () => {
+  const journal = new MemoryAuditJournal();
+  journal.checkpoint({
+    execution_id: 'progress-legacy',
+    round: 1,
+    observation: { revision, state: base },
+    report: null,
+    dispatched: 'progress-legacy:r1:audit',
+  });
+  const { ports, sites } = loopPorts([base], 'progressing');
+  const result = await runAuditLoop({ execution_id: 'progress-legacy', terms }, ports, journal);
+  assert.equal(result.outcome, 'audit_unconfirmed');
+  assert.equal(result.progress, null);
+  assert.deepEqual(sites, []);
 });
