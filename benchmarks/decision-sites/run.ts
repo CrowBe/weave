@@ -257,7 +257,6 @@ export async function main(
       DEFAULT_PROVIDERS.every((p) => options.providers.includes(p)) &&
       options.split === 'all' &&
       options.sites.length === SITES.length;
-    const callCost = records.filter((r) => r.type === 'call').reduce((sum, r) => sum + (r.cost_usd ?? 0), 0);
     const reportRecords = bound;
     const report = makeReport(
       {
@@ -281,7 +280,7 @@ export async function main(
     // Reserved spend may over-state the bill (a usage-less 429 is charged at projection), never under-state it.
     const spend = ledger(records);
     Object.assign(report.summary, {
-      metered_call_cost_usd: callCost,
+      metered_call_cost_usd: spend.observed_usd,
       observed_usd: spend.observed_usd,
       reserved_usd: spend.reserved_usd,
       pending_reservation_usd: spend.pending_reservation_usd,

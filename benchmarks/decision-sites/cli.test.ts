@@ -902,6 +902,7 @@ test('summary and report separate observed spend from reserved spend; the ledger
     assert.equal(await main(args, { providers: [p] }), 0);
     const summary = JSON.parse(readFileSync(join(dir, 'summary.json'), 'utf8'));
     assert.ok(Math.abs(summary.observed_usd - (12 * 10 * 0.1) / 1e6) < 1e-15);
+    assert.equal(summary.metered_call_cost_usd, summary.observed_usd);
     assert.ok(summary.reserved_usd > 0);
     assert.equal(summary.pending_reservation_usd, 0);
     assert.ok(Math.abs(summary.spent_usd - (summary.observed_usd + summary.reserved_usd)) < 1e-15);

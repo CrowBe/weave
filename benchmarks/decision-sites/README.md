@@ -65,6 +65,8 @@ report give `observed_usd` (priced from usage receipts) and `reserved_usd`
 ledger total `spent_usd`, which the budget stop uses. Prices are TypeSafe $0.042/M input (output free) and OpenAI Decisions
 $0.10/M input with output tokens assumed unbilled and no cache charges, based on the
 [Decisions guide](https://developers.openai.com/api/docs/guides/decisions).
+The summary's `metered_call_cost_usd` matches `observed_usd` and excludes
+receipt-less projections.
 The OpenAI price remains unconfirmed until a credentialed run; [code](providers.ts)
 records the same source and input-only assumption. The reservation conservatively
 allows one input token per UTF-8 byte. The USD ceiling is a hard preflight bound
