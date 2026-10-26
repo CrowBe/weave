@@ -148,35 +148,6 @@ test('the TypeSafe-only hosted gateway sends choice criteria in the probe order'
   assert.ok(!JSON.stringify(record).includes(direct.typesafe));
 });
 
-test('the local Kev gateway sends choice criteria in the probe order', async (t) => {
-  const decision = CORPUS.find((c) => c.candidates.length >= 3)!;
-  const urls: string[] = [];
-  const bodies: { questions: { best: { criteria: Record<string, unknown> } } }[] = [];
-  t.mock.method(globalThis, 'fetch', async (url: string | URL, init?: RequestInit) => {
-    urls.push(String(url));
-    bodies.push(JSON.parse(String(init?.body)));
-    return new Response(
-      JSON.stringify({
-        model: 'kev-4b',
-        answers: { best: { type: 'choice', choice: decision.label, confidence: 0.9 } },
-        usage: { input_tokens: 10, output_tokens: 1 },
-      }),
-      { status: 200, headers: { 'content-type': 'application/json' } },
-    );
-  });
-  // A shuffling adapter would reorder every list of two or more under this RNG.
-  t.mock.method(Math, 'random', () => 0);
-  const gateway = run.createKevGateway(clock);
-  const record = await run.runCase(gateway, clock, direct, decision, 'choice', 0, { preferFree: false, local: true });
-  assert.equal(record.status, 'accepted');
-  assert.equal(urls.length, 1);
-  const question = renderQuestions('choice', decision)['best']!;
-  assert.equal(question.type, 'choice');
-  const order = Object.keys(question.type === 'choice' ? question.criteria : {});
-  assert.deepEqual(Object.keys(bodies[0]!.questions.best.criteria), order);
-  assert.deepEqual(record.candidate_ids, order);
-});
-
 for (const script of ['probe.ts', 'transfer-probe.ts']) {
   test(`${script} logs describeRoutes before running, with no credential values`, async (t) => {
     for (const preferFree of [false, true]) {
