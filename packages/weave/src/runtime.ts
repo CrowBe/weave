@@ -152,7 +152,6 @@ const ABANDONED_INFERENCE = 'abandoned at recovery: no inference.recorded before
  * Ids that merely mention an action, such as an imported conclusion from
  * another run, do not.
  */
-const CYCLE_WEIGHING_ID = /^weights:c(\d+)$|^inference:inf:c(\d+):weigh$/;
 const CYCLE_ACTION_ID = /^a:(\d+):\d+$/;
 
 /** Cost envelope reserved for one gateway weigh; framing must still have remaining budget. */
@@ -661,6 +660,7 @@ export class Runtime {
       this.indexApprovalRequest(observation);
       this.seqHigh = observation.seq;
       this.noteObservationId(observation.observation_id);
+      this.noteCycleFromObservation(observation);
       this.emittedIds.add(observation.observation_id);
       if (observation.validation.status === 'accepted') {
         const goalBefore = this.weft ? this.current.goal?.status : undefined;
@@ -1621,20 +1621,76 @@ export class Runtime {
 
   private nextCycleNo(): number {
     // A recovered run has no cycle records; its logged ids still name their cycles.
-    return Math.max(this.cycles.length, this.cycleIdHigh) + 1;
+    let next = Math.max(this.cycles.length, this.cycleIdHigh) + 1;
+    if (!Number.isSafeInteger(next)) {
+      throw new RangeError('cycle number exceeds the safe integer range');
+    }
+    while (this.observationIds.has(`weights:c${next}`) || this.observationIds.has(`inference:inf:c${next}:weigh`)) {
+      next += 1;
+      if (!Number.isSafeInteger(next)) {
+        throw new RangeError('cycle number exceeds the safe integer range');
+      }
+    }
+    return next;
   }
 
-  /** A weighing id that can make a later append a duplicate also reserves its cycle number. */
+  /** Track every logged id for duplicate detection; only typed weigh records reserve cycles. */
   private noteObservationId(observation_id: string): void {
     this.observationIds.add(observation_id);
-    const match = CYCLE_WEIGHING_ID.exec(observation_id);
-    if (match) {
-      this.noteCycleNumber(Number(match[1] ?? match[2]));
+  }
+
+  /** Only ids whose observation type, source, payload and envelope agree reserve a weighing cycle. */
+  private noteCycleFromObservation(observation: Observation): void {
+    if (
+      observation.validation.status === 'rejected' &&
+      observation.validation.reason === 'untrusted ingress cannot claim this origin'
+    ) {
+      return;
+    }
+
+    if (observation.payload_type === 'inference.requested' && observation.source.kind === 'runtime') {
+      const payload = this.recordPayload(observation.payload);
+      if (!payload) return;
+      if (
+        payload.site !== 'frontier.weigh' ||
+        typeof payload.request_id !== 'string' ||
+        observation.observation_id !== `inference:${payload.request_id}`
+      ) {
+        return;
+      }
+      const match = /^inf:c(\d+):weigh$/.exec(payload.request_id);
+      if (match) this.noteCycleNumberFromDigits(match[1]!);
+      return;
+    }
+
+    if (observation.payload_type === 'weights.recorded' && observation.source.kind === 'judgment') {
+      const payload = this.recordPayload(observation.payload);
+      if (!payload) return;
+      if (payload.site !== 'frontier.weigh') {
+        return;
+      }
+      const match = /^weights:c(\d+)$/.exec(observation.observation_id);
+      if (match) this.noteCycleNumberFromDigits(match[1]!);
+    }
+  }
+
+  private recordPayload(value: unknown): Record<string, unknown> | null {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  }
+
+  private noteCycleNumberFromDigits(digits: string): void {
+    const cycle_no = Number(digits);
+    if (Number.isSafeInteger(cycle_no) && cycle_no > 0) {
+      this.noteCycleNumber(cycle_no);
     }
   }
 
   private noteCycleNumber(cycle_no: number): void {
-    this.cycleIdHigh = Math.max(this.cycleIdHigh, cycle_no);
+    if (Number.isSafeInteger(cycle_no) && cycle_no > 0) {
+      this.cycleIdHigh = Math.max(this.cycleIdHigh, cycle_no);
+    }
   }
 
   private prefetchContracts(): void {
@@ -1887,6 +1943,7 @@ export class Runtime {
       this.indexApprovalRequest(stored);
       this.seqHigh = stored.seq;
       this.noteObservationId(stored.observation_id);
+      this.noteCycleFromObservation(stored);
       this.emittedIds.add(stored.observation_id);
       if (observation.validation.status === 'accepted') {
         applyAccepted(this.current, observation);

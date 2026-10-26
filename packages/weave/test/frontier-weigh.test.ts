@@ -1,6 +1,6 @@
 /**
  * `frontier.weigh@1`: one typed judgment site, end to end
- * (packages/weave/src/FRONTIER-WEIGH-CONTRACT.md §8, FW-T01..FW-T13).
+ * (packages/weave/src/FRONTIER-WEIGH-CONTRACT.md §8, FW-T01..FW-T14).
  *
  * The fixture judge stands in for a routed unit. It is not evidence about any
  * model; it proves the wiring and the control boundary only.
@@ -593,6 +593,98 @@ describe('frontier.weigh@1', () => {
       numbers.every((n) => n > last.cycle_no),
       `recovered cycles ${numbers.join(',')} follow ${last.cycle_no}`,
     );
+  });
+
+  it('FW-T10b an accepted source change id cannot reserve a weighing cycle', async () => {
+    const s = fwScenario({ judge: constantJudge(0) });
+    await drive(s);
+    const firstCycleNo = lastCycle(s).cycle_no;
+
+    const accepted = s.observe({
+      ...changed(ALPHA, 2, 'alpha revision 2'),
+      observation_id: 'weights:c9007199254740992',
+    });
+    assert.equal(accepted.validation.status, 'accepted');
+    const afterAccepted = lastCycle(s).cycle_no;
+    assert.equal(afterAccepted, firstCycleNo + 1, 'a source change is not a weighing reservation');
+  });
+
+  it('FW-T10c a rejected foreign request id cannot reserve a weighing cycle', async () => {
+    const s = fwScenario({ judge: constantJudge(0) });
+    await drive(s);
+    const firstCycleNo = lastCycle(s).cycle_no;
+    const rejected = s.observe({
+      ...changed(ALPHA, 3, 'alpha revision 3'),
+      observation_id: 'inference:inf:c999:weigh',
+      source: { kind: 'judgment', id: 'untrusted' },
+    });
+    assert.equal(rejected.validation.status, 'rejected');
+
+    const next = s.observe(changed(ALPHA, 2, 'alpha revision 2'));
+    assert.equal(next.validation.status, 'accepted');
+    assert.equal(lastCycle(s).cycle_no, firstCycleNo + 1, 'a rejected foreign request is not a reservation');
+  });
+
+  it('FW-T10d a colliding first weighing id is skipped so the run can weigh and dispatch', () => {
+    const environment = new FixtureEnvironment();
+    const runtime = new Runtime({
+      host: new FakeHost(environment),
+      decisionLayer: new ScriptedDecisionLayer(),
+    });
+    const sources: [string, string][] = [
+      [ALPHA, CONTENT[ALPHA] as string],
+      [BETA, CONTENT[BETA] as string],
+      [GAMMA, CONTENT[GAMMA] as string],
+      [DELTA, 'delta one\ndelta two'],
+    ];
+    for (const [resource, content] of sources) {
+      environment.register(resource, content);
+      runtime.observe(registered(resource, content));
+    }
+    const collision = runtime.observe({
+      ...changed(ALPHA, 2, 'alpha revision 2'),
+      observation_id: 'weights:c1',
+    });
+    assert.equal(collision.validation.status, 'accepted');
+
+    runtime.operator.submit(goalOpened(fwGoal()));
+    const trace = runtime.trace();
+    const firstCycle = trace.cycles[0];
+    assert.ok(firstCycle);
+    assert.equal(firstCycle.cycle_no, 2, 'the occupied id is skipped without trusting it as a high-water mark');
+    const weights = trace.observations.find((o) => o.observation_id === 'weights:c2');
+    assert.equal(weights?.validation.status, 'accepted');
+    assert.ok(trace.observations.some((o) => o.payload_type === 'action.started'));
+    assert.equal(
+      trace.observations.some((o) => o.validation.status === 'rejected'),
+      false,
+    );
+  });
+
+  it('FW-T10e malformed rejected weighing records do not break cycle indexing', () => {
+    const runtime = new Runtime({
+      host: new FakeHost(new FixtureEnvironment()),
+      decisionLayer: guardLayer(),
+    });
+    const request = runtime.feed({
+      observation_id: 'inference:inf:c1:weigh',
+      source: { kind: 'runtime', id: 'weave' },
+      caused_by: null,
+      payload_type: 'inference.requested',
+      payload_version: 1,
+      payload: null,
+    });
+    const weights = runtime.feed({
+      observation_id: 'weights:c1',
+      source: { kind: 'judgment', id: 'fixture' },
+      caused_by: null,
+      payload_type: 'weights.recorded',
+      payload_version: 1,
+      payload: null,
+    });
+    assert.equal(request.validation.status, 'rejected');
+    assert.equal(weights.validation.status, 'rejected');
+    assert.equal(runtime.trace().cycles.length, 0);
   });
 
   it('FW-T11 load rejects a journal whose seqs are not strictly increasing, and loads nothing from it', async () => {
