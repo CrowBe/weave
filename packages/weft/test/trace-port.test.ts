@@ -76,3 +76,28 @@ test('a batch with one invalid line imports nothing', async () => {
   await assert.rejects(importTraceLines(`${lines[0]}\nnot json\n`, port), /Invalid trace record/);
   assert.equal(port.rows.size, 0);
 });
+
+for (const field of ['id', 'confidence']) {
+  test(`trace serialization writes the redacted ${field} snapshot it validated, read once`, () => {
+    let reads = 0;
+    const line = serializeTrace(record, (r) =>
+      field === 'id'
+        ? Object.defineProperty({ ...r }, 'id', {
+            enumerable: true,
+            get: () => (++reads === 1 ? 'safe-id' : 'sk-unvalidated-canary'),
+          })
+        : {
+            ...r,
+            payload: Object.defineProperty({}, 'confidence', {
+              enumerable: true,
+              get: () => (++reads === 1 ? 0.5 : Infinity),
+            }),
+          },
+    );
+    const serialized = JSON.parse(line);
+    assert.equal(reads, 1, field);
+    assert.equal(field === 'id' ? serialized.id : serialized.payload.confidence, field === 'id' ? 'safe-id' : 0.5);
+    assert.equal(validateTrace(serialized), true);
+    assert.equal(line.includes('unvalidated-canary'), false);
+  });
+}

@@ -62,7 +62,8 @@ export function validateTrace(value: unknown): value is TraceRecord {
 }
 /** Caller must remove secrets at the composition boundary, even for opaque ids. */
 export function serializeTrace(record: TraceRecord, redact: (record: TraceRecord) => unknown): string {
-  const clean = redact(record);
+  // Validate and serialize the same snapshot, including nested metric getters.
+  const clean: unknown = structuredClone(redact(record));
   if (!validateTrace(clean)) throw new Error('Invalid trace record');
   const payload: Record<string, number | boolean> = {};
   for (const key of metrics) {
