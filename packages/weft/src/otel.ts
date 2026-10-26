@@ -187,23 +187,36 @@ export function createOtlpExporter(options: OtlpExporterOptions): {
   const { redact, inline, baseTimeUnixNano, write, timer, writeTimeoutMs = 1000 } = options;
   return {
     async export(records: unknown, signal?: AbortSignal): Promise<OtlpResult> {
+      try {
+        if (
+          typeof write !== 'function' ||
+          typeof timer !== 'function' ||
+          !Number.isFinite(writeTimeoutMs) ||
+          writeTimeoutMs <= 0 ||
+          writeTimeoutMs > 2 ** 31 - 1 ||
+          (signal !== undefined &&
+            (typeof signal.aborted !== 'boolean' ||
+              typeof signal.addEventListener !== 'function' ||
+              typeof signal.removeEventListener !== 'function'))
+        )
+          return { ok: false, reason: 'config' };
+        if (signal?.aborted) return { ok: false, reason: 'write' };
+      } catch {
+        return { ok: false, reason: 'config' };
+      }
       const result = exportOtlp(records, { redact, baseTimeUnixNano, ...(inline === undefined ? {} : { inline }) });
       if (!result.ok) return result;
-      if (
-        typeof timer !== 'function' ||
-        !Number.isFinite(writeTimeoutMs) ||
-        writeTimeoutMs <= 0 ||
-        writeTimeoutMs > 2 ** 31 - 1
-      )
-        return { ok: false, reason: 'config' };
-      if (signal?.aborted) return { ok: false, reason: 'write' };
       return new Promise<OtlpResult>((resolve) => {
         let settled = false;
         let cancel: (() => void) | undefined;
         const finish = (outcome: OtlpResult) => {
           if (settled) return;
           settled = true;
-          signal?.removeEventListener('abort', failed);
+          try {
+            signal?.removeEventListener('abort', failed);
+          } catch {
+            /* Signal cleanup cannot escape to the run. */
+          }
           try {
             cancel?.();
           } catch {
@@ -212,8 +225,8 @@ export function createOtlpExporter(options: OtlpExporterOptions): {
           resolve(outcome);
         };
         const failed = () => finish({ ok: false, reason: 'write' });
-        signal?.addEventListener('abort', failed, { once: true });
         try {
+          signal?.addEventListener('abort', failed, { once: true });
           cancel = timer(writeTimeoutMs, failed);
           // Injected timers may fire synchronously.
           if (settled) {

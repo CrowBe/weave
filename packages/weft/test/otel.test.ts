@@ -316,6 +316,87 @@ test('write bounds reject invalid configuration and pre-abort without delivery',
   assert.equal(writes, 0);
 });
 
+test('exporter configuration fails before mapping or redaction', async () => {
+  let redactions = 0;
+  let writes = 0;
+  const redact: Redactor = () => {
+    redactions++;
+    throw Error('redaction canary');
+  };
+  const write = () => {
+    writes++;
+  };
+  for (const config of [
+    { timer: undefined },
+    { write: undefined },
+    ...[0, -1, Infinity, NaN, 2 ** 31].map((writeTimeoutMs) => ({ writeTimeoutMs })),
+  ]) {
+    for (const records of [null, [{}], [record()]]) {
+      const exporter = createOtlpExporter({ timer, redact, write, ...config } as never);
+      assert.deepEqual(await exporter.export(records), { ok: false, reason: 'config' });
+    }
+  }
+  assert.equal(redactions, 0);
+  assert.equal(writes, 0);
+});
+
+test('malformed JS cancellation signals return config without mapping or delivery', async () => {
+  let redactions = 0;
+  let writes = 0;
+  const exporter = createOtlpExporter({
+    timer,
+    redact: (r) => {
+      redactions++;
+      return r;
+    },
+    write: () => {
+      writes++;
+    },
+  });
+  for (const signal of [
+    null,
+    {},
+    { aborted: false, addEventListener() {} },
+    { aborted: 'false', addEventListener() {}, removeEventListener() {} },
+    {
+      get aborted() {
+        throw Error('signal canary');
+      },
+    },
+  ]) {
+    assert.deepEqual(await exporter.export([record()], signal as never), { ok: false, reason: 'config' });
+  }
+  assert.equal(redactions, 0);
+  assert.equal(writes, 0);
+});
+
+test('throwing signal registration and cleanup cannot reject an export', async () => {
+  let writes = 0;
+  const exporter = createOtlpExporter({
+    timer,
+    redact: keep,
+    write: () => {
+      writes++;
+    },
+  });
+  const signal = {
+    aborted: false,
+    addEventListener() {
+      throw Error('registration canary');
+    },
+    removeEventListener() {
+      throw Error('cleanup canary');
+    },
+  };
+  assert.deepEqual(await exporter.export([record()], signal as never), { ok: false, reason: 'write' });
+  assert.equal(writes, 0);
+  assert.deepEqual(
+    await exporter.export([record()], { ...signal, addEventListener() {} } as never),
+    exportOtlp([record()], { redact: keep }),
+  );
+  assert.equal(writes, 1);
+});
+
 test('timer cleanup and cancellation belong to each concurrent export', async () => {
   const deadlines: (() => void)[] = [];
   const cancelled: number[] = [];
