@@ -69,6 +69,12 @@ and a committed output or confirms no committed effect; Fabric records that
 resolution before releasing the reservation. Reconciliation never renews a
 grant or authorizes repeating the invocation id.
 
+A **superseded attempt** is an earlier record of a CLI generation id that a
+re-run under a fresh grant replaced. Only a stopped attempt can be superseded:
+the re-run first reconciles it automatically as `not_committed` (unless already
+reconciled), then starts the next numbered attempt. Superseded attempts stay
+readable as ordered history; the earlier grant stays consumed.
+
 CLI generations surface uncertainty with their invocation identity and retain the
 workspace write reservation. A later generation reports `workspace_held` with
 that owner. The host can reconcile an unchanged workspace from a bounded durable
