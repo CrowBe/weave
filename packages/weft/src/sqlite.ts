@@ -133,7 +133,14 @@ export function openTraceStore(
     if (version === 0) {
       database.exec('BEGIN IMMEDIATE');
       try {
-        database.exec(schema);
+        // Another opener may have initialized the schema before we acquired the lock.
+        const lockedVersion = database.prepare('PRAGMA user_version').get()!['user_version'];
+        if (lockedVersion !== 0 && lockedVersion !== 1) {
+          database.exec('ROLLBACK');
+          database.close();
+          return fail('schema');
+        }
+        if (lockedVersion === 0) database.exec(schema);
         database.exec('COMMIT');
       } catch (error) {
         database.exec('ROLLBACK');

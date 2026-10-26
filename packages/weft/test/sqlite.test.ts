@@ -124,6 +124,46 @@ test('versioned normalized tables, independent connections, locked DB and durabl
     rmSync(dir, { recursive: true, force: true });
   }
 });
+for (const version of [1, 99]) {
+  test(`first open rechecks schema version ${version} after another opener wins the transaction`, (t) => {
+    const dir = mkdtempSync(join(tmpdir(), 'weft-first-open-'));
+    const path = join(dir, 'trace.db');
+    const exec = DatabaseSync.prototype.exec;
+    let competed = false;
+    // Deterministically interleave another real connection after the version read,
+    // immediately before this opener acquires its schema transaction.
+    t.mock.method(DatabaseSync.prototype, 'exec', function (this: DatabaseSync, sql: string) {
+      if (sql === 'BEGIN IMMEDIATE' && !competed) {
+        competed = true;
+        const other = openTraceStore(path, options);
+        assert.ok(other.ok);
+        if (other.ok) other.store.close();
+        if (version !== 1) {
+          const raw = new DatabaseSync(path);
+          raw.exec(`PRAGMA user_version = ${version}`);
+          raw.close();
+        }
+      }
+      return exec.call(this, sql);
+    });
+    try {
+      const result = openTraceStore(path, options);
+      assert.equal(competed, true);
+      if (version === 1) {
+        assert.ok(result.ok, JSON.stringify(result));
+        if (result.ok) {
+          assert.deepEqual(result.store.read(), { ok: true, rows: [] });
+          result.store.close();
+        }
+      } else {
+        assert.deepEqual(result, { ok: false, reason: 'schema' });
+      }
+    } finally {
+      t.mock.restoreAll();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
 test('SQLite failure after a write rolls back all tables; no raw error escapes', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'weft-sqlite-fail-'));
   const path = join(dir, 'trace.db');
