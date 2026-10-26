@@ -732,20 +732,24 @@ function freshCheckGrant(ports: ImplementPorts, held: Grant | null): Grant | nul
  * Object identity is the hold: a field-equal copy, a wider grant, or a
  * decision answer is refused. The held grant is not consumed.
  *
- * `limit` bounds fresh grants per held grant (#124). One step run invokes each
- * check once per generation run, at most `retries + 2` times, so the default
- * fits the default retries; bind one issuer per step run and pass
- * `retries + 2` when the step is configured with more. Each fresh grant gets
- * its own action id, `<held action_id>:g<n>`, so release and proceed by action
- * id stay unambiguous among this issuer's grants (#125). Action id is not scope.
+ * The issuer bounds fresh grants per held grant (#124). One step run invokes
+ * each check once per generation run, at most `retries + 2` times, so the
+ * limit is sized from the step's own `retries` (pass the step input, or the
+ * same `retries`) rather than set beside it, where a step configured with
+ * more retries would get null grants on its later runs (#249). Bind one
+ * issuer per step run. Each fresh grant gets its own action id,
+ * `<held action_id>:g<n>`, so release and proceed by action id stay
+ * unambiguous among this issuer's grants (#125). Action id is not scope.
  */
 export function createEqualGrantIssuer(
   authority: GrantAuthority,
   held: readonly Grant[],
-  limit: number = DEFAULT_IMPLEMENT_RETRIES + 2,
+  step: Pick<ImplementStepInput, 'retries'>,
 ): EqualGrantIssuer {
-  if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_RETRIES + 2)
-    throw new Error('Invalid grant issue limit');
+  const retries = step.retries ?? DEFAULT_IMPLEMENT_RETRIES;
+  if (!Number.isSafeInteger(retries) || retries < 0 || retries > MAX_RETRIES)
+    throw new Error('Invalid grant issue limit: retries must match a valid implementation step');
+  const limit = retries + 2;
   const scopes = new Map<Grant, { readonly scope: Grant; issued: number }>();
   for (const grant of held) {
     if (!authority.isIssued(grant) || !authority.isValid(grant)) continue;

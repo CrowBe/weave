@@ -601,7 +601,7 @@ test('the equal issuer refuses a wider grant and the step does not invoke one', 
     process_effects: ['process.spawn', 'fs.write:workspace-1'],
     issued_at: 1,
   });
-  const issuer = createEqualGrantIssuer(authority, [held]);
+  const issuer = createEqualGrantIssuer(authority, [held], {});
   (held.permissions as { resource: string; mode: string }[]).push({ resource: 'ref_late', mode: 'read' });
   const first = issuer.issue(held);
   assert.ok(first);
@@ -698,7 +698,7 @@ test('a real host accepts a fresh grant when a green check is retried after D5 f
       process_effects: ['process.spawn', `fs.write:${cwd}`],
       issued_at: 1,
     });
-    const issuer = createEqualGrantIssuer(authority, [template]);
+    const issuer = createEqualGrantIssuer(authority, [template], {});
     const world = driver({ evaluations: [{ c1: { p: 0.2, conf: 0.95 } }, { c1: { p: 0.95, conf: 0.95 } }] });
     const used: Grant[] = [];
     const ports: ImplementPorts = {
@@ -792,7 +792,7 @@ for (const sameText of [false, true]) {
         process_effects: ['process.spawn', `fs.write:${cwd}`],
         issued_at: 1,
       });
-      const issuer = createEqualGrantIssuer(authority, [template]);
+      const issuer = createEqualGrantIssuer(authority, [template], { retries: 0 });
       const work = input({
         ceiling: 'flash',
         retries: 0,
@@ -1958,7 +1958,7 @@ test('the equal issuer gives each fresh grant its own action id and stops at its
   };
   const held = authority.issue(fields);
   const other = authority.issue({ ...fields, action_id: 'act-2' });
-  const issuer = createEqualGrantIssuer(authority, [held, other], 2);
+  const issuer = createEqualGrantIssuer(authority, [held, other], { retries: 0 });
   const first = issuer.issue(held);
   const second = issuer.issue(held);
   assert.ok(first && second);
@@ -1972,7 +1972,7 @@ test('the equal issuer gives each fresh grant its own action id and stops at its
   const third = issuer.issue(other);
   assert.ok(third, 'each held grant has its own count');
   assert.equal(new Set([first.action_id, second.action_id, third.action_id]).size, 3);
-  const defaults = createEqualGrantIssuer(authority, [held]);
+  const defaults = createEqualGrantIssuer(authority, [held], {});
   const minted = Array.from({ length: DEFAULT_IMPLEMENT_RETRIES + 3 }, () => defaults.issue(held));
   assert.equal(
     minted.filter((item) => item !== null).length,
@@ -1980,9 +1980,42 @@ test('the equal issuer gives each fresh grant its own action id and stops at its
     'by default one fresh grant per generation run of a step: retries, the first attempt and the escalation',
   );
   assert.equal(minted.at(-1), null);
-  for (const bad of [0, -1, 1.5, 11, Number.NaN]) {
-    assert.throws(() => createEqualGrantIssuer(authority, [held], bad), /limit/);
+  for (const bad of [-1, 1.5, 9, Number.NaN, '2']) {
+    assert.throws(() => createEqualGrantIssuer(authority, [held], { retries: bad as number }), /limit/, String(bad));
   }
+});
+
+// #249: the issuer is sized from the step's own retries, so a step configured
+// with more retries than the default still gets a grant on every run.
+test('an issuer sized from the step input grants every generation run its checks (#249)', async () => {
+  const authority = createGrantAuthority();
+  const template = authority.issue({
+    action_id: 'act-1',
+    operation: 'repo.test',
+    contract_rev: 'r1',
+    permissions: [{ resource: 'workspace-1', mode: 'write' }],
+    effects: [{ resource: 'workspace-1', mode: 'write' }],
+    process_effects: ['process.spawn', 'fs.write:workspace-1'],
+    issued_at: 1,
+  });
+  const base = input();
+  const work = input({ retries: 4, checks: base.checks.map((check) => ({ ...check, grant: template })) });
+  const world = driver({ input: work, exits: Array.from({ length: 8 }, () => 1) });
+  const issuer = createEqualGrantIssuer(authority, [template], work);
+  const result = await runImplementationStep(
+    work,
+    { ...world.ports, issueCheckGrant: (held) => issuer.issue(held) },
+    world.journal,
+  );
+  assert.equal(result.attempts.length, 6, 'the first attempt, four retries and the escalation');
+  assert.equal(world.invokes.length, 6);
+  assert.ok(
+    world.invokes.every((call) => call.grant !== null),
+    'no run is denied its check grant',
+  );
+  assert.ok(result.attempts.every((attempt) => attempt.checks[0]?.exit === 1));
+  assert.equal(result.open_issue?.source, 'check');
+  assert.equal(issuer.issue(template), null, 'the bound still holds past the last run');
 });
 
 test('uncertain generation records its invocation and stalls without checks, evaluation, or implicit retry', async () => {
