@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execute, countCompetitorCalls } from './engine.ts';
-import { Journal, digest, projectedCost } from './journal.ts';
+import { Journal, digest, ledger, projectedCost } from './journal.ts';
 import { buildRequest } from './questions.ts';
 import { buildProviders } from './providers.ts';
 import { buildCompetitors } from './competitors.ts';
@@ -868,4 +868,36 @@ test('a request that may dispatch twice reserves both against the cap, and count
     // An intent with no receipt (a crash mid-request) counts its full reservation.
     journal.append({ type: 'intent', provider: 'fake', call_id: 'lost', projected_usd: 0, dispatch_reservation: 2 });
     assert.equal(countCompetitorCalls(journal.read(), 'fake'), 41);
+  }));
+
+test('usage-less 429 retries stay charged at projection but are reported as reserved, not observed', () =>
+  fixture(async (journal) => {
+    let n = 0;
+    const p = provider(async () => {
+      n++;
+      return n < 3
+        ? { status: 'failed', http_status: 429, retry_after_ms: 0 }
+        : { status: 'ok', model: 'fake', input_tokens: 7, answers: {} };
+    });
+    const projected = projectedCost(p.serialize(await buildRequest(item)), p.price),
+      observed = (7 * p.price) / 1e6;
+    await execute({ entries: [entry], providers: [p], journal, maxSpend: 2, ...clock });
+    assert.equal(n, 3);
+    // The budget keeps the conservative charge: a 429 without usage cannot prove it was unbilled.
+    assert.equal(journal.spent(), projected + projected + observed);
+    const split = ledger(journal.read());
+    assert.equal(split.spent_usd, journal.spent());
+    assert.equal(split.observed_usd, observed);
+    assert.equal(split.reserved_usd, split.spent_usd - observed);
+    assert.ok(Math.abs(split.reserved_usd - 2 * projected) < 1e-15);
+    assert.equal(split.pending_reservation_usd, 0);
+    // An unacknowledged intent is reserved and pending; a usage receipt is observed even when it costs more.
+    journal.append({ type: 'intent', call_id: 'pending', projected_usd: 0.5 });
+    journal.append({ type: 'intent', call_id: 'excess', projected_usd: 0.001 });
+    journal.append({ type: 'call', call_id: 'excess', cost_usd: 0.002, result: { status: 'ok', input_tokens: 20000 } });
+    const after = ledger(journal.read());
+    assert.equal(after.spent_usd, journal.spent());
+    assert.equal(after.pending_reservation_usd, 0.5);
+    assert.equal(after.observed_usd, observed + 0.002);
+    assert.equal(after.reserved_usd, after.spent_usd - after.observed_usd);
   }));
