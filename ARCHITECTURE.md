@@ -339,6 +339,8 @@ suppresses an attempt. When the gateway has no timer, when the wait would pass
 the deadline, or when one request could never fit, the request is sent at once
 and a refusal is handled as above. Pacing sees only one gateway's requests on
 one routed unit; traffic from other processes or other units is not counted.
+Requests waiting on a unit are served in arrival order, so a newcomer cannot
+take a freed slot from an earlier waiter and starve it until its deadline.
 
 Inference on the operator's own hardware is a routed unit like any other, and
 deliberately so: it earns no exemption from accounting, acceptance or the

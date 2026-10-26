@@ -210,6 +210,9 @@ it('a pacing wait is cancellable, spends no attempt, and the budget gate runs ag
   assert.equal(outcome.status, 'unaccepted');
   if (outcome.status === 'unaccepted') assert.equal(outcome.reason, 'provider_failed');
   assert.deepEqual(outcome.attempts, []);
+  // b leaving the queue nudges c to recheck its place; let that recheck settle.
+  await time.advance(0);
+  assert.deepEqual(provider.sent, [0]);
   const before = reads;
   await time.advance(1_000);
   assert.equal((await waiting).status, 'accepted');
@@ -235,4 +238,139 @@ it('route config accepts pace as a boolean only, and the Muse Spark units opt in
   for (const muse of parsed.table.filter((u) => u.adapter === 'muse-spark')) {
     assert.deepEqual(muse.rate_limits, [{ requests: 150, tokens: 3_000_000, window_ms: 60_000, pace: true }]);
   }
+});
+
+it('construction refuses a hand-built rate limit that parseRouteConfig would reject (#242)', async () => {
+  const bad: unknown[] = [
+    { requests: 0, window_ms: 1_000, pace: true },
+    { requests: -1, window_ms: 1_000, pace: true },
+    { requests: 1.5, window_ms: 1_000, pace: true },
+    { requests: Number.NaN, window_ms: 1_000 },
+    { requests: 1, window_ms: 0 },
+    { requests: 1, window_ms: Number.POSITIVE_INFINITY, pace: true },
+    { requests: 1, tokens: 0, window_ms: 1_000, pace: true },
+    { requests: 1, window_ms: 1_000, pace: 'yes' },
+    { requests: 1, window_ms: 1_000, burst: 2 },
+    null,
+  ];
+  for (const limit of bad) {
+    const time = manualTime();
+    const provider = recording(undefined, time.clock.now);
+    const build = () =>
+      createInferenceGateway({
+        routes: [unit([limit as RateLimit])],
+        adapters: [provider.adapter],
+        clock: time.clock,
+        timer: time.timer,
+      });
+    let gateway: ReturnType<typeof createInferenceGateway> | undefined;
+    try {
+      gateway = build();
+    } catch (error) {
+      assert.ok(error instanceof Error && !(error instanceof TypeError), JSON.stringify(limit));
+      assert.match(error.message, /routed unit 'paced' declares an invalid rate_limits\[0\]/, JSON.stringify(limit));
+      continue;
+    }
+    // Construction accepted it: show what a request does with it, then fail.
+    const outcome = await gateway.generate(request('a')).then(
+      (o) => o.status,
+      (error: unknown) => `threw ${String(error)}`,
+    );
+    assert.fail(`${JSON.stringify(limit)} constructed; a request ${outcome}`);
+  }
+  // Every shape parseRouteConfig accepts still constructs.
+  const time = manualTime();
+  createInferenceGateway({
+    routes: [
+      unit([
+        { requests: 1, tokens: 1, window_ms: 1, pace: false },
+        { requests: 2, window_ms: 0.5 },
+      ]),
+    ],
+    adapters: [recording(undefined, time.clock.now).adapter],
+    clock: time.clock,
+  });
+});
+
+it('paced waiters are served first in, first out: a newcomer cannot take the slot an earlier waiter is owed (#242)', async () => {
+  // A timer that wakes only when the test says so, as a busy event loop wakes late.
+  let now = 0;
+  const sleepers: (() => void)[] = [];
+  const timer: Timer = {
+    sleep: (_ms, signal) =>
+      new Promise((resolve) => {
+        sleepers.push(resolve);
+        signal?.addEventListener('abort', () => resolve(), { once: true });
+      }),
+  };
+  const wake = async () => {
+    for (const resolve of sleepers.splice(0)) resolve();
+    for (let i = 0; i < 5; i++) await setImmediate();
+  };
+  const sent: string[] = [];
+  const gateway = createInferenceGateway({
+    routes: [unit([{ requests: 1, window_ms: 1_000, pace: true }])],
+    adapters: [
+      {
+        id: 'fake',
+        async execute(call) {
+          sent.push(`${call.prompt}@${now}`);
+          return {
+            status: 'completed',
+            text: 'ok',
+            usage: { input_tokens: 1, output_tokens: 1 },
+            finish_reason: 'stop',
+            provider_response_id: undefined,
+          };
+        },
+      },
+    ],
+    clock: { now: () => now },
+    timer,
+  });
+  const named = (id: string): GenerationRequest => ({ ...request(id), input: { instructions: '', prompt: id } });
+  const a = gateway.generate(named('a'));
+  const b = gateway.generate(named('b'));
+  for (let i = 0; i < 5; i++) await setImmediate();
+  assert.deepEqual(sent, ['a@0'], 'b waits for the slot that frees at 1000');
+  now = 1_000;
+  // The slot is free, but b's wake is late. c arrives first.
+  const c = gateway.generate(named('c'));
+  for (let i = 0; i < 5; i++) await setImmediate();
+  assert.deepEqual(sent, ['a@0'], 'c queues behind b instead of taking its slot');
+  await wake();
+  assert.deepEqual(sent, ['a@0', 'b@1000']);
+  now = 2_000;
+  await wake();
+  assert.deepEqual(sent, ['a@0', 'b@1000', 'c@2000']);
+  assert.deepEqual(
+    (await Promise.all([a, b, c])).map((o) => o.status),
+    ['accepted', 'accepted', 'accepted'],
+  );
+});
+
+it('a waiter that leaves the queue releases its place: cancellation does not block those behind it (#242)', async () => {
+  const time = manualTime();
+  const provider = recording(undefined, time.clock.now);
+  const gateway = createInferenceGateway({
+    routes: [unit([{ requests: 1, window_ms: 1_000, pace: true }])],
+    adapters: [provider.adapter],
+    clock: time.clock,
+    timer: time.timer,
+  });
+  const a = gateway.generate(request('a'));
+  const controller = new AbortController();
+  const b = gateway.generate(request('b'), controller.signal);
+  const c = gateway.generate(request('c'));
+  await time.advance(0);
+  assert.deepEqual(provider.sent, [0]);
+  controller.abort();
+  assert.equal((await b).status, 'unaccepted');
+  // c was queued behind b for the 2000 slot; with b gone it takes the 1000 slot.
+  await time.advance(1_000);
+  assert.deepEqual(provider.sent, [0, 1_000]);
+  assert.deepEqual(
+    (await Promise.all([a, c])).map((o) => o.status),
+    ['accepted', 'accepted'],
+  );
 });

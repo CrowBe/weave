@@ -323,6 +323,14 @@ export interface TokenPrice {
  * request's worst case exceeds the budget, the request is sent at once and the
  * provider's refusal governs as before. Pacing counts this gateway's requests
  * on this unit only, not other processes or other units sharing the limit.
+ * Requests waiting on a unit are served in arrival order: a later request
+ * waits behind an earlier one rather than taking the slot it is owed, and a
+ * waiter that leaves (cancelled, rerouted or out of deadline) lets those
+ * behind it recheck at once.
+ *
+ * `requests` is a positive integer, `window_ms` positive and finite, `tokens`
+ * a positive integer when present. `parseRouteConfig` and
+ * `createInferenceGateway` both reject any other shape.
  */
 export interface RateLimit {
   readonly requests: number;

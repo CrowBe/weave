@@ -347,7 +347,7 @@ The deterministic `budget.policy@1` filter applied before every routed dispatch.
 
 ### Paced limit
 
-A declared routed-unit rate limit marked `pace`. The gateway holds a request on that unit until the requests it has already started there fit the limit's window, counting worst-case tokens until usage is reported. It is a wait inside the deadline, not a quota: it never suppresses an attempt, and a request that cannot wait is sent at once.
+A declared routed-unit rate limit marked `pace`. The gateway holds a request on that unit until the requests it has already started there fit the limit's window, counting worst-case tokens until usage is reported, and serves waiting requests in arrival order. It is a wait inside the deadline, not a quota: it never suppresses an attempt, and a request that cannot wait is sent at once.
 
 ### Loop pause record
 

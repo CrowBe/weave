@@ -1,5 +1,13 @@
 /** Pure validation of composition-root data. No credentials are resolved here. */
-import { EVALUATION_KINDS, GENERATION_KINDS, QUALITY_BARS, TIERS, type RoutedUnit, type RouteTable } from './types.js';
+import {
+  EVALUATION_KINDS,
+  GENERATION_KINDS,
+  QUALITY_BARS,
+  TIERS,
+  type RateLimit,
+  type RoutedUnit,
+  type RouteTable,
+} from './types.js';
 import { NOUS_PORTAL_ADAPTER, isNousPortalFreeModel } from './adapters/nous-portal-catalogue.js';
 
 const DECISION_AUTH = ['chatgpt-oauth', 'api-key'] as const;
@@ -176,6 +184,24 @@ function number(value: unknown): value is number {
 }
 function positiveInteger(value: unknown): boolean {
   return number(value) && Number.isInteger(value) && value > 0;
+}
+const RATE_LIMIT_KEYS = ['requests', 'tokens', 'window_ms', 'pace'] as const;
+/**
+ * One declared rate limit: a positive integer request count, a positive finite
+ * window, an optional positive integer token budget, an optional boolean pace,
+ * and no other key. `parseRouteConfig` and `createInferenceGateway` both apply
+ * it, so a hand-built table cannot reach pacing with a limit the document form rejects.
+ */
+export function validRateLimit(limit: unknown): limit is RateLimit {
+  return (
+    object(limit) &&
+    Object.keys(limit).every((key) => (RATE_LIMIT_KEYS as readonly string[]).includes(key)) &&
+    positiveInteger(limit.requests) &&
+    number(limit.window_ms) &&
+    limit.window_ms > 0 &&
+    (limit.tokens === undefined || positiveInteger(limit.tokens)) &&
+    (limit.pace === undefined || typeof limit.pace === 'boolean')
+  );
 }
 function member(value: unknown, values: readonly string[]): boolean {
   return typeof value === 'string' && values.includes(value);
@@ -364,16 +390,8 @@ export function parseRouteConfig(json: unknown): RouteConfigResult {
         check(Array.isArray(unit.rate_limits), `${path}.rate_limits`);
         if (Array.isArray(unit.rate_limits))
           unit.rate_limits.forEach((limit: unknown, j: number) => {
-            if (object(limit)) keys(limit, ['requests', 'tokens', 'window_ms', 'pace'], `${path}.rate_limits[${j}]`);
-            check(
-              object(limit) &&
-                positiveInteger(limit.requests) &&
-                number(limit.window_ms) &&
-                limit.window_ms > 0 &&
-                (limit.tokens === undefined || positiveInteger(limit.tokens)) &&
-                (limit.pace === undefined || typeof limit.pace === 'boolean'),
-              `${path}.rate_limits[${j}]`,
-            );
+            if (object(limit)) keys(limit, RATE_LIMIT_KEYS, `${path}.rate_limits[${j}]`);
+            check(validRateLimit(limit), `${path}.rate_limits[${j}]`);
           });
       }
     });
