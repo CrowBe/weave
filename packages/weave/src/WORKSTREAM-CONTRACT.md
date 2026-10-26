@@ -263,8 +263,12 @@ outcome (`unchanged`), and a direction that cannot apply
 `operator`:
 
 - A pause request that the corrected `interrupt` made and the provider has
-  not yet honoured is withdrawn (`pause_withdrawn`). A pause that already
-  happened stays: resuming is its own explicit decision.
+  not yet honoured is withdrawn (`pause_withdrawn`). If another `interrupt`
+  was placed while that request was pending, the request passes to the
+  earliest such interrupt instead, so its pause still happens. A pause that
+  already happened stays: resuming is its own explicit decision. A process
+  that completed or stopped first is left alone, and the correction still
+  applies.
 - A held `queue` placement stops being held.
 - A workstream that `parallel` opened stays open, with no goal and no
   process.

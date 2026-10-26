@@ -62,6 +62,10 @@ export type ProcessResult =
 function seq(value: unknown): value is Seq {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
+/** A bounded opaque identifier; `correlation(null)` is null, so the type is checked first. */
+function boundedRef(value: unknown): value is string {
+  return typeof value === 'string' && correlation(value) === value;
+}
 function refuse(reason: ProcessRefusal): ProcessResult {
   return { ok: false, reason };
 }
@@ -70,8 +74,7 @@ export function isLive(process: OperatingProcess): boolean {
 }
 
 export function openProcess(process_id: string, workstream_id: string, evidence: Seq): ProcessResult {
-  if (correlation(process_id) !== process_id || correlation(workstream_id) !== workstream_id)
-    return refuse('invalid_id');
+  if (!boundedRef(process_id) || !boundedRef(workstream_id)) return refuse('invalid_id');
   if (!seq(evidence)) return refuse('invalid_evidence');
   return {
     ok: true,
@@ -155,7 +158,7 @@ export function transitionProcess(process: OperatingProcess, event: ProcessEvent
       if (
         point === null ||
         typeof point !== 'object' ||
-        correlation(point.ref) !== point.ref ||
+        !boundedRef(point.ref) ||
         typeof point.digest !== 'string' ||
         !/^[0-9a-f]{64}$/.test(point.digest)
       )

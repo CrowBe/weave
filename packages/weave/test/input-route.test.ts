@@ -459,6 +459,45 @@ test('an operator correction is evaluation evidence and re-places the input', as
   if (!same.ok) assert.equal(same.reason, 'unchanged');
 });
 
+test('correcting one of two pending interrupts keeps the pause the other still needs', async () => {
+  const before = step(busy(), 'ws-a', { type: 'input.recorded', seq: 22 });
+  const first = await routed(before, 'interrupt');
+  let index = applied(before, first, 30);
+  const second = routeRule({ workstream: stream(index, 'ws-a'), input_seq: 22, direction: 'interrupt' })!;
+  index = applied(index, second, 31);
+  assert.equal(stream(index, 'ws-a').process?.pause_requested, 30, 'one request serves both interrupts');
+  const corrected = correctRoute(index, first, 'conversation', { evidence: 40 });
+  assert.ok(corrected.ok);
+  if (!corrected.ok) return;
+  index = corrected.index;
+  assert.equal(stream(index, 'ws-a').process?.pause_requested, 31, 'the request passes to the remaining interrupt');
+  const last = correctRoute(index, second, 'conversation', { evidence: 41 });
+  assert.ok(last.ok);
+  if (last.ok) assert.equal(stream(last.index, 'ws-a').process?.pause_requested, null, 'no interrupt remains');
+});
+
+test('an interrupt can be corrected after the process completed or stopped before honouring it', async () => {
+  const before = busy();
+  const interrupt = await routed(before, 'interrupt');
+  const pending = applied(before, interrupt, 30);
+  const completed = step(pending, 'ws-a', { type: 'process.transition', event: { type: 'completed', evidence: 31 } });
+  let stopped = step(pending, 'ws-a', { type: 'process.transition', event: { type: 'stop_requested', evidence: 31 } });
+  stopped = step(stopped, 'ws-a', {
+    type: 'process.transition',
+    event: { type: 'stopped', reason: 'requested', evidence: 32 },
+  });
+  for (const [index, state] of [
+    [completed, 'complete'],
+    [stopped, 'stopped'],
+  ] as const) {
+    const corrected = correctRoute(index, interrupt, 'conversation', { evidence: 40 });
+    assert.ok(corrected.ok, state);
+    if (!corrected.ok) continue;
+    assert.equal(stream(corrected.index, 'ws-a').process?.state, state, 'a terminal process is left alone');
+    assert.equal(stream(corrected.index, 'ws-a').inputs[0]!.route, 'conversation');
+  }
+});
+
 test('corrections keep honoured pauses and opened workstreams, drop holds, and label unrouted input', async () => {
   // A pause the provider already honoured stays paused.
   const before = busy();

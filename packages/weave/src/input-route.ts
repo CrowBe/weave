@@ -17,6 +17,7 @@ import {
   type SiteTransition,
 } from './sites/index.js';
 import type { Seq } from './types.js';
+import { isLive } from './operating-process.js';
 import {
   activeGoal,
   openWorkstream,
@@ -204,10 +205,12 @@ export function applyRoute(index: WorkstreamIndex, routed: RouteRecord, context:
   const evidence = context.evidence;
   const process = subject.process;
   const steps: (() => WorkstreamRefusal | null)[] = [];
+  // A terminal process has no pending pause left to act on, so there is nothing to withdraw.
   if (
     entry.route === 'interrupt' &&
     entry.routed_at !== null &&
     process !== null &&
+    isLive(process) &&
     process.state !== 'paused' &&
     process.pause_requested === entry.routed_at
   ) {
@@ -217,6 +220,17 @@ export function applyRoute(index: WorkstreamIndex, routed: RouteRecord, context:
         event: { type: 'pause_withdrawn', request: entry.routed_at!, evidence },
       }),
     );
+    // An interrupt placed while this request was pending relied on it. The request passes to the
+    // earliest such interrupt, so the pause still happens and a later correction can withdraw it.
+    const waiting = subject.inputs
+      .filter((input) => input.seq !== seq && input.route === 'interrupt' && input.routed_at !== null)
+      .filter((input) => input.routed_at! > entry.routed_at!)
+      .sort((a, b) => a.routed_at! - b.routed_at!)[0];
+    if (waiting !== undefined) {
+      steps.push(() =>
+        apply(id, { type: 'process.transition', event: { type: 'pause_requested', evidence: waiting.routed_at! } }),
+      );
+    }
   }
   if (routed.outcome === 'parallel') {
     const target = context.new_workstream_id;

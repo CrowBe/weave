@@ -95,6 +95,10 @@ test('a process opens idle with fixed keys and no authority fields', () => {
   for (const key of KEYS) assert.doesNotMatch(key, /grant|approval|budget|reservation|scope|authority/);
   refused(openProcess('a/b', 'ws-a', 1), 'invalid_id');
   refused(openProcess('proc-1', 'ws-a', -1), 'invalid_evidence');
+  // Runtime data is not validated by the declared types: null and non-string ids refuse.
+  refused(openProcess(null as unknown as string, 'ws-a', 1), 'invalid_id');
+  refused(openProcess('proc-1', null as unknown as string, 1), 'invalid_id');
+  refused(openProcess(7 as unknown as string, 'ws-a', 1), 'invalid_id');
 });
 
 test('plain lifecycle events are legal only from the states the contract lists', () => {
@@ -159,6 +163,17 @@ test('a pause is requested, honoured at a boundary with a resume point, and resu
     transitionProcess(process, { type: 'paused', resume_point: { ref: 'snap-1', digest: 'ABC' }, evidence: 4 }),
     'invalid_resume_point',
   );
+  // A provider observation with no bounded reference cannot be inspected or restored.
+  for (const ref of [null, undefined, 7]) {
+    refused(
+      transitionProcess(process, {
+        type: 'paused',
+        resume_point: { ref: ref as unknown as string, digest: POINT.digest },
+        evidence: 4,
+      }),
+      'invalid_resume_point',
+    );
+  }
   process = ok(transitionProcess(process, { type: 'paused', resume_point: POINT, evidence: 4 }));
   assert.equal(process.state, 'paused');
   assert.equal(process.paused_from, 'running');
