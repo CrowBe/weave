@@ -37,7 +37,8 @@ export function createWeftSink(options: WeftSinkOptions): WeftSink {
         rejected += 1;
         return;
       }
-      write(line);
+      // Delivery remains synchronous and unawaited, but async failures are observed.
+      void Promise.resolve(write(line)).catch(() => {});
     },
     get rejected(): number {
       return rejected;

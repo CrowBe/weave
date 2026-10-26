@@ -411,7 +411,9 @@ records only when its own composition passes a port.
 Weft's sink for a port. It runs `serializeRecord` on every record and hands
 `write` only the resulting line. A record the redactor or the validator
 rejects is counted in `rejected` and not written. So the store, file or
-exporter behind `write` never sees an unredacted or invalid record.
+exporter behind `write` never sees an unredacted or invalid record. The writer
+is never awaited, and a returned promise or thenable has its rejection handled.
+Writer failures do not count as rejected input records.
 
 **One-way.** Emitting never changes state, scheduling, budgets or outcomes:
 
@@ -441,7 +443,11 @@ resumes with the first observation appended after the load. Loading indexes
 the journaled dispatches, so a dispatch after recovery still supersedes a
 thread opened before the crash, and a queued action that starts after
 recovery is not opened a second time. Replay invokes
-neither the gateway nor the host, so they emit nothing either.
+neither the gateway nor the host, so they emit nothing either. Cancel and
+supersession links after recovery may target thread records emitted before
+the crash: the composition root must retain those earlier trace segments
+under the same trace and Loom emitter ids. A new sink receiving only the
+post-recovery segment does not receive those historical records again.
 
 **Identity and order.** Loom's record ids are derived from the log, so a run
 yields the same ids every time: `<emitter>:goal:<goal.opened seq>` (a run may

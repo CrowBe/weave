@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { createWeftSink, serializeRecord, type InlinePolicy, type Redactor, type WeftRecord } from '@weave/weft';
 
 /** W5: Weft's sink for an emission port (WEFT-CONTRACT.md, Emission). */
@@ -103,4 +104,34 @@ test('a missing redactor, a missing write or a malformed policy is a configurati
       inline: { trace_id: 'goal-17', classes: ['secret'] } as unknown as InlinePolicy,
     }),
   );
+});
+
+test('async and thenable writers are never awaited and leave no unhandled rejection', () => {
+  const child = spawnSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      `
+    import { createWeftSink } from '@weave/weft';
+    const record = ${JSON.stringify(goal)};
+    let unhandled = 0;
+    process.on('unhandledRejection', () => { unhandled++; });
+    let handled = 0;
+    for (const write of [
+      () => Promise.reject(new Error('writer failed')),
+      () => ({ then(_ok, reject) { handled++; reject(new Error('thenable failed')); } }),
+      () => new Promise(() => {}),
+    ]) {
+      const sink = createWeftSink({ redact: r => r, write });
+      if (sink.emit(record) !== undefined) throw Error('emit returned a writer result');
+      if (sink.rejected !== 0) throw Error('writer failure counted as invalid input');
+    }
+    await new Promise(resolve => setImmediate(resolve));
+    if (unhandled !== 0 || handled !== 1) process.exit(1);
+  `,
+    ],
+    { encoding: 'utf8' },
+  );
+  assert.equal(child.status, 0, child.stderr || child.stdout);
 });
