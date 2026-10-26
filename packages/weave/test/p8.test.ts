@@ -418,6 +418,28 @@ function driver(options: {
   return found;
 }
 
+// #244: the check-tail screen uses the repository's shared credential markers (#158).
+test('a check tail carrying any shared credential marker is dropped; an ordinary tail is kept', async () => {
+  for (const tail of [
+    'Authorization: Bearer\tabc123',
+    'Authorization: Bearer\nabc123',
+    'key=AIzaSyA1234567890',
+    'token xoxb-123-456',
+    '-----BEGIN RSA PRIVATE KEY-----',
+    'export OPENAI=sk-SECRETVALUE',
+  ]) {
+    const world = driver({ tail });
+    const result = await runImplementationStep(world.input, world.ports, world.journal);
+    assert.equal(result.checks[0]?.tail, '', JSON.stringify(tail));
+    assert.equal(JSON.stringify(world.journal.load('exec-1')).includes(tail.slice(-6)), false, JSON.stringify(tail));
+  }
+  for (const tail of ['12 tests passed', 'bearer_token_id rotated']) {
+    const world = driver({ tail });
+    const result = await runImplementationStep(world.input, world.ports, world.journal);
+    assert.equal(result.checks[0]?.tail, tail);
+  }
+});
+
 test('a passing toy goal records evidence and does not complete the goal', async () => {
   const world = driver({
     text: 'CANARY_OUTPUT',

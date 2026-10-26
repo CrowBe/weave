@@ -66,7 +66,15 @@ const PAUSE_REASONS = [
 export type ImplementPauseReason = (typeof PAUSE_REASONS)[number];
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const KEPT_REF = /^(?:ref_|gen_)[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
-const CREDENTIAL = /sk[-_]|Bearer |eyJ|gh[pousr]_|github_pat_|AKIA/i;
+/**
+ * The repository's credential markers (`packages/gateway/src/privacy.ts`,
+ * `packages/weft/src/credential.ts`), kept equal by checks/test (#158, #244).
+ * The gateway does not export its screen, so Loom keeps this copy. It drops
+ * the token-start guard those screens use: a check tail is untrusted process
+ * output, and dropping a tail on a marker inside a word loses no authority.
+ */
+const CREDENTIAL =
+  /(?:sk[-_]|Bearer\s+|eyJ|gh[pousr]_|github_pat_|AKIA|AIza|xox[abp]-|-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----)/i;
 const TAIL_CHARS = 240;
 const MAX_RETRIES = 8;
 const CHECK_TEXT = 'Deterministic checks failed.';
