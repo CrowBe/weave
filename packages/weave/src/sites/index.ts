@@ -1,5 +1,6 @@
 /** P5 judgments are observations; these transitions confer no dispatch authority. */
 import type { EvaluationContent, EvaluationOutcome, InferenceGateway, InferenceTerms } from '@weave/gateway';
+import type { ProcessState } from '../operating-process.js';
 
 export const SITE_POLICY = {
   'loop.triage': {
@@ -23,6 +24,12 @@ export const SITE_POLICY = {
   'intake.classify': {
     question: 'How should this inbound message relate to the running threads?',
     options: ['new_thread', 'continue_thread', 'queue', 'steer', 'interrupt', 'stop'],
+    confidence: 0.8,
+    fallback: 'ask_user',
+  },
+  'input.route': {
+    question: 'How does this operator input relate to the active work?',
+    options: ['conversation', 'steer', 'interrupt', 'parallel', 'queue'],
     confidence: 0.8,
     fallback: 'ask_user',
   },
@@ -57,8 +64,25 @@ export type IntakeState = {
 export interface IntakeSiteInput extends SiteInput {
   readonly state: IntakeState;
 }
-/** Intake takes IntakeState (#90); every other choice site takes any disclosed evaluation content. */
-export type SiteInputFor<S extends DecisionSite> = S extends 'intake.classify' ? IntakeSiteInput : SiteInput;
+/** What `input.route` may propose; WORKSTREAM-CONTRACT.md fixes what each one does. */
+export type RouteOutcome = (typeof SITE_POLICY)['input.route']['options'][number];
+/** Input routing (#27) discloses one operator input and its workstream's active work; nothing else. */
+export type RouteState = {
+  readonly input: string;
+  readonly active_work: {
+    readonly summary: string;
+    readonly process: ProcessState | null;
+  };
+};
+export interface RouteSiteInput extends SiteInput {
+  readonly state: RouteState;
+}
+/** Intake takes IntakeState (#90), input routing RouteState; every other choice site any disclosed content. */
+export type SiteInputFor<S extends DecisionSite> = S extends 'intake.classify'
+  ? IntakeSiteInput
+  : S extends 'input.route'
+    ? RouteSiteInput
+    : SiteInput;
 export interface RecordedSiteAnswer {
   readonly state_revision: number;
   /** Injected reading at response receipt, never a provider's clock. */

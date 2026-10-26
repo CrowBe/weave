@@ -114,6 +114,18 @@ The currently viable set of weighted actions. It may contain several independent
 
 A causally related sequence of actions and observations within a goal. Threads may run concurrently, join, be superseded, or be cancelled. A thread is not an operating-system thread.
 
+### Workstream
+
+An independently addressable stream of conversation and work within one project. It pursues at most one active goal at a time and keeps, by reference, every goal it has pursued, the operator input observations addressed to it, and the artifact revisions its goals produced. A Thread stays inside one goal and so inside one workstream. A workstream is not a Thread and not a Weft `thread_id`. Project availability gives a workstream no context, capability access, disclosure or visibility. Opening one grants nothing and starts no work.
+
+### Operating process
+
+The explicit execution state of one workstream's work: `idle`, `running`, `waiting`, `paused`, `complete`, or `stopped`. Loom owns its transitions: a provider reports boundaries, the operator or policy requests a pause or a stop, and Tapestry only renders the state. It is not an operating-system process, a sandbox, an execution tier, or the conversation. A provider may back it with a worker, a container, or nothing at all while it is paused. A workstream has at most one live operating process and outlives every one. No operating process pauses or stops itself without a request, and resuming renews no grant, approval, reservation or budget.
+
+### Resume point
+
+The opaque reference and SHA-256 digest that a paused operating process keeps under Loom's custody, so its work can be inspected and resumed. Resuming must present the same digest. A resume point names no provider type and grants nothing.
+
 ## Intelligence and control
 
 ### State view
@@ -127,6 +139,14 @@ message relates to summaries of running threads: `new_thread`,
 `continue_thread`, `queue`, `steer`, `interrupt`, or `stop`. A deterministic
 confidence rule records the observation and returns `ask_user` / `needs_human`
 when uncertain. Classification grants no authority to execute or interrupt.
+
+### Input routing
+
+The `input.route` judgment site and the fixed meaning of its outcomes. When operator input reaches a workstream with active work, Loom decides how the input relates to that work: `conversation` (respond without changing the work), `steer` (the active goal's work reads it at its next boundary), `interrupt` (request a pause at the next boundary, then reconsider), `parallel` (open a new workstream for it), or `queue` (hold it until the current goal ends). Explicit operator direction decides first and never reaches the site. With no active work a rule decides `conversation`. An uncertain or unavailable answer asks the operator. The answer is an observation: it starts no work, attaches no goal, creates no grant, and never stops work. It does not replace intake classification.
+
+### Route correction
+
+The `input.route.correction@1` record made when the operator re-places a routed input. It holds the earlier outcome and who decided it, the corrected outcome, and the site's answer statistics, never input text. It is evaluation evidence for input routing. It changes no threshold and trains nothing.
 
 ### Judgment site
 
@@ -579,7 +599,7 @@ The principal that configures Weave locally, opens goals, and decides requests t
 
 ### Project
 
-The durable, presentation-independent record of what may be relevant to Loom: repositories, documents, artifacts, capability availability, history references, and goals over time. Loom holds it, so a headless invocation has it when Tapestry is absent. Availability is not a grant, not a slice fill, not disclosure, and not a reason to show the resource. A project is not an npm workspace, and it is not itself a goal.
+The durable, presentation-independent record of what may be relevant to Loom: repositories, documents, artifacts, capability availability, history references, and goals over time. Loom holds it, so a headless invocation has it when Tapestry is absent. Availability is not a grant, not a slice fill, not disclosure, and not a reason to show the resource. A project is not an npm workspace, and it is not itself a goal. Its independent streams of work are workstreams.
 
 ### Operator surface
 
@@ -717,6 +737,9 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 - Say **workspace**, not _dashboard_ or _mode_, for the adaptive operator surface. There is no chat, code, research, or agent mode.
 - Say **shell**, not _frame_ or _chrome_, for the fixed structure of a workspace. _Frame_ remains the name of framing: `profile.frame@1`, the `goal.frame` site, and the `framing` role.
 - Say **region**, not _slot_ or _coordinate_, for a semantic place in the shell. An execution slot is scheduler capacity.
+- Say **workstream**, not _thread_, for an independently addressable stream of conversation and work within a project. A Thread is a causally related sequence inside one goal.
+- Say **operating process**, not _process_ or _sandbox_, for a workstream's execution state. `process.spawn` remains an effect, and an execution tier is where code runs.
+- Say **`input.route`**, not _mode_ or _intent detection_, for the judgment site that proposes how operator input relates to active work. The operator never has to choose a mode.
 - Say **placement** for an operator's session-scoped assignment of a component to a region, and **pin** when that assignment is a hard constraint.
 - Say **cut-through**, not _modal_, for the region where a pending authority request stays visible.
 - Say **arrangement**, not _composition_ or _layout_, for an admitted assignment of components to adaptive regions. A composition is a capability assembled from capabilities.
