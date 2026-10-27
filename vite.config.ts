@@ -53,6 +53,8 @@ export default defineConfig({
           // LD_PRELOAD into every child process, which the shell.run@1 env-isolation test rightly
           // rejects, and its directory listings made a deleted __pycache__ a cache miss.
           input: [
+            // Root dotfiles such as `.npmrc` can change dependency resolution and verify behavior.
+            '.*',
             '*.json',
             '*.ts',
             '.github/**',
