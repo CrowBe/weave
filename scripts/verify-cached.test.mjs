@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,6 +40,10 @@ test('verify cache ignores removed Python cache directories but tracks source ch
     writeFileSync(join(dir, '.github', 'workflows', 'verify.yml'), 'name: changed\n');
     assert.equal(run(), 'run\nrun\nrun\n');
     assert.equal(run(), 'run\nrun\nrun\n');
+    writeFileSync(join(dir, '.npmrc'), 'fund=true\n');
+    assert.equal(run(), 'run\nrun\nrun\nrun\n');
+    writeFileSync(join(dir, '.tool-versions'), 'nodejs 22.18.0\n');
+    assert.equal(run(), 'run\nrun\nrun\nrun\nrun\n');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -55,3 +59,137 @@ test('CI runs lint and formatting as required gates', () => {
   assert.match(workflow, /run: npm run fmt:check\n/);
   assert.doesNotMatch(workflow, /continue-on-error|\|\| true/);
 });
+
+test('interrupted verify cache tasks are not cached as successful', async (t) => {
+  if (process.platform === 'win32') {
+    t.skip('process-group signals are unavailable on Windows');
+    return;
+  }
+
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    const dir = mkdtempSync(join(tmpdir(), `weave-verify-cache-${signal.toLowerCase()}-`));
+    let child;
+    let closed;
+    try {
+      symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'), 'dir');
+      writeFileSync(join(dir, 'package.json'), '{"name":"cache-interrupt-regression","private":true,"type":"module"}');
+      const config = readFileSync(join(root, 'vite.config.ts'), 'utf8')
+        .replace("command: 'npm run verify'", "command: 'node task.mjs'")
+        .replace("output: ['packages/*/dist/**']", 'output: []');
+      writeFileSync(join(dir, 'vite.config.ts'), config);
+      writeFileSync(
+        join(dir, 'task.mjs'),
+        `
+        import { appendFileSync, existsSync, writeFileSync } from 'node:fs';
+        appendFileSync('runs', 'run\\n');
+        if (!existsSync('started')) {
+          writeFileSync('started', 'yes');
+          process.once('SIGINT', () => process.exit(1));
+          process.once('SIGTERM', () => process.exit(1));
+          setInterval(() => {}, 1000);
+        }
+      `,
+      );
+      child = spawn(join(root, 'node_modules', '.bin', 'vp'), ['run', 'verify-cached'], {
+        cwd: dir,
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      closed = waitForClose(child);
+      await waitForFile(join(dir, 'started'));
+      process.kill(-child.pid, signal);
+      const result = await closed;
+      child = undefined;
+      assert.notEqual(result.code, 0, `${signal} unexpectedly completed successfully: ${result.output}`);
+
+      const rerun = spawnSync(join(root, 'node_modules', '.bin', 'vp'), ['run', 'verify-cached'], {
+        cwd: dir,
+        encoding: 'utf8',
+      });
+      assert.equal(rerun.status, 0, rerun.stdout + rerun.stderr);
+      assert.equal(readFileSync(join(dir, 'runs'), 'utf8'), 'run\nrun\n');
+      const cached = spawnSync(join(root, 'node_modules', '.bin', 'vp'), ['run', 'verify-cached'], {
+        cwd: dir,
+        encoding: 'utf8',
+      });
+      assert.equal(cached.status, 0, cached.stdout + cached.stderr);
+      assert.equal(readFileSync(join(dir, 'runs'), 'utf8'), 'run\nrun\n');
+    } finally {
+      if (child?.pid) {
+        try {
+          process.kill(-child.pid, 'SIGKILL');
+        } catch {}
+        await closed?.catch(() => {});
+      }
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('concurrent verify cache writers leave a reusable cache entry', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-verify-cache-concurrent-'));
+  try {
+    symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'), 'dir');
+    writeFileSync(join(dir, 'package.json'), '{"name":"cache-concurrent-regression","private":true,"type":"module"}');
+    const config = readFileSync(join(root, 'vite.config.ts'), 'utf8')
+      .replace("command: 'npm run verify'", "command: 'node task.mjs'")
+      .replace("output: ['packages/*/dist/**']", 'output: []');
+    writeFileSync(join(dir, 'vite.config.ts'), config);
+    writeFileSync(
+      join(dir, 'task.mjs'),
+      `
+      import { appendFileSync } from 'node:fs';
+      appendFileSync('runs', 'run\\n');
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    `,
+    );
+
+    const first = spawn(join(root, 'node_modules', '.bin', 'vp'), ['run', 'verify-cached'], {
+      cwd: dir,
+      stdio: 'pipe',
+    });
+    const second = spawn(join(root, 'node_modules', '.bin', 'vp'), ['run', 'verify-cached'], {
+      cwd: dir,
+      stdio: 'pipe',
+    });
+    const results = await Promise.all([waitForClose(first), waitForClose(second)]);
+    for (const result of results) assert.equal(result.code, 0, result.output);
+
+    const runsBeforeHit = existsSync(join(dir, 'runs')) ? readFileSync(join(dir, 'runs'), 'utf8') : '';
+    assert.ok(runsBeforeHit.length > 0, 'at least one concurrent task should execute');
+    const cached = spawnSync(join(root, 'node_modules', '.bin', 'vp'), ['run', 'verify-cached'], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+    assert.equal(cached.status, 0, cached.stdout + cached.stderr);
+    assert.equal(readFileSync(join(dir, 'runs'), 'utf8'), runsBeforeHit);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+function waitForFile(path, timeoutMs = 10_000) {
+  const startedAt = Date.now();
+  return new Promise((resolve, reject) => {
+    const poll = () => {
+      if (existsSync(path)) return resolve();
+      if (Date.now() - startedAt >= timeoutMs) return reject(new Error(`timed out waiting for ${path}`));
+      setTimeout(poll, 20);
+    };
+    poll();
+  });
+}
+
+function waitForClose(child) {
+  return new Promise((resolve, reject) => {
+    let output = '';
+    child.stdout?.setEncoding('utf8').on('data', (chunk) => {
+      output += chunk;
+    });
+    child.stderr?.setEncoding('utf8').on('data', (chunk) => {
+      output += chunk;
+    });
+    child.once('error', reject);
+    child.once('close', (code, signal) => resolve({ code, signal, output }));
+  });
+}
