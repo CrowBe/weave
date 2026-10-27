@@ -901,3 +901,41 @@ test('usage-less 429 retries stay charged at projection but are reported as rese
     assert.equal(after.observed_usd, observed + 0.002);
     assert.equal(after.reserved_usd, after.spent_usd - after.observed_usd);
   }));
+
+test('locked execution and resume do not repeatedly copy the full journal per item', async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), 'engine-index-'));
+  const { acquireLock } = await import('./journal.ts');
+  const release = acquireLock(dir);
+  try {
+    const journal = new Journal(join(dir, 'journal.jsonl'));
+    const read = t.mock.method(journal, 'read');
+    const entries = Array.from({ length: 12 }, (_, n) => ({ ...entry, item: { ...item, id: `item-${n}` } }));
+    let calls = 0;
+    const p = provider(async () => {
+      calls++;
+      return { status: 'ok', answers: {} };
+    });
+    const run = () => execute({ entries, providers: [p], journal, maxSpend: 2, ...clock });
+    await run();
+    await run();
+    assert.equal(calls, entries.length);
+    assert.ok(read.mock.callCount() <= 2, `full journal reads: ${read.mock.callCount()}`);
+  } finally {
+    release();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('render-only legacy binding requires an absent request digest, not null', async () => {
+  const { bindObservations } = await import('./observations.ts');
+  const { bindingFor } = await import('./binding.ts');
+  const p = provider(async () => ({ status: 'ok', answers: {} }));
+  const binding = bindingFor(p, entry, await buildRequest(entry.item));
+  const legacy = { ...binding, type: 'call', call_id: 'legacy', result: { status: 'ok', answers: {} }, terminal: true };
+  delete (legacy as { request_digest?: string }).request_digest;
+  const invalid = { ...legacy, request_digest: null, call_id: 'null' };
+  const result = await bindObservations([legacy, invalid], [p], [entry], true);
+  assert.equal(result.bound[0]?.call_id, 'legacy');
+  const nullOnly = await bindObservations([invalid], [p], [entry], true);
+  assert.equal(nullOnly.bound.length, 0);
+});

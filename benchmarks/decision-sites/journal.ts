@@ -48,9 +48,9 @@ export class Journal {
     const owner = this.owner(),
       path = resolve(this.path),
       cached = owner?.journals.get(path);
-    if (cached !== undefined) return cached;
+    if (cached !== undefined) return cached.rows;
     const rows = this.load();
-    owner?.journals.set(path, rows);
+    owner?.journals.set(path, new JournalIndex(rows));
     return rows;
   }
   private owner(): HeldLock | undefined {
@@ -112,14 +112,41 @@ export class Journal {
         closeSync(directory);
       }
       // Snapshot exactly what was persisted, including JSON normalization.
-      rows.push(JSON.parse(serialized) as JournalRecord);
+      const persisted = JSON.parse(serialized) as JournalRecord;
+      const index = this.owner()?.journals.get(resolve(this.path));
+      if (index) index.add(persisted);
+      else rows.push(persisted);
     } catch (error) {
       this.owner()?.journals.delete(resolve(this.path));
       throw error;
     }
   }
   spent(): number {
-    return ledger(this.rows()).spent_usd;
+    return this.index().spent;
+  }
+  private index(): JournalIndex {
+    const rows = this.rows();
+    return this.owner()?.journals.get(resolve(this.path)) ?? new JournalIndex(rows);
+  }
+  length(): number {
+    return this.rows().length;
+  }
+  recordsFor(key: string): JournalRecord[] {
+    return structuredClone(this.index().bindings.get(key) ?? []);
+  }
+  hasCall(id: unknown): boolean {
+    return this.index().calls.has(id);
+  }
+  competitorCalls(provider: string): number {
+    return this.index().competitor.get(provider) ?? 0;
+  }
+  budgetState(): { stopped: boolean; excess?: JournalRecord; projected?: number | undefined } {
+    const index = this.index();
+    const excess = index.excess();
+    return {
+      stopped: index.stopped,
+      ...(excess ? { excess: structuredClone(excess), projected: index.reservations.get(excess.call_id) } : {}),
+    };
   }
 }
 /**
@@ -156,9 +183,87 @@ export function ledger(rows: readonly JournalRecord[]): {
   }
   return { spent_usd: total, observed_usd: observed, reserved_usd: total - observed, pending_reservation_usd: pending };
 }
+/** Derived solely from persisted rows; shared only while the local writer lock is held. */
+class JournalIndex {
+  readonly rows: JournalRecord[] = [];
+  readonly bindings = new Map<string, JournalRecord[]>();
+  readonly calls = new Set<unknown>();
+  readonly reservations = new Map<unknown, number>();
+  readonly competitor = new Map<string, number>();
+  readonly byId = new Map<unknown, { intents: JournalRecord[]; calls: JournalRecord[] }>();
+  stopped = false;
+  spent = 0;
+  private excessive: JournalRecord | undefined;
+  private beforeLast = 0;
+  constructor(rows: JournalRecord[]) {
+    for (const row of rows) this.add(row);
+  }
+  private dispatch(group: { intents: JournalRecord[]; calls: JournalRecord[] }): Map<string, number> {
+    const result = new Map<string, number>();
+    const uncalled = group.calls.some(
+      (r) =>
+        r.result &&
+        ((r.result.status !== 'ok' && (r.result.reason === 'cancelled' || r.result.reason === 'not_sent')) ||
+          (r.result.status === 'skipped' && r.result.reason === 'quota_unavailable_or_weekly_cap')),
+    );
+    const dispatched = group.calls
+      .filter((r) => Number.isSafeInteger(r.result?.dispatches) && r.result.dispatches >= 0)
+      .at(-1)?.result.dispatches;
+    if (!uncalled)
+      for (const r of group.intents)
+        result.set(r.provider, (result.get(r.provider) ?? 0) + (dispatched ?? r.dispatch_reservation ?? 1));
+    return result;
+  }
+  add(row: JournalRecord): void {
+    const previousRow = this.rows.at(-1),
+      oldSpent = this.spent;
+    this.rows.push(row);
+    const key = replayKey(row),
+      group = this.bindings.get(key) ?? [];
+    group.push(row);
+    this.bindings.set(key, group);
+    if (row.type === 'budget_stop' && row.reason === 'actual_cost_exceeds_projection') this.stopped = true;
+    if (row.type !== 'intent' && row.type !== 'call') {
+      this.beforeLast = oldSpent;
+      return;
+    }
+    const id = row.call_id,
+      prior = this.byId.get(id) ?? { intents: [], calls: [] };
+    const before = this.dispatch(prior),
+      hadCalls = prior.calls.length > 0,
+      hadIntents = prior.intents.length;
+    if (row.type === 'intent') {
+      prior.intents.push(row);
+      this.reservations.set(id, row.projected_usd);
+    } else {
+      prior.calls.push(row);
+      this.calls.add(id);
+    }
+    this.byId.set(id, prior);
+    if (row.type === 'call' && !this.excessive && row.cost_usd > this.reservations.get(id)!) this.excessive = row;
+    if (row.type === 'intent' && prior.calls.length)
+      this.excessive = this.rows.find((r) => r.type === 'call' && r.cost_usd > this.reservations.get(r.call_id)!);
+    if (row.type === 'intent' && !hadCalls) this.spent += row.projected_usd ?? 0;
+    else if (row.type === 'call' && !hadCalls) {
+      if (!hadIntents) this.spent += row.cost_usd ?? 0;
+      else if (hadIntents === 1 && previousRow === prior.intents[0]) this.spent = this.beforeLast + (row.cost_usd ?? 0);
+      else this.spent = ledger(this.rows).spent_usd;
+    }
+    this.beforeLast = oldSpent;
+    const after = this.dispatch(prior);
+    for (const provider of new Set([...before.keys(), ...after.keys()]))
+      this.competitor.set(
+        provider,
+        (this.competitor.get(provider) ?? 0) + (after.get(provider) ?? 0) - (before.get(provider) ?? 0),
+      );
+  }
+  excess(): JournalRecord | undefined {
+    return this.excessive;
+  }
+}
 interface HeldLock {
   nonce: string;
-  journals: Map<string, JournalRecord[]>;
+  journals: Map<string, JournalIndex>;
 }
 const heldLocks = new Map<string, HeldLock>();
 function lockHost(): string | undefined {
