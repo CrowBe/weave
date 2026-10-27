@@ -14,13 +14,14 @@
  * `runBounded` loop below, so neither operation can drift from the other's
  * accounting.
  */
-import { bindDecisionProvider, type DecisionConfig } from './config.js';
+import { bindDecisionProvider, validRateLimit, type DecisionConfig } from './config.js';
 import { budgetRoute } from './budget.js';
 import { priceAttempt, worstCaseCost, type RouteExclusion } from './routing.js';
 import { containsCredentialContent, trainingAllowedDestinations } from './privacy.js';
 import { GatewayWeft, type RequestWeft, type WeftPort } from './weft.js';
 import {
   answersMatchQuestions,
+  BILLINGS,
   nonEmptyText,
   TIERS,
   CONTENT_CLASSES,
@@ -116,11 +117,34 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
     if (!pool.has(unit.adapter)) {
       throw new Error(`routed unit '${unit.routed_unit_id}' names unknown ${unit.operation} adapter '${unit.adapter}'`);
     }
+    if (unit.billing === undefined) {
+      throw new Error(`routed unit '${unit.routed_unit_id}' must declare billing`);
+    }
+    if (!BILLINGS.includes(unit.billing)) {
+      throw new Error(`routed unit '${unit.routed_unit_id}' declares unknown billing`);
+    }
+    if (unit.billing === 'subscription' && unit.quota_provider === undefined) {
+      throw new Error(`routed unit '${unit.routed_unit_id}' declares subscription billing without quota_provider`);
+    }
+    // parseRouteConfig validates the document form; a hand-built table gets the
+    // same rule here, so pacing and retry timing never see an invalid limit.
+    if (unit.rate_limits !== undefined) {
+      if (!Array.isArray(unit.rate_limits)) {
+        throw new Error(`routed unit '${unit.routed_unit_id}' declares rate_limits that are not an array`);
+      }
+      unit.rate_limits.forEach((limit: unknown, i) => {
+        if (!validRateLimit(limit)) {
+          throw new Error(
+            `routed unit '${unit.routed_unit_id}' declares an invalid rate_limits[${i}]: expected positive integer requests, positive finite window_ms, optional positive integer tokens and optional boolean pace`,
+          );
+        }
+      });
+    }
   }
   const minEvidence = config.min_evidence_attempts ?? DEFAULT_MIN_EVIDENCE_ATTEMPTS;
   // Paced limits are the one state shared across calls: concurrent callers
   // must see each other's requests to be spaced at all.
-  const pacing: PaceHistory = new Map();
+  const pacing: PaceState = { history: new Map(), queues: new Map() };
   const weft = config.weft ? new GatewayWeft(config.weft) : undefined;
 
   return {
@@ -366,7 +390,7 @@ interface BoundedParams<T> {
   readonly clock: Clock;
   readonly timer: Timer | undefined;
   readonly signal: AbortSignal | undefined;
-  readonly pacing: PaceHistory;
+  readonly pacing: PaceState;
   readonly routes: RouteTable;
   readonly minEvidence: number;
   readonly target: RouteTarget;
@@ -393,7 +417,17 @@ async function traced<T>(
   }
 }
 
+/** A request's place in the paced queue is released however the request ends. */
 async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
+  const waiter: PaceWaiter = { unit: undefined, tokens: 0 };
+  try {
+    return await runBoundedLoop(params, waiter);
+  } finally {
+    leavePaceQueue(params.pacing, waiter);
+  }
+}
+
+async function runBoundedLoop<T>(params: BoundedParams<T>, waiter: PaceWaiter): Promise<Bounded<T>> {
   const { clock, terms } = params;
   const perRoute = terms.max_attempts_per_route ?? DEFAULT_MAX_ATTEMPTS_PER_ROUTE;
   const attempts: AttemptRecord[] = [];
@@ -474,11 +508,25 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
     // A paced limit holds the request until it fits. The wait spends deadline,
     // so signal, deadline, budget gate and routing run again after it. When the
     // gateway cannot wait, the request goes now and a refusal governs as before.
-    const pace = paceDelay(params.pacing, unit, terms, clock.now());
+    // Waiters keep their arrival order on a unit: an earlier one is owed the
+    // next slot, so a later request waits behind it rather than taking it.
+    if (waiter.unit !== unit.routed_unit_id) leavePaceQueue(params.pacing, waiter);
+    const pace = paceDelay(params.pacing, unit, terms, clock.now(), waiter);
     if (pace > 0) {
       if (Number.isFinite(pace) && params.timer !== undefined && clock.now() + pace < terms.deadline) {
+        joinPaceQueue(params.pacing, waiter, unit, terms);
+        // A waiter ahead that leaves frees its slot early: it nudges this wait
+        // to recheck, which is a recheck and never a cancellation.
+        const nudge = new AbortController();
+        waiter.nudge = () => nudge.abort();
         const before = clock.now();
-        if (await sleepInterrupted(params.timer, pace, params.signal)) {
+        const interrupted = await sleepInterrupted(
+          params.timer,
+          pace,
+          params.signal === undefined ? nudge.signal : AbortSignal.any([params.signal, nudge.signal]),
+        );
+        waiter.nudge = undefined;
+        if (params.signal?.aborted || (interrupted && !nudge.signal.aborted)) {
           return finish({ status: 'unaccepted', reason: 'provider_failed' });
         }
         waitedMs += Math.max(0, clock.now() - before);
@@ -492,6 +540,7 @@ async function runBounded<T>(params: BoundedParams<T>): Promise<Bounded<T>> {
             : `${unit.routed_unit_id}: pacing wait of ${Math.round(pace)}ms would pass the deadline; sent without waiting`,
       );
     }
+    leavePaceQueue(params.pacing, waiter);
     const paced = reservePace(params.pacing, unit, terms, clock.now());
     const worstCase = worstCaseCost(unit, terms);
     consumed.set(unit.routed_unit_id, (consumed.get(unit.routed_unit_id) ?? 0) + 1);
@@ -877,55 +926,115 @@ async function sleepInterrupted(timer: Timer, ms: number, signal: AbortSignal | 
   return signal?.aborted === true;
 }
 
-/** Requests started on each routed unit with a paced limit, newest last. */
-type PaceHistory = Map<RoutedUnitId, { readonly at: Timestamp; tokens: number }[]>;
+interface PaceStart {
+  readonly at: Timestamp;
+  tokens: number;
+}
+
+/** A request waiting on a paced unit, at its worst-case tokens. */
+interface PaceWaiter {
+  unit: RoutedUnitId | undefined;
+  tokens: number;
+  /** Interrupts the current wait so the waiter rechecks its place. */
+  nudge?: (() => void) | undefined;
+}
+
+/**
+ * Paced state shared by every request through one gateway: the requests
+ * started on each routed unit (newest last) and the requests waiting on it
+ * (earliest arrival first).
+ */
+interface PaceState {
+  readonly history: Map<RoutedUnitId, PaceStart[]>;
+  readonly queues: Map<RoutedUnitId, PaceWaiter[]>;
+}
 
 function pacedLimits(unit: RoutedUnit): readonly RateLimit[] {
   return (unit.rate_limits ?? []).filter((limit) => limit.pace === true);
 }
 
 /** Started requests still inside the unit's longest paced window. */
-function recentStarts(history: PaceHistory, unit: RoutedUnit, limits: readonly RateLimit[], now: Timestamp) {
+function recentStarts(state: PaceState, unit: RoutedUnit, limits: readonly RateLimit[], now: Timestamp) {
   const window = Math.max(...limits.map((limit) => limit.window_ms));
-  const kept = (history.get(unit.routed_unit_id) ?? []).filter((start) => start.at > now - window);
-  history.set(unit.routed_unit_id, kept);
+  const kept = (state.history.get(unit.routed_unit_id) ?? []).filter((start) => start.at > now - window);
+  state.history.set(unit.routed_unit_id, kept);
   return kept;
 }
 
 /**
- * How long until one more request on this unit fits every paced limit: zero
- * when it fits now, Infinity when its worst-case tokens alone exceed a paced
- * budget. A started request counts until a full window has passed since it.
+ * The earliest time at or after `now` that one more request of `tokens` fits
+ * every paced limit after `starts` (ordered by time): Infinity when its tokens
+ * alone exceed a paced budget. A start counts until a full window has passed.
  */
-function paceDelay(history: PaceHistory, unit: RoutedUnit, terms: InferenceTerms, now: Timestamp): number {
-  const limits = pacedLimits(unit);
-  if (limits.length === 0) return 0;
-  const started = recentStarts(history, unit, limits, now);
-  const tokens = terms.max_context_tokens + unit.settings.max_output_tokens;
+function fitTime(starts: readonly PaceStart[], limits: readonly RateLimit[], tokens: number, now: Timestamp): number {
   let fits = now;
   for (const limit of limits) {
-    if (started.length >= limit.requests) {
-      fits = Math.max(fits, started[started.length - limit.requests]!.at + limit.window_ms);
+    if (starts.length >= limit.requests) {
+      fits = Math.max(fits, starts[starts.length - limit.requests]!.at + limit.window_ms);
     }
     if (limit.tokens === undefined) continue;
     if (tokens > limit.tokens) return Infinity;
     let used = tokens;
-    for (let i = started.length - 1; i >= 0; i--) {
-      used += started[i]!.tokens;
+    for (let i = starts.length - 1; i >= 0; i--) {
+      used += starts[i]!.tokens;
       if (used > limit.tokens) {
-        fits = Math.max(fits, started[i]!.at + limit.window_ms);
+        fits = Math.max(fits, starts[i]!.at + limit.window_ms);
         break;
       }
     }
   }
-  return fits - now;
+  return fits;
+}
+
+/**
+ * How long until this request fits every paced limit on the unit: zero when
+ * it fits now, Infinity when its worst-case tokens alone exceed a paced
+ * budget. Each waiter queued ahead of it is first given its own slot, in
+ * arrival order, as if it had started then; a waiter that can never fit
+ * would be sent at once and takes no slot here.
+ */
+function paceDelay(
+  state: PaceState,
+  unit: RoutedUnit,
+  terms: InferenceTerms,
+  now: Timestamp,
+  waiter: PaceWaiter,
+): number {
+  const limits = pacedLimits(unit);
+  if (limits.length === 0) return 0;
+  const starts: PaceStart[] = [...recentStarts(state, unit, limits, now)];
+  for (const ahead of state.queues.get(unit.routed_unit_id) ?? []) {
+    if (ahead === waiter) break;
+    const at = fitTime(starts, limits, ahead.tokens, Math.max(now, starts.at(-1)?.at ?? now));
+    if (Number.isFinite(at)) starts.push({ at, tokens: ahead.tokens });
+  }
+  const tokens = terms.max_context_tokens + unit.settings.max_output_tokens;
+  return fitTime(starts, limits, tokens, Math.max(now, starts.at(-1)?.at ?? now)) - now;
+}
+
+/** Hold a place on the unit; a waiter keeps its first place across wakes. */
+function joinPaceQueue(state: PaceState, waiter: PaceWaiter, unit: RoutedUnit, terms: InferenceTerms) {
+  waiter.tokens = terms.max_context_tokens + unit.settings.max_output_tokens;
+  if (waiter.unit === unit.routed_unit_id) return;
+  waiter.unit = unit.routed_unit_id;
+  state.queues.set(unit.routed_unit_id, [...(state.queues.get(unit.routed_unit_id) ?? []), waiter]);
+}
+
+/** Give up a place, and let every waiter still queued recheck its own. */
+function leavePaceQueue(state: PaceState, waiter: PaceWaiter) {
+  if (waiter.unit === undefined) return;
+  const rest = (state.queues.get(waiter.unit) ?? []).filter((w) => w !== waiter);
+  if (rest.length === 0) state.queues.delete(waiter.unit);
+  else state.queues.set(waiter.unit, rest);
+  waiter.unit = undefined;
+  for (const behind of rest) behind.nudge?.();
 }
 
 /** Record a request as started, at its worst-case tokens until usage is reported. */
-function reservePace(history: PaceHistory, unit: RoutedUnit, terms: InferenceTerms, now: Timestamp) {
+function reservePace(state: PaceState, unit: RoutedUnit, terms: InferenceTerms, now: Timestamp) {
   if (pacedLimits(unit).length === 0) return undefined;
   const start = { at: now, tokens: terms.max_context_tokens + unit.settings.max_output_tokens };
-  history.set(unit.routed_unit_id, [...(history.get(unit.routed_unit_id) ?? []), start]);
+  state.history.set(unit.routed_unit_id, [...(state.history.get(unit.routed_unit_id) ?? []), start]);
   return start;
 }
 

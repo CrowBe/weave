@@ -38,7 +38,12 @@ const MISSES = 'boolean.task@amos-small';
 /** Not named by the set; keeps its configured evidence. */
 const LOCAL = 'boolean.task@kev-local';
 
-const unit = (id: string, destination: string, extra: Partial<RoutedUnit> = {}): RoutedUnit =>
+const unit = (
+  id: string,
+  destination: string,
+  billing: RoutedUnit['billing'],
+  extra: Partial<RoutedUnit> = {},
+): RoutedUnit =>
   ({
     routed_unit_id: id,
     operation: 'evaluate',
@@ -51,6 +56,7 @@ const unit = (id: string, destination: string, extra: Partial<RoutedUnit> = {}):
     prompt_template_version: 1,
     settings: { max_output_tokens: 10 },
     destination,
+    billing,
     quality: 'high',
     context_limit_tokens: 1000,
     price: { input_per_mtok: 1000, output_per_mtok: 1000 },
@@ -58,10 +64,10 @@ const unit = (id: string, destination: string, extra: Partial<RoutedUnit> = {}):
   }) as RoutedUnit;
 
 const TABLE: RouteTable = [
-  unit(MISSES, 'vendor', { evidence: { attempts: 100, accepted: 100 } }),
-  unit(SECOND, 'vendor'),
-  unit(LOCAL, 'local', { evidence: { attempts: 50, accepted: 25 } }),
-  unit(PREFERRED, 'contrib', { destination_training_allowed: true }),
+  unit(MISSES, 'vendor', 'metered', { evidence: { attempts: 100, accepted: 100 } }),
+  unit(SECOND, 'vendor', 'metered'),
+  unit(LOCAL, 'local', 'local', { evidence: { attempts: 50, accepted: 25 } }),
+  unit(PREFERRED, 'contrib', 'metered', { destination_training_allowed: true }),
 ];
 const TARGET = { operation: 'evaluate', kind: 'boolean' } as const;
 const terms = (overrides: Partial<InferenceTerms> = {}): InferenceTerms => ({
@@ -191,8 +197,8 @@ test('an entry without a decided verdict earns no preference, whatever its inter
   const entry = SET.entries.find((e) => e.routed_unit === UNDECIDED)!;
   assert.equal(entry.verdict, 'insufficient_evidence');
   const table: RouteTable = [
-    unit(UNDECIDED, 'vendor', { evidence: { attempts: 100, accepted: 100 } }),
-    unit(SECOND, 'vendor'),
+    unit(UNDECIDED, 'vendor', 'metered', { evidence: { attempts: 100, accepted: 100 } }),
+    unit(SECOND, 'vendor', 'metered'),
   ];
   const [undecided] = applyPreferences(table, SET);
   assert.equal(undecided!.evidence, undefined, 'insufficient_evidence never becomes routing evidence');
@@ -226,7 +232,7 @@ test('a meets_bar entry with a zero-width accept interval is refused, never cred
   const missed = { ...set, entries: set.entries.map((e, i) => (i === misses ? pinned(e, [0.7, 0.7]) : e)) };
   assert.equal(loadPreferenceSet(missed).ok, true, 'a zero-width accept interval on a misses_bar entry');
   // A set built without the loader still earns no evidence from it.
-  const table: RouteTable = [unit(PREFERRED, 'vendor', { evidence: { attempts: 100, accepted: 100 } })];
+  const table: RouteTable = [unit(PREFERRED, 'vendor', 'metered', { evidence: { attempts: 100, accepted: 100 } })];
   assert.equal(applyPreferences(table, zeroWidth as PreferenceSet)[0]!.evidence, undefined);
 });
 
@@ -292,7 +298,9 @@ test('a preference cannot route around budget policy', async () => {
       },
     ],
   };
-  const table = TABLE.map((u) => (u.routed_unit_id === PREFERRED ? { ...u, quota_provider: 'contrib-account' } : u));
+  const table = TABLE.map((u) =>
+    u.routed_unit_id === PREFERRED ? { ...u, billing: 'subscription' as const, quota_provider: 'contrib-account' } : u,
+  );
   const decision = budgetRoute(applyPreferences(table, SET), TARGET, terms(), 20, undefined, capped, 100);
   assert.equal(reasonFor(decision.excluded, PREFERRED), 'weekly_budget_cap');
   assert.deepEqual(ids(decision.order), [SECOND, LOCAL, MISSES]);

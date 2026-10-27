@@ -149,6 +149,7 @@ const UNIT_DEFAULTS = {
   model: 'fake/model',
   settings: { max_output_tokens: 1_000 },
   destination: PERMITTED,
+  billing: 'metered',
   quality: 'baseline',
   context_limit_tokens: 100_000,
   // 1 micro per Mtok in and out: a 1k/500 attempt costs 0.0015 micros.

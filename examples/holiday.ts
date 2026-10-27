@@ -49,6 +49,7 @@ function holidayRoute(
     model,
     settings: { max_output_tokens: 600 },
     destination: VERCEL_AI_GATEWAY_DESTINATION,
+    billing: 'metered',
     quality,
     context_limit_tokens: contextLimit,
     price,

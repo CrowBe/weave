@@ -168,7 +168,8 @@ Run the opt-in local intake probe after building:
 `npm run example:vercel-free` reads `AI_GATEWAY_API_KEY` only at the composition
 root. It uses the existing AI SDK `createGateway` + `generateText` path, checks a
 fresh key-free `/v1/models` catalogue before each attempt, and requires reported
-zero response cost. The five verified IDs are exported as
+zero response cost: every field named like `cost` in the response's provider
+metadata or raw usage, including one added later, must be zero. The five verified IDs are exported as
 `VERCEL_AI_GATEWAY_FREE_MODELS`; Laguna's known expiry is 2026-10-31T00:00Z.
 Unknown, missing, priced, provider-dependent or expired entries fail closed.
 Callers injecting a catalogue snapshot are responsible for its freshness.

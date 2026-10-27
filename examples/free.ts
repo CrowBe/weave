@@ -59,6 +59,7 @@ const SHARED = {
   prompt_template_version: 1,
   settings: { max_output_tokens: 700 },
   quality: 'baseline',
+  billing: 'metered',
 } as const;
 
 // Free routes are priced at zero, so both are affordable under any ceiling

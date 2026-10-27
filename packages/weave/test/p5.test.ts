@@ -171,7 +171,7 @@ const routed: RoutedUnit = {
   operation: 'evaluate', kind: 'choice', tier: 'decision', routed_unit_id: 'decision.fixture',
   adapter: 'fake', model: 'fixture', context_profile: 'none', context_profile_version: 1,
   prompt_template: 'none', prompt_template_version: 1, settings: { max_output_tokens: 1 },
-  destination: 'local', quality: 'baseline', context_limit_tokens: 1000,
+  destination: 'local', billing: 'local', quality: 'baseline', context_limit_tokens: 1000,
   price: { input_per_mtok: 0, output_per_mtok: 0 },
 };
 for (const mode of ['normal', 'refusal', 'unavailable'] as const) {
@@ -357,7 +357,7 @@ test('Amos unavailable makes intake ask_user without calling TypeSafe', async ()
   const { amosEvaluator } = await import('@weave/gateway/amos');
   const unit: RoutedUnit = {
     routed_unit_id: 'amos.choice', adapter: 'amos', model: 'amos-1-2b', operation: 'evaluate', kind: 'choice',
-    destination: 'local', quality: 'baseline', context_profile: 'decision', context_profile_version: 1,
+    destination: 'local', billing: 'local', quality: 'baseline', context_profile: 'decision', context_profile_version: 1,
     prompt_template: 'decision.choice', prompt_template_version: 1, settings: { max_output_tokens: 256 },
     context_limit_tokens: 1000, price: { input_per_mtok: 0, output_per_mtok: 0 },
   };

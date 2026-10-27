@@ -286,6 +286,7 @@ describe('Amos local decision contract', () => {
       operation: 'evaluate',
       kind: 'choice',
       destination: 'local',
+      billing: 'local',
       quality: 'baseline',
       context_profile: 'decision',
       context_profile_version: 1,

@@ -140,6 +140,7 @@ export function localGenerateUnit(overrides: { routed_unit_id: string; adapter?:
     model: 'fixture/framer',
     settings: { max_output_tokens: 256 },
     destination: LOCAL_DESTINATION,
+    billing: 'local',
     quality: 'baseline',
     context_limit_tokens: 8_000,
     price: { input_per_mtok: 1, output_per_mtok: 1 },
@@ -163,6 +164,7 @@ export function localEvaluateUnit(overrides: {
     model: 'fixture/weigher',
     settings: { max_output_tokens: 256 },
     destination: overrides.destination ?? LOCAL_DESTINATION,
+    billing: 'local',
     quality: 'baseline',
     context_limit_tokens: 8_000,
     price: { input_per_mtok: 1, output_per_mtok: 1 },
@@ -171,11 +173,14 @@ export function localEvaluateUnit(overrides: {
 }
 
 export function hostedEvaluateUnit(overrides: { routed_unit_id: string; adapter?: string }): RoutedUnit {
-  return localEvaluateUnit({
-    routed_unit_id: overrides.routed_unit_id,
-    adapter: overrides.adapter ?? 'fixture.hosted',
-    destination: HOSTED_DESTINATION,
-  });
+  return {
+    ...localEvaluateUnit({
+      routed_unit_id: overrides.routed_unit_id,
+      adapter: overrides.adapter ?? 'fixture.hosted',
+      destination: HOSTED_DESTINATION,
+    }),
+    billing: 'metered',
+  };
 }
 
 export function fixtureGateway(options: {

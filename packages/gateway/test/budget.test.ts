@@ -13,6 +13,7 @@ import {
 const unit: RoutedUnit = {
   routed_unit_id: 'strong.codex',
   tier: 'strong',
+  billing: 'subscription',
   quota_provider: 'codex',
   operation: 'generate',
   kind: 'transform',

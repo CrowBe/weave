@@ -43,6 +43,7 @@ const unit = (id: string, model: string, max_output_tokens = 256): RoutedUnit =>
   model,
   settings: { max_output_tokens },
   destination: NOUS_PORTAL_DESTINATION,
+  billing: 'metered',
   destination_training_allowed: true,
   quality: 'baseline',
   context_limit_tokens: 1000,

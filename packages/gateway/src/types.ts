@@ -87,6 +87,15 @@ export type ContentClass = (typeof CONTENT_CLASSES)[number];
 export const TIERS = ['decision', 'flash', 'standard', 'strong'] as const;
 export type Tier = (typeof TIERS)[number];
 
+/**
+ * How a routed unit is paid for. `subscription` draws on a whole-account plan
+ * allowance and must name its `quota_provider`, so the weekly cap reaches it;
+ * `metered` is billed per use and bounded by the cost ceiling; `local` runs on
+ * the operator's own hardware. A zero token price cannot tell these apart.
+ */
+export const BILLINGS = ['subscription', 'metered', 'local'] as const;
+export type Billing = (typeof BILLINGS)[number];
+
 export type ProviderStatus = 'available' | 'exhausted' | 'auth_required' | 'unavailable';
 /** Caller-supplied status keyed by exact routed-unit adapter ids, not provider
  * or destination ids. The composition root must map quota-provider ids to adapters.
@@ -323,6 +332,14 @@ export interface TokenPrice {
  * request's worst case exceeds the budget, the request is sent at once and the
  * provider's refusal governs as before. Pacing counts this gateway's requests
  * on this unit only, not other processes or other units sharing the limit.
+ * Requests waiting on a unit are served in arrival order: a later request
+ * waits behind an earlier one rather than taking the slot it is owed, and a
+ * waiter that leaves (cancelled, rerouted or out of deadline) lets those
+ * behind it recheck at once.
+ *
+ * `requests` is a positive integer, `window_ms` positive and finite, `tokens`
+ * a positive integer when present. `parseRouteConfig` and
+ * `createInferenceGateway` both reject any other shape.
  */
 export interface RateLimit {
   readonly requests: number;
@@ -340,7 +357,15 @@ export interface RouteEvidence {
 }
 
 export interface RoutedUnitBase {
-  /** Whole-account quota-axi provider id; independent of adapter and destination. */
+  /**
+   * Required with no default: zero price alone does not identify the billing
+   * boundary, and the gateway rejects a route that omits it.
+   */
+  readonly billing: Billing;
+  /**
+   * Whole-account quota-axi provider id; independent of adapter and
+   * destination. Required with `billing: 'subscription'`.
+   */
   readonly quota_provider?: string;
   readonly tier?: Tier;
   readonly routed_unit_id: RoutedUnitId;

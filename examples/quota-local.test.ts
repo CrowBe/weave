@@ -57,6 +57,7 @@ test('quota normalization preserves account totals and source timestamps', () =>
 const strong: RoutedUnit = {
   routed_unit_id: 'strong',
   tier: 'strong',
+  billing: 'subscription',
   quota_provider: 'claude',
   operation: 'generate',
   kind: 'transform',

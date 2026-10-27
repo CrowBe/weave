@@ -30,6 +30,7 @@ if (!apiKey || apiKey.trim().length === 0) {
       prompt_template: 'example',
       prompt_template_version: 1,
       destination: VERCEL_AI_GATEWAY_FREE_DESTINATION,
+      billing: 'metered',
       destination_training_allowed: true,
       settings: { max_output_tokens: 1024 },
       context_limit_tokens: 1024,

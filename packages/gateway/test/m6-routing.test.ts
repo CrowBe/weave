@@ -70,7 +70,7 @@ function unreported(): GenerationProviderResult {
 }
 
 function unit(
-  overrides: Partial<GenerateUnit> & Pick<GenerateUnit, 'routed_unit_id' | 'destination' | 'price'>,
+  overrides: Partial<GenerateUnit> & Pick<GenerateUnit, 'routed_unit_id' | 'destination' | 'price' | 'billing'>,
 ): GenerateUnit {
   return {
     operation: 'generate',
@@ -92,12 +92,14 @@ function unit(
 const strong = unit({
   routed_unit_id: 'route.strong',
   destination: 'local',
+  billing: 'local',
   price: { input_per_mtok: 5_000_000, output_per_mtok: 25_000_000 },
 });
 
 const cheap = unit({
   routed_unit_id: 'route.cheap',
   destination: 'hosted.cheap',
+  billing: 'metered',
   price: { input_per_mtok: 3_000_000, output_per_mtok: 15_000_000 },
 });
 
@@ -172,6 +174,7 @@ describe('M6 prefix cache', () => {
     const baseline = unit({
       routed_unit_id: 'route.baseline',
       destination: 'hosted.cheap',
+      billing: 'metered',
       quality: 'baseline',
       price: { input_per_mtok: 1, output_per_mtok: 1 },
       settings: { max_output_tokens: 100 },

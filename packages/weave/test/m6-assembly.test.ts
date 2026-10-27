@@ -60,6 +60,7 @@ function unit(id: string, destination: string): RoutedUnit {
     model: id,
     settings: { max_output_tokens: 100 },
     destination,
+    billing: destination === 'local' ? 'local' : 'metered',
     quality: 'high',
     context_limit_tokens: 8_000,
     price:

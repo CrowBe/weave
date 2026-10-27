@@ -339,6 +339,8 @@ suppresses an attempt. When the gateway has no timer, when the wait would pass
 the deadline, or when one request could never fit, the request is sent at once
 and a refusal is handled as above. Pacing sees only one gateway's requests on
 one routed unit; traffic from other processes or other units is not counted.
+Requests waiting on a unit are served in arrival order, so a newcomer cannot
+take a freed slot from an earlier waiter and starve it until its deadline.
 
 Inference on the operator's own hardware is a routed unit like any other, and
 deliberately so: it earns no exemption from accounting, acceptance or the
@@ -352,6 +354,16 @@ mechanism layered beside it — and it is correspondingly hard to lose by
 accident, since adding a hosted fallback to the table does not weaken it. Such
 a route is priced at a real zero rather than left unpriced, so it remains
 affordable under an exhausted ceiling while still being accounted.
+
+Price alone does not say how a route is paid for: a zero describes a local
+route, a promotional one, an unpriced placeholder and a subscription plan
+alike. Every routed unit therefore declares its billing as `subscription`,
+`metered` or `local`, with no default. A metered route answers to the cost
+ceiling. A subscription route draws on a whole-account allowance that other
+work also spends, so it must name the account it draws on; the budget gate's
+weekly cap is enforced against that account's total, and a subscription route
+without the mapping is refused as configuration rather than dispatched outside
+the cap.
 
 Record and account for every attempt, including malformed responses and failures,
 independently of whether its judgment is accepted. Slow inference cannot block

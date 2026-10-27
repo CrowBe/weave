@@ -54,6 +54,7 @@ const decisionUnit: RoutedUnit = {
   prompt_template_version: 1,
   settings: { max_output_tokens: 1 },
   destination: 'local',
+  billing: 'local',
   quality: 'baseline',
   context_limit_tokens: 1_000_000,
   price: { input_per_mtok: 0, output_per_mtok: 0 },
@@ -80,6 +81,7 @@ function replayGateway() {
     ...decisionUnit,
     routed_unit_id: 'strong.fake',
     tier: 'strong',
+    billing: 'subscription',
     quota_provider: 'fake',
     operation: 'generate',
     kind: 'judge',
@@ -769,6 +771,7 @@ test('ahead pace through the real gateway pauses the audit instead of a standard
   const unit: RoutedUnit = {
     routed_unit_id: 'strong.codex',
     tier: 'strong',
+    billing: 'subscription',
     quota_provider: 'codex',
     operation: 'generate',
     kind: 'judge',

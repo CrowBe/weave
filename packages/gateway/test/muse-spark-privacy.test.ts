@@ -30,6 +30,7 @@ const ROUTE: RoutedUnit = {
   model: MUSE_SPARK_PRIMARY_MODEL,
   settings: MUSE_SPARK_DEFAULT_SETTINGS,
   destination: MUSE_SPARK_DESTINATION,
+  billing: 'metered',
   destination_training_allowed: true,
   quality: 'baseline',
   context_limit_tokens: 100,
