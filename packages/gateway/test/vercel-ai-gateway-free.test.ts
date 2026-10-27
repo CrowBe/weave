@@ -72,6 +72,7 @@ const primary: RoutedUnit = {
   model: PRIMARY,
   settings: call.settings,
   destination: 'vercel-ai-gateway-free',
+  billing: 'metered',
   destination_training_allowed: true,
   quality: 'baseline',
   context_limit_tokens: 100,
@@ -699,6 +700,8 @@ describe('Vercel promotional free contract', () => {
       { gateway: { ...zeroGateway, upstreamInferenceCost: null } },
       undefined,
     ],
+    ['empty object under a cost key', { gateway: { ...zeroGateway, futureCost: {} } }, undefined],
+    ['empty array under a cost key', { gateway: { ...zeroGateway, futureCost: [] } }, undefined],
   ] as const) {
     it(`refuses a free response with nonzero cost evidence: ${name} (#227)`, async () => {
       const result = await adapter(async () => {
@@ -728,6 +731,20 @@ describe('Vercel promotional free contract', () => {
     assert.equal(result.attempts[0]?.cost_is_upper_bound, false);
     assert.equal(result.status === 'unaccepted' && result.reason, 'budget_exhausted');
     assert.equal(calls, 1);
+  });
+
+  it('meters a positive nested amount under an unknown cost field (#227)', async () => {
+    const result = await gateway(async () => {
+      const body = (await completion().json()) as Record<string, unknown>;
+      return Response.json({
+        ...body,
+        providerMetadata: { gateway: { ...zeroGateway, futureCost: { usd: 0.01 } } },
+      });
+    }).generate(request());
+    assert.equal(result.spent, 10_000);
+    assert.equal(result.attempts[0]?.usage.cost, 10_000);
+    assert.equal(result.attempts[0]?.cost_is_upper_bound, false);
+    assert.equal(result.status === 'unaccepted' && result.reason, 'budget_exhausted');
   });
 
   it('accepts zero cost evidence in unknown fields and ignores numeric fields that are not cost-like (#227)', async () => {

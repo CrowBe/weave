@@ -358,12 +358,10 @@ export interface RouteEvidence {
 
 export interface RoutedUnitBase {
   /**
-   * Required in a route document, with no default: `parseRouteConfig` rejects
-   * a unit without it, so no unit can reach dispatch as an unclassified
-   * subscription. Optional here only for hand-built tables, which
-   * `createInferenceGateway` still checks when it is present.
+   * Required with no default: zero price alone does not identify the billing
+   * boundary, and the gateway rejects a route that omits it.
    */
-  readonly billing?: Billing;
+  readonly billing: Billing;
   /**
    * Whole-account quota-axi provider id; independent of adapter and
    * destination. Required with `billing: 'subscription'`.

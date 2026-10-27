@@ -235,6 +235,7 @@ export function museSparkCompetitor(config: MuseSparkCompetitorConfig): Provider
     settings: MUSE_SPARK_DEFAULT_SETTINGS,
     // Benchmark-local bound, not a claimed provider context capacity.
     context_limit_tokens: 8192,
+    billing: 'metered',
     // Official price unknown: flat zero placeholder, not a claim of free use.
     price: { input_per_mtok: 0, output_per_mtok: 0 },
   }));

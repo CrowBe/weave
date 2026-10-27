@@ -25,6 +25,7 @@ const unit = (rate_limits: readonly RateLimit[], id = 'paced'): RoutedUnit => ({
   model: 'fake',
   settings: { max_output_tokens: 10 },
   destination: 'test',
+  billing: 'metered',
   quality: 'baseline',
   context_limit_tokens: 100,
   price: { input_per_mtok: 0, output_per_mtok: 0 },

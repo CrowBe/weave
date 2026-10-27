@@ -130,6 +130,7 @@ export function composeWeigh(json: unknown, env: Readonly<Record<string, string 
         // The direct API names the model differently than the gateway catalogue.
         model: decision.model,
         destination: unit.destination,
+        billing: unit.billing,
       });
     }
     if (gatewayKey !== undefined) {
@@ -139,6 +140,7 @@ export function composeWeigh(json: unknown, env: Readonly<Record<string, string 
         adapter: VERCEL_AI_GATEWAY_ADAPTER,
         model: 'typesafe-ai/jev',
         destination: VERCEL_AI_GATEWAY_DESTINATION,
+        billing: 'metered',
       });
     }
   }

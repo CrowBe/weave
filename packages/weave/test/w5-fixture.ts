@@ -72,6 +72,7 @@ export const WEIGH_UNIT: RoutedUnit = {
   model: 'fixture/weigher',
   settings: { max_output_tokens: 256 },
   destination: LOCAL_DESTINATION,
+  billing: 'local',
   quality: 'baseline',
   context_limit_tokens: 8_000,
   price: { input_per_mtok: 1, output_per_mtok: 1 },

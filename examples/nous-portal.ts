@@ -34,6 +34,7 @@ if (!apiKey || apiKey.trim().length === 0) {
       operation: 'generate',
       kind: 'transform',
       destination: NOUS_PORTAL_DESTINATION,
+      billing: 'metered',
       destination_training_allowed: true,
       quality: 'baseline',
       context_profile: 'implementation',

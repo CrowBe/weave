@@ -824,6 +824,7 @@ export function taskJevRoute(adapter: string, destination: string): RoutedUnit {
     model: TASK_JEV_MODEL_ID,
     settings: { max_output_tokens: 256 },
     destination,
+    billing: 'metered',
     quality: 'baseline',
     context_limit_tokens: 128_000,
     // Same input price the weigh example records for Jev. Output is unused.

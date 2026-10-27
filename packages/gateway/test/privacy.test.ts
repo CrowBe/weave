@@ -31,6 +31,7 @@ function unit(training = true, overrides: Partial<RoutedUnit> = {}): RoutedUnit 
     model: 'fake',
     settings: { max_output_tokens: 20 },
     destination: 'contributor',
+    billing: 'metered',
     quality: 'baseline',
     context_limit_tokens: 100,
     price: { input_per_mtok: 0, output_per_mtok: 0 },

@@ -89,6 +89,7 @@ function jevRoutes(kind: EvaluationKind, credentials: Credentials, options: Rout
     settings: { max_output_tokens: 512 },
     quality: 'baseline',
     context_limit_tokens: 128_000,
+    billing: 'metered',
     price: JEV_PRICE,
   } as const;
 
@@ -470,6 +471,7 @@ export function createKevGateway(clock: Clock, baseURL: string = KEV_LOCAL_BASE_
     quality: 'baseline',
     // The service accepts 8192; the suite's own records all sat under 384.
     context_limit_tokens: 8_192,
+    billing: 'local',
     // Local compute. Nothing is billed, so a price would be a fiction.
     price: { input_per_mtok: 0, output_per_mtok: 0 },
     routed_unit_id: `${kind}@kev`,

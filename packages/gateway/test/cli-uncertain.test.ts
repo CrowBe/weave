@@ -37,6 +37,7 @@ const unit: RoutedUnit = {
   model: 'cli',
   settings: { max_output_tokens: 10 },
   destination: 'local',
+  billing: 'local',
   quality: 'baseline',
   context_limit_tokens: 100,
   price: { input_per_mtok: 0, output_per_mtok: 0 },

@@ -12,6 +12,7 @@ import {
   type DecisionConfig,
   type EvaluationAdapter,
   type InferenceTerms,
+  type RoutedUnit,
 } from '@weave/gateway';
 import { typesafeAiEvaluator } from '@weave/gateway/typesafe-ai';
 
@@ -483,6 +484,19 @@ it('a hand-built subscription unit without quota_provider fails gateway construc
     /routed unit 'codex\.flash' declares unknown billing/,
   );
   createInferenceGateway({ routes: [codex], adapters, clock: { now: () => 0 } });
+
+  const unbilled = { ...codex } as Record<string, unknown>;
+  delete unbilled.billing;
+  delete unbilled.quota_provider;
+  assert.throws(
+    () =>
+      createInferenceGateway({
+        routes: [unbilled as unknown as RoutedUnit],
+        adapters,
+        clock: { now: () => 0 },
+      }),
+    /routed unit 'codex\.flash' must declare billing/,
+  );
 });
 it('availability retains evidence tie order and exclusion declaration order', () => {
   const units = table().map((unit) => ({ ...unit, evidence: { attempts: 20, accepted: 20 } }));

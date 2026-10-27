@@ -117,9 +117,10 @@ export function createInferenceGateway(config: GatewayConfig): InferenceGateway 
     if (!pool.has(unit.adapter)) {
       throw new Error(`routed unit '${unit.routed_unit_id}' names unknown ${unit.operation} adapter '${unit.adapter}'`);
     }
-    // A hand-built table may omit billing, but one it declares is held to the
-    // document rule: a subscription unit outside the weekly cap fails here.
-    if (unit.billing !== undefined && !BILLINGS.includes(unit.billing)) {
+    if (unit.billing === undefined) {
+      throw new Error(`routed unit '${unit.routed_unit_id}' must declare billing`);
+    }
+    if (!BILLINGS.includes(unit.billing)) {
       throw new Error(`routed unit '${unit.routed_unit_id}' declares unknown billing`);
     }
     if (unit.billing === 'subscription' && unit.quota_provider === undefined) {

@@ -256,8 +256,8 @@ const COST_KEY = /cost/i;
 const COST_DEPTH = 8;
 
 interface CostEvidence {
-  /** Every value at or below a cost-like key, with whether its own key is cost-like. */
-  readonly values: readonly { readonly value: unknown; readonly named: boolean }[];
+  /** Every value at or below a cost-like key. */
+  readonly values: readonly unknown[];
   readonly complete: boolean;
 }
 
@@ -269,24 +269,27 @@ interface CostEvidence {
  * field added later is checked rather than ignored (#227).
  */
 function costEvidence(metadata: unknown, rawUsage: unknown): CostEvidence {
-  const values: { value: unknown; named: boolean }[] = [];
+  const values: unknown[] = [];
   let complete = true;
-  const walk = (value: unknown, depth: number, under: boolean, named: boolean) => {
+  const walk = (value: unknown, depth: number, under: boolean) => {
     if (depth > COST_DEPTH) {
       complete = false;
       return;
     }
     if (record(value) || Array.isArray(value)) {
-      for (const [key, child] of Object.entries(value)) {
+      const entries = Object.entries(value);
+      // An empty cost-shaped container has no readable amount to verify.
+      if (under && entries.length === 0) values.push(value);
+      for (const [key, child] of entries) {
         const costly = COST_KEY.test(key);
-        walk(child, depth + 1, under || costly, costly);
+        walk(child, depth + 1, under || costly);
       }
       return;
     }
-    if (under) values.push({ value, named });
+    if (under) values.push(value);
   };
-  walk(metadata, 0, false, false);
-  walk(rawUsage, 0, false, false);
+  walk(metadata, 0, false);
+  walk(rawUsage, 0, false);
   return { values, complete };
 }
 
@@ -297,19 +300,18 @@ function costEvidence(metadata: unknown, rawUsage: unknown): CostEvidence {
  */
 function freeCost(metadata: unknown, evidence: CostEvidence): boolean {
   if (!record(metadata) || !record(metadata.gateway)) return false;
-  return zero(metadata.gateway.cost) && evidence.complete && evidence.values.every(({ value }) => zero(value));
+  return zero(metadata.gateway.cost) && evidence.complete && evidence.values.every(zero);
 }
 
 /**
  * Gateway bills in currency units; the provider-neutral port meters in micros.
  * The fields can overlap (total, market price, gateway price), so use the
  * largest charge evidence rather than assuming they are additive components.
- * A field read as a charge is one whose own key is cost-like.
+ * Positive numeric values beneath cost-like keys are charge evidence too.
  */
 function reportedCost(metadata: unknown, evidence: CostEvidence): number | undefined {
   let reported: number | undefined;
-  for (const { value, named } of evidence.values) {
-    if (!named) continue;
+  for (const value of evidence.values) {
     if (typeof value !== 'number' && !(typeof value === 'string' && /^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value)))
       continue;
     const cost = Number(value) * 1_000_000;
