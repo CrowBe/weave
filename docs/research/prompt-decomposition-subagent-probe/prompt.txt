@@ -1,0 +1,11 @@
+Do not use tools, access files, or delegate. Return only JSON.
+Decompose CURRENT REQUEST into minimal actionable work items. Preserve every requirement and prohibition, exclude archived work, and do not invent extra tasks. Describe the work; do not perform it. Use:
+{"global_constraints":["..."],"work_items":[{"id":"w1","task":"...","depends_on":[]}],"open_questions":[]}
+
+CONTEXT
+A document-comparison service accepts plain text. Existing capabilities inspect documents and assemble reports.
+Constraints: keep document contents local; do not publish externally.
+Archived example: translate a document into French. This is not current work.
+
+CURRENT REQUEST
+Compare the two supplied documents, identify conflicting statements, and write a recommendation supported by quotations. Do not modify either document.

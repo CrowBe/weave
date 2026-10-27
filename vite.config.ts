@@ -30,6 +30,9 @@ export default defineConfig({
       'benchmarks/inference/space-bunny/general-cases.json',
       'benchmarks/inference/space-bunny/sol-compare/cases.json',
       'benchmarks/inference/space-bunny/sol-compare/hard-cases.json',
+      // Retain the exact hosted probe response bytes for audit.
+      'docs/research/prompt-decomposition-probe/*.response.json',
+      'docs/research/prompt-decomposition-field-probe/response.json',
       'benchmarks/frontier-weigh/REPORT.md',
       // Generated decision-sites reports are re-rendered and compared byte-for-byte.
       'benchmarks/decision-sites/REPORT.md',

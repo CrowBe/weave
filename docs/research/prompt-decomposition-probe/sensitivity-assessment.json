@@ -1,0 +1,76 @@
+[
+  {
+    "variant": "baseline-repeat",
+    "request_sha256": "ae22ab5535a23f6380d82a40810a78ab517d595da30ade8f70381e6e4e06ef2d",
+    "seconds_cli_wall": 0.82,
+    "values": {
+      "requested_components": [
+        "Compare the two supplied documents",
+        "identify conflicting statements",
+        "write a recommendation"
+      ],
+      "constraints": ["plain text documents", "keep document contents local", "do not publish externally", "Do"]
+    },
+    "all_spans_match": true,
+    "input_tokens": 349,
+    "all_three_complete_components": false,
+    "quotation_requirement": false,
+    "no_modification": false
+  },
+  {
+    "variant": "instructions",
+    "request_sha256": "0664e7981638a4d452b4a4b381e5fd83e9e813d3951bc9a29e00681d6ebf49ee",
+    "seconds_cli_wall": 1.43,
+    "values": {
+      "requested_components": ["Compare", "the two supplied documents", "write a recommendation"],
+      "constraints": ["plain text documents", "keep document contents local", "do not publish externally", "Do"]
+    },
+    "all_spans_match": true,
+    "input_tokens": 541,
+    "all_three_complete_components": false,
+    "quotation_requirement": false,
+    "no_modification": false
+  },
+  {
+    "variant": "context",
+    "request_sha256": "0321ffaf80ac0a5adeae9ba1a6ba1b4a2a5c0364200cbe0fc5b3eaab9224e800",
+    "seconds_cli_wall": 0.8,
+    "values": {
+      "requested_components": [
+        "Compare the two supplied documents",
+        "identify conflicting statements",
+        "write a recommendation supported"
+      ],
+      "constraints": [
+        "plain text documents",
+        "keep document contents local",
+        "do not publish externally",
+        "Do not modify either document"
+      ]
+    },
+    "all_spans_match": true,
+    "input_tokens": 394,
+    "all_three_complete_components": false,
+    "quotation_requirement": false,
+    "no_modification": true
+  },
+  {
+    "variant": "instructions-context",
+    "request_sha256": "815427e2be58c765d020c89bd993225c0a001c3b9c41cadd407d63370e702f8d",
+    "seconds_cli_wall": 1.02,
+    "values": {
+      "requested_components": [
+        "Compare",
+        "the two supplied documents",
+        "identify conflicting statements",
+        "write a recommendation supported by quotations"
+      ],
+      "constraints": ["keep document contents local", "do not publish externally", "Do"]
+    },
+    "all_spans_match": true,
+    "input_tokens": 586,
+    "all_three_complete_components": false,
+    "quotation_requirement": true,
+    "no_modification": false
+  }
+]

@@ -1,0 +1,100 @@
+{
+  "model": "clairic",
+  "answers": {
+    "requested_actions": {
+      "type": "list",
+      "value": [
+        "Compare the two supplied documents",
+        "identify conflicting statements",
+        "write a recommendation supported by quotations"
+      ],
+      "spans": [
+        [
+          349,
+          383
+        ],
+        [
+          385,
+          416
+        ],
+        [
+          422,
+          468
+        ]
+      ],
+      "confidence": 0.0076981992818253514
+    },
+    "final_deliverable": {
+      "type": "text",
+      "p_null": 0.00914771854877472,
+      "span": [
+        428,
+        468
+      ],
+      "guess": "a recommendation supported by quotations",
+      "confidence": 0.8187565803527832,
+      "value": "a recommendation supported by quotations"
+    },
+    "evidence_requirement": {
+      "type": "text",
+      "p_null": 0.024752793833613396,
+      "span": [
+        458,
+        468
+      ],
+      "guess": "quotations",
+      "confidence": 0.9852955341339111,
+      "value": "quotations"
+    },
+    "prohibited_actions": {
+      "type": "list",
+      "value": [
+        "do not publish externally",
+        "Do",
+        "modify either document"
+      ],
+      "spans": [
+        [
+          219,
+          244
+        ],
+        [
+          470,
+          472
+        ],
+        [
+          477,
+          499
+        ]
+      ],
+      "confidence": 0.03899399682258223
+    },
+    "data_handling_constraints": {
+      "type": "list",
+      "value": [
+        "keep document contents local",
+        "do not publish externally"
+      ],
+      "spans": [
+        [
+          189,
+          217
+        ],
+        [
+          219,
+          244
+        ]
+      ],
+      "confidence": 0.03595798277981648
+    }
+  },
+  "truncated": false,
+  "usage": {
+    "state_tokens": 87,
+    "image_tokens": 0,
+    "schema_tokens": 500,
+    "input_tokens": 761,
+    "output_tokens": 0,
+    "passes": 3
+  }
+}

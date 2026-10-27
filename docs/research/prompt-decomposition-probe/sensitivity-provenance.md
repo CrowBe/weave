@@ -1,0 +1,3 @@
+# Instruction/context sensitivity smoke probe
+
+Synthetic input and field instructions authored in this conversation; author permits this fixture to be sent to Cloudflare Workers AI @cf/cloudflare/clairic via the authenticated account AI run endpoint. No private documents or external benchmark text. Freeze four inputs before execution: baseline-repeat, instructions, context, instructions-context. Each is one observation; baseline-repeat also checks obvious instability relative to the prior observation. This is development exploration on an already examined case, not held-out evidence or a model-quality comparison. Latency records one process invocation including CLI overhead, auth/account lookup, network and inference; no model-only latency or p95 claim is supported.

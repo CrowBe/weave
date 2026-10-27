@@ -1,0 +1,1 @@
+{"global_constraints":["Keep document contents local; do not publish them externally.","Do not modify either supplied document."],"work_items":[{"id":"w1","task":"Compare the two supplied documents and identify conflicting statements.","depends_on":[]},{"id":"w2","task":"Write a recommendation supported by quotations from the documents.","depends_on":["w1"]}],"open_questions":[]}

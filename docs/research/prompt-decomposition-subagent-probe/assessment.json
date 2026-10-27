@@ -1,0 +1,81 @@
+{
+  "astra": {
+    "requested_model": "gpt-6-astra",
+    "requested_reasoning_effort": "low",
+    "json_valid": true,
+    "schema_valid": true,
+    "dependency_valid": true,
+    "work_items": 2,
+    "response_characters": 431,
+    "manual_semantic_assessment": {
+      "comparison_and_conflict_identification_preserved": true,
+      "recommendation_with_quotations_preserved": true,
+      "local_only_preserved": true,
+      "no_external_publication_preserved": true,
+      "no_modification_preserved": true,
+      "archived_translation_not_in_work_items": true
+    },
+    "notes": "Parent assessment on one examined synthetic development case; not an independent semantic benchmark."
+  },
+  "sol": {
+    "requested_model": "gpt-6.1-sol",
+    "requested_reasoning_effort": "low",
+    "json_valid": true,
+    "schema_valid": true,
+    "dependency_valid": true,
+    "work_items": 2,
+    "response_characters": 453,
+    "manual_semantic_assessment": {
+      "comparison_and_conflict_identification_preserved": true,
+      "recommendation_with_quotations_preserved": true,
+      "local_only_preserved": true,
+      "no_external_publication_preserved": true,
+      "no_modification_preserved": true,
+      "archived_translation_not_in_work_items": true
+    },
+    "notes": "Parent assessment on one examined synthetic development case; not an independent semantic benchmark."
+  },
+  "terra": {
+    "requested_model": "gpt-5.6-terra",
+    "requested_reasoning_effort": "low",
+    "json_valid": true,
+    "schema_valid": true,
+    "dependency_valid": true,
+    "work_items": 2,
+    "response_characters": 524,
+    "manual_semantic_assessment": {
+      "comparison_and_conflict_identification_preserved": true,
+      "recommendation_with_quotations_preserved": true,
+      "local_only_preserved": true,
+      "no_external_publication_preserved": true,
+      "no_modification_preserved": true,
+      "archived_translation_not_in_work_items": true
+    },
+    "notes": "Parent assessment on one examined synthetic development case; not an independent semantic benchmark."
+  },
+  "luna": {
+    "requested_model": "gpt-6-luna",
+    "requested_reasoning_effort": "low",
+    "json_valid": true,
+    "schema_valid": true,
+    "dependency_valid": true,
+    "work_items": 2,
+    "response_characters": 382,
+    "manual_semantic_assessment": {
+      "comparison_and_conflict_identification_preserved": true,
+      "recommendation_with_quotations_preserved": true,
+      "local_only_preserved": true,
+      "no_external_publication_preserved": false,
+      "no_modification_preserved": true,
+      "archived_translation_not_in_work_items": true
+    },
+    "notes": "Current manual assessment updated 2026-10-27 on one examined synthetic development case; not an independent semantic benchmark. The earlier publication-preservation verdict is retained separately.",
+    "reassessment_2026_10_27": {
+      "no_external_publication_preserved": false,
+      "reason": "The output forbids publishing the document contents, while the source prohibition is not limited to those contents. The original parent verdict is retained in original_parent_assessment_2026_10_20."
+    },
+    "original_parent_assessment_2026_10_20": {
+      "no_external_publication_preserved": true
+    }
+  }
+}

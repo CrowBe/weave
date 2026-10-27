@@ -1,0 +1,65 @@
+{
+  "model": "clairic",
+  "answers": {
+    "requested_components": {
+      "type": "list",
+      "value": [
+        "Compare the two supplied documents",
+        "identify conflicting statements",
+        "write a recommendation supported"
+      ],
+      "spans": [
+        [
+          596,
+          630
+        ],
+        [
+          632,
+          663
+        ],
+        [
+          669,
+          701
+        ]
+      ],
+      "confidence": 0.00019451078151710082
+    },
+    "constraints": {
+      "type": "list",
+      "value": [
+        "plain text documents",
+        "keep document contents local",
+        "do not publish externally",
+        "Do not modify either document"
+      ],
+      "spans": [
+        [
+          335,
+          355
+        ],
+        [
+          436,
+          464
+        ],
+        [
+          466,
+          491
+        ],
+        [
+          717,
+          746
+        ]
+      ],
+      "confidence": 0.0004966417101726248
+    }
+  },
+  "truncated": false,
+  "usage": {
+    "state_tokens": 132,
+    "image_tokens": 0,
+    "schema_tokens": 262,
+    "input_tokens": 394,
+    "output_tokens": 0,
+    "passes": 1
+  }
+}
