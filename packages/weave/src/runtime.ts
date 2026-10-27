@@ -142,7 +142,17 @@ const HOST_SOURCE = { kind: 'host', id: 'capability-host' } as const;
 const OPERATOR_SOURCE = { kind: 'operator', id: 'operator' } as const;
 const CLOCK_SOURCE = { kind: 'clock', id: 'clock' } as const;
 const GATEWAY_SOURCE = { kind: 'gateway', id: 'inference-gateway' } as const;
-const ABANDONED_WEIGH = 'abandoned at recovery: no inference.recorded before the restart';
+const ABANDONED_INFERENCE = 'abandoned at recovery: no inference.recorded before the restart';
+
+/**
+ * Ids a cycle appends under its own number when it weighs: the scripted
+ * `weights:c<N>` and the gateway request `inference:inf:c<N>:weigh`, accepted
+ * or not. A recovered run has no cycle records; these ids still occupy their
+ * cycle numbers. Dispatched actions are counted from their accepted starts.
+ * Ids that merely mention an action, such as an imported conclusion from
+ * another run, do not.
+ */
+const CYCLE_ACTION_ID = /^a:(\d+):\d+$/;
 
 /** Cost envelope reserved for one gateway weigh; framing must still have remaining budget. */
 const GATEWAY_WEIGH_COST = 10_000;
@@ -240,6 +250,10 @@ export class Runtime {
   private readonly weightsByRequestId = new Map<string, Observation>();
   private boundFrame: { profile: string; version: number } | null = null;
   private recoveryExhausted = false;
+  /** Highest cycle number named by a logged weighing id or an accepted action start. */
+  private cycleIdHigh = 0;
+  /** Seq of the latest accepted observation that is new evidence for a weighing deferral. */
+  private evidenceHigh: Seq = 0;
   /** First logged request sequence, matching the workspace's historical trace scan. */
   private readonly approvalRequestSequences = new Map<string, Seq>();
   /** Conclusion ids already applied to State, so an import can skip without scanning. */
@@ -603,7 +617,7 @@ export class Runtime {
           payload: { reason: 'budget', bytes },
         };
         this.diagnostics.push(diagnostic);
-        this.observationIds.add(diagnostic.observation_id);
+        this.noteObservationId(diagnostic.observation_id);
         return diagnostic;
       }
       const duplicate = this.observationIds.has(envelope.observation_id);
@@ -645,7 +659,8 @@ export class Runtime {
       this.log.push(observation);
       this.indexApprovalRequest(observation);
       this.seqHigh = observation.seq;
-      this.observationIds.add(observation.observation_id);
+      this.noteObservationId(observation.observation_id);
+      this.noteCycleFromObservation(observation);
       this.emittedIds.add(observation.observation_id);
       if (observation.validation.status === 'accepted') {
         const goalBefore = this.weft ? this.current.goal?.status : undefined;
@@ -1034,7 +1049,7 @@ export class Runtime {
     if (!latest?.recorded) {
       return { kind: 'needed' };
     }
-    if (latest.recorded.reason === ABANDONED_WEIGH) {
+    if (latest.recorded.reason === ABANDONED_INFERENCE) {
       return { kind: 'needed' };
     }
     if (latest.recorded.status !== 'accepted') {
@@ -1057,17 +1072,9 @@ export class Runtime {
    * and not a weighing record.
    */
   private evidenceSince(seq: Seq): boolean {
-    // The log is append-only in seq order, so only its tail after `seq` is read.
-    for (let i = this.log.length - 1; i >= 0; i -= 1) {
-      const observation = this.log[i] as Observation;
-      if (observation.seq <= seq) {
-        return false;
-      }
-      if (observation.validation.status === 'accepted' && !WEIGH_CONTROL_RECORDS.includes(observation.payload_type)) {
-        return true;
-      }
-    }
-    return false;
+    // Seqs ascend through the log (load() rejects a journal that does not), so
+    // the latest evidence seq answers without reading the ticks since `seq`.
+    return this.evidenceHigh > seq;
   }
 
   private anyInFlight(): boolean {
@@ -1613,21 +1620,77 @@ export class Runtime {
   }
 
   private nextCycleNo(): number {
-    let max = this.cycles.length;
-    for (const action of Object.values(this.current.actions)) {
-      const match = /^a:(\d+):/.exec(action.action_id);
-      if (match) {
-        max = Math.max(max, Number(match[1]));
+    // A recovered run has no cycle records; its logged ids still name their cycles.
+    let next = Math.max(this.cycles.length, this.cycleIdHigh) + 1;
+    if (!Number.isSafeInteger(next)) {
+      throw new RangeError('cycle number exceeds the safe integer range');
+    }
+    while (this.observationIds.has(`weights:c${next}`) || this.observationIds.has(`inference:inf:c${next}:weigh`)) {
+      next += 1;
+      if (!Number.isSafeInteger(next)) {
+        throw new RangeError('cycle number exceeds the safe integer range');
       }
     }
-    // A recovered run has no cycle records; its weighings still name their cycle.
-    for (const request_id of Object.keys(this.current.inferences)) {
-      const match = /^inf:c(\d+):weigh$/.exec(request_id);
-      if (match) {
-        max = Math.max(max, Number(match[1]));
-      }
+    return next;
+  }
+
+  /** Track every logged id for duplicate detection; only typed weigh records reserve cycles. */
+  private noteObservationId(observation_id: string): void {
+    this.observationIds.add(observation_id);
+  }
+
+  /** Only ids whose observation type, source, payload and envelope agree reserve a weighing cycle. */
+  private noteCycleFromObservation(observation: Observation): void {
+    if (
+      observation.validation.status === 'rejected' &&
+      observation.validation.reason === 'untrusted ingress cannot claim this origin'
+    ) {
+      return;
     }
-    return max + 1;
+
+    if (observation.payload_type === 'inference.requested' && observation.source.kind === 'runtime') {
+      const payload = this.recordPayload(observation.payload);
+      if (!payload) return;
+      if (
+        payload.site !== 'frontier.weigh' ||
+        typeof payload.request_id !== 'string' ||
+        observation.observation_id !== `inference:${payload.request_id}`
+      ) {
+        return;
+      }
+      const match = /^inf:c(\d+):weigh$/.exec(payload.request_id);
+      if (match) this.noteCycleNumberFromDigits(match[1]!);
+      return;
+    }
+
+    if (observation.payload_type === 'weights.recorded' && observation.source.kind === 'judgment') {
+      const payload = this.recordPayload(observation.payload);
+      if (!payload) return;
+      if (payload.site !== 'frontier.weigh') {
+        return;
+      }
+      const match = /^weights:c(\d+)$/.exec(observation.observation_id);
+      if (match) this.noteCycleNumberFromDigits(match[1]!);
+    }
+  }
+
+  private recordPayload(value: unknown): Record<string, unknown> | null {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  }
+
+  private noteCycleNumberFromDigits(digits: string): void {
+    const cycle_no = Number(digits);
+    if (Number.isSafeInteger(cycle_no) && cycle_no > 0) {
+      this.noteCycleNumber(cycle_no);
+    }
+  }
+
+  private noteCycleNumber(cycle_no: number): void {
+    if (Number.isSafeInteger(cycle_no) && cycle_no > 0) {
+      this.cycleIdHigh = Math.max(this.cycleIdHigh, cycle_no);
+    }
   }
 
   private prefetchContracts(): void {
@@ -1780,7 +1843,7 @@ export class Runtime {
   }
 
   private reconcileStep(): void {
-    this.abandonUnrecordedWeighs();
+    this.abandonUnrecordedInferences();
     const unfinished = Object.values(this.current.actions).filter(
       (a) => a.state === 'running' || a.state === 'pending' || (a.state === 'uncertain' && !a.reconciled),
     );
@@ -1835,13 +1898,14 @@ export class Runtime {
   }
 
   /**
-   * A frontier weighing requested before a restart has no live gateway call
-   * left to record it. Record it as abandoned so its slot and reservation are
-   * freed; the whole reservation is charged, since the provider may have spent it.
+   * An inference requested before a restart, at any site, has no live gateway
+   * call left to record it. Record it as abandoned so its slot and reservation
+   * are freed; the whole reservation is charged, since the provider may have
+   * spent it. A framing action's own outcome is reconciled separately below.
    */
-  private abandonUnrecordedWeighs(): void {
+  private abandonUnrecordedInferences(): void {
     for (const record of Object.values(this.current.inferences)) {
-      if (record.request.site !== 'frontier.weigh' || record.recorded || this.inferAbort.has(record.request_id)) {
+      if (record.recorded || this.inferAbort.has(record.request_id)) {
         continue;
       }
       this.gatewayIngress.submit({
@@ -1854,19 +1918,32 @@ export class Runtime {
           attempts: [],
           spent: record.request.reservation.cost,
           status: 'unaccepted',
-          reason: ABANDONED_WEIGH,
+          reason: ABANDONED_INFERENCE,
         } satisfies InferenceRecordedPayload,
       });
     }
   }
 
+  /**
+   * Rebuild state from a journal. A journal is append-only, so its seqs must
+   * strictly increase past anything already logged; otherwise nothing is
+   * loaded and the journal is refused.
+   */
   load(observations: readonly Observation[]): void {
+    let previous = this.seqHigh;
+    for (const observation of observations) {
+      if (!(observation.seq > previous)) {
+        throw new Error(`journal seq ${observation.seq} does not follow seq ${previous}; refusing to load it`);
+      }
+      previous = observation.seq;
+    }
     for (const observation of observations) {
       const stored = structuredClone(observation);
       this.log.push(stored);
       this.indexApprovalRequest(stored);
-      this.seqHigh = Math.max(this.seqHigh, stored.seq);
-      this.observationIds.add(stored.observation_id);
+      this.seqHigh = stored.seq;
+      this.noteObservationId(stored.observation_id);
+      this.noteCycleFromObservation(stored);
       this.emittedIds.add(stored.observation_id);
       if (observation.validation.status === 'accepted') {
         applyAccepted(this.current, observation);
@@ -1881,7 +1958,18 @@ export class Runtime {
 
   /** Derived only after acceptance and persistence, and rebuilt by load without effects. */
   private indexAccepted(observation: Observation): void {
+    if (!WEIGH_CONTROL_RECORDS.includes(observation.payload_type)) {
+      this.evidenceHigh = observation.seq;
+    }
     switch (observation.payload_type) {
+      case 'action.started':
+      case 'action.queued': {
+        const match = CYCLE_ACTION_ID.exec((observation.payload as ActionStartedPayload).action_id);
+        if (match) {
+          this.noteCycleNumber(Number(match[1]));
+        }
+        break;
+      }
       case 'goal.opened':
         this.boundFrame = null;
         break;
@@ -2706,6 +2794,17 @@ export function replay(recorded: readonly Observation[], options: RuntimeOptions
     const running = Object.values(runtime.state().actions).find((a) => a.state === 'running' || a.state === 'pending');
     if (running) {
       throw new ReplayFailureError(null, running.action_id, `missing recorded action.result for ${running.action_id}`);
+    }
+    // An action-scoped inference is reported through its running action above.
+    const unrecorded = Object.values(runtime.state().inferences).find(
+      (record) => record.request.site === 'frontier.weigh' && record.recorded === null,
+    );
+    if (unrecorded) {
+      throw new ReplayFailureError(
+        unrecorded.evidence[0] ?? null,
+        null,
+        `missing recorded inference.recorded for ${unrecorded.request_id}`,
+      );
     }
   } catch (error) {
     if (error instanceof ReplayFailureError) {
