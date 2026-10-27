@@ -647,7 +647,7 @@ async function runChecks(
           env_allow: [...check.env_allow],
           timeout_ms: check.timeout_ms,
         },
-        { invocation_id: requested },
+        { invocation_id: requested, reject_existing: true },
       );
       if (invoked.kind === 'rejected') {
         evidence.push({ check_id: check.operation, argv_digest, exit, passed, tail, artifacts, invocation_id });

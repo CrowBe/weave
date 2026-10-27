@@ -1764,6 +1764,15 @@ export class AgentFabricHost implements CapabilityHost {
     const action_id = (grant as Grant).action_id;
     const invocation_id = options?.invocation_id ?? action_id;
     const binding_digest = digest({ operation, inputs: boundInputs });
+    if (
+      options?.reject_existing &&
+      (existing ||
+        this.open.has(invocation_id) ||
+        this.preparingCli.has(invocation_id) ||
+        this.reservedCliIds.has(invocation_id))
+    ) {
+      return this.reject('DENIED', 'invocation identity already exists');
+    }
     if (existing && existing.action_id !== action_id) {
       return this.reject('DENIED', 'grant does not name this invocation');
     }

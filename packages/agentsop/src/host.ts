@@ -12,6 +12,8 @@ export type InvocationOutcome =
 
 export interface InvokeOptions {
   readonly invocation_id?: string;
+  /** Reject an already recorded or active invocation instead of replaying it. */
+  readonly reject_existing?: boolean;
 }
 
 export interface InvocationHandle {
