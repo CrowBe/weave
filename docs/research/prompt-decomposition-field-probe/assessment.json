@@ -1,0 +1,59 @@
+{
+  "request_sha256": "e862cd6088c27cf7553a2bac7af9174f9a37b9a61eef5b99c89d998c81e35672",
+  "all_spans_match": true,
+  "span_checks": [
+    {
+      "field": "requested_actions",
+      "value": "Compare the two supplied documents",
+      "matches_source": true
+    },
+    {
+      "field": "requested_actions",
+      "value": "identify conflicting statements",
+      "matches_source": true
+    },
+    {
+      "field": "requested_actions",
+      "value": "write a recommendation supported by quotations",
+      "matches_source": true
+    },
+    {
+      "field": "final_deliverable",
+      "value": "a recommendation supported by quotations",
+      "matches_source": true
+    },
+    {
+      "field": "evidence_requirement",
+      "value": "quotations",
+      "matches_source": true
+    },
+    {
+      "field": "prohibited_actions",
+      "value": "do not publish externally",
+      "matches_source": true
+    },
+    {
+      "field": "prohibited_actions",
+      "value": "Do",
+      "matches_source": true
+    },
+    {
+      "field": "prohibited_actions",
+      "value": "modify either document",
+      "matches_source": true
+    },
+    {
+      "field": "data_handling_constraints",
+      "value": "keep document contents local",
+      "matches_source": true
+    },
+    {
+      "field": "data_handling_constraints",
+      "value": "do not publish externally",
+      "matches_source": true
+    }
+  ],
+  "all_three_complete_action_spans": true,
+  "complete_no_modification_clause": false,
+  "overall": "Narrow field extraction improved; prohibition list still lost negation. Development observation only."
+}

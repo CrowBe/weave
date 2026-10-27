@@ -1,0 +1,16 @@
+{
+  "model": "clairic",
+  "state": "PURPOSE OF EXTRACTION\nThe selected spans will be used to construct focused work prompts. Losing an attached modifier can change the requested result. Constraints will be inherited by every component. Nothing in archived examples is current work.\n\nASSEMBLED CONTEXT\nProject: a synthetic document comparison service.\nThe service accepts plain text documents. Existing capabilities can inspect documents and assemble reports.\nConstraints: keep document contents local; do not publish externally.\nAn archived example requested translation; that is background, not current work.\n\nCURRENT USER REQUEST\nCompare the two supplied documents, identify conflicting statements, and write a recommendation supported by quotations. Do not modify either document.",
+  "fields": {
+    "requested_components": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Extract each distinct work component requested in CURRENT USER REQUEST, as a separate exact text span. Preserve each component\u2019s verb and object. Exclude background, archived examples, constraints, and unrequested work. Do not invent intermediate steps."
+    },
+    "constraints": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Extract explicit constraints that apply to the current request from ASSEMBLED CONTEXT and CURRENT USER REQUEST."
+    }
+  }
+}
