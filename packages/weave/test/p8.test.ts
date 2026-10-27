@@ -754,8 +754,12 @@ test('a real host accepts a fresh grant when a green check is retried after D5 f
   }
 });
 
-for (const sameText of [false, true]) {
-  test(`restart cannot replay green durable checks against a new generation (same text: ${sameText})`, async () => {
+for (const [sameText, repeatedRunId] of [
+  [false, false],
+  [true, false],
+  [true, true],
+]) {
+  test(`restart cannot replay green durable checks against a new generation (same text: ${sameText}, repeated run id: ${repeatedRunId})`, async () => {
     const dir = mkdtempSync(join(tmpdir(), 'weave-p8-restart-'));
     let store: FabricStore | undefined;
     try {
@@ -792,7 +796,7 @@ for (const sameText of [false, true]) {
         process_effects: ['process.spawn', `fs.write:${cwd}`],
         issued_at: 1,
       });
-      const issuer = createEqualGrantIssuer(authority, [template], { retries: 0 });
+      let issuer = createEqualGrantIssuer(authority, [template], { retries: 0 });
       const work = input({
         ceiling: 'flash',
         retries: 0,
@@ -810,6 +814,7 @@ for (const sameText of [false, true]) {
       let generations = 0;
       const ports: ImplementPorts = {
         ...world.ports,
+        ...(repeatedRunId ? { runId: () => 'repeated' } : {}),
         generate: async (request) => {
           generations += 1;
           writeFileSync(join(dir, 'exit'), generations === 1 ? '0' : '1');
@@ -832,6 +837,12 @@ for (const sameText of [false, true]) {
               ? false
               : store!.getInvocation(options.invocation_id)?.status === 'committed';
           const handle = host.invoke(token, operation, inputs, options);
+          if (repeatedRunId && generations === 1 && handle.kind === 'handle' && token) {
+            const duplicate = authority.issue({ ...token });
+            const rejected = host.invoke(duplicate, operation, inputs, options);
+            assert.equal(rejected.kind, 'rejected', 'an active check identity cannot be replayed');
+            if (rejected.kind === 'rejected') assert.match(rejected.reason, /already exists/);
+          }
           if (handle.kind === 'handle' && !committed) host.release(handle.action_id);
           return handle;
         },
@@ -849,16 +860,17 @@ for (const sameText of [false, true]) {
       assert.equal(readFileSync(join(dir, 'runs'), 'utf8'), 'check\n');
       store!.close();
       host = openHost();
+      issuer = createEqualGrantIssuer(authority, [template], { retries: 0 });
       const result = await runImplementationStep(work, ports, journal);
       assert.equal(generations, 2);
       assert.equal(result.status, 'failed');
-      assert.equal(result.checks[0]?.exit, 1);
+      assert.equal(result.checks[0]?.exit, repeatedRunId ? null : 1);
       assert.equal(result.checks[0]?.passed, false);
       assert.deepEqual(result.evals, []);
       assert.equal(result.attempts[0]?.eval_skipped, 'check_failed');
       assert.equal(result.execution_id, work.execution_id);
       assert.equal(result.attempts[0]?.attempt, 1);
-      assert.equal(readFileSync(join(dir, 'runs'), 'utf8'), 'check\ncheck\n');
+      assert.equal(readFileSync(join(dir, 'runs'), 'utf8'), repeatedRunId ? 'check\n' : 'check\ncheck\n');
       const finished = await runImplementationStep(work, ports, journal);
       assert.deepEqual(finished, result);
       assert.equal(generations, 2);
