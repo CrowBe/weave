@@ -205,3 +205,40 @@ test('empty or malformed lock is stale-unknown and is never stolen', async () =>
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('indexed ledger and dispatch counts preserve unusual durable record order across handles', async () => {
+  const { ledger } = await import('./journal.ts');
+  const { countCompetitorCalls } = await import('./engine.ts');
+  const dir = await mkdtemp(join(tmpdir(), 'decision-index-parity-'));
+  const path = join(dir, 'journal.jsonl');
+  const release = acquireLock(dir);
+  try {
+    const a = new Journal(path),
+      b = new Journal(path),
+      reader = new Journal(path, true);
+    const rows = [
+      { type: 'call', call_id: 'late', cost_usd: 0.4, result: { dispatches: 2 } },
+      { type: 'intent', call_id: 'late', provider: 'fake', projected_usd: 0.5 },
+      { type: 'intent', call_id: 'pending', provider: 'fake', projected_usd: 0.2 },
+      { type: 'intent', call_id: 'pending', provider: 'fake', projected_usd: 0.3, dispatch_reservation: 2 },
+      { type: 'call', call_id: 'late', cost_usd: 0.9, result: { dispatches: 3 } },
+      { type: 'call', call_id: 'pending', cost_usd: 0, result: { status: 'failed', reason: 'not_sent' } },
+      { type: 'intent', call_id: 'quota', provider: 'fake', projected_usd: 0.6 },
+      {
+        type: 'call',
+        call_id: 'quota',
+        cost_usd: 0,
+        result: { status: 'skipped', reason: 'quota_unavailable_or_weekly_cap' },
+      },
+    ];
+    for (const row of rows) {
+      a.append(row);
+      const durable = reader.read();
+      assert.equal(b.spent(), ledger(durable).spent_usd);
+      assert.equal(b.competitorCalls('fake'), countCompetitorCalls(durable, 'fake'));
+    }
+  } finally {
+    release();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

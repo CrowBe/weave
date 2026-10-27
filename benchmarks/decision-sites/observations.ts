@@ -33,19 +33,28 @@ export async function bindObservations(
       .filter((r) => r.type === 'provider_status' && r.result && persistentProviderSkip(r.result))
       .map((r) => r.provider),
   );
+  const order = new Map(records.map((r, i) => [r, i]));
+  const byBinding = new Map<string, JournalRecord[]>();
+  for (const record of records) {
+    const key = replayKey(record),
+      group = byBinding.get(key) ?? [];
+    group.push(record);
+    byBinding.set(key, group);
+  }
   let complete = true;
   for (const provider of providers)
     for (const entry of entries) {
       const request = await buildRequest(entry.item);
       const binding = bindingFor(provider, entry, request);
-      const matches = records.filter(
-        (r) =>
-          replayKey(r) === replayKey(binding) ||
-          // Legacy records have no wire-body evidence: display them only in a non-executing render.
-          (renderOnly &&
-            r.request_digest === undefined &&
-            replayKey(r) === replayKey({ ...binding, request_digest: undefined })),
-      );
+      const matches = [
+        ...(byBinding.get(replayKey(binding)) ?? []),
+        ...(renderOnly
+          ? (byBinding.get(replayKey({ ...binding, request_digest: undefined })) ?? []).filter(
+              (r) => r.request_digest === undefined,
+            )
+          : []),
+      ];
+      matches.sort((a, b) => order.get(a)! - order.get(b)!);
       const calls = matches.filter((r) => r.type === 'call');
       const last = calls.at(-1);
       const pending = matches.filter((r) => r.type === 'intent' && !calls.some((c) => c.call_id === r.call_id)).at(-1);

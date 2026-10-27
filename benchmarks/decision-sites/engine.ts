@@ -86,7 +86,7 @@ export async function execute(options: {
     if (skipped.has(provider.id)) continue;
     const scheduled = provider.competitor ? competitorEntries(entries) : entries;
     items: for (const entry of scheduled) {
-      if (provider.competitor && countCompetitorCalls(journal.read(), provider.id) >= COMPETITOR_CALL_CAP) {
+      if (provider.competitor && journal.competitorCalls(provider.id) >= COMPETITOR_CALL_CAP) {
         journal.append({
           type: 'provider_status',
           provider: provider.id,
@@ -99,19 +99,16 @@ export async function execute(options: {
         return;
       }
       // A receipt disproving our reservation bound stops the whole run, including resume.
-      const ledger = journal.read();
-      if (ledger.some((r) => r.type === 'budget_stop' && r.reason === 'actual_cost_exceeds_projection')) return;
-      const reservations = new Map(ledger.filter((r) => r.type === 'intent').map((r) => [r.call_id, r.projected_usd]));
-      const excess = ledger.find((r) => r.type === 'call' && r.cost_usd > reservations.get(r.call_id));
-      if (excess) {
-        // Recover a crash between the durable receipt and its budget-stop record.
+      const budget = journal.budgetState();
+      if (budget.stopped) return;
+      if (budget.excess) {
         journal.append({
           type: 'budget_stop',
-          call_id: excess.call_id,
+          call_id: budget.excess.call_id,
           reason: 'actual_cost_exceeds_projection',
           spent_usd: journal.spent(),
-          cost_usd: excess.cost_usd,
-          projected_usd: reservations.get(excess.call_id),
+          cost_usd: budget.excess.cost_usd,
+          projected_usd: budget.projected,
           ceiling_usd: options.maxSpend,
         });
         return;
@@ -121,7 +118,8 @@ export async function execute(options: {
       const serialized = provider.serialize(request);
       const binding = bindingFor(provider, entry, request, serialized);
       const key = replayKey(binding);
-      const history = journal.read();
+      const history = journal.recordsFor(key);
+      const historyLength = journal.length();
       const prior = history.filter(
         (r) =>
           r.type === 'call' &&
@@ -130,12 +128,7 @@ export async function execute(options: {
           !(r.result.status === 'skipped' && r.result.reason === 'quota_unavailable_or_weekly_cap'),
       );
       if (prior.some((r) => r.terminal)) continue;
-      const pending = history.filter(
-        (r) =>
-          r.type === 'intent' &&
-          replayKey(r) === key &&
-          !history.some((c) => c.type === 'call' && c.call_id === r.call_id),
-      );
+      const pending = history.filter((r) => r.type === 'intent' && replayKey(r) === key && !journal.hasCall(r.call_id));
       if (pending.length) {
         // The provider may have accepted a request before a crash. Never automatically pay again.
         if (!history.some((r) => r.type === 'uncertain' && replayKey(r) === key))
@@ -149,10 +142,7 @@ export async function execute(options: {
         }
         // Every attempt, retries included, must fit its whole reservation under the cap.
         const reservation = provider.max_dispatches ?? 1;
-        if (
-          provider.competitor &&
-          countCompetitorCalls(journal.read(), provider.id) + reservation > COMPETITOR_CALL_CAP
-        ) {
+        if (provider.competitor && journal.competitorCalls(provider.id) + reservation > COMPETITOR_CALL_CAP) {
           journal.append({
             type: 'provider_status',
             provider: provider.id,
@@ -170,7 +160,7 @@ export async function execute(options: {
           });
           break items;
         }
-        const call_id = digest(JSON.stringify([binding, history.length, attempt, journal.read().length]));
+        const call_id = digest(JSON.stringify([binding, historyLength, attempt, journal.length()]));
         journal.append({
           type: 'intent',
           ...binding,
