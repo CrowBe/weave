@@ -421,6 +421,16 @@ The interface through which an implementation reaches its environment: nested in
 
 Where an implementation or generated test runs. The `trusted` tier is host-owned code. The `untrusted` tier is generated code and generated tests, which run only under enforced isolation. Missing isolation blocks execution; it does not fall back to the trusted tier.
 
+### Execution provider
+
+The replaceable boundary that runs one orchestration program with a fixed set
+of offered capability names and stubs, reports suspensions before host calls,
+enforces limits, and supports resume, opaque dump/restore and close. It supplies
+run-bound isolation evidence including `os_isolation`; it holds no grants and
+decides no approvals or Loom transitions. The
+[execution-provider contract](docs/execution-provider-contract.md) is contract
+and test doubles only; lifecycle integration and multi-call authority are blocked.
+
 ### Held-out report
 
 The only result returned from protected admission tests to an implementer or corpus author: how many cases passed, how many failed, and the failure codes. It does not include inputs, expected outputs, artifact bodies, or which case failed. One report is available per implementation revision; requesting another spends that held-out split.
