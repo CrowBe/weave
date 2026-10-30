@@ -272,18 +272,17 @@ describe('M6 prefix cache', () => {
       weft: { trace_id: 'm6', emitter_id: 'gw', emit: (r) => void records.push(r) },
     });
     const routeCaches = () =>
-      records.filter((r) => r.kind === 'route.selected').map((r) => [r.fields['routed_unit'], r.fields['prefix_cache']]);
+      records
+        .filter((r) => r.kind === 'route.selected')
+        .map((r) => [r.fields['routed_unit'], r.fields['prefix_cache']]);
     const warm = terms({ prefix_digest: LONG_DIGEST, prefix_cache: CACHE });
     const outcome = await gateway.generate(request(warm));
     assert.equal(outcome.status, 'accepted');
     // The warm unit leaves mid-request: the switch off the cache is on the record.
-    assert.deepEqual(
-      routeCaches(),
-      [
-        ['route.strong', 'hit'],
-        ['route.cheap', 'reload'],
-      ],
-    );
+    assert.deepEqual(routeCaches(), [
+      ['route.strong', 'hit'],
+      ['route.cheap', 'reload'],
+    ]);
 
     records.length = 0;
     const strongOnly = createInferenceGateway({
@@ -294,14 +293,20 @@ describe('M6 prefix cache', () => {
     });
     const oversized = terms({ prefix_digest: LONG_DIGEST, prefix_cache: { ...CACHE, cached_tokens: 800_000 } });
     await strongOnly.generate({ ...request(oversized), request_id: 'req-oversized' });
-    assert.deepEqual(
-      routeCaches(),
-      [['route.strong', 'ignored']],
-    );
+    assert.deepEqual(routeCaches(), [['route.strong', 'ignored']]);
+
+    // A matching record with nothing to discount is priced at the full input: a reload.
+    records.length = 0;
+    const empty = terms({ prefix_digest: LONG_DIGEST, prefix_cache: { ...CACHE, cached_tokens: 0 } });
+    await strongOnly.generate({ ...request(empty), request_id: 'req-empty' });
+    assert.deepEqual(routeCaches(), [['route.strong', 'reload']]);
 
     records.length = 0;
     await gateway.generate({ ...request(terms()), request_id: 'req-cold' });
     assert.deepEqual(routeCaches(), [['route.cheap', undefined]]);
-    assert.ok(records.every((r) => !Object.hasOwn(r.fields, 'prefix_cache')), 'no cache lookup, no cache field');
+    assert.ok(
+      records.every((r) => !Object.hasOwn(r.fields, 'prefix_cache')),
+      'no cache lookup, no cache field',
+    );
   });
 });

@@ -335,7 +335,7 @@ A recorded match between one routed unit and the digest of a view's stable prefi
 
 ### Prefix cache use
 
-How routing priced one routed unit's prefix cache, recorded as `prefix_cache` on each Weft `route.selected` when the request carries a prefix digest and a prefix cache record: `hit` (the record matches this unit and digest, so cached input was discounted), `reload` (a different unit or digest, priced at the full input), or `ignored` (the record matched but its cached tokens exceeded the input, so the attempt was priced cold). An escalation off the cached unit is a new route record, so a switch from `hit` to `reload` is explicit. It records a routing price, not what the provider actually served from cache, and it grants nothing.
+How routing priced one routed unit's prefix cache, recorded as `prefix_cache` on each Weft `route.selected` when the request carries a prefix digest and a prefix cache record: `hit` (the record matches this unit and digest and holds cached tokens, so cached input was discounted), `reload` (a different unit or digest, or a matching record with zero cached tokens, priced at the full input), or `ignored` (the record matched but its cached tokens exceeded the input, so the attempt was priced cold). An escalation off the cached unit is a new route record, so a switch from `hit` to `reload` is explicit. It records a routing price, not what the provider actually served from cache, and it grants nothing.
 
 ### Generative implementation
 

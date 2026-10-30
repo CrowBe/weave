@@ -80,12 +80,12 @@ write-back.
 
 ### Evidence: what was missing, and the change
 
-| Question                                     | Before                                                                                                                                                          | After                                                                         |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Did routing price this unit warm or cold?    | Not recorded. Outcome `uncertainty` noted only the `ignored` case (`routing.ts:161-165`, `gateway.ts:562-571`)                                                  | `route.selected.prefix_cache`: `hit`, `reload` or `ignored`                   |
-| Did an escalation leave the cached unit?     | A new `route.selected` that `supersedes` the old one (`packages/gateway/src/weft.ts:91-120`), with nothing about the cache                                       | The superseding record reads `reload` after a `hit`                           |
-| Did the budget gate exclude the cached unit? | `excluded[].reason` on the next route record (`budget.ts:116`)                                                                                                  | Unchanged, and that next record now carries its own `prefix_cache`            |
-| Did Gauge evidence depend on cache state?    | No. Preference sets credit accept rate per routed unit (`packages/gateway/src/preferences.ts:147-168`). That is correct, because the cache changes cost, not acceptance | Unchanged                                                                     |
+| Question                                     | Before                                                                                                                                                                  | After                                                              |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Did routing price this unit warm or cold?    | Not recorded. Outcome `uncertainty` noted only the `ignored` case (`routing.ts:161-165`, `gateway.ts:562-571`)                                                          | `route.selected.prefix_cache`: `hit`, `reload` or `ignored`        |
+| Did an escalation leave the cached unit?     | A new `route.selected` that `supersedes` the old one (`packages/gateway/src/weft.ts:91-120`), with nothing about the cache                                              | The superseding record reads `reload` after a `hit`                |
+| Did the budget gate exclude the cached unit? | `excluded[].reason` on the next route record (`budget.ts:116`)                                                                                                          | Unchanged, and that next record now carries its own `prefix_cache` |
+| Did Gauge evidence depend on cache state?    | No. Preference sets credit accept rate per routed unit (`packages/gateway/src/preferences.ts:147-168`). That is correct, because the cache changes cost, not acceptance | Unchanged                                                          |
 
 The new **prefix cache use** field (GLOSSARY.md) is set by `prefixCacheUse`
 (`routing.ts:106-115`) and emitted from the attempt loop (`gateway.ts:548`)
@@ -99,12 +99,15 @@ Weft.
 
 Red then green: `M6-T05` (`m6-routing.test.ts:259`) failed with
 `prefix_cache` `undefined` on both route records. It passes after the change.
-The test pins three behaviours:
+The test pins four behaviours:
 
 - **Hit, then reload.** A warm request whose cached unit refuses
   non-retryably records a `hit` for `route.strong`, then a `reload` for the
   `route.cheap` escalation.
 - **Ignored.** An oversized cache records `ignored`.
+- **Empty.** A matching record with zero cached tokens discounts nothing, so
+  it records `reload`. This case was added in review and passed on its first
+  run, because it pins existing pricing.
 - **Absent.** A request with no cache record emits no field.
 
 Routing semantics did not change. The order and the outcomes are the same as
