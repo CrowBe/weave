@@ -123,15 +123,14 @@ export async function execute(options: {
       const prior = history.filter(
         (r) =>
           r.type === 'call' &&
-          replayKey(r) === key &&
           !retryableCancellation(r.result) &&
           !(r.result.status === 'skipped' && r.result.reason === 'quota_unavailable_or_weekly_cap'),
       );
       if (prior.some((r) => r.terminal)) continue;
-      const pending = history.filter((r) => r.type === 'intent' && replayKey(r) === key && !journal.hasCall(r.call_id));
+      const pending = history.filter((r) => r.type === 'intent' && !journal.hasCall(r.call_id));
       if (pending.length) {
         // The provider may have accepted a request before a crash. Never automatically pay again.
-        if (!history.some((r) => r.type === 'uncertain' && replayKey(r) === key))
+        if (!history.some((r) => r.type === 'uncertain'))
           journal.append({ type: 'uncertain', ...binding, reason: 'unacknowledged_call_no_automatic_retry' });
         continue;
       }

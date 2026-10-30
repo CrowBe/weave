@@ -206,7 +206,7 @@ export async function main(
         await delay(ms, undefined, signal ? { signal } : {});
       },
     };
-    const counts = Object.fromEntries(['pi', 'fx-ask'].map((p) => [p, countCompetitorCalls(journal.read(), p)]));
+    const counts = Object.fromEntries(['pi', 'fx-ask'].map((p) => [p, countCompetitorCalls(history, p)]));
     const competitors = buildCompetitors({ run: runProcess, cwd: temp, quotaAllowed: true, callCounts: counts }).map(
       (provider) => ({
         ...provider,
@@ -250,6 +250,7 @@ export async function main(
         signal: controller.signal,
       });
     const records = journal.read();
+    const spend = ledger(records);
     const { bound, statuses, complete } = await bindObservations(records, providers, entries, options.renderOnly);
     const publish =
       complete &&
@@ -267,7 +268,7 @@ export async function main(
         providers: options.providers,
         sites: options.sites,
         statuses,
-        spent_usd: journal.spent(),
+        spent_usd: spend.spent_usd,
         input_tokens: records
           .filter((r) => r.type === 'call')
           .reduce((sum, r) => sum + (r.result.input_tokens ?? 0), 0),
@@ -278,7 +279,6 @@ export async function main(
       reportRecords,
     );
     // Reserved spend may over-state the bill (a usage-less 429 is charged at projection), never under-state it.
-    const spend = ledger(records);
     Object.assign(report.summary, {
       metered_call_cost_usd: spend.observed_usd,
       observed_usd: spend.observed_usd,
@@ -289,7 +289,7 @@ export async function main(
     const markdown =
       report.markdown +
       '\n\nLedger spend (including pending reservations): $' +
-      journal.spent().toFixed(8) +
+      spend.spent_usd.toFixed(8) +
       '\n' +
       'Observed spend (usage receipts): $' +
       spend.observed_usd.toFixed(8) +
@@ -303,7 +303,7 @@ export async function main(
       writeFileSync(join(root, 'REPORT.md'), markdown);
     writeSync(
       1,
-      `Run ${options.runId}: ${bound.length} items; spend $${journal.spent().toFixed(8)} / $${options.maxSpend.toFixed(2)}\n`,
+      `Run ${options.runId}: ${bound.length} items; spend $${spend.spent_usd.toFixed(8)} / $${options.maxSpend.toFixed(2)}\n`,
     );
     return controller.signal.aborted ? 130 : 0;
   } finally {

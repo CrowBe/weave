@@ -382,9 +382,41 @@ export function tune(site: string, observations: readonly Observed[], provider?:
   const rows = observations.filter((o) => o.split === 'tune');
   const production = productionThresholds(site, provider);
   if (!rows.length) return { ...production, tuning_status: 'no_tune_data' };
-  let best: Thresholds | undefined, score: Metrics | undefined;
+  // Selection uses only these three measures. Full reporting metrics (including
+  // calibration and sorted latencies) need not be rebuilt for every grid point.
+  const labelled = rows.map((o) => ({ o, gold: Object.entries(o.item.gold) }));
+  type Selection = Pick<Metrics, 'coverage' | 'accuracy' | 'violation_recall'>;
+  let best: Thresholds | undefined, score: Selection | undefined;
   for (const candidate of grid(site, provider)) {
-    const m = metrics(site, rows, candidate);
+    let covered = 0,
+      correct = 0,
+      violations = 0,
+      caught = 0;
+    for (const { o, gold } of labelled) {
+      const decision = decide(site, o, candidate);
+      if (decision.covered) {
+        covered++;
+        if (
+          gold.every(([key, value]) =>
+            site === 'loop.preselect'
+              ? value !== true || decision.predicted[key] === true
+              : decision.predicted[key] === value,
+          )
+        )
+          correct++;
+      }
+      if (guard(site))
+        for (const [key, value] of gold)
+          if (value === true) {
+            violations++;
+            if (decision.covered && decision.predicted[key] === true) caught++;
+          }
+    }
+    const m: Selection = {
+      coverage: covered / rows.length,
+      accuracy: covered ? correct / covered : null,
+      violation_recall: violations ? caught / violations : null,
+    };
     if (m.coverage < 0.5) continue;
     const better =
       !score ||

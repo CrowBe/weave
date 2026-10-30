@@ -37,7 +37,7 @@ export class Journal {
   constructor(path: string, readOnly = false) {
     this.path = path;
     this.readOnly = readOnly;
-    this.read();
+    this.rows();
   }
   read(): JournalRecord[] {
     return structuredClone(this.rows());
