@@ -56,8 +56,9 @@ export async function bindObservations(
       ];
       matches.sort((a, b) => order.get(a)! - order.get(b)!);
       const calls = matches.filter((r) => r.type === 'call');
+      const completed = new Set(calls.map((r) => r.call_id));
       const last = calls.at(-1);
-      const pending = matches.filter((r) => r.type === 'intent' && !calls.some((c) => c.call_id === r.call_id)).at(-1);
+      const pending = matches.filter((r) => r.type === 'intent' && !completed.has(r.call_id)).at(-1);
       if (pending || (!calls.some((r) => r.terminal) && !skipped.has(provider.id))) complete = false;
       if (pending)
         bound.push({
