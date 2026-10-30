@@ -130,6 +130,32 @@ describe('recurrence key', () => {
     assert.equal(recurrenceKey({ ...base, kind: 'criterion_failed' }), null);
     assert.equal(recurrenceKey({ ...base, site: 'eval.output' }), null);
   });
+
+  it('matches the execution id in evidence only on whole segments', () => {
+    const base: JudgmentFinding = {
+      site: 'audit.generate',
+      execution_id: 'exec-1',
+      kind: 'gap',
+      criterion_id: 'c1',
+      evidence_ref: 'ref_readme',
+    };
+    for (const evidence_ref of ['ref_exec-10', 'ref_xexec-1', 'exec-1x', 'ref_exec-1a.log']) {
+      assert.ok(recurrenceKey({ ...base, evidence_ref }), evidence_ref);
+    }
+    assert.ok(recurrenceKey({ ...base, execution_id: 'a1', evidence_ref: 'ref_data1' }));
+    assert.ok(recurrenceKey({ ...base, execution_id: 'a1', evidence_ref: 'a10' }));
+    for (const evidence_ref of ['exec-1', 'ref_exec-1', 'exec-1_log', 'ref.exec-1:log', 'exec-10_exec-1']) {
+      assert.equal(recurrenceKey({ ...base, evidence_ref }), null, evidence_ref);
+    }
+
+    const gaps = recordCheckGaps(
+      ['exec-1', 'exec-2'].flatMap((id) =>
+        auditJudgmentFindings(round(id, [{ ...readmeDefect, evidence_ref: 'ref_exec-10' }], ['fix_now'])),
+      ),
+    );
+    assert.equal(gaps.length, 1);
+    assert.deepEqual(gaps[0]?.cites, [{ execution_id: 'exec-1' }, { execution_id: 'exec-2' }]);
+  });
 });
 
 describe('capability gap records', () => {
@@ -221,6 +247,38 @@ describe('capability gap records', () => {
         String(executions),
       );
     }
+  });
+
+  it('does not record recurrence from malformed D5 statistics', () => {
+    const malformed: readonly ImplementEval[] = [
+      { ...fail('c2'), confidence: 1.01 },
+      { ...fail('c2'), confidence: Number.POSITIVE_INFINITY },
+      { ...fail('c2'), confidence: Number.NaN },
+      { ...fail('c2'), confidence: -0.01 },
+      { ...fail('c2'), verdict_probability: -0.01 },
+      { ...fail('c2'), verdict_probability: Number.NEGATIVE_INFINITY },
+      { ...fail('c2'), verdict_probability: Number.NaN },
+      { ...fail('c2'), verdict_probability: 1.01 },
+    ];
+    for (const item of malformed) {
+      const findings = ['exec-1', 'exec-2'].flatMap((execution_id) =>
+        outputEvalJudgmentFindings({ execution_id, evals: [item] }, 'ref_app'),
+      );
+      assert.deepEqual(findings, [], 'invalid statistics are not judgment-caught failures');
+      assert.deepEqual(recordCheckGaps(findings), []);
+    }
+    const boundary = { ...fail('c2'), confidence: 0.9, verdict_probability: 0 };
+    const findings = ['exec-1', 'exec-2'].flatMap((execution_id) =>
+      outputEvalJudgmentFindings({ execution_id, evals: [boundary] }, 'ref_app'),
+    );
+    assert.equal(recordCheckGaps(findings).length, 1);
+    assert.deepEqual(
+      outputEvalJudgmentFindings(
+        { execution_id: 'exec-3', evals: [{ ...boundary, verdict_probability: 0.8 }] },
+        'ref_app',
+      ),
+      [],
+    );
   });
 });
 
@@ -357,5 +415,30 @@ describe('check coverage', () => {
       covered: 0,
       share: null,
     });
+  });
+
+  it('derives the covering operation from the finding, not from a caller-supplied gap', () => {
+    const readme = ['exec-1', 'exec-2'].flatMap((id) => auditJudgmentFindings(round(id, [readmeDefect], ['fix_now'])));
+    const changelog = ['exec-3', 'exec-4'].flatMap((id) =>
+      auditJudgmentFindings(round(id, [{ ...readmeDefect, evidence_ref: 'ref_changelog' }], ['fix_now'])),
+    );
+    const findings = [...readme, ...changelog];
+    const gaps = recordCheckGaps(findings);
+    assert.equal(gaps.length, 2);
+    const readmeKey = recurrenceKey(readme[0] as JudgmentFinding);
+    const readmeGap = gaps.find((gap) => gap.recurrence_key === readmeKey) as CheckGapRecord;
+    const changelogGap = gaps.find((gap) => gap.recurrence_key !== readmeKey) as CheckGapRecord;
+    const admitted = changelogGap.desired.operation;
+
+    const forged: CheckGapRecord = { ...readmeGap, desired: { ...readmeGap.desired, operation: admitted } };
+    assert.deepEqual(checkCoverage(findings, [forged, changelogGap], [admitted]), {
+      schema: 'judgment.check_coverage@1',
+      caught: 4,
+      covered: 2,
+      share: 0.5,
+    });
+    const unrelated: CheckGapRecord = { ...readmeGap, desired: { ...readmeGap.desired, operation: 'text.normalize' } };
+    assert.equal(checkCoverage(findings, [unrelated], ['text.normalize']).covered, 0);
+    assert.equal(checkCoverage(findings, [unrelated], [readmeGap.desired.operation]).covered, 2);
   });
 });

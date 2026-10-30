@@ -22,7 +22,7 @@ import type { AuditFinding, AuditRound } from './audit-loop.js';
 import { digest } from './digest.js';
 import type { ImplementEval } from './implement-step.js';
 import type { AuditDisposition } from './sites/audit-dispose.js';
-import { correlation } from './sites/index.js';
+import { correlation, unit } from './sites/index.js';
 import { OUTPUT_EVAL_POLICY } from './sites/output-eval.js';
 
 export const RECURRENCE_KEY_SCHEMA = 'judgment.recurrence@1' as const;
@@ -85,12 +85,32 @@ export interface CheckCoverage {
 
 const AUDIT_KINDS: readonly AuditFinding['kind'][] = ['gap', 'defect', 'regression', 'scope_creep'];
 const FIX_NOW: AuditDisposition = 'fix_now';
+const SEGMENT_SEPARATOR = /[_.:-]/;
+
+/** True when the execution id occupies whole segments of the evidence reference, not part of a longer segment. */
+function namesExecution(evidence: string, execution: string): boolean {
+  for (let at = evidence.indexOf(execution); at !== -1; at = evidence.indexOf(execution, at + 1)) {
+    const before = evidence[at - 1];
+    const after = evidence[at + execution.length];
+    if (
+      (before === undefined || SEGMENT_SEPARATOR.test(before)) &&
+      (after === undefined || SEGMENT_SEPARATOR.test(after))
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function checkOperation(kind: JudgmentFindingKind, key: string): string {
+  return `check.${kind}.${key.slice(3, 19)}`;
+}
 
 /**
  * Stable across executions: kind, criterion and check-relevant evidence. The
  * execution id, any proposed fix, and any other free text are not inputs. Null
  * when the finding cannot recur: an unsafe reference, a kind its site does not
- * produce, or evidence that names its own execution.
+ * produce, or evidence that names its own execution as whole segments.
  */
 export function recurrenceKey(finding: JudgmentFinding): string | null {
   const execution = correlation(finding.execution_id);
@@ -101,7 +121,7 @@ export function recurrenceKey(finding: JudgmentFinding): string | null {
     finding.site === 'eval.output'
       ? finding.kind === 'criterion_failed'
       : finding.site === 'audit.generate' && (AUDIT_KINDS as readonly string[]).includes(finding.kind);
-  if (!known || evidence.includes(execution)) return null;
+  if (!known || namesExecution(evidence, execution)) return null;
   const { kind, criterion_id } = finding;
   return `rk_${digest({ schema: RECURRENCE_KEY_SCHEMA, kind, criterion_id, evidence_ref: evidence }).slice(0, 32)}`;
 }
@@ -138,7 +158,7 @@ export function recordCheckGaps(
       finding: { site, kind, criterion_id, evidence_ref },
       cites: [...executions].sort().map((execution_id) => ({ execution_id })),
       desired: {
-        operation: `check.${kind}.${key.slice(3, 19)}`,
+        operation: checkOperation(kind, key),
         purpose:
           `Decide in code the recurring ${kind} judgment finding` +
           `${criterion_id === null ? '' : ` for criterion ${criterion_id}`} on evidence ${evidence_ref}`,
@@ -171,7 +191,8 @@ export function auditJudgmentFindings(round: AuditRound): readonly JudgmentFindi
 
 /**
  * D5 failures: a criterion verdict at or above the confidence floor and below
- * the probability threshold. Low confidence and outages are not caught failures.
+ * the probability threshold. Both statistics must be finite numbers in [0, 1].
+ * Malformed statistics, low confidence and outages are not caught failures.
  * The caller names the evidence D5 judged.
  */
 export function outputEvalJudgmentFindings(
@@ -180,9 +201,9 @@ export function outputEvalJudgmentFindings(
 ): readonly JudgmentFinding[] {
   return attempt.evals.flatMap((item) =>
     !item.passed &&
-    item.confidence !== null &&
+    unit(item.confidence) &&
     item.confidence >= OUTPUT_EVAL_POLICY.confidence &&
-    item.verdict_probability !== null &&
+    unit(item.verdict_probability) &&
     item.verdict_probability < OUTPUT_EVAL_POLICY.probability
       ? [
           {
@@ -200,8 +221,10 @@ export function outputEvalJudgmentFindings(
 /**
  * Share of judgment-caught failures that an admitted check covers. A failure
  * is one finding per execution. It is covered only when a gap record holds its
- * recurrence key and that gap's operation is among the admitted operations: a
- * gap record alone covers nothing.
+ * recurrence key and the check operation derived from that key is among the
+ * admitted operations. A gap's own `desired.operation` is never read, so a
+ * forged gap cannot link a finding to an unrelated admitted operation. A gap
+ * record alone covers nothing.
  */
 export function checkCoverage(
   findings: readonly JudgmentFinding[],
@@ -209,14 +232,15 @@ export function checkCoverage(
   admitted_operations: readonly string[],
 ): CheckCoverage {
   const admitted = new Set(admitted_operations);
-  const coveredKeys = new Set(
-    gaps.filter((gap) => admitted.has(gap.desired.operation)).map((gap) => gap.recurrence_key),
-  );
+  const recorded = new Set(gaps.map((gap) => gap.recurrence_key));
   const caught = new Map<string, boolean>();
   for (const finding of findings) {
     const { execution_id, kind, criterion_id, evidence_ref } = finding;
     const key = recurrenceKey(finding);
-    caught.set(digest({ execution_id, kind, criterion_id, evidence_ref }), key !== null && coveredKeys.has(key));
+    caught.set(
+      digest({ execution_id, kind, criterion_id, evidence_ref }),
+      key !== null && recorded.has(key) && admitted.has(checkOperation(kind, key)),
+    );
   }
   const covered = [...caught.values()].filter(Boolean).length;
   return {
