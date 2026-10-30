@@ -222,6 +222,38 @@ describe('capability gap records', () => {
       );
     }
   });
+
+  it('does not record recurrence from malformed D5 statistics', () => {
+    const malformed: readonly ImplementEval[] = [
+      { ...fail('c2'), confidence: 1.01 },
+      { ...fail('c2'), confidence: Number.POSITIVE_INFINITY },
+      { ...fail('c2'), confidence: Number.NaN },
+      { ...fail('c2'), confidence: -0.01 },
+      { ...fail('c2'), verdict_probability: -0.01 },
+      { ...fail('c2'), verdict_probability: Number.NEGATIVE_INFINITY },
+      { ...fail('c2'), verdict_probability: Number.NaN },
+      { ...fail('c2'), verdict_probability: 1.01 },
+    ];
+    for (const item of malformed) {
+      const findings = ['exec-1', 'exec-2'].flatMap((execution_id) =>
+        outputEvalJudgmentFindings({ execution_id, evals: [item] }, 'ref_app'),
+      );
+      assert.deepEqual(findings, [], 'invalid statistics are not judgment-caught failures');
+      assert.deepEqual(recordCheckGaps(findings), []);
+    }
+    const boundary = { ...fail('c2'), confidence: 0.9, verdict_probability: 0 };
+    const findings = ['exec-1', 'exec-2'].flatMap((execution_id) =>
+      outputEvalJudgmentFindings({ execution_id, evals: [boundary] }, 'ref_app'),
+    );
+    assert.equal(recordCheckGaps(findings).length, 1);
+    assert.deepEqual(
+      outputEvalJudgmentFindings(
+        { execution_id: 'exec-3', evals: [{ ...boundary, verdict_probability: 0.8 }] },
+        'ref_app',
+      ),
+      [],
+    );
+  });
 });
 
 describe('a gap record grants nothing', () => {

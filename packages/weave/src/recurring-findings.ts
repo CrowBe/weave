@@ -22,7 +22,7 @@ import type { AuditFinding, AuditRound } from './audit-loop.js';
 import { digest } from './digest.js';
 import type { ImplementEval } from './implement-step.js';
 import type { AuditDisposition } from './sites/audit-dispose.js';
-import { correlation } from './sites/index.js';
+import { correlation, unit } from './sites/index.js';
 import { OUTPUT_EVAL_POLICY } from './sites/output-eval.js';
 
 export const RECURRENCE_KEY_SCHEMA = 'judgment.recurrence@1' as const;
@@ -171,7 +171,8 @@ export function auditJudgmentFindings(round: AuditRound): readonly JudgmentFindi
 
 /**
  * D5 failures: a criterion verdict at or above the confidence floor and below
- * the probability threshold. Low confidence and outages are not caught failures.
+ * the probability threshold. Both statistics must be finite numbers in [0, 1].
+ * Malformed statistics, low confidence and outages are not caught failures.
  * The caller names the evidence D5 judged.
  */
 export function outputEvalJudgmentFindings(
@@ -180,9 +181,9 @@ export function outputEvalJudgmentFindings(
 ): readonly JudgmentFinding[] {
   return attempt.evals.flatMap((item) =>
     !item.passed &&
-    item.confidence !== null &&
+    unit(item.confidence) &&
     item.confidence >= OUTPUT_EVAL_POLICY.confidence &&
-    item.verdict_probability !== null &&
+    unit(item.verdict_probability) &&
     item.verdict_probability < OUTPUT_EVAL_POLICY.probability
       ? [
           {
