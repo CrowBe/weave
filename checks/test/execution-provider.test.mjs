@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
+import { access } from 'node:fs/promises';
 import { test } from 'node:test';
 import { scenarios } from '../fixtures/execution-provider/contract.mjs';
 import { ExecutionProviderDouble, makeDouble } from '../fixtures/execution-provider/doubles.mjs';
+
+test('raw red runner lives outside default Node test discovery', async () => {
+  await access(new URL('../fixtures/execution-provider/red.mjs', import.meta.url));
+  await assert.rejects(access(new URL('../fixtures/execution-provider/red.test.mjs', import.meta.url)), {
+    code: 'ENOENT',
+  });
+});
 
 test('execution-provider probes preserve research IDs X-T01–X-T10', () => {
   assert.deepEqual(
@@ -52,4 +60,25 @@ for (const scenario of scenarios) {
   });
   test(`${scenario.id} scripted positive control satisfies the same probe`, () =>
     scenario.check(makeDouble(scenario.id)));
+}
+
+for (const [id, defect, failure] of [
+  ['X-T03', 'duplicate-approval', 'X-T03: duplicate approval never repeats invocation'],
+  ['X-T05', 'wrong-identity-lookup', 'X-T05: recovery looks up the recorded invocation identity'],
+  ['X-T05', 'ignore-restored-call', 'X-T05: changed restored call is refused before lookup'],
+  ['X-T06', 'late-time', 'X-T06: time trip stays within the deadline'],
+  ['X-T06', 'late-memory', 'X-T06: memory trip stays within the deadline'],
+  ['X-T09', 'missed-kill', 'X-T09: running cancellation kills the worker'],
+  ['X-T10', 'unbounded-checkout', 'X-T10: worker checkout has a finite positive deadline'],
+]) {
+  test(`${id} rejects independent defect: ${defect}`, async () => {
+    const scenario = scenarios.find((candidate) => candidate.id === id);
+    await assert.rejects(
+      () => scenario.check(makeDouble(id, defect)),
+      (error) =>
+        error instanceof assert.AssertionError &&
+        error.code === 'ERR_ASSERTION' &&
+        error.message.split('\n')[0] === failure,
+    );
+  });
 }

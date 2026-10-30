@@ -1,4 +1,5 @@
-// Run directly to observe red. The gating test requires ten assertion failures,
+// Run directly to observe red. Keep this outside Node's *.test.mjs discovery.
+// The gating test requires ten assertion failures,
 // not skips/todos, loader failures or unrelated exceptions.
 import { test } from 'node:test';
 import { scenarios } from './contract.mjs';

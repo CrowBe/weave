@@ -1,6 +1,7 @@
 // Deliberately bounded scripts for the contract probes. No interpreter, real
 // grants, durable store, MAC, jail, OS limits or scheduler is implemented here.
-// `broken` injects one known defect per research scenario. Healthy scripts are
+// `broken === true` injects the primary defect; named strings select independent
+// defects without also injecting the primary one. Healthy scripts are
 // positive controls for the probes, not candidate providers for admission.
 const pending = {
   kind: 'suspended',
@@ -117,10 +118,10 @@ const factories = {
       async pause() {
         await provider.start({ source: 'fixture' }, ['doc.write'], { deadline: 10 });
         await provider.dump();
-        if (!broken) await provider.close();
+        if (broken !== true) await provider.close();
       },
       async decide(decision) {
-        if (decided) return;
+        if (decided && broken !== 'duplicate-approval') return;
         decided = true;
         if (decision === 'approve') this.invocations++;
         this.resumptions.push(decision === 'approve' ? value : { kind: 'exception', code: 'DENIED' });
@@ -168,7 +169,8 @@ const factories = {
     };
   },
   'X-T05': (broken) => {
-    let outcome;
+    const identities = new Map();
+    const outcomes = new Map();
     return {
       invocationId: 'invocation:run-1:call-1',
       events: [],
@@ -187,22 +189,42 @@ const factories = {
       },
       fresh: () => factories['X-T05'](broken),
       loseOutcome() {
-        outcome = undefined;
+        outcomes.clear();
       },
       async dispatchThenCrash() {
+        identities.set(pending.call_id, { call: structuredClone(pending), invocationId: this.invocationId });
         this.events.push('identity_recorded');
         this.held = true;
         this.events.push('invoke');
         this.effects++;
-        outcome = structuredClone(value);
+        outcomes.set(this.invocationId, structuredClone(value));
         // A crash loses the acknowledgement before provider.resume.
       },
       async recover(bytes) {
-        await this.provider.restore(bytes); // Re-announces the same call.
-        if (broken) {
+        const call = await this.provider.restore(bytes);
+        const recorded = identities.get(call.call_id);
+        if (
+          broken !== 'ignore-restored-call' &&
+          (!recorded ||
+            recorded.call.capability !== call.capability ||
+            JSON.stringify(recorded.call.input) !== JSON.stringify(call.input))
+        )
+          return 'refused';
+        let outcome;
+        if (broken === true) {
           this.effects++;
           this.events.push('invoke');
-        } else this.lookups.push(this.invocationId);
+          outcome = outcomes.get(this.invocationId);
+        } else {
+          const identity =
+            broken === 'wrong-identity-lookup'
+              ? call.call_id
+              : broken === 'ignore-restored-call'
+                ? this.invocationId
+                : recorded.invocationId;
+          this.lookups.push(identity);
+          outcome = outcomes.get(identity);
+        }
         if (outcome) {
           this.resumptions.push(outcome);
           this.held = false;
@@ -221,10 +243,12 @@ const factories = {
       fresh: () => factories['X-T06'](broken),
       async start(limit) {
         this.feeds++;
-        this.elapsed = this.deadline; // Injected ticks, no actual runaway code.
+        // Injected ticks, no actual runaway code. Late termination is separate
+        // from failing to discard the session, for both limit types.
+        this.elapsed = this.deadline + Number(broken === `late-${limit}`);
         const result = await provider.start({ source: 'fixture', limit }, [], { deadline: this.deadline });
-        if (!broken) await provider.close();
-        this.closed = !broken;
+        if (broken !== true) await provider.close();
+        this.closed = broken !== true;
         return result;
       },
       async resume() {
@@ -276,9 +300,9 @@ const factories = {
         this.record('cancelled');
         return;
       }
-      this.kills++;
+      if (broken !== 'missed-kill') this.kills++;
       this.status = 'pending_record';
-      if (broken) this.held = false;
+      if (broken === true) this.held = false;
     },
     record(outcome) {
       this.status = outcome;
@@ -299,8 +323,8 @@ const factories = {
         latest = [...offered];
         return {
           grant: { owner: id },
-          checkoutDeadline: 10,
-          offered: () => [...(broken ? latest : offered)],
+          checkoutDeadline: broken === 'unbounded-checkout' ? Infinity : 10,
+          offered: () => [...(broken === true ? latest : offered)],
           start() {
             if (pool.workers >= 2) return Promise.resolve({ kind: 'failed', code: 'PROVIDER_UNAVAILABLE' });
             pool.workers++;

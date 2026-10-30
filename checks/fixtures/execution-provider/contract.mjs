@@ -40,7 +40,7 @@ export const scenarios = [
       assert.equal(f.invocations, 0);
       await f.decide('approve');
       await f.decide('approve');
-      assert.equal(f.invocations, 1);
+      assert.equal(f.invocations, 1, 'X-T03: duplicate approval never repeats invocation');
       assert.equal(f.resumptions.length, 1);
       const refused = f.fresh();
       await refused.pause();
@@ -80,8 +80,27 @@ export const scenarios = [
       assert.equal(f.effects, 1);
       await f.recover(saved);
       assert.equal(f.effects, 1, this.failure);
-      assert.deepEqual(f.lookups, [f.invocationId]);
+      assert.deepEqual(f.lookups, [f.invocationId], 'X-T05: recovery looks up the recorded invocation identity');
       assert.equal(f.resumptions.length, 1);
+      for (const changed of [
+        { call_id: 'call:other' },
+        { capability: 'doc.read' },
+        { input: { ref: 'ref:other', content: 'draft' } },
+      ]) {
+        const mismatched = f.fresh();
+        await mismatched.dispatchThenCrash();
+        const restore = mismatched.provider.restore.bind(mismatched.provider);
+        mismatched.provider.restore = async (bytes) => ({ ...(await restore(bytes)), ...changed });
+        assert.equal(
+          await mismatched.recover(await mismatched.provider.dump()),
+          'refused',
+          'X-T05: changed restored call is refused before lookup',
+        );
+        assert.equal(mismatched.lookups.length, 0);
+        assert.equal(mismatched.resumptions.length, 0);
+        assert.equal(mismatched.effects, 1);
+        assert.equal(mismatched.held, true);
+      }
       const unknown = f.fresh();
       await unknown.dispatchThenCrash();
       unknown.loseOutcome();
@@ -99,7 +118,7 @@ export const scenarios = [
       for (const limit of ['time', 'memory']) {
         const run = f.fresh();
         assert.deepEqual(await run.start(limit), { kind: 'failed', code: 'LIMIT_EXCEEDED' });
-        assert.ok(run.elapsed <= run.deadline);
+        assert.ok(run.elapsed <= run.deadline, `X-T06: ${limit} trip stays within the deadline`);
         assert.equal(run.closed, true, this.failure);
         const feeds = run.feeds;
         assert.deepEqual(await run.resume('call:1', { kind: 'value', value: 1 }), {
@@ -152,7 +171,7 @@ export const scenarios = [
       assert.equal(paused.status, 'cancelled');
       const running = f.fresh('running');
       await running.cancel();
-      assert.equal(running.kills, 1);
+      assert.equal(running.kills, 1, 'X-T09: running cancellation kills the worker');
       assert.equal(running.held, true, this.failure);
       assert.equal(running.status, 'pending_record');
       running.record('cancelled');
@@ -177,7 +196,10 @@ export const scenarios = [
       assert.equal(f.workers, 2);
       assert.deepEqual(a.offered(), ['doc.read'], this.failure);
       assert.deepEqual(b.offered(), ['doc.write']);
-      assert.ok(a.checkoutDeadline > 0 && Number.isFinite(a.checkoutDeadline));
+      assert.ok(
+        a.checkoutDeadline > 0 && Number.isFinite(a.checkoutDeadline),
+        'X-T10: worker checkout has a finite positive deadline',
+      );
       const excess = f.open('thread:c', ['doc.read']);
       assert.deepEqual(await excess.start(), { kind: 'failed', code: 'PROVIDER_UNAVAILABLE' });
       f.release('thread:b');

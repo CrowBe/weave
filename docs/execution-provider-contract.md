@@ -222,9 +222,9 @@ is executed and no double proves isolation, durability, timing or real concurren
 | ----- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | X-T01 | Un-offered call fails in the program; no invoke; repeat has the same gap signature                                                  | Scripted interpreter and gap record only                                  |
 | X-T02 | Grant-shaped input cannot replace host-bound grant; offered valid input reaches Fabric; denied outcome resumes with exact code      | Synthetic authority, not production grant mapping                         |
-| X-T03 | Approval pauses with zero workers and no invoke; approval invokes once; refusal raises `DENIED`                                     | Lifecycle, durable approval binding and custody blocked                   |
+| X-T03 | Approval pauses with zero workers and no invoke; duplicate approval invokes once; refusal raises `DENIED`                           | Lifecycle, durable approval binding and custody blocked                   |
 | X-T04 | Edited dump and changed bindings refuse restore before provider access; valid envelope reaches provider                             | Real MAC/key/storage implementation blocked; E3b motivates the red double |
-| X-T05 | Crash after dispatch, restore re-announces call; lookup by recorded identity; effect count remains one                              | Durable atomicity and unknown outcomes need a real host                   |
+| X-T05 | Crash after dispatch, restore re-announces call; lookup by recorded identity; changed call refuses lookup; effect count remains one | Durable atomicity and unknown outcomes need a real host                   |
 | X-T06 | Time/memory trip is bounded; terminal session is discarded and cannot resume                                                        | Injected ticks, no OS timing or RSS evidence                              |
 | X-T07 | Missing OS isolation refuses untrusted start and restore; never changes tier                                                        | Report is synthetic, not containment evidence                             |
 | X-T08 | Replay has identical observations, clock and seed; provider/invoke/lookup counts zero                                               | Durable replay format blocked                                             |
@@ -234,8 +234,11 @@ is executed and no double proves isolation, durability, timing or real concurren
 Run raw demonstrated red (expected exit 1, ten contract assertion failures):
 
 ```sh
-node checks/fixtures/execution-provider/red.test.mjs
+node checks/fixtures/execution-provider/red.mjs
 ```
+
+The raw runner deliberately avoids Node's default test discovery names, so bare
+`node --test` does not execute these expected failures.
 
 Run the gating checks (expected exit 0):
 
@@ -247,17 +250,31 @@ npm run verify
 The gating suite requires the exact assertion failure for each invalid double,
 rejecting a missing module, unexpected exception or unexpectedly passing double.
 It also runs the scripted positive controls. These implementer-authored checks
-establish sensitivity to the named defects only. Before provider admission,
+establish sensitivity to the named defects only. Seven additional independent
+defects exercise duplicate approval (X-T03), lookup with the wrong invocation
+identity and acceptance of a changed restored call (X-T05), late time and memory
+termination separately (X-T06), a missed running-worker kill (X-T09), and an
+infinite checkout deadline (X-T10). Each must fail its own observation without
+the scenario's primary defect masking it. Recovery binds the re-announced call
+id, capability and input to the recorded invocation before lookup. Timing,
+termination and checkout observations remain injected test data; these checks
+provide no real worker or scheduler evidence. Other observations exercised only
+by healthy scripts are non-red positive controls. Before provider admission,
 reserve independently authored adversarial and held-out cases and prove these
 obligations against the real provider, adapter and durable host, including
 malformed data, revoked approvals, persistence faults, crashes and concurrent
 continuation claims. No benchmark, live provider or sandbox adoption is claimed.
 
-Local evidence (2026-10-30, Node 22.23.4): the raw runner produced ten expected
-assertion failures; the gating suite passed all 22 checks with no skips or todos.
+Local evidence (2026-10-30, Node 22.23.4): before fixing the doubles and runner
+name, the expanded gating suite failed nine checks. Afterward all 30 checks
+passed with no skips or todos, and the raw runner produced ten expected assertion
+failures. Bare `node --test` in the fixture directory discovered zero tests.
 Build and repository static checks passed. `npm run verify` was attempted and
 stopped in the existing `checks/test/checks.test.mjs` subprocess fixtures; an
 independent Node subprocess probe reports `spawnSync EPERM` in this environment.
-`npm test` also failed in seven existing test files, with a direct loopback
-test reporting `listen EPERM`. Full verification remains unproven and must be
-rerun in a host that permits the existing subprocess and loopback checks.
+All remaining verification stages were attempted individually: `npm test`
+failed in seven existing test files, and task-acceptance and decision-sites
+CLI subprocess checks also failed. A direct loopback probe reports `EPERM`.
+The other stages passed, including web build, typechecks, and offline suites.
+Full verification remains unproven and must be rerun in a host that permits
+the existing subprocess and loopback checks.
