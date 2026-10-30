@@ -103,6 +103,16 @@ export function priceAttempt(
   };
 }
 
+/** How routing priced this unit's prefix cache (GLOSSARY.md "Prefix cache use"). */
+export type PrefixCacheUse = 'hit' | 'reload' | 'ignored';
+
+/** Absent when the request asked for no cache lookup: it carries no digest or no record. */
+export function prefixCacheUse(route: RoutedUnit, terms: InferenceTerms): PrefixCacheUse | undefined {
+  if (terms.prefix_digest === undefined || terms.prefix_cache === undefined) return undefined;
+  const price = priceAttempt(route, terms);
+  return price.cache_ignored ? 'ignored' : price.cache_applied ? 'hit' : 'reload';
+}
+
 function tokenCost(tokens: number, perMtok: Micros): Micros {
   return (tokens * perMtok) / 1_000_000;
 }

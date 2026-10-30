@@ -182,6 +182,7 @@ export const FIELDS: { readonly [K in Kind]: Readonly<Record<string, Field>> } =
     request_ref: req(ref(isId)),
     routed_unit: req(ref(isId)),
     tier: ref(code('decision', 'flash', 'standard', 'strong')),
+    prefix_cache: ref(code('hit', 'reload', 'ignored')),
     excluded: ref(list(shape(EXCLUSION), 64), Object.keys(EXCLUSION)),
   },
   'inference.attempt': {

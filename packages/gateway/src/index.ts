@@ -8,11 +8,13 @@
 export { createInferenceGateway, type GatewayConfig } from './gateway.js';
 export type { WeftPort, WeftRecordShape } from './weft.js';
 export {
+  prefixCacheUse,
   priceAttempt,
   route,
   worstCaseCost,
   type AttemptPrice,
   type ExclusionReason,
+  type PrefixCacheUse,
   type RouteExclusion,
   type RoutingDecision,
 } from './routing.js';

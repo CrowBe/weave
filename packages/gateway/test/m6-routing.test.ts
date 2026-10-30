@@ -17,6 +17,7 @@ import {
   type GenerationRequest,
   type InferenceTerms,
   type RoutedUnit,
+  type WeftRecordShape,
 } from '@weave/gateway';
 
 type GenerateUnit = Extract<RoutedUnit, { operation: 'generate' }>;
@@ -253,5 +254,54 @@ describe('M6 prefix cache', () => {
       assert.equal(outcome.attempts[0]?.cost, 6_850_000);
       assert.equal(outcome.attempts[0]?.cost_is_upper_bound, true);
     }
+  });
+
+  it('M6-T05 each route record says whether routing priced a prefix-cache hit, a reload or an ignored cache', async () => {
+    const records: WeftRecordShape[] = [];
+    const refused: GenerationProviderResult = {
+      status: 'failed',
+      failure: { code: 'invalid_request', message: 'refused', retryable: false },
+    };
+    const gateway = createInferenceGateway({
+      routes: [
+        { ...cheap, adapter: 'route.cheap' },
+        { ...strong, adapter: 'route.strong' },
+      ],
+      adapters: [scripted('route.strong', refused), scripted('route.cheap', completed(770_000, 120_000))],
+      clock: fakeClock(),
+      weft: { trace_id: 'm6', emitter_id: 'gw', emit: (r) => void records.push(r) },
+    });
+    const routeCaches = () =>
+      records.filter((r) => r.kind === 'route.selected').map((r) => [r.fields['routed_unit'], r.fields['prefix_cache']]);
+    const warm = terms({ prefix_digest: LONG_DIGEST, prefix_cache: CACHE });
+    const outcome = await gateway.generate(request(warm));
+    assert.equal(outcome.status, 'accepted');
+    // The warm unit leaves mid-request: the switch off the cache is on the record.
+    assert.deepEqual(
+      routeCaches(),
+      [
+        ['route.strong', 'hit'],
+        ['route.cheap', 'reload'],
+      ],
+    );
+
+    records.length = 0;
+    const strongOnly = createInferenceGateway({
+      routes: [{ ...strong, adapter: 'route.strong' }],
+      adapters: [scripted('route.strong', completed(770_000, 120_000))],
+      clock: fakeClock(),
+      weft: { trace_id: 'm6', emitter_id: 'gw', emit: (r) => void records.push(r) },
+    });
+    const oversized = terms({ prefix_digest: LONG_DIGEST, prefix_cache: { ...CACHE, cached_tokens: 800_000 } });
+    await strongOnly.generate({ ...request(oversized), request_id: 'req-oversized' });
+    assert.deepEqual(
+      routeCaches(),
+      [['route.strong', 'ignored']],
+    );
+
+    records.length = 0;
+    await gateway.generate({ ...request(terms()), request_id: 'req-cold' });
+    assert.deepEqual(routeCaches(), [['route.cheap', undefined]]);
+    assert.ok(records.every((r) => !Object.hasOwn(r.fields, 'prefix_cache')), 'no cache lookup, no cache field');
   });
 });

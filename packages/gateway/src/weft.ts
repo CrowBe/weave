@@ -6,7 +6,7 @@
  * settled, so the sink cannot spend the request's deadline.
  */
 import type { AttemptRecord, RoutedUnit } from './types.js';
-import type { RouteExclusion } from './routing.js';
+import type { PrefixCacheUse, RouteExclusion } from './routing.js';
 
 /** A `weft.record@1` as the gateway builds it. Weft's validator decides whether it is valid. */
 export interface WeftRecordShape {
@@ -88,7 +88,7 @@ export class RequestWeft {
   }
 
   /** The unit about to be attempted. A unit other than the last is a new route: the first, or an escalation. */
-  routed(unit: RoutedUnit, excluded: readonly RouteExclusion[]): void {
+  routed(unit: RoutedUnit, excluded: readonly RouteExclusion[], prefixCache?: PrefixCacheUse): void {
     if (unit.routed_unit_id === this.routedUnit) {
       return;
     }
@@ -106,6 +106,9 @@ export class RequestWeft {
     const fields: Record<string, unknown> = { request_ref: this.request_id, routed_unit: unit.routed_unit_id };
     if (unit.tier !== undefined) {
       fields['tier'] = unit.tier;
+    }
+    if (prefixCache !== undefined) {
+      fields['prefix_cache'] = prefixCache;
     }
     if (excluded.length > 0) {
       fields['excluded'] = excluded
