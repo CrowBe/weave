@@ -35,6 +35,52 @@ function v2Token(overrides: Record<string, unknown> = {}): string {
 }
 
 describe('FabricStore stale-lock reclaim protocol', () => {
+  for (const removed of ['claim file', 'reclaim generation'] as const) {
+    it(`rescans when the ${removed} disappears between claim lstat and read`, () => {
+      const dir = mkdtempSync(join(tmpdir(), 'weave-store-vanished-claim-'));
+      const path = join(dir, 'fabric.json');
+      const reclaim = `${path}.lock.reclaim`;
+      const claim = `${reclaim}/reap`;
+      const stale = v2Token({ start: '0' });
+      writeFileSync(`${path}.lock`, stale);
+      nodeFs.mkdirSync(reclaim);
+      writeFileSync(`${reclaim}/owner`, stale);
+      writeFileSync(claim, stale);
+      const mutableFs = createRequire(import.meta.url)('node:fs') as { lstatSync: typeof nodeFs.lstatSync };
+      const original = mutableFs.lstatSync;
+      let injected = false;
+      mutableFs.lstatSync = ((...args: Parameters<typeof original>) => {
+        const result = original(...args);
+        if (!injected && String(args[0]) === claim) {
+          assert.ok(result?.isFile());
+          injected = true;
+          if (removed === 'claim file') nodeFs.unlinkSync(claim);
+          else rmSync(reclaim, { recursive: true });
+        }
+        return result;
+      }) as typeof original;
+      syncBuiltinESMExports();
+      let store: FabricStore | undefined;
+      try {
+        store = FabricStore.open(path, {
+          clock: { now: () => 0 },
+          sleep() {
+            assert.fail('a vanished claim must rescan without waiting');
+          },
+        });
+        assert.ok(injected);
+        assert.equal(existsSync(reclaim), false);
+        store.retainConclusion('recovered after claim vanished');
+        assert.deepEqual(store.conclusions(), ['recovered after claim vanished']);
+      } finally {
+        mutableFs.lstatSync = original;
+        syncBuiltinESMExports();
+        store?.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+
   for (const target of ['lock', 'reclaim', 'claim'] as const) {
     for (const host of ['foreign-boot:pid:[1]', 'foreign-namespace:pid:[2]']) {
       it(`never probes or reclaims a foreign ${target} owner (${host})`, () => {

@@ -1036,6 +1036,10 @@ function reapGeneration(
       readLockContent(ours) !== token ||
       claims.some((n) => n > next || (n < next && claimState(slotPath(reclaimPath, n), ownerless, wait) !== 'dead'))
     ) {
+      // Accepted residual race (PLAN.md): generation replacement between this
+      // token check and unlink can redirect the path to a successor's slot.
+      // A dev/ino precheck would still leave a gap before unlink; the invariant
+      // remains that we must never delete another owner's claim.
       if (readLockContent(ours) === token) unlinkSync(ours);
       return false;
     }
@@ -1094,7 +1098,8 @@ function claimState(path: string, ownerless: Map<string, number>, wait: ReclaimW
   try {
     const before = lstatSync(path);
     const token = readLockContent(before.isDirectory() ? `${path}/owner` : path);
-    if (!before.isDirectory() || token !== undefined) return ownerState(token);
+    if (!before.isDirectory()) return token === undefined ? undefined : ownerState(token);
+    if (token !== undefined) return ownerState(token);
     const after = lstatSync(path);
     if (before.dev !== after.dev || before.ino !== after.ino) return 'alive';
     const key = `${path}:${before.dev}:${before.ino}`;
