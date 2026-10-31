@@ -164,8 +164,9 @@ interface LoadedJournal {
  * Store writer lock: lock, reclaim owner and claims share a JSON v2 token
  * (pid, boot/PID-namespace identity, process start time, unique nonce). Legacy
  * leading-pid tokens retain kill(pid, 0) behavior. Matching local start means
- * alive; missing pid or changed start means dead; foreign/unverifiable owners
- * are unknown and never automatically reclaimed. A sibling worker is alive.
+ * alive; ESRCH-confirmed missing pid or changed start means dead. V2 owners
+ * with a foreign host identity or unverifiable liveness are unknown and never
+ * automatically reclaimed. A sibling worker is alive.
  * Only proven-dead owners permit stale-lock reclaim, never elapsed time.
  *
  * Reapers exclusively link fully written files at reap, reap.2, ... (16 max).
@@ -915,7 +916,7 @@ function acquireLock(path: string, options: FabricStoreOptions): string {
           }
         }
       } finally {
-        releaseReclaim(`${lockPath}.reclaim`, token);
+        releaseReclaim(`${lockPath}.reclaim`, token, nonce);
       }
     }
     throw new Error(`host store is already open: ${resolve(path)}`);
@@ -1120,10 +1121,10 @@ function blockedReclaim(path: string, blockedPath: string, reclaimPath: string):
   );
 }
 
-function releaseReclaim(reclaimPath: string, token: string): void {
+function releaseReclaim(reclaimPath: string, token: string, nonce: string): void {
   try {
     if (readLockContent(`${reclaimPath}/owner`) === token) {
-      const quarantine = `${reclaimPath}.released.${process.pid}.${(lockSequence += 1)}`;
+      const quarantine = `${reclaimPath}.released.${nonce}.${(lockSequence += 1)}`;
       renameSync(reclaimPath, quarantine);
       rmSync(quarantine, { recursive: true, force: true });
     }
@@ -1227,7 +1228,8 @@ function ownerState(text: string | undefined): OwnerState {
     const start = processStart(Number(value.pid));
     return start === null ? 'unknown' : start === value.start ? 'alive' : 'dead';
   } catch (error) {
-    return isErrno(error, 'ENOENT') ? 'dead' : 'unknown';
+    // hidepid can also return ENOENT for a live process owned by another user.
+    return isErrno(error, 'ENOENT') && probePid(Number(value.pid)) === 'dead' ? 'dead' : 'unknown';
   }
 }
 

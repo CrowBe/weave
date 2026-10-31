@@ -489,6 +489,73 @@ describe('FabricStore stale-lock reclaim protocol', () => {
     }
   });
 
+  for (const target of ['lock', 'reclaim', 'claim'] as const) {
+    for (const probe of ['success', 'EPERM', 'ESRCH'] as const) {
+      it(`requires ESRCH to reclaim a v2 ${target} after proc ENOENT (kill: ${probe})`, () => {
+        const dir = mkdtempSync(join(tmpdir(), 'weave-store-hidden-proc-'));
+        const path = join(nodeFs.realpathSync(dir), 'fabric.json');
+        const reclaim = `${path}.lock.reclaim`;
+        const pid = 1234567890;
+        const hidden = v2Token({ pid });
+        const stale = v2Token({ start: '0' });
+        const journal = '{"op":"conclusion","conclusion":"existing evidence"}\n';
+        writeFileSync(path, journal);
+        writeFileSync(`${path}.lock`, target === 'lock' ? hidden : stale);
+        if (target !== 'lock') {
+          nodeFs.mkdirSync(reclaim);
+          writeFileSync(`${reclaim}/owner`, target === 'reclaim' ? hidden : stale);
+          if (target === 'claim') writeFileSync(`${reclaim}/reap`, hidden);
+        }
+        const mutableFs = createRequire(import.meta.url)('node:fs') as typeof nodeFs;
+        const originalRead = mutableFs.readFileSync;
+        const originalKill = process.kill;
+        let reads = 0;
+        let probes = 0;
+        let store: FabricStore | undefined;
+        mutableFs.readFileSync = ((...args: Parameters<typeof originalRead>) => {
+          if (String(args[0]) === `/proc/${pid}/stat`) {
+            reads += 1;
+            // hidepid can hide a live process with the same errno as a dead one.
+            throw Object.assign(new Error('proc entry unavailable'), { code: 'ENOENT' });
+          }
+          return originalRead(...args);
+        }) as typeof originalRead;
+        process.kill = ((...args: Parameters<typeof originalKill>) => {
+          if (args[0] !== pid) return originalKill(...args);
+          assert.equal(args[1], 0);
+          probes += 1;
+          if (probe !== 'success') throw Object.assign(new Error('probe result'), { code: probe });
+          return true;
+        }) as typeof originalKill;
+        syncBuiltinESMExports();
+        try {
+          const open = () => (store = FabricStore.open(path));
+          if (probe === 'ESRCH') {
+            open();
+            assert.deepEqual(store?.conclusions(), ['existing evidence']);
+            assert.notEqual(readFileSync(`${path}.lock`, 'utf8'), hidden);
+            assert.equal(existsSync(reclaim), false);
+          } else {
+            assert.throws(open, target === 'claim' ? /blocked by/ : /cannot be verified.*retry later/);
+            assert.equal(readFileSync(`${path}.lock`, 'utf8'), target === 'lock' ? hidden : stale);
+            if (target !== 'lock')
+              assert.equal(readFileSync(`${reclaim}/owner`, 'utf8'), target === 'reclaim' ? hidden : stale);
+            if (target === 'claim') assert.equal(readFileSync(`${reclaim}/reap`, 'utf8'), hidden);
+          }
+          assert.ok(reads > 0);
+          assert.equal(probes, reads, 'every proc ENOENT requires a kill probe');
+          assert.equal(readFileSync(path, 'utf8'), journal);
+        } finally {
+          mutableFs.readFileSync = originalRead;
+          process.kill = originalKill;
+          syncBuiltinESMExports();
+          store?.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+    }
+  }
+
   it('fails closed when the local process start cannot be read', () => {
     const dir = mkdtempSync(join(tmpdir(), 'weave-store-unreadable-start-'));
     const path = join(dir, 'fabric.json');
@@ -1578,11 +1645,13 @@ describe('FabricStore append-only journal', () => {
     const mutableFs = createRequire(import.meta.url)('node:fs') as typeof nodeFs;
     const originalRemove = mutableFs.rmSync;
     let injected = false;
+    let releasedPath: string | undefined;
     let store: FabricStore | undefined;
     mutableFs.rmSync = ((...args: Parameters<typeof originalRemove>) => {
       const target = String(args[0]);
       if (!injected && (target === reclaim || target.startsWith(`${reclaim}.released.`))) {
         injected = true;
+        releasedPath = target;
         // Another contender occupies the live name after release has selected
         // its removal target, before recursive removal starts walking it.
         if (existsSync(reclaim)) nodeFs.renameSync(reclaim, `${reclaim}.previous`);
@@ -1595,6 +1664,8 @@ describe('FabricStore append-only journal', () => {
     try {
       store = FabricStore.open(path);
       assert.ok(injected);
+      const { nonce } = JSON.parse(readFileSync(`${path}.lock`, 'utf8'));
+      assert.ok(releasedPath?.startsWith(`${reclaim}.released.${nonce}.`), 'release uses the owner nonce');
       assert.ok(existsSync(reclaim), 'release must preserve the successor directory');
       assert.equal(readFileSync(`${reclaim}/owner`, 'utf8'), `${process.pid}:successor`);
     } finally {
