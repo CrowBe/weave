@@ -93,6 +93,7 @@ export interface KindFields {
     readonly request_ref: string;
     readonly routed_unit: string;
     readonly tier?: 'decision' | 'flash' | 'standard' | 'strong';
+    readonly prefix_cache?: 'hit' | 'reload' | 'ignored';
     readonly excluded?: readonly Exclusion[];
   };
   readonly 'inference.attempt': {

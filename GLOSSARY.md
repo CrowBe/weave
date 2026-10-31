@@ -333,6 +333,10 @@ The deterministic selection step inside the gateway. It minimizes expected total
 
 A recorded match between one routed unit and the digest of a view's stable prefix, together with a cached token count. A matching digest discounts that unit's input cost. A different unit or digest is one reload at the selected unit's input price. With no record, input cost stays the cold window. A prefix cache is not a cached conclusion, a provider bill, or authority.
 
+### Prefix cache use
+
+How routing priced one routed unit's prefix cache, recorded as `prefix_cache` on each Weft `route.selected` when the request carries a prefix digest and a prefix cache record: `hit` (the record matches this unit and digest and holds cached tokens, so cached input was discounted), `reload` (a different unit or digest, or a matching record with zero cached tokens, priced at the full input), or `ignored` (the record matched but its cached tokens exceeded the input, so the attempt was priced cold). An escalation off the cached unit is a new route record, so a switch from `hit` to `reload` is explicit. It records a routing price, not what the provider actually served from cache, and it grants nothing.
+
 ### Generative implementation
 
 An implementation of a capability contract that depends on inference. Its admission requires applicable deterministic checks and versioned evaluation evidence; its maturity and execution scope are limited by that evidence and policy.

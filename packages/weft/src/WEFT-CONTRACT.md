@@ -177,6 +177,7 @@ The gateway's routing decision for one inference request.
 - `request_ref` id, required
 - `routed_unit` id, required
 - `tier` code: `decision`, `flash`, `standard`, `strong`
+- `prefix_cache` code: `hit`, `reload`, `ignored` (GLOSSARY.md "Prefix cache use")
 - `excluded` exclusion[] ≤ 64. Each is `{ "routed_unit": id, "reason": code }`.
 
 ### `inference.attempt`
@@ -486,7 +487,9 @@ never inferred from order or timing.
 
 **Gateway.** Each time a request routes to a unit other than the one before,
 the gateway emits `route.selected` with the exclusions behind it (the first
-64, in routing order). An
+64, in routing order). When the request carries a prefix digest and a prefix
+cache record, the route also says how routing priced that unit's cache:
+`hit`, `reload` or `ignored`. An
 escalation `supersedes` the previous route and is `caused_by` the attempt that
 ended it. Every attempt emits `inference.attempt`, child of its route, with
 tokens, `spent_micros` (rounded up), `cost_is_upper_bound` and `latency_ms`

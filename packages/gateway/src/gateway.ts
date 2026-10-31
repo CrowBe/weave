@@ -16,7 +16,7 @@
  */
 import { bindDecisionProvider, validRateLimit, type DecisionConfig } from './config.js';
 import { budgetRoute } from './budget.js';
-import { priceAttempt, worstCaseCost, type RouteExclusion } from './routing.js';
+import { priceAttempt, prefixCacheUse, worstCaseCost, type RouteExclusion } from './routing.js';
 import { containsCredentialContent, trainingAllowedDestinations } from './privacy.js';
 import { GatewayWeft, type RequestWeft, type WeftPort } from './weft.js';
 import {
@@ -545,7 +545,7 @@ async function runBoundedLoop<T>(params: BoundedParams<T>, waiter: PaceWaiter): 
     const worstCase = worstCaseCost(unit, terms);
     consumed.set(unit.routed_unit_id, (consumed.get(unit.routed_unit_id) ?? 0) + 1);
 
-    params.weft?.routed(unit, decision.excluded);
+    params.weft?.routed(unit, decision.excluded, prefixCacheUse(unit, terms));
     const started_at = clock.now();
     const result = await attemptBeforeDeadline(params, unit);
     const ended_at = clock.now();
