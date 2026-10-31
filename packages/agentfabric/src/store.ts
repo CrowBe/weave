@@ -1109,7 +1109,8 @@ function claimState(path: string, ownerless: Map<string, number>, wait: ReclaimW
     const before = lstatSync(path);
     const token = readLockContent(before.isDirectory() ? `${path}/owner` : path);
     if (!before.isDirectory()) return token === undefined ? undefined : ownerState(token);
-    if (token !== undefined) return ownerState(token);
+    // Legacy directory claims can expose an empty owner before publishing it.
+    if (token !== undefined && token !== '') return ownerState(token);
     const after = lstatSync(path);
     if (before.dev !== after.dev || before.ino !== after.ino) return 'alive';
     const key = `${path}:${before.dev}:${before.ino}`;

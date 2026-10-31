@@ -1344,34 +1344,39 @@ describe('FabricStore append-only journal', () => {
     });
   }
 
-  it('does not supersede an ownerless claim that gains a live v2 owner during the grace', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'weave-store-ownerless-live-'));
-    const path = join(dir, 'fabric.json');
-    const reclaim = `${path}.lock.reclaim`;
-    const claim = `${reclaim}/reap`;
-    const dead = spawnSync(process.execPath, ['-e', '']);
-    assert.equal(dead.status, 0);
-    nodeFs.mkdirSync(claim, { recursive: true });
-    writeFileSync(`${path}.lock`, String(dead.pid));
-    writeFileSync(`${reclaim}/owner`, String(dead.pid));
-    const live = v2Token();
-    let now = 0;
-    const options = {
-      clock: { now: () => now },
-      sleep(ms: number) {
-        now += ms;
-        if (now >= 100) writeFileSync(`${claim}/owner`, live);
-      },
-    };
-    try {
-      assert.throws(() => FabricStore.open(path, options), /live process.*retry later/);
-      assert.ok(now >= 2000 && now <= 2050);
-      assert.equal(readFileSync(`${claim}/owner`, 'utf8'), live);
-      assert.equal(existsSync(`${reclaim}/reap.2`), false);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
+  for (const owner of ['missing', 'empty'] as const) {
+    it(`does not supersede a directory claim whose ${owner} owner becomes live during the grace`, () => {
+      const dir = mkdtempSync(join(tmpdir(), 'weave-store-ownerless-live-'));
+      const path = join(dir, 'fabric.json');
+      const reclaim = `${path}.lock.reclaim`;
+      const claim = `${reclaim}/reap`;
+      const dead = spawnSync(process.execPath, ['-e', '']);
+      assert.equal(dead.status, 0);
+      nodeFs.mkdirSync(claim, { recursive: true });
+      if (owner === 'empty') writeFileSync(`${claim}/owner`, '');
+      writeFileSync(`${path}.lock`, String(dead.pid));
+      writeFileSync(`${reclaim}/owner`, String(dead.pid));
+      const live = v2Token();
+      let now = 0;
+      const options = {
+        clock: { now: () => now },
+        sleep(ms: number) {
+          now += ms;
+          if (now < 100 && owner === 'empty') assert.equal(readFileSync(`${claim}/owner`, 'utf8'), '');
+          assert.equal(existsSync(`${reclaim}/reap.2`), false);
+          if (now >= 100) writeFileSync(`${claim}/owner`, live);
+        },
+      };
+      try {
+        assert.throws(() => FabricStore.open(path, options), /live process.*retry later/);
+        assert.ok(now >= 2000 && now <= 2050);
+        assert.equal(readFileSync(`${claim}/owner`, 'utf8'), live);
+        assert.equal(existsSync(`${reclaim}/reap.2`), false);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
 
   it('retries acquisition when the writer lock vanishes after link reports EEXIST', () => {
     const dir = mkdtempSync(join(tmpdir(), 'weave-store-vanished-lock-'));
