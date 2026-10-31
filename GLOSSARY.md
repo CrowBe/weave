@@ -114,6 +114,20 @@ The currently viable set of weighted actions. It may contain several independent
 
 A causally related sequence of actions and observations within a goal. Threads may run concurrently, join, be superseded, or be cancelled. A thread is not an operating-system thread.
 
+The [durable recursive threads design](docs/durable-recursive-threads.md) proposes a durable thread record, which is not implemented. Under it, a thread has an identity, a purpose, a completion condition and an optional parent thread whose work opened it. It exists from the moment it is opened, before any action, and it keeps its history while nothing executes it. Parentage explains why a thread exists; its dependencies on other threads' result references decide when it may proceed. A thread advances only through actions Loom dispatches for it, one execution claim at a time, and it holds no execution slot while it waits. A child's authority and budget come from its parent's share and never widen it. Child completion does not complete a parent: the parent completes only against its own completion condition.
+
+### Execution slot
+
+One unit of the execution capacity Loom accounts for. One running action occupies one slot (`executionSlots`). A slot is distinct from budget, effect locks and a region. Work that is opened or queued holds no slot, and recording results, cancellation, authority changes and reconciliation never need one.
+
+### Execution claim
+
+A running action's temporary right to occupy an execution slot and to submit results for one thread at one thread revision. Proposed in the [durable recursive threads design](docs/durable-recursive-threads.md); not implemented. Loom acquires it atomically when it records the action's start and issues the grant at that moment, and releases it when the action ends or suspends. A claim held outside Loom's process may expire on an injected clock tick. Expiry does not prove that execution stopped: the action becomes uncertain, its effect locks stay held until reconciliation, and a late result is kept as evidence but cannot advance the thread. A claim is not a grant, an approval, an effect lock or a budget, and renewing one renews none of them.
+
+### Result reference
+
+A revision-bound pointer to a named result a thread offered: thread id, result key, thread revision, artifact revision and digest, together with the evidence that accepted it. Proposed in the [durable recursive threads design](docs/durable-recursive-threads.md); not implemented. A reference to an established result, a deterministic check, a bounded judgment or a review accepts it; the producing worker's own report is only an observation. A steer that revises the thread it depends on makes it stale until it is revalidated.
+
 ### Workstream
 
 An independently addressable stream of conversation and work within one project. It pursues at most one active goal at a time and keeps, by reference, every goal it has pursued, the operator input observations addressed to it, and the artifact revisions its goals produced. A Thread stays inside one goal and so inside one workstream. A workstream is not a Thread and not a Weft `thread_id`. Project availability gives a workstream no context, capability access, disclosure or visibility. Opening one grants nothing and starts no work.
@@ -752,6 +766,7 @@ The judgment site that proposes an arrangement. It is one evaluation request of 
 - Say **shell**, not _frame_ or _chrome_, for the fixed structure of a workspace. _Frame_ remains the name of framing: `profile.frame@1`, the `goal.frame` site, and the `framing` role.
 - Say **region**, not _slot_ or _coordinate_, for a semantic place in the shell. An execution slot is scheduler capacity.
 - Say **workstream**, not _thread_, for an independently addressable stream of conversation and work within a project. A Thread is a causally related sequence inside one goal.
+- Say **execution claim**, not _lease_, _lock_ or _claim announcement_, for a running action's temporary right to an execution slot. An effect lock is a reservation over resources.
 - Say **operating process**, not _process_ or _sandbox_, for a workstream's execution state. `process.spawn` remains an effect, and an execution tier is where code runs.
 - Say **`input.route`**, not _mode_ or _intent detection_, for the judgment site that proposes how operator input relates to active work. The operator never has to choose a mode.
 - Say **placement** for an operator's session-scoped assignment of a component to a region, and **pin** when that assignment is a hard constraint.
