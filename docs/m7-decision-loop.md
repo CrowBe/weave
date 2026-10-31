@@ -23,6 +23,10 @@ The existing `frontier.weigh` site remains available through
 shape. Provider outage cannot silently turn evaluation into prose generation.
 Capability generation, admission, and authority to execute stay separate gates.
 
+[Deterministic-first verification](deterministic-first-verification.md) maps each
+property to its lowest existing verification layer and identifies the judgment
+that remains, including audit scope and interruption/recovery obligations (#197).
+
 ## 2. Target loop
 
 ```mermaid
