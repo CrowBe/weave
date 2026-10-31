@@ -1036,11 +1036,19 @@ function reapGeneration(
       readLockContent(ours) !== token ||
       claims.some((n) => n > next || (n < next && claimState(slotPath(reclaimPath, n), ownerless, wait) !== 'dead'))
     ) {
-      // Accepted residual race (PLAN.md): generation replacement between this
+      // Accepted residual race: generation replacement between this
       // token check and unlink can redirect the path to a successor's slot.
       // A dev/ino precheck would still leave a gap before unlink; the invariant
-      // remains that we must never delete another owner's claim.
-      if (readLockContent(ours) === token) unlinkSync(ours);
+      // remains that we must never delete another owner's claim. Closing the
+      // window requires deletion relative to a stable directory identity;
+      // this cleanup retains the existing claim-slot protocol.
+      if (readLockContent(ours) === token) {
+        try {
+          unlinkSync(ours);
+        } catch (error) {
+          if (!isErrno(error, 'ENOENT')) throw error;
+        }
+      }
       return false;
     }
     const quarantine = `${reclaimPath}.stale.${nonce}.${(lockSequence += 1)}`;
@@ -1070,7 +1078,9 @@ function reapGeneration(
     }
     return true;
   }
-  throw blockedReclaim(path, reclaimPath, reclaimPath);
+  throw new Error(
+    `host store is already open: ${path}; stale-lock reclaim contention exhausted retries (${reclaimPath}); retry later`,
+  );
 }
 
 function slotPath(reclaimPath: string, slot: number): string {

@@ -35,6 +35,156 @@ function v2Token(overrides: Record<string, unknown> = {}): string {
 }
 
 describe('FabricStore stale-lock reclaim protocol', () => {
+  for (const outcome of ['vanished claim', 'quarantined generation', 'released generation', 'EACCES'] as const) {
+    it(`handles ${outcome} between the back-out token check and unlink`, () => {
+      const dir = mkdtempSync(join(tmpdir(), 'weave-store-back-out-'));
+      const path = join(dir, 'fabric.json');
+      const reclaim = `${path}.lock.reclaim`;
+      const ours = `${reclaim}/reap`;
+      const other = `${reclaim}/reap.2`;
+      const stale = v2Token({ start: '0' });
+      const live = v2Token();
+      const failure = Object.assign(new Error('back-out denied'), { code: 'EACCES' });
+      writeFileSync(`${path}.lock`, stale);
+      nodeFs.mkdirSync(reclaim);
+      writeFileSync(`${reclaim}/owner`, stale);
+      const mutableFs = createRequire(import.meta.url)('node:fs') as typeof nodeFs;
+      const originalLink = mutableFs.linkSync;
+      const originalUnlink = mutableFs.unlinkSync;
+      let injected = false;
+      mutableFs.linkSync = ((...args: Parameters<typeof originalLink>) => {
+        const result = originalLink(...args);
+        if (!injected && String(args[1]) === ours) writeFileSync(other, live);
+        return result;
+      }) as typeof originalLink;
+      mutableFs.unlinkSync = ((...args: Parameters<typeof originalUnlink>) => {
+        if (!injected && String(args[0]) === ours) {
+          // Reaching unlink proves the preceding token check accepted our claim.
+          assert.equal(JSON.parse(readFileSync(ours, 'utf8')).pid, process.pid);
+          assert.notEqual(readFileSync(ours, 'utf8'), live);
+          injected = true;
+          if (outcome === 'EACCES') throw failure;
+          if (outcome === 'vanished claim') originalUnlink(ours);
+          else {
+            const moved = `${reclaim}.${outcome === 'quarantined generation' ? 'stale' : 'released'}.test`;
+            nodeFs.renameSync(reclaim, moved);
+            if (outcome === 'released generation') rmSync(moved, { recursive: true });
+          }
+        }
+        return originalUnlink(...args);
+      }) as typeof originalUnlink;
+      syncBuiltinESMExports();
+      let store: FabricStore | undefined;
+      try {
+        const open = () => {
+          store = FabricStore.open(path, {
+            clock: { now: () => 0 },
+            sleep() {
+              assert.equal(outcome, 'vanished claim');
+              assert.equal(readFileSync(other, 'utf8'), live);
+            },
+          });
+        };
+        if (outcome === 'EACCES') {
+          assert.throws(open, (error) => error === failure);
+          assert.equal(readFileSync(other, 'utf8'), live);
+          assert.equal(readFileSync(`${path}.lock`, 'utf8'), stale);
+        } else if (outcome === 'vanished claim') {
+          assert.throws(open, /live process.*retry later/);
+          assert.equal(readFileSync(other, 'utf8'), live);
+          assert.equal(readFileSync(`${path}.lock`, 'utf8'), stale);
+        } else {
+          open();
+          assert.ok(store);
+          store.retainConclusion('recovered after back-out claim vanished');
+          assert.deepEqual(store.conclusions(), ['recovered after back-out claim vanished']);
+          assert.equal(existsSync(reclaim), false);
+          if (outcome === 'quarantined generation') {
+            assert.equal(readFileSync(`${reclaim}.stale.test/reap.2`, 'utf8'), live);
+          }
+        }
+        assert.ok(injected);
+      } finally {
+        mutableFs.linkSync = originalLink;
+        mutableFs.unlinkSync = originalUnlink;
+        syncBuiltinESMExports();
+        store?.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+
+  for (const contention of ['EEXIST', 'vanished claim'] as const) {
+    it(`reports retry later without removal hints after repeated ${contention} exhausts reclaim retries`, () => {
+      const dir = mkdtempSync(join(tmpdir(), 'weave-store-reclaim-retries-'));
+      const path = join(dir, 'fabric.json');
+      const reclaim = `${path}.lock.reclaim`;
+      const claim = `${reclaim}/reap`;
+      const stale = v2Token({ start: '0' });
+      const live = v2Token();
+      writeFileSync(`${path}.lock`, stale);
+      nodeFs.mkdirSync(reclaim);
+      writeFileSync(`${reclaim}/owner`, stale);
+      const mutableFs = createRequire(import.meta.url)('node:fs') as typeof nodeFs;
+      const originalLink = mutableFs.linkSync;
+      const mutableStat = mutableFs as { lstatSync: typeof nodeFs.lstatSync };
+      const originalScan = mutableFs.readdirSync;
+      const originalStat = mutableStat.lstatSync;
+      let retries = 0;
+      mutableFs.linkSync = ((...args: Parameters<typeof originalLink>) => {
+        if (contention === 'EEXIST' && String(args[1]) === claim) {
+          writeFileSync(claim, live);
+          retries += 1;
+          try {
+            return originalLink(...args);
+          } finally {
+            nodeFs.unlinkSync(claim); // The competing claimant departs before the next scan.
+          }
+        }
+        return originalLink(...args);
+      }) as typeof originalLink;
+      mutableFs.readdirSync = ((...args: Parameters<typeof originalScan>) => {
+        if (contention === 'vanished claim' && String(args[0]) === reclaim) writeFileSync(claim, live);
+        return originalScan(...args);
+      }) as typeof originalScan;
+      mutableStat.lstatSync = ((...args: Parameters<typeof originalStat>) => {
+        const result = originalStat(...args);
+        if (contention === 'vanished claim' && String(args[0]) === claim) {
+          retries += 1;
+          nodeFs.unlinkSync(claim);
+        }
+        return result;
+      }) as typeof originalStat;
+      syncBuiltinESMExports();
+      try {
+        assert.throws(
+          () =>
+            FabricStore.open(path, {
+              clock: { now: () => 0 },
+              sleep() {
+                assert.fail('must rescan without waiting');
+              },
+            }),
+          (error: Error) => {
+            assert.match(error.message, /reclaim.*retry later/);
+            assert.doesNotMatch(error.message, /remove|private-test-token/);
+            return true;
+          },
+        );
+        assert.equal(retries, 128);
+        assert.equal(readFileSync(`${reclaim}/owner`, 'utf8'), stale);
+        assert.equal(readFileSync(`${path}.lock`, 'utf8'), stale);
+        assert.equal(existsSync(claim), false);
+      } finally {
+        mutableFs.linkSync = originalLink;
+        mutableFs.readdirSync = originalScan;
+        mutableStat.lstatSync = originalStat;
+        syncBuiltinESMExports();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+
   for (const removed of ['claim file', 'reclaim generation'] as const) {
     it(`rescans when the ${removed} disappears between claim lstat and read`, () => {
       const dir = mkdtempSync(join(tmpdir(), 'weave-store-vanished-claim-'));
