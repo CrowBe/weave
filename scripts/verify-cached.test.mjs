@@ -1,12 +1,117 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+
+test('verify requires formatting before the remaining checks', () => {
+  const { scripts } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  assert.equal(scripts.verify.split(' && ')[0], 'npm run fmt:check');
+});
+
+test('verify fails at the format step for malformed source or a missing formatter', () => {
+  const { scripts } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  for (const installed of [true, false]) {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-verify-format-'));
+    try {
+      writeFileSync(
+        join(dir, 'package.json'),
+        JSON.stringify({ private: true, type: 'module', scripts }, null, 2) + '\n',
+      );
+      writeFileSync(join(dir, 'vite.config.ts'), readFileSync(join(root, 'vite.config.ts'), 'utf8'));
+      if (installed) {
+        symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'), 'dir');
+        writeFileSync(join(dir, 'malformed.js'), 'const value={a:1,b:2}\n');
+      }
+      const log = join(dir, 'output');
+      const fd = openSync(log, 'w');
+      let result;
+      try {
+        result = spawnSync('npm', ['run', 'verify'], {
+          cwd: dir,
+          stdio: ['ignore', fd, fd],
+          env: {
+            ...process.env,
+            // Do not inherit the enclosing npm run's installed formatter in the missing-tool case.
+            PATH: process.env.PATH.split(delimiter)
+              .filter((entry) => !entry.endsWith('/node_modules/.bin'))
+              .join(delimiter),
+          },
+        });
+      } finally {
+        closeSync(fd);
+      }
+      assert.ifError(result.error);
+      const output = readFileSync(log, 'utf8');
+      assert.notEqual(result.status, 0, output);
+      assert.match(output, /> fmt:check\n> vp fmt --check/);
+      assert.doesNotMatch(output, /> check\n/);
+      assert.match(output, installed ? /malformed\.js/ : /vp: (?:not found|command not found)/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('verify cache rejects formatting-only changes to root and docs Markdown', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-verify-cache-format-'));
+  try {
+    symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'), 'dir');
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify(
+        {
+          name: 'cache-format-regression',
+          private: true,
+          type: 'module',
+          scripts: { verify: 'npm run fmt:check', 'fmt:check': 'vp fmt --check' },
+        },
+        null,
+        2,
+      ) + '\n',
+    );
+    const config = readFileSync(join(root, 'vite.config.ts'), 'utf8').replace(
+      "output: ['packages/*/dist/**']",
+      'output: []',
+    );
+    writeFileSync(join(dir, 'vite.config.ts'), config);
+    mkdirSync(join(dir, 'docs'));
+    const files = ['README.md', 'docs/guide.md'];
+    const formatted = '# Heading\n\n- item\n';
+    for (const file of files) writeFileSync(join(dir, file), formatted);
+    const run = () =>
+      spawnSync(join(root, 'node_modules', '.bin', 'vp'), ['run', 'verify-cached'], { cwd: dir, encoding: 'utf8' });
+    for (let i = 0; i < 2; i += 1) {
+      const result = run();
+      assert.equal(result.status, 0, result.stdout + result.stderr);
+    }
+    for (const file of files) {
+      writeFileSync(join(dir, file), '# Heading\n\n-   item\n');
+      const result = run();
+      assert.notEqual(result.status, 0, `formatting change in ${file} replayed a cached pass: ${result.stdout}`);
+      assert.match(result.stdout + result.stderr, /Format issues found/);
+      writeFileSync(join(dir, file), formatted);
+      const restored = run();
+      assert.equal(restored.status, 0, restored.stdout + restored.stderr);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test('verify cache ignores removed Python cache directories but tracks source changes', () => {
   const dir = mkdtempSync(join(tmpdir(), 'weave-verify-cache-'));
