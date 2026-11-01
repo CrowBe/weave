@@ -174,9 +174,12 @@ interface LoadedJournal {
  * token/device/inode, all earlier claims dead and no later claim. Never delete
  * another owner's claim. Legacy ownerless reap directories need 500 ms of
  * stable local observation. Injected time (default: sum of sleeps) bounds live
- * waits to 2000 ms; iteration caps also bound a stopped clock. Live reapers
- * produce retry-later errors without removal hints; unknown owners and slot
- * exhaustion fail closed with canonical paths and conditional operator steps.
+ * waits to 2000 ms per acquisition; iteration caps also bound a stopped clock.
+ * Live reapers produce retry-later errors without removal hints, including a
+ * live claim seen linking into a back-out gap below ours while that same claim
+ * (token, device, inode) stays live across retries; other earlier live claims,
+ * unknown owners, non-directory generations and slot exhaustion fail closed
+ * with canonical paths and conditional operator steps.
  * Quarantine identity mismatches must restore or fail closed.
  *
  * No leases, heartbeats, garbage sweeping, journal changes or async open.
@@ -879,6 +882,7 @@ function acquireLock(path: string, options: FabricStoreOptions): string {
       slept += milliseconds;
     },
   };
+  const evidence: ReclaimEvidence = { deadline: undefined, arrivals: new Map() };
   writeFileSync(tempPath, token);
   try {
     for (let attempt = 0; attempt < 32; attempt += 1) {
@@ -900,7 +904,7 @@ function acquireLock(path: string, options: FabricStoreOptions): string {
       if (state === 'alive') {
         throw new Error(`host store is already open: ${path}`);
       }
-      if (!acquireReclaim(path, token, nonce, wait)) {
+      if (!acquireReclaim(path, token, nonce, wait, evidence)) {
         continue;
       }
       try {
@@ -940,8 +944,27 @@ interface ReclaimWait {
   sleep(milliseconds: number): void;
 }
 
+/** Kept across one acquisition's reclaim retries, so a back-out is not forgotten. */
+interface ReclaimEvidence {
+  deadline: number | undefined;
+  // Live file claims seen linking into a back-out gap after our pre-link scan.
+  readonly arrivals: Map<string, ClaimIdentity>;
+}
+
+interface ClaimIdentity {
+  readonly token: string;
+  readonly dev: number;
+  readonly ino: number;
+}
+
 /** Only a claimant of the observed generation may move it. */
-function acquireReclaim(path: string, token: string, nonce: string, wait: ReclaimWait): boolean {
+function acquireReclaim(
+  path: string,
+  token: string,
+  nonce: string,
+  wait: ReclaimWait,
+  evidence: ReclaimEvidence,
+): boolean {
   const reclaimPath = `${path}.lock.reclaim`;
   for (let attempt = 0; attempt < 16; attempt += 1) {
     const tempPath = `${reclaimPath}.${nonce}.${(lockSequence += 1)}.tmp`;
@@ -967,12 +990,12 @@ function acquireReclaim(path: string, token: string, nonce: string, wait: Reclai
         // Best-effort removal of our unpublished directory.
       }
     }
-    const owner = readReclaimIdentity(reclaimPath);
+    const owner = readReclaimIdentity(path, reclaimPath);
     if (owner === undefined) return false;
     const state = ownerState(owner.token);
     if (state === 'unknown') throw unverifiableOwner(path, reclaimPath);
     if (state === 'alive') return false;
-    if (!reapGeneration(path, reclaimPath, owner, token, nonce, wait)) return false;
+    if (!reapGeneration(path, reclaimPath, owner, token, nonce, wait, evidence)) return false;
   }
   return false;
 }
@@ -984,12 +1007,14 @@ function reapGeneration(
   token: string,
   nonce: string,
   wait: ReclaimWait,
+  evidence: ReclaimEvidence,
 ): boolean {
-  const deadline = wait.now() + RECLAIM_WAIT_MS;
+  // One live-wait budget per acquisition, however often we back out and retry.
+  const deadline = (evidence.deadline ??= wait.now() + RECLAIM_WAIT_MS);
   const ownerless = new Map<string, number>();
   let backoff = 5;
   for (let attempt = 0; attempt < MAX_RECLAIM_WAITS; attempt += 1) {
-    if (!sameReclaimOwner(owner, readReclaimIdentity(reclaimPath))) return false;
+    if (!sameReclaimOwner(owner, readReclaimIdentity(path, reclaimPath))) return false;
     const slots = claimSlots(reclaimPath);
     const highest = slots.at(-1) ?? 0;
     const claimPath = slotPath(reclaimPath, highest);
@@ -1005,9 +1030,17 @@ function reapGeneration(
     const pending = states.find((claim) => claim.state === 'alive');
     if (pending) {
       if (wait.now() >= deadline || attempt === MAX_RECLAIM_WAITS - 1) {
-        if (pending.path !== claimPath) throw blockedReclaim(path, pending.path, reclaimPath);
+        // A lower live claim is only a reaper mid-protocol if we saw that same
+        // claim arrive in a gap; anything else earlier still fails closed.
+        const blocked = states.find(
+          (claim) =>
+            claim.state === 'alive' &&
+            claim.path !== claimPath &&
+            !sameClaim(evidence.arrivals.get(claim.path), claimIdentity(claim.path)),
+        );
+        if (blocked) throw blockedReclaim(path, blocked.path, reclaimPath);
         throw new Error(
-          `host store is already open: ${path}; stale-lock reclaim is in progress by a live process (${claimPath}); retry later`,
+          `host store is already open: ${path}; stale-lock reclaim is in progress by a live process (${pending.path}); retry later`,
         );
       }
       wait.sleep(Math.min(backoff, Math.max(0, deadline - wait.now())));
@@ -1034,21 +1067,30 @@ function reapGeneration(
       }
     }
     // Claim then revalidate: a delayed link can land in a successor generation.
-    const current = readReclaimIdentity(reclaimPath);
+    const current = readReclaimIdentity(path, reclaimPath);
     const claims = claimSlots(reclaimPath);
     let unresolved: string | undefined;
     if (
       !sameReclaimOwner(owner, current) ||
       ownerState(current.token) !== 'dead' ||
       readLockContent(ours) !== token ||
-      claims.some((n) => {
+      // Inspect every claim, not just the first that forces a back-out, so each
+      // of several simultaneous gap arrivals is remembered as evidence.
+      claims.filter((n) => {
         if (n > next) return true;
         if (n === next) return false;
         const earlier = slotPath(reclaimPath, n);
         const state = claimState(earlier, ownerless, wait);
-        if (state === 'alive' || state === 'unknown') unresolved = earlier;
+        if (state === 'unknown' || (state === 'alive' && slots.includes(n))) unresolved ??= earlier;
+        else if (state === 'alive') {
+          // A live claim absent from our scan was linked into a back-out gap; its
+          // owner also sees a higher claim and backs out, so retry instead. Remember
+          // it so a retry that outlasts the deadline still reports retry-later.
+          const arrival = claimIdentity(earlier);
+          if (arrival) evidence.arrivals.set(earlier, arrival);
+        }
         return state !== 'dead';
-      })
+      }).length > 0
     ) {
       // Accepted residual race: generation replacement between this
       // token check and unlink can redirect the path to a successor's slot.
@@ -1073,7 +1115,7 @@ function reapGeneration(
       if (isErrno(error, 'ENOENT')) return false;
       throw error;
     }
-    const moved = readReclaimIdentity(quarantine);
+    const moved = readReclaimIdentity(path, quarantine);
     if (!sameReclaimOwner(owner, moved) || ownerState(moved.token) !== 'dead') {
       try {
         renameSync(quarantine, reclaimPath);
@@ -1117,6 +1159,32 @@ function claimSlots(reclaimPath: string): number[] {
     if (isErrno(error, 'ENOENT')) return [];
     throw error;
   }
+}
+
+/** A v2 file claim's stable token and inode; directory claims have none. */
+function claimIdentity(path: string): ClaimIdentity | undefined {
+  try {
+    const before = lstatSync(path);
+    if (!before.isFile()) return undefined;
+    const token = readLockContent(path);
+    const after = lstatSync(path);
+    if (token === undefined || before.dev !== after.dev || before.ino !== after.ino) return undefined;
+    return { token, dev: after.dev, ino: after.ino };
+  } catch (error) {
+    if (isErrno(error, 'ENOENT')) return undefined;
+    throw error;
+  }
+}
+
+function sameClaim(expected: ClaimIdentity | undefined, actual: ClaimIdentity | undefined): boolean {
+  return (
+    expected !== undefined &&
+    actual !== undefined &&
+    expected.token === actual.token &&
+    expected.dev === actual.dev &&
+    expected.ino === actual.ino &&
+    ownerState(actual.token) === 'alive'
+  );
 }
 
 function claimState(path: string, ownerless: Map<string, number>, wait: ReclaimWait): OwnerState | undefined {
@@ -1170,7 +1238,7 @@ interface ReclaimIdentity {
   readonly ino: number;
 }
 
-function readReclaimIdentity(reclaimPath: string): ReclaimIdentity | undefined {
+function readReclaimIdentity(path: string, reclaimPath: string): ReclaimIdentity | undefined {
   try {
     const before = statSync(reclaimPath);
     const token = readLockContent(`${reclaimPath}/owner`);
@@ -1181,6 +1249,10 @@ function readReclaimIdentity(reclaimPath: string): ReclaimIdentity | undefined {
     return { token, dev: after.dev, ino: after.ino };
   } catch (error) {
     if (isErrno(error, 'ENOENT')) return undefined;
+    // A non-directory generation or owner has no verifiable identity.
+    if (isErrno(error, 'ENOTDIR') || isErrno(error, 'EISDIR')) {
+      throw blockedReclaim(path, reclaimPath, `${path}.lock.reclaim`);
+    }
     throw error;
   }
 }
