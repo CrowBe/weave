@@ -5,8 +5,13 @@ Planning only. D-ENG-017 (Benjamin, 1 November 2026) locks one nestable
 This plan prepares the atomic workstream → Thread rename into that family;
 it changes no source, glossary, tests, schemas or recorded data. Owner questions
 Q1–Q13, including Q10-0, are answered in section 7: Q1–Q4 by D-ENG-017, Q6 by
-D-ENG-019, Q8 by D-ENG-018, Q9 by D-ENG-020, and Q5, Q7, Q10-0, Q10, Q11–Q13 by
-the deciding Claude Opus session under D-ENG-021 (1 November 2026).
+D-ENG-019, Q8 by D-ENG-018, Q9 by D-ENG-020, and Q5, Q7, Q10-0, Q10's mechanical
+schema answers, Q11–Q13 by the deciding Claude Opus session under D-ENG-021
+(1 November 2026). **Q14, the child-Thread goal-association and goal-ending
+contract, is open for Benjamin** (section 7). It is observable lifecycle policy, so
+D-ENG-021 does not decide it. Q14 gates only PR 2b's goal-association part; PR 1's
+naming/crosswalk contract, PR 2a's pure rename and rename-only PR 4 prose run
+without it.
 
 ## 1. Evidence, scope, and data shape inventory
 
@@ -236,29 +241,29 @@ arrive later. Preserve all those meanings, even when prose uses the new term.
 
 ### Terminology to fold into one kind, and unrelated uses
 
-| File                                               | Count | Classification                                                                                                                                                                                                                                                                                                              |
-| -------------------------------------------------- | ----: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GLOSSARY.md`                                      |    36 | Current Thread/Workstream distinction is superseded by D-ENG-017; fold it and the present #320 additions into one nestable Thread entry in PR 1. Q6: labels kept; `running_threads[].thread_id` → Thread nodes.                                                                                                             |
-| `docs/durable-recursive-threads.md`                |   160 | #320's proposed durable Thread contract; reconcile normative naming, id scope and nesting rules in PR 1, remaining explanatory prose in PR 4.                                                                                                                                                                               |
-| `packages/weave/src/WORKSTREAM-CONTRACT.md`        |     8 | #26's quoted thread is already project-level; remaining comparisons explicitly distinguish the causal-chain Thread and Weft id from the workstream. Replace the distinction with D-ENG-017's single nestable kind.                                                                                                          |
-| `packages/weave/src/sites/index.ts`                |     6 | `IntakeState.running_threads[].thread_id`, fixed intake question and `new_thread`/`continue_thread`: legacy task/causal-work vocabulary; no durable Thread tree integration yet. Q6 (D-ENG-019): new disclosed ids point at Thread nodes; labels preserved; frozen benchmark bytes stay unchanged.                          |
-| `packages/weave/src/sites/CONTRACT.md`             |     1 | Same intake summaries.                                                                                                                                                                                                                                                                                                      |
-| `packages/weave/test/p5.test.ts`                   |     5 | Intake summary shape and frozen choice vocabulary; no project Thread behavior.                                                                                                                                                                                                                                              |
-| `packages/weave/test/p6.test.ts`                   |     1 | Empty intake `running_threads` fixture.                                                                                                                                                                                                                                                                                     |
-| `packages/gateway/test/amos.test.ts`               |     8 | Intake choices, prompt and generic choice fixtures; no project Thread behavior.                                                                                                                                                                                                                                             |
-| `docs/m7-decision-loop.md`                         |     5 | Intake question/options/summaries: legacy task vocabulary; storage `run/thread/...` description: causal Weft storage.                                                                                                                                                                                                       |
-| `docs/execution-provider-contract.md`              |     3 | Boundary table lists Threads and workstreams separately: old Thread is causal. Independent Threads and X-T10 programs are execution-work units, not a wired project record; fold their descriptions into one Thread kind while preserving the action/process distinction.                                                   |
-| `checks/fixtures/execution-provider/contract.mjs`  |     7 | `thread:a/b/c` labels for separate offered sets/worker progress; execution correlation ids, no `Thread` type or `workstream@1` shape. Keep values unless the fixture contract changes.                                                                                                                                      |
-| `docs/research/monty-sandbox.md`                   |    18 | Explicit vocabulary note binds Thread work to #28's operating process: already the planned project-level sense. Two matches concern OS `threading`/threads and remain OS terms. Preserve historical evidence and qualify lifecycle statements when updating the note.                                                       |
-| `docs/design-system.md`                            |     6 | Initial Threads/input-routing/pause scope exclusion: planned project-level work. Five other uses name the conversational component, not a durable Thread record.                                                                                                                                                            |
-| `packages/tapestry/src/vocabulary.ts`              |     2 | `conversation.thread@1`: conversational presentation component, not the domain identity.                                                                                                                                                                                                                                    |
-| `packages/tapestry/src/session.ts`                 |     1 | Same versioned component node.                                                                                                                                                                                                                                                                                              |
-| `packages/tapestry/src/tree.ts`                    |     2 | Same component placement/reading.                                                                                                                                                                                                                                                                                           |
-| `packages/tapestry/test/tree.test.ts`              |    10 | Same component identity/placement; no project Thread model.                                                                                                                                                                                                                                                                 |
-| `packages/tapestry-web/src/host.tsx`               |     3 | Component renderer dispatch and `ConversationThread`; presentation only.                                                                                                                                                                                                                                                    |
-| `packages/tapestry-web/src/paint/conversation.tsx` |     2 | Renderer name/test id; presentation only.                                                                                                                                                                                                                                                                                   |
-| `docs/respan-routing-learnings.md`                 |     6 | External Respan conversation/cache affinity and a proposed thread+digest cache key; external correlation, not a durable Loom Thread id. Do not rewrite external `thread_identifier`.                                                                                                                                        |
-| `packages/agentfabric/test/shell-run.test.ts`      |     1 | OS/main JS thread blocking comment.                                                                                                                                                                                                                                                                                         |
+| File                                               | Count | Classification                                                                                                                                                                                                                                                                                     |
+| -------------------------------------------------- | ----: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GLOSSARY.md`                                      |    36 | Current Thread/Workstream distinction is superseded by D-ENG-017; fold it and the present #320 additions into one nestable Thread entry in PR 1. Q6: labels kept; `running_threads[].thread_id` → Thread nodes.                                                                                    |
+| `docs/durable-recursive-threads.md`                |   160 | #320's proposed durable Thread contract; reconcile normative naming, id scope and nesting rules in PR 1, remaining explanatory prose in PR 4.                                                                                                                                                      |
+| `packages/weave/src/WORKSTREAM-CONTRACT.md`        |     8 | #26's quoted thread is already project-level; remaining comparisons explicitly distinguish the causal-chain Thread and Weft id from the workstream. Replace the distinction with D-ENG-017's single nestable kind.                                                                                 |
+| `packages/weave/src/sites/index.ts`                |     6 | `IntakeState.running_threads[].thread_id`, fixed intake question and `new_thread`/`continue_thread`: legacy task/causal-work vocabulary; no durable Thread tree integration yet. Q6 (D-ENG-019): new disclosed ids point at Thread nodes; labels preserved; frozen benchmark bytes stay unchanged. |
+| `packages/weave/src/sites/CONTRACT.md`             |     1 | Same intake summaries.                                                                                                                                                                                                                                                                             |
+| `packages/weave/test/p5.test.ts`                   |     5 | Intake summary shape and frozen choice vocabulary; no project Thread behavior.                                                                                                                                                                                                                     |
+| `packages/weave/test/p6.test.ts`                   |     1 | Empty intake `running_threads` fixture.                                                                                                                                                                                                                                                            |
+| `packages/gateway/test/amos.test.ts`               |     8 | Intake choices, prompt and generic choice fixtures; no project Thread behavior.                                                                                                                                                                                                                    |
+| `docs/m7-decision-loop.md`                         |     5 | Intake question/options/summaries: legacy task vocabulary; storage `run/thread/...` description: causal Weft storage.                                                                                                                                                                              |
+| `docs/execution-provider-contract.md`              |     3 | Boundary table lists Threads and workstreams separately: old Thread is causal. Independent Threads and X-T10 programs are execution-work units, not a wired project record; fold their descriptions into one Thread kind while preserving the action/process distinction.                          |
+| `checks/fixtures/execution-provider/contract.mjs`  |     7 | `thread:a/b/c` labels for separate offered sets/worker progress; execution correlation ids, no `Thread` type or `workstream@1` shape. Keep values unless the fixture contract changes.                                                                                                             |
+| `docs/research/monty-sandbox.md`                   |    18 | Explicit vocabulary note binds Thread work to #28's operating process: already the planned project-level sense. Two matches concern OS `threading`/threads and remain OS terms. Preserve historical evidence and qualify lifecycle statements when updating the note.                              |
+| `docs/design-system.md`                            |     6 | Initial Threads/input-routing/pause scope exclusion: planned project-level work. Five other uses name the conversational component, not a durable Thread record.                                                                                                                                   |
+| `packages/tapestry/src/vocabulary.ts`              |     2 | `conversation.thread@1`: conversational presentation component, not the domain identity.                                                                                                                                                                                                           |
+| `packages/tapestry/src/session.ts`                 |     1 | Same versioned component node.                                                                                                                                                                                                                                                                     |
+| `packages/tapestry/src/tree.ts`                    |     2 | Same component placement/reading.                                                                                                                                                                                                                                                                  |
+| `packages/tapestry/test/tree.test.ts`              |    10 | Same component identity/placement; no project Thread model.                                                                                                                                                                                                                                        |
+| `packages/tapestry-web/src/host.tsx`               |     3 | Component renderer dispatch and `ConversationThread`; presentation only.                                                                                                                                                                                                                           |
+| `packages/tapestry-web/src/paint/conversation.tsx` |     2 | Renderer name/test id; presentation only.                                                                                                                                                                                                                                                          |
+| `docs/respan-routing-learnings.md`                 |     6 | External Respan conversation/cache affinity and a proposed thread+digest cache key; external correlation, not a durable Loom Thread id. Do not rewrite external `thread_identifier`.                                                                                                               |
+| `packages/agentfabric/test/shell-run.test.ts`      |     1 | OS/main JS thread blocking comment.                                                                                                                                                                                                                                                                |
 
 The merged #320 design note and glossary additions are included in the current
 inventory above. Align its §3, dependent normative names and glossary additions
@@ -318,16 +323,23 @@ The unified field set is **answered in Q10 (a)**: today's ten fields
 artifacts, process` are required at every Thread depth; `parent` is optional;
 #320 §5.1's `purpose, completion, depends_on, share, deadline, lifecycle,
 cancel, resume_point, results, evidence` are common optional fields; #320's
-stored `goal_id` is replaced by goal association derived from `goals[]`.
-Today's `goal.attached` refuses `goal_attached` if any Thread in the project
-index already has that goal id. Q10 keeps that project-wide attachment
-uniqueness unchanged and gives child Threads an **inherited** goal association
-instead of a second attachment, so many children share goal G. #320's per-goal
-root Thread becomes the goal's first child of the project-level Thread, not a
-second parent-less root. Q10-0 is answered (a): today's renamed 10-field record
-is a valid root Thread under that matrix, through the same decoder that accepts
-children, so PR 2a need not wait for the Q10 contract extension. No interim
-schema specific to root Threads is authorized.
+stored `goal_id` field is dropped, so the field set has no second goal field.
+#320's per-goal root Thread becomes the goal's first child of the project-level
+Thread, not a second parent-less root. Q10-0 is answered (a): today's renamed
+10-field record is a valid root Thread under that matrix, through the same
+decoder that accepts children, so PR 2a need not wait for the Q10 contract
+extension. No interim schema specific to root Threads is authorized.
+
+**Child-Thread goal association is open (Q14, Benjamin).** Today's
+`goal.attached` refuses `goal_attached` if any Thread in the project index
+already has that goal id, and a root Thread's goal is its own active `goals[]`
+entry. Every Q14 option keeps that root-Thread behavior, so the renamed record
+and PR 2a are unaffected. Q14 decides how a child Thread relates to its
+ancestors' goals, and whether ending a goal blocks on, cascades to or ignores
+open child Threads. Until it is answered, no plan text, glossary entry or test
+may assert a child goal-association rule; PR 2b's other nesting checks may
+proceed. The association stability contract below is architectural and applies
+to whichever Q14 option derives a child's goal from ancestor history.
 
 **One id rule at every Thread depth.** #320 §5.1's `<parent>/<opening seq>/<index>`
 and goal-only uniqueness conflict with Weft `isId` (`validate.ts:46`): `/` is
@@ -363,11 +375,14 @@ for the current `:thread:` format the safe cap is **N = 93 - E**:
 are shorter. Q10 confirms E = 32 and N = 61 for new node-bound emissions; an
 unrestricted 128-character emitter leaves no usable Thread node budget. The
 Thread-only grammar is therefore `^[A-Za-z0-9][A-Za-z0-9_.-]{0,60}$` under that
-budget, not 128-character Thread nodes. Q9(b)'s new record version keeps this
-record-id format (the version lives in `schema`, not in the record id) and
-Q8(a)'s node lifecycle uses only the existing suffixes, so N = 61 stands. PR 1
-records the exact bounds and emission format; if review changes that format to a
-longer suffix, recompute N downward before PR 2b.
+budget, not 128-character Thread nodes. The new-record identity contract below
+narrows the node-bound emitter grammar to colon-free ids of at most E characters
+and moves action-chain events to a `chain` family, but keeps the Thread family's
+`${emitter_id}:thread:${node_id}:<transition>[:${seq}]` layout and its longest
+suffix. Q9(b)'s version lives in `schema`, not in the record id, so N = 61
+stands. PR 1 records the exact bounds and emission format before PR 2b admits
+ids; if review changes the Thread-family layout to a longer suffix, recompute N
+downward first.
 **PR 2b first enforces N** at Thread node admission, including root Threads and parent ids;
 it depends on Q8/Q9 as well as Q10, and owns the N+1/128-character-node reds.
 PR 3 owns enforcement of E in **Loom's emitter construction for node-bound
@@ -379,22 +394,65 @@ envelope `thread_id`, **every derived Weft record id and link target**, with
 maximum-length Thread node and emitter ids and the longest suffix/sequence. Include
 the N+1 boundary and the formerly valid 128-character Thread node that breaks emission.
 
-**Injective record ids.** For `${emitter_id}:thread:${node_id}:<transition>`,
-excluding `:` from Thread node ids makes the boundary unambiguous even when an emitter
-contains `:thread:`: strip the fixed transition/sequence suffix, then split at
-the last `:thread:`. The two components are uniquely recoverable. The old
-collision `(a, b:thread:c)` versus `(a:thread:b, c)` is prevented by refusing the
-first Thread node id. PR 2b owns that grammar red; PR 3 owns the emitted-id/link-target
-collision red across distinct valid emitter/Thread node pairs. Any Q8/Q9 format change
-must preserve injectivity and revalidate the budget before PR 2b admits ids.
-That argument covers only Thread records against each other. PR 3 must also
-prove disjointness from every other Loom-derived family sharing `emitter_id:`:
-`action:${action_id}:${state}`, `cycle:${cycle_no}:${trigger}`, `goal:${seq}`,
-`judgment:${id}` and `outcome:goal:${seq}`. Fixed kind segments alone are not
-proof when emitter ids contain `:`. Exercise cross-family collisions with
-distinct emitters and valid action/judgment ids as well as Thread node ids under the
-Q8 (a)/Q9 (b) format, including `@2` action-subject chain records; do not tighten
-shared validators to make them disjoint.
+**New-record identity contract (decided D-ENG-021; PR 1 records it before the
+format and budget are locked).** Colon-free Thread node ids alone do not make
+`weft.record@2` ids collision-free. Weft `isId` admits `:` in emitter ids, and
+judgment refs may contain `:`. Concrete counterexample under the earlier format:
+Thread emitter `a:judgment`, node `n`, transition `opened` yields
+`a:judgment:thread:n:opened`, and judgment emitter `a` with request id
+`thread:n:opened` yields the same id. Both emitters fit E = 32 and the node fits
+N = 61. A different `schema` does not separate them: SQLite keys spans by
+`(run_id, id)` and OTel span ids hash `[…, trace_id, record_id]`. The second
+collision: Q8 moves action-chain events to the action subject, and if they keep
+`thread:${action_id}:…` ids, action `x` and Thread node `x` produce the same
+`:thread:x:opened` id. The contract is:
+
+1. **Colon-free node-bound emitters.** A Loom emitter that emits any
+   `weft.record@2` record has id `^[A-Za-z0-9][A-Za-z0-9_.-]{0,31}$`
+   (at most E = 32, no `:`, `/` or `@`). All of its records in that trace use
+   that id, whatever their family. Enforce this at Loom's emitter construction for
+   node-bound emission only, before any record is built. Weft `isId`, `boundedId`,
+   `correlation`, gateway/Fabric/external emitters and historical emitter ids stay
+   unchanged.
+2. **Fixed family tag after the first `:`.** Every record id from a node-bound
+   Loom emitter, `@2` or null-id `@1`, is
+   `<emitter>:<family>:<rest>` with family one of `thread`, `chain`, `action`,
+   `cycle`, `goal`, `judgment` and `outcome`. The emitter ends at the first `:`, and
+   the family tag is the next segment. The families are pairwise disjoint because
+   their tags differ.
+3. **Per-family recovery.** `thread:<node>:<transition>`: the node is colon-free.
+   `chain:<action_id>:<edge>[:<seq>]` and `action:<action_id>:<state>`: strip
+   the fixed edge or state word (plus a trailing all-digit sequence for
+   `cancelled`); the remainder is the action id, colons included. `cycle` and
+   `goal` carry only integers and fixed words, `outcome:goal:<seq>` is fixed, and
+   `judgment:<ref>` is the whole remainder. Equal ids therefore imply equal
+   emitter, family and components.
+4. **Action-chain events get their own family.** `@2` chain edges are
+   `<emitter>:chain:<action_id>:<edge>` (`cancelled` adds `:<seq>`). Thread node
+   lifecycle keeps `<emitter>:thread:<node>:opened|closed`. A node and an action
+   with equal id strings can no longer collide. The `chain` layout is one
+   character shorter than the historical `:thread:<action_id>:` layout, so no
+   action id that fits today overflows.
+5. **Other emitters in the same trace.** Weft requires `record_id` to be unique
+   within a trace across emitters. Gateway, Fabric and external emitter ids may
+   contain `:`, for example gateway `a:thread` with its
+   `<emitter>:<request>:route:<n>` ids, so the format cannot prove disjointness
+   from them. The composition root assigns every port's emitter id. It must
+   refuse a trace in which another emitter id equals a node-bound Loom emitter
+   id or begins with `<that emitter>:`. That is a composition check at port
+   construction, not a validator change. Receivers keep refusing an identity
+   reused with unequal content (see the delivery contract in PR 3).
+6. **Historical ids are untouched.** `weft.record@1` keeps
+   `<emitter>:thread:<action_id>:…` chain ids, colon-bearing emitters and link
+   targets byte for byte. The Thread-family layout and longest suffix are
+   unchanged, so N = 93 − E = 61 stands; the `chain` family is shorter.
+
+The old collision `(a, b:thread:c)` versus `(a:thread:b, c)` is prevented twice:
+the colon-bearing node is refused, and so is the colon-bearing emitter. PR 2b
+owns the node-grammar red. PR 3 owns the emitter-grammar, composition and
+emitted-id/link-target collision reds, including the counterexample above.
+Any later format change must preserve rules 1–6 and revalidate N before PR 2b
+admits ids. Do not tighten shared validators to make families disjoint.
 
 **Canonical nesting (confirmed by Q10).** `parent` is the only stored structural
 edge; children are derived by selecting Thread nodes whose `parent` names this Thread node,
@@ -414,9 +472,44 @@ a root Thread is always within the limit; #320 §8's per-goal limits remain
 independently enforced. PR 1 records the answer; PR 2b records its boundary
 cases. There is no implicit unbounded or default limit.
 Define **Thread tree**, **root Thread**, **Thread node** and **Thread depth** inside PR 1's single
-Thread glossary entry, plus the **Thread depth limit** (`max_depth`, Q12) and
-**inherited goal association** (Q10). A project index may hold several Thread
-trees: each `parallel` target opens another root Thread (Q10).
+Thread glossary entry, plus the **Thread depth limit** (`max_depth`, Q12). A
+child-Thread goal-association term (for example **inherited goal association**)
+is added only with Q14's answer, in PR 1b or the nesting issue's contract PR. A
+project index may hold several Thread trees: each `parallel` target opens
+another root Thread (Q10).
+
+**Association stability contract (decided D-ENG-021; applies if Q14 derives a
+child's goal from ancestor history).** Today's `openWorkstream`, `goal.attached`
+and `goal.ended` check evidence only as a nonnegative safe integer (`validSeq`,
+`packages/weave/src/workstream.ts:109`), so backdated evidence is accepted.
+Interval containment on a caller-supplied `opened_at` therefore has no fixed
+meaning. Example: a parent attaches G at evidence 10 and a child opens at 12.
+Then G is ended with evidence 11, or a grandparent attaches H with evidence 5
+after G ends. Reconstruction would now place the existing child outside G or
+inside H. The contract:
+
+1. **Committed opening prefix.** A child's derived goal is fixed by the index
+   committed immediately before its open transition. Use recursive ancestor
+   lookup: the nearest ancestor (parent, grandparent, …) with an own active goal
+   in that index. It is never fixed by later parent history, and the lookup
+   does not stop at Thread depth 1.
+2. **Reconstruction agrees with the prefix.** Pure index values carry no
+   transition order, so PR 2b adds two ancestry-scoped evidence-order refusals
+   (`invalid_evidence`, no mutation). (i) A child open whose evidence is below
+   the highest `attached_at`/`ended_at` recorded on any ancestor refuses. (ii) An
+   ancestor `goal.attached`/`goal.ended` whose evidence is at or below any
+   existing descendant's `opened_at` refuses. With half-open goal intervals
+   `[attached_at, ended_at)`, interval containment over the final index then
+   equals the committed-prefix answer: an equal-seq attach-then-open inherits,
+   an equal-seq end-then-open does not, and the reverse orders refuse.
+   Backdated evidence is refused, never reinterpreted on reconstruction.
+3. **Root Threads unchanged.** Both refusals need an ancestor or a descendant,
+   so root-only indexes, including all 33 ported tests and the `parallel` root
+   target, keep today's evidence behavior.
+
+If Q14 selects an option that stores association explicitly instead of deriving
+it, rules 1–2 reduce to "a stored association is immutable after open", and PR 2b
+records that instead.
 
 Language constraint: use those qualified forms for Thread structure; bare **root** still means **composition root**.
 Keep Component tree, Default tree, Tapestry component nodes and context-declaration
@@ -495,15 +588,15 @@ Repository inspection cannot independently
 prove external absence, so new recorder evidence is the only reason to revisit
 that compatibility premise.
 
-| Existing unpersisted surface                                          | Locked target                                                                                                                                                          |
-| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `workstream@1`, `workstream_id`                                       | `thread@1`, `thread_id`, the one nestable Thread kind                                                                                                                  |
-| `workstreams` index, `workstream` result/request, `new_workstream_id` | `threads`, `thread`, `new_thread_id`, referring to Thread nodes in that same Thread tree                                                                               |
-| `operating.process@1` ownership                                       | Keep the schema version; rename its ownership key to `thread_id`                                                                                                       |
-| `input.route@1`, `input.route.correction@1` ownership                 | Keep both schema versions; rename their ownership keys to `thread_id`                                                                                                  |
-| Proposed #320 `thread.*` observations and durable fields              | Retain the existing Thread family; reconcile the common contract before implementation                                                                                 |
-| Index ordered keys `project_id`, `workstreams`                        | PR 2a renames to `project_id`, `threads`; Q12(a1) then extends to `project_id`, `threads`, `max_depth` in PR 2b, a new serialized index key                            |
-| No recorded nesting limit                                             | Q12(a1): one injected positive safe-integer `max_depth` on the project index; no root Thread field and no per-call limit argument                                      |
+| Existing unpersisted surface                                          | Locked target                                                                                                                               |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workstream@1`, `workstream_id`                                       | `thread@1`, `thread_id`, the one nestable Thread kind                                                                                       |
+| `workstreams` index, `workstream` result/request, `new_workstream_id` | `threads`, `thread`, `new_thread_id`, referring to Thread nodes in that same Thread tree                                                    |
+| `operating.process@1` ownership                                       | Keep the schema version; rename its ownership key to `thread_id`                                                                            |
+| `input.route@1`, `input.route.correction@1` ownership                 | Keep both schema versions; rename their ownership keys to `thread_id`                                                                       |
+| Proposed #320 `thread.*` observations and durable fields              | Retain the existing Thread family; reconcile the common contract before implementation                                                      |
+| Index ordered keys `project_id`, `workstreams`                        | PR 2a renames to `project_id`, `threads`; Q12(a1) then extends to `project_id`, `threads`, `max_depth` in PR 2b, a new serialized index key |
+| No recorded nesting limit                                             | Q12(a1): one injected positive safe-integer `max_depth` on the project index; no root Thread field and no per-call limit argument           |
 
 This is an atomic pre-persistence contract replacement, including nested process
 records, routes, corrections, callers and fixtures. Remove active workstream
@@ -588,8 +681,10 @@ design and documentation work can proceed concurrently after PR 1. PR 3 may
 also need explicitly identified #320 runtime integration; record that dependency
 rather than add a parallel id. Every slice uses a branch from current
 origin/main with its prerequisite PRs merged or explicitly carried. Q1–Q13 and
-Q10-0 are answered (section 7); no slice waits on an owner answer. PR 2b's
-Thread node budget is fixed by Q8/Q9/Q10 (N = 61, E = 32). Under Q10-0 (a), PR 2a
+Q10-0 are answered (section 7). Only PR 2b's child goal-association part waits
+on the open owner question Q14. PR 1, PR 2a, rename-only PR 4 and PR 2b's
+parent/id/depth checks do not. PR 2b's Thread node budget is fixed by Q8/Q9/Q10
+and the new-record identity contract (N = 61, colon-free E = 32). Under Q10-0 (a), PR 2a
 depends only on PR 1's settled terminology/crosswalk and the minimal-root
 guarantee; PR 1 may carry the full Q10/Q12 contract extension or split it into
 a follow-up PR 1b, which must merge before PR 2b.
@@ -658,13 +753,57 @@ together. Define **Thread tree**, **root Thread**, **Thread node** and **Thread 
 entry. Align #320 §3, its glossary summary, normative identifiers and common
 contract path while retaining its proposed/unimplemented status.
 Record every section 7 answer with its decision id: Q5 export policy, Q6 intake
-meaning, Q8 node lifecycle, Q9 record version, Q10 field matrix/goal
-association/placements/id rule, Q11 run-scoped storage, Q12 `max_depth` on the
-index, and Q13's issue boundary, plus latest-index revalidation and no-orphan
-contracts. Under Q10-0 (a) the Q10/Q12 contract extension may land in a
-follow-up PR 1b; PR 2a needs only the settled terminology/crosswalk and the
-minimal-root guarantee. Behavioral enforcement stays in PR 2b/PR 3 and #320
-integration; documentation assertions cannot establish those behaviors.
+meaning, Q8 node lifecycle, Q9 record version, Q10 field matrix/placements/id
+rule, Q11 run-scoped storage, Q12 `max_depth` on the index, and Q13's issue
+boundary, plus latest-index revalidation and no-orphan contracts. Record Q14 as
+open, without asserting any child goal-association rule, and record the
+association stability contract as conditional on Q14 (section 3). Under
+Q10-0 (a) the Q10/Q12 contract extension may land in a follow-up PR 1b; PR 2a
+needs only the settled terminology/crosswalk and the minimal-root guarantee.
+Q14's answer is recorded in PR 1b, or in the nesting issue's contract PR if
+#329 closes first; either way it is recorded before PR 2b's goal-association
+red. Behavioral enforcement stays in PR 2b/PR 3 and #320 integration;
+documentation assertions cannot establish those behaviors.
+
+**Exact `weft.record@2` mapping (PR 1 prerequisite for PR 3).** PR 1 records
+this mapping in the Weft contract. A record family not listed here is not
+emitted under `@2` until it is added with its own red.
+
+- **Thread node lifecycle:** kind `thread.transition`, subject `thread`, id
+  `<emitter>:thread:<node>:opened|closed`. Under `@2` the only transitions are
+  `opened` and `closed`; `joined`, `superseded` and `cancelled` are refused on
+  `@2` `thread.transition`. Neither transition requires a link. #320's settle
+  outcome is a field on `closed`.
+- **Action state:** kind `action.transition` with `state` (today's closed state
+  set), id `<emitter>:action:<action_id>:<state>`, carrying the owning node's
+  `thread_id`. State records are always emitted and never omitted for a link
+  reason.
+- **Action chain edges:** kind `action.transition` with an `edge` field
+  (`opened`, `joined`, `superseded`, `cancelled`, `closed`) and no `state`. A
+  `@2` `action.transition` carries exactly one of `state` and `edge`. Id
+  `<emitter>:chain:<action_id>:<edge>`, with `:<seq>` added for `cancelled`.
+  Links and targets: `joined` requires `joins` → each dependency's
+  `chain:<dep>:closed`; `superseded` (on the earlier action) requires
+  `supersedes` → the replacement's `chain:<id>:opened`; `cancelled` carries
+  `cancels` → `chain:<id>:opened`; `closed` carries `caused_by` → the terminal
+  state record. Today `REQUIRED_LINK` applies only to `thread.transition`
+  (`packages/weft/src/validate.ts:282,341–344`). Under `@2` it must also apply
+  to `action.transition` edges `joined` → `joins` and `superseded` →
+  `supersedes`, and it does not follow the events automatically.
+- **Cross-trace omission:** only a chain-edge record whose required target lies
+  in another Weft trace is not emitted; the Loom journal remains its evidence.
+  Action state records and node lifecycle records are never omitted for this
+  reason. Today an action belongs to one Loom goal and so to one trace, which
+  makes such an edge unreachable from the reference emitter, but the rule stays
+  explicit.
+- **Not node-bound:** Loom's `cycle`, `goal`, `judgment` and `outcome` records
+  carry null `thread_id` and stay `weft.record@1` with unchanged layouts, as
+  Gateway/Fabric null-id records do (Q9). Because one emitter id covers all of
+  a Loom emitter's records in a trace, they still use the colon-free node-bound
+  emitter id (section 3, rule 1).
+
+PR 1 also records section 3's new-record identity contract and PR 3's delivery
+contract (logical records versus delivery attempts) as the target for PR 3.
 Record section 4's in-place ownership/schema mapping, leaving current source
 names explicit until PR 2a. Include Weft's normative Thread node crosswalk immediately;
 remaining emission/link alignment belongs to PR 3 and prose to PR 4. Quote and
@@ -687,7 +826,8 @@ Keep current source names allowlisted until PR 2a atomically removes them;
 never allowlist whole source/doc directories. Text assertions may pin that each
 answer is recorded (for example the `weft.record@1`/`@2` split and the
 `max_depth` glossary term), but must not stand in for behavior: bounded ids,
-parent storage, finite Thread depth, goal inheritance, single-writer/latest-index
+parent storage, finite Thread depth, child goal association (once Q14 is
+answered), single-writer/latest-index
 rules, no-orphan rules and version discrimination are proven only by PR 2b/PR 3
 behavioral tests.
 This documentation red grants no permission to generate implementation code
@@ -745,7 +885,8 @@ options unchanged (Q6). A rename regression is reviewed independently of nesting
 
 Q13 (a): tracked by a new nesting issue linked from #320, not #329. Depends on
 green PR 2a, PR 1 (or PR 1b) recording the Q10/Q12 contract, and the fixed
-N = 61 / E = 32 budget. Add its optional immutable
+N = 61 / colon-free E = 32 budget. Its goal-association part also depends on
+Q14's recorded answer. Add its optional immutable
 `parent` and derive children from it, with the same schema and id rule at every Thread depth.
 Use injected opaque ids, project-wide duplicate refusal, Thread depth limits and
 atomic validation against the latest index. No stored child list, reparenting,
@@ -753,12 +894,15 @@ second record kind or automatic process allocation. Introduce section 3's
 Thread-specific id predicate here and apply N at every Thread depth: child and
 root Thread admission (including the `parallel` target's `new_thread_id`) and
 parent references. Never change shared `boundedId`/`correlation`.
-Implement Q10's inherited goal association: a child's goal is its parent's
-effective goal at the child's `opened_at`, derived from recorded `goals[]`
-intervals and never stored; `goal.attached` keeps project-wide uniqueness and
-refuses `goal_active` on a Thread whose effective goal is active, inherited or
-not; `goal.ended` refuses while an open descendant inheriting that goal has no
-settlement or cancel request.
+**Goal association waits on Q14.** The parent/id/depth part of PR 2b may land
+before Q14 is answered, but only if a child Thread's goal behavior stays exactly
+today's own-`goals[]` behavior. The PR must document that child-Thread goal
+association is pending Q14 and must claim no inheritance, attachment refusal or
+goal-ending rule for descendants. Once Q14 is answered and recorded (PR 1b or
+the nesting issue's contract PR), PR 2b, or a follow-up PR 2c in the same issue,
+implements the chosen option. It also implements section 3's association
+stability contract whenever that option derives association from ancestor
+history.
 Cover latest-index revalidation/refusal/retry with pure transition interleavings;
 durable serialization and append/settle/cancel wiring remain explicit #320 integration with their own
 behavioral red. There is no journal CAS to exercise.
@@ -780,17 +924,28 @@ matrix. Do not smuggle these contract/call-site changes into PR 2a.
 **Red before implementation:** nested openings against PR 2a must fail to retain
 and validate `parent`. Reject missing/cross-project parents, self-parentage,
 cycles, reparenting, duplicate ids and depth-limit overflow without changing the
-original index. Add a separate red: **two child Threads share goal G by
-inherited association**. With `parent` already supported, before implementing
-inheritance, open two children under a Thread whose active goal is G: each
-child's effective goal must be G, and it is not (today's `activeGoal` reads
-only the child's own empty `goals[]`). Failure merely to retain `parent` is not
-evidence for this red. Also prove: a second `goal.attached` of G anywhere in
-the project index still refuses `goal_attached`; attaching another goal to a
-child with inherited active G refuses `goal_active`; a child opened after its
-parent's goal ended inherits nothing; ending G on the parent refuses while an
-inheriting child is open without a cancel request; and replay derives the same
-associations.
+original index. Before Q14 is answered, pin only the unchanged behavior: a
+child Thread's `activeGoal` reads its own `goals[]`, and a second
+`goal.attached` of G anywhere in the project index still refuses
+`goal_attached`.
+
+**After Q14, goal-association reds (separate from parent retention).** With
+`parent` already supported and before implementing the chosen option, write the
+red for that option's shared-goal case: two child Threads under a Thread whose
+active goal is G each relate to G as Q14 specifies, and today's code does not
+(`activeGoal` reads only the child's own empty `goals[]`). Failure merely to
+retain `parent` is not evidence for this red. Add the option's attachment and
+goal-ending reds as listed under Q14. If the option derives association from
+ancestor history, add **Later parent history cannot change an existing child's
+goal association**. Open a child at evidence 12 under a parent with G attached
+at 10. Each of these then refuses `invalid_evidence` without mutation, with the
+evidence check running before any Q14 goal-ending rule: ending G
+at 11, attaching a goal on a grandparent at 5, and opening a second child at 9,
+which is below G's `attached_at`. Reconstruction of the final index and
+of every committed prefix gives the same association as the opening prefix,
+including a grandchild resolving through two ancestors. The equal-seq cases in
+section 3 rule 2 behave as stated. Root-only evidence behavior is unchanged in
+all 33 ported tests.
 Named checks: **Thread depth N child id passes Weft validation** (at the
 configured Thread depth bound, with distinct parent/action ids, maximum-length Thread node
 and emitter ids, every derived record id/link target including the longest
@@ -832,9 +987,11 @@ in section 6 are required integration evidence before claiming durability.
 Q13 (a): tracked by a new node-bound Weft emission issue linked from #320, not
 #329. Depends on PR 2b and the recorded #320 Thread node binding prerequisite;
 Q8 (a), Q9 (b) and Q11 (b) are fixed. Apply Q10's root-id rule (N = 61 at every
-Thread depth); this slice must not tighten N after admission. Enforce E = 32 in
-Loom's emitter construction for node-bound emissions only, leaving shared Weft
-`isId` and all historical emitter ids unchanged.
+Thread depth); this slice must not tighten N after admission. Enforce section 3's
+colon-free E = 32 emitter grammar in Loom's emitter construction for node-bound
+emissions only, plus the composition root's emitter-prefix refusal. Leave shared
+Weft `isId` and all historical emitter ids unchanged. Implement exactly PR 1's
+`weft.record@2` mapping; it is a prerequisite, not something PR 3 designs.
 Expand PR 1's crosswalk through Weft mapping/link documentation and Loom
 emission comments, and implement the owning-node mapping only after its runtime
 binding has behavioral red. The destination is locked: each span's `thread_id`
@@ -843,8 +1000,9 @@ prerequisite explicitly. Do not call retained action-id correlation completion
 of this slice. Preserve historical JSON, OTel attributes, SQLite tables,
 record-id segments and link targets as historical evidence. Implement new
 emission under `weft.record@2` (Q9): node-lifecycle `thread.transition` records
-on subject `thread` (Q8), and per-action chain events on the action subject with
-the owning node's `thread_id`. Extend Weft validation, OTel export and both
+on subject `thread` (Q8), action state records, and `chain`-family action edge
+records, both as `action.transition` with the owning node's `thread_id`. Extend
+`REQUIRED_LINK` to `@2` action edges, and extend Weft validation, OTel export and both
 SQLite intakes to accept and preserve `@2` (OTel intake currently accepts only
 `weft.record@1`, `packages/weft/src/sqlite-intake.ts:64,93`) while `@1` keeps
 validating unchanged. Under Q11 (b), SQLite remains run-scoped, there is no
@@ -863,23 +1021,34 @@ maximum-length Thread node/emitter ids and every derived record id/link target a
 **Two goals' children with the same injected id are refused** at the binding/index
 boundary before emission/storage, with no overwrite of the first Thread node's rows.
 Named red **Emitter cap for Thread node emissions is enforced at construction**: the E-length
-emitter succeeds, E+1 refuses before any node-bound emission, and existing
-Weft validation still accepts otherwise valid 33–128-character historical,
-gateway/Fabric/external emitter ids, including `@` and `:`. No global validator
-change or historical rejection may make this red pass.
+colon-free emitter succeeds. E+1 characters, or any `:`, `/` or `@` (for
+example `a:judgment` or `a:thread`), refuses before any node-bound record is
+built. Existing Weft validation still accepts otherwise valid 33–128-character
+historical, gateway/Fabric/external emitter ids, including `@` and `:`. No
+global validator change or historical rejection may make this red pass.
 Named red **Distinct emitter/Thread node pairs have distinct record ids and link targets**:
-exercise emitters containing `:thread:` and different valid Thread node ids across
-every transition/sequence suffix through emission, validation and SQLite link
-resolution. Include cross-family comparisons against all Loom-derived
-`action:${action_id}:${state}`, `cycle:${cycle_no}:${trigger}`, `goal:${seq}`,
-`judgment:${id}` and `outcome:goal:${seq}` records in the same trace, with
-distinct colon-bearing emitters and valid action/judgment ids. Fixed kind
-segments alone do not establish disjointness. Reject any collision of unequal
-logical records, including a Thread node record colliding with another family, without
-changing shared validators. Include the former collision `(a, b:thread:c)` / `(a:thread:b, c)`:
-the colon-bearing Thread node refuses; valid pairs round-trip to their unique
-components under section 3's delimiter rule. Reject a mapper/grammar mutation
-that admits the old ambiguity; the Q8 (a)/Q9 (b) format must pass this red.
+use distinct colon-free emitters, valid Thread node ids, action ids and
+judgment refs that contain `:` and family words (`thread:n:opened`,
+`x:cancelled`, `x:cancelled:5`), and a Thread node and an action sharing one id
+string. Cover every family (`thread`, `chain`, `action`, `cycle`, `goal`,
+`judgment`, `outcome`) and every edge/state/sequence suffix through emission,
+validation and SQLite link resolution in one trace. Each id must round-trip to
+its unique emitter, family and components under section 3's rules 2–3. Include
+the recorded counterexample: `(a:judgment, node n, opened)` versus `(a,
+judgment thread:n:opened)` must be impossible because `a:judgment` refuses at
+construction. Include the former collision `(a, b:thread:c)` / `(a:thread:b, c)`:
+both the colon-bearing node and the colon-bearing emitter refuse. Add the
+composition red: a trace with Loom emitter `a` and a gateway emitter `a:thread`
+(or exactly `a`) refuses at port construction, while unrelated colon-bearing
+gateway/Fabric emitters stay accepted. Reject a mapper/grammar mutation that
+readmits colon-bearing node-bound emitters, or that puts chain edges back in
+the `thread` family, without changing shared validators.
+Named red **`@2` action-chain events keep their required links**:
+`@2` `action.transition` with `edge=joined` and no `joins`, or `edge=superseded`
+and no `supersedes`, rejects. So does a `@2` `action.transition` carrying both
+or neither of `state` and `edge`, and a `@2` `thread.transition` with
+`joined`, `superseded` or `cancelled`. Every `@1` fixture keeps validating
+unchanged.
 Repeat **Historical action-correlated and new node-bound records are distinguishable**
 under `weft.record@1` versus `weft.record@2`, through validation and both intakes.
 Named PR 3 red: **Thread node opened/settled exactly once regardless of action count**.
@@ -890,9 +1059,49 @@ A zero-, one- and two-action Thread node must each satisfy those counts.
 Counting only Loom observations cannot satisfy this red.
 #320's Loom `thread.opened` and `thread.settled` observations are counted separately in the journal:
 one opening and one terminal observation per Thread node, regardless of action count.
+**Delivery contract: logical records versus delivery attempts.** A logical
+projection record is one `(trace_id, record_id)` with its content, derived
+deterministically from the committed journal. A delivery attempt is one
+`WeftPort.emit` call. "Exactly once" in this slice counts distinct logical
+records; it never counts attempts. Today `emit` is one-way: `deliver` swallows
+throws and never awaits (`packages/weave/src/weft.ts:395–407`). Pending
+records live only in memory, there is no durable delivery acknowledgement and
+no transaction spans the Loom journal and the sink. `recover()` emits nothing
+(`WEFT-CONTRACT.md`, recovery), so a record built but not delivered before a
+crash is lost, and recovery cannot tell a delivered record from an undelivered
+one. Retained record identities permit deduplication; they cannot guarantee
+one attempt. PR 3 therefore depends on an identified delivery prerequisite,
+contracted in its node-bound Weft issue and outside Loom:
+
+1. **Durable pending delivery.** The composition root, not Loom, keeps a
+   durable cursor: the highest journal position whose derived records the
+   receiver has acknowledged. The cursor advances only on an acknowledging
+   receiver result, such as the trace store's typed `upsert`/`upsertBatch`
+   result. A fire-and-forget `emit` never advances it. After `recover()` and
+   outside replay, a separate redelivery step re-derives the records above the
+   cursor from the committed journal and delivers them again. It invokes only
+   the sink: no gateway, host, effect, grant or scheduling change. Loom still
+   reads no trace.
+2. **Receiver idempotency.** Receivers treat a repeated `(trace_id, record_id)`
+   with byte-identical content as a no-op, and refuse unequal content under an
+   existing identity as `conflict`, never ignoring it. The SQLite trace store's
+   span upsert already refuses unequal `record_json` as `conflict`
+   (`packages/weft/src/sqlite.ts:221`); its `INSERT OR IGNORE` covers only the
+   `runs`/`threads` scope rows. Every other receiver PR 3 relies on must show
+   the same property.
+3. Until both exist at the actual boundary, PR 3 may claim no duplicate logical
+   record and no unequal identity reuse. It must not claim that no lifecycle
+   record is lost, and it stays blocked on that evidence.
+
 Include recovery after a **crash before and after each open/settle emission**,
-including after durable append but before delivery and after delivery but before
-acknowledgement. Replay emits zero new lifecycle records. Also keep one
+with both windows. **Lost delivery:** crash after durable append but before
+delivery; after recovery and redelivery the receiver holds exactly one logical
+`opened` (or `closed`) record. **Repeated delivery:** crash after delivery but
+before acknowledgement; redelivery repeats the attempt, and the receiver still
+holds one logical record with byte-identical content. Count attempts and
+distinct identities separately: two attempts for one identity pass, while two
+identities for one lifecycle transition, or unequal content under one
+identity, fail. Replay itself emits zero records. Also keep one
 project-level Thread node alive across two goals/runs, changing the active run/emitter
 on recovery, with concurrent and out-of-order action arrivals from both runs.
 Assert exactly one Weft opened and one `closed` transition **across the
@@ -903,32 +1112,40 @@ its open projection; the emitter/run recording its terminal observation owns
 its settle projection, even if different. Retain those recorded owners and
 record identities across recovery; attaching a new run/emitter or starting an
 action never reallocates lifecycle ownership or opens the Thread node again.
-Cross-trace link rule (answered with Q8/Q11, section 7): terminal `closed`
-keeps requiring no link, so a project-level Thread node opening in one goal's
-Weft trace and settling in another needs no cross-trace target. `joined`
-(`joins`) and `superseded` (`supersedes`) keep their `REQUIRED_LINK` rules and
-are emitted only when the target record lies in the same Weft trace (one Loom
-goal per Weft trace); otherwise no Weft record is emitted for that edge and the
-Loom journal remains its evidence. Demonstrate terminal/join validation and
-intake in that two-goal case. Never emit a cross-trace link or treat a prior
-goal's opening record as a legal target.
-Count lifecycle records before SQLite row coalescing as well as after intake:
-`INSERT OR IGNORE` on `(run_id, thread_id)` cannot prove uniqueness. Validate
-that a mutation emitting once per run or re-emitting on journal load fails.
-At the actual durable integration boundary, demonstrate no lost lifecycle
-state and deduplicated record identities through these crash windows; if that
-depends on #320 integration, keep PR 3 blocked on its behavioral evidence.
-Replay never delivers missing records or invokes effects; recovery is separate.
-Under Q8 (a), action-chain events are `@2` `action.transition` records carrying
-the owning node's `thread_id`, with their `joins`/`supersedes`/`cancels` links,
-and do not enter the Weft node-lifecycle counts. A byte-preservation check must reject mutation
-of historical `:thread:` ids or link targets. Documentation alone needs no speculative mapper.
+Cross-trace link rule (answered with Q8/Q11, section 7, under PR 1's `@2`
+mapping): node lifecycle `opened` and `closed` require no link, so a
+project-level Thread node opening in one goal's Weft trace and settling in
+another needs no cross-trace target. `joined` and `superseded` exist under `@2`
+only as `chain`-family action edges, with their `REQUIRED_LINK` rules. Only such
+an edge whose target lies in another Weft trace (one Loom goal per Weft trace) is
+not emitted; the Loom journal remains its evidence. Every action state record
+and node lifecycle record is still emitted. Demonstrate in the two-goal case
+that both goals' action state records are present and valid, that node
+`closed` validates without a link, and that a constructed cross-trace dependency
+omits only its `joined` edge. Never emit a cross-trace link or treat a prior
+goal's record as a legal target.
+Count distinct logical lifecycle identities across all delivery attempts,
+before SQLite row coalescing as well as after intake: `INSERT OR IGNORE` on
+`(run_id, thread_id)` cannot prove uniqueness. Validate that a mutation emitting
+once per run, deriving a second identity on journal load, or redelivering with
+unequal content fails. A repeated attempt with identical content passes. At the
+actual durable integration boundary, demonstrate both crash windows above; if
+that depends on #320 integration or the delivery prerequisite, keep PR 3 blocked
+on its behavioral evidence. Replay never delivers records or invokes effects;
+redelivery is a separate recovery step.
+Under Q8 (a), action state and chain-edge records carry the owning node's
+`thread_id` and do not enter the Weft node-lifecycle counts. A byte-preservation
+check must reject mutation of historical `:thread:` ids or link targets.
+Documentation alone needs no speculative mapper.
 
-**Green:** mapping, derived-id budget/collision, historical/new distinguishability
-and single-node-lifecycle assertions across crashes, concurrent arrival and
-goals/runs pass under Q8 (a) and Q9 (b); run-scoped SQLite assertions (Q11 b)
-still pass; original historical golden records remain identical and valid. Join/handoff/
-supersession/repeated cancel/recovery links retain their recorded targets. Run
+**Green:** mapping, derived-id budget/collision, emitter grammar/composition,
+`@2` action-edge link, historical/new distinguishability and single-node-lifecycle
+assertions pass under Q8 (a), Q9 (b) and PR 1's `@2` mapping. That covers
+crashes in both delivery windows, concurrent arrival and goals/runs.
+Run-scoped SQLite assertions (Q11 b) still pass, and original historical golden
+records remain identical and valid. Historical `@1` join/handoff/supersession/
+repeated cancel/recovery links keep their recorded targets; `@2` edges target
+`chain`-family records. Run
 `npm run test:weft-contract`; after build run
 `node --test 'packages/weave/dist/test/w5-*.test.js'` (Node >=22.18), including
 replay, isolation and authority tests; run G and full verification. Keep SQLite
@@ -975,23 +1192,176 @@ records never carry or mint a grant. Keep budget/effect holds as accounting; rec
 at actual start. Any continuation/recovery guarantee relying on that fix is
 blocked on RT-00's own demonstrated red/green evidence.
 
-| Case                                               | Required deterministic evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Partial rename across packages                     | For PR 2a and every source/test rename or deletion, remove `packages/*/dist` before build and verify (or use a fresh `npm ci` checkout with no prior output); build scripts stay unchanged. After build and verify, require no `dist/**/workstream*` artifacts before reporting green, using section 5's artifact check independently of the legacy-name scan. Build and public consumer compile checks reject stale imports or mismatched ownership keys; link/name check rejects stale contract paths. Writers implement the locked in-place replacement into one `thread@1` family; no recorded schema is silently repurposed. Preserve G import directions and local port declarations.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| One nestable kind at every Thread depth            | Under Q10 (a)'s common field matrix and confirmed allocation/nesting rules, same `thread@1` schema and bounded grammar/project-wide uniqueness at every Thread depth. Thread depth N checks cover envelope ids and every derived Weft record id/link target with maximum-length Thread node/emitter ids and suffix/sequence; reject N+1. **Two goals' children with the same injected id are refused** without mutation. Parent is the only stored edge, immutable after open; children are derived. Refuse missing/cross-project parents, cycles, reparenting and Thread depth overflow. Q12 (a1) records `max_depth` once on the project index; PR 2b proves a second caller/goal cannot raise it (no per-call argument exists), absent/invalid policy refuses, and replay preserves it. PR 2b explicitly covers root Thread callers and child limit cases. Parentage is distinct from dependencies/Weft links; nesting grants nothing.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| Concurrent sibling open                            | No append CAS exists. At #320 journal integration, composition root serializes the shared index commit boundary under exclusive single-writer ownership and reconstructs the latest index from its reloaded committed snapshot before validation/persist. Pure transition checks apply the second proposal to the first commit's resulting index, with no expected-prefix input. Revalidation refuses invalidated assumptions without mutation; valid stale proposals and retries can succeed against that index. Two valid distinct siblings both survive; parent semantic revision is unchanged. Duplicate ids, overcommitted shares and stale parent state refuse atomically. Race opens against cancel/settle in both orders; no lost children or dependency edges.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Parent cancelled or settled with open children     | Apply #320 §6.3–§6.4: cascade cancel requests to every open descendant, retain identity/locks/late evidence, refuse settlement leaving an open child without a cancel request. Required open children block completion; optional outstanding children receive cancellation on parent completion. Race child open against parent cancel/settle in both orders; neither order permits an orphan.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| Crash between parent and child appends             | At real journal integration, crash after parent open/before child-group append and after child-group append/before acknowledgement. Replay yields the parent alone or the complete child group plus dependency changes, never a partial fork or child-list divergence. Parent link is immutable, children are derived, retry uses recorded ids exactly once, and replay has zero effects/grants.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Recorder evidence appears                          | Preserve evidence, stop and open a separate issue for compatibility and cutover scope. Add no reader, migrator or dual-read path in this plan.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| Replay and grants (unconditional)                  | Replay invokes nothing, emits nothing and issues zero grants. Queued/held reads carry or mint no grant. Single-use grants remain consumed after a crash and are never re-presented. Recovery checks current authority; only actual start may receive a fresh grant, subject to RT-00. Reservations are accounting, never transferable grants.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Parallel routing fails or is cancelled             | Aborted/unavailable/stale site answers place no input and open no Thread. Q10 places the parallel target as a new root Thread (Thread depth 0, so within any `max_depth`); its id must pass the Thread-only predicate from PR 2b. If a parallel target id is invalid/duplicate or any subsequent step refuses, retain the exact original index: no orphan target, partial input placement or process transition. A model answer alone never grants or dispatches work.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Interrupt correction races a pause/stop/completion | An interrupt requests pause at the next boundary, never a stop. Correcting one of two interrupts retains the other's pending pause; an honoured pause stays paused; terminal processes stay terminal; stale corrections refuse. Preserve request evidence and resume digest through the rename.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| Concurrent independent Threads                     | Interleave two Threads' transitions and separate active goals; transitioning one preserves the other's record, inputs, process and authority. Only one active goal and live process per Thread. PR 2a and PR 2b both preserve that one goal attaches once within a project (Q10). Multiple child Threads share goal G by inherited association, derived from the parent's goal interval at `opened_at`; a second attachment of G anywhere in the project refuses `goal_attached`. Independent action execution remains concurrent; serialization of the shared index commit boundary reserves no execution slots.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| Concurrent artifact updates                        | Preserve monotonic artifact revisions within a Thread; cross-Thread writes still require canonical effect locks. Ownership/key renames do not expand a grant or bypass stale read-set/resource checks.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Old exported-name consumers                        | Exercise a fixture importing the public old names and one using the new names. Q5: the atomic change updates all checked-in callers, documents the source-breaking API change, and the old-name fixture must fail to compile; no deprecated alias, duplicate state model or deep-import shim. Wire compatibility and the source export policy remain separate decisions.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Weft links across crash/concurrent arrival         | Old segments and new segments resolve the same ids, including forward targets, dependency joins, repeated cancels and supersession before/after recovery. New spans point at their owning durable Thread node, at any Thread depth; a child span must not inherit its parent's id, and two actions on one Thread node share that Thread node id. Preserve historical action correlation as recorded evidence; apply Q8 (a)/Q9 (b) to new emissions, distinguish historical `weft.record@1` action-correlated records from new `weft.record@2` node-bound records, and validate derived record ids/link targets within 128 and collision freedom across all Loom-derived families. Exercise crash/recovery before/after open and settle emissions, including append/delivery/acknowledgement windows; replay emits zero new lifecycle records. For one Thread node with zero/one/multiple actions spanning two goals/runs and concurrent/out-of-order arrivals, count exactly one node-lifecycle `thread.transition` with `transition=opened` and one with `transition=closed` across the whole Weft projection, not per trace. Separately count #320's Loom `thread.opened`/`thread.settled` observations once each in the journal; journal counts alone do not prove Weft uniqueness. When open and settle occur in different Weft traces, `closed` needs no link and `joined`/`superseded` are emitted only with a same-trace target (section 5, PR 3); validate each record within its own Weft trace, without cross-trace links. Keep the opening/terminal observations' recorded emitter/run owners and record ids across restart; count before SQLite coalescing so `INSERT OR IGNORE` cannot hide duplicate lifecycle records. Q11 (b) keeps storage/OTel run-scoped; no cross-run correlation is claimed. Slow/throwing/reentrant sinks do not change scheduling, budgets or outcomes.                          |
-| Authority and disclosure                           | Opening, decoding, correcting or resuming creates no grant/approval/budget. Keep unconditional replay/single-use-grant invariants above; uncertain effects are reconciled only under current authority. Reject credential-shaped ids, keep raw input/provider errors out of records and keys out of argv/logs.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| Benchmark contamination                            | Keep intake choices/frozen corpus bytes and digests unchanged. Rename checks must not rewrite historical evidence, inject guardrails or shuffles into benchmark routes, or expose held-out cases. A future comparison requires reserved independent adversarial/held-out cases and recorded data provenance/license/destination plus sanitization or explicit authorization before hosted disclosure.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+Each case below names its required deterministic evidence.
+
+### Partial rename across packages
+
+For PR 2a and every source/test rename or deletion, remove `packages/*/dist`
+before build and verify (or use a fresh `npm ci` checkout with no prior output);
+build scripts stay unchanged. After build and verify, require no
+`dist/**/workstream*` artifacts before reporting green, using section 5's
+artifact check independently of the legacy-name scan. Build and public consumer
+compile checks reject stale imports or mismatched ownership keys; the link/name
+check rejects stale contract paths. Writers implement the locked in-place
+replacement into one `thread@1` family; no recorded schema is silently
+repurposed. Preserve G import directions and local port declarations.
+
+### One nestable kind at every Thread depth
+
+Under Q10 (a)'s common field matrix and confirmed allocation/nesting rules, use
+the same `thread@1` schema and bounded grammar/project-wide uniqueness at every
+Thread depth. Thread depth N checks cover envelope ids and every derived Weft
+record id/link target with maximum-length Thread node/emitter ids and
+suffix/sequence; reject N+1. **Two goals' children with the same injected id are
+refused** without mutation. Parent is the only stored edge, immutable after
+open; children are derived. Refuse missing/cross-project parents, cycles,
+reparenting and Thread depth overflow. Q12 (a1) records `max_depth` once on the
+project index; PR 2b proves a second caller/goal cannot raise it (no per-call
+argument exists), absent/invalid policy refuses, and replay preserves it. PR 2b
+explicitly covers root Thread callers and child limit cases. Parentage is
+distinct from dependencies/Weft links; nesting grants nothing.
+
+### Concurrent sibling open
+
+No append CAS exists. At #320 journal integration, the composition root
+serializes the shared index commit boundary under exclusive single-writer
+ownership and reconstructs the latest index from its reloaded committed snapshot
+before validation/persist. Pure transition checks apply the second proposal to
+the first commit's resulting index, with no expected-prefix input. Revalidation
+refuses invalidated assumptions without mutation; valid stale proposals and
+retries can succeed against that index. Two valid distinct siblings both
+survive; parent semantic revision is unchanged. Duplicate ids, overcommitted
+shares and stale parent state refuse atomically. Race opens against
+cancel/settle in both orders; no lost children or dependency edges.
+
+### Parent cancelled or settled with open children
+
+Apply #320 §6.3–§6.4: cascade cancel requests to every open descendant, retain
+identity/locks/late evidence, and refuse settlement leaving an open child
+without a cancel request. Required open children block completion; optional
+outstanding children receive cancellation on parent completion. Race child open
+against parent cancel/settle in both orders; neither order permits an orphan.
+
+### Crash between parent and child appends
+
+At real journal integration, crash after parent open/before child-group append
+and after child-group append/before acknowledgement. Replay yields the parent
+alone or the complete child group plus dependency changes, never a partial fork
+or child-list divergence. The parent link is immutable, children are derived,
+retry uses recorded ids exactly once, and replay has zero effects/grants.
+
+### Recorder evidence appears
+
+Preserve evidence, stop and open a separate issue for compatibility and cutover
+scope. Add no reader, migrator or dual-read path in this plan.
+
+### Replay and grants (unconditional)
+
+Replay invokes nothing, emits nothing and issues zero grants. Queued/held reads
+carry or mint no grant. Single-use grants remain consumed after a crash and are
+never re-presented. Recovery checks current authority; only actual start may
+receive a fresh grant, subject to RT-00. Reservations are accounting, never
+transferable grants.
+
+### Parallel routing fails or is cancelled
+
+Aborted/unavailable/stale site answers place no input and open no Thread. Q10
+places the parallel target as a new root Thread (Thread depth 0, so within any
+`max_depth`); its id must pass the Thread-only predicate from PR 2b. If a
+parallel target id is invalid/duplicate or any subsequent step refuses, retain
+the exact original index: no orphan target, partial input placement or process
+transition. A model answer alone never grants or dispatches work.
+
+### Interrupt correction races a pause/stop/completion
+
+An interrupt requests pause at the next boundary, never a stop. Correcting one
+of two interrupts retains the other's pending pause; an honoured pause stays
+paused; terminal processes stay terminal; stale corrections refuse. Preserve
+request evidence and resume digest through the rename.
+
+### Concurrent independent Threads
+
+Interleave two Threads' transitions and separate active goals; transitioning one
+preserves the other's record, inputs, process and authority. Only one active
+goal and live process per Thread. PR 2a and PR 2b both preserve that one goal
+attaches once within a project, and a second attachment of G anywhere in the
+project refuses `goal_attached`. How several child Threads relate to goal G is
+Q14's open answer; until it is recorded, child Threads keep today's
+own-`goals[]` behavior and no shared-goal assertion is made. If Q14 derives
+association from ancestor history, section 3's association stability contract
+applies, and later parent history cannot change an existing child's goal.
+Independent action execution remains concurrent; serialization of the shared
+index commit boundary reserves no execution slots.
+
+### Concurrent artifact updates
+
+Preserve monotonic artifact revisions within a Thread; cross-Thread writes still
+require canonical effect locks. Ownership/key renames do not expand a grant or
+bypass stale read-set/resource checks.
+
+### Old exported-name consumers
+
+Exercise a fixture importing the public old names and one using the new names.
+Q5: the atomic change updates all checked-in callers and documents the
+source-breaking API change, and the old-name fixture must fail to compile. There
+is no deprecated alias, duplicate state model or deep-import shim. Wire
+compatibility and the source export policy remain separate decisions.
+
+### Weft links across crash/concurrent arrival
+
+- **Historical links:** old and new segments resolve the same ids, including
+  forward targets, dependency joins, repeated cancels and supersession
+  before/after recovery. Preserve historical action correlation as recorded
+  evidence.
+- **Owning node:** new spans point at their owning durable Thread node, at any
+  Thread depth. A child span must not inherit its parent's id, and two actions
+  on one Thread node share that Thread node id.
+- **Versions and ids:** apply Q8 (a)/Q9 (b) and PR 1's exact `@2` mapping to new
+  emissions. Distinguish historical `weft.record@1` action-correlated records
+  from new `weft.record@2` node-bound records. Validate derived record ids/link
+  targets within 128 and collision freedom across all Loom-derived families,
+  under section 3's new-record identity contract (colon-free node-bound
+  emitters, fixed family tags, `chain` family for action edges, composition
+  emitter-prefix refusal).
+- **Delivery:** exercise crash/recovery before/after open and settle emissions
+  in both delivery windows: lost delivery (append, no delivery) and repeated
+  delivery (delivery, no acknowledgement). Count distinct logical records, not
+  delivery attempts. Replay emits zero records; redelivery is a separate
+  recovery step that invokes only the sink. Without the durable pending-delivery
+  prerequisite, no "no lost record" claim is made.
+- **Lifecycle counts:** for one Thread node with zero/one/multiple actions
+  spanning two goals/runs and concurrent/out-of-order arrivals, count exactly
+  one node-lifecycle `thread.transition` with `transition=opened` and one with
+  `transition=closed` across the whole Weft projection, not per trace.
+  Separately count #320's Loom `thread.opened`/`thread.settled` observations
+  once each in the journal; journal counts alone do not prove Weft uniqueness.
+- **Cross-trace:** when open and settle occur in different Weft traces, node
+  lifecycle records need no link. Only a `chain` edge whose required target lies
+  in another trace is omitted; action state records are always emitted. `@2`
+  `joined`/`superseded` edges without their required links reject. Validate
+  each record within its own Weft trace, without cross-trace links.
+- **Ownership and storage:** keep the opening/terminal observations' recorded
+  emitter/run owners and record ids across restart. Count before SQLite
+  coalescing so `INSERT OR IGNORE` cannot hide duplicate lifecycle identities.
+  Q11 (b) keeps storage/OTel run-scoped; no cross-run correlation is claimed.
+- **Sinks:** slow/throwing/reentrant sinks do not change scheduling, budgets or
+  outcomes.
+
+### Authority and disclosure
+
+Opening, decoding, correcting or resuming creates no grant/approval/budget. Keep
+the unconditional replay/single-use-grant invariants above; uncertain effects
+are reconciled only under current authority. Reject credential-shaped ids, keep
+raw input/provider errors out of records and keys out of argv/logs.
+
+### Benchmark contamination
+
+Keep intake choices/frozen corpus bytes and digests unchanged. Rename checks
+must not rewrite historical evidence, inject guardrails or shuffles into
+benchmark routes, or expose held-out cases. A future comparison requires
+reserved independent adversarial/held-out cases and recorded data
+provenance/license/destination plus sanitization or explicit authorization
+before hosted disclosure.
 
 Runtime and gateway remain provider-independent and pure: no environment,
 filesystem, shell or ambient-clock access is introduced. Time and identity
@@ -1001,7 +1371,7 @@ to execute remain separate gates. A repeated review finding becomes a narrow
 lint or behavioral regression test with known-red and green evidence; do not
 relax permissions, validation or protected checks to pass it.
 
-## 7. Answered owner questions
+## 7. Owner questions (Q1–Q13 answered, Q14 open)
 
 ### Q1 — Answered: Thread identity family
 
@@ -1067,18 +1437,22 @@ closure. #320's one-Thread glossary and normative alignment stay in PR 1.
 emits exactly one `transition=opened` and one terminal `transition=closed`.
 There is no Weft `settled` value; #320's settle outcome is a `weft.record@2`
 field on the `closed` record. Per-action chain events move to the action subject
-as `@2` `action.transition` records carrying the owning node's `thread_id`, with
-the chain's `joins`/`supersedes`/`cancels` links retargeted to action records;
-PR 1 records that exact mapping. PR 3's red is **Thread node opened/settled
-exactly once regardless of action count** (section 5).
+as `@2` `action.transition` records carrying the owning node's `thread_id`.
+Action state records keep `state`; chain edges carry `edge` in the separate
+`chain` id family, with `joins`/`supersedes`/`cancels` retargeted to `chain`
+records. `REQUIRED_LINK` extends to `@2` action edges. PR 1 records that exact
+mapping as a PR 3 prerequisite (section 5, PR 1; D-ENG-021 decides its encoding).
+PR 3's red is **Thread node opened/settled exactly once regardless of action
+count** (section 5).
 
-Folded sub-question — cross-trace link rules (with Q11): terminal `closed` keeps
-requiring no link, so a Thread node that opens in one goal's Weft trace and
-settles in another needs no cross-trace target. `joined`/`superseded` keep their
-`REQUIRED_LINK` rules and are emitted only when the target lies in the same Weft
-trace; otherwise the Loom journal alone records that edge. No cross-trace link
-is ever emitted. This composes existing kinds and link rules rather than adding
-a primitive.
+Folded sub-question — cross-trace link rules (with Q11): node lifecycle `opened`
+and `closed` require no link, so a Thread node that opens in one goal's Weft
+trace and settles in another needs no cross-trace target. `joined`/`superseded`
+exist under `@2` only as action chain edges with their `REQUIRED_LINK` rules.
+Only such an edge whose target lies in another Weft trace is omitted, and the
+Loom journal alone records it. Action state and node lifecycle records are
+never omitted. No cross-trace link is ever emitted. This composes existing kinds
+and link rules rather than adding a primitive.
 
 ### Q9 — Answered (D-ENG-020): Weft record version for node-bound emissions
 
@@ -1090,11 +1464,17 @@ version lives in `schema`, already exported as `weft.schema` and stored in
 SQLite's `schema` column, so readers need no inference from id spelling or
 arrival time. OTel intake currently accepts only `@1`
 (`packages/weft/src/sqlite-intake.ts:64,93`) and must accept `@2` in PR 3. The
-record-id format is unchanged, so N = 61 stands. PR 1 names, and PR 3
+version does not separate record ids: SQLite keys and OTel span ids ignore
+`schema`. Collision freedom therefore comes from section 3's new-record identity
+contract. That contract keeps the Thread-family layout, so N = 61 stands. PR 1 names, and PR 3
 demonstrates, **Historical action-correlated and new node-bound records are
 distinguishable**, including equal `thread_id` strings.
 
-### Q10 — Answered (D-ENG-021): single `thread@1` field set and #320 contract replacements
+### Q10 — Answered (D-ENG-021): single `thread@1` field set, ids and placement (mechanical schema answers)
+
+Q10 answers only the mechanical schema questions: field set, ids and placement.
+The behavioral goal-association and goal-ending contract that an earlier
+revision recorded here is now the open owner question Q14.
 
 **Q10-0 — Answered: (a) PR 2a proceeds on the minimal renamed root Thread.**
 Under field set (a) below, today's ten fields are exactly the required set and
@@ -1110,32 +1490,29 @@ every Thread depth: `schema, thread_id, project_id, origin, opened_at, revision,
 goals, inputs, artifacts, process`. Optional at every Thread depth: `parent` and
 #320's `purpose, completion, depends_on, share, deadline, lifecycle, cancel,
 resume_point, results, evidence`, each with an explicit absence rule; absence
-never fabricates a lifecycle, budget or grant. `goals[]` is the sole goal
-association/history. #320's stored `goal_id` is dropped in favor of derived
-association, so there are not two goal authorities. Option (b) is rejected: it
+never fabricates a lifecycle, budget or grant. `goals[]` remains a Thread's own
+goal history. #320's stored `goal_id` field is dropped, so the field set has no
+second goal field; how a child Thread relates to its ancestors' goals is Q14.
+The Q14 option that stores association explicitly does so through `goals[]`,
+not through a new field. Option (b) is rejected: it
 would force lifecycle fields onto every project-level Thread at open and push
 PR 2a beyond a pure rename. Durable lifecycle semantics still need #320
 behavioral evidence.
 
-**Goal association and attachment uniqueness — Answered: inherit, keep
-project-wide attachment uniqueness.** `goal.attached` keeps today's project-wide
-`goal_attached` check unchanged, so a goal attaches to exactly one Thread node.
-A child Thread's goal is its parent's effective goal at the child's `opened_at`.
-It is derived from the parent's recorded `goals[]` intervals, never stored, and
-fixed for the child's life, matching #320's "a thread never leaves its goal".
-The rule is the same at every depth: a Thread's effective goal is its own active
-goal, else its inherited goal. `goal.attached` refuses `goal_active` while
-either is active. `goal.ended` refuses while an open descendant inheriting that
-goal has no settlement or cancel request. Many children thus share goal G
-without a second attachment. PR 2b owns the red **two child Threads share goal G
-by inherited association**.
+**Goal association and goal ending — moved to Q14 (open, Benjamin).** This
+covers inherited ownership, fixed lifetime association, refusal of a second
+attachment and when descendants block goal ending. These rules are observable
+lifecycle policy that D-ENG-017–020 do not determine, so D-ENG-021 does not
+decide them. Q10 fixes only that the field set has no second goal field and
+that a root Thread's goal is its own active `goals[]` entry, as today.
 
 **Per-goal root Thread placement — Answered: child of the project-level Thread.**
 D-ENG-017 puts project-level and goal-local Threads "at different Thread depths
 in one Thread tree"; a second parent-less per-goal root would split them into
 separate trees. PR 1 amends #320 §5.1/Increment B: the goal's first Thread is a
-child (Thread depth 1) of the project-level Thread on which G is active, and it
-inherits G. #320's "root thread" wording is replaced, so bare **root** still
+child (Thread depth 1) of the project-level Thread on which G is active. Its
+relation to G follows Q14. This is structural placement, not goal policy.
+#320's "root thread" wording is replaced, so bare **root** still
 means composition root and **root Thread** means parent-less. #320 §8's per-goal
 depth limit counts from that goal's first Thread, alongside Q12's tree limit.
 
@@ -1151,9 +1528,10 @@ child placement for routed work needs its own #320 follow-up contract and red.
 `<parent>/<opening seq>/<index>` goal-local scheme with injected opaque ids that
 are unique project-wide, including settled Thread nodes; duplicates refuse
 `duplicate_thread` atomically. Use the Thread-only predicate
-`^[A-Za-z0-9][A-Za-z0-9_.-]{0,60}$` (N = 61, no `:`, `/` or `@`) with emitter cap
-E = 32 for node-bound emissions; shared `boundedId`, `correlation` and Weft
-`isId` stay unchanged. The tighter predicate applies to root Threads too,
+`^[A-Za-z0-9][A-Za-z0-9_.-]{0,60}$` (N = 61, no `:`, `/` or `@`) with the
+colon-free emitter grammar `^[A-Za-z0-9][A-Za-z0-9_.-]{0,31}$` (E = 32) for
+node-bound Loom emitters (section 3, new-record identity contract); shared
+`boundedId`, `correlation` and Weft `isId` stay unchanged. The tighter predicate applies to root Threads too,
 including `new_thread_id` on the route path (today `new_workstream_id` under
 `boundedId`: 128 characters, `:` allowed). Tightening is safe now because no
 Thread records are persisted. It keeps one id rule at every Thread depth and
@@ -1201,7 +1579,67 @@ red/green obligations unchanged, and name implementers/reviewers when opened.
 The Q10/Q12 contract extension (PR 1 or PR 1b) and the Q8/Q9 crosswalk are
 recorded under #329, so the follow-ups start from a locked contract. #330 prose
 (Q7) does not gate closure. Pending Thread node binding stays explicit in the
-crosswalk.
+crosswalk. Q14 does not gate closure either: if it is unanswered when #329
+closes, its contract text moves with PR 2b's nesting issue.
+
+### Q14 — Open (Benjamin): child-Thread goal association and goal ending
+
+**Question.** When a Thread has child Threads, how do the children relate to the
+goal active on an ancestor, and what happens when that goal ends while children
+are still open? Today's `goal.attached` refuses `goal_attached` if any Thread in
+the project already has that goal, so a goal attaches to exactly one Thread.
+#320 assumes many goal-local Threads per goal and says "a thread never leaves its
+goal". D-ENG-017–020 settle naming, ids and nesting, not this behavior. It is
+observable lifecycle policy, so under D-ENG-021 it is Benjamin's call.
+
+**Common to every option.** Root Threads behave as today: a root Thread's goal is
+its own active `goals[]` entry. PR 1, PR 2a and rename-only PR 4 are unaffected,
+and so are PR 2b's parent/id/depth checks. `parallel` targets stay root Threads
+with their own goals. Explicit parent cancellation still cascades cancel
+requests to open descendants (#320 §6.3–§6.4) under every option.
+
+- **(a) Inherited, fixed at opening; ending is blocked by open children.** A
+  child takes the nearest ancestor's active goal when it opens and keeps it for
+  life. The association is derived, never stored, under section 3's association
+  stability contract. A goal still attaches to one Thread. Attaching another
+  goal to a Thread whose inherited goal is active refuses `goal_active`.
+  `goal.ended` refuses while an open descendant inheriting that goal has no
+  settlement or cancel request. _For users:_ every child reports the goal it
+  works for. A goal cannot be marked ended while its child work is still open:
+  the user (or caller) settles or cancels that work first, and nothing is
+  cancelled implicitly.
+- **(b) Inherited, fixed at opening; ending cascades.** Inheritance, the
+  stability contract and the attachment refusal are the same as (a). Instead of
+  refusing, `goal.ended` succeeds and records a cancel request for every open
+  inheriting descendant, with evidence retained, as a parent cancel does.
+  _For users:_ ending a goal also stops its outstanding child work in one step,
+  and a goal end is never stuck. In exchange, ending a goal can cancel work the
+  user expected to finish, so a mistaken end costs more.
+- **(c) Explicit shared attachment; no inheritance.** Each child that works for
+  G attaches G itself through its own `goals[]`. The project-wide
+  `goal_attached` refusal is relaxed to "once per Thread", which changes a
+  behavior today's tests pin. Ending G on one Thread does not affect others; G
+  counts as ended only when every Thread carrying it has ended it. The stability
+  contract is not needed, because association is stored and immutable.
+  _For users:_ each Thread's record shows its goal directly, with no lookup
+  through ancestors. A child could carry a different goal from its parent, or
+  none. Ending a goal becomes several separate actions, and "is G finished?" has
+  to be answered across Threads.
+
+**Recommendation: (a).** It matches #320's "a thread never leaves its goal" and
+keeps today's one-attachment rule. It never cancels work implicitly, because
+cancellation stays an explicit request that already cascades. It is the easiest
+to relax later: moving to (b) only turns a refusal into a cascade, while going
+from (c) back to inheritance would rewrite stored associations. Choose (b) if a
+goal end should act as a stop signal for its child work.
+
+**What the answer changes in this plan.** PR 1b, or the nesting issue's contract
+PR, records the chosen option and its glossary term. PR 2b, or a PR 2c in the
+same issue, adds that option's shared-goal, attachment and goal-ending reds. For
+(a) or (b) it also adds **Later parent history cannot change an existing child's
+goal association** (section 5). Section 6's "Concurrent independent Threads"
+case gains the option's shared-goal assertion. Nothing in PR 1, PR 2a or #329's
+closure waits for this answer.
 
 ## Follow-ups
 
