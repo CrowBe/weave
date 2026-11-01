@@ -1074,12 +1074,14 @@ function reapGeneration(
       !sameReclaimOwner(owner, current) ||
       ownerState(current.token) !== 'dead' ||
       readLockContent(ours) !== token ||
-      claims.some((n) => {
+      // Inspect every claim, not just the first that forces a back-out, so each
+      // of several simultaneous gap arrivals is remembered as evidence.
+      claims.filter((n) => {
         if (n > next) return true;
         if (n === next) return false;
         const earlier = slotPath(reclaimPath, n);
         const state = claimState(earlier, ownerless, wait);
-        if (state === 'unknown' || (state === 'alive' && slots.includes(n))) unresolved = earlier;
+        if (state === 'unknown' || (state === 'alive' && slots.includes(n))) unresolved ??= earlier;
         else if (state === 'alive') {
           // A live claim absent from our scan was linked into a back-out gap; its
           // owner also sees a higher claim and backs out, so retry instead. Remember
@@ -1088,7 +1090,7 @@ function reapGeneration(
           if (arrival) evidence.arrivals.set(earlier, arrival);
         }
         return state !== 'dead';
-      })
+      }).length > 0
     ) {
       // Accepted residual race: generation replacement between this
       // token check and unlink can redirect the path to a successor's slot.
