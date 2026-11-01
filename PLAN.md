@@ -619,6 +619,9 @@ green, independently of the legacy-name scan that excludes build output:
 legacy_workstream_artifacts=$(find packages -path '*/dist/*' -name 'workstream*' -print) && test -z "$legacy_workstream_artifacts"
 ```
 
+For rename slices, green evidence comes from uncached `npm run verify` after
+removing `dist`, not from a `verify:cached` replay.
+
 Keep the build scripts unchanged in this rename. Use the declared
 Node >=22.18 toolchain and installed locked dependencies. A missing dependency,
 unsupported Node or unavailable runner is a blocker to report, never a reason
@@ -767,11 +770,17 @@ matrix. Do not smuggle these contract/call-site changes into PR 2a.
 **Red before implementation:** nested openings against PR 2a must fail to retain
 and validate `parent`. Reject missing/cross-project parents, self-parentage,
 cycles, reparenting, duplicate ids and depth-limit overflow without changing the
-original index. Add a red: **two child Threads of one goal open without
-`goal_attached`, and a second unrelated Thread attaching an already-attached
-goal is still refused**. Bind the setup and expected association to Q10's
-recorded uniqueness/inheritance answer before implementation; this test must
-not select that answer. Named checks: **Thread depth N child id passes Weft validation** (at the
+original index. Add a separate red: **two child Threads share goal G under
+Q10's recorded association rule**. With `parent` already supported, before
+implementing the association rule, the second child must fail with
+`goal_attached` from the current project-wide `goal.attached` uniqueness check,
+or fail to inherit G if Q10 selects inheritance. Failure merely to retain
+`parent` is not evidence for this red. Bind the setup and expected association
+to Q10's recorded uniqueness/inheritance answer before implementation; this
+test must not select that answer. Check duplicate attachments within the chosen
+uniqueness scope and attachments outside that scope according to the recorded
+answer, without presupposing refusal outside it.
+Named checks: **Thread depth N child id passes Weft validation** (at the
 configured Thread depth bound, with distinct parent/action ids, maximum-length Thread node
 and emitter ids, every derived record id/link target including the longest
 suffix and maximum safe sequence, and the N+1 refusal; validated by Weft in
@@ -781,10 +790,14 @@ refuse `duplicate_thread`, never overwrite). Also reject literal #320 slash ids
 and ids longer than the contracted Thread node budget, including a 128-character
 Thread node whose derived record id would overflow, so grammar failure cannot hide the
 uniqueness test. Reject colon-bearing Thread nodes, including `b:thread:c`, before
-deriving ids. Named red/guard **Shared id validators stay unchanged**: root Thread
-opens and the live `input-route.ts` parallel target path refuse `new_thread_id`
-longer than N regardless of Q10's placement answer, while
-62–128-character goal, project, artifact and intake/site ids remain accepted by
+deriving ids. Named red/guard **Shared id validators stay unchanged**:
+Gate root Thread tightening on Q10's recorded answer to whether the tighter
+Thread-only predicate applies to root Threads as well as children. If confirmed,
+root Thread opens refuse ids longer than N; otherwise follow the owner's
+recorded root-id rule and resolve the admission/emission budget contract before
+dependent implementation. The live `input-route.ts` parallel target path checks
+`new_thread_id` against the approved predicate for Q10's recorded target placement.
+In every case, 62–128-character goal, project, artifact and intake/site ids remain accepted by
 their existing validators (also test N+1–128 if N changes). Pin shared colon
 acceptance and credential refusals, decision-site validation and frozen
 benchmark bytes/digests, including benchmark-route ids. Demonstrate the guard
@@ -1160,8 +1173,9 @@ Under either field-set option, these remain open owner questions:
   without attaching it? Today's `transitionWorkstream` `goal.attached` checks
   the whole project index; #320 fixes a `goal_id` on every Thread. Requiring
   every child of goal G to attach G would refuse the second child. The owner
-  must specify how the chosen option lets multiple children share one goal
-  while still refusing a second unrelated Thread's duplicate attachment;
+  must specify how the chosen option lets multiple children share one goal,
+  define any attachment uniqueness scope, and state which duplicate attachments
+  are refused within it and which attachments are allowed outside it;
   section 6's current invariant alone does not resolve this conflict.
 - **Per-goal root Thread placement — Open:** Is #320's per-goal root Thread a
   child of the project-level Thread, or a second parent-less root? #320 §5.1
