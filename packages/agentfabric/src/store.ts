@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { threadId } from 'node:worker_threads';
 import {
   appendFileSync,
   closeSync,
@@ -9,6 +11,8 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  readdirSync,
+  readlinkSync,
   readSync,
   realpathSync,
   renameSync,
@@ -30,6 +34,8 @@ let lockSequence = 0;
 /** Synchronous backoff for the path-backed writer lock; injectable for deterministic races. */
 export interface FabricStoreOptions {
   readonly sleep?: (milliseconds: number) => void;
+  /** Bounds local waits only; without it, time is the sum of slept milliseconds. */
+  readonly clock?: { now(): number };
 }
 
 const lockWait = new Int32Array(new SharedArrayBuffer(4));
@@ -154,6 +160,30 @@ interface LoadedJournal {
  * every mutation is appended to a JSONL journal and folded back on open.
  * All path-backed entry points take the writer lock. A supplied snapshot may
  * seed an empty path, but cannot replace existing journal history.
+ *
+ * Store writer lock: lock, reclaim owner and claims share a JSON v2 token
+ * (pid, boot/PID-namespace identity, process start time, unique nonce). Legacy
+ * leading-pid tokens retain kill(pid, 0) behavior. Matching local start means
+ * alive; ESRCH-confirmed missing pid or changed start means dead. V2 owners
+ * with a foreign host identity or unverifiable liveness are unknown and never
+ * automatically reclaimed. A sibling worker is alive.
+ * Only proven-dead owners permit stale-lock reclaim, never elapsed time.
+ *
+ * Reapers exclusively link fully written files at reap, reap.2, ... (16 max).
+ * Only the highest live claimant may move a generation, after revalidating its
+ * token/device/inode, all earlier claims dead and no later claim. Never delete
+ * another owner's claim. Legacy ownerless reap directories need 500 ms of
+ * stable local observation. Injected time (default: sum of sleeps) bounds live
+ * waits to 2000 ms; iteration caps also bound a stopped clock. Live reapers
+ * produce retry-later errors without removal hints; unknown owners and slot
+ * exhaustion fail closed with canonical paths and conditional operator steps.
+ * Quarantine identity mismatches must restore or fail closed.
+ *
+ * No leases, heartbeats, garbage sweeping, journal changes or async open.
+ * Assumes Linux boot/namespace/start identify an incarnation and stores do not
+ * mix with versions older than #233. An older reaper already past revalidation
+ * relies on the defensive quarantine restore. UUID nonces cover hosts without
+ * start identity; no clock or owner timestamp supplies liveness evidence.
  */
 export class FabricStore {
   private next_handle = 1;
@@ -201,7 +231,7 @@ export class FabricStore {
     if (!existsSync(directory)) {
       mkdirSync(directory, { recursive: true });
     }
-    const lockToken = acquireLock(key, options.sleep ?? defaultLockSleep);
+    const lockToken = acquireLock(key, options);
     this.lockToken = lockToken;
     try {
       this.assertWritable();
@@ -836,10 +866,19 @@ function canonicalStorePath(path: string): string {
   }
 }
 
-function acquireLock(path: string, sleep: (milliseconds: number) => void): string {
+function acquireLock(path: string, options: FabricStoreOptions): string {
   const lockPath = `${path}.lock`;
-  const token = `${process.pid}:${(lockSequence += 1)}`;
-  const tempPath = `${lockPath}.${token}.tmp`;
+  const nonce = `${threadId}.${(lockSequence += 1)}.${randomUUID()}`;
+  const token = JSON.stringify({ v: 2, pid: process.pid, ...localOwnerIdentity(), nonce } satisfies OwnerTokenV2);
+  const tempPath = `${lockPath}.${nonce}.tmp`;
+  let slept = 0;
+  const wait = {
+    now: () => options.clock?.now() ?? slept,
+    sleep(milliseconds: number) {
+      (options.sleep ?? defaultLockSleep)(milliseconds);
+      slept += milliseconds;
+    },
+  };
   writeFileSync(tempPath, token);
   try {
     for (let attempt = 0; attempt < 32; attempt += 1) {
@@ -856,16 +895,17 @@ function acquireLock(path: string, sleep: (milliseconds: number) => void): strin
         // The previous writer may have released its lock after link failed.
         continue;
       }
-      const pid = lockOwner(owner);
-      if (pid === undefined || isAlive(pid)) {
-        throw new Error(`host store is already open: ${resolve(path)}`);
+      const state = ownerState(owner);
+      if (state === 'unknown') throw unverifiableOwner(path, lockPath);
+      if (state === 'alive') {
+        throw new Error(`host store is already open: ${path}`);
       }
-      if (!acquireReclaim(path, token, sleep)) {
+      if (!acquireReclaim(path, token, nonce, wait)) {
         continue;
       }
       try {
         const current = readLockContent(lockPath);
-        if (current !== owner) {
+        if (current !== owner || ownerState(current) !== 'dead') {
           continue;
         }
         try {
@@ -876,7 +916,7 @@ function acquireLock(path: string, sleep: (milliseconds: number) => void): strin
           }
         }
       } finally {
-        releaseReclaim(`${lockPath}.reclaim`, token);
+        releaseReclaim(`${lockPath}.reclaim`, token, nonce);
       }
     }
     throw new Error(`host store is already open: ${resolve(path)}`);
@@ -889,14 +929,22 @@ function acquireLock(path: string, sleep: (milliseconds: number) => void): strin
   }
 }
 
-/**
- * Serialize stale-lock reclamation so only the holder removes the main lock
- * and no contender can move a live writer's lock into quarantine.
- */
-function acquireReclaim(path: string, token: string, sleep: (milliseconds: number) => void): boolean {
+const RECLAIM_WAIT_MS = 2000;
+const OWNERLESS_GRACE_MS = 500;
+const MAX_CLAIM_SLOTS = 16;
+// Enough backoff rounds to reach the deadline; also terminates a stopped clock.
+const MAX_RECLAIM_WAITS = 128;
+
+interface ReclaimWait {
+  now(): number;
+  sleep(milliseconds: number): void;
+}
+
+/** Only a claimant of the observed generation may move it. */
+function acquireReclaim(path: string, token: string, nonce: string, wait: ReclaimWait): boolean {
   const reclaimPath = `${path}.lock.reclaim`;
   for (let attempt = 0; attempt < 16; attempt += 1) {
-    const tempPath = `${reclaimPath}.${process.pid}.${(lockSequence += 1)}.tmp`;
+    const tempPath = `${reclaimPath}.${nonce}.${(lockSequence += 1)}.tmp`;
     mkdirSync(tempPath);
     try {
       writeFileSync(`${tempPath}/owner`, token);
@@ -916,59 +964,117 @@ function acquireReclaim(path: string, token: string, sleep: (milliseconds: numbe
       try {
         rmSync(tempPath, { recursive: true, force: true });
       } catch {
-        // ignore
+        // Best-effort removal of our unpublished directory.
       }
     }
     const owner = readReclaimIdentity(reclaimPath);
-    if (owner === undefined || isAlive(owner.pid)) {
-      return false;
-    }
-    // Atomic mkdir grants a single contender the right to move this generation.
-    // All reapers must claim before revalidating: a check followed by rename
-    // alone allows a delayed contender to quarantine a live successor.
-    const claimPath = `${reclaimPath}/reap`;
-    try {
-      mkdirSync(claimPath);
-      writeFileSync(`${claimPath}/owner`, token);
-    } catch (error) {
-      if (isErrno(error, 'ENOENT')) continue;
-      if (isErrno(error, 'EEXIST')) {
-        // A reaper can be between mkdir, writing its token and moving the directory.
-        // Bound the wait by injected sleeps, without consulting an ambient clock.
-        for (let wait = 0; wait < 8; wait += 1) {
-          sleep(5);
-          const current = readReclaimIdentity(reclaimPath);
-          if (!sameReclaimOwner(owner, current) || isAlive(current.pid) || !existsSync(claimPath)) return false;
-        }
-        const current = readReclaimIdentity(reclaimPath);
-        if (!sameReclaimOwner(owner, current) || isAlive(current.pid) || !existsSync(claimPath)) return false;
+    if (owner === undefined) return false;
+    const state = ownerState(owner.token);
+    if (state === 'unknown') throw unverifiableOwner(path, reclaimPath);
+    if (state === 'alive') return false;
+    if (!reapGeneration(path, reclaimPath, owner, token, nonce, wait)) return false;
+  }
+  return false;
+}
+
+function reapGeneration(
+  path: string,
+  reclaimPath: string,
+  owner: ReclaimIdentity,
+  token: string,
+  nonce: string,
+  wait: ReclaimWait,
+): boolean {
+  const deadline = wait.now() + RECLAIM_WAIT_MS;
+  const ownerless = new Map<string, number>();
+  let backoff = 5;
+  for (let attempt = 0; attempt < MAX_RECLAIM_WAITS; attempt += 1) {
+    if (!sameReclaimOwner(owner, readReclaimIdentity(reclaimPath))) return false;
+    const slots = claimSlots(reclaimPath);
+    const highest = slots.at(-1) ?? 0;
+    const claimPath = slotPath(reclaimPath, highest);
+    // Observe every slot before linking, so earlier ownerless claims accrue
+    // grace even when a later reaper has already linked and then crashed.
+    const states = slots.map((slot) => {
+      const path = slotPath(reclaimPath, slot);
+      return { path, state: claimState(path, ownerless, wait) };
+    });
+    const unknown = states.find((claim) => claim.state === 'unknown');
+    if (unknown) throw blockedReclaim(path, unknown.path, reclaimPath);
+    if (states.some((claim) => claim.state === undefined)) continue;
+    const pending = states.find((claim) => claim.state === 'alive');
+    if (pending) {
+      if (wait.now() >= deadline || attempt === MAX_RECLAIM_WAITS - 1) {
+        if (pending.path !== claimPath) throw blockedReclaim(path, pending.path, reclaimPath);
         throw new Error(
-          `host store is already open: ${path}; stale-lock reclaim is blocked by ${claimPath}; ` +
-            `confirm no weave process is using ${path}, then remove ${claimPath} and retry`,
+          `host store is already open: ${path}; stale-lock reclaim is in progress by a live process (${claimPath}); retry later`,
         );
       }
-      throw error;
+      wait.sleep(Math.min(backoff, Math.max(0, deadline - wait.now())));
+      backoff = Math.min(backoff * 2, 50);
+      continue;
     }
+    if (highest >= MAX_CLAIM_SLOTS) throw blockedReclaim(path, reclaimPath, reclaimPath);
+    const next = highest + 1;
+    const ours = slotPath(reclaimPath, next);
+    const temp = `${reclaimPath}/.reap.${nonce}.tmp`;
+    try {
+      writeFileSync(temp, token, { flag: 'wx' });
+      // The entire token is visible on success, including to legacy readers.
+      linkSync(temp, ours);
+    } catch (error) {
+      if (isErrno(error, 'ENOENT')) return false;
+      if (isErrno(error, 'EEXIST')) continue;
+      throw error;
+    } finally {
+      try {
+        unlinkSync(temp);
+      } catch (error) {
+        if (!isErrno(error, 'ENOENT')) throw error;
+      }
+    }
+    // Claim then revalidate: a delayed link can land in a successor generation.
     const current = readReclaimIdentity(reclaimPath);
-    if (!sameReclaimOwner(owner, current) || isAlive(current.pid)) {
-      // A successor may now own the directory. Release only our token's claim,
-      // leaving any replacement claim for its owner.
-      releaseReclaim(claimPath, token);
+    const claims = claimSlots(reclaimPath);
+    let unresolved: string | undefined;
+    if (
+      !sameReclaimOwner(owner, current) ||
+      ownerState(current.token) !== 'dead' ||
+      readLockContent(ours) !== token ||
+      claims.some((n) => {
+        if (n > next) return true;
+        if (n === next) return false;
+        const earlier = slotPath(reclaimPath, n);
+        const state = claimState(earlier, ownerless, wait);
+        if (state === 'alive' || state === 'unknown') unresolved = earlier;
+        return state !== 'dead';
+      })
+    ) {
+      // Accepted residual race: generation replacement between this
+      // token check and unlink can redirect the path to a successor's slot.
+      // A dev/ino precheck would still leave a gap before unlink; the invariant
+      // remains that we must never delete another owner's claim. Closing the
+      // window requires deletion relative to a stable directory identity;
+      // this cleanup retains the existing claim-slot protocol.
+      if (readLockContent(ours) === token) {
+        try {
+          unlinkSync(ours);
+        } catch (error) {
+          if (!isErrno(error, 'ENOENT')) throw error;
+        }
+      }
+      if (unresolved) throw blockedReclaim(path, unresolved, reclaimPath);
       return false;
     }
-    const quarantine = `${reclaimPath}.stale.${process.pid}.${(lockSequence += 1)}`;
+    const quarantine = `${reclaimPath}.stale.${nonce}.${(lockSequence += 1)}`;
     try {
       renameSync(reclaimPath, quarantine);
     } catch (error) {
-      if (isErrno(error, 'ENOENT')) {
-        continue;
-      }
+      if (isErrno(error, 'ENOENT')) return false;
       throw error;
     }
     const moved = readReclaimIdentity(quarantine);
-    if (!sameReclaimOwner(owner, moved) || isAlive(moved.pid)) {
-      // Defensive validation: restoration failure must stop acquisition. Never
-      // continue while a displaced owner could still be in the critical section.
+    if (!sameReclaimOwner(owner, moved) || ownerState(moved.token) !== 'dead') {
       try {
         renameSync(quarantine, reclaimPath);
       } catch (error) {
@@ -983,16 +1089,73 @@ function acquireReclaim(path: string, token: string, sleep: (milliseconds: numbe
     try {
       rmSync(quarantine, { recursive: true, force: true });
     } catch {
-      // ignore
+      // Best-effort garbage removal after exclusively moving the generation.
     }
+    return true;
   }
-  return false;
+  throw new Error(
+    `host store is already open: ${path}; stale-lock reclaim contention exhausted retries (${reclaimPath}); retry later`,
+  );
 }
 
-function releaseReclaim(reclaimPath: string, token: string): void {
+function slotPath(reclaimPath: string, slot: number): string {
+  return `${reclaimPath}/reap${slot <= 1 ? '' : `.${slot}`}`;
+}
+
+function claimSlots(reclaimPath: string): number[] {
+  try {
+    return readdirSync(reclaimPath)
+      .flatMap((name) =>
+        name === 'reap'
+          ? [1]
+          : /^reap\.[1-9][0-9]*$/.test(name) && Number(name.slice(5)) >= 2
+            ? [Number(name.slice(5))]
+            : [],
+      )
+      .sort((a, b) => a - b);
+  } catch (error) {
+    if (isErrno(error, 'ENOENT')) return [];
+    throw error;
+  }
+}
+
+function claimState(path: string, ownerless: Map<string, number>, wait: ReclaimWait): OwnerState | undefined {
+  try {
+    const before = lstatSync(path);
+    const token = readLockContent(before.isDirectory() ? `${path}/owner` : path);
+    if (!before.isDirectory()) return token === undefined ? undefined : ownerState(token);
+    // Legacy directory claims can expose an empty owner before publishing it.
+    if (token !== undefined && token !== '') return ownerState(token);
+    const after = lstatSync(path);
+    if (before.dev !== after.dev || before.ino !== after.ino) return 'alive';
+    const key = `${path}:${before.dev}:${before.ino}`;
+    const observed = ownerless.get(key);
+    if (observed === undefined) ownerless.set(key, wait.now());
+    return observed !== undefined && wait.now() - observed >= OWNERLESS_GRACE_MS ? 'dead' : 'alive';
+  } catch (error) {
+    if (isErrno(error, 'ENOENT')) return undefined;
+    throw error;
+  }
+}
+
+function unverifiableOwner(path: string, ownerPath: string): Error {
+  return new Error(
+    `host store is already open: ${path}; owner of ${ownerPath} cannot be verified from this host; retry later; ` +
+      `confirm no weave process on any host is using ${path}, then remove ${ownerPath} and retry`,
+  );
+}
+
+function blockedReclaim(path: string, blockedPath: string, reclaimPath: string): Error {
+  return new Error(
+    `host store is already open: ${path}; stale-lock reclaim is blocked by ${blockedPath}; ` +
+      `confirm no weave process is using ${path}, then remove ${reclaimPath} and retry`,
+  );
+}
+
+function releaseReclaim(reclaimPath: string, token: string, nonce: string): void {
   try {
     if (readLockContent(`${reclaimPath}/owner`) === token) {
-      const quarantine = `${reclaimPath}.released.${process.pid}.${(lockSequence += 1)}`;
+      const quarantine = `${reclaimPath}.released.${nonce}.${(lockSequence += 1)}`;
       renameSync(reclaimPath, quarantine);
       rmSync(quarantine, { recursive: true, force: true });
     }
@@ -1002,8 +1165,7 @@ function releaseReclaim(reclaimPath: string, token: string): void {
 }
 
 interface ReclaimIdentity {
-  readonly token: string;
-  readonly pid: number;
+  readonly token: string | undefined;
   readonly dev: number;
   readonly ino: number;
 }
@@ -1012,14 +1174,14 @@ function readReclaimIdentity(reclaimPath: string): ReclaimIdentity | undefined {
   try {
     const before = statSync(reclaimPath);
     const token = readLockContent(`${reclaimPath}/owner`);
-    const pid = lockOwner(token);
     const after = statSync(reclaimPath);
-    if (token === undefined || pid === undefined || before.dev !== after.dev || before.ino !== after.ino) {
+    if (before.dev !== after.dev || before.ino !== after.ino) {
       return undefined;
     }
-    return { token, pid, dev: after.dev, ino: after.ino };
-  } catch {
-    return undefined;
+    return { token, dev: after.dev, ino: after.ino };
+  } catch (error) {
+    if (isErrno(error, 'ENOENT')) return undefined;
+    throw error;
   }
 }
 
@@ -1032,16 +1194,91 @@ function sameReclaimOwner(expected: ReclaimIdentity, actual: ReclaimIdentity | u
   );
 }
 
-function lockOwner(content: string | undefined): number | undefined {
-  const owner = Number.parseInt(content ?? '', 10);
-  return Number.isInteger(owner) && owner > 0 ? owner : undefined;
+interface OwnerTokenV2 {
+  readonly v: 2;
+  readonly pid: number;
+  readonly host: string | null;
+  readonly start: string | null;
+  readonly nonce: string;
+}
+
+type OwnerState = 'alive' | 'dead' | 'unknown';
+let localIdentity: { host: string | null; start: string | null } | undefined;
+
+function processStart(pid: number | 'self'): string | null {
+  const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+  const start = stat.slice(stat.lastIndexOf(')') + 2).split(/\s+/)[19];
+  return start !== undefined && /^[0-9]+$/.test(start) ? start : null;
+}
+
+function localOwnerIdentity(): { host: string | null; start: string | null } {
+  if (localIdentity !== undefined) return localIdentity;
+  let host: string | null = null;
+  let start: string | null = null;
+  try {
+    host = `${readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim()}:${readlinkSync('/proc/self/ns/pid')}`;
+  } catch {
+    // An unavailable local identity allows only the legacy kill probe fallback.
+  }
+  try {
+    start = processStart('self');
+  } catch {
+    // A missing start identity is recorded explicitly, never guessed.
+  }
+  localIdentity = { host, start };
+  return localIdentity;
+}
+
+function ownerState(text: string | undefined): OwnerState {
+  if (text === undefined) return 'unknown';
+  if (!text.startsWith('{')) {
+    const pid = Number.parseInt(text, 10);
+    return Number.isSafeInteger(pid) && pid > 0 ? probePid(pid) : 'unknown';
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return 'unknown';
+  }
+  if (
+    !isRecord(value) ||
+    value.v !== 2 ||
+    !Number.isSafeInteger(value.pid) ||
+    Number(value.pid) <= 0 ||
+    !(value.host === null || (typeof value.host === 'string' && value.host.length > 0)) ||
+    !(value.start === null || (typeof value.start === 'string' && /^[0-9]+$/.test(value.start))) ||
+    typeof value.nonce !== 'string' ||
+    value.nonce.length === 0
+  )
+    return 'unknown';
+  const local = localOwnerIdentity();
+  if (local.host === null && value.host === null) return probePid(Number(value.pid));
+  if (local.host === null || value.host !== local.host || value.start === null) return 'unknown';
+  try {
+    const start = processStart(Number(value.pid));
+    return start === null ? 'unknown' : start === value.start ? 'alive' : 'dead';
+  } catch (error) {
+    // hidepid can also return ENOENT for a live process owned by another user.
+    return isErrno(error, 'ENOENT') && probePid(Number(value.pid)) === 'dead' ? 'dead' : 'unknown';
+  }
+}
+
+function probePid(pid: number): OwnerState {
+  try {
+    process.kill(pid, 0);
+    return 'alive';
+  } catch (error) {
+    return isErrno(error, 'ESRCH') ? 'dead' : 'alive';
+  }
 }
 
 function readLockContent(lockPath: string): string | undefined {
   try {
     return readFileSync(lockPath, 'utf8').trim();
-  } catch {
-    return undefined;
+  } catch (error) {
+    if (isErrno(error, 'ENOENT')) return undefined;
+    throw error;
   }
 }
 
@@ -1053,15 +1290,6 @@ function releaseLock(path: string, token: string): void {
     }
   } catch {
     return;
-  }
-}
-
-function isAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return isErrno(error, 'EPERM');
   }
 }
 
