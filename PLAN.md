@@ -480,11 +480,19 @@ another root Thread (Q10).
 
 **Association reconstruction requirement (decided D-ENG-021; independent of the
 Q14 option).** Whatever association semantics Q14 selects, reconstructing the
-project index from the committed journal must reproduce them exactly. The
-association that the chosen semantics assign to a child Thread after each
-committed transition must equal what reconstruction derives from that committed
-prefix and from every later prefix. Reconstruction never reinterprets a
-committed association. Today's `openWorkstream`, `goal.attached` and `goal.ended`
+project index from the committed journal must reproduce them exactly, in two
+separate senses. _Prefix reconstruction:_ for each committed prefix,
+reconstruction from that prefix yields the association the chosen semantics
+assign to each child Thread at that same prefix. _Historical query:_ against any
+later committed journal, the association as of an earlier prefix is that
+original prefix's association, derived from entries up to that prefix only,
+never from later entries or the final index; reconstructing that prefix of the
+append-only journal suffices, so no new query API is added. Neither sense makes
+a later prefix's current association equal an earlier one: subsequent
+authorized transitions may change current association exactly as the Q14
+answer permits (for example, (c)'s own attach/end transitions). Reconstruction
+never reinterprets a committed association; a later transition changes current
+association only through its own committed effect. Today's `openWorkstream`, `goal.attached` and `goal.ended`
 check evidence only as a nonnegative safe integer (`validSeq`,
 `packages/weave/src/workstream.ts:109`), so backdated evidence is accepted, and
 pure index values carry no transition order. Any option that relates a child to
@@ -927,10 +935,16 @@ retain `parent` is not evidence for this red. Add the option's attachment and
 goal-ending reds, and any reds Q14 lists as consequences of that option. For
 every option, add **Reconstruction reproduces the chosen goal association**
 (section 3): after each committed transition in a nested scenario that
-includes section 3's backdated-evidence example and a grandchild, the
-association the option assigns equals what reconstruction derives from that
-prefix and from the final index. Root-only evidence behavior is unchanged in
-all 33 ported tests.
+includes section 3's backdated-evidence example and a grandchild, capture the
+association the option assigns, and assert that reconstruction from that prefix
+equals it. Separately, after the final transition, reconstruct each earlier
+prefix of the final journal and assert it equals the association captured at
+that prefix, while the final index's current association equals the option's
+assignment after the last transition. If the option permits a later authorized
+transition to change a child's association, the scenario includes one, so a
+mutation that answers historical queries from the final index, or one that
+freezes current association at its first value, fails. Root-only evidence
+behavior is unchanged in all 33 ported tests.
 Named checks: **Thread depth N child id passes Weft validation** (at the
 configured Thread depth bound, with distinct parent/action ids, maximum-length Thread node
 and emitter ids, every derived record id/link target including the longest
@@ -1082,9 +1096,15 @@ contracted in its node-bound Weft issue and outside Loom:
    (`packages/weave/src/weft.ts:117`) and `parent_id` from its current cycle
    record, so re-deriving only the records above the cursor with the active
    emitter would change them. The node-bound Weft issue's contract picks one of
-   two mechanisms and states it: (i) the composition root durably stores each
-   complete projection envelope before its first delivery attempt and
-   redelivers that stored envelope; or (ii) a versioned deterministic
+   two mechanisms and states it: (i) the composition root durably stores the
+   complete set of projection envelopes derived from a journal position in the
+   same atomic commit as that position's journal append, and redelivers the
+   stored envelopes. No committed position may lack any of its envelopes, so a
+   crash after the append but before, or between, envelope writes cannot occur.
+   Persisting envelopes after the append, even before the first delivery
+   attempt, does not meet (i). If the journal and envelope store cannot commit
+   atomically, (i) is unavailable and the contract uses (ii). Loom still neither
+   reads nor writes envelopes; or (ii) a versioned deterministic
    projection re-derives each envelope from the committed journal prefix it
    needs (from position 0 if emitter state depends on it). Every input,
    including the original trace, emitter and sequence state, comes from that
@@ -1126,7 +1146,17 @@ record id, `sequence`, `parent_id`, links, evidence and fields) is
 byte-identical to its original attempt captured before the crash; a record
 never attempted equals the envelope a crash-free run over the same committed
 journal produces. A mutation that re-derives envelopes with the active emitter
-must fail. Also keep one
+must fail. **Crash between journal append and envelope persistence:** inject a
+crash immediately after a position's journal append and before any of its
+envelopes is persisted, and another between two envelopes derived from one
+position. After recovery and redelivery the receiver holds every logical record
+the committed journal derives, each once, with the original identity and
+content: byte-identical to any attempt captured before the crash, otherwise
+equal to a crash-free run over the same committed journal. Under (i) the
+injected crash must leave either the position and all its envelopes committed
+or neither; under (ii) both windows reduce to the lost-delivery case. A
+mutation that redelivers only persisted envelopes, or persists envelopes after
+a non-atomic append, must fail. Also keep one
 project-level Thread node alive across two goals/runs, changing the active run/emitter
 on recovery, with concurrent and out-of-order action arrivals from both runs.
 Assert exactly one Weft opened and one `closed` transition **across the
