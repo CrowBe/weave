@@ -4,21 +4,25 @@ Planning only. D-ENG-017 (Benjamin, 1 November 2026) locks one nestable
 **Thread** kind at every depth, retaining `thread@1`, `thread_id` and `thread.*`.
 This plan prepares the atomic workstream → Thread rename into that family;
 it changes no source, glossary, tests, schemas or recorded data. Owner questions
-1–4 are answered; only Q5–Q8 remain open in section 7.
+1–4 are answered; Q5–Q10 remain open in section 7.
 
 ## 1. Evidence, scope, and data shape inventory
 
-Planning checkout HEAD: `f7b34887f3ca3a4b1d6d94d21269f75f45cff359` (`f7b3488`),
-branch `wv-329-thread-rename-plan`, inspected on 1 November 2026. This is reviewed
+Plan6 checkout HEAD: `4f90030`, branch `wv-329-thread-rename-plan`, inspected
+on 1 November 2026. The unchanged source inventory below was recorded at
+`f7b34887f3ca3a4b1d6d94d21269f75f45cff359` (`f7b3488`). That baseline is reviewed
 plan `48e9192` plus the merge of locally available `origin/main` at `e35767b`.
 `48e9192` differs from original plan commit `02543c2` only in `PLAN.md`.
 #320 (`8ce60c5`, PR #362), `docs/durable-recursive-threads.md` and its glossary
 additions are now present. They describe proposed, unimplemented runtime behavior.
 Read `VISION.md`, `GLOSSARY.md`, `AGENTS.md`, current contracts, transitions and
 their tests, Weft validation/emission/recovery tests and import-direction checks
-before revising this plan. Review evidence is the supplied
-`/workspace/wvops/WV-329-review-48e9192.json`; its missing-#320 finding describes
-the reviewed base, not this merged checkout.
+before revising this plan. Plan6 review evidence is the supplied
+`/workspace/wvops/WV-329-review-4f90030.json` (all nine findings read).
+The earlier `/workspace/wvops/WV-329-review-48e9192.json` described the
+pre-merge base. Both review files and earlier temporary documentation checks
+are external evidence, non-reproducible from the repo; their availability in
+this workspace is not a checked-in validation gate.
 
 Every implementation PR must branch from current `origin/main` (at least
 `e35767b`, including #320), carrying only its declared prerequisite changes.
@@ -317,42 +321,86 @@ completion, results and dependencies, describe nodes in that same tree. Reconcil
 the flat project index and #320's fixed goal-local scope in that contract; never
 select different decoders by depth. Record exact field presence and validation
 using existing capabilities, without a second schema or automatic worker/process.
+The unified field set is **open Q10**, not settled by D-ENG-017: today's
+`origin, opened_at, revision, goals, inputs, artifacts, process` and #320 §5.1's
+fixed `goal_id, purpose, completion, depends_on, share, deadline, lifecycle,
+cancel, resume_point, results, evidence` must have one required/optional matrix
+at every depth. PR 1 must record the owner's answer, including how `goals[]`
+and `goal_id` reconcile, before either implementation slice. PR 2a's minimal
+renamed shape is valid only if that answer explicitly admits it through the
+same decoder used for children; otherwise re-slice PR 2a before implementation.
 
 **One id rule at every depth.** #320 §5.1's `<parent>/<opening seq>/<index>`
 and goal-only uniqueness conflict with Weft `isId` (`validate.ts:46`): `/` is
 rejected, nesting grows ids beyond 128, and different goals can collide in the
-project index and SQLite `threads(run_id, thread_id)` key. Replace that proposal
-in PR 1 with injected opaque ids matching
-`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$`, accepted by both Loom `boundedId` and
+project index and SQLite `threads(run_id, thread_id)` key. **Proposal for Q10
+owner sign-off:** replace #320 §5.1's child id scheme with injected opaque ids
+matching `^[A-Za-z0-9][A-Za-z0-9_.:-]*$`, accepted by both Loom `boundedId` and
 Weft `isId`, retaining both validators' credential-shaped-id refusals. No `/`
-or `@`; 1–128 ASCII characters at every depth, independent of ancestry. Identity
-allocation is injected and replay uses recorded ids; no ambient entropy or
-parent/sequence concatenation. All nodes, across every goal in a project, share
-one uniqueness scope: **project-wide uniqueness**, including settled nodes.
-Duplicate allocation refuses atomically rather than overwriting or merging.
-Run/project association must preserve this scope at the SQLite boundary.
+or `@`; the same bounded length applies at every depth, independent of ancestry.
+Identity allocation is injected and replay uses recorded ids; no ambient entropy
+or parent/sequence concatenation. Proposed scope is **project-wide uniqueness**,
+including settled nodes across every goal; duplicate allocation refuses
+atomically rather than overwriting or merging. Run/project association must
+preserve this scope at the SQLite boundary. These replacements are proposals
+for PR 1, not authority to override the merged #320 design without its owner.
 
-**Canonical nesting.** `parent` is the only stored structural edge; children
-are derived by selecting nodes whose `parent` names this node, never stored as
-a second source of truth. A root omits `parent`; a leaf has no derived children.
-`parent` is immutable after open; reparenting is forbidden. Refuse missing or
-cross-project parents, self-parentage and cycles without a partial transition.
-Root depth is 0; child depth is parent depth + 1. Require an explicit positive
-safe-integer `max_depth` limit and refuse openings beyond it (or absent/invalid
-limits). The same finite limit applies across goal boundaries in the tree;
-#320 §8's additional per-goal limits remain independently enforced. PR 1 records
-this limit input and its boundary cases; no implicit unbounded default.
+**Derived Weft id budget (PR 1 contract).** Choose a node-length cap rather
+than a digest-based record-id scheme. Let E be the maximum emitter-id length;
+for the current `:thread:` format the safe cap is **N = 93 - E**:
+`E + 8 + N + 11 + 16 <= 128` for
+`${emitter_id}:thread:${node_id}:cancelled:${seq}`. The 16 digits cover
+`Number.MAX_SAFE_INTEGER`; `:opened`, `:closed`, `:joined` and `:superseded`
+are shorter. Recommend E = 32 and N = 61 for new node-bound emissions, with
+both bounds validated before admitting ids; an unrestricted 128-character
+emitter leaves no usable node budget. The proposed common grammar is therefore
+`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,60}$` under that budget, not 128-character nodes.
+PR 1 records the exact bounds for Q10's approved allocation scheme and Q8/Q9's
+selected emission format; recompute N downward if that format has a longer
+suffix or discriminator. Reject over-budget node/emitter ids without truncation.
+Historical record ids remain unchanged. The depth-N check must validate the
+envelope `thread_id`, **every derived Weft record id and link target**, with
+maximum-length node and emitter ids and the longest suffix/sequence. Include
+the N+1 boundary and the formerly valid 128-character node that breaks emission.
+
+**Canonical nesting (Q10 proposal).** `parent` is the only stored structural
+edge; children are derived by selecting nodes whose `parent` names this node,
+never stored as a second source of truth. A root omits `parent`; a leaf has no
+derived children. `parent` is immutable after open; reparenting is forbidden.
+Refuse missing or cross-project parents, self-parentage and cycles without a
+partial transition. Root depth is 0; child depth is parent depth + 1. Propose an
+explicit positive safe-integer `max_depth` injected by the composition root
+**on child openings only**, including every child-group request. Root opens need no
+`max_depth`; depth 0 is always bounded. Refuse child openings beyond the limit
+or with an absent/invalid limit. The composition root supplies the same finite
+limit across goal boundaries in the tree; #320 §8's additional per-goal limits
+remain independently enforced. PR 1 records this proposed limit input and its
+boundary cases after Q10 sign-off; no implicit unbounded child default. Add
+`max_depth` / depth limit to PR 1's GLOSSARY.md work list. Immutable parent and
+the placement of this limit also need Q10's explicit answer; they are not
+mechanical consequences of the name lock.
 
 **Concurrent opens.** Apply sibling opens against the latest project index.
-At a durable boundary, use the existing append position/observation sequence as
-a compare-and-swap precondition, not the parent's semantic revision alone.
-#320 §5.3 keeps that revision unchanged by child opening. A stale append refuses;
-retry revalidates the parent's open/non-cancelled state, id uniqueness, limits,
-shares and dependency edges against the latest committed prefix. Distinct,
-valid sibling opens both survive; no lost child, duplicate share or edge update.
+**No append CAS exists today:** `ObservationJournal` has only `persist` and
+`snapshot` (`packages/weave/src/journal.ts:13–16`), and `AUDIT-CONTRACT.md:179`
+explicitly states there is no lock or compare-and-swap in `AuditJournal`.
+**Recommend single-writer composition-root serialization**, following that
+contract: acquire exclusive ownership, reload the latest committed prefix,
+validate and persist before releasing it. Do not add a conditional-append
+primitive in this rename. #320 integration must demonstrate this composition at
+the real journal boundary; the journal interface alone supplies no exclusion.
+Pure transitions test stale-prefix refusal using explicit expected/current
+prefix evidence, not the parent's semantic revision alone (#320 §5.3 keeps it
+unchanged by child opening). A stale proposal refuses without mutation; a retry
+revalidates the parent's open/non-cancelled state, id uniqueness, limits, shares
+and dependency edges against the latest index. Distinct valid siblings survive;
+no lost child, duplicate share or edge update. Serialize only the shared index
+commit boundary, leaving independent action execution concurrent.
 Opening a child group and its dependency additions/rebindings is one atomic
 append as in #320 §5.3; no separate stored child-list write. Pure transition
-checks exercise the same interleavings; journal integration remains follow-up.
+checks exercise these interleavings; journal integration remains follow-up. If
+multiple writers are later required, conditional append needs separate #320
+integration work with its own contract and demonstrated behavioral red.
 
 **No orphans.** Adopt #320 §6.3–§6.4: every open non-root node has an open parent
 or a recorded cancel request. Refuse parent settlement leaving an open child
@@ -408,9 +456,11 @@ that compatibility premise.
 This is an atomic pre-persistence contract replacement, including nested process
 records, routes, corrections, callers and fixtures. Remove active workstream
 schema/vocabulary, not arbitrary opaque identifier values such as `ws-a`.
-Never decode `thread@1` as two concepts. Add no speculative @2 versions,
-dual-read path, alias state model, journal or migrator. The TypeScript export
-break policy remains Q5, separate from this settled wire decision.
+Never decode `thread@1` as two concepts. Add no speculative Thread @2 versions,
+dual-read path, alias state model, journal or migrator. This lock covers the
+unpersisted rename surfaces above; Q9 separately asks how new Weft emissions
+remain distinguishable from recorded Weft evidence. The TypeScript export break
+policy remains Q5, separate from this settled wire decision.
 
 **Transitional bytes: none expected** for the renamed records. If recorder or
 recorded-byte evidence appears, preserve it, stop and open a separate issue for
@@ -423,6 +473,18 @@ the span, at whichever depth it belongs. A parallel workstream id or a second
 product identity is forbidden. `WEFT-CONTRACT.md:33` currently defines a causal
 sequence, and the reference emitter currently uses `thread_id = action_id`.
 Those are implementation evidence to crosswalk, not the target contract.
+PR 1 must quote and explicitly supersede the entire no-widening clause at
+`packages/weft/src/WEFT-CONTRACT.md:33–36`:
+
+> Correlation across goals or runtimes is outside v1. If it becomes necessary it
+> gets its own term and its own field; `thread_id` is not widened to cover it.
+
+A project-level Thread may span goals over time, so the locked node binding
+changes this stated scope. D-ENG-017 settles the field name and destination,
+not the Weft envelope version or discriminator. Q9 asks the owner to choose
+between documented discrimination under `weft.record@1` and a new record
+version for new node-bound emissions. PR 1 records that answer and the scope
+supersession explicitly; preserving historical bytes alone is insufficient.
 
 PR 1's normative crosswalk must state: “`thread_id` identifies the node in the
 Thread tree that the span belongs to (the durable record). The current reference
@@ -444,9 +506,16 @@ Preservation is not a decision about new `thread.transition` emissions: today
 opened/joined/superseded/cancelled/closed describe an action chain with ids built
 from `action_id` (`packages/weave/src/weft.ts:201–310`). Two actions would emit
 two opened/closed pairs under one node id, alongside #320's node lifecycle.
-Q8 must resolve the new emission semantics before the dependent PR 3 work;
-PR 1 records the answer without reopening the locked identity family. Gateway
-and Fabric retain locally declared ports and null ids when no node binding exists.
+Q8 must resolve new lifecycle emission semantics and Q9 must resolve record
+version/discrimination before dependent PR 3 work. PR 1 names the red check
+**Historical action-correlated and new node-bound records are distinguishable**:
+a reader must deterministically distinguish both even if their `thread_id`
+strings are identical; do not infer meaning from id spelling or arrival time.
+Exercise the selected discriminator/version through emission, validation, OTel
+and SQLite intake without rewriting historical records. If a proposed v1
+discriminator is not preserved there, it fails this check. PR 1 records the
+answers without reopening the locked identity family. Gateway and Fabric retain
+locally declared ports and null ids when no node binding exists.
 Weft remains a projection: no trace reader feeds Loom, no imports reverse, and
 nothing emitted grants authority or changes scheduling.
 
@@ -459,7 +528,7 @@ design and documentation work can proceed concurrently after PR 1. PR 3 may
 also need explicitly identified #320 runtime integration; record that dependency
 rather than add a parallel id. Every slice uses a branch from current
 origin/main with its prerequisite PRs merged or explicitly carried. Q1–Q4 are
-settled; only work depending on Q5–Q8 waits for those answers. Finish every
+settled; only work depending on Q5–Q10 waits for those answers. Finish every
 implementing slice green before merge; never merge a partially renamed
 producer/consumer pair. This planning revision implements none of these slices.
 
@@ -496,29 +565,43 @@ runtime or universal protocol for the rename.
 `origin/main` (at least `e35767b`) and record the exact base SHA and counts.
 Before PR 1 edits, record `npm ci && npm run verify` green on that origin/main
 base using Node >=22.18. A failed or unavailable install/runner blocks this
-precondition; earlier planning attempts do not establish base green.
+precondition; earlier planning attempts do not establish base green. If verify
+is red on base in a clean, supported environment after `npm ci`, follow the
+separate base-failure issue/owner step in Follow-ups; never accept a red baseline.
 
 Apply D-ENG-017 in one Thread glossary entry and the existing contract, updating
 all related definitions and #320 additions/language constraints in section 3
 together. Align #320 §3, its glossary summary, normative identifiers and common
 contract path while retaining its proposed/unimplemented status. Specify one
-`thread@1` shape, common id grammar/length/project-wide scope, canonical
-immutable parent, derived children, depth limit, sibling-open CAS and orphan
-invariant from section 3, not competing project/goal decoders.
+`thread@1` required/optional field matrix and reconciliation of `goals[]` with
+`goal_id` under Q10. Record owner sign-off for section 3's proposed #320 child-id
+replacement, common bounded grammar/project-wide scope, immutable parent,
+derived children and child-only depth-limit input (including its glossary
+entry). Use single-writer serialization and pure stale-prefix refusal, not an
+invented journal CAS. Specify the orphan invariant without competing
+project/goal decoders. Do not settle the open Q10 proposals by writing them as
+already locked facts.
 Record section 4's in-place ownership/schema mapping, leaving current source
 names explicit until PR 2a. Include Weft's normative node crosswalk immediately;
 remaining emission/link alignment belongs to PR 3 and prose to PR 4. Record
-Q8's owner answer before dependent lifecycle work and Q6's answer before changing
-live intake id semantics; neither question reopens D-ENG-017.
+Q8/Q9 owner answers before dependent Weft work and Q6's answer before changing
+live intake id semantics. Quote and supersede Weft's no-widening clause and
+specify the historical/new record discriminator or version. Q10's field-set
+answer gates the implementation split; none of these questions reopens D-ENG-017.
 
-**Red before edits:** a narrow terminology/contract check must fail against the
+**Red before edits:** add `checks/thread-contract.mjs` with a
+`checks/test/thread-contract.test.mjs` red/green fixture case, so
+`npm run test:checks` (part of G) runs it; wire the check itself into
+`npm run check`. This narrow terminology/contract check must fail against the
 current Workstream/Thread split, #320's fixed goal-local wording and Weft's
-unqualified causal-sequence definition. Assert one Thread kind with optional
+causal-sequence definition/no-widening clause. Assert one Thread kind with optional
 parent and derived children at different depths, one schema/key/transition
 family, shared bounded ids unique across goals, immutable canonical parent,
-finite depth, sibling-open CAS, no-orphan/cancel rules, aligned #320 dependent
-entries and honest current-versus-target Weft mapping. The check rejects #320's
+finite child depth, single-writer/stale-prefix rules, no-orphan/cancel rules,
+aligned #320 dependent entries and honest current-versus-target Weft mapping. The check rejects #320's
 slash-derived, goal-only ids and any stored child-list authority.
+Pin Q9's selected distinguishability contract and its named red before new
+emissions; PR 3 supplies the behavioral evidence at the binding boundary.
 Check that opening/nesting confers no authority or execution. This documentation
 red grants no permission to generate implementation code before behavioral red.
 
@@ -528,7 +611,9 @@ current behavior tests still pass unchanged. Run G and full verification. No
 
 ### PR 2a — Pure atomic Loom rename into the existing Thread family
 
-Under PR 1's contract, rename module/test/contract to `thread.ts`,
+Depends on Q10's recorded common field matrix admitting the minimal shape;
+otherwise revise this split with the owner before code. Under PR 1's contract,
+rename module/test/contract to `thread.ts`,
 `thread.test.ts`, `THREAD-CONTRACT.md`; change public exports (subject to Q5),
 imports, index/result/request properties, refusal names and callers together.
 Replace `workstream@1` with `thread@1` and affected ownership keys with
@@ -560,38 +645,57 @@ options pending Q6. A rename regression is reviewed independently of nesting.
 
 ### PR 2b — Optional parent and deterministic nesting validation
 
-Depends on green PR 2a. Add the section 3 contract's optional immutable `parent`
-and derive children from it, with the same schema and id rule at every depth.
+Depends on green PR 2a and Q10's owner-approved contract. Add its optional
+immutable `parent` and derive children from it, with the same schema and id rule
+at every depth.
 Use injected opaque ids, project-wide duplicate refusal, depth limits and
 atomic validation against the latest index. No stored child list, reparenting,
-second record kind or automatic process allocation. Cover the CAS/retry rule
-with pure transition interleavings; durable append/settle/cancel wiring remains
-explicit #320 integration with its own behavioral red.
+second record kind or automatic process allocation. Cover stale-prefix
+refusal/retry with pure transition interleavings; durable serialization and
+append/settle/cancel wiring remain explicit #320 integration with their own
+behavioral red. There is no journal CAS to exercise.
+
+Under the proposed child-only limit, keep every root `openThread` call in the
+8 record, 10 process and 15 routing tests and the live `input-route.ts` parallel
+root-open path free of a new `max_depth` argument. Add optional-parent/common
+field assertions to those tests without weakening their behavior. New child
+open and child-group callers/tests explicitly receive the composition root's
+finite `max_depth`; they cover absent, invalid, exactly-at-limit and over-limit
+inputs. Also test root opens without a limit and a root/child decoded through
+the same field matrix. If Q10 chooses project/index configuration instead,
+update the index constructor, all three test helpers and the routing caller
+explicitly in this slice; do not smuggle that call-site change into PR 2a.
 
 **Red before implementation:** nested openings against PR 2a must fail to retain
 and validate `parent`. Reject missing/cross-project parents, self-parentage,
 cycles, reparenting, duplicate ids and depth-limit overflow without changing the
 original index. Named checks: **Depth-N child id passes Weft validation** (at the
-configured depth bound, with distinct parent/action ids, unchanged id length,
-validated by Weft in tests only) and **Two goals' children with the same derived id are refused**
+configured depth bound, with distinct parent/action ids, maximum-length node
+and emitter ids, every derived record id/link target including the longest
+suffix and maximum safe sequence, and the N+1 refusal; validated by Weft in
+tests only) and **Two goals' children with the same injected id are refused**
 (a faulty injected allocator reuses an otherwise valid opaque id across goals;
 refuse `duplicate_thread`, never overwrite). Also reject literal #320 slash ids
-and ids longer than 128, so grammar failure cannot hide the uniqueness test.
-Exercise concurrent sibling opens and retry after stale append/parent cancel;
-assert parent semantic revision unchanged, both valid siblings retained, no
+and ids longer than the contracted node budget, including a 128-character
+node whose derived record id would overflow, so grammar failure cannot hide the
+uniqueness test. Exercise concurrent sibling opens and retry after stale-prefix
+refusal/parent cancel; assert parent semantic revision unchanged, both valid
+siblings retained, no
 partial edges/shares, and derived children agree after reconstruction. Validate
 an invalid mapper that truncates or concatenates parent ids is rejected.
 
 **Green:** the nesting reds pass under section 3; all 33 ported tests and PR 2a's
-consumer/whole-repository scan stay green, with explicit optional-field assertions
-where needed. Run narrow Thread/route/process tests, Weft id validation from the
-Loom test boundary, G and full verification. Do not import Weft into Loom source.
+consumer/whole-repository scan stay green, with the root/child call-site and
+field assertions listed above. Root callers still open without `max_depth`;
+all child callers supply it under Q10's approved input placement. Run narrow
+Thread/route/process tests, Weft id validation from the Loom test boundary, G
+and full verification. Do not import Weft into Loom source.
 For an actual journal boundary, #320's atomic-child-append and no-orphan cases
 in section 6 are required integration evidence before claiming durability.
 
 ### PR 3 — Weft owning-node mapping and causal links
 
-Depends on PR 2b, Q8's owner answer and any recorded #320 binding prerequisite.
+Depends on PR 2b, Q8/Q9 owner answers and any recorded #320 binding prerequisite.
 Expand PR 1's crosswalk through Weft mapping/link documentation and Loom
 emission comments, and implement the owning-node mapping only after its runtime
 binding has behavioral red. The destination is locked: each span's `thread_id`
@@ -599,7 +703,7 @@ is its durable node in the same Thread tree. Record any #320 integration
 prerequisite explicitly. Do not call retained action-id correlation completion
 of this slice. Preserve historical JSON, OTel attributes, SQLite tables,
 record-id segments and link targets as historical evidence. Implement new
-emission semantics only under Q8's selected contract; preserving old fixtures
+emission semantics only under Q8/Q9's selected contracts; preserving old fixtures
 must not silently select how new action-chain transitions are represented.
 Gateway and Fabric retain local ports/null ids where no binding exists; Loom imports
 no Weft and never reads traces for scheduling.
@@ -609,9 +713,13 @@ PR 1's already-fixed normative crosswalk. Before code mapping, demonstrate red
 with distinct root, child and action ids, plus two actions belonging to one
 node. Reject a mapping to a parent or parallel project id instead of the node
 owning the span. Repeat **Depth-N child id passes Weft validation** at the
-configured depth bound through new emission, OTel and SQLite intake; repeat
-**Two goals' children with the same derived id are refused** at the binding/index
+configured depth bound through new emission, OTel and SQLite intake, checking
+maximum-length node/emitter ids and every derived record id/link target against
+128, including the longest suffix and sequence; repeat
+**Two goals' children with the same injected id are refused** at the binding/index
 boundary before emission/storage, with no overwrite of the first node's rows.
+Repeat **Historical action-correlated and new node-bound records are distinguishable**
+under Q9's selected version/discriminator, through validation and both intakes.
 Named PR 3 red under either Q8 option: **Node opened/settled exactly once regardless of action count**.
 A zero-, one- and two-action node has one `thread.opened` and one terminal
 `thread.settled`; attempts never duplicate that node lifecycle. Under Q8(a),
@@ -621,10 +729,10 @@ transition evidence and prove it neither opens nor settles the node again, per
 the owner's recorded rationale. A byte-preservation check must reject mutation
 of historical `:thread:` ids or link targets. Documentation alone needs no speculative mapper.
 
-**Green:** mapping, depth/id-collision and single-node-lifecycle assertions pass
-under the recorded Q8 answer; original historical golden records remain identical
-and valid. Join/handoff/supersession/repeated
-cancel/recovery links retain their recorded targets. Run
+**Green:** mapping, derived-id budget/collision, historical/new distinguishability
+and single-node-lifecycle assertions pass under the recorded Q8/Q9 answers;
+original historical golden records remain identical and valid. Join/handoff/
+supersession/repeated cancel/recovery links retain their recorded targets. Run
 `npm run test:weft-contract`; after build run
 `node --test 'packages/weave/dist/test/w5-*.test.js'` (Node >=22.18), including
 replay, isolation and authority tests; run G and full verification. Keep SQLite
@@ -671,18 +779,18 @@ blocked on RT-00's own demonstrated red/green evidence.
 | Case | Required deterministic evidence |
 | --- | --- |
 | Partial rename across packages | Build and public consumer compile checks reject stale imports or mismatched ownership keys; link/name check rejects stale contract paths. Writers implement the locked in-place replacement into one `thread@1` family; no recorded schema is silently repurposed. Preserve G import directions and local port declarations. |
-| One nestable kind at every depth | Same `thread@1` schema, common 1–128-character grammar and project-wide uniqueness; depth-N ids pass both validators. Across two goals, a duplicate injected/derived id refuses without mutation. Parent is the only stored edge, immutable after open; children are derived. Refuse missing/cross-project parents, cycles, reparenting and depth overflow. Parentage is distinct from dependencies/Weft links; nesting grants nothing. |
-| Concurrent sibling open | Two distinct children opened from the same prefix: first append wins CAS; second retries against latest index and survives if still valid. Parent semantic revision is unchanged; duplicate ids, overcommitted shares and stale parent state refuse atomically. No lost children or dependency edges. |
+| One nestable kind at every depth | Under Q10's approved common field matrix and allocation/nesting proposals, same `thread@1` schema and bounded grammar/project-wide uniqueness at every depth. Depth-N checks cover envelope ids and every derived Weft record id/link target with maximum-length node/emitter ids and suffix/sequence; reject N+1. **Two goals' children with the same injected id are refused** without mutation. Parent is the only stored edge, immutable after open; children are derived. Refuse missing/cross-project parents, cycles, reparenting and depth overflow. Composition root injects `max_depth` on child/group openings only; absent/invalid child limits refuse, roots need none. PR 2b explicitly covers root callers and child limit cases. Parentage is distinct from dependencies/Weft links; nesting grants nothing. |
+| Concurrent sibling open | No append CAS exists. At #320 journal integration, composition root serializes the shared index commit boundary under exclusive single-writer ownership and reloads before validation/persist. Pure transition checks refuse a stale expected prefix without mutation, then retry against the latest index. Two valid distinct siblings both survive; parent semantic revision is unchanged. Duplicate ids, overcommitted shares and stale parent state refuse atomically. Race opens against cancel/settle in both orders; no lost children or dependency edges. |
 | Parent cancelled or settled with open children | Apply #320 §6.3–§6.4: cascade cancel requests to every open descendant, retain identity/locks/late evidence, refuse settlement leaving an open child without a cancel request. Required open children block completion; optional outstanding children receive cancellation on parent completion. Race child open against parent cancel/settle in both orders; neither order permits an orphan. |
 | Crash between parent and child appends | At real journal integration, crash after parent open/before child-group append and after child-group append/before acknowledgement. Replay yields the parent alone or the complete child group plus dependency changes, never a partial fork or child-list divergence. Parent link is immutable, children are derived, retry uses recorded ids exactly once, and replay has zero effects/grants. |
 | Recorder evidence appears | Preserve evidence, stop and open a separate issue for compatibility and cutover scope. Add no reader, migrator or dual-read path in this plan. |
 | Replay and grants (unconditional) | Replay invokes nothing, emits nothing and issues zero grants. Queued/held reads carry or mint no grant. Single-use grants remain consumed after a crash and are never re-presented. Recovery checks current authority; only actual start may receive a fresh grant, subject to RT-00. Reservations are accounting, never transferable grants. |
 | Parallel routing fails or is cancelled | Aborted/unavailable/stale site answers place no input and open no Thread. If a parallel target id is invalid/duplicate or any subsequent step refuses, retain the exact original index: no orphan target, partial input placement or process transition. A model answer alone never grants or dispatches work. |
 | Interrupt correction races a pause/stop/completion | An interrupt requests pause at the next boundary, never a stop. Correcting one of two interrupts retains the other's pending pause; an honoured pause stays paused; terminal processes stay terminal; stale corrections refuse. Preserve request evidence and resume digest through the rename. |
-| Concurrent independent Threads | Interleave two Threads' transitions and separate active goals; transitioning one preserves the other's record, inputs, process and authority. Only one active goal and live process per Thread; one goal attaches once within a project. Independent transitions remain concurrent; append CAS does not reserve execution slots. |
+| Concurrent independent Threads | Interleave two Threads' transitions and separate active goals; transitioning one preserves the other's record, inputs, process and authority. Only one active goal and live process per Thread; one goal attaches once within a project. Independent action execution remains concurrent; serialization of the shared index commit boundary reserves no execution slots. |
 | Concurrent artifact updates | Preserve monotonic artifact revisions within a Thread; cross-Thread writes still require canonical effect locks. Ownership/key renames do not expand a grant or bypass stale read-set/resource checks. |
 | Old exported-name consumers | Exercise a fixture importing the public old names and one using the new names. Preferred atomic change updates all checked-in callers and documents the source-breaking API change. If the owner requires a temporary deprecated alias, it must be one identity/implementation with a removal boundary and compile/behavior tests; no duplicate state model or unsupported deep-import shim. Wire compatibility and the source export policy remain separate decisions (Q5). |
-| Weft links across crash/concurrent arrival | Old segments and new segments resolve the same ids, including forward targets, dependency joins, repeated cancels and supersession before/after recovery. New spans point at their owning durable node, at any depth; a child span must not inherit its parent's id, and two actions on one node share that node id. Preserve historical action correlation as recorded evidence; apply Q8's recorded contract to new emissions and prove the node opens/settles once regardless of action count. Slow/throwing/reentrant sinks do not change scheduling, budgets or outcomes. |
+| Weft links across crash/concurrent arrival | Old segments and new segments resolve the same ids, including forward targets, dependency joins, repeated cancels and supersession before/after recovery. New spans point at their owning durable node, at any depth; a child span must not inherit its parent's id, and two actions on one node share that node id. Preserve historical action correlation as recorded evidence; apply Q8/Q9's recorded contracts to new emissions, distinguish historical action-correlated records from new node-bound records, validate derived record ids/link targets within 128, and prove the node opens/settles once regardless of action count. Slow/throwing/reentrant sinks do not change scheduling, budgets or outcomes. |
 | Authority and disclosure | Opening, decoding, correcting or resuming creates no grant/approval/budget. Keep unconditional replay/single-use-grant invariants above; uncertain effects are reconciled only under current authority. Reject credential-shaped ids, keep raw input/provider errors out of records and keys out of argv/logs. |
 | Benchmark contamination | Keep intake choices/frozen corpus bytes and digests unchanged. Rename checks must not rewrite historical evidence, inject guardrails or shuffles into benchmark routes, or expose held-out cases. A future comparison requires reserved independent adversarial/held-out cases and recorded data provenance/license/destination plus sanitization or explicit authorization before hosted disclosure. |
 
@@ -748,8 +856,12 @@ For live `IntakeState.running_threads[].thread_id`
 
 Owner choice remains open; this plan does not silently select either option.
 **Frozen benchmark bytes and digests stay unchanged either way**; any live
-mapping is separate from those historical inputs. Dependent live intake work
-waits for the answer.
+mapping is separate from those historical inputs. Option (a) changes the live
+input distribution of the benchmarked `intake.classify` decision site; historical
+tuning cannot establish validity on node-bound ids. The separately scoped
+evaluation plan in Follow-ups is required before claiming its tuned policy or
+thresholds valid there. Keep that evaluation out of PR 2a/2b. Dependent live
+intake work waits for the answer.
 
 ### Q7 — Open: #330 document owner and scope
 
@@ -779,17 +891,102 @@ unchanged. PR 3's red under either choice is **Node opened/settled exactly once 
 (section 5), covering zero, one and multiple actions. Q8 blocks dependent
 lifecycle emission work until answered, not the pure rename.
 
+### Q9 — Open: Weft record version or discriminator for node-bound emissions
+
+PR 1 must quote and explicitly supersede the no-widening clause in section 4.
+With that scope change, should new node-bound emissions:
+
+- **(a) Stay on `weft.record@1` with a documented discriminator**, such as an
+  emitter version or a node-lifecycle subject, with exact presence, validation
+  and transport/storage rules. **Recommendation: (a)** only if the discriminator
+  survives every relevant record kind, OTel export and SQLite intake and gives
+  deterministic reader separation; a convention outside the record is insufficient.
+- **(b) Use a new Weft record version**, with an explicit contract for new
+  emissions and historical v1 evidence, if v1 cannot provide reliable separation.
+
+Owner choice is open; do not choose a discriminator or version implicitly.
+This question concerns the Weft envelope, not a second Thread schema or a
+reopening of the locked rename. PR 1 names, and PR 3 must demonstrate, the red
+**Historical action-correlated and new node-bound records are distinguishable**,
+including equal `thread_id` strings. Q9 gates dependent emission/reader work;
+no historical byte rewrite or speculative migration is authorized.
+
+### Q10 — Open: single `thread@1` field set and #320 contract replacements
+
+Confirm the proposed common shape and allocation/nesting rules, or choose a
+uniform alternative before PR 1 establishes the implementation contract:
+
+- **(a) Extend the renamed record uniformly at every depth. Recommendation: (a).**
+  Keep required `schema, thread_id, project_id, origin, opened_at, revision,
+  goals, inputs, artifacts, process` on all nodes. Make `parent` optional and
+  children derived. Use `goals[]` as the sole goal association/history at every
+  depth, deriving the active goal rather than storing #320's fixed `goal_id`.
+  Specify `purpose, completion, depends_on, share, deadline, lifecycle, cancel,
+  resume_point, results, evidence` as common optional fields with explicit
+  absence/default and validation rules, independent of depth. Absence must not
+  fabricate a lifecycle or grant. Confirm that PR 2a's minimal renamed record
+  is accepted by this same decoder; PR 2b adds parent validation, and durable
+  lifecycle semantics still need separate #320 behavioral evidence.
+- **(b) Require a uniform full record at every depth**, giving every node the
+  same explicit empty/null values and lifecycle fields at open, with a common
+  optional current `goal_id` reconciled with `goals[]` history. The owner must
+  specify the authoritative relation and terminal/goal-change semantics, and
+  re-slice PR 2a if those obligations exceed a pure rename. No root/child decoder
+  split, duplicate goal authority or second schema is allowed.
+
+Also explicitly confirm or amend section 3's proposals: replace #320 §5.1's
+`<parent>/<opening seq>/<index>`/goal-only scheme with injected opaque ids unique
+project-wide (including settled nodes); cap node/emitter lengths for derived
+Weft record ids (recommended N = 61, E = 32 for the shown format); keep parent
+immutable and children derived; inject a positive finite `max_depth` on child
+openings only. An alternative may use a bounded deterministic allocation scheme
+that passes both validators, preserves project-wide uniqueness and fits every
+derived record/link id, or put the depth limit in project/index configuration
+with explicit caller changes. PR 1 must document the chosen scheme and glossary
+depth-limit term. These are open owner-level choices, not consequences of
+D-ENG-017. Q10 blocks the common field/allocation contract and dependent code;
+Q1–Q4 stay answered and Q5–Q8 stay open.
+
+## Follow-ups
+
+- **Live intake evaluation after Q6(a):** node-bound ids change the live input
+  distribution. Before calling the site's accepted tuned policy/thresholds
+  valid for that distribution, require a separately scoped evaluation plan with
+  reserved independent adversarial/held-out cases and recorded provenance.
+  Preserve frozen corpus bytes/digests; guardrails and shuffles must not leak
+  into benchmark routes. Record licenses, exact destination and sanitization
+  or explicit authorization before any future hosted disclosure. No benchmark
+  or evaluation expansion belongs in PR 2a/2b.
+- **Base verification failure:** if `npm ci && npm run verify` is red on the
+  exact origin/main base in a clean, supported environment (Node >=22.18 with
+  locked dependencies installed), open or link a separate issue with the base
+  SHA, failing command/output and an owner, and obtain that owner's call before
+  PR 1 starts. First distinguish runner/dependency faults from a real main red;
+  neither is an accepted baseline. No owner or issue is invented in this
+  offline planning run.
+- **#320 durable integration and RT-00:** retain their separately scoped
+  behavioral red/green requirements. Prove single-writer exclusion, atomic child
+  groups and dependency changes, crash/replay with no duplicated or lost state,
+  deduplicated recorded ids and zero replay effects/grants at the actual journal
+  boundary. A future multi-writer requirement needs a separately contracted
+  conditional-append capability and its own red; none exists today. Preserve
+  the no-orphan and grant-at-start prerequisites; this rename does not ship them.
+
 ## Planning-run validation
 
 Only `PLAN.md` may change; no source, glossary or test edits, dependency install,
 network or push. D-ENG-017 is supplied decision evidence and remains locked.
-Review findings come from `/workspace/wvops/WV-329-review-48e9192.json`.
+Plan6 findings come from `/workspace/wvops/WV-329-review-4f90030.json`;
+the older review reference in section 1 is historical. External review files and temporary
+plan checks are non-reproducible from the repo and establish no implementation
+red/green. PR 1's checked-in terminology gate is specified in section 5.
 
-- Plan5 documentation red was observed before editing: a temporary check outside
-  the repository failed all 18 requested plan requirements, including current
-  baseline, common id rule, nesting/CAS, PR 2a/2b, PR 3 lifecycle red and Q6/Q8.
-  Its green result validates plan text only; implementation slices still require
-  independently validated behavioral red/green evidence.
+- Historical Plan5 documentation evidence (non-reproducible from the repo):
+  a temporary check outside the repository reportedly failed all 18 requested
+  plan requirements, including current baseline, common id rule, the then-planned
+  nesting/CAS rule, PR 2a/2b, PR 3 lifecycle red and Q6/Q8. Its reported green
+  validates plan text only; Plan6 removes the unsupported journal-CAS claim.
+  Implementation slices still require independently validated behavioral red/green.
 - Recounted at planning HEAD `f7b3488`: workstream **489 occurrences on 390 lines
   in 13 files**, thread **535 occurrences on 431 lines in 48 files**. Compared
   with reviewed `48e9192`, the increase is exactly #320's design note/glossary.
@@ -797,7 +994,8 @@ Review findings come from `/workspace/wvops/WV-329-review-48e9192.json`.
   the scan roots, 6 repo-wide including root `CONTRACT.md:12` (excluding this
   plan). Existing workstream/process/route tests remain 8/10/15, 33 total;
   the 14-name public barrel block starts at `index.ts:247`.
-- Plan5 validation passed the 18-requirement temporary plan check, inventory
+- Historical Plan5 validation reportedly passed the external, non-reproducible
+  18-requirement temporary plan check, inventory
   reconciliation and `git diff --check`; the diff is confined to `PLAN.md`.
   Q1–Q4 remain answered;
   Q5/Q7 are retained, Q6 extended and Q8 opened without choosing for the owner.
@@ -816,6 +1014,20 @@ Review findings come from `/workspace/wvops/WV-329-review-48e9192.json`.
   run. `node_modules/.bin` is still absent. No dependencies were installed and
   the full suite remains not green. This is a reported environment blocker,
   not implementation evidence or permission to weaken a gate.
+- Plan6 observed documentation red before edits: an inline, external text check
+  failed all 11 review requirements; after edits all 11 passed. This temporary
+  check is non-reproducible from the repo and is evidence about plan coverage
+  only. Manual review checked all nine findings against the resulting diff;
+  no implementation or behavioral green is claimed. Q9/Q10 are now open with
+  options/recommendations; Q5–Q8 remain open and D-ENG-017 remains locked.
+- Plan6 reran the five direct repository guard checks with Node v22.23.4:
+  all passed (325/104/51/133/12). `npm run verify` was attempted and stopped in
+  `npm run check`: benchmark-digests passed; `scripts/verify-cached.test.mjs`
+  failed (`ERR_TEST_FAILURE`), so later stages did not run. `node_modules/.bin`
+  is absent; no dependencies were installed. This does not establish whether
+  main is red in a clean supported environment; use the Follow-ups issue/owner
+  step if it is. The full suite remains not green. Plan6 also checked the
+  derived-id budget arithmetic and `git diff --check`; only `PLAN.md` changed.
 - **PR 1 precondition:** record `npm ci && npm run verify` green on its exact
   current origin/main base before edits, as specified above. Missing dependencies,
   runner failures or unavailable installation are concrete blockers to report,
