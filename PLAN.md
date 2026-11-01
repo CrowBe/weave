@@ -8,12 +8,19 @@ or performed by this planning task.
 
 ## Verified baseline and dependencies
 
-Inspected on 2026-11-01 at
-`e35767b74a0118bf7e806747e4ae89bdb9053d06`, also the GitHub `main` head and
-local `origin/main` observed for this task. The local `main` ref is older
+The inspected baseline on 2026-11-01 was
+`e35767b74a0118bf7e806747e4ae89bdb9053d06`. As of the review checkout, main
+had advanced three commits
+to `0311340`, including `439cea6`, with no changes to the inspected seams:
+`packages/{gauge,weft}`, `benchmarks/decision-sites`, `GLOSSARY.md`,
+`checks/import-direction.mjs`, `packages/weave/src/{implement-step,journal}.ts`.
+This freshness evidence comes from the supplied review; this worktree still
+caches `origin/main` at `e35767b` and lacks those newer objects, so it cannot
+independently repeat that comparison. The inventory remains applicable on
+the review's evidence. The local `main` ref is older
 (`74683ef7896512701dd3e4c8fd75d16959877ef1`); both prerequisites are ancestors
-of that ref too. GitHub reports both PRs merged with base `main`, and local
-`git merge-base --is-ancestor` checks confirm their presence:
+of that ref too. The original inspection recorded both PRs merged with base
+`main`, with local `git merge-base --is-ancestor` checks confirming their presence:
 
 | Prerequisite | Evidence on main | Contracts and tests inspected |
 | --- | --- | --- |
@@ -50,12 +57,10 @@ explicit observations and deterministic policy; filesystem, network, clocks,
 credentials and inference dispatch stay at existing host/adapter/composition
 boundaries. Gauge's classifier must be a pure transformation too.
 
-Preserve D-ENG-017 when translating Thread evidence: one nestable Thread kind
-uses `thread@1`, `thread_id` and `thread.*`; drop the workstream schema and
-rename in place. Weft `thread_id` points at the tree node, not an action's
-projection. The inspected baseline still uses older naming; treat it as inventory
-while carrying D-ENG-017 forward. G7 must not introduce a parallel
-workstream shape or implement the rename itself in this planning task.
+Per owner decision D-ENG-017 (1 Nov 2026, issue #329), recorded outside the repo
+in the bench's decision log by Benjamin and scoped to #329 rather than #195,
+G7 consumes the current Weft `thread.transition`/`thread_id` shapes and depends
+on no workstream rename or schema removal in any slice.
 
 ## Contract before implementation: record and evidence
 
@@ -117,8 +122,11 @@ same inputs must trigger the durability conflict rule. Put this id derivation
 rule in `GAUGE-CONTRACT.md` in slice 1a. G7-T07 pins the exact derivation,
 canonical-key-order invariance, changed-input identities and `isId` acceptance
 red-first in slice 3, before the binder writes ids. G7-T10 covers same-id
-conflicts across crash and replay: two different judgment answers for the same
-request have the same id, and the second claim is refused as a conflict.
+conflicts across crash and replay in two distinct cases: a conflicting second
+outcome receipt for one attempt is refused at the receipt layer; an injected
+conflicting claim write or mutated finalizer output for an already-claimed id
+is refused at the claim layer. Each case disables only its own layer for red,
+so receipt refusal cannot mask a broken claim check.
 Revision-dependent ids do not settle product uniqueness or supersession;
 owner question 6 must settle that separate contract and its G7-T10 cases.
 It must also decide how authorized retries avoid a transient abstention
@@ -132,10 +140,17 @@ Under either option, a late receipt from an attempt superseded by an
 authorized retry is retained as evidence only and never produces a claim.
 Use the separate `attempt_id` journal binding and supersession check-and-set
 specified below before retry dispatch; restore that binding on restart and
-replay. If a valid outcome receipt for the earlier attempt commits first,
-refuse supersession and retry dispatch. Thus neither a late receipt after
-supersession nor a receipt committed before it can race an authorized retry
-to claim their shared id under option (a). This leaves both Q6 retry alternatives open.
+replay. A valid outcome receipt is a well-formed, attempt-bound, completed-response
+receipt, independent of whether its answer is usable at the decision step:
+a malformed answer payload, low confidence, invented refs or contradictory
+content can be retained inside a valid receipt envelope. A malformed or
+misbound receipt envelope is invalid. A committed valid receipt blocks attempt
+supersession and retry dispatch, subject to the separately pending Q6 choice
+on completed-but-unusable answers. Q6 must decide whether those answers block
+retry too or permit a separately authorized retry, including its claim-persistence
+and identity rules. In either case, the locked eligibility check prevents two
+attempts from claiming a shared id under option (a). Both Q6 retry alternatives
+and the completed-but-unusable retry choice remain open.
 
 The record itself is the structured claim; render an explanation from its
 category, basis, signal and resolved citations. There is no existing free-text
@@ -260,7 +275,14 @@ live outside the implementer-readable repo, or encrypted with an evaluator-held
 key; committing readable labels is forbidden. Owner question 3 selects the
 sealing arrangement and custodian. The slice-1b loader verifies sealed labels
 by digest before evaluation, refusing missing or mismatched artifacts without
-exposing their contents to the implementer. Independence
+exposing their contents to the implementer. Each 1b tune case also retains raw
+source receipts and a frozen normalized-fact form conforming to the slice-1a
+Gauge input types, with separately pinned raw-receipt and normalized-fact digests.
+Corpus authors can prepare these in parallel with 1a, but validate and freeze
+the normalized form against 1a before slice 3. G7-T15 compares the Gauge fixture
+with those frozen facts independently of slice 2; the later slice-2 resolver
+check proves `resolver(raw) == 1b normalized facts`. Fixture parity alone is
+not evidence that receipt translation is correct. Independence
 is by scenario/source lineage, not a random row split of similar examples.
 Add a loader check preventing tune/acceptance overlap. The classifier developer
 does not read acceptance labels or per-case evaluation diagnostics. An
@@ -334,13 +356,26 @@ increasing ordinal per run/case under the single-writer lock, before intent;
 never reuse it after crash/replay. Bind each key to the frozen case evidence,
 classifier/rule/prompt/model and policy revisions and exact request bytes.
 Intents and receipts carry that key, the attribution id and request digest;
-supersession records carry the same binding and explicitly name both the
-superseded `attempt_id` and the authorized successor `attempt_id`. These are
+attempt supersession records carry the same binding and explicitly name both
+the replaced `attempt_id` and the authorized successor `attempt_id`. These are
 leaf journal fields, not new keys on `FailureAttribution`. Uncertainty
 observations also carry the attempt binding and use a separate record kind;
 they do not occupy the valid outcome-receipt slot. For intents, outcome
-receipts and supersessions, the same key, record kind and content is
-idempotent; different bound content fails closed. Attribution claims separately retain the same-id conflict rule.
+receipts and attempt supersessions, the same key, record kind and content is
+idempotent; different bound content fails closed. G7-T10's named case
+`receipt-layer conflicting outcome is refused` commits a valid outcome receipt,
+then attempts different, otherwise-valid content for the same
+`{run_id, case, attempt_id}`; assert a receipt-conflict error at receipt commit
+and no second finalizer invocation. Its red
+mutation disables only the receipt conflict check, keeping the claim check intact.
+Attribution claims separately retain the same-id conflict rule. G7-T10's
+`claim-layer conflicting write is refused` uses one committed eligible receipt
+and an already-claimed id, then injects a conflicting claim write or mutated
+finalizer output without submitting another receipt; use otherwise-valid claim
+content and assert a claim-conflict error at claim commit. Its red mutation disables only the claim conflict check, keeping the
+receipt check intact. Both cases run across crash/replay, retain the original
+content and prove identical-content idempotence. Do not use superseded attempts
+or conflicting receipts to reach the claim-layer check.
 Under Q6(a), retry attempts share the attribution id and frozen request digest
 while their per-attempt journal keys differ. Under Q6(b), each retry also has
 a distinct frozen request digest and attribution id, so the attribution id
@@ -390,12 +425,25 @@ late receipt settles that invocation only. Commit supersession as a
 check-and-set under the single-writer lock used for receipt commits: reload
 the bound attempt state and refuse supersession, successor intent and retry
 dispatch if a valid outcome receipt for that attempt is already committed,
-even if its derived claim has not yet been written. Otherwise durably record
-the supersession binding before successor intent/dispatch. Receipt commitment
-and claim eligibility use that same serialized state. After supersession,
+even if its derived claim has not yet been written, except for any separately
+authorized completed-but-unusable retry path the owner may choose in Q6.
+Receipt validity is the envelope/completion definition above, not answer
+usability; Q6 must settle the latter's retry eligibility before implementation.
+If retry is permitted, durably record the attempt supersession binding before
+successor intent/dispatch, retaining the earlier receipt and reservation accounting.
+Receipt commitment and claim eligibility use that same serialized state. After supersession,
 retain the earlier attempt's late receipt as evidence only; it cannot produce
-a claim. G7-T10 injects barriers for a receipt committing before supersession
-and for both receipt orders after supersession, including crash/replay. Do not treat
+a claim. G7-T10 injects barriers for a receipt committing before attempt
+supersession and for both receipt orders after it, including crash/replay.
+For `completed-but-unusable receipt before supersession`, retain both pending
+variants: owner chooses refusal, and successor intent/dispatch must be absent;
+or owner permits a separately authorized retry, and the locked transition must
+retain the receipt, mark the earlier attempt ineligible to claim, and allow only
+the authorized successor under Q6's persistence/id rule. Exercise malformed
+answer payload, low-confidence, invented-ref and contradictory-answer receipts
+with valid envelopes. Also test those unusable receipts arriving after attempt
+supersession in both receipt orders. No variant silently releases reservations
+or replaces a conflicting claim. Do not treat
 cancellation as failed implementation, release an uncertain effect reservation, or reuse a grant.
 Replay performs no inference, host invocation, grant issuance or Weft emission;
 recovery continues only new authorized work. G7 calls no grant or authority
@@ -424,8 +472,8 @@ Each PR runs the narrow relevant checks, then `npm run verify` and every
 `checks/` gate. Do not merge a deliberately failing test-only PR; save red
 evidence during development and merge tests with their passing implementation.
 Independent corpus authorship and evidence inventory can proceed in parallel
-with slice 1a. Slice 2 needs 1a, the 1b import baseline and Q7, not the
-acceptance freeze; slice 3 needs 1a and the scenario-disjoint
+with slice 1a. Slice 2 needs 1a, the 1b import baseline, frozen tune facts for
+resolver parity and Q7, not the acceptance freeze; slice 3 needs 1a and the scenario-disjoint
 tune cases from 1b, not slice 2 or the owner-gated acceptance freeze.
 Acceptance freeze and sealed evaluation remain gated on Q3/Q5;
 if they are unresolved, development-only deterministic work can proceed,
@@ -437,14 +485,33 @@ G7-T14 host-receipt refinement are gated on Q7 before slice 2; do not infer a
 choice. The shared deny-by-default baseline and its red controls land in 1b
 without waiting for Q7; host imports remain forbidden while that question is open.
 
+Extend G7-T14 beyond import scanning with the named subcheck
+`G7 leaf data reads use only declared pinned inputs`, landing with 1b.
+Route all leaf data reads through one declared reader with an allowlist of
+exact pinned paths and digests in the leaf contract/input manifest. Verify each
+read's canonical path and content digest before exposing bytes; reject aliases,
+traversal and symlinks that escape the declared target. Frozen corpus, receipts,
+schemas and fixtures use this reader; seal-protected paths retain their access
+controls. Mutable journal I/O remains the separate slice-5 receipt interface and
+cannot read package data. Statically refuse other fs reads outside those declared
+interfaces and undeclared fs path literals or reads into `packages/`, including
+computed-path bypasses; no blanket `node:fs` allowance establishes data access.
+Add only the exact Gauge fixture in slice 3 and owner-chosen Q7(b) schema paths
+in slice 2 to the pinned data allowlist, never host source trees or arbitrary
+fixtures. Red controls are an `undeclared host-path read` of
+`packages/weave/src/**` (also try another host's fixtures) and a `wrong digest`
+for an otherwise allowed path; the first fails statically, the second at the
+reader. Exact declared path/digest reads pass. Rerun both checks for G7-T15 and
+any Q7(b) schema consumer, so an fs read cannot bypass the import boundary.
+
 | Slice and dependency | Minimal deliverable | Named red-before-green behavior |
 | --- | --- | --- |
-| 1a. Gauge contract, independent of corpus freeze | Define pure fact/decision input and decision-output types in `packages/gauge/src/types.ts`, exported through existing `index.ts`. Extend `packages/gauge/src/GAUGE-CONTRACT.md` with those types, producer/evidence semantics and the pre-judgment id derivation rule above, including injected `isDigest` revisions and receipt exclusion, without changing @1; document new terms below in `GLOSSARY.md`. Keep Q6 uniqueness/history and retry alternatives explicitly pending; do not block the independent input/id contract on that decision or corpus sealing. No classifier logic. | Use compile-time/type-level conformance fixtures that must or must not typecheck against the exported pure input/decision types, plus a contract-doc check of the declared semantics and derivation rule. Show these checks fail before the contract/types and pass afterward; existing green record semantics are regression evidence only. No behavioral red is claimed for this contract-only slice. Keep id derivation implementation and malformed-revision-digest refusal red solely in slice 3 G7-T07. |
-| 1b. Independent corpus, provenance and harness, parallel with 1a | **New** `benchmarks/failure-attribution/{CONTRACT.md,PROVENANCE.md,cases.test.ts,imports.test.ts}` plus scenario-disjoint tune cases and a deterministic label harness; no classifier logic. Corpus authorship, provenance inventory and tune cases can proceed now. Land the Q7-independent G7-T14 baseline before or with the first executable leaf code: deny by default, allow only `@weave/gauge`, `@weave/weft`, `@weave/weft/sqlite` and node built-ins; permit within-leaf relative imports and resolve all other relative paths to refuse package-internal or unapproved-location bypasses. `@weave/weave` and `@weave/gateway` start forbidden, including type-only imports and subpaths; `@weave/agentfabric` and `@weave/agentsop` remain outright forbidden. Enable no journal edge before the slice-5 reuse decision. Only the acceptance freeze is gated on owner Q3/Q5. For the acceptance set commit only acceptance-set digests, the manifest and label-free inputs; labels/rationales stay outside the implementer-readable repo or encrypted with an evaluator-held key under Q3. The slice-1b loader verifies sealed labels by digest. | **G7-T01 `frozen corpus rejects always-unattributed and wrong-citation controls`**; **G7-T02 `scenario lineage and labels cannot cross into tuning inputs`** in `cases.test.ts`. Run the validated harness red against controls, then green against independent expected controls; report both with zero skips. Reject missing/mismatched sealed-label digests and tune/acceptance overlap without exposing labels. **G7-T14 `G7 uses no host value imports or grant/authority symbol references`**, baseline in `imports.test.ts`: demonstrate red with planted forbidden host/Fabric/AgentSOP imports, type-only/subpath imports, relative-path bypasses and an unlisted package; green with public Gauge/Weft, built-in and within-leaf positive controls, scanning the harness and sealed-label loader too. Acceptance execution waits for Q3/Q5; development harness checks do not. |
-| 2. Evidence resolver and Q7 import refinement, after 1a and the 1b baseline; gated on Q7 | **New** leaf `benchmarks/failure-attribution/{evidence.ts,evidence.test.ts}` and extend existing `imports.test.ts`, translating existing receipts to the Gauge-owned input types already exported in slice 1a, after owner Q7 chooses type imports or schema-validated serialized receipts. Do not re-declare unchecked host shapes. No temporary benchmark-owned fact type, runtime or Weft schema changes. Preserve the slice-1b G7-T14 baseline; slice 2 only widens or confirms its host-receipt policy after Q7. If Q7(b) is selected, this slice also owns adding the host-owned G7-H01 parity checks and schema artifacts at the locations the owners choose in Q7(b); no package imports from `benchmarks/`. | **G7-T03 `wrong-case, stale, dangling and conflicting citations cannot support a claim`**; **G7-T04 `missing search or route inventory is inconclusive`**. Red against a pass-through resolver, green with validation and an immutable snapshot. **G7-T14 `G7 uses no host value imports or grant/authority symbol references`**: extend the existing baseline only after Q7; the approved journal location can be enabled only after the slice-5 reuse decision. The final host-receipt rule is pending Q7: (a) extend the allowlist for `import type` from public `@weave/weave` and `@weave/gateway` entry points, rejecting value imports and specific grant/authority symbols, including aliases/re-exports via a type-only symbol resolver; or (b) accept serialized JSONL/receipt files only against a schema pinned by host-owned G7-H01 parity tests against the real host types, with schema/test locations still an explicit Q7(b) sub-question, forbidding `@weave/weave`, `@weave/gateway`, `@weave/agentfabric` and `@weave/agentsop`, including type-only imports, subpaths and relative aliases. Under (a), Fabric/AgentSOP receipts still use validated serialized inputs; their packages remain forbidden. No choice is made here. Demonstrate red/green for the chosen boundary: forbidden value/symbol imports and type-import positive controls under (a), or forbidden host imports plus schema drift/malformed receipts and valid receipt controls under (b). Keep the baseline relative-path bypass and unlisted-package controls green; no runtime-effect comparison or extra-effect test double. |
-| 3. Pure deterministic attribution and fixture parity, after 1a and tune cases from 1b | **New** `packages/gauge/src/attribute.ts`, exported from existing `index.ts`; **new** `packages/gauge/test/attribution.test.ts` and leaf `benchmarks/failure-attribution/fixture-parity.test.ts`. Reuse existing record types, `validate` and the slice-1a Gauge input and id contract. No resolver dependency: consume frozen normalized tune facts from **new** `packages/gauge/fixtures/attribution-development.json`. Never import from `benchmarks/` in Gauge tests. This slice adds G7-T15 in the leaf: read `packages/gauge/fixtures/attribution-development.json` by pinned digest/fs path as data, never by a relative JSON import or other code import; compare its normalized facts/digest with the corresponding frozen tune facts from 1b and refuse drift. Declare this exact read-only data coupling in the leaf contract; it grants no host-module access or scan exemption. Package tests read only their own fixtures. Pin derivation tests red-first before the binder writes ids. | **G7-T05 `each decisive signal emits its category and citations without judgment`**, including the purity port checks below; **G7-T06 `policy exclusion, routine deferral and conflicting causes abstain`**; **G7-T07 `every tune decision binds and validates with identical category, signal and evidence; unknown case, holdout and info-only bindings are refused`**, including exact id derivation, canonical-key-order invariance, changed-input identities for each pre-judgment field, `isId` acceptance, malformed revision-digest refusal against Weft `isDigest` (`sha256:` plus 64 lowercase hex; reject bare/uppercase hex and wrong lengths), explicit-null eligibility and receipt/output independence. Demonstrate derivation red with constant-id and receipt-dependent mutations before implementing the binder; also reject the placeholder and a binder that changes decision fields. Green must cover derivation and all signals/negative controls on tune cases. **G7-T15 `Gauge fixture digests match the frozen tune facts`** in `fixture-parity.test.ts`: a mutated fixture must fail before accepting the fixture; the exact matching fixture passes. Rerun G7-T14 on this new leaf test. |
+| 1a. Gauge contract, independent of corpus freeze | Define pure fact/decision input and decision-output types in `packages/gauge/src/types.ts`, exported through existing `index.ts`. Extend `packages/gauge/src/GAUGE-CONTRACT.md` with those types, producer/evidence semantics and the pre-judgment id derivation rule above, including injected `isDigest` revisions and receipt exclusion, without changing @1; document the slice-1a glossary proposals below in `GLOSSARY.md`. Keep Q6 uniqueness/history and retry alternatives explicitly pending; do not block the independent input/id contract on that decision or corpus sealing. No classifier logic. | Use compile-time/type-level conformance fixtures that must or must not typecheck against the exported pure input/decision types, plus a contract-doc check of the declared semantics and derivation rule. Show these checks fail before the contract/types and pass afterward; existing green record semantics are regression evidence only. No behavioral red is claimed for this contract-only slice. Keep id derivation implementation and malformed-revision-digest refusal red solely in slice 3 G7-T07. |
+| 1b. Independent corpus, provenance and harness, parallel with 1a | **New** `benchmarks/failure-attribution/{CONTRACT.md,PROVENANCE.md,cases.test.ts,imports.test.ts}` plus scenario-disjoint tune cases and a deterministic label harness; no classifier logic. Each tune case carries raw source receipts plus a frozen normalized-fact form conforming to 1a, with both forms digested; validate/freeze that form after 1a and before slice 3. Corpus authorship and provenance inventory can proceed in parallel with 1a. Land the Q7-independent G7-T14 baseline before or with the first executable leaf code: deny by default, allow only `@weave/gauge`, `@weave/weft`, `@weave/weft/sqlite` and node built-ins; permit within-leaf relative imports and resolve all other relative paths to refuse package-internal or unapproved-location bypasses. `@weave/weave` and `@weave/gateway` start forbidden, including type-only imports and subpaths; `@weave/agentfabric` and `@weave/agentsop` remain outright forbidden. Enable no journal edge before the slice-5 reuse decision. Only the acceptance freeze is gated on owner Q3/Q5. For the acceptance set commit only acceptance-set digests, the manifest and label-free inputs; labels/rationales stay outside the implementer-readable repo or encrypted with an evaluator-held key under Q3. The slice-1b loader verifies sealed labels by digest. | **G7-T01 `frozen corpus rejects always-unattributed and wrong-citation controls`**; **G7-T02 `scenario lineage and labels cannot cross into tuning inputs`** in `cases.test.ts`. Run the validated harness red against controls, then green against independent expected controls; report both with zero skips. Reject missing/mismatched sealed-label digests and tune/acceptance overlap without exposing labels. **G7-T14 `G7 leaf imports only allowlisted public Gauge/Weft/built-in specifiers`**, baseline in `imports.test.ts`: demonstrate red with planted forbidden host/Fabric/AgentSOP imports, type-only/subpath imports, relative-path bypasses and an unlisted package; green with public Gauge/Weft, built-in and within-leaf positive controls, scanning the harness and sealed-label loader too. Add the named data-reader subcheck and its undeclared host-path/wrong-digest red controls above before allowing data reads. Acceptance execution waits for Q3/Q5; development harness checks do not. |
+| 2. Evidence resolver and Q7 import refinement, after 1a and the 1b baseline/tune facts; gated on Q7 | **New** leaf `benchmarks/failure-attribution/{evidence.ts,evidence.test.ts}` and extend existing `imports.test.ts`, translating existing receipts to the Gauge-owned input types already exported in slice 1a, after owner Q7 chooses type imports or schema-validated serialized receipts. Do not re-declare unchecked host shapes. G7-T03 also proves `resolver(raw) == 1b normalized facts` from the digested raw source receipts and frozen 1a-conforming tune facts; a resolver that changes or drops a fact is a red control. No temporary benchmark-owned fact type, runtime or Weft schema changes. Preserve the slice-1b G7-T14 baseline; slice 2 only widens or confirms its host-receipt policy after Q7. If Q7(b) is selected, this slice also owns adding the host-owned G7-H01 parity checks and schema artifacts at the locations the owners choose in Q7(b); no package imports from `benchmarks/`. | **G7-T03 `wrong-case, stale, dangling and conflicting citations cannot support a claim`**; **G7-T04 `missing search or route inventory is inconclusive`**. Red against a pass-through resolver, green with validation and an immutable snapshot. **G7-T14 `G7 leaf imports only allowlisted public Gauge/Weft/built-in specifiers`**: extend the existing baseline only after Q7; the approved journal location can be enabled only after the slice-5 reuse decision. The final host-receipt rule is pending Q7: (a) extend the allowlist for `import type` from public `@weave/weave` and `@weave/gateway` entry points, refining the check to `G7 uses no host value imports or grant/authority symbol references`, including aliases/re-exports via a type-only symbol resolver; or (b) accept serialized JSONL/receipt files only against a schema pinned by host-owned G7-H01 parity tests against the real host types, with schema/test locations still an explicit Q7(b) sub-question, forbidding `@weave/weave`, `@weave/gateway`, `@weave/agentfabric` and `@weave/agentsop`, including type-only imports, subpaths and relative aliases. Under (a), Fabric/AgentSOP receipts still use validated serialized inputs; their packages remain forbidden. No choice is made here. Demonstrate red/green for the chosen boundary: forbidden value/symbol imports and type-import positive controls under (a), or forbidden host imports plus schema drift/malformed receipts and valid receipt controls under (b). Keep the baseline relative-path bypass, unlisted-package and declared-reader controls green; Q7(b) schemas use only the exact owner-selected pinned paths/digests through that reader, with undeclared host-path and wrong-digest red controls. No runtime-effect comparison or extra-effect test double. |
+| 3. Pure deterministic attribution and fixture parity, after 1a and tune cases from 1b | **New** `packages/gauge/src/attribute.ts`, exported from existing `index.ts`; **new** `packages/gauge/test/attribution.test.ts` and leaf `benchmarks/failure-attribution/fixture-parity.test.ts`. Reuse existing record types, `validate` and the slice-1a Gauge input and id contract. No resolver dependency: consume frozen normalized tune facts from **new** `packages/gauge/fixtures/attribution-tune.json`. Never import from `benchmarks/` in Gauge tests. This slice adds G7-T15 in the leaf: read `packages/gauge/fixtures/attribution-tune.json` through the G7-T14 declared reader at its exact pinned path/digest as data, never by a relative JSON import or other code import; compare its normalized facts/digest with the corresponding digested 1b normalized-fact form and refuse drift. Slice 1b supplies both normalized facts and raw receipts; slice 2 later proves resolver parity from those raw receipts. G7-T15 stays in slice 3 with no slice-2 dependency. Declare this exact read-only data coupling in the leaf contract; it grants no host-module access or scan exemption. Package tests read only their own fixtures. Pin derivation tests red-first before the binder writes ids. | **G7-T05 `each decisive signal emits its category and citations without judgment`**, including the purity port checks below; **G7-T06 `policy exclusion, routine deferral and conflicting causes abstain`**; **G7-T07 `every tune decision binds and validates with identical category, signal and evidence; unknown case, holdout and info-only bindings are refused`**, including exact id derivation, canonical-key-order invariance, changed-input identities for each pre-judgment field, `isId` acceptance, malformed revision-digest refusal against Weft `isDigest` (`sha256:` plus 64 lowercase hex; reject bare/uppercase hex and wrong lengths), explicit-null eligibility and receipt/output independence. Demonstrate derivation red with constant-id and receipt-dependent mutations before implementing the binder; also reject the placeholder and a binder that changes decision fields. Green must cover derivation and all signals/negative controls on tune cases. **G7-T15 `Gauge fixture digests match the frozen tune facts`** in `fixture-parity.test.ts`: a mutated fixture must fail before accepting the fixture; the exact matching fixture passes. Rerun G7-T14 on this new leaf test. |
 | 4. Bounded judgment fallback, after 2 and 3; retry contract gated on Q6 | Extend `attribute.ts` with a recorded-judgment input/finalizer; **new** `packages/gauge/test/attribution-judgment.test.ts`; put receipt/dispatch composition and its mocked dispatch tests in the new benchmark leaf. No hosted provider dependency or I/O in Gauge. | **G7-T08 `judgment runs only after inconclusive deterministic analysis`**, extending the purity port checks below to the finalizer; **G7-T09 `missing confidence, invented refs, timeout and cancellation abstain`** at the decision step. Include timeout-then-retry with a valid answer under the owner-chosen Q6 persistence/request-identity option: either no attribution is persisted on the transient failure, or the authorized retry freezes a distinct request digest before dispatch. Do not choose the option in implementation. Red against a judgment-always or unchecked-answer double, green with deterministic mocks and exact `basis: judgment` records. Extend G7-T07 to cover every judgment and abstention tune decision as well. Rerun G7-T14 on the added composition code. |
-| 5. Durable runner and evaluation report, after 4 and the sibling-import assumption check; acceptance run gated on Q3/Q5 | **New** leaf `benchmarks/failure-attribution/{run.ts,report.ts,report.test.ts,durability.test.ts}`. Slice 5 owns `run.ts` as the sole opt-in composition point, explicitly invoked as the offline G7 runner; compose evidence resolution, Gauge decisions/binding, existing journal and Weft intake, and receipt/report output using the explicitly resolved reuse option. Publish only aggregate held-out reports. The owner-designated evaluator runs the sealed set once against the frozen classifier and records decision-only per-category precision/recall. No live calls unless separately authorized with the data/destination gate below satisfied. | **G7-T10 `receipt crash and replay neither duplicate nor lose a claim or repay a call; same-id conflicts are refused`**: two different judgment answers for the same frozen request from the same eligible, non-superseded attempt produce the same id and the second claim is refused as a conflict, including across crash and replay; identical claim content is idempotent. Pin the separate `attempt_id` journal contract: intents, receipts and supersessions bind the attempt; Q6(a) retries use different journal keys with identical frozen request bytes/digest and shared attribution id, while Q6(b) also changes request digest/id. Same-attempt replay never redispatches; conflicting attempt bindings fail closed. Name the snapshot case `replay after new Weft records arrive`: reproduce the same id or refuse if the recorded bundle is unavailable/mismatched; never emits a second claim for the case. Cover the deterministic path with no judgment intent. Name the race case `superseded late receipt versus authorized retry receipt`: use injected barriers for both receipt orders across crash/replay; the superseded receipt stays evidence only and never claims the shared id. Supersession must be a durable check-and-set under the single-writer lock before retry dispatch. Add `receipt before supersession refuses retry dispatch`: a valid outcome receipt for attempt N commits while the retry waits at a barrier, so supersession and successor intent/dispatch are refused even before claim derivation. Test this third interleaving alongside the two receipt orders after supersession, across crash/replay. Include timeout-then-retry across crash/replay under either owner-chosen Q6 option: a valid authorized retry can produce a claim without permanent transient-abstention lockout, silent replacement or automatic redispatch; uncertain receipts/reservations survive. Add the owner-decided uniqueness/history cases from Q6; derivation itself is already pinned by G7-T07 in slice 3. **G7-T11 `cancellation and competing writers preserve receipts without authority calls`**; **G7-T12 `all five categories retain FP/FN and null denominators without leaking holdout cases`**. Red via deterministic crash/write/conflict mutations and wrong-count controls, then green across restart and concurrent reads. Rerun G7-T14 on `run.ts` and the resolved journal location. |
+| 5. Durable runner and evaluation report, after 4 and the sibling-import assumption check; acceptance run gated on Q3/Q5 | **New** leaf `benchmarks/failure-attribution/{run.ts,report.ts,report.test.ts,durability.test.ts}`. Slice 5 owns `run.ts` as the sole opt-in composition point, explicitly invoked as the offline G7 runner; compose evidence resolution, Gauge decisions/binding, existing journal and Weft intake, and receipt/report output using the explicitly resolved reuse option. Add the slice-5 attempt/receipt glossary proposals below when their Q6 contract is settled. Publish only aggregate held-out reports. The owner-designated evaluator runs the sealed set once against the frozen classifier and records decision-only per-category precision/recall. No live calls unless separately authorized with the data/destination gate below satisfied. | **G7-T10 `receipt crash and replay neither duplicate nor lose a claim or repay a call; same-id conflicts are refused`**: split conflict coverage into `receipt-layer conflicting outcome is refused` and `claim-layer conflicting write is refused`, with the layer-specific assertions and isolated red mutations defined in the journal contract above. The first submits different outcome content for the same attempt key and refuses it before finalization; the second injects a conflicting claim write or mutated finalizer output for an already-claimed id using one eligible committed receipt, so it reaches the claim gate. Identical receipt/claim content is idempotent; verify both cases across crash/replay. Pin the separate `attempt_id` journal contract: intents, receipts and supersessions bind the attempt; Q6(a) retries use different journal keys with identical frozen request bytes/digest and shared attribution id, while Q6(b) also changes request digest/id. Same-attempt replay never redispatches; conflicting attempt bindings fail closed. Name the snapshot case `replay after new Weft records arrive`: reproduce the same id or refuse if the recorded bundle is unavailable/mismatched; never emits a second claim for the case. Cover the deterministic path with no judgment intent. Name the race case `superseded late receipt versus authorized retry receipt`: use injected barriers for both receipt orders across crash/replay; the superseded receipt stays evidence only and never claims the shared id. Supersession must be a durable check-and-set under the single-writer lock before retry dispatch. Add `receipt before supersession refuses retry dispatch`: a valid receipt with a usable answer for attempt N commits while the retry waits at a barrier, so attempt supersession and successor intent/dispatch are refused even before claim derivation. Add `completed-but-unusable receipt before supersession`: under pending Q6, either refuse successor intent/dispatch, or allow a separately authorized retry through the locked transition while retaining the receipt and reservation accounting and making the earlier attempt ineligible to claim. Include valid envelopes with malformed, low-confidence, invented-ref and contradictory answers. Test both pending variants under the owner's eventual choice, plus unusable receipts in both orders after attempt supersession, across crash/replay. Include timeout-then-retry across crash/replay under either owner-chosen Q6 option: a valid authorized retry can produce a claim without permanent transient-abstention lockout, silent replacement or automatic redispatch; uncertain receipts/reservations survive. Add the owner-decided uniqueness/history cases from Q6; derivation itself is already pinned by G7-T07 in slice 3. **G7-T11 `cancellation and competing writers preserve receipts without authority calls`**; **G7-T12 `all five categories retain FP/FN and null denominators without leaking holdout cases`**. Red via deterministic crash/write/conflict mutations and wrong-count controls, then green across restart and concurrent reads. Rerun G7-T14 on `run.ts` and the resolved journal location. |
 | 6. Consumer regression and documentation, after 5 | Documentation only in the new G7 leaf; use the runner already owned by slice 5. Nothing attaches G7 to decision-sites or Loom. Keep `benchmarks/decision-sites/**` and existing W5 tests unchanged; document results/limitations. | **G7-T13 `existing G4 recorded-report parity anchor and provider-order protections remain green`**: run the existing parity/provider tests unchanged; this is a regression anchor, not new behavioral red. Inspect the decision-sites diff against the implementation base as a PR review step only, never a committed test dependent on git history. |
 
 Keep these existing regression anchors green: G4
@@ -514,14 +581,28 @@ field name for the provider statistic beside a typed judgment, as permitted
 by the glossary's specific language rule; it is not a weight, calibrated
 probability, model-quality measure or authority. Do not describe it as
 calibrated confidence under the general weight-versus-confidence rule.
+Slice 5 also proposes **attempt journal key** (`{run_id, case, attempt_id}`,
+separate from claim id/request digest), with **attempt id** (`attempt_id`, the
+durably allocated monotonic ordinal within a run/case, never reused after
+crash/replay); **attempt supersession** (the locked, durable transition binding
+an earlier attempt to a separately authorized successor and ending the earlier
+attempt's claim eligibility); **outcome receipt** (a well-formed, attempt-bound
+completed-response record, independent of answer usability); and **uncertainty
+observation** (a separate attempt-bound record of timeout/cancellation or unknown
+outcome and retained reservation, which occupies no outcome-receipt slot).
+Attempt supersession is distinct from a Weft `supersedes` causal link, the
+`superseded` orchestration signal/transition, and the glossary's CLI
+**superseded attempt** reconciliation semantics; it grants no execution authority
+and releases no reservation. Add these terms to `GLOSSARY.md` in slice 5 after
+Q6 settles the retry contract, without changing those existing meanings.
 No glossary edit is made in this planning task; no vision acceptance boundary
 change is proposed.
 
 ## Follow-ups
 
 - Keep G7-T11 limited to offline cancellation/receipt behavior and G7-T14 to
-  the static grant/authority import boundary. Single-use grants must never be
-  reused, including after cancellation, crash or replay; fresh-grant retry
+  the leaf import boundary and declared data-reader checks above. Single-use
+  grants must never be reused, including after cancellation, crash or replay; fresh-grant retry
   behavior remains covered by W5-T58/T59 and `p8.test.ts`. Add no grant
   mechanism, runtime attachment or runtime grant/check retry-semantic work to
   G7. The offline judgment retry/id contract remains pending owner Q6.
@@ -612,11 +693,19 @@ change is proposed.
    an unknown outcome never silently authorizes redispatch. In (a) the same
    attribution id/request digest uses distinct per-attempt journal keys; in
    (b) request digest/attribution id differ too. Both require the locked
-   supersession check-and-set above and refuse retry dispatch if the earlier
-   attempt already has a committed valid outcome receipt. Include
-   timeout-then-retry with a valid answer in G7-T09/G7-T10, including crash and
-   replay. Both retry and uniqueness/history decisions are pending; this plan
-   does not select or implement either option.
+   attempt supersession check-and-set above. A valid outcome receipt means a
+   well-formed, attempt-bound, completed-response receipt, independent of answer
+   usability. A committed usable answer refuses retry even before claim derivation.
+   Should a completed-but-unusable answer (malformed payload, low confidence,
+   invented refs or contradictions inside a valid envelope) also block retry,
+   or permit a separately authorized retry? Both variants remain pending:
+   retain the receipt/reservation accounting either way; if retry is allowed,
+   decide claim persistence/request identity so an abstention cannot lock out
+   that authorized retry or permit conflicting claims. Pin the owner's choice
+   in G7-T10's completed-but-unusable interleavings before implementation.
+   Include timeout-then-retry with a valid answer in G7-T09/G7-T10, including
+   crash and replay. Retry, completed-but-unusable eligibility and
+   uniqueness/history decisions all remain pending; this plan selects none.
 
 7. How should the slice-2 resolver translate host receipts while G7-T14
    excludes grant/authority access? **Options:** (a) allow `import type` from
@@ -643,7 +732,11 @@ change is proposed.
    not a selected design; they must name the participating hosts and final
    locations before slice 2. The leaf consumes pinned schema/fixture digests,
    not unchecked shape copies. Neither a relative JSON import nor an
-   undeclared fs read may bypass the boundary.
+   undeclared fs read may bypass the boundary: G7-T14's named data-reader
+   subcheck statically rejects other fs reads into `packages/` and requires
+   these exact owner-selected schema paths/digests through the declared reader.
+   Demonstrate red with an undeclared host-path read and a wrong digest, then
+   green with the declared schema; this is a checked rule, not review alone.
    **Recommendation:** (b), keeping the offline leaf free of host-package
    imports while making receipt-shape drift fail explicitly. This is a pending
    owner choice, not a selected implementation. State the chosen option in
@@ -736,11 +829,23 @@ dependency installation or source, schema, glossary or test edits:
 | --- | --- |
 | Review-topic documentation acceptance | Nine change checks failed before editing; the question/test preservation check already passed. All ten pass after editing. This is documentation acceptance only, not classifier behavioral red/green or quality evidence. G7-T01–T14 remain; G7-T15 is assigned to slice 3. Q1–Q7 remain open, including Q7(b)'s schema/test location and ownership. D-ENG-017 is explicit. |
 | Scope and whitespace | `git diff --check` passed; only `PLAN.md` changed. |
-| Main freshness | Cached `origin/main` is `e35767b`; the requested `439cea6` object is unavailable locally. Fetch failed on read-only `FETCH_HEAD`; `git ls-remote` failed DNS resolution for `github.com`. A clean plan-only integration could not be verified; retained the current branch. |
+| Main freshness | Historical plan6 check: cached `origin/main` was `e35767b`; `439cea6` was unavailable locally, fetch failed on read-only `FETCH_HEAD` and `git ls-remote` failed DNS. Review-checkout update supplied for plan7: main advanced to `0311340`, including `439cea6`, with no changes to the inspected seams listed above. The present worktree still caches the older ref and lacks the newer objects; the review's comparison is recorded as supplied evidence, not a locally repeated check. |
 | `npm run fmt:check` | Exit 127: `vp: not found`; no local `node_modules`. Formatting and whether the formatter covers `PLAN.md` remain unverified. No formatter configuration was changed. |
 | Every top-level `checks/*.mjs`, direct | All five gates passed: import direction (325 files), clock (104), entropy (51), environment (133), failure propagation (12); `source-scan.mjs` loaded, exit 0. |
 | `npm run verify` | Exit 1 in initial `check`: benchmark-digest tests passed, verify-cache tests failed; later stages were not reached. The local `vp` probe reports `ENOENT`; full verification remains blocked. |
 | `npm run test:checks` | Exit 1: credential-parity and execution-provider files passed; `checks.test.mjs` failed. Direct execution showed five failures with unavailable child-process output and one pass. A child-process probe reports `EPERM`; no harness or permissions were changed. |
+
+Plan7 checks used Node `v22.23.4` at `/home/box/.local/node22/bin`, without
+dependency installation or changes outside `PLAN.md`:
+
+| Check | Observed result / blocker |
+| --- | --- |
+| Review-topic documentation acceptance | All nine review-topic checks failed before editing and pass afterward; the Q1–Q7/G7-T01–T15 preservation check passed throughout. This is plan acceptance only, not classifier behavioral red/green. Every owner question remains open. |
+| Scope and whitespace | `git diff --check` passed; only `PLAN.md` changed. |
+| `npm run fmt:check` | Exit 127: `vp: not found`; no local `node_modules`. Formatter execution and its coverage of `PLAN.md` remain unverified; no formatting configuration was changed. |
+| Every top-level `checks/*.mjs`, direct | All five gates passed: import direction (325 files), clock (104), entropy (51), environment (133), failure propagation (12); `source-scan.mjs` loaded, exit 0. |
+| `npm run verify` | Exit 1 in initial `check`: benchmark-digest tests passed; verify-cache tests failed. Direct diagnosis reports missing `node_modules/.bin/vp` (`ENOENT`); later verify stages were not reached. |
+| `npm run test:checks` | Exit 1: credential-parity and execution-provider files passed; `checks.test.mjs` failed. Direct diagnosis reproduced five empty-child-output fixture failures and one pass; a child-process probe reports `EPERM`. No harness or permissions were changed. |
 
 Full green must be established in the supported Node/dependency environment
 before implementation PRs merge. Do not change scripts, suppress failures or
