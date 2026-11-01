@@ -19,7 +19,7 @@ import test from 'node:test';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 
-function selectNpmCli(npmExecPath, nodePrefix) {
+function selectNpmCli(npmExecPath, nodePrefix, stat = statSync) {
   // Debian apt npm lives outside the Node prefix: run via npm run or set npm_execpath.
   // Do not search PATH; the formatting test deliberately isolates it.
   const npmCli =
@@ -29,9 +29,9 @@ function selectNpmCli(npmExecPath, nodePrefix) {
   let isFile = false;
   let statError;
   try {
-    isFile = statSync(npmCli).isFile();
+    isFile = stat(npmCli).isFile();
   } catch (error) {
-    statError = error.code;
+    statError = error.code ?? error.message;
   }
   assert.ok(
     isFile,
@@ -116,6 +116,31 @@ test('npm CLI lookup rejects a regular-file parent with the selected path, env v
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('npm CLI lookup rejects a self-referencing symlink with the selected path, env value, and stat error', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-npm-lookup-'));
+  try {
+    const npmExecPath = join(dir, 'npm-cli.js');
+    symlinkSync(npmExecPath, npmExecPath);
+    assert.throws(() => selectNpmCli(npmExecPath, dir), {
+      code: 'ERR_ASSERTION',
+      message: `npm CLI not found at ${npmExecPath} (npm_execpath=${JSON.stringify(npmExecPath)}; ELOOP); run via npm run or set npm_execpath`,
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('npm CLI lookup keeps the message of a stat error without a code', () => {
+  const npmExecPath = '/npm/npm-cli.js';
+  const stat = () => {
+    throw new Error('stat failed without a code');
+  };
+  assert.throws(() => selectNpmCli(npmExecPath, '/node', stat), {
+    code: 'ERR_ASSERTION',
+    message: `npm CLI not found at ${npmExecPath} (npm_execpath=${JSON.stringify(npmExecPath)}; stat failed without a code); run via npm run or set npm_execpath`,
+  });
 });
 
 test('verify requires formatting before the remaining checks', () => {
