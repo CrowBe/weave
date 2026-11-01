@@ -62,12 +62,30 @@ Reuse `FailureAttribution` unchanged:
 
 | Field | Contract for G7 production |
 | --- | --- |
-| `schema`, `attribution` | `gauge.attribution@1`; stable caller-supplied id bound to result, case, evidence digest and classifier revision. No ambient time or random id generation in Gauge. |
+| `schema`, `attribution` | `gauge.attribution@1`; deterministic id derived by the rule below, checked by the producer. No ambient time or random id generation in Gauge. |
 | `result`, `case` | Known, valid `EvaluationResult` on `tune`; additionally verify case membership and an observed failed case under that result's governed criteria. Aggregate `misses_bar` alone does not identify a failed case. A case failure can exist inside an aggregate `meets_bar` result. Unknown, unfinished or cancelled-without-a-failure cases cannot be invented as failures. |
 | `category` | Existing `AttributionCategory` values with the conceptual mapping above. One claim per failed case for the initial version. |
 | `basis`, `signal` | `deterministic` with a category-specific closed signal; `judgment` with null signal means probabilistic inference; `none` with null signal only for `unattributed`. |
 | `confidence` | Null for deterministic and unattributed; finite [0,1] for judgment. Preserve reported confidence as a provider statistic, distinct from class probability, model quality, calibration and authority. Missing confidence cannot become 1. |
 | `evidence` | Existing `EvidenceRef[]`, unique `(source, ref)`, maximum 64. Cite Weft records/spans and check receipts, including contrary evidence. Require evidence for every attributed claim; retain diagnostic evidence for abstentions where available. |
+
+Derive `attribution` as `g7:` followed by all 64 lowercase hexadecimal
+characters of the SHA-256 digest of the UTF-8 canonical JSON object
+`{domain: "gauge.attribution-id@1", result, case, evidence_bundle_digest,
+classifier_revision, rule_revision, prompt_revision, model_revision}`.
+Use `recordDigest` canonicalization (recursively sorted object keys, no
+whitespace, array order preserved), stripping only its `sha256:` prefix.
+`result` and `case` are the bound ids; `evidence_bundle_digest` is
+`recordDigest` of the complete frozen, normalized input bundle, including
+resolved evidence contents and any judgment receipt. Revision fields are
+content digests of the frozen classifier, rules, prompt and model/configuration
+declarations; use explicit null for prompt/model revisions only when no
+judgment is used. The resulting 67-character id uses only `g7:` and `[0-9a-f]`,
+within `isId`'s `[A-Za-z0-9_.:@-]{1,128}` alphabet/length. Do not include the
+output category or claim content in the identity: a different claim for the
+same inputs must trigger the durability conflict rule. G7-T10 pins this
+derivation, canonical-key-order invariance, changed-input identities, `isId`
+acceptance and same-id/different-content refusal across replay/restart.
 
 The record itself is the structured claim; render an explanation from its
 category, basis, signal and resolved citations. There is no existing free-text
@@ -77,7 +95,11 @@ evidence, never an extra attribution key or trusted instruction.
 
 Compose an evidence resolver outside Gauge. Gauge receives immutable validated
 Weft records and bounded normalized check/search/route/schedule facts, not host
-objects. The resolver maintains opaque, credential-screened ids that resolve:
+objects. Define and export the pure fact and decision input types in
+`packages/gauge/src/types.ts` in slice 1,
+with their `GAUGE-CONTRACT.md` text, before the slice-2 resolver targets them.
+Gauge owns this contract; classifier logic remains in slice 3. The resolver
+maintains opaque, credential-screened ids that resolve:
 
 - `EvidenceRef {source: weft_trace, ref}` to an exact `(trace_id, record_id)`
   and content digest in an immutable Weft snapshot, not merely an entire run;
@@ -100,8 +122,14 @@ Have the pure decision step return the selected category, basis, signal,
 confidence and evidence before result binding. The tune-only producer binds
 that decision into `FailureAttribution` and validates it. The isolated holdout
 evaluator can score the same decision step without creating forbidden holdout
-attribution records. This is one decision implementation with two consumers,
-not a second record schema or a bypass of `validate`.
+attribution records. Held-out precision/recall covers the decision step only:
+`validate.ts:882–883` rejects results outside `tune`, so these metrics do not
+exercise id derivation, case-membership/failed-case checks or final record
+validation. G7-T07 must also prove on the tune/development set that every
+development decision binds to a record passing `validate` with the same
+category, signal and evidence. Retain its negative binding controls. This is
+one decision implementation with two consumers, not a second record schema
+or a bypass of `validate`.
 
 ## Deterministic signals first
 
@@ -144,16 +172,19 @@ observations; accepted probabilistic claims use `basis: judgment`.
 ## Labelled set, demonstrated red and reporting
 
 Build and freeze the acceptance labelled set **before writing the classifier**.
-Proposed leaf: **new** `benchmarks/failure-attribution/`. Start with four
-independent scenarios per category (including `unattributed`) and eight
-ambiguous/adversarial scenarios: 28 minimum, with multiple signal variants and
-negative controls. Ambiguous is a case annotation, not a sixth category; its
+Proposed leaf: **new** `benchmarks/failure-attribution/`. The proposed minimum,
+subject to owner confirmation, is four independent scenarios per category
+(including `unattributed`) and eight ambiguous/adversarial scenarios: 28 cases
+(4 × 5 + 8), with multiple signal variants and negative controls. Ambiguous is
+a case annotation, not a sixth category; its
 expected output is `unattributed` unless the independent rubric identifies one
 supported cause. Include independently reviewed recorded failures or cases
 authored by an owner/reviewer other than the classifier implementer; synthetic
 cases authored solely by that implementer are insufficient quality evidence.
-If that independent evidence is unavailable, report the limitation and defer
-the quality conclusion, rather than substituting self-authored labels.
+If that independent evidence is unavailable, report the limitation without
+substituting self-authored labels. Whether a characterization-only report
+then closes #195 is an open owner decision below; this plan does not waive
+the held-out acceptance criterion or decide closure.
 
 Each case carries an opaque id, scenario family, source snapshot/digests,
 provenance and license status, evidence permissions, failure criterion,
@@ -197,6 +228,9 @@ Gauge's statistics module is internal: do not invent intervals in @2 records
 or import that module from the benchmark. Record classifier/rule/prompt/model
 and corpus revisions, evaluation mode, seeds and evidence digests.
 
+Held-out precision/recall covers the decision step only, not production
+binding or its rejection paths (`validate.ts:882–883`). G7-T07 supplies the
+tune/development decision-to-record agreement check described above.
 Preserve current holdout protection: no `FailureAttribution` may name a holdout
 case, even in a private store. The isolated evaluator retains bounded raw
 decisions/receipts under holdout access controls, scores against sealed labels,
@@ -216,9 +250,18 @@ No-port runs stay unchanged too. Missing Weft records cannot become evidence
 of no capability or a scheduling defect. Keep runtime recovery on the
 observation log and host store; attribution never drives recovery.
 
-Use the existing leaf `Journal`/`acquireLock` receipt pattern for G7's offline
-evaluation artifacts (importing from a sibling leaf is allowed; no new generic
-journal primitive). Give each output one writer, retain fsync and durable
+Reuse the existing leaf `Journal`/`acquireLock` receipt pattern for G7's offline
+evaluation artifacts, subject to the dependency check below; add no new
+generic journal primitive. **Assumption to check before slice 5:** direct
+reuse of `benchmarks/decision-sites/journal.ts` is acceptable. Reinspect
+`checks/import-direction.mjs` and the leaf's contract then: the current check
+covers package/consumer direction, not benchmark-leaf to benchmark-leaf
+imports, so a passing gate cannot establish permission or API stability here.
+Resolve this explicitly before using the import: either move just
+`Journal`/`acquireLock` to an owner-approved shared location, or document
+deliberate pinned leaf-to-leaf coupling with a test of the required receipt,
+lock and replay behavior. Do not adopt decision-sites' private replay keys
+as G7's identity contract. Give each output one writer, retain fsync and durable
 intent-before-dispatch, receipt-before-report ordering, and build deterministic
 attribution/report output from committed receipts. Bind replay keys to case
 evidence, classifier/prompt/model and policy revisions as well as request
@@ -249,16 +292,17 @@ Concurrent report readers produce identical results without writes or calls.
 Do not reorder the existing benchmark engine, whose sequential dispatch and
 cost reservations are part of its current contract.
 
-Cancellation before dispatch makes no call and consumes no grant. Cancellation
+Cancellation before judgment dispatch makes no call. Cancellation
 after dispatch retains any acknowledged outcome/cost and uncertain reservation;
 late receipt settles that invocation only. Do not treat cancellation as failed
 implementation, release an uncertain effect reservation, or reuse a grant.
 Replay performs no inference, host invocation, grant issuance or Weft emission;
-recovery continues only new authorized work. Every actual check retry needs a
-fresh equal-scope single-use grant; `markInvoked` and `createEqualGrantIssuer`
-remain unchanged. Same invocation lookup is evidence, not authority to repeat
-its effect. Test cancel/result races and dependency completion/cancellation
-interleavings using injected scheduling barriers rather than timing sleeps.
+recovery continues only new authorized work. G7 imports and calls no grant or
+authority API; existing W5-T58/T59 and `p8.test.ts` remain the evidence for
+grant and check-retry semantics. Same invocation lookup is evidence, not
+authority to repeat its effect. Test cancel/result races and dependency
+completion/cancellation interleavings using injected scheduling barriers
+rather than timing sleeps.
 
 Keep attribution diagnostic and opt-in at composition: it never promotes,
 admits, mints grants, releases reservations, changes routes or marks goals
@@ -277,12 +321,12 @@ classifier construction waits for the contract and frozen corpus.
 
 | Slice and dependency | Minimal deliverable | Named red-before-green behavior |
 | --- | --- | --- |
-| 1. Contract and independent corpus, first | Extend `packages/gauge/src/GAUGE-CONTRACT.md` with producer/evidence semantics without changing @1; document new terms below in `GLOSSARY.md`. **New** `benchmarks/failure-attribution/{CONTRACT.md,PROVENANCE.md,cases.test.ts}` plus development cases, sealed evaluation artifacts and their digests. Add the deterministic label harness, not a classifier. | **G7-T01 `frozen corpus rejects always-unattributed and wrong-citation controls`**; **G7-T02 `scenario lineage and labels cannot cross into tuning inputs`** in `cases.test.ts`. Run the validated harness red against controls, then green against independent expected controls; report both with zero skips. |
-| 2. Evidence resolver, after 1 | **New** leaf `benchmarks/failure-attribution/{evidence.ts,evidence.test.ts}` translating existing receipts to bounded portable facts. No runtime or Weft schema changes. | **G7-T03 `wrong-case, stale, dangling and conflicting citations cannot support a claim`**; **G7-T04 `missing search or route inventory is inconclusive`**. Red against a pass-through resolver, green with validation and an immutable snapshot. |
-| 3. Pure deterministic attribution, after 2 | **New** `packages/gauge/src/attribute.ts`, exported from existing `index.ts`; **new** `packages/gauge/test/attribution.test.ts`. Reuse existing record types and `validate`; input contract uses only Weft/public portable facts. | **G7-T05 `each decisive signal emits its category and citations without judgment`**; **G7-T06 `policy exclusion, routine deferral and conflicting causes abstain`**; **G7-T07 `unknown case, holdout and info-only result bindings are refused`**. Red against the placeholder, green for all signals and their negative controls. |
-| 4. Bounded judgment fallback, after 3 | Extend `attribute.ts` with a recorded-judgment input/finalizer; **new** `packages/gauge/test/attribution-judgment.test.ts`; put receipt/dispatch composition and its mocked dispatch tests in the new benchmark leaf. No hosted provider dependency or I/O in Gauge. | **G7-T08 `judgment runs only after inconclusive deterministic analysis`**; **G7-T09 `missing confidence, invented refs, timeout and cancellation abstain`**. Red against a judgment-always or unchecked-answer double, green with deterministic mocks and exact `basis: judgment` records. |
-| 5. Durable runner and evaluation report, after 4 | **New** leaf `benchmarks/failure-attribution/{run.ts,report.ts,report.test.ts,durability.test.ts}`. Compose existing journal and Weft intake; publish only aggregate held-out reports. Run the sealed set once against the frozen classifier and record per-category precision/recall. No live calls unless separately authorized with the data/destination gate below satisfied. | **G7-T10 `receipt crash and replay neither duplicate nor lose a claim or repay a call`**; **G7-T11 `cancel and competing writers preserve reservations and single-use authority`**; **G7-T12 `all five categories retain FP/FN and null denominators without leaking holdout cases`**. Red via deterministic crash/write/conflict mutations and wrong-count controls, then green across restart and concurrent reads. |
-| 6. Consumer regression and documentation, after 5 | Wire only the opt-in evaluation consumer. Extend existing `benchmarks/decision-sites/{recorded.test.ts,test/providers.test.ts}` and relevant W5 tests if composition is exercised; document results/limitations in the new leaf's report. Leave production routing unchanged. | **G7-T13 `attribution changes neither G4 report parity nor benchmark request bodies`**; **G7-T14 `sink failure, replay and concurrent cases change no runtime effect or grant`**. Red with deliberate guardrail/shuffle/duplicate-dispatch mutations, green on the original routing and authority boundaries. |
+| 1. Contract and independent corpus, first | Define pure fact/decision input and decision-output types in `packages/gauge/src/types.ts`, exported through existing `index.ts`. Extend `packages/gauge/src/GAUGE-CONTRACT.md` with those types and producer/evidence semantics without changing @1; document new terms below in `GLOSSARY.md`. **New** `benchmarks/failure-attribution/{CONTRACT.md,PROVENANCE.md,cases.test.ts}` plus development cases, sealed evaluation artifacts and their digests. Add the deterministic label harness; no classifier logic. | **G7-T01 `frozen corpus rejects always-unattributed and wrong-citation controls`**; **G7-T02 `scenario lineage and labels cannot cross into tuning inputs`** in `cases.test.ts`. Run the validated harness red against controls, then green against independent expected controls; report both with zero skips. |
+| 2. Evidence resolver, after 1 | **New** leaf `benchmarks/failure-attribution/{evidence.ts,evidence.test.ts}` translating existing receipts to the Gauge-owned input types already exported in slice 1. No temporary benchmark-owned fact type, runtime or Weft schema changes. | **G7-T03 `wrong-case, stale, dangling and conflicting citations cannot support a claim`**; **G7-T04 `missing search or route inventory is inconclusive`**. Red against a pass-through resolver, green with validation and an immutable snapshot. |
+| 3. Pure deterministic attribution, after 2 | **New** `packages/gauge/src/attribute.ts`, exported from existing `index.ts`; **new** `packages/gauge/test/attribution.test.ts`. Reuse existing record types, `validate` and the slice-1 Gauge input contract. | **G7-T05 `each decisive signal emits its category and citations without judgment`**; **G7-T06 `policy exclusion, routine deferral and conflicting causes abstain`**; **G7-T07 `every development decision binds and validates with identical category, signal and evidence; unknown case, holdout and info-only bindings are refused`**. Red against the placeholder and a binder that changes decision fields, green for all signals and their negative controls on tune/development cases. |
+| 4. Bounded judgment fallback, after 3 | Extend `attribute.ts` with a recorded-judgment input/finalizer; **new** `packages/gauge/test/attribution-judgment.test.ts`; put receipt/dispatch composition and its mocked dispatch tests in the new benchmark leaf. No hosted provider dependency or I/O in Gauge. | **G7-T08 `judgment runs only after inconclusive deterministic analysis`**; **G7-T09 `missing confidence, invented refs, timeout and cancellation abstain`**. Red against a judgment-always or unchecked-answer double, green with deterministic mocks and exact `basis: judgment` records. Extend G7-T07 to cover every judgment and abstention development decision as well. |
+| 5. Durable runner and evaluation report, after 4 and the sibling-import assumption check | **New** leaf `benchmarks/failure-attribution/{run.ts,report.ts,report.test.ts,durability.test.ts}`. Compose existing journal and Weft intake using the explicitly resolved reuse option; publish only aggregate held-out reports. The owner-designated evaluator runs the sealed set once against the frozen classifier and records decision-only per-category precision/recall. No live calls unless separately authorized with the data/destination gate below satisfied. | **G7-T10 `stable derived ids, receipt crash and replay neither duplicate nor lose a claim or repay a call`**, including the exact id derivation and same-id conflict checks above; **G7-T11 `cancellation and competing writers preserve receipts; attribution imports and calls no grant or authority API`**; **G7-T12 `all five categories retain FP/FN and null denominators without leaking holdout cases`**. Red via deterministic crash/write/conflict mutations and wrong-count controls, then green across restart and concurrent reads. |
+| 6. Consumer regression and documentation, after 5 | The sole opt-in composition point is **new** `benchmarks/failure-attribution/run.ts`, explicitly invoked as the offline G7 runner; it composes evidence resolution, Gauge decisions/binding and receipt/report output. Nothing attaches G7 to decision-sites or Loom. Keep `benchmarks/decision-sites/**` and existing W5 tests unchanged; add regression checks only in the new G7 leaf and document results/limitations there. | **G7-T13 `decision-sites files are unchanged and G4 recorded-report parity holds`**: check the decision-sites diff against the implementation base and run the existing parity/provider tests without editing them; **G7-T14 `runtime effects are identical with attribution absent, present, throwing or cancelled; no grant or authority API is imported or called`**. Red using a G7 test double that dispatches an extra runtime effect or calls an authority API, green with recorded evidence and existing runtime regression anchors. |
 
 Keep these existing regression anchors green: G4
 `Gauge reproduces every number of every row of the recorded report exactly`,
@@ -338,7 +382,18 @@ deterministic/judgment distinction; reuse **Confidence**, **Holdout**,
 No glossary edit is made in this planning commit; no vision acceptance boundary
 change is proposed.
 
-## Owner questions: product forks only
+## Follow-ups
+
+- Keep G7-T11/T14 limited to no grant/authority imports or calls and unchanged
+  runtime effects with attribution absent, present, throwing or cancelled.
+  Grant single-use and fresh-grant retry behavior remain covered by W5-T58/T59
+  and `p8.test.ts`; add no grant mechanism or retry-semantic work to G7.
+- Track extending the clock and entropy scans to `packages/gauge/src` as
+  separate follow-up work. Demonstrate red with `Date`/`Math.random` mutations;
+  allow deterministic `node:crypto` hashing (`createHash`) while continuing to
+  reject entropy APIs. Do not expand the G7 implementation slices for this.
+
+## Owner questions
 
 1. Should the product eventually retain multiple causal claims per failure,
    or demand one primary cause? **Recommendation:** one supported category
@@ -351,17 +406,46 @@ change is proposed.
    disclosure and destination authorization must be explicit; lack of
    inference leaves an honest `unattributed` result. This affects cost and
    data exposure, not whether deterministic checks are obeyed.
+3. Who authors and labels the acceptance set, and who runs the sealed
+   evaluation? **Options:** name an owner/reviewer label author and a separate
+   independent evaluator with sealed-label access; or defer acceptance
+   evaluation until those roles are available. **Recommendation:** designate
+   both roles before freezing the acceptance set, with neither role held by
+   the classifier implementer. No people are assigned by this plan.
+4. If independent labels are unavailable, does #195 close with a
+   characterization-only report? **Options:** keep #195 open until independent
+   held-out precision/recall is reported; or explicitly accept characterization
+   for closure and track the unmet quality evaluation separately.
+   **Recommendation:** keep #195 open; characterization alone does not meet
+   the stated held-out acceptance criterion. Closure remains the owner's
+   decision, not an implicit fallback.
+5. Is the 28-case minimum (4 per category × 5 + 8 ambiguous/adversarial)
+   acceptable as a proposal? **Options:** confirm it as the initial
+   characterization minimum; or set a different size/coverage requirement
+   before freezing. **Recommendation:** confirm 28 as an initial proposal,
+   retaining all five categories and ambiguous/adversarial coverage without
+   claiming general accuracy from that small set. It is not a fixed
+   requirement until the owner decides.
 
-These questions do not block the contract, corpus, resolver or deterministic
-slices under the recommendations. Naming, id format, dependency direction and
-holdout protection are existing technical contracts, not owner approval forks.
+The contract, evidence inventory, development corpus and deterministic work
+can proceed independently. Acceptance-set freeze and sealed evaluation depend
+on question 3 and confirmation of question 5; closure without independent
+labels depends on question 4. Recommendations are not owner decisions.
+Naming, id format and holdout protection remain technical contracts; the
+sibling-leaf dependency assumption must be resolved before slice 5 as above.
 
 ## Verification performed for this plan
 
-Commands ran on the clean starting branch `wv-195-failure-attribution-plan`.
-The intended commit contains only `PLAN.md`, with message
-`plan: Gauge G7 failure attribution (#195)`; no push. The file is complete,
-but staging/committing is blocked by the read-only Git metadata mount below.
+The original plan was committed as `15eda3a` on
+`wv-195-failure-attribution-plan`, with message
+`plan: Gauge G7 failure attribution (#195)`. This review revision changes only
+`PLAN.md`; its requested commit message is
+`plan: address review of 15eda3a (#195)`. Staging this revision failed as
+recorded in the review-revision table below, so these edits remain in the
+working tree; the original plan is still committed as `15eda3a`. Neither
+planning task pushes. The table below records the
+original plan's checks at the inspected `e35767b` baseline, not fresh
+verification of this revision.
 
 | Check | Observed result / blocker |
 | --- | --- |
@@ -375,7 +459,18 @@ but staging/committing is blocked by the read-only Git metadata mount below.
 | `checks/test/execution-provider.test.mjs`, direct | Passed 30/30 tests. Helpers `checks/fixtures/execution-provider/{contract,doubles}.mjs` also loaded directly, exit 0. |
 | `checks/test/checks.test.mjs`, direct | Failed 6/6 because its child `spawnSync` output was unavailable. A minimal child invocation returned `spawnSync /usr/bin/node EPERM`; this environment blocks that nested execution path. The exact red and green fixture invocations were then run directly: all three red roots exited 1 with the expected findings and all three green roots exited 0. This diagnostic does not turn the failing harness green. |
 | `checks/fixtures/execution-provider/red.mjs`, direct | Intentional red: 10 assertion failures, zero skips, exit 1. Existing execution-provider fixture evidence only, not classifier quality evidence. |
-| Commit attempt | `git add -- PLAN.md` failed exit 128: unable to create `/workspace/weave-WV-234/.git/worktrees/weave-WV-195/index.lock`, `Read-only file system`. The worktree's `.git` points there. No commit was created and nothing was pushed; completing the requested commit requires writable Git metadata. No alternate repository or metadata rewrite was substituted. |
+| Original plan commit | `15eda3a`, containing only `PLAN.md`; no push by the planning task. |
+
+Review-revision checks used Node `v22.23.4` at
+`/home/box/.local/node22/bin`, with no network or dependency installation:
+
+| Check | Observed result / blocker |
+| --- | --- |
+| Review acceptance and diff checks | The eight review-topic documentation checks failed before editing and passed afterward; G7-T01–T14 remain present. `git diff --check` passed and only `PLAN.md` changed. This is plan acceptance evidence, not classifier red/green. |
+| Every top-level `checks/*.mjs`, direct | All five gates passed with the same source counts listed above; `source-scan.mjs` loaded, exit 0. |
+| `npm run verify` | Attempted with Node 22; exit 1 in `check`. Benchmark-digest tests passed, verify-cache tests failed. Direct diagnosis again found missing `node_modules/.bin/vp` (`ENOENT`); later verify stages were not reached. |
+| `npm run test:checks` | Exit 1: credential-parity and execution-provider test files passed; `checks.test.mjs` failed. Direct execution showed unavailable child-process output in five fixture assertions (one passed). The suite remains failing. |
+| Review-revision commit attempt | `git add -- PLAN.md` failed exit 128: unable to create `/workspace/weave-WV-234/.git/worktrees/weave-WV-195/index.lock`, `Read-only file system`. The requested review commit could not be made; only this revision remains uncommitted in `PLAN.md`. The original commit `15eda3a` is unaffected. Nothing was pushed. |
 
 Full green must be established in the supported Node/dependency environment
 before implementation PRs merge. Do not change scripts, suppress failures or
