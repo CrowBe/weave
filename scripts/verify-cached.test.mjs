@@ -8,6 +8,7 @@ import {
   openSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -17,6 +18,70 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+
+function selectNpmCli(npmExecPath, nodePrefix) {
+  const npmCli =
+    npmExecPath && isAbsolute(npmExecPath) && basename(npmExecPath) === 'npm-cli.js'
+      ? npmExecPath
+      : join(nodePrefix, 'lib/node_modules/npm/bin/npm-cli.js');
+  assert.ok(
+    statSync(npmCli, { throwIfNoEntry: false })?.isFile(),
+    `npm CLI not found at ${npmCli} (npm_execpath=${JSON.stringify(npmExecPath)})`,
+  );
+  return npmCli;
+}
+
+test('npm CLI lookup selects an absolute npm override or the Node prefix fallback', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-npm-lookup-'));
+  try {
+    const fallback = join(dir, 'lib/node_modules/npm/bin/npm-cli.js');
+    mkdirSync(dirname(fallback), { recursive: true });
+    writeFileSync(fallback, '');
+    const override = join(dir, 'npm-cli.js');
+    writeFileSync(override, '');
+    for (const [npmExecPath, expected] of [
+      [undefined, fallback],
+      ['', fallback],
+      ['relative/npm-cli.js', fallback],
+      [join(dir, 'yarn.js'), fallback],
+      [join(dir, 'pnpm.cjs'), fallback],
+      [join(dir, 'bun'), fallback],
+      [override, override],
+    ]) {
+      assert.equal(selectNpmCli(npmExecPath, dir), expected, `npm_execpath=${JSON.stringify(npmExecPath)}`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('npm CLI lookup rejects missing files and directories with the selected path and env value', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-npm-lookup-'));
+  try {
+    const fallback = join(dir, 'lib/node_modules/npm/bin/npm-cli.js');
+    mkdirSync(dirname(fallback), { recursive: true });
+    writeFileSync(fallback, '');
+    const missing = join(dir, 'missing/npm-cli.js');
+    const directory = join(dir, 'npm-cli.js');
+    mkdirSync(directory);
+    for (const npmExecPath of [missing, directory]) {
+      assert.throws(() => selectNpmCli(npmExecPath, dir), {
+        code: 'ERR_ASSERTION',
+        message: `npm CLI not found at ${npmExecPath} (npm_execpath=${JSON.stringify(npmExecPath)})`,
+      });
+    }
+    rmSync(fallback);
+    for (const isDirectory of [false, true]) {
+      if (isDirectory) mkdirSync(fallback);
+      assert.throws(() => selectNpmCli(undefined, dir), {
+        code: 'ERR_ASSERTION',
+        message: `npm CLI not found at ${fallback} (npm_execpath=undefined)`,
+      });
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test('verify requires formatting before the remaining checks', () => {
   const { scripts } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
@@ -33,12 +98,7 @@ test('verify fails at the format step for malformed source or a missing formatte
     return;
   }
 
-  const npmExecPath = process.env.npm_execpath;
-  const npmCli =
-    npmExecPath && isAbsolute(npmExecPath) && basename(npmExecPath) === 'npm-cli.js'
-      ? npmExecPath
-      : join(dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js');
-  assert.ok(existsSync(npmCli), `npm CLI not found at ${npmCli} (npm_execpath=${JSON.stringify(npmExecPath)})`);
+  const npmCli = selectNpmCli(process.env.npm_execpath, dirname(dirname(process.execPath)));
   const env = { ...process.env };
   for (const key of Object.keys(env)) {
     if (/^npm_config_(loglevel|silent)$/i.test(key)) delete env[key];
@@ -71,7 +131,8 @@ test('verify fails at the format step for malformed source or a missing formatte
           env: {
             ...env,
             // Keep node/npm available without inheriting local or global formatters.
-            // Assumes npm >= 7, which removed scripts-prepend-node-path.
+            // Requires npm >= 7: npm 6's scripts-prepend-node-path would re-add
+            // the real node bin directory (and any global vp), breaking isolation.
             PATH: bin,
             // npm otherwise resolves its default POSIX shell by name on PATH.
             npm_config_script_shell: '/bin/sh',
