@@ -59,6 +59,8 @@ export default defineConfig({
             // Root dotfiles such as `.npmrc` can change dependency resolution and verify behavior.
             '.*',
             '*.json',
+            // Formatting also checks root Markdown and documentation.
+            '*.md',
             '*.ts',
             '.github/**',
             'checks/**',
@@ -66,6 +68,7 @@ export default defineConfig({
             'packages/**',
             'benchmarks/**',
             'examples/**',
+            'docs/**',
             '!**/node_modules/**',
             '!**/dist/**',
             '!**/*.tsbuildinfo',

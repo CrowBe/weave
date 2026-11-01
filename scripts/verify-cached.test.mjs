@@ -1,12 +1,239 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+
+function selectNpmCli(npmExecPath, nodePrefix) {
+  // Debian apt npm lives outside the Node prefix: run via npm run or set npm_execpath.
+  // Do not search PATH; the formatting test deliberately isolates it.
+  const npmCli =
+    npmExecPath && isAbsolute(npmExecPath) && basename(npmExecPath) === 'npm-cli.js'
+      ? npmExecPath
+      : join(nodePrefix, 'lib/node_modules/npm/bin/npm-cli.js');
+  let isFile = false;
+  let statError;
+  try {
+    isFile = statSync(npmCli).isFile();
+  } catch (error) {
+    statError = error.code;
+  }
+  assert.ok(
+    isFile,
+    `npm CLI not found at ${npmCli} (npm_execpath=${JSON.stringify(npmExecPath)}${statError ? `; ${statError}` : ''}); run via npm run or set npm_execpath`,
+  );
+  return npmCli;
+}
+
+test('npm CLI lookup selects an absolute npm override or the Node prefix fallback', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-npm-lookup-'));
+  try {
+    const fallback = join(dir, 'lib/node_modules/npm/bin/npm-cli.js');
+    mkdirSync(dirname(fallback), { recursive: true });
+    writeFileSync(fallback, '');
+    const override = join(dir, 'npm-cli.js');
+    writeFileSync(override, '');
+    const symlink = join(dir, 'symlink/npm-cli.js');
+    mkdirSync(dirname(symlink));
+    symlinkSync(override, symlink);
+    for (const [npmExecPath, expected] of [
+      [undefined, fallback],
+      ['', fallback],
+      ['relative/npm-cli.js', fallback],
+      [join(dir, 'yarn.js'), fallback],
+      [join(dir, 'pnpm.cjs'), fallback],
+      [join(dir, 'bun'), fallback],
+      [override, override],
+      [symlink, symlink],
+    ]) {
+      assert.equal(selectNpmCli(npmExecPath, dir), expected, `npm_execpath=${JSON.stringify(npmExecPath)}`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('npm CLI lookup rejects missing files, directories, and dangling symlinks with the selected path and env value', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-npm-lookup-'));
+  try {
+    const fallback = join(dir, 'lib/node_modules/npm/bin/npm-cli.js');
+    mkdirSync(dirname(fallback), { recursive: true });
+    writeFileSync(fallback, '');
+    const missing = join(dir, 'missing/npm-cli.js');
+    const directory = join(dir, 'npm-cli.js');
+    mkdirSync(directory);
+    const dangling = join(dir, 'dangling/npm-cli.js');
+    mkdirSync(dirname(dangling));
+    symlinkSync(missing, dangling);
+    for (const [npmExecPath, statError] of [
+      [missing, '; ENOENT'],
+      [directory, ''],
+      [dangling, '; ENOENT'],
+    ]) {
+      assert.throws(() => selectNpmCli(npmExecPath, dir), {
+        code: 'ERR_ASSERTION',
+        message: `npm CLI not found at ${npmExecPath} (npm_execpath=${JSON.stringify(npmExecPath)}${statError}); run via npm run or set npm_execpath`,
+      });
+    }
+    rmSync(fallback);
+    for (const isDirectory of [false, true]) {
+      if (isDirectory) mkdirSync(fallback);
+      assert.throws(() => selectNpmCli(undefined, dir), {
+        code: 'ERR_ASSERTION',
+        message: `npm CLI not found at ${fallback} (npm_execpath=undefined${isDirectory ? '' : '; ENOENT'}); run via npm run or set npm_execpath`,
+      });
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('npm CLI lookup rejects a regular-file parent with the selected path, env value, and stat error', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-npm-lookup-'));
+  try {
+    const parent = join(dir, 'file');
+    writeFileSync(parent, '');
+    const npmExecPath = join(parent, 'npm-cli.js');
+    assert.throws(() => selectNpmCli(npmExecPath, dir), {
+      code: 'ERR_ASSERTION',
+      message: `npm CLI not found at ${npmExecPath} (npm_execpath=${JSON.stringify(npmExecPath)}; ENOTDIR); run via npm run or set npm_execpath`,
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('verify requires formatting before the remaining checks', () => {
+  const { scripts } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  assert.equal(scripts.verify.split(' && ')[0], 'npm run fmt:check');
+});
+
+test('verify fails at the format step for malformed source or a missing formatter', (t) => {
+  if (process.platform === 'win32') {
+    t.skip('format-failure isolation requires POSIX symlinks and /bin/sh');
+    return;
+  }
+  if (!existsSync('/bin/sh')) {
+    t.skip('format-failure isolation requires /bin/sh');
+    return;
+  }
+
+  const npmCli = selectNpmCli(process.env.npm_execpath, dirname(dirname(process.execPath)));
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (/^npm_config_(loglevel|silent)$/i.test(key)) delete env[key];
+  }
+  const { scripts } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  for (const installed of [true, false]) {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-verify-format-'));
+    try {
+      const bin = join(dir, 'bin');
+      mkdirSync(bin);
+      symlinkSync(process.execPath, join(bin, 'node'));
+      // verify invokes npm again, so expose only node and the selected npm CLI.
+      symlinkSync(npmCli, join(bin, 'npm'));
+      writeFileSync(
+        join(dir, 'package.json'),
+        JSON.stringify({ private: true, type: 'module', scripts }, null, 2) + '\n',
+      );
+      writeFileSync(join(dir, 'vite.config.ts'), readFileSync(join(root, 'vite.config.ts'), 'utf8'));
+      if (installed) {
+        symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'), 'dir');
+        writeFileSync(join(dir, 'malformed.js'), 'const value={a:1,b:2}\n');
+      }
+      const log = join(dir, 'output');
+      const fd = openSync(log, 'w');
+      let result;
+      try {
+        result = spawnSync(process.execPath, [npmCli, 'run', 'verify'], {
+          cwd: dir,
+          stdio: ['ignore', fd, fd],
+          env: {
+            ...env,
+            // Keep node/npm available without inheriting local or global formatters.
+            // Requires npm >= 7: npm 6's scripts-prepend-node-path would re-add
+            // the real node bin directory (and any global vp), breaking isolation.
+            PATH: bin,
+            // npm otherwise resolves its default POSIX shell by name on PATH.
+            npm_config_script_shell: '/bin/sh',
+            npm_config_loglevel: 'notice',
+          },
+        });
+      } finally {
+        closeSync(fd);
+      }
+      assert.ifError(result.error);
+      const output = readFileSync(log, 'utf8');
+      assert.notEqual(result.status, 0, output);
+      assert.match(output, /> fmt:check\n> vp fmt --check/);
+      assert.doesNotMatch(output, /> check\n/);
+      assert.match(output, installed ? /malformed\.js/ : /vp: (?:not found|command not found)/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('verify cache rejects formatting-only changes to root and docs Markdown', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-verify-cache-format-'));
+  try {
+    symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'), 'dir');
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify(
+        {
+          name: 'cache-format-regression',
+          private: true,
+          type: 'module',
+          scripts: { verify: 'npm run fmt:check', 'fmt:check': 'vp fmt --check' },
+        },
+        null,
+        2,
+      ) + '\n',
+    );
+    const config = readFileSync(join(root, 'vite.config.ts'), 'utf8').replace(
+      "output: ['packages/*/dist/**']",
+      'output: []',
+    );
+    writeFileSync(join(dir, 'vite.config.ts'), config);
+    mkdirSync(join(dir, 'docs'));
+    const files = ['README.md', 'docs/guide.md'];
+    const formatted = '# Heading\n\n- item\n';
+    for (const file of files) writeFileSync(join(dir, file), formatted);
+    const run = () =>
+      spawnSync(join(root, 'node_modules', '.bin', 'vp'), ['run', 'verify-cached'], { cwd: dir, encoding: 'utf8' });
+    for (let i = 0; i < 2; i += 1) {
+      const result = run();
+      assert.equal(result.status, 0, result.stdout + result.stderr);
+    }
+    for (const file of files) {
+      writeFileSync(join(dir, file), '# Heading\n\n-   item\n');
+      const result = run();
+      assert.notEqual(result.status, 0, `formatting change in ${file} replayed a cached pass: ${result.stdout}`);
+      assert.match(result.stdout + result.stderr, /Format issues found/);
+      writeFileSync(join(dir, file), formatted);
+      const restored = run();
+      assert.equal(restored.status, 0, restored.stdout + restored.stderr);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test('verify cache ignores removed Python cache directories but tracks source changes', () => {
   const dir = mkdtempSync(join(tmpdir(), 'weave-verify-cache-'));
