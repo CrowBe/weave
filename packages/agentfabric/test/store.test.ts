@@ -749,6 +749,172 @@ describe('FabricStore stale-lock reclaim protocol', () => {
     });
   }
 
+  for (const shape of ['regular file at reclaim', 'directory at reclaim owner'] as const) {
+    it(`reports canonical remediation instead of a raw errno for a ${shape}`, () => {
+      const dir = mkdtempSync(join(tmpdir(), 'weave-store-reclaim-shape-'));
+      const path = join(dir, 'fabric.json');
+      const reclaim = `${path}.lock.reclaim`;
+      const stale = v2Token({ start: '0' });
+      writeFileSync(`${path}.lock`, stale);
+      if (shape === 'regular file at reclaim') writeFileSync(reclaim, stale);
+      else nodeFs.mkdirSync(`${reclaim}/owner`, { recursive: true });
+      const before = nodeFs.readdirSync(dir).sort();
+      try {
+        assert.throws(
+          () =>
+            FabricStore.open(path, {
+              clock: { now: () => 0 },
+              sleep() {
+                assert.fail('a malformed reclaim generation cannot be waited out');
+              },
+            }),
+          (error: Error & { code?: string }) => {
+            assert.equal(error.code, undefined);
+            assert.ok(error.message.includes(`stale-lock reclaim is blocked by ${reclaim}`));
+            assert.ok(error.message.includes(`confirm no weave process is using ${path}`));
+            assert.ok(error.message.includes(`then remove ${reclaim} and retry`));
+            assert.doesNotMatch(error.message, /private-test-token/);
+            return true;
+          },
+        );
+        // No unpublished reclaim directory or lock temp is left beside the store.
+        assert.deepEqual(nodeFs.readdirSync(dir).sort(), before);
+        assert.equal(readFileSync(`${path}.lock`, 'utf8'), stale);
+        if (shape === 'regular file at reclaim') assert.equal(readFileSync(reclaim, 'utf8'), stale);
+        else assert.deepEqual(nodeFs.readdirSync(`${reclaim}/owner`), []);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+
+  it('backs out and retries when a live reaper links into an earlier back-out gap', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-store-back-out-gap-'));
+    const path = join(dir, 'fabric.json');
+    const reclaim = `${path}.lock.reclaim`;
+    const gap = `${reclaim}/reap.2`;
+    const ours = `${reclaim}/reap.4`;
+    const stale = v2Token({ start: '0' });
+    const live = v2Token();
+    writeFileSync(`${path}.lock`, stale);
+    nodeFs.mkdirSync(reclaim);
+    writeFileSync(`${reclaim}/owner`, stale);
+    // reap.2 was backed out, leaving a gap below the dead reap.3.
+    writeFileSync(`${reclaim}/reap`, stale);
+    writeFileSync(`${reclaim}/reap.3`, stale);
+    const mutableFs = createRequire(import.meta.url)('node:fs') as typeof nodeFs;
+    const originalLink = mutableFs.linkSync;
+    const originalRename = mutableFs.renameSync;
+    let links = 0;
+    let liveHeld = false;
+    let sleeps = 0;
+    mutableFs.linkSync = ((...args: Parameters<typeof originalLink>) => {
+      if (String(args[1]) !== ours) return originalLink(...args);
+      links += 1;
+      assert.equal(liveHeld, false, 'never claims the next slot over a known live claim');
+      const result = originalLink(...args);
+      if (links === 1) {
+        // A live reaper that scanned before reap.3 existed lands its delayed link in the gap.
+        writeFileSync(gap, live);
+        liveHeld = true;
+      }
+      return result;
+    }) as typeof originalLink;
+    mutableFs.renameSync = ((...args: Parameters<typeof originalRename>) => {
+      if (String(args[0]) === reclaim) assert.equal(liveHeld, false, 'never moves a generation a live reaper holds');
+      return originalRename(...args);
+    }) as typeof originalRename;
+    syncBuiltinESMExports();
+    let now = 0;
+    let store: FabricStore | undefined;
+    try {
+      store = FabricStore.open(path, {
+        clock: { now: () => now },
+        sleep(ms) {
+          sleeps += 1;
+          now += ms;
+          if (!liveHeld) return;
+          // Our claim was backed out without touching the live reaper's claim.
+          assert.equal(existsSync(ours), false);
+          assert.deepEqual(
+            nodeFs.readdirSync(reclaim).filter((name) => name.endsWith('.tmp')),
+            [],
+          );
+          assert.equal(readFileSync(gap, 'utf8'), live);
+          // The gap reaper sees the higher reap.3 and backs out by protocol.
+          nodeFs.unlinkSync(gap);
+          liveHeld = false;
+        },
+      });
+      assert.equal(links, 2);
+      assert.ok(sleeps >= 1);
+      assert.equal(existsSync(reclaim), false);
+      store.retainConclusion('recovered after a gap claimant backed out');
+      assert.deepEqual(store.conclusions(), ['recovered after a gap claimant backed out']);
+    } finally {
+      mutableFs.linkSync = originalLink;
+      mutableFs.renameSync = originalRename;
+      syncBuiltinESMExports();
+      store?.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('leaves no orphan identity file after a claimant backs out', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'weave-store-back-out-orphans-'));
+    const path = join(dir, 'fabric.json');
+    const reclaim = `${path}.lock.reclaim`;
+    const stale = v2Token({ start: '0' });
+    const live = v2Token();
+    writeFileSync(`${path}.lock`, stale);
+    nodeFs.mkdirSync(reclaim);
+    writeFileSync(`${reclaim}/owner`, stale);
+    const mutableFs = createRequire(import.meta.url)('node:fs') as typeof nodeFs;
+    const original = mutableFs.linkSync;
+    let injected = false;
+    mutableFs.linkSync = ((...args: Parameters<typeof original>) => {
+      const result = original(...args);
+      if (!injected && String(args[1]) === `${reclaim}/reap`) {
+        injected = true;
+        writeFileSync(`${reclaim}/reap.2`, live);
+      }
+      return result;
+    }) as typeof original;
+    syncBuiltinESMExports();
+    let now = 0;
+    try {
+      assert.throws(
+        () =>
+          FabricStore.open(path, {
+            clock: { now: () => now },
+            sleep(ms) {
+              now += ms;
+            },
+          }),
+        (error: Error) => {
+          assert.match(error.message, /live process.*retry later/);
+          assert.doesNotMatch(error.message, /remove/);
+          return true;
+        },
+      );
+      assert.ok(injected);
+      const files = (nodeFs.readdirSync(dir, { recursive: true }) as string[]).filter((name) =>
+        nodeFs.statSync(join(dir, name)).isFile(),
+      );
+      // Only the stale lock, stale reclaim owner and the live claim remain.
+      assert.deepEqual(files.sort(), [
+        'fabric.json.lock',
+        'fabric.json.lock.reclaim/owner',
+        'fabric.json.lock.reclaim/reap.2',
+      ]);
+      for (const name of files) assert.ok([stale, live].includes(readFileSync(join(dir, name), 'utf8')));
+    } finally {
+      mutableFs.linkSync = original;
+      syncBuiltinESMExports();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('cannot move a generation after its own claim token is replaced', () => {
     const dir = mkdtempSync(join(tmpdir(), 'weave-store-replaced-claim-'));
     const path = join(dir, 'fabric.json');

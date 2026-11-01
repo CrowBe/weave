@@ -175,8 +175,10 @@ interface LoadedJournal {
  * another owner's claim. Legacy ownerless reap directories need 500 ms of
  * stable local observation. Injected time (default: sum of sleeps) bounds live
  * waits to 2000 ms; iteration caps also bound a stopped clock. Live reapers
- * produce retry-later errors without removal hints; unknown owners and slot
- * exhaustion fail closed with canonical paths and conditional operator steps.
+ * produce retry-later errors without removal hints, including a live claim
+ * linked into a back-out gap below ours; unknown owners, non-directory
+ * generations and slot exhaustion fail closed with canonical paths and
+ * conditional operator steps.
  * Quarantine identity mismatches must restore or fail closed.
  *
  * No leases, heartbeats, garbage sweeping, journal changes or async open.
@@ -967,7 +969,7 @@ function acquireReclaim(path: string, token: string, nonce: string, wait: Reclai
         // Best-effort removal of our unpublished directory.
       }
     }
-    const owner = readReclaimIdentity(reclaimPath);
+    const owner = readReclaimIdentity(path, reclaimPath);
     if (owner === undefined) return false;
     const state = ownerState(owner.token);
     if (state === 'unknown') throw unverifiableOwner(path, reclaimPath);
@@ -989,7 +991,7 @@ function reapGeneration(
   const ownerless = new Map<string, number>();
   let backoff = 5;
   for (let attempt = 0; attempt < MAX_RECLAIM_WAITS; attempt += 1) {
-    if (!sameReclaimOwner(owner, readReclaimIdentity(reclaimPath))) return false;
+    if (!sameReclaimOwner(owner, readReclaimIdentity(path, reclaimPath))) return false;
     const slots = claimSlots(reclaimPath);
     const highest = slots.at(-1) ?? 0;
     const claimPath = slotPath(reclaimPath, highest);
@@ -1034,7 +1036,7 @@ function reapGeneration(
       }
     }
     // Claim then revalidate: a delayed link can land in a successor generation.
-    const current = readReclaimIdentity(reclaimPath);
+    const current = readReclaimIdentity(path, reclaimPath);
     const claims = claimSlots(reclaimPath);
     let unresolved: string | undefined;
     if (
@@ -1046,7 +1048,9 @@ function reapGeneration(
         if (n === next) return false;
         const earlier = slotPath(reclaimPath, n);
         const state = claimState(earlier, ownerless, wait);
-        if (state === 'alive' || state === 'unknown') unresolved = earlier;
+        // A live claim absent from our scan was linked into a back-out gap; its
+        // owner also sees a higher claim and backs out, so retry instead.
+        if (state === 'unknown' || (state === 'alive' && slots.includes(n))) unresolved = earlier;
         return state !== 'dead';
       })
     ) {
@@ -1073,7 +1077,7 @@ function reapGeneration(
       if (isErrno(error, 'ENOENT')) return false;
       throw error;
     }
-    const moved = readReclaimIdentity(quarantine);
+    const moved = readReclaimIdentity(path, quarantine);
     if (!sameReclaimOwner(owner, moved) || ownerState(moved.token) !== 'dead') {
       try {
         renameSync(quarantine, reclaimPath);
@@ -1170,7 +1174,7 @@ interface ReclaimIdentity {
   readonly ino: number;
 }
 
-function readReclaimIdentity(reclaimPath: string): ReclaimIdentity | undefined {
+function readReclaimIdentity(path: string, reclaimPath: string): ReclaimIdentity | undefined {
   try {
     const before = statSync(reclaimPath);
     const token = readLockContent(`${reclaimPath}/owner`);
@@ -1181,6 +1185,10 @@ function readReclaimIdentity(reclaimPath: string): ReclaimIdentity | undefined {
     return { token, dev: after.dev, ino: after.ino };
   } catch (error) {
     if (isErrno(error, 'ENOENT')) return undefined;
+    // A non-directory generation or owner has no verifiable identity.
+    if (isErrno(error, 'ENOTDIR') || isErrno(error, 'EISDIR')) {
+      throw blockedReclaim(path, reclaimPath, `${path}.lock.reclaim`);
+    }
     throw error;
   }
 }
