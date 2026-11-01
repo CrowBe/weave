@@ -12,7 +12,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
@@ -33,7 +33,12 @@ test('verify fails at the format step for malformed source or a missing formatte
     return;
   }
 
-  const npmCli = process.env.npm_execpath ?? join(dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js');
+  const npmExecPath = process.env.npm_execpath;
+  const npmCli =
+    npmExecPath && isAbsolute(npmExecPath) && basename(npmExecPath) === 'npm-cli.js'
+      ? npmExecPath
+      : join(dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js');
+  assert.ok(existsSync(npmCli), `npm CLI not found at ${npmCli} (npm_execpath=${JSON.stringify(npmExecPath)})`);
   const env = { ...process.env };
   for (const key of Object.keys(env)) {
     if (/^npm_config_(loglevel|silent)$/i.test(key)) delete env[key];
@@ -66,6 +71,7 @@ test('verify fails at the format step for malformed source or a missing formatte
           env: {
             ...env,
             // Keep node/npm available without inheriting local or global formatters.
+            // Assumes npm >= 7, which removed scripts-prepend-node-path.
             PATH: bin,
             // npm otherwise resolves its default POSIX shell by name on PATH.
             npm_config_script_shell: '/bin/sh',
