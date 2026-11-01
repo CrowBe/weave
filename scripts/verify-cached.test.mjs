@@ -20,13 +20,22 @@ import test from 'node:test';
 const root = fileURLToPath(new URL('../', import.meta.url));
 
 function selectNpmCli(npmExecPath, nodePrefix) {
+  // Debian apt npm lives outside the Node prefix: run via npm run or set npm_execpath.
+  // Do not search PATH; the formatting test deliberately isolates it.
   const npmCli =
     npmExecPath && isAbsolute(npmExecPath) && basename(npmExecPath) === 'npm-cli.js'
       ? npmExecPath
       : join(nodePrefix, 'lib/node_modules/npm/bin/npm-cli.js');
+  let isFile = false;
+  let statError;
+  try {
+    isFile = statSync(npmCli).isFile();
+  } catch (error) {
+    statError = error.code;
+  }
   assert.ok(
-    statSync(npmCli, { throwIfNoEntry: false })?.isFile(),
-    `npm CLI not found at ${npmCli} (npm_execpath=${JSON.stringify(npmExecPath)})`,
+    isFile,
+    `npm CLI not found at ${npmCli} (npm_execpath=${JSON.stringify(npmExecPath)}${statError ? `; ${statError}` : ''}); run via npm run or set npm_execpath`,
   );
   return npmCli;
 }
@@ -39,6 +48,9 @@ test('npm CLI lookup selects an absolute npm override or the Node prefix fallbac
     writeFileSync(fallback, '');
     const override = join(dir, 'npm-cli.js');
     writeFileSync(override, '');
+    const symlink = join(dir, 'symlink/npm-cli.js');
+    mkdirSync(dirname(symlink));
+    symlinkSync(override, symlink);
     for (const [npmExecPath, expected] of [
       [undefined, fallback],
       ['', fallback],
@@ -47,6 +59,7 @@ test('npm CLI lookup selects an absolute npm override or the Node prefix fallbac
       [join(dir, 'pnpm.cjs'), fallback],
       [join(dir, 'bun'), fallback],
       [override, override],
+      [symlink, symlink],
     ]) {
       assert.equal(selectNpmCli(npmExecPath, dir), expected, `npm_execpath=${JSON.stringify(npmExecPath)}`);
     }
@@ -55,7 +68,7 @@ test('npm CLI lookup selects an absolute npm override or the Node prefix fallbac
   }
 });
 
-test('npm CLI lookup rejects missing files and directories with the selected path and env value', () => {
+test('npm CLI lookup rejects missing files, directories, and dangling symlinks with the selected path and env value', () => {
   const dir = mkdtempSync(join(tmpdir(), 'weave-npm-lookup-'));
   try {
     const fallback = join(dir, 'lib/node_modules/npm/bin/npm-cli.js');
@@ -64,10 +77,17 @@ test('npm CLI lookup rejects missing files and directories with the selected pat
     const missing = join(dir, 'missing/npm-cli.js');
     const directory = join(dir, 'npm-cli.js');
     mkdirSync(directory);
-    for (const npmExecPath of [missing, directory]) {
+    const dangling = join(dir, 'dangling/npm-cli.js');
+    mkdirSync(dirname(dangling));
+    symlinkSync(missing, dangling);
+    for (const [npmExecPath, statError] of [
+      [missing, '; ENOENT'],
+      [directory, ''],
+      [dangling, '; ENOENT'],
+    ]) {
       assert.throws(() => selectNpmCli(npmExecPath, dir), {
         code: 'ERR_ASSERTION',
-        message: `npm CLI not found at ${npmExecPath} (npm_execpath=${JSON.stringify(npmExecPath)})`,
+        message: `npm CLI not found at ${npmExecPath} (npm_execpath=${JSON.stringify(npmExecPath)}${statError}); run via npm run or set npm_execpath`,
       });
     }
     rmSync(fallback);
@@ -75,9 +95,24 @@ test('npm CLI lookup rejects missing files and directories with the selected pat
       if (isDirectory) mkdirSync(fallback);
       assert.throws(() => selectNpmCli(undefined, dir), {
         code: 'ERR_ASSERTION',
-        message: `npm CLI not found at ${fallback} (npm_execpath=undefined)`,
+        message: `npm CLI not found at ${fallback} (npm_execpath=undefined${isDirectory ? '' : '; ENOENT'}); run via npm run or set npm_execpath`,
       });
     }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('npm CLI lookup rejects a regular-file parent with the selected path, env value, and stat error', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-npm-lookup-'));
+  try {
+    const parent = join(dir, 'file');
+    writeFileSync(parent, '');
+    const npmExecPath = join(parent, 'npm-cli.js');
+    assert.throws(() => selectNpmCli(npmExecPath, dir), {
+      code: 'ERR_ASSERTION',
+      message: `npm CLI not found at ${npmExecPath} (npm_execpath=${JSON.stringify(npmExecPath)}; ENOTDIR); run via npm run or set npm_execpath`,
+    });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
