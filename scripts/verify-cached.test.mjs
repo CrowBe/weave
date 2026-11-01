@@ -12,7 +12,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
@@ -46,10 +46,11 @@ test('verify fails at the format step for malformed source or a missing formatte
           stdio: ['ignore', fd, fd],
           env: {
             ...process.env,
-            // Do not inherit the enclosing npm run's installed formatter in the missing-tool case.
-            PATH: process.env.PATH.split(delimiter)
-              .filter((entry) => !entry.endsWith('/node_modules/.bin'))
-              .join(delimiter),
+            // Keep node/npm available without inheriting local or global formatters.
+            PATH: dirname(process.execPath),
+            // npm otherwise resolves its default POSIX shell by name on PATH.
+            npm_config_script_shell: process.platform === 'win32' ? process.env.ComSpec : '/bin/sh',
+            npm_config_loglevel: 'notice',
           },
         });
       } finally {
