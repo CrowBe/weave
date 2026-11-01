@@ -338,8 +338,8 @@ and PR 2a are unaffected. Q14 decides how a child Thread relates to its
 ancestors' goals, and whether ending a goal blocks on, cascades to or ignores
 open child Threads. Until it is answered, no plan text, glossary entry or test
 may assert a child goal-association rule; PR 2b's other nesting checks may
-proceed. The association stability contract below is architectural and applies
-to whichever Q14 option derives a child's goal from ancestor history.
+proceed. Only the association reconstruction requirement below is architectural
+(D-ENG-021); it binds whichever option Q14 selects and selects none of them.
 
 **One id rule at every Thread depth.** #320 §5.1's `<parent>/<opening seq>/<index>`
 and goal-only uniqueness conflict with Weft `isId` (`validate.ts:46`): `/` is
@@ -478,38 +478,28 @@ is added only with Q14's answer, in PR 1b or the nesting issue's contract PR. A
 project index may hold several Thread trees: each `parallel` target opens
 another root Thread (Q10).
 
-**Association stability contract (decided D-ENG-021; applies if Q14 derives a
-child's goal from ancestor history).** Today's `openWorkstream`, `goal.attached`
-and `goal.ended` check evidence only as a nonnegative safe integer (`validSeq`,
-`packages/weave/src/workstream.ts:109`), so backdated evidence is accepted.
-Interval containment on a caller-supplied `opened_at` therefore has no fixed
-meaning. Example: a parent attaches G at evidence 10 and a child opens at 12.
-Then G is ended with evidence 11, or a grandparent attaches H with evidence 5
-after G ends. Reconstruction would now place the existing child outside G or
-inside H. The contract:
-
-1. **Committed opening prefix.** A child's derived goal is fixed by the index
-   committed immediately before its open transition. Use recursive ancestor
-   lookup: the nearest ancestor (parent, grandparent, …) with an own active goal
-   in that index. It is never fixed by later parent history, and the lookup
-   does not stop at Thread depth 1.
-2. **Reconstruction agrees with the prefix.** Pure index values carry no
-   transition order, so PR 2b adds two ancestry-scoped evidence-order refusals
-   (`invalid_evidence`, no mutation). (i) A child open whose evidence is below
-   the highest `attached_at`/`ended_at` recorded on any ancestor refuses. (ii) An
-   ancestor `goal.attached`/`goal.ended` whose evidence is at or below any
-   existing descendant's `opened_at` refuses. With half-open goal intervals
-   `[attached_at, ended_at)`, interval containment over the final index then
-   equals the committed-prefix answer: an equal-seq attach-then-open inherits,
-   an equal-seq end-then-open does not, and the reverse orders refuse.
-   Backdated evidence is refused, never reinterpreted on reconstruction.
-3. **Root Threads unchanged.** Both refusals need an ancestor or a descendant,
-   so root-only indexes, including all 33 ported tests and the `parallel` root
-   target, keep today's evidence behavior.
-
-If Q14 selects an option that stores association explicitly instead of deriving
-it, rules 1–2 reduce to "a stored association is immutable after open", and PR 2b
-records that instead.
+**Association reconstruction requirement (decided D-ENG-021; independent of the
+Q14 option).** Whatever association semantics Q14 selects, reconstructing the
+project index from the committed journal must reproduce them exactly. The
+association that the chosen semantics assign to a child Thread after each
+committed transition must equal what reconstruction derives from that committed
+prefix and from every later prefix. Reconstruction never reinterprets a
+committed association. Today's `openWorkstream`, `goal.attached` and `goal.ended`
+check evidence only as a nonnegative safe integer (`validSeq`,
+`packages/weave/src/workstream.ts:109`), so backdated evidence is accepted, and
+pure index values carry no transition order. Any option that relates a child to
+ancestor history therefore cannot meet this requirement through interval
+containment over caller-supplied evidence alone. Example: a parent attaches G at
+evidence 10 and a child opens at 12. Then G is ended with evidence 11, or a
+grandparent attaches H with evidence 5 after G ends. Containment over the final
+index would now place the existing child outside G or inside H, although neither
+transition said so. The Q14 answer records how its option meets this
+requirement. Which ancestor supplies a goal, whether an association can change
+after opening, and any evidence-order refusal are consequences of that answer,
+listed per option under Q14 (section 7); D-ENG-021 locks none of them. A root
+Thread's association is its own `goals[]`, which reconstruction reads directly,
+so the requirement adds nothing for root-only indexes: they, including all 33
+ported tests and the `parallel` root target, keep today's evidence behavior.
 
 Language constraint: use those qualified forms for Thread structure; bare **root** still means **composition root**.
 Keep Component tree, Default tree, Tapestry component nodes and context-declaration
@@ -756,8 +746,8 @@ Record every section 7 answer with its decision id: Q5 export policy, Q6 intake
 meaning, Q8 node lifecycle, Q9 record version, Q10 field matrix/placements/id
 rule, Q11 run-scoped storage, Q12 `max_depth` on the index, and Q13's issue
 boundary, plus latest-index revalidation and no-orphan contracts. Record Q14 as
-open, without asserting any child goal-association rule, and record the
-association stability contract as conditional on Q14 (section 3). Under
+open, without asserting any child goal-association rule, and record section 3's
+association reconstruction requirement, which selects no Q14 option. Under
 Q10-0 (a) the Q10/Q12 contract extension may land in a follow-up PR 1b; PR 2a
 needs only the settled terminology/crosswalk and the minimal-root guarantee.
 Q14's answer is recorded in PR 1b, or in the nesting issue's contract PR if
@@ -900,9 +890,8 @@ today's own-`goals[]` behavior. The PR must document that child-Thread goal
 association is pending Q14 and must claim no inheritance, attachment refusal or
 goal-ending rule for descendants. Once Q14 is answered and recorded (PR 1b or
 the nesting issue's contract PR), PR 2b, or a follow-up PR 2c in the same issue,
-implements the chosen option. It also implements section 3's association
-stability contract whenever that option derives association from ancestor
-history.
+implements the chosen option, including the consequences listed for it under
+Q14, and demonstrates section 3's association reconstruction requirement for it.
 Cover latest-index revalidation/refusal/retry with pure transition interleavings;
 durable serialization and append/settle/cancel wiring remain explicit #320 integration with their own
 behavioral red. There is no journal CAS to exercise.
@@ -935,16 +924,12 @@ red for that option's shared-goal case: two child Threads under a Thread whose
 active goal is G each relate to G as Q14 specifies, and today's code does not
 (`activeGoal` reads only the child's own empty `goals[]`). Failure merely to
 retain `parent` is not evidence for this red. Add the option's attachment and
-goal-ending reds as listed under Q14. If the option derives association from
-ancestor history, add **Later parent history cannot change an existing child's
-goal association**. Open a child at evidence 12 under a parent with G attached
-at 10. Each of these then refuses `invalid_evidence` without mutation, with the
-evidence check running before any Q14 goal-ending rule: ending G
-at 11, attaching a goal on a grandparent at 5, and opening a second child at 9,
-which is below G's `attached_at`. Reconstruction of the final index and
-of every committed prefix gives the same association as the opening prefix,
-including a grandchild resolving through two ancestors. The equal-seq cases in
-section 3 rule 2 behave as stated. Root-only evidence behavior is unchanged in
+goal-ending reds, and any reds Q14 lists as consequences of that option. For
+every option, add **Reconstruction reproduces the chosen goal association**
+(section 3): after each committed transition in a nested scenario that
+includes section 3's backdated-evidence example and a grandchild, the
+association the option assigns equals what reconstruction derives from that
+prefix and from the final index. Root-only evidence behavior is unchanged in
 all 33 ported tests.
 Named checks: **Thread depth N child id passes Weft validation** (at the
 configured Thread depth bound, with distinct parent/action ids, maximum-length Thread node
@@ -1074,24 +1059,48 @@ one attempt. PR 3 therefore depends on an identified delivery prerequisite,
 contracted in its node-bound Weft issue and outside Loom:
 
 1. **Durable pending delivery.** The composition root, not Loom, keeps a
-   durable cursor: the highest journal position whose derived records the
-   receiver has acknowledged. The cursor advances only on an acknowledging
-   receiver result, such as the trace store's typed `upsert`/`upsertBatch`
-   result. A fire-and-forget `emit` never advances it. After `recover()` and
-   outside replay, a separate redelivery step re-derives the records above the
-   cursor from the committed journal and delivers them again. It invokes only
-   the sink: no gateway, host, effect, grant or scheduling change. Loom still
-   reads no trace.
-2. **Receiver idempotency.** Receivers treat a repeated `(trace_id, record_id)`
+   durable cursor: the highest journal position P such that, for every position
+   up to and including P, the complete set of logical records derived from it
+   has been acknowledged by the receiver. A position deriving no records is
+   complete. Delivery may be concurrent or out of order, and one position may
+   derive several records. An acknowledgement above a gap, or of only some of
+   one position's records, is tracked durably per `(trace_id, record_id)` but never
+   advances the cursor past the first incomplete position. Acknowledgement
+   comes only from an acknowledging receiver result, such as the trace store's
+   typed `upsert`/`upsertBatch` result; a fire-and-forget `emit` never
+   advances the cursor or records an acknowledgement. After `recover()` and
+   outside replay, a separate redelivery step redelivers every record above the
+   cursor not durably tracked as acknowledged, using the envelopes from item 2.
+   A redelivered record that was in fact acknowledged before a crash is a
+   receiver no-op under item 3. It invokes only the sink: no gateway, host,
+   effect, grant or scheduling change. Loom still reads no trace.
+2. **Reconstructible envelopes.** Redelivery must send the complete original
+   envelope byte for byte: trace id, emitter, record id, `sequence`,
+   `parent_id`, links, evidence and every field. Retained lifecycle owners and
+   record identities alone do not establish this. Today's emitter assigns
+   `sequence` from mutable emission history
+   (`packages/weave/src/weft.ts:117`) and `parent_id` from its current cycle
+   record, so re-deriving only the records above the cursor with the active
+   emitter would change them. The node-bound Weft issue's contract picks one of
+   two mechanisms and states it: (i) the composition root durably stores each
+   complete projection envelope before its first delivery attempt and
+   redelivers that stored envelope; or (ii) a versioned deterministic
+   projection re-derives each envelope from the committed journal prefix it
+   needs (from position 0 if emitter state depends on it). Every input,
+   including the original trace, emitter and sequence state, comes from that
+   prefix and never from the recovering run's active emitter. Under (ii) the
+   projection version is durably recorded with the cursor, and records above
+   the cursor are re-derived under that recorded version, never a newer one.
+3. **Receiver idempotency.** Receivers treat a repeated `(trace_id, record_id)`
    with byte-identical content as a no-op, and refuse unequal content under an
    existing identity as `conflict`, never ignoring it. The SQLite trace store's
    span upsert already refuses unequal `record_json` as `conflict`
    (`packages/weft/src/sqlite.ts:221`); its `INSERT OR IGNORE` covers only the
    `runs`/`threads` scope rows. Every other receiver PR 3 relies on must show
    the same property.
-3. Until both exist at the actual boundary, PR 3 may claim no duplicate logical
-   record and no unequal identity reuse. It must not claim that no lifecycle
-   record is lost, and it stays blocked on that evidence.
+4. Until items 1–3 exist at the actual boundary, PR 3 may claim no duplicate
+   logical record and no unequal identity reuse. It must not claim that no
+   lifecycle record is lost, and it stays blocked on that evidence.
 
 Include recovery after a **crash before and after each open/settle emission**,
 with both windows. **Lost delivery:** crash after durable append but before
@@ -1101,7 +1110,23 @@ before acknowledgement; redelivery repeats the attempt, and the receiver still
 holds one logical record with byte-identical content. Count attempts and
 distinct identities separately: two attempts for one identity pass, while two
 identities for one lifecycle transition, or unequal content under one
-identity, fail. Replay itself emits zero records. Also keep one
+identity, fail. Replay itself emits zero records. **Acknowledgement beyond a
+gap:** a later journal position's records are acknowledged before an earlier
+position's records are delivered, then the process crashes. The cursor stays
+below the earlier position, and after recovery the earlier records are
+delivered and the receiver holds each logical record once. **Partial
+acknowledgement within one position:** a position deriving several records has
+only some acknowledged before a crash. The cursor does not pass that position,
+and redelivery completes the rest without a second identity. A mutation that
+advances the cursor to the highest acknowledged position must fail both.
+**Redelivery after a changed emitter:** deliver part of a committed prefix,
+crash, and recover with a different active run/emitter and a different
+in-memory sequence state. Every complete redelivered envelope (trace, emitter,
+record id, `sequence`, `parent_id`, links, evidence and fields) is
+byte-identical to its original attempt captured before the crash; a record
+never attempted equals the envelope a crash-free run over the same committed
+journal produces. A mutation that re-derives envelopes with the active emitter
+must fail. Also keep one
 project-level Thread node alive across two goals/runs, changing the active run/emitter
 on recovery, with concurrent and out-of-order action arrivals from both runs.
 Assert exactly one Weft opened and one `closed` transition **across the
@@ -1141,7 +1166,9 @@ Documentation alone needs no speculative mapper.
 **Green:** mapping, derived-id budget/collision, emitter grammar/composition,
 `@2` action-edge link, historical/new distinguishability and single-node-lifecycle
 assertions pass under Q8 (a), Q9 (b) and PR 1's `@2` mapping. That covers
-crashes in both delivery windows, concurrent arrival and goals/runs.
+crashes in both delivery windows, acknowledgement beyond a gap, partial
+acknowledgement within one position, byte-identical redelivery after a changed
+emitter, concurrent arrival and goals/runs.
 Run-scoped SQLite assertions (Q11 b) still pass, and original historical golden
 records remain identical and valid. Historical `@1` join/handoff/supersession/
 repeated cancel/recovery links keep their recorded targets; `@2` edges target
@@ -1287,9 +1314,10 @@ goal and live process per Thread. PR 2a and PR 2b both preserve that one goal
 attaches once within a project, and a second attachment of G anywhere in the
 project refuses `goal_attached`. How several child Threads relate to goal G is
 Q14's open answer; until it is recorded, child Threads keep today's
-own-`goals[]` behavior and no shared-goal assertion is made. If Q14 derives
-association from ancestor history, section 3's association stability contract
-applies, and later parent history cannot change an existing child's goal.
+own-`goals[]` behavior and no shared-goal assertion is made. Under every Q14
+option, section 3's association reconstruction requirement applies; any rule on
+whether later ancestor history can change an existing child's goal comes from
+the chosen option's consequences.
 Independent action execution remains concurrent; serialization of the shared
 index commit boundary reserves no execution slots.
 
@@ -1326,9 +1354,11 @@ compatibility and the source export policy remain separate decisions.
 - **Delivery:** exercise crash/recovery before/after open and settle emissions
   in both delivery windows: lost delivery (append, no delivery) and repeated
   delivery (delivery, no acknowledgement). Count distinct logical records, not
-  delivery attempts. Replay emits zero records; redelivery is a separate
-  recovery step that invokes only the sink. Without the durable pending-delivery
-  prerequisite, no "no lost record" claim is made.
+  delivery attempts. The cursor covers only a contiguous fully acknowledged
+  prefix, and redelivered envelopes are byte-identical to the originals even
+  after the active emitter changes. Replay emits zero records; redelivery is a
+  separate recovery step that invokes only the sink. Without the durable
+  pending-delivery prerequisite, no "no lost record" claim is made.
 - **Lifecycle counts:** for one Thread node with zero/one/multiple actions
   spanning two goals/runs and concurrent/out-of-order arrivals, count exactly
   one node-lifecycle `thread.transition` with `transition=opened` and one with
@@ -1600,16 +1630,16 @@ requests to open descendants (#320 §6.3–§6.4) under every option.
 
 - **(a) Inherited, fixed at opening; ending is blocked by open children.** A
   child takes the nearest ancestor's active goal when it opens and keeps it for
-  life. The association is derived, never stored, under section 3's association
-  stability contract. A goal still attaches to one Thread. Attaching another
+  life. The association is derived, never stored (consequences below). A goal
+  still attaches to one Thread. Attaching another
   goal to a Thread whose inherited goal is active refuses `goal_active`.
   `goal.ended` refuses while an open descendant inheriting that goal has no
   settlement or cancel request. _For users:_ every child reports the goal it
   works for. A goal cannot be marked ended while its child work is still open:
   the user (or caller) settles or cancels that work first, and nothing is
   cancelled implicitly.
-- **(b) Inherited, fixed at opening; ending cascades.** Inheritance, the
-  stability contract and the attachment refusal are the same as (a). Instead of
+- **(b) Inherited, fixed at opening; ending cascades.** Inheritance, its
+  consequences and the attachment refusal are the same as (a). Instead of
   refusing, `goal.ended` succeeds and records a cancel request for every open
   inheriting descendant, with evidence retained, as a parent cancel does.
   _For users:_ ending a goal also stops its outstanding child work in one step,
@@ -1619,12 +1649,50 @@ requests to open descendants (#320 §6.3–§6.4) under every option.
   G attaches G itself through its own `goals[]`. The project-wide
   `goal_attached` refusal is relaxed to "once per Thread", which changes a
   behavior today's tests pin. Ending G on one Thread does not affect others; G
-  counts as ended only when every Thread carrying it has ended it. The stability
-  contract is not needed, because association is stored and immutable.
+  counts as ended only when every Thread carrying it has ended it. Association
+  is stored in each Thread's own `goals[]` (consequences below).
   _For users:_ each Thread's record shows its goal directly, with no lookup
   through ancestors. A child could carry a different goal from its parent, or
   none. Ending a goal becomes several separate actions, and "is G finished?" has
   to be answered across Threads.
+
+**Conditional consequences of each option.** These follow from Benjamin's
+answer and take effect only with it; D-ENG-021 locks none of them. Each is how
+its option meets section 3's association reconstruction requirement, which is
+the only locked part.
+
+- **If (a) or (b):**
+  1. _Selection at the committed opening prefix._ A child's goal is the active
+     goal of the nearest ancestor (parent, grandparent, …) with an own active
+     goal in the index committed immediately before its open transition. The
+     lookup does not stop at Thread depth 1.
+  2. _Lifetime immutability._ That association is fixed at opening; later
+     ancestor history never changes it.
+  3. _Evidence-order refusals._ PR 2b/2c adds two ancestry-scoped refusals
+     (`invalid_evidence`, no mutation). (i) A child open whose evidence is below
+     the highest `attached_at`/`ended_at` recorded on any ancestor refuses. (ii)
+     An ancestor `goal.attached`/`goal.ended` whose evidence is at or below any
+     existing descendant's `opened_at` refuses. With half-open goal intervals
+     `[attached_at, ended_at)`, interval containment over the final index then
+     equals the committed-prefix answer: an equal-seq attach-then-open
+     inherits, an equal-seq end-then-open does not, and the reverse orders
+     refuse. Backdated evidence is refused, never reinterpreted. Both refusals
+     need an ancestor or a descendant, so root-only indexes are unaffected.
+  4. _Red_ **Later parent history cannot change an existing child's goal
+     association**. Open a child at evidence 12 under a parent with G attached
+     at 10. Each of these then refuses `invalid_evidence` without mutation, with
+     the evidence check running before the option's goal-ending rule: ending G
+     at 11, attaching a goal on a grandparent at 5, and opening a second child
+     at 9, which is below G's `attached_at`. Reconstruction of the final index
+     and of every committed prefix gives the same association as the opening
+     prefix, including a grandchild resolving through two ancestors. The
+     equal-seq cases in item 3 behave as stated.
+- **If (c):** association is each Thread's own `goals[]`, changed only by that
+  Thread's own attach/end transitions, so reconstruction reads it directly as
+  for root Threads. No ancestor selection, ancestry-scoped evidence-order
+  refusal or "a stored association is immutable after open" rule is added.
+  Whether a Thread's own attachment may change after opening is part of (c)'s
+  answer, not of D-ENG-021.
 
 **Recommendation: (a).** It matches #320's "a thread never leaves its goal" and
 keeps today's one-attachment rule. It never cancels work implicitly, because
@@ -1635,9 +1703,9 @@ goal end should act as a stop signal for its child work.
 
 **What the answer changes in this plan.** PR 1b, or the nesting issue's contract
 PR, records the chosen option and its glossary term. PR 2b, or a PR 2c in the
-same issue, adds that option's shared-goal, attachment and goal-ending reds. For
-(a) or (b) it also adds **Later parent history cannot change an existing child's
-goal association** (section 5). Section 6's "Concurrent independent Threads"
+same issue, adds that option's shared-goal, attachment and goal-ending reds, its
+conditional consequences above and **Reconstruction reproduces the chosen goal
+association** (section 5). Section 6's "Concurrent independent Threads"
 case gains the option's shared-goal assertion. Nothing in PR 1, PR 2a or #329's
 closure waits for this answer.
 
