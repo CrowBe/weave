@@ -23,11 +23,30 @@ test('verify requires formatting before the remaining checks', () => {
   assert.equal(scripts.verify.split(' && ')[0], 'npm run fmt:check');
 });
 
-test('verify fails at the format step for malformed source or a missing formatter', () => {
+test('verify fails at the format step for malformed source or a missing formatter', (t) => {
+  if (process.platform === 'win32') {
+    t.skip('format-failure isolation requires POSIX symlinks and /bin/sh');
+    return;
+  }
+  if (!existsSync('/bin/sh')) {
+    t.skip('format-failure isolation requires /bin/sh');
+    return;
+  }
+
+  const npmCli = process.env.npm_execpath ?? join(dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js');
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (/^npm_config_(loglevel|silent)$/i.test(key)) delete env[key];
+  }
   const { scripts } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   for (const installed of [true, false]) {
     const dir = mkdtempSync(join(tmpdir(), 'weave-verify-format-'));
     try {
+      const bin = join(dir, 'bin');
+      mkdirSync(bin);
+      symlinkSync(process.execPath, join(bin, 'node'));
+      // verify invokes npm again, so expose only node and the selected npm CLI.
+      symlinkSync(npmCli, join(bin, 'npm'));
       writeFileSync(
         join(dir, 'package.json'),
         JSON.stringify({ private: true, type: 'module', scripts }, null, 2) + '\n',
@@ -41,15 +60,15 @@ test('verify fails at the format step for malformed source or a missing formatte
       const fd = openSync(log, 'w');
       let result;
       try {
-        result = spawnSync('npm', ['run', 'verify'], {
+        result = spawnSync(process.execPath, [npmCli, 'run', 'verify'], {
           cwd: dir,
           stdio: ['ignore', fd, fd],
           env: {
-            ...process.env,
+            ...env,
             // Keep node/npm available without inheriting local or global formatters.
-            PATH: dirname(process.execPath),
+            PATH: bin,
             // npm otherwise resolves its default POSIX shell by name on PATH.
-            npm_config_script_shell: process.platform === 'win32' ? process.env.ComSpec : '/bin/sh',
+            npm_config_script_shell: '/bin/sh',
             npm_config_loglevel: 'notice',
           },
         });
