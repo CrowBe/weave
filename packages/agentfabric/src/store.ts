@@ -993,20 +993,26 @@ function reapGeneration(
     const slots = claimSlots(reclaimPath);
     const highest = slots.at(-1) ?? 0;
     const claimPath = slotPath(reclaimPath, highest);
-    if (highest > 0) {
-      const state = claimState(claimPath, ownerless, wait);
-      if (state === undefined) continue;
-      if (state === 'unknown') throw blockedReclaim(path, claimPath, reclaimPath);
-      if (state === 'alive') {
-        if (wait.now() >= deadline || attempt === MAX_RECLAIM_WAITS - 1) {
-          throw new Error(
-            `host store is already open: ${path}; stale-lock reclaim is in progress by a live process (${claimPath}); retry later`,
-          );
-        }
-        wait.sleep(Math.min(backoff, Math.max(0, deadline - wait.now())));
-        backoff = Math.min(backoff * 2, 50);
-        continue;
+    // Observe every slot before linking, so earlier ownerless claims accrue
+    // grace even when a later reaper has already linked and then crashed.
+    const states = slots.map((slot) => {
+      const path = slotPath(reclaimPath, slot);
+      return { path, state: claimState(path, ownerless, wait) };
+    });
+    const unknown = states.find((claim) => claim.state === 'unknown');
+    if (unknown) throw blockedReclaim(path, unknown.path, reclaimPath);
+    if (states.some((claim) => claim.state === undefined)) continue;
+    const pending = states.find((claim) => claim.state === 'alive');
+    if (pending) {
+      if (wait.now() >= deadline || attempt === MAX_RECLAIM_WAITS - 1) {
+        if (pending.path !== claimPath) throw blockedReclaim(path, pending.path, reclaimPath);
+        throw new Error(
+          `host store is already open: ${path}; stale-lock reclaim is in progress by a live process (${claimPath}); retry later`,
+        );
       }
+      wait.sleep(Math.min(backoff, Math.max(0, deadline - wait.now())));
+      backoff = Math.min(backoff * 2, 50);
+      continue;
     }
     if (highest >= MAX_CLAIM_SLOTS) throw blockedReclaim(path, reclaimPath, reclaimPath);
     const next = highest + 1;
@@ -1030,11 +1036,19 @@ function reapGeneration(
     // Claim then revalidate: a delayed link can land in a successor generation.
     const current = readReclaimIdentity(reclaimPath);
     const claims = claimSlots(reclaimPath);
+    let unresolved: string | undefined;
     if (
       !sameReclaimOwner(owner, current) ||
       ownerState(current.token) !== 'dead' ||
       readLockContent(ours) !== token ||
-      claims.some((n) => n > next || (n < next && claimState(slotPath(reclaimPath, n), ownerless, wait) !== 'dead'))
+      claims.some((n) => {
+        if (n > next) return true;
+        if (n === next) return false;
+        const earlier = slotPath(reclaimPath, n);
+        const state = claimState(earlier, ownerless, wait);
+        if (state === 'alive' || state === 'unknown') unresolved = earlier;
+        return state !== 'dead';
+      })
     ) {
       // Accepted residual race: generation replacement between this
       // token check and unlink can redirect the path to a successor's slot.
@@ -1049,6 +1063,7 @@ function reapGeneration(
           if (!isErrno(error, 'ENOENT')) throw error;
         }
       }
+      if (unresolved) throw blockedReclaim(path, unresolved, reclaimPath);
       return false;
     }
     const quarantine = `${reclaimPath}.stale.${nonce}.${(lockSequence += 1)}`;
