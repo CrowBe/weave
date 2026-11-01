@@ -1,24 +1,34 @@
-# WV-329: project-level workstream becomes Thread
+# WV-329: workstream → one nestable Thread kind (D-ENG-017)
 
-Planning only. The owner decided on 26 October that the project-level concept
-shipped in #314 is **Thread**. This plan prepares that rename; it changes no
-source, glossary, tests, schemas, or recorded data. Recommendations below are
-proposals awaiting the owner decisions in section 7, not permission to change
-record meanings.
+Planning only. D-ENG-017 (Benjamin, 1 November 2026) locks one nestable
+**Thread** kind at every depth, retaining `thread@1`, `thread_id` and `thread.*`.
+This plan prepares the atomic workstream → Thread rename into that family;
+it changes no source, glossary, tests, schemas or recorded data. Owner questions
+1–4 are answered; only Q5–Q7 remain open in section 7.
 
 ## 1. Evidence, scope, and data shape inventory
 
-Baseline: `85b311e7173bd5938507f671e387a16714a7ad54`, inspected on
-1 November 2026. Read `VISION.md`, `GLOSSARY.md`, `AGENTS.md`, current contracts,
-transition implementations, their tests, Weft emission/recovery tests, and the
-import-direction checks before choosing the sequence below.
+Actual checkout HEAD: `02543c2d5a6f11d496e41af3b795ca8be0629eee`, branch
+`wv-329-thread-rename-plan`, inspected on 1 November 2026. Read `VISION.md`,
+`GLOSSARY.md`, `AGENTS.md`, current contracts, transition implementations and
+their tests, Weft emission/recovery tests and import-direction checks before
+revising the sequence below. PLAN.md already contained the uncommitted plan3;
+this revision preserves its relevant evidence and acceptance constraints.
 
-`gh issue view 329 -R CrowBe/weave` failed to connect to `api.github.com`.
-The supplied issue summary is the issue evidence available here. References to
-#26, #28, #314, #320, #330 and PR #362 use that summary and checked-in references;
-their latest remote status is unverified. No files in the WV-320 worktree were
-read or edited. Its design remains in flight; section 5 defers its update until
-after merge.
+Baseline discrepancy: the supplied main history includes #320 as `8ce60c5`
+(PR #362) and later merges, but this worktree's actual HEAD is still the
+original plan commit `02543c2`. `docs/durable-recursive-threads.md` and #320's
+glossary additions are absent from this checkout. The design note and glossary
+at `8ce60c5` were inspected with `git show`; they are locally available merged
+design evidence, not implemented runtime behavior. No rebase or branch change
+is part of this PLAN.md-only task. The earlier plan's `0efd2bc` rebase claim
+is not this checkout's observed commit state. Recount below uses actual HEAD;
+recount again when the implementation worktree adopts current main.
+
+No network or push is permitted for this revision. References to #26, #28,
+#314 and #330 use supplied issue summaries and checked-in references; their
+latest remote text/status is unverified. #330's exact document/scope remains
+unknown. No files in the WV-320 worktree need to be read or edited.
 
 Reproduce the required inventory, including plurals and identifier substrings:
 
@@ -30,9 +40,10 @@ rg -n -i 'thread' packages/ docs/ checks/ GLOSSARY.md AGENTS.md
 
 Counts below are regex **occurrences**, not just matching lines; the JSON
 `submatches` arrays provide occurrence counts. These are tracked/source inputs
-visible to normal `rg`, excluding ignored build/dependency output. Recount on the
-implementation baseline after #320 merges. The groups in this table partition
-all **480 occurrences on 383 lines in 12 files**: lowercase `workstream` 286,
+visible to normal `rg`, excluding ignored build/dependency output. The scanned
+inputs match actual HEAD `02543c2` exactly; `PLAN.md` is outside these roots.
+Recount if the implementation baseline changes. The groups in this table partition all
+**480 occurrences on 383 lines in 12 files**: lowercase `workstream` 286,
 `Workstream` 181, uppercase `WORKSTREAM` 13.
 
 | Group | File | Occurrences | Matching lines |
@@ -108,8 +119,9 @@ Proposed new names are `Thread*`, `THREAD_SCHEMA`, `emptyThreadIndex`,
 `threads`, result/request property `thread`, and refusals
 `duplicate_thread`/`unknown_thread`. Keep `boundedId`, `validSeq` and
 `activeGoal` unless a separately demonstrated conflict requires a change.
-The serialized-key/version decision in section 4 precedes renaming stored
-fields. No arbitrary identifier value such as fixture id `ws-a` needs rewriting.
+Section 4 locks the in-place serialized-key/schema rename before first
+persistence; PR 1 establishes its single-kind contract before implementation.
+No arbitrary identifier value such as fixture id `ws-a` needs rewriting.
 
 ### Input routing and operating-process dependencies
 
@@ -133,7 +145,7 @@ sent to the judgment site. Its two old-term occurrences are comments.
 serialized `workstream_id` under `operating.process@1`. `openProcess` accepts
 that id; `move` preserves it and the `Change` type excludes it from edits.
 Keep process names and states; rename its ownership reference only under the
-chosen wire-version policy. Preserve pause/stop evidence, resume-point digest,
+locked in-place rename policy. Preserve pause/stop evidence, resume-point digest,
 revision and terminal-state rules.
 
 ### Documentation and test coverage
@@ -141,10 +153,11 @@ revision and terminal-state rules.
 Rename `packages/weave/src/WORKSTREAM-CONTRACT.md` to `THREAD-CONTRACT.md` in
 the implementation slice, replacing its overridden naming assumption and
 updating links from source comments and `packages/weave/src/sites/CONTRACT.md`.
-Update glossary Workstream, old Thread, Operating process, Input routing,
-Project, and both affected language constraints in the glossary-first slice.
-`docs/execution-provider-contract.md` contains both senses of Thread and
-references #320's workstream follow-ups; classify them before editing.
+Fold glossary Workstream and Thread into one Thread entry in PR 1; align
+Operating process, Input routing, Project and the affected language constraints,
+together with #320's additions and design terminology listed in section 3.
+`docs/execution-provider-contract.md` currently lists Threads and workstreams
+separately; align it with the same kind at different depths.
 
 The three tests contain **33 top-level behavioral tests**: workstream 8,
 operating process 10, input route 15. They pin ordered serialized keys,
@@ -152,8 +165,8 @@ schemas, refusal values, opening without authority, one active goal,
 independent records, input ordering, artifact revisions, byte-identical
 transition replay, process lifecycle, routing atomicity/correction, cancellation,
 and provider-free reconstruction. Their existing assertions are acceptance
-constraints, not snapshots to regenerate wholesale. Preserve old-format fixtures
-when adding new-format coverage.
+constraints, not snapshots to regenerate wholesale. Preserve any actual
+transitional bytes if discovered; none are expected for workstream records under D-ENG-017. Do not invent a legacy reader for fixtures.
 
 A repository-wide cross-check found another **4 occurrences on 2 lines** in
 root `CONTRACT.md`, outside the requested roots: contract title/link, schema and
@@ -161,28 +174,32 @@ execution description. Include its link/terminology update in implementation.
 There are no other workstream matches outside the required scan roots at this
 baseline (excluding this new plan).
 
-## 2. Old-sense Thread inventory
+## 2. Existing Thread terminology and correlation inventory
 
-The broad case-insensitive `thread` scan above finds **351 occurrences on 299
-lines in 47 files**. It includes plurals, `running_threads`, `new_thread`,
+The broad case-insensitive `thread` scan above finds
+**351 occurrences on 299 lines in 47 files**. It includes plurals,
+`running_threads`, `new_thread`,
 `thread_identifier`, component names and OS threading; those are classified
 below rather than globally substituted. Counts in each row are occurrences.
 
-### Causal-chain definitions, emission, storage and tests
+### Existing causal projection, emission, storage and tests
 
-Every entry in this table uses the causal-chain sense, including null envelope
-fields that support that sense; none already identifies the project-level
-record. Weft's current reference mapping is `thread_id = action_id`.
+This table describes current implementation evidence, not a second product
+identity to retain. The reference emitter currently maps `thread_id = action_id`
+and has no durable Thread binding. D-ENG-017 requires the target mapping to the
+Thread tree node owning the span. PR 1 records that crosswalk; PR 3 supplies
+behavioral evidence for the emission mapping once durable node binding exists.
+Null envelope fields remain permitted for records without a Thread.
 
 | File | Count | Use and treatment |
 | --- | ---: | --- |
-| `packages/weave/src/weft.ts` | 21 | Port envelope, action causal lifecycle, deterministic record ids and join/supersession/cancel links; retain v1 wire meaning. |
+| `packages/weave/src/weft.ts` | 21 | Port envelope, action causal lifecycle, deterministic record ids and join/supersession/cancel links; preserve historical evidence; align new emission with the owning Thread node in PR 3. |
 | `packages/gateway/src/weft.ts` | 2 | Envelope field and null emission; no project identity. |
 | `packages/agentfabric/src/weft.ts` | 2 | Envelope field and null emission; no project identity. |
 | `packages/weft/src/types.ts` | 3 | `thread.transition`, outcome subject `thread`, envelope `thread_id`. |
 | `packages/weft/src/validate.ts` | 12 | Closed keys/kinds/subject, id rules and cross-record link requirements. |
 | `packages/weft/src/WEFT-CONTRACT.md` | 35 | Definition, transitions, cross-chain links, crash/recovery identities, action mapping, SQLite scopes. |
-| `packages/weft/src/otel.ts` | 2 | Exports envelope as `weft.thread_id`; keep causal meaning. |
+| `packages/weft/src/otel.ts` | 2 | Exports envelope as `weft.thread_id`; keep attribute name; align its node mapping in PR 3. |
 | `packages/weft/src/sqlite-intake.ts` | 3 | Imports that OTel attribute; null for generic spans. |
 | `packages/weft/src/sqlite.ts` | 18 | `threads` table, `thread_id` foreign keys/columns and insertion; legacy rows null. |
 | `packages/weft/fixtures/records.json` | 66 | Valid/invalid v1 records, transitions and causal links. |
@@ -205,39 +222,47 @@ record. Weft's current reference mapping is `thread_id = action_id`.
 | `docs/research/typesafe-harness-lessons.md` | 3 | Explicitly defines a thread as the causal sequence; work dependencies and effect locks are separate. |
 
 #181's tracing scope is represented locally by the Weft contract and W5 #187
-acceptance files; its remote issue text was not retrieved. Cross-chain links
+acceptance files; its remote issue text was not retrieved. Existing causal links
 are `joins`, `supersedes`, `cancels`, `handoff` (plus general `caused_by` and
-`retry_of`), all targeting records within one trace. They are not project
-Thread links. Dependencies join dependency chains' `closed` records;
+`retry_of`), all targeting records within one trace. Their record targets are
+not parent links in the Thread tree. Dependencies join dependency chains'
+`closed` records;
 supersession belongs to the earlier chain and names the replacement's `opened`
 record; cancellation names the affected chain's `opened` record. A repeated
 cancel has a distinct sequence-derived record id. Forward link targets can
 arrive later. Preserve all those meanings, even when prose uses the new term.
 
-### Mixed senses and other uses
+### Terminology to fold into one kind, and unrelated uses
 
 | File | Count | Classification |
 | --- | ---: | --- |
-| `GLOSSARY.md` | 12 | Thread heading/definition, Workstream comparisons and language constraint: causal-chain. Intake classification uses task-oriented summaries, not the project record; retain its existing contract pending an explicit mapping. |
-| `packages/weave/src/WORKSTREAM-CONTRACT.md` | 8 | #26's quoted thread is already project-level; remaining comparisons explicitly distinguish the causal-chain Thread and Weft id from the workstream. Rewrite the distinction after the owner names it. |
-| `packages/weave/src/sites/index.ts` | 6 | `IntakeState.running_threads[].thread_id`, fixed intake question and `new_thread`/`continue_thread`: legacy task/causal-work vocabulary; no project index integration, so not already project-level. |
+| `GLOSSARY.md` | 12 | Current Thread/Workstream distinction is superseded by D-ENG-017; fold into one nestable Thread entry in PR 1. #320 additions are absent at HEAD and must join that same entry when main is adopted. Intake classification retains its existing contract pending Q6. |
+| `packages/weave/src/WORKSTREAM-CONTRACT.md` | 8 | #26's quoted thread is already project-level; remaining comparisons explicitly distinguish the causal-chain Thread and Weft id from the workstream. Replace the distinction with D-ENG-017's single nestable kind. |
+| `packages/weave/src/sites/index.ts` | 6 | `IntakeState.running_threads[].thread_id`, fixed intake question and `new_thread`/`continue_thread`: legacy task/causal-work vocabulary; no project index integration, so no durable Thread-tree integration yet. |
 | `packages/weave/src/sites/CONTRACT.md` | 1 | Same intake summaries. |
 | `packages/weave/test/p5.test.ts` | 5 | Intake summary shape and frozen choice vocabulary; no project Thread behavior. |
 | `packages/weave/test/p6.test.ts` | 1 | Empty intake `running_threads` fixture. |
 | `packages/gateway/test/amos.test.ts` | 8 | Intake choices, prompt and generic choice fixtures; no project Thread behavior. |
 | `docs/m7-decision-loop.md` | 5 | Intake question/options/summaries: legacy task vocabulary; storage `run/thread/...` description: causal Weft storage. |
-| `docs/execution-provider-contract.md` | 3 | Boundary table lists Threads and workstreams separately: old Thread is causal. Independent Threads and X-T10 programs are execution-work units, not a wired project record; clarify against #28/#320 rather than infer a wire mapping. |
+| `docs/execution-provider-contract.md` | 3 | Boundary table lists Threads and workstreams separately: old Thread is causal. Independent Threads and X-T10 programs are execution-work units, not a wired project record; fold their descriptions into one Thread kind while preserving the action/process distinction. |
 | `checks/fixtures/execution-provider/contract.mjs` | 7 | `thread:a/b/c` labels for separate offered sets/worker progress; execution correlation ids, no `Thread` type or `workstream@1` shape. Keep values unless the fixture contract changes. |
 | `docs/research/monty-sandbox.md` | 18 | Explicit vocabulary note binds Thread work to #28's operating process: already the planned project-level sense. Two matches concern OS `threading`/threads and remain OS terms. Preserve historical evidence and qualify lifecycle statements when updating the note. |
-| `docs/design-system.md` | 6 | Initial Threads/input-routing/pause scope exclusion: planned project-level work. Five other uses name the conversational component, not a causal-chain or project record. |
-| `packages/tapestry/src/vocabulary.ts` | 2 | `conversation.thread@1`: conversational presentation component, neither domain identity. |
+| `docs/design-system.md` | 6 | Initial Threads/input-routing/pause scope exclusion: planned project-level work. Five other uses name the conversational component, not a durable Thread record. |
+| `packages/tapestry/src/vocabulary.ts` | 2 | `conversation.thread@1`: conversational presentation component, not the domain identity. |
 | `packages/tapestry/src/session.ts` | 1 | Same versioned component node. |
 | `packages/tapestry/src/tree.ts` | 2 | Same component placement/reading. |
 | `packages/tapestry/test/tree.test.ts` | 10 | Same component identity/placement; no project Thread model. |
 | `packages/tapestry-web/src/host.tsx` | 3 | Component renderer dispatch and `ConversationThread`; presentation only. |
 | `packages/tapestry-web/src/paint/conversation.tsx` | 2 | Renderer name/test id; presentation only. |
-| `docs/respan-routing-learnings.md` | 6 | External Respan conversation/cache affinity and a proposed thread+digest cache key; neither implemented project identity nor Loom's defined causal-chain id. Do not rewrite external `thread_identifier`. |
+| `docs/respan-routing-learnings.md` | 6 | External Respan conversation/cache affinity and a proposed thread+digest cache key; external correlation, not a durable Loom Thread id. Do not rewrite external `thread_identifier`. |
 | `packages/agentfabric/test/shell-run.test.ts` | 1 | OS/main JS thread blocking comment. |
+
+#320 at `8ce60c5` separately adds 9 workstream occurrences on 7 lines in its
+design note, and 184 thread occurrences on 132 lines across that note (160/128)
+and glossary additions (24/4). These are excluded from the HEAD inventory.
+That explains plan3's 489/390/13 and 535/431/48 totals. Align its §3, dependent
+normative names and glossary additions in PR 1 when working from main; retain
+its proposed/unimplemented status. Remaining explanatory prose goes in PR 4.
 
 No `thread` matches occur in `AGENTS.md`. Beyond the required roots, inspect
 these semantic references in the implementation slices:
@@ -265,80 +290,133 @@ these semantic references in the implementation slices:
   CPU/server threads, external conversations, and historical results are not
   domain rename targets. No benchmark run or hosted inference is required here.
 
-## 3. Owner decision: replacement for the old glossary Thread
+## 3. Locked contract: one nestable Thread kind (D-ENG-017)
 
-| Candidate | Benefit | Limitation |
-| --- | --- | --- |
-| **Causal chain** (recommended) | Names the existing goal-local actions/observations relation, independent of provider, runtime implementation and tracing format; clearly distinct from project Thread. | Several chains can join into a graph, so define a chain as a causal line of work with explicit links to other chains, not as the whole graph or a strictly linear execution schedule. |
-| **Trace thread** | Makes legacy `thread_id` easy to explain in Weft documentation. | Conflates runtime work with its non-authoritative Weft projection and keeps the overloaded word. |
-| **Action lineage** | Fits today's Weft `thread_id = action_id` reference mapping. | Too narrow for the broader current glossary definition spanning actions and observations; may imply ancestry rather than joins/cancellation. |
+Captain lock, Benjamin, 1 November 2026: “everything is Threads. Threads are a
+nested resource that may or may not have a parent, and may or may not have
+children.” Owner Q1 and Q2 are answered; do not reopen the identity allocation
+or select a replacement name for goal-local work.
 
-Recommend **Causal chain**, subject to owner approval. Define it in the glossary
-before introducing code/prose terminology. Preserve the old within-goal scope,
-concurrency, join, supersession and cancellation semantics. The relationship is
-Project → Thread → goals over time → causal chains within a goal. A Thread
-still has at most one active goal and at most one live operating process; it
-outlives both. This renaming creates no new runtime primitive.
+Locked answers, verbatim:
 
-## 4. Owner decision: recorded-record compatibility
+1. **One Thread kind** keeps `thread@1`, `thread_id`, and `thread.*`. There is no second product identity.
+2. **Nestable**: optional parent, optional children. Project-level and goal-local are the same kind at different depths in one tree — not two concepts needing two schema families.
+3. **Drop** the separate `workstream@1` schema / workstream vocabulary; do not invent `project.thread@1` or a "Causal chain" / "Work unit" twin.
+4. **Weft `thread_id`** points at the node in that Thread tree the span belongs to (the durable record), not a parallel workstream id.
+5. **Compatibility**: rename in place now (private 0.0.0, no external recorder, no recorded workstream records). No @2 dual-read path unless evidence of an external recorder appears.
 
-Current evidence matters: `WORKSTREAM-CONTRACT.md` explicitly says this slice
-is not persisted or wired into the runtime observation log/replay. The repository
-therefore cannot prove that external consumers have recorded none of its JSON
-results. Existing pure transition tests and `transitionRoute` are replay-like
-checks, not a durable workstream journal implementation. Do not invent a new
-journal or on-disk migrator just to rename this concept.
+PR 1 must establish one coherent `thread@1` contract before implementation:
+optional parent, optional children, one identity at any depth. Project-level
+conversation and goals over time, and #320's goal-local purpose, completion,
+results and dependencies, describe nodes in that same tree. Reconcile the
+current flat project index and #320's fixed goal-local scope/uniqueness rules
+with that contract; do not encode them as two decoders selected by depth.
+Record exact field presence, id scope, parent validation and child references
+in the contract using existing capabilities, without inventing a second schema
+or an automatic worker/process per child. Distinguish structural parentage from
+result dependencies and Weft links. Validate missing parents, cycles and
+cross-project references deterministically; a leaf needs no children and a root
+needs no parent. Nesting itself grants no authority, budget, context or access.
 
-| Option | Contract and replay consequences |
+Fold Workstream and Thread into **one Thread glossary entry**, including #320's
+expanded durable proposal. Align **Execution slot**, **Execution claim**
+(including **producing claim**), **Result reference** (including **current**
+references), and **Unmet dependency** (including the **failure-handling attempt**)
+with that same Thread identity. Keep those independent entry names and their
+fences. Align Operating process, Input routing, Project and language constraints
+in the same PR. Do not leave a goal-local twin behind under another name.
+
+Align #320's §3 and §16 summary, plus normative names in §5/§7/§15/§17:
+`thread@1`, `thread_id`, `thread_revision`, `threads[]`, parent/child/root
+references, `depends_on` producer ids, result-reference and execution-claim
+fields, and `thread.opened`, `thread.revised`, `thread.result_accepted`,
+`thread.cancel_requested`, `thread.settled`. These remain one family. Resolve
+its proposed `THREAD-CONTRACT.md` reference to the same contract PR 2 renames;
+there are no competing contract owners. Keep the distinction between durable
+lifecycle, derived eligibility and action execution ownership. Preserve existing
+process pause/stop, resume digest, one-active-goal and one-live-process rules
+where implemented; opening or nesting a Thread never allocates execution.
+Full durable lifecycle/execution-claim integration remains #320 follow-up work
+with its own behavioral red; this rename does not claim it exists.
+
+## 4. Locked in-place compatibility and Weft crosswalk (D-ENG-017)
+
+Owner Q3 is answered: rename in place now. The workspace is private `0.0.0`;
+the captain records **no external recorder and no recorded workstream records**.
+The current contract also says its transitions are not persisted or wired into
+the runtime loop. This decision replaces plan3's unconfirmed assumption; do
+not ask the owner to confirm it again. Repository inspection cannot independently
+prove external absence, so new recorder evidence is the only reason to revisit
+that compatibility premise.
+
+| Existing unpersisted surface | Locked target |
 | --- | --- |
-| (a) New `thread@1`, read-side alias for `workstream@1` | New writers use `thread@1` and `thread_id`. A bounded, version-dispatched reader recognizes the complete old shape and maps it to the new semantic view, retaining its original bytes/version for historical replay. Dependent record keys require versions too: if `workstream_id` becomes `thread_id`, use `operating.process@2`, `input.route@2`, `input.route.correction@2`, with explicit old-version mappings. `thread@1` starts a new schema identity; it is a documented successor, not an in-place edit of v1. |
-| (b) Keep `workstream@1` readable forever with a documented mapping | Rename the public/prose concept to Thread while retaining the old wire schema and `workstream_id` in all v1 records. No new wire version or historical byte change. Lowest migration risk, but the old vocabulary stays in serialization and needs a permanent glossary/contract crosswalk. Readability also remains an obligation if future formats are added. |
-| (c) Explicit offline conversion to only the new format | Copy into a new store with source digests, versioned conversion evidence, atomic publication and rollback; never rewrite the only journal in place. Costs a real migration/recovery contract, risks changing hashes/identities and requires a justified support cutoff. No checked-in persistence need currently justifies it. |
+| `workstream@1`, `workstream_id` | `thread@1`, `thread_id`, the one nestable Thread kind |
+| `workstreams` index, `workstream` result/request, `new_workstream_id` | `threads`, `thread`, `new_thread_id`, referring to nodes in that same tree |
+| `operating.process@1` ownership | Keep the schema version; rename its ownership key to `thread_id` |
+| `input.route@1`, `input.route.correction@1` ownership | Keep both schema versions; rename their ownership keys to `thread_id` |
+| Proposed #320 `thread.*` observations and durable fields | Retain the existing Thread family; reconcile the common contract before implementation |
 
-Recommend **(a)**, pending owner approval of the complete version matrix and
-actual downstream persistence inventory. Retain old-format readability without a
-sunset; the read-side alias is a documented semantic mapping, not permission to
-accept either set of keys under the same schema. If there is no reader boundary
-yet, specify the mapping now and implement only the minimal pure adapter needed
-by an identified consumer, not speculative storage infrastructure. Option (b)
-is the fallback if the owner prefers zero wire-format churn now.
+This is an atomic pre-persistence contract replacement, including nested process
+records, routes, corrections, callers and fixtures. Remove active workstream
+schema/vocabulary, not arbitrary opaque identifier values such as `ws-a`.
+Never decode `thread@1` as two concepts. Add no speculative @2 versions,
+dual-read path, alias state model, journal or migrator. The TypeScript export
+break policy remains Q5, separate from this settled wire decision.
 
-For (a), the compatibility contract must say:
+**Transitional bytes: none expected** for the renamed records. If any exist,
+preserve their original bytes and evidence and exercise mixed-version replay
+before accepting a cutover. Evidence of an external recorder must identify the
+actual storage/reader/writer boundary, consumers and cutover owner before
+reconsidering versioned compatibility. Do not silently reinterpret historical
+schemas, drop evidence or rewrite the only journal. Any required read mapping
+must dispatch exact recorded versions/shapes, fail closed on conflicting keys,
+duplicate logical ids or wrong nested versions, and preserve ids, ordering,
+revisions, artifact references, held inputs, process state, request evidence,
+resume digests and historical replay outputs. Readers precede changed writers
+at that boundary. Replay invokes nothing, emits nothing and issues no grants;
+queued/held reads carry or mint no grant. RT-00 remains a separate prerequisite
+for authorized recovery at actual start (section 6).
 
-- Dispatch by exact schema/version and enforce each version's shape, bounded
-  ids and closed vocabularies. Reject conflicting dual ids, mixed-version nested
-  records, malformed versions, duplicate logical ids and cross-project aliases;
-  never let an alias bypass validation.
-- Preserve all ids, order, evidence sequence references, revisions, artifact
-  revisions, held inputs, operating state, pending requests and resume digests.
-  Resolve old index/result `workstreams`/`workstream` and new `threads`/`thread`
-  deliberately; indexes/results are API shapes, not currently versioned journal
-  envelopes. Preserve historical refusal strings in historical transitions.
-- Historical reconstruction uses historical versions and yields unchanged
-  historical bytes/results. A new normalized read view is a separate projection;
-  never run an old record through the new writer and call that unchanged replay.
-  Document the new-write cutover and dependent versions in the renamed contract.
-- Existing Loom journal replay remains unchanged and non-executing. It invokes
-  no capability/provider, reconciles no effect, renews no grant and emits no
-  Weft record. Recovery remains a separate authority-checked operation. Do not
-  use Weft records as the source for rebuilding project state.
+Owner Q4 is answered: Weft `thread_id` identifies the durable Thread node owning
+the span, at whichever depth it belongs. A parallel workstream id or a second
+product identity is forbidden. `WEFT-CONTRACT.md:33` currently defines a causal
+sequence, and the reference emitter currently uses `thread_id = action_id`.
+Those are implementation evidence to crosswalk, not the target contract.
 
-Weft compatibility is a separate decision: recommend retaining
-`weft.record@1.thread_id`, `thread.transition`, outcome subject `thread`,
-`weft.thread_id`, `threads` SQLite storage and `:thread:` record-id segments as
-legacy **causal-chain** wire names. Map those to Causal chain in documentation
-and future views. Never put the project Thread id in these fields. A future
-project correlation field or causal wire rename needs a separately versioned
-Weft contract, disclosed bounded identifiers, schema/OTel/SQLite support and
-its own replay/recovery evidence; it is not necessary for this rename.
+PR 1's normative crosswalk must state: “`thread_id` identifies the node in the
+Thread tree that the span belongs to (the durable record). The current reference
+emitter uses action-id correlation until durable node binding is implemented.”
+It must mark that binding as pending implementation, not as another owner choice.
+Actions are attempts associated with a node; `action_id` does not become a second
+Thread identity. PR 3 must prove that new emission uses the owning node when
+that binding exists, including multiple actions on one node and a child node
+whose id differs from both its parent's and its actions'. If runtime binding
+requires #320 follow-up integration, state that dependency and retain pending
+status rather than assert the old mapping satisfies D-ENG-017.
+
+Preserve historical Weft records, `weft.record@1`, `thread.transition`, subject
+`thread`, `weft.thread_id`, SQLite `threads`, `:thread:` record ids and link
+targets as historical evidence. Existing action-correlated bytes are not
+`workstream@1` records and do not establish a second Thread kind. Do not rewrite
+historical correlation or invent versioned readers merely for golden fixtures;
+actual recorder evidence must establish any compatibility boundary. Gateway and
+Fabric retain locally declared ports and null ids when no node binding exists.
+Weft remains a projection: no trace reader feeds Loom, no imports reverse, and
+nothing emitted grants authority or changes scheduling.
 
 ## 5. Smallest ordered PR slices and red-before-green evidence
 
-Dependencies are **1 → 2 → 3 → 4**. Read-only inventory review and independent
-test-case design can proceed concurrently; each implementing PR waits for its
-contract decisions. Each slice must finish green before merge. Do not merge a
-partially renamed producer/consumer pair. This planning commit implements none
-of these slices.
+Keep slice order **PR 1 → PR 2 → PR 3 → PR 4** for review. Contract dependencies
+are **1 → 2**, **1 → 3**, **1 → 4**, plus **2 → 3** for emission that needs the
+renamed node binding and **2/3 → 4** where prose cites final exports/mapping.
+Independent inventory review, test-case design and documentation work can
+proceed concurrently after PR 1. PR 3's actual durable binding may also depend
+on explicitly identified #320 integration; record that dependency rather than
+add a parallel id. Q1–Q4 are settled by D-ENG-017. Only work depending on Q5–Q7
+waits for those answers. Each implementing slice must finish green before merge;
+never merge a partially renamed producer/consumer pair. This planning revision
+implements none of these slices.
 
 Shared gate **G**, required unchanged for every slice:
 
@@ -367,119 +445,145 @@ Consumers use public package entry points and packages never import consumers.
 Compose existing transition functions and injected ports; do not create another
 runtime or universal protocol for the rename.
 
-### PR 1 — Glossary and naming/compatibility contract first
+### PR 1 — One Thread glossary and nestable naming/compatibility contract
 
-After owner choices, rename the old glossary Thread entry to the selected term,
-replace Workstream with project-level Thread, update related definitions and
-language constraints, and record the old wire-name crosswalk. Amend the naming
-assumption in the existing contract to point to the approved decisions; leave
-its current implementation/wire names explicitly identified until PR 2.
-This is the glossary update deferred from this planning-only run.
+Apply D-ENG-017 in one Thread glossary entry and the existing contract, updating
+all related definitions and #320 additions/language constraints in section 3
+together. Align #320 §3, its glossary summary, normative identifiers and common
+contract path while retaining its proposed/unimplemented status. Specify one
+`thread@1` shape and its nesting rules, not competing project/goal decoders.
+Record section 4's in-place ownership/schema mapping, leaving current source
+names explicit until PR 2. Include Weft's normative node crosswalk immediately;
+remaining emission/link alignment belongs to PR 3 and prose to PR 4.
 
-**Red before edits:** run a narrow terminology contract check asserting that
-the glossary's Thread is project-level, the chosen causal term has the old
-within-goal semantics, and legacy Weft `thread_id` is explicitly causal. It must
-fail against today's glossary. Include a check that opening a Thread confers
-no authority. This is a documentation/contract check, not permission to generate
-implementation code before a behavioral red in PR 2.
+**Red before edits:** a narrow terminology/contract check must fail against the
+current Workstream/Thread split, #320's fixed goal-local wording and Weft's
+unqualified causal-sequence definition. Assert one Thread kind with optional
+parent and children at different depths, one schema/key/transition family,
+aligned #320 dependent entries and honest current-versus-target Weft mapping.
+Check that opening/nesting confers no authority or execution. This documentation
+red grants no permission to generate implementation code before behavioral red.
 
-**Green:** those assertions and link checks pass, and current record/behavior
-tests still pass unchanged. Run G and full verification. No `VISION.md` edit:
-the acceptance boundary stays the same.
+**Green:** the single-kind terminology, shape and link checks pass together;
+current behavior tests still pass unchanged. Run G and full verification. No
+`VISION.md` edit: its acceptance boundary stays the same.
 
-### PR 2 — Atomic Loom API/module rename and versioned record mapping
+### PR 2 — Atomic Loom rename into the existing Thread family
 
-Rename the module/test/contract to `thread.ts`, `thread.test.ts`,
-`THREAD-CONTRACT.md`; change public exports, internal imports, index/result
-properties and callers together. Update operating-process ownership, routing
-request/context, refusal names and new serialization only under section 4's
-approved version matrix. Update the root `CONTRACT.md` link and site contract
-links in the same PR. Preserve legacy record fixtures and replay functions.
-Do not change intake labels, inference routing, capability admission, authority
-or Tapestry component ids.
+Under PR 1's common contract, rename module/test/contract to `thread.ts`,
+`thread.test.ts`, `THREAD-CONTRACT.md`; change public exports (subject to Q5),
+internal imports, index/result/request properties, refusal names and callers
+together. Replace `workstream@1` with `thread@1` and all affected ownership keys
+with `thread_id`, keeping process/route/correction @1 under the locked
+pre-persistence policy. Implement the bounded parent/child representation
+specified by PR 1 as part of the same kind; do not add a second record family
+or pretend full #320 journal integration is already shipped. Update the root
+`CONTRACT.md` and site contract links in the same PR. Preserve replay functions
+and evidence; replace unpersisted fixture expectations without invented readers.
+Keep intake labels/sets under Q6's recommended preservation policy, inference
+routing, capability admission, authority and Tapestry component ids intact.
 
 **Red before implementation:** add a public-entry-point consumer check using
-`Thread`/`openThread` and the approved emitted shape; it fails to compile or
-fails its shape assertion on the old API. Separately demonstrate behavioral red
-for reading an old record and a new record into the same semantic state while
-preserving original historical output; reject contradictory ids and schema/key
-mismatches. Exercise all four affected schema families, not only `thread@1`.
-Use a known-invalid mapping (drops evidence or changes a resume digest) to
-confirm the compatibility tests detect semantic damage.
+`Thread`/`openThread` and the common emitted shape; it must fail to compile or
+fail its shape assertion against the old API. Demonstrate red for the four
+affected schema surfaces, renamed ownership keys, a root without a parent,
+a leaf without children and nested nodes of the same `thread@1` kind. Reject
+missing parents, cycles, conflicting ids and cross-project references atomically.
+Validate tests with a known-invalid mapping that drops evidence or changes a
+resume digest. Any actual transitional bytes trigger section 6's mixed-version
+checks at their real boundary; no speculative @2 path is part of this PR.
 
 **Green:** port all 33 existing workstream/process/route behaviors without
-weakening their assertions; add mixed-version/historical checks described in
-section 6. Run `npm run build`, then
+weakening constraints; apply section 6 under the in-place policy. Run
+`npm run build`, then
 `node --test packages/weave/dist/test/thread.test.js packages/weave/dist/test/operating-process.test.js packages/weave/dist/test/input-route.test.js`,
-the public consumer compile check, G and full verification. Test `p5.test.ts`
-and `p6.test.ts` remain green with their existing intake shapes and options.
-Use a narrowly allowlisted legacy-name scan, with a failing fixture containing
-a stale active API import, so recurring partial-rename findings become a
-deterministic lint/check rather than another review reminder.
+the public consumer compile check, G and full verification. `p5.test.ts` and
+`p6.test.ts` retain existing intake shapes/options pending Q6. Use a narrowly
+allowlisted legacy-name scan, validated by a failing stale active API import,
+so partial renames become a deterministic check.
 
-### PR 3 — Weft causal mapping and cross-link terminology
+### PR 3 — Weft owning-node mapping and causal links
 
-Update causal-chain terminology in the Weft contract, Loom emission comments,
-architecture and relevant research prose; retain the section 4 v1 wire mapping.
-Do not rename v1 JSON fixture fields, OTel attributes, SQLite tables or durable
-record-id segments. Gateway and Fabric keep their locally declared ports and
-null causal id semantics. No trace reader feeds back into Loom.
+Expand PR 1's crosswalk through Weft mapping/link documentation and Loom
+emission comments, and implement the owning-node mapping only after its runtime
+binding has behavioral red. The destination is locked: each span's `thread_id`
+is its durable node in the same Thread tree. Record any #320 integration
+prerequisite explicitly. Do not call retained action-id correlation completion
+of this slice. Preserve historical JSON, OTel attributes, SQLite tables,
+record-id segments and link targets; change no historical evidence. Gateway
+and Fabric retain local ports/null ids where no binding exists; Loom imports
+no Weft and never reads traces for scheduling.
 
-**Red before edits:** a terminology/mapping check fails on the current contract
-claim that Weft `thread_id` means the newly project-level Thread. For any code
-mapping added, first use a test that distinguishes a project Thread id from an
-action's causal id and fails under the conflating mapping. A byte-preservation
-test should also reject a mutation that changes `:thread:` ids or link targets.
-Retaining the wire format requires no speculative mapper implementation.
+**Red before edits:** identify the actual stale emission/link statements beyond
+PR 1's already-fixed normative crosswalk. Before code mapping, demonstrate red
+with distinct root, child and action ids, plus two actions belonging to one
+node. Reject a mapping to a parent or parallel project id instead of the node
+owning the span. A byte-preservation check must reject mutation of historical
+`:thread:` ids or link targets. Documentation alone needs no speculative mapper.
 
-**Green:** the crosswalk and mapping assertions pass, the original golden
-records remain identical and valid, and dependency join, handoff, supersession,
-repeated cancellation and recovery links preserve their targets. Run
+**Green:** mapping assertions and owning-node behavior pass; original historical
+golden records remain identical and valid. Join/handoff/supersession/repeated
+cancel/recovery links retain their recorded targets. Run
 `npm run test:weft-contract`; after build run
 `node --test 'packages/weave/dist/test/w5-*.test.js'` (Node >=22.18), including
-replay, isolation and authority tests; run G and full verification. Keep the
-SQLite/OTel intake tests enabled under their supported Node environment.
+replay, isolation and authority tests; run G and full verification. Keep SQLite
+and OTel intake tests enabled in their supported Node environment. If the durable
+binding is blocked, report that dependency and keep this slice incomplete.
 
-### PR 4 — #320/#330 and dependent document alignment after merges
+### PR 4 — #330 and remaining prose alignment
 
-Wait for #320 / PR #362 to merge, then inspect its actual merged files and
-recompute inventories. Open a follow-up from that baseline updating its design
-doc to project Thread, the approved causal term, ownership fields, compatibility
-matrix, pause/resume/recovery and Weft mapping. Do not edit or cherry-pick the
-in-flight WV-320 worktree. Apply the same crosswalk to #330's document once its
-actual scope/file is known; no guessed path or assumed implementation is part
-of this plan. Include #26/#28/#314 follow-up references and clarify the mixed
-execution-provider/design-system/research wording inventoried above.
+#320 is merged on main; its glossary/terminology/normative naming alignment is
+PR 1 work, not a wait for merge. Update remaining explanatory prose/examples in
+its design note, architecture, execution-provider, design-system and research
+docs against the single nestable Thread contract and final exports/mapping.
+Preserve design status and lifecycle fences. Include #26/#28/#314 references.
+Apply that same contract to #330 once its owner, exact file and scope are named
+(Q7); do not invent them or assume implementation. Q7 blocks only that alignment.
 
-**Red before edits:** run a scoped doc/link check on the merged docs, failing
-on stale workstream contract paths, project work called causal-chain Thread,
-or a project id mapped to Weft's causal `thread_id`. Keep intentional historical
-quotes, external names and legacy version mappings explicitly allowlisted.
+**Red before edits:** a scoped doc/link check must identify a concrete stale
+contract path, scope description or separate-identity claim in the files being
+edited. Allowlist historical quotes, external names and recorded mappings.
+Do not manufacture red from terminology already fixed in PR 1.
 
-**Green:** corrected cross-references and examples agree with glossary/actual
-exported types and versions, with no change to normative lifecycle behavior.
-Run G and full available verification. Any new runtime integration discovered
-in #320 needs its own behavioral red and scope review, not silent enlargement
-of this documentation slice.
+**Green:** prose/examples agree with the one Thread glossary entry, common
+contract and exported types/versions, with no unreviewed lifecycle change.
+Run G and full available verification. Runtime integration beyond the bounded
+rename/nesting change needs its own behavioral red and scope review.
 
 ## 6. Failure, cancellation and concurrency acceptance cases
 
-These are requirements for implementation evidence, not claims that a durable
-project Thread journal exists today. Pure adapters can use recorded JSON
-sequences now; durable integration must exercise the real journal when it exists.
+These are implementation-evidence requirements, not claims that a durable
+Thread journal already exists. The locked path is deterministic transition and
+fixture checks for an in-place pre-persistence rename. Transitional bytes: none
+expected. Mixed-version replay and crash/cutover requirements below still apply
+if any transitional bytes are present; external-recorder evidence must establish
+the real compatibility boundary before adding readers. Full durable integration
+must exercise the real journal when it exists. Never decode `thread@1` as two
+concepts or allocate identities by project versus goal-local depth.
+
+Known gap/dependency: [#320 §9.1, RT-00](docs/durable-recursive-threads.md#91-gap-found-a-queued-action-keeps-the-grant-it-was-queued-with)
+(design path available at `8ce60c5`, absent from this HEAD as noted above)
+records that a queued action retains its queue-time grant, which the new host
+after restart refuses. The proposed grant-at-start fix is separate work, not a
+property established by this rename or by #320's merge. Compatibility reads of
+queued or held records never carry or mint a grant. Keep budget/effect holds as
+accounting; recovery must check current authority and issue a fresh grant only
+at actual start. Any continuation/recovery guarantee relying on that fix is
+blocked on RT-00's own demonstrated red/green evidence.
 
 | Case | Required deterministic evidence |
 | --- | --- |
-| Partial rename across packages | Build and public consumer compile checks reject stale imports or mismatched ownership keys; link/name check rejects stale contract paths. No producer writes a new shape under an old schema. Preserve G import directions and local port declarations. |
-| Mixed old/new records in one journal | Version-dispatched read handles interleaved old/new Thread, process, route and correction records in recorded order. Compare canonical semantic state with an equivalent single-version history; compare each historical replay result with its original version's expected bytes. Equal logical ids share one identity, not two aliases; conflicting duplicates, dual keys, wrong nested versions and unknown versions fail closed without applying a prefix of a transition. |
-| Crash mid-migration or write cutover | Prefer no migration: readers are installed before new writers and original records remain intact. Crash before append, after append/before acknowledgement and between old/new records; restart from every durable prefix. State/evidence/queue/process/grant reservations are neither lost nor duplicated. Replay has zero effects, gateway calls or emission; recovery emits only newly appended observations and never reopens the same causal chain. If (c) is chosen, require atomic destination publication, source retention and resume-or-rollback evidence before introducing a migrator. |
+| Partial rename across packages | Build and public consumer compile checks reject stale imports or mismatched ownership keys; link/name check rejects stale contract paths. Writers implement the locked in-place replacement into one `thread@1` family; no recorded schema is silently repurposed. Preserve G import directions and local port declarations. |
+| One nestable kind at every depth | Root with no parent, leaf with no children and nested nodes share the same schema, identity and transition family. Reject missing parents, cycles, conflicting ids and cross-project parentage without partial transitions. Parentage is distinct from result dependencies and Weft record links; nesting grants nothing and allocates no worker. |
+| Mixed old/new records in one journal (only if transitional bytes exist) | Version-dispatched read handles interleaved old/new Thread, process, route and correction records in recorded order. Compare canonical semantic state with an equivalent single-version history; compare each historical replay result with its original version's expected bytes. Include a queued action and held input across versions: replay issues zero grants before start, invokes nothing and never presents a historical grant. After authorized recovery, only actual start may issue a fresh grant (RT-00 dependency). Equal logical ids share one identity, not two aliases; conflicting duplicates, dual keys, wrong nested versions and unknown versions fail closed without applying a prefix of a transition. |
+| Crash or write cutover (only at an actual durable boundary) | The locked path needs no migration. If recorder evidence requires compatibility, readers are installed before new writers and original records remain intact. Crash before append, after append/before acknowledgement and between old/new records; restart from every durable prefix. State, evidence, queues, processes and budget/effect reservations are neither lost nor duplicated; grants are never transferred as reservations. Replay has zero effects, gateway calls or emission; recovery emits only newly appended observations and never reopens the same Thread node. Compatibility reads carry/mint no queued or held grant (RT-00); recovery success awaits that prerequisite. No migrator is authorized by this plan; any later conversion needs its own source-retention, atomic-publication and resume-or-rollback evidence. |
 | Parallel routing fails or is cancelled | Aborted/unavailable/stale site answers place no input and open no Thread. If a parallel target id is invalid/duplicate or any subsequent step refuses, retain the exact original index: no orphan target, partial input placement or process transition. A model answer alone never grants or dispatches work. |
 | Interrupt correction races a pause/stop/completion | An interrupt requests pause at the next boundary, never a stop. Correcting one of two interrupts retains the other's pending pause; an honoured pause stays paused; terminal processes stay terminal; stale corrections refuse. Preserve request evidence and resume digest across record versions. |
 | Concurrent independent Threads | Interleave two Threads' transitions and separate active goals; transitioning one preserves the other's record, inputs, process and authority. Only one active goal and live process per Thread; one goal attaches once within a project. No new global lock or serial batch is introduced by compatibility reading. |
 | Concurrent artifact updates | Preserve monotonic artifact revisions within a Thread; cross-Thread writes still require canonical effect locks. Ownership/key renames do not expand a grant or bypass stale read-set/resource checks. |
-| Old exported-name consumers | Exercise a fixture importing the public old names and one using the new names. Preferred atomic change updates all checked-in callers and documents the source-breaking API change. If the owner requires a temporary deprecated alias, it must be one identity/implementation with a removal boundary and compile/behavior tests; no duplicate state model or unsupported deep-import shim. The wire read alias in (a) does not imply an API alias. |
-| Weft links across crash/concurrent arrival | Old segments and new segments resolve the same ids, including forward targets, dependency joins, repeated cancels and supersession before/after recovery. Project Thread ids never overwrite action causal ids. Slow/throwing/reentrant sinks do not change scheduling, budgets or outcomes. |
-| Authority and disclosure | Opening, decoding, correcting or resuming creates no grant/approval/budget. Single-use grants stay consumed after crash and are never re-presented; uncertain effects are reconciled only under current authority. Reject credential-shaped ids, keep raw input/provider errors out of records and keys out of argv/logs. |
+| Old exported-name consumers | Exercise a fixture importing the public old names and one using the new names. Preferred atomic change updates all checked-in callers and documents the source-breaking API change. If the owner requires a temporary deprecated alias, it must be one identity/implementation with a removal boundary and compile/behavior tests; no duplicate state model or unsupported deep-import shim. A recorded-version read mapping, if later justified, does not imply an API alias (Q5). |
+| Weft links across crash/concurrent arrival | Old segments and new segments resolve the same ids, including forward targets, dependency joins, repeated cancels and supersession before/after recovery. New spans point at their owning durable node, at any depth; a child span must not inherit its parent's id, and two actions on one node share that node id. Preserve historical action correlation as recorded evidence; apply section 4 to any actual transitional bytes. Slow/throwing/reentrant sinks do not change scheduling, budgets or outcomes. |
+| Authority and disclosure | Opening, decoding, correcting or resuming creates no grant/approval/budget. Queued/held compatibility reads never carry or mint a grant; mixed-version replay issues none before start (RT-00). Single-use grants stay consumed after crash and are never re-presented; uncertain effects are reconciled only under current authority. Reject credential-shaped ids, keep raw input/provider errors out of records and keys out of argv/logs. |
 | Benchmark contamination | Keep intake choices/frozen corpus bytes and digests unchanged. Rename checks must not rewrite historical evidence, inject guardrails or shuffles into benchmark routes, or expose held-out cases. A future comparison requires reserved independent adversarial/held-out cases and recorded data provenance/license/destination plus sanitization or explicit authorization before hosted disclosure. |
 
 Runtime and gateway remain provider-independent and pure: no environment,
@@ -490,63 +594,86 @@ to execute remain separate gates. A repeated review finding becomes a narrow
 lint or behavioral regression test with known-red and green evidence; do not
 relax permissions, validation or protected checks to pass it.
 
-## 7. Open questions for the owner
+## 7. Answered owner questions and remaining open questions
 
-1. Approve **Causal chain** for the former goal-local Thread, or choose Trace
-   thread / Action lineage? Confirm its scope remains the existing definition,
-   with today's action-id mapping a reference implementation detail.
-2. Approve compatibility option (a), including `thread@1`, dependent
-   `operating.process@2` / `input.route@2` / `input.route.correction@2`, explicit
-   old-version readers and indefinite old-record readability, or prefer (b)'s
-   unchanged v1 wire vocabulary? Who has recorded #314 results outside this repo,
-   and which reader/writer owns the actual cutover?
-3. Keep Weft v1's causal wire names/ids unchanged with a documented mapping as
-   recommended? Is new project-level trace correlation required now? If yes,
-   approve a separately versioned Weft scope rather than repurposing `thread_id`.
-4. Are old public TypeScript export names allowed to break in this private
-   `0.0.0` workspace, or are there downstream consumers requiring time-bounded
-   deprecated aliases? Name those consumers and the support/removal boundary.
-5. Confirm `intake.classify` stays on its existing task/causal-work contract,
-   labels and frozen sets for this rename. If it must address project Threads,
-   which separate versioned state/mapping change and evaluation owns that work?
-6. After #320 / PR #362 merges, which merged design document and reviewer own
-   its terminology update, and what exact #330 document/scope must follow?
-   Confirm whether their merged integration changes the persistence assumption
-   recorded here before PR 2's implementation starts.
+### Q1 — Answered: Thread identity family
+
+D-ENG-017: one Thread kind keeps `thread@1`, `thread_id` and `thread.*`.
+Project-level and goal-local nodes are depths in one tree, not competing owners.
+No `project.thread@1` family or dual allocation remains.
+
+### Q2 — Answered: goal-local name and nesting
+
+D-ENG-017: Thread. Optional parent, optional children; no second Work unit,
+Causal chain or other product twin. Fold #320 and the renamed workstream into
+one glossary entry and contract, as specified in section 3.
+
+### Q3 — Answered: compatibility
+
+D-ENG-017: rename in place now, private `0.0.0`, no external recorder and no
+recorded workstream records. No @2 dual-read path unless external-recorder
+evidence appears. Preserve and test any transitional bytes if discovered;
+none expected. No repeat confirmation is required.
+
+### Q4 — Answered: Weft `thread_id`
+
+D-ENG-017: the durable node in the Thread tree that the span belongs to, not a
+parallel workstream id. PR 1 records the current action-id/target-node crosswalk;
+PR 3 proves node binding, subject to its explicit runtime prerequisites.
+
+### Q5 — Open: public TypeScript export break policy
+
+May old public TypeScript exports break atomically, or are temporary deprecated
+aliases needed for named downstream consumers? Recommend atomic rename in this
+private `0.0.0` workspace; aliases require a real consumer and removal boundary.
+D-ENG-017 settled wire compatibility, not this source export policy.
+
+### Q6 — Open: `intake.classify` frozen labels
+
+Should the existing labels, shapes and frozen sets be preserved, or should a
+separately scoped/versioned mapping and evaluation follow? Recommend preserving
+labels/sets for this rename. D-ENG-017 does not authorize rewriting benchmark
+evidence or changing classification semantics.
+
+### Q7 — Open: #330 document owner and scope
+
+Who owns #330's alignment, and what exact file/scope and reviewer follow?
+Recommend naming the owner and document now; defer only that prose if still
+unidentified. No owner is invented here. #320's one-Thread glossary and normative
+alignment still belong in PR 1.
 
 ## Planning-run validation
 
-Only `PLAN.md` is intended to be committed, with message
-`plan: workstream → Thread rename (#329)`; no push. Inventory counts and file
-references are checked against the baseline, and the final diff must contain
-no source, glossary or test edits.
+Only `PLAN.md` may change; no source, glossary or test edits, dependency install,
+network or push. This revision uses D-ENG-017 as supplied decision evidence;
+no remote decision/issue lookup is possible or needed.
 
-- Demonstrated planning-artifact red: a presence assertion failed because
-  `PLAN.md` did not exist. This is not implementation behavioral-red evidence;
-  the future slices still require their own tests before implementation.
-- Planning checks green: recomputed all per-file counts in both inventories
-  (12 workstream files, 47 thread files), checked referenced existing file
-  paths, required sections and compatibility/scope statements, and confirmed
-  `PLAN.md` was the only working-tree change. Whitespace checks pass.
-- Direct repository checks green: import direction (325 files), ambient clock
-  (104 runtime files), ambient entropy (51 Loom/Weft files), ambient environment
-  (133 source files), and swallowed failures (12 manifests/workflows).
+- Plan4 documentation red observed before editing: missing D-ENG-017 lock,
+  dual allocation, unanswered Q1–Q4, stale HEAD and both inventory totals.
+  The temporary deterministic planning check is outside the repository;
+  it grants no implementation authority. Implementation slices retain their
+  own required behavioral red/green evidence.
+- Recounted source inputs at actual HEAD `02543c2`: workstream **480 occurrences
+  on 383 lines in 12 files**, thread **351 occurrences on 299 lines in 47 files**.
+  The inventories above are authoritative; #320's separately inspected changes
+  explain plan3's main-based totals. Exact `workstream_id` remains 71 (76 as a
+  substring), `workstream@1` remains 5 and the existing workstream/process/route
+  suite remains 33 top-level tests. No source inputs changed during this task.
+- Planning checks green after editing: exact lock, Q1–Q4 answered/Q5–Q7 open,
+  no dual allocation, actual HEAD, both inventories, RT-00 and conditional
+  transitional-byte coverage. Whitespace checks pass; only `PLAN.md` is modified.
+- Node 22 validation used `/home/box/.local/node22/bin`, version **v22.23.4**.
+  Direct checks passed: import direction (325 files), ambient clock (104),
+  ambient entropy (51), ambient environment (133) and swallowed failures
+  (12 manifests/workflows).
 - `npm run verify` was attempted and stopped in `npm run check`:
-  `scripts/benchmark-digests.test.mjs` passed, but verify-cache tests cannot
-  spawn missing `node_modules/.bin/vp` (`ENOENT`). The standalone build also
-  failed because `tsc` is absent. No dependencies were installed or lockfiles
-  changed for this planning run.
-- Environment is Node `v20.19.2`, below the declared `>=22.18.0` requirement.
-  `npm run test:checks` cannot resolve its quoted glob under this Node. An
-  explicit shell-expanded run passed credential-parity and execution-provider
-  test files but failed the checks fixture file. Diagnostic child-process
-  execution returned `EPERM` in this restricted environment, although the
-  directly invoked checks and sampled red/green fixtures produced the expected
-  findings. The full deterministic suite is therefore **not green here**;
-  rerun with the supported toolchain, dependencies and child-process execution
-  before merging implementation. No check, fixture or permission was weakened.
-- Commit attempted with the requested message, but `git add -- PLAN.md`
-  could not create
-  `/workspace/weave-WV-234/.git/worktrees/weave-WV-329/index.lock`: that worktree
-  metadata directory is mounted read-only. The plan remains uncommitted and
-  unpushed; no permissions or Git metadata were changed to bypass the mount.
+  benchmark-digests passed; verify-cache tests failed. `node_modules/.bin`
+  is absent and a direct `vp` spawn reports `ENOENT`. No dependencies were
+  installed; the remaining full-suite stages did not run.
+- `npm run test:checks` passed credential-parity and execution-provider test
+  files; `checks.test.mjs` failed. Direct diagnostic execution reports
+  5 failed / 1 passed fixture checks with missing expected child output;
+  a child-process probe also reports `EPERM`. The full deterministic suite
+  remains **not green** in this environment. Implementation still requires
+  installed locked dependencies and a working runner before merge; no test,
+  permission or protected check was weakened.
