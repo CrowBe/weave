@@ -1,6 +1,6 @@
 # PLAN — strict pre-flight context budget assembler (#353)
 
-Status: **plan only. This revision addresses the Codex review of `518dc05`; no implementation is authorized by it.**
+Status: **plan only. This revision addresses the opencode GLM review of `08e157a`; no implementation is authorized by it.**
 Issue: CrowBe/weave#353 (architecture parent). Branch `wv-353-context-budget-plan`, base `0281c5e`.
 
 The issue text used here is the copy in the task brief. This plan revision did
@@ -23,20 +23,25 @@ beside the view. If the parts that may not be dropped do not fit, Loom fails
 closed: no inference budget is reserved, nothing is dispatched, and the refusal
 is recorded. Nothing is ever cut silently. Instructions, questions, authority,
 goal and audit material are never dropped to make a request fit.
+If the complete evidence cannot fit the observation bound, record the distinct
+durable persistence failure in §5.5; never claim a complete refusal was stored.
 
-## 2. Inventory at HEAD (`0281c5e`)
+## 2. Inventory at HEAD (`08e157a`)
+
+Symbols are the primary references; line numbers are secondary navigation hints,
+rechecked against this HEAD. Children must resolve the symbols at their own base.
 
 ### 2.1 The context window is declared, never measured
 
-| Where                                                                                                                   | What it does today                                                                                                                                               |
-| ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/gateway/src/types.ts:146` `InferenceTerms.max_context_tokens`                                                 | A caller-declared number.                                                                                                                                        |
-| `packages/gateway/src/gateway.ts:867` `invalidTerms`                                                                    | Only checks `>= 1`.                                                                                                                                              |
-| `packages/gateway/src/routing.ts:220` `excludeReason`                                                                   | Excludes a unit when `unit.context_limit_tokens < terms.max_context_tokens` (`context_limit_too_small`). It compares two declarations.                           |
-| `packages/gateway/src/routing.ts:66` `worstCaseCost`, `:78` `priceAttempt`                                              | Prices the cold window as `max_context_tokens` input tokens. Gateway attempt affordability depends on that input bound; Loom reserves `cost_ceiling` separately. |
-| `packages/gateway/src/gateway.ts:1011,1017,1036` pacing                                                                 | Counts worst-case tokens as `max_context_tokens + max_output_tokens`.                                                                                            |
-| `packages/gateway/src/types.ts:408` `ProviderUsage.input_tokens`                                                        | Reported after the call. Nothing compares it with `max_context_tokens`.                                                                                          |
-| `packages/weave/src/runtime.ts:928` (frontier.weigh), `:1258` (goal.frame), `packages/weave/src/gateway-decision.ts:54` | All hard-code `max_context_tokens: 8_000`. Framing can override it through `RuntimeOptions.framingTerms` (`runtime.ts:120`).                                     |
+| Where                                                                                                                                                                | What it does today                                                                                                                                               |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `InferenceTerms.max_context_tokens` (`packages/gateway/src/types.ts:146`)                                                                                            | A caller-declared number.                                                                                                                                        |
+| `invalidTerms` (`packages/gateway/src/gateway.ts:867`)                                                                                                               | Only checks `>= 1` for the context term.                                                                                                                         |
+| `excludeReason` (`packages/gateway/src/routing.ts:220`)                                                                                                              | Excludes a unit when `unit.context_limit_tokens < terms.max_context_tokens` (`context_limit_too_small`). It compares two declarations.                           |
+| `worstCaseCost`, `priceAttempt` (`packages/gateway/src/routing.ts:66,78`)                                                                                            | Prices the cold window as `max_context_tokens` input tokens. Gateway attempt affordability depends on that input bound; Loom reserves `cost_ceiling` separately. |
+| `paceDelay`, `joinPaceQueue`, `reservePace` (`packages/gateway/src/gateway.ts:1011,1017,1036`)                                                                       | Counts worst-case tokens as `max_context_tokens + max_output_tokens`.                                                                                            |
+| `ProviderUsage.input_tokens` (`packages/gateway/src/types.ts:409`)                                                                                                   | Reported after the call. Nothing compares it with `max_context_tokens`.                                                                                          |
+| `Runtime.weighAndSelect`, `Runtime.frameGoal` (`packages/weave/src/runtime.ts:928,1258`), `GatewayDecisionLayer.weigh` (`packages/weave/src/gateway-decision.ts:54`) | All hard-code `max_context_tokens: 8_000`. Framing can override it through `RuntimeOptions.framingTerms` (`runtime.ts:120`).                                     |
 
 **Finding F1:** no code path compares the bytes or tokens actually sent
 (`instructions` + `prompt`, or `state` + `questions`) with
@@ -46,50 +51,54 @@ input. Loom separately reserves the whole `cost_ceiling`, not `worstCaseCost`.
 
 ### 2.2 Slices, profiles and disclosed truncation
 
-- `packages/weave/src/types.ts:200-220` defines `ViewOmission {name, reason}`,
+- `ViewOmission`, `ViewSliceManifest` and `StateView`
+  (`packages/weave/src/types.ts:200,205,214`) define `ViewOmission {name, reason}`,
   `ViewSliceManifest {name, revisions, truncated, omitted, assembly_id?}` and
   `StateView {profile, profile_version, state_revision, content, manifest}`.
-- `packages/weave/src/views.ts:19` `FrameProfile` has `catalogue_budget`,
+- `FrameProfile` (`packages/weave/src/views.ts:19`) has `catalogue_budget`,
   which counts **operations**, not tokens. It also has `slices`, `prefix` and
   `schema_for`. `renderFrameView` (`:101`) truncates the catalogue by
   `catalogue_budget` with omission reason `budget` and `truncated: true`. It
   omits unauthorized sources with reason `authority` and unselected schemas
   with reason `profile`.
-- `views.ts:74` `sliceAssemblyId` and `:80` `stampAssemblies` stamp a shared
-  assembly. The runtime charges it once per cycle (`runtime.ts:1216`
-  `noteViewAssemblies`, `SHARED_ASSEMBLY_MICROS`).
-- `views.ts:272` `renderWeighView` has no budget at all. It omits non-scalar
+- `sliceAssemblyId` and `stampAssemblies` (`views.ts:74,80`) stamp a shared
+  assembly. `Runtime.noteViewAssemblies` (`runtime.ts:1216`) charges it once
+  per cycle using `SHARED_ASSEMBLY_MICROS`.
+- `renderWeighView` (`views.ts:272`) has no budget at all. It omits non-scalar
   inputs with reason `profile`.
-- `packages/weave/src/audit-view.ts:154` `assembleAuditState` uses fixed byte
+- `assembleAuditState` (`packages/weave/src/audit-view.ts:154`) uses fixed byte
   caps: `max_body_bytes` (default 4096), statements 4096, ids and tails 240.
   It records each cut in `omissions` (`*:size_cap`, `*:statement_cap`, …) and
   cuts UTF-8 safely (`boundedUtf8`, `boundedUtf8Tail`). The truncation is
   disclosed, but per field and in bytes. There is no total.
-- `packages/weave/src/strategy.ts:33` `stablePrefixBytes` defines the stable
+- `stablePrefixBytes` (`packages/weave/src/strategy.ts:33`) defines the stable
   prefix: profile id and version, `prefix`, and the catalogue.
   `CATALOGUE_SLOT_MICROS` and `profileReservation` (`:72`) are fixture costs per
   catalogue slot, not token counts.
-- `packages/weave/src/compaction.ts:13` `compactContext` works on token arrays
+- `compactContext` (`packages/weave/src/compaction.ts:13`) works on token arrays
   from an injected tokenizer. It compacts at 80% of capacity and rejects an
-  oversized summary (`AUDIT-CONTRACT.md:133`). Nothing calls it on the
+  oversized summary ("Context compaction port", `AUDIT-CONTRACT.md:133`). Nothing calls it on the
   inference request path.
 
 ### 2.3 Instructions and questions are outside any manifest
 
-- goal.frame: `runtime.ts:1300` has an inline instruction string. The prompt
+- goal.frame: `Runtime.frameGoal` (`runtime.ts:1300-1302`) has an inline instruction string. The prompt
   is `stableStringify(view.content)`.
-- frontier.weigh: `gateway-decision.ts:45` sends `view.content` as `state`, plus
+- frontier.weigh: `GatewayDecisionLayer.weigh` (`gateway-decision.ts:45`) sends `view.content` as `state`, plus
   `frontierWeighQuestions` (`frontier-weigh.ts:37`).
-- audit: `audit-loop.ts:368` has inline instructions. The prompt is
+- audit: `runAuditLoop` (`audit-loop.ts:368`) has inline instructions. The prompt is
   `JSON.stringify(observed.state)`.
-- implementation step: `implement-step.ts:908` uses caller instructions and
+- implementation step: `runImplementationStep` (`implement-step.ts:908`) uses caller instructions and
   prompt. `feedbackPrompt` (`:573`) **appends** failure lines on every retry,
   and nothing measures the result.
-- task validation and the criteria gate: `task-acceptance.ts:86,89` instruction
-  constants, with per-line questions (`:471`, `:487`).
-- The gateway API accepts already filtered content (`types.ts:172`), but
-  adapters transform it: `typesafe-ai.ts` translates typed questions into wire
-  questions; `openai-compatible.ts` constructs messages, roles and an envelope.
+- task validation and the criteria gate: `CRITERIA_INSTRUCTIONS` and
+  `VALIDATION_INSTRUCTIONS` (`task-acceptance.ts:86,89`), with per-line questions
+  in `criteriaQuestions` and `validationQuestions` (`task-acceptance.ts:471,487`).
+- `GenerationInput`'s disclosure contract (`packages/gateway/src/types.ts:172`)
+  accepts already filtered content, but adapters transform it: `toWireQuestion`
+  (`typesafe-ai.ts:105`) translates typed questions into wire questions;
+  `openAiCompatibleAdapter` and `messagesFor` (`openai-compatible.ts:75,116`)
+  construct messages, roles and an envelope.
   Measuring only the caller's leaf bodies does not measure this complete input.
 
 **Finding F2:** the issue wants instructions and capability schemas in the same
@@ -102,23 +111,23 @@ are not in `ViewSliceManifest` and are not counted anywhere.
   whole-account quota filter (weekly, five-hour and pace). It knows nothing
   about request content and must not learn about it: the gateway imports
   nothing in-repo (`checks/import-direction.mjs`).
-- Loom's own budget: `inference.requested` reserves `{judgments, cost}`
+- Loom's own budget: `applyAccepted`'s `inference.requested` branch reserves `{judgments, cost}`
   (`state.ts:326`). `validateInferenceRequested` (`validation.ts:653`) rejects
   a reservation over the remaining budget. `inference.recorded`
   (`state.ts:338`) settles it.
-- Precedent for refusing before dispatch: `runtime.ts:905-913` blocks the cycle
+- Precedent for refusing before dispatch: `Runtime.weighAndSelect` (`runtime.ts:905-913`) blocks the cycle
   with `cost budget exhausted` and makes no call, writing no extra record.
   Replay re-derives the refusal from state.
 
 ### 2.5 Durability, recovery, replay
 
-- `runtime.ts:1086` `appendInferenceRequested` journals the view, terms and
-  reservation **before** the gateway call (`:1284-1307`).
+- `Runtime.appendInferenceRequested` (`runtime.ts:1086`) journals the view, terms
+  and reservation **before** `Runtime.frameGoal` calls the gateway (`runtime.ts:1284-1307`).
 - Recovery abandons a request that has no `inference.recorded`
-  (`runtime.ts:145` `ABANDONED_INFERENCE`).
+  (`ABANDONED_INFERENCE`, `runtime.ts:145`).
 - Replay re-renders the frame view using a historical profile **supplied by
-  the replay caller** (`RuntimeOptions.frameProfile`, `runtime.ts:111-115`) and
-  the recorded catalogue (`replayCatalogueIds`, `:1170`). `StateView` contains
+  the replay caller** (`RuntimeOptions.frameProfile`, `runtime.ts:115`) and
+  the recorded catalogue (`Runtime.replayCatalogueIds`, `runtime.ts:1170`). `StateView` contains
   only profile identity/version, not the complete profile. Neither historical
   templates nor future excluded bodies are guaranteed to be recoverable there.
 - `validate` (`validation.ts:117`) globally rejects versions other than 1;
@@ -126,20 +135,29 @@ are not in `ViewSliceManifest` and are not counted anywhere.
   `Runtime.load` currently folds accepted records without version dispatch.
 - `FileJournal.persist` uses `appendFileSync` with no flush or torn-tail
   protocol. It does not establish the stronger durable-append contract in §6.5.
-- `log-bound.ts` rejects a mid-value cut ("rejected, not repaired") and bounds
-  observation bytes.
+- `payloadBytes` and `hasMidValue` (`log-bound.ts:7,11`) measure canonical
+  payload bytes and reject a mid-value cut ("rejected, not repaired").
+  `Runtime.appendStep` (`runtime.ts:610-621`) rejects payloads exceeding
+  `RuntimeOptions.logBound.max_observation_bytes` with an in-memory diagnostic,
+  without throwing or persisting it. This is not a durable refusal; managed
+  preparation must check append acceptance and use §5.5 for oversize evidence.
 
 ### 2.6 Benchmark routes
 
 - Benchmarks build gateways and terms directly and never go through Loom's
   request path:
-  - `benchmarks/inference/jev/run.ts:240,483` (`max_context_tokens: 8_000`;
-    `TYPESAFE_REQUEST_PARAMS.shuffle: false` at `:47`; reference mode);
-  - `benchmarks/decision-sites/competitors.ts:266`;
-  - `benchmarks/decision-sites/questions.ts:37` (4000);
-  - `benchmarks/frontier-weigh/run.ts:110`;
-  - `benchmarks/task-acceptance/live.ts:47`.
-- `benchmarks/frontier-weigh/build.ts:233` calls `renderWeighView` directly,
+  - `createJevGateway` and `createKevGateway` (`benchmarks/inference/jev/run.ts:240,483`)
+    build gateways; `probeTerms` and `kevTerms` declare `max_context_tokens: 8_000`
+    (`run.ts:270,283,502`). `TYPESAFE_REQUEST_PARAMS.shuffle` is false (`run.ts:47`;
+    reference mode);
+  - `museSparkCompetitor` (`benchmarks/decision-sites/competitors.ts:266,297`)
+    builds the gateway and declares its 8000 term;
+  - `buildRequest` (`benchmarks/decision-sites/questions.ts:37`) declares 4000;
+  - `configureJev` (`benchmarks/frontier-weigh/run.ts:110`) builds a gateway
+    passed through `siteWeigher` and `GatewayDecisionLayer.weigh`;
+  - `main` (`benchmarks/task-acceptance/live.ts:47,59`) builds a gateway and
+    declares its 8_000 term.
+- `buildCase` (`benchmarks/frontier-weigh/build.ts:233`) calls `renderWeighView` directly,
   so any byte change to a renderer changes benchmark cases.
 - `scripts/benchmark-digests.test.mjs` pins the checked-in benchmark inputs
   and artifacts. The reference run header pins the corpus hash and plan hash
@@ -240,10 +258,22 @@ maximum output allowance; a certified input-only limit is used directly.
 Record both source semantics and normalization in the immutable coverage
 snapshot, checking safe arithmetic. Unknown semantics fail admission. The
 managed gateway receives only this explicitly scoped snapshot; the default
-`routing.ts:220` comparison and every direct benchmark route keep their present
+`excludeReason` comparison (`routing.ts:220`) and every direct benchmark route keep their present
 semantics. If establishing this contract requires a separate gateway change,
 it must land with red tests before C2 enforcement can claim window safety.
 Until then, hold affected routes; do not assert strict safety on assumption A4.
+
+**R8. Bound durable failure separately from complete assembly evidence.**
+Under D-ENG-021, keep full fit/refusal evidence inline and atomic; do not add
+blob storage, split snapshots or raise the log bound. Measure storage fit
+separately from token fit. When either complete decision is too large, use one
+bounded, runtime-only `context.persistence_failed@1` record in the same journal
+with no reservation effect (§5.5). This is evidence of a storage failure, never
+a substitute for a ledger or a replayable numeric refusal. Existing action-result
+disposition composes with it for goal.frame; frontier.weigh needs the same
+durable stop record because its blocked cycle alone is not journaled. Only the
+operator-facing outcome/recovery policy remains P2. Compose journal fault tests
+with the existing M1 crash-worker pattern (§6.5); do not create another harness.
 
 ## 4. Data and admission contracts (proposal only)
 
@@ -251,22 +281,28 @@ C1 writes `packages/weave/src/CONTEXT-BUDGET-CONTRACT.md` before implementation.
 Use validated JSON values, not `body: unknown` as an accepted contract. The
 following are closed, versioned records; version ids name immutable content.
 
-| Record                 | Required evidence and invariants                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Site assembly contract | Site and operation/kind; complete profile snapshot; expected parts and content-path mapping; protected classes and priorities; renderer and reconstruction revisions; complete instruction/question template snapshots and their rendering rules; budget policy and limits. No optional map supplied by the caller can override it.                                                                                                                                       |
-| Accounting family      | Version and content digest; all member contract/evidence digests; opaque fingerprint of the scoped gateway route/adapter configuration; exact reconstruction and serialization revisions; per-route bounds and proved framing allowances; capacity contract and output allowance. Implementations are injected pure functions whose historical revisions must be retained; provider-specific configuration stays opaque to Loom.                                          |
-| `assembly_evidence`    | Decision id and owner scope/attempt; complete site policy/profile (including `catalogue_budget`, `slices`, `prefix`, `schema_for` and budget); estimator/accounting specification and evidence identity; original authorized pre-trim view and manifest; exact template bodies and substitutions; all candidate part bodies including excluded ones; original terms, effective terms and prepared request. Record content digests and original state/catalogue revisions. |
-| `context.ledger@1`     | Policy ceiling `ceiling_tokens`; enforced request term `reserved_tokens`; `full_tokens`, `required_tokens`, `used_tokens`, `truncated_tokens`; original/included/required request digests; family and evidence digests; per-route complete-input byte counts, framing allowance and token bound; ordered parts with inclusion, class, priority, body digest, canonical body byte counts and manifest/template linkage.                                                    |
-| Prepared request       | Immutable generation `input` or evaluation `state` and `questions`, plus id/site/role/kind and all effective terms. Its content digest is bound to the ledger and evidence. Acceptance callbacks and AbortSignals stay outside serialized evidence and are selected by historical site contract.                                                                                                                                                                          |
+| Record                         | Required evidence and invariants                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Site assembly contract         | Site and operation/kind; complete profile snapshot; expected parts and content-path mapping; protected classes and priorities; renderer and reconstruction revisions; complete instruction/question template snapshots and their rendering rules; budget policy and limits. No optional map supplied by the caller can override it.                                                                                                                                       |
+| Accounting family              | Version and content digest; all member contract/evidence digests; opaque fingerprint of the scoped gateway route/adapter configuration; exact reconstruction and serialization revisions; per-route bounds and proved framing allowances; capacity contract and output allowance. Implementations are injected pure functions whose historical revisions must be retained; provider-specific configuration stays opaque to Loom.                                          |
+| `assembly_evidence`            | Decision id and owner scope/attempt; complete site policy/profile (including `catalogue_budget`, `slices`, `prefix`, `schema_for` and budget); estimator/accounting specification and evidence identity; original authorized pre-trim view and manifest; exact template bodies and substitutions; all candidate part bodies including excluded ones; original terms, effective terms and prepared request. Record content digests and original state/catalogue revisions. |
+| `context.ledger@1`             | Policy ceiling `ceiling_tokens`; enforced request term `reserved_tokens`; `full_tokens`, `required_tokens`, `used_tokens`, `truncated_tokens`; original/included/required request digests; family and evidence digests; per-route complete-input byte counts, framing allowance and token bound; ordered parts with inclusion, class, priority, body digest, canonical body byte counts and manifest/template linkage.                                                    |
+| Prepared request               | Immutable generation `input` or evaluation `state` and `questions`, plus id/site/role/kind and all effective terms. Its content digest is bound to the ledger and evidence. Acceptance callbacks and AbortSignals stay outside serialized evidence and are selected by historical site contract.                                                                                                                                                                          |
+| `context.persistence_failed@1` | Fixed-size decision/owner/attempt and policy digests; closed site, attempted record type and `evidence_record_too_large` code; measured complete payload bytes, configured byte bound and attempted decision digest. No bodies, exception text, unbounded identifiers, token claims or reservation. It records only inability to persist the complete decision.                                                                                                           |
 
 `assembly_evidence` uses inline complete snapshots in the same atomic decision
 record. Profile ids, estimator ids, hashes or mutable repository paths alone
 are insufficient. The historical pure implementation and its evidence bundle
 are resolved by immutable revision/digest, verified before replay; unavailable
 versions are a replay failure. No new blob-store abstraction is introduced.
-If the record cannot fit the existing observation bound, persistence rejects it
-before dispatch; never cut evidence, relax the bound or persist only a trimmed
-view. Already disclosed profile/audit byte omissions remain recorded inputs.
+Before append, measure ledger and evidence bytes separately and the canonical
+bytes of the entire decision payload using the existing `payloadBytes` encoding;
+only the last determines fit against `logBound.max_observation_bytes`. Include
+duplicated snapshots, terms, manifests and all other payload fields. Equality
+fits; one byte over follows §5.5. Never cut evidence, relax the bound or persist
+only a trimmed view. Already disclosed profile/audit byte omissions remain
+recorded inputs. Journal envelope/physical framing bytes are reported separately
+if relevant to the journal contract; they do not redefine the observation bound.
 
 Ledger part byte counts are diagnostics, **not additive token estimates**.
 The accounting family recomputes the complete request for each inclusion set.
@@ -305,8 +341,9 @@ C2 must change admission and historical transitions together:
 
 1. Replace the global v1-only gate in `validate` with an explicit per-type
    version table. Admit `inference.requested@2` and runtime-only
-   `context.refused@1`; keep other types' current supported versions and source
-   checks. Refusal records have no budget reservation effect.
+   `context.refused@1` and `context.persistence_failed@1`; keep other types'
+   current supported versions and source checks. Neither refusal nor persistence
+   failure records have a budget reservation effect.
 2. Distinguish trusted historical load/replay from new-write admission; the
    payload cannot select historical mode. Preserve v1 validation/folding for
    old logs; every new assembler-managed request requires v2. Reject a new v1
@@ -439,9 +476,36 @@ though no `inference.requested` exists. It changes no inference reservation and
 creates no controller or gateway call. Failure to persist the refusal is an
 explicit persistence failure, not a silently recorded blocked outcome.
 
+If the full `inference.requested@2` or `context.refused@1` payload is known to
+exceed the configured byte bound, do not submit it to the diagnostic-only
+oversize path. Append `context.persistence_failed@1` instead, under the same
+atomic durability contract. The marker binds the logical decision and owner
+with fixed-size digests and records attempted type, byte count and bound; no
+full decision or ledger is claimed committed. Validate closed fields, checked
+sizes and deterministic identity. Rebuild a separate failure index on load;
+unchanged inputs/policy reuse that durable stop without reassembly, new records,
+reservation, controller or dispatch. Do not count its bookkeeping as fresh
+weighing evidence. Recovery finishes only the local P2-approved disposition.
+Bind the configured byte bound into the storage-policy identity so an authorized
+configuration change creates a fresh decision rather than reusing a stale stop.
+
+Managed composition must prove the maximum encoded failure marker fits its
+configured log bound before enabling preparation, with behavioral tests for an
+insufficient bound. A smaller bound makes the managed configuration unsupported;
+it is never silently increased. If even the marker's append fails or is
+ambiguous, stop the owner, expose a content-free persistence error and reload
+the journal before any continuation. Do not claim a durable failure when no
+append was acknowledged, or fall back to a diagnostic as persistence. General
+journal faults remain explicit failures; the marker is for known size rejection,
+not a speculative second write after an ambiguous append.
+
 Proposed P2 follow-up is action `failed: context_overflow` for goal.frame and
 cycle `blocked: context overflow` for frontier.weigh; user-visible disposition
 remains an owner question. Its durable result references the refusal decision.
+For evidence oversize (including an oversized refusal), propose action failure
+or cycle block with `context_persistence_failure`, referencing the durable
+failure marker rather than a nonexistent refusal. P2 covers this outcome too;
+neither path authorizes summarization, evidence loss or automatic recovery.
 Index refusals separately, excluding refusal bookkeeping from new weighing
 evidence. A repeated cycle with unchanged authorized inputs/policy reuses the
 recorded refusal rather than appending forever. New recovery/escalation is not
@@ -468,7 +532,9 @@ cancelled. Do not invent an asynchronous yield inside the step: queued ingress
 cannot be processed there. After call, pass the signal through and follow existing gateway cancellation and
 settlement rules. A late result cannot advance cancelled work or settle twice.
 A refused request has no `inferAbort` entry and no reservation to release.
-Cancellation cannot erase its ledger or evidence.
+A persistence-failure marker also has neither. Cancellation before/after its
+append cannot dispatch or erase its durable stop. Cancellation cannot erase
+any acknowledged ledger or evidence.
 
 ### 6.3 Concurrency
 
@@ -479,7 +545,7 @@ single-writer sequencing and at most one pending frontier weighing. Do not
 invent simultaneous goal.frame/frontier.weigh dispatch contrary to that state
 machine. Exercise supported overlapping work with distinct scopes/request ids,
 different policies and inverse completion/cancellation order. Ledgers, detached
-bodies and cost settlement must remain isolated. Durable stores keep their
+bodies, failure indexes and cost settlement must remain isolated. Durable stores keep their
 existing single-writer ownership; a second writer is rejected, not a source of
 concurrent mutation inside a request.
 
@@ -513,6 +579,16 @@ acknowledgment means the whole decision and inline evidence are durable before
 any fold/dispatch. The current `FileJournal` alone is insufficient evidence.
 C2 must either establish this guarantee in the journal boundary with fault tests
 or refuse managed enforcement on an unsupported journal; never assume a flush.
+Extend the existing `m1-crash-worker.ts` child-process pattern and the
+`M1-T13 crash at commit/result boundary does not duplicate publication` test
+(`packages/weave/test/m1-crash-worker.ts`, `packages/weave/test/m1.test.ts:360`).
+Add injected fault gates for decision/refusal/failure-marker append and result
+boundaries, partial writes/torn tails and written-then-throws ambiguity; restore
+the real file journal in the parent and reload twice. Assert canonical ledger
+and evidence bytes, one disposition and exact reservation/settlement counts,
+with zero redispatch. Retain M1's publication/grant assertions. Process-exit
+tests alone do not prove power-loss durability; pair them with deterministic
+write/flush fault checks against the specified journal protocol.
 Keep storage I/O in the journal, outside the pure assembler. A torn uncommitted
 suffix is explicitly rejected/recovered by the journal protocol; never repair
 a complete invalid record or delete an acknowledged decision. Flush/atomicity
@@ -536,9 +612,9 @@ append and dispatch in the same process on an assumption of failure.
 - After result append, before settlement/index update: fold/recovery reproduces
   exactly one settlement. Failed result append or a late duplicate result cannot
   lose the ledger, double-charge or free another request's reservation.
-- For refusals, crash before the subsequent action/cycle result reuses the
+- For refusals or persistence-failure markers, crash before the subsequent action/cycle result reuses the
   recorded decision and finishes only its local disposition; no model call or
-  second refusal is introduced. A fresh attempt requires explicit new inputs
+  second refusal/failure marker is introduced. A fresh attempt requires explicit new inputs
   or the separately approved P2 policy.
 
 ### 6.6 Byte-for-byte replay
@@ -559,7 +635,12 @@ refusal evidence; an invalid-input witness replays only its recorded rejection,
 never authorizes execution. Historical v1 logs keep historical behavior without
 invented ledgers. Replay invokes no gateway, capability, Weft port or recovery
 effect. Recovery loads immutable decisions first and follows §6.5; it does not
-rerun inference to reconstruct evidence.
+rerun inference to reconstruct evidence. A `context.persistence_failed@1` marker
+replays only its canonical failure bytes and durable stop/disposition. Missing
+full evidence is explicit: it cannot recreate a ledger, certify token totals or
+stand in for a complete `context.refused@1` record. Preserve every acknowledged
+fit/refusal ledger and its evidence byte-for-byte, without duplicate or lost
+state, across crashes and repeated recovery.
 
 ### 6.7 Grants and effects
 
@@ -580,7 +661,7 @@ them. Adapter order bounds never call ambient randomness during assembly.
 
 ### 6.9 Keys stay out of argv and logs
 
-Ledger, refusal summaries and Weft fields contain only closed part names/codes,
+Ledger, refusal/failure summaries and Weft fields contain only closed part names/codes,
 counts and digests (`metric`/`reference`); no raw body, dynamic question text or
 exception message. Closed template identifiers replace content-derived names.
 Replay snapshots **do contain authorized content** and stay in the protected
@@ -629,28 +710,40 @@ rebuild-at-dispatch and dispatch-before-persist. Reserve independent adversarial
 and held-out cases before estimator comparisons; implementer cases are not the
 sole quality evidence. No test threshold, permission or check is weakened.
 
-| Test | Child and location                    | Required behavioral assertion before implementation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ---- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T1   | C1, `context-budget.test.ts`          | Required input one over ceiling refuses with exact total/required/excess fields; exact equality fits. Placeholder always-fit fails.                                                                                                                                                                                                                                                                                                                                                                                                |
-| T2   | C1/C2, same                           | Required fits but optional content makes total one over: `total_exceeds_ceiling`, exact `over_by_tokens = total - ceiling`; C2 never trims. Protected bodies/digests remain complete.                                                                                                                                                                                                                                                                                                                                              |
-| T3   | C1/C2, accounting fixtures            | Complete wrapper-heavy request exceeds a budget that a leaf-body sum fits. Capture exact projected TypeSafe/OpenAI bodies; exercise escaping, long property names, many questions/slices, CJK, emoji, surrogate replacement, base64, empty framing, settings and permutations. Refuse an uncovered fallback, tokenizer revision or unproved allowance.                                                                                                                                                                             |
-| T4   | C1/C2, pure validation                | Reject missing instructions/questions, protected relabeling, unknown/duplicate parts, wrong inventory, cyclic/BigInt/accessor/undefined/non-finite/deep/sparse bodies, negative/unsafe values and safe operands whose sum overflows. Assert closed invalid variant with absent invalid numbers, zero dispatch and no secret-bearing diagnostics.                                                                                                                                                                                   |
-| T5   | C2, `context-budget-runtime.test.ts`  | Oversized goal.frame: zero fixture-adapter calls, no `inference.requested`, unchanged inference cost reservation; exactly one durable refusal with full evidence, referenced by the P2-approved disposition. HEAD currently dispatches.                                                                                                                                                                                                                                                                                            |
-| T6   | C2, same                              | Oversized frontier.weigh: zero calls/reservations and one refusal; repeating unchanged cycles adds no refusals and does not spin due to its own bookkeeping.                                                                                                                                                                                                                                                                                                                                                                       |
-| T7   | C2, same and `frontier-weigh.test.ts` | Fits: v2 admission succeeds; captured generation/evaluation request id, state/questions/instructions, terms and digest equal the prepared request. Force differing old hard-coded terms to detect rebuild/substitution by GatewayDecisionLayer; test retry/escalation coverage and actual AbortSignal forwarding.                                                                                                                                                                                                                  |
-| T8   | C2, cancellation fixtures             | Already-aborted input, queued cancellation, cancellation after append before dispatch, during call and late completion. Assert no premature call, one settlement, correct controller cleanup and no progress by cancelled work. Overflow has no controller.                                                                                                                                                                                                                                                                        |
-| T9   | C2, `w5-replay.test.ts` style         | Canonical bytes equal for fit, C3 excluded bodies and refusal replay after changing defaults, templates and profiles. Tampered/missing ledger, historical profile/algorithm/proof, excluded body or template fails; no external calls/emission. Fault immediately before/after durable append, after append before fold/call, after call before result and after result before fold; reload twice yields one decision and one settlement without redispatch. Include torn/ambiguous append and refusal-before-disposition crashes. |
-| T10  | Every affected child, §7 fixtures     | Renderer/artifact digests plus actual direct and managed request/route/adapter equivalence, pricing and pacing. These baseline guards are green at base; add a mutation that leaks the guard into a direct route to show they detect it. Never change the pinned expected behavior.                                                                                                                                                                                                                                                |
-| T11  | C2, validation/load tests             | Valid v2 admitted; unsupported per-type versions and new-write v1 downgrade rejected; historical v1 still replays. Reject falsified arithmetic/allowance, body/digest/manifest/request mismatch, excluded required slice, omitted instructions and tampered terms before durability. Unknown stored versions refuse before partial fold, even if flagged accepted.                                                                                                                                                                 |
-| T12  | C3, pure/runtime tests                | Exact lowest-priority drop order and tie-break; required input remains, effective omission fields are measured and recorded, all new bytes counted, final fit exact. Always-trim-required/leaf-subtraction mutation fails.                                                                                                                                                                                                                                                                                                         |
-| T13  | C3, view/replay tests                 | Original and effective views, original manifest and excluded bodies survive crash; only effective view has `context_budget` omissions. Another consumer of a shared slice assembly sees unchanged bytes.                                                                                                                                                                                                                                                                                                                           |
-| T14  | C3, cache fixtures                    | Dropping an optional part cannot change stable prefix or hide a hit/reload change; cached tokens count toward window in full.                                                                                                                                                                                                                                                                                                                                                                                                      |
-| T15  | C2, persistence fixtures              | Journal refusal, accepted-request append failure, full-record-too-large, torn tail, append-written-then-throws and result append failure all prevent unjournaled dispatch or double reservation. No in-memory accepted index advances before successful append. Known durable request is abandoned once, never resent.                                                                                                                                                                                                             |
-| T16  | C2/C4, concurrency fixtures           | Supported overlapping independent requests with distinct ceilings and inverse completion/cancellation order retain isolated ledgers, bodies and budgets. Duplicate ids and second writers refuse; preserve one pending frontier weighing.                                                                                                                                                                                                                                                                                          |
-| T17  | C4, per-owner tests in §10            | Each listed site exceeds its bound: zero calls/effects and durable refusal. Fit passes exact prepared payload and terms. Retry growth crosses ceiling only on the later attempt; no subsequent check grant is issued. Crash/cancel/append failure follows that owner's record, not Loom's two-site lifecycle.                                                                                                                                                                                                                      |
-| T18  | C5, Weft tests                        | Missing, throwing, stalled, mutating and reentrant sinks leave decisions, schedule and budget identical; after-step emission only, replay emits nothing. Fit/refusal metrics match durable evidence; canary keys/bodies absent from argv and all diagnostic/Weft output.                                                                                                                                                                                                                                                           |
-| T19  | C6, accounting/routing tests          | New schema distinguishes policy ceiling from tightened positive term; test exact zero/minimum, equality, safe arithmetic, smaller-route boundary, cached-token overflow, retry cost/output allowance, pricing and injected-time pacing. Loom reserves unchanged cost_ceiling; accept/failure/cancel/unknown usage/recovery settle once. Direct benchmark fixtures remain identical.                                                                                                                                                |
-| T20  | C7, admission fixtures                | A calibrated but underbounding or uncovered estimator is refused. An admitted replacement proves full-input/framing and capacity bounds at just-fit/one-over, has independent held-out/adversarial evidence, and replays alongside old versions after defaults change. Missing historical version fails. Efficiency comparison follows soundness, never substitutes for it.                                                                                                                                                        |
+| Test | Child and location                                         | Required behavioral assertion before implementation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ---- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T1   | C1, `context-budget.test.ts`                               | Required input one over ceiling refuses with exact total/required/excess fields; exact equality fits. Placeholder always-fit fails.                                                                                                                                                                                                                                                                                                                                                                                                               |
+| T2   | C1/C2, same                                                | Required fits but optional content makes total one over: `total_exceeds_ceiling`, exact `over_by_tokens = total - ceiling`; C2 never trims. Protected bodies/digests remain complete.                                                                                                                                                                                                                                                                                                                                                             |
+| T3   | C1/C2, accounting fixtures                                 | Complete wrapper-heavy request exceeds a budget that a leaf-body sum fits. Capture exact projected TypeSafe/OpenAI bodies; exercise escaping, long property names, many questions/slices, CJK, emoji, surrogate replacement, base64, empty framing, settings and permutations. Refuse an uncovered fallback, tokenizer revision or unproved allowance.                                                                                                                                                                                            |
+| T4   | C1/C2, pure validation                                     | Reject missing instructions/questions, protected relabeling, unknown/duplicate parts, wrong inventory, cyclic/BigInt/accessor/undefined/non-finite/deep/sparse bodies, negative/unsafe values and safe operands whose sum overflows. Assert closed invalid variant with absent invalid numbers, zero dispatch and no secret-bearing diagnostics.                                                                                                                                                                                                  |
+| T5   | C2, `context-budget-runtime.test.ts`                       | Oversized goal.frame: zero fixture-adapter calls, no `inference.requested`, unchanged inference cost reservation; exactly one durable refusal with full evidence, referenced by the P2-approved disposition. HEAD currently dispatches.                                                                                                                                                                                                                                                                                                           |
+| T6   | C2, same                                                   | Oversized frontier.weigh: zero calls/reservations and one refusal; repeating unchanged cycles adds no refusals and does not spin due to its own bookkeeping.                                                                                                                                                                                                                                                                                                                                                                                      |
+| T7   | C2, same and `frontier-weigh.test.ts`                      | Fits: v2 admission succeeds; captured generation/evaluation request id, state/questions/instructions, terms and digest equal the prepared request. Force differing old hard-coded terms to detect rebuild/substitution by GatewayDecisionLayer; test retry/escalation coverage and actual AbortSignal forwarding.                                                                                                                                                                                                                                 |
+| T8   | C2, cancellation fixtures                                  | Already-aborted input, queued cancellation, cancellation after append before dispatch, during call and late completion. Assert no premature call, one settlement, correct controller cleanup and no progress by cancelled work. Overflow has no controller.                                                                                                                                                                                                                                                                                       |
+| T9   | C2, `w5-replay.test.ts` and M1 crash-worker pattern (§6.5) | Canonical bytes equal for fit, C3 excluded bodies and refusal replay after changing defaults, templates and profiles. Tampered/missing ledger, historical profile/algorithm/proof, excluded body or template fails; no external calls/emission. Fault immediately before/after durable append, after append before fold/call, after call before result and after result before fold; reload twice yields one decision and one settlement without redispatch. Include torn/ambiguous append and refusal/failure-marker-before-disposition crashes. |
+| T10  | Every affected child, §7 fixtures                          | Renderer/artifact digests plus actual direct and managed request/route/adapter equivalence, pricing and pacing. These baseline guards are green at base; add a mutation that leaks the guard into a direct route to show they detect it. Never change the pinned expected behavior.                                                                                                                                                                                                                                                               |
+| T11  | C2, validation/load tests                                  | Valid v2 admitted; unsupported per-type versions and new-write v1 downgrade rejected; historical v1 still replays. Reject falsified arithmetic/allowance, body/digest/manifest/request mismatch, excluded required slice, omitted instructions and tampered terms before durability. Unknown stored versions refuse before partial fold, even if flagged accepted.                                                                                                                                                                                |
+| T12  | C3, pure/runtime tests                                     | Exact lowest-priority drop order and tie-break; required input remains, effective omission fields are measured and recorded, all new bytes counted, final fit exact. Always-trim-required/leaf-subtraction mutation fails.                                                                                                                                                                                                                                                                                                                        |
+| T13  | C3, view/replay tests                                      | Original and effective views, original manifest and excluded bodies survive crash; only effective view has `context_budget` omissions. Another consumer of a shared slice assembly sees unchanged bytes.                                                                                                                                                                                                                                                                                                                                          |
+| T14  | C3, cache fixtures                                         | Dropping an optional part cannot change stable prefix or hide a hit/reload change; cached tokens count toward window in full.                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| T15  | C1/C2, persistence fixtures extending M1 (§6.5)            | Fit and refusal records exactly at/one byte over the log bound; durable oversize disposition as specified below. Journal refusal, request/result append failure, torn tail and written-then-throws never permit unjournaled dispatch or double reservation. No accepted index advances before durable append. Known durable request is abandoned once, never resent.                                                                                                                                                                              |
+| T16  | C2/C4, concurrency fixtures                                | Supported overlapping independent requests with distinct ceilings and inverse completion/cancellation order retain isolated ledgers, bodies, failure indexes and budgets. Duplicate ids and second writers refuse; preserve one pending frontier weighing.                                                                                                                                                                                                                                                                                        |
+| T17  | C4, per-owner tests in §10                                 | Each listed site exceeds its bound: zero calls/effects and durable refusal. Fit passes exact prepared payload and terms. Retry growth crosses ceiling only on the later attempt; no subsequent check grant is issued. Crash/cancel/append failure follows that owner's record, not Loom's two-site lifecycle.                                                                                                                                                                                                                                     |
+| T18  | C5, Weft tests                                             | Missing, throwing, stalled, mutating and reentrant sinks leave decisions, schedule and budget identical; after-step emission only, replay emits nothing. Fit/refusal metrics match durable evidence; failure markers emit no invented token totals; canary keys/bodies absent from argv and all diagnostic/Weft output.                                                                                                                                                                                                                           |
+| T19  | C6, accounting/routing tests                               | New schema distinguishes policy ceiling from tightened positive term; test exact zero/minimum, equality, safe arithmetic, smaller-route boundary, cached-token overflow, retry cost/output allowance, pricing and injected-time pacing. Loom reserves unchanged cost_ceiling; accept/failure/cancel/unknown usage/recovery settle once. Direct benchmark fixtures remain identical.                                                                                                                                                               |
+| T20  | C7, admission fixtures                                     | A calibrated but underbounding or uncovered estimator is refused. An admitted replacement proves full-input/framing and capacity bounds at just-fit/one-over, has independent held-out/adversarial evidence, and replays alongside old versions after defaults change. Missing historical version fails. Efficiency comparison follows soundness, never substitutes for it.                                                                                                                                                                       |
+
+T15 measures ledger, evidence and complete canonical payload bytes separately
+against the configured log bound for both `inference.requested@2` and
+`context.refused@1`, including token-fit/evidence-oversize input. Equality fits;
+one byte over yields exactly one durable `context.persistence_failed@1`, zero
+request/refusal acceptance, reservation, controller, gateway call or new grant,
+and the P2-approved disposition references that marker. Reload twice and repeat
+unchanged cycles: identical marker bytes, no duplicate/lost state or dispatch.
+Reject configuration too small for the maximum marker; marker append failure
+or ambiguity remains explicit, never reported durable. Extend the M1 worker
+fault gates (§6.5) for these cases, including cancellation before/after marker
+append; keep the existing H1 log-bound rejection assertions intact.
 
 For each child: run the narrow affected test first, then `npm run fmt:check`,
 `npm run check`, `npm run test:checks`, `npm test`, the §7 benchmark test set,
@@ -675,41 +768,64 @@ answers. Safety invariants and architecture above are fixed.
 - **P1. Default ceilings and merge/hold policy.** Approve ceilings per inference
   kind (including proposed default input resource limits) and the treatment of
   existing fixtures that would refuse. C2 inventories every
-  goal.frame/frontier.weigh fixture: total and required
-  certified bounds, ceiling, excess, affected behavior and supported/unsupported
-  contracts. C4 extends the inventory per site. Proposed merge criterion:
+  goal.frame/frontier.weigh fixture: total and required certified token bounds,
+  ceiling, token excess, supported/unsupported contracts; ledger bytes, complete
+  inline evidence bytes and complete decision payload bytes (measured separately,
+  not inferred from tokens), configured `logBound.max_observation_bytes`, byte
+  excess and storage fit. Measure both fit and refusal record shapes, including
+  full excluded bodies, original/effective views, templates and profile. An
+  unsupported token estimate does not excuse omitting storage measurements;
+  unconstructible shapes are explicitly unavailable, never assumed to fit.
+  Record the failure marker's maximum bytes/fit, affected behavior and proposed
+  P2 disposition per fixture. Report an absent log bound explicitly and also
+  exercise the proposed bounded managed configuration. C4 extends this inventory
+  per site/owner journal. Proposed merge criterion:
   enforcement lands only when applicable evidence is sound, all checks pass
-  and every changed fixture consequence/default is approved. Otherwise hold
+  (including marker fit and journal guarantees), and every changed fixture
+  consequence/default is approved. Otherwise hold
   enforcement (contract-only work may proceed). Present measured excesses and
   consequences before the decision; never silently raise limits or weaken tests.
 - **P2. User-visible overflow recovery.** The oversized/unverifiable request
   never dispatches. Proposed follow-up: fail goal.frame and block frontier.weigh
-  with a reference to the durable refusal. Owner alternatives are an operator
-  clarification or a separately authorized and budgeted larger-window attempt.
+  with a reference to the durable refusal. If that refusal's full evidence (or a
+  fitting request's evidence) exceeds the log bound, propose the same fail/block
+  behavior with `context_persistence_failure`, referencing R8's durable marker
+  and stating that full evidence was not persisted. Choose the operator-facing
+  outcome and recovery policy for both cases. Storage placement, marker schema,
+  bounded admission and fail-closed durability are decided engineering scope.
+  Owner alternatives are an operator clarification or a separately authorized
+  and budgeted larger-window attempt for token overflow; larger model capacity
+  does not fix evidence oversize. Storage failure needs a separately authorized
+  configuration/input change before a fresh decision; never cut evidence.
   No automatic extra spend or recovery is implied by the fixed refusal rule.
 - **P3. Audit fidelity.** May audit material ever be summarized? Until a separate
   summarization/disclosure policy is approved and validated with crash-safe
   evidence, retain all selected audit material as required. `compactContext`
   cannot silently replace that policy.
-- **P4. Window-waste tolerance and C7 priority.** After sound accounting is
-  established, choose acceptable unused capacity and whether to fund C7 early.
+- **P4. Window-waste tolerance (product only).** After sound accounting is
+  established, choose acceptable unused capacity.
   Supply workload measurements, including route refusals and quality/cost
   consequences. A rough English overestimate is not a workload-wide guarantee,
   and accepting waste never authorizes an unsound estimator.
 
 P5 is removed: R5 decides storage placement under D-ENG-021.
+C7 scheduling is an engineering follow-up under D-ENG-021: after P4 is known,
+use A5's measured unused capacity and route refusals to prioritize C7 ahead of
+optional work when measured window waste exceeds that tolerance; otherwise
+defer it. This prioritization never blocks the soundness or durability
+prerequisites, relaxes a check, or becomes another owner question.
 
 ## 10. Child breakdown and ownership outside the runtime
 
-| Child | Scope and first red evidence                                                                                                                                                                                                                                                                              | Depends on                                                                     |
-| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| C1    | Contract, complete data shapes/rejection variants and GLOSSARY additions; validate behavioral corpus T1–T4 against invalid placeholders. No implementation before observed red.                                                                                                                           | Implementation authorization                                                   |
-| C2    | Certified accounting/capacity binding; historical snapshots and atomic journal prerequisites; type-specific v2 admission/load/replay; prepared handoff for goal.frame/frontier.weigh; T5–T11, T15–T16 and §7 guards. Inventory fixtures before enforcement. Hold uncovered routes, never assume evidence. | C1; P1/P2 for enforcement/disposition; sound accounting and journal guarantees |
-| C3    | Optional priority removal on detached effective views; T12–T14 plus expanded T9, T10 and failure boundaries.                                                                                                                                                                                              | C2                                                                             |
-| C4    | Per-site managed profiles, preparation and durable owner integration below; T17 and site-specific T8/T9/T15/T16; assembler-coverage check with red fixtures.                                                                                                                                              | C2; P1/P2 per site                                                             |
-| C5    | Revised Weft contract for policy ceiling, request term, full/used/reduced bounds and refusal metrics/references; T18.                                                                                                                                                                                     | C2                                                                             |
-| C6    | `context.ledger@2` and tightened token term only, leaving money reservations explicit; T19 plus T9–T11 and §7 guards.                                                                                                                                                                                     | C2                                                                             |
-| C7    | More efficient certified accounting, possibly per-route, admitted with a proof rather than calibration alone; historical-version retention and T20.                                                                                                                                                       | C2; P4 prioritization                                                          |
+| Child | Scope and first red evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Depends on                                                                     |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| C1    | Contract, complete data shapes/rejection variants, bounded persistence-failure marker and GLOSSARY additions; validate behavioral corpus T1–T4 and T15's marker contract against invalid placeholders. No implementation before observed red.                                                                                                                                                                                                                                                | Implementation authorization                                                   |
+| C2    | Certified accounting/capacity binding; historical snapshots and atomic journal prerequisites; type-specific v2 and failure-marker admission/load/replay; prepared handoff for goal.frame/frontier.weigh; T5–T11, T15–T16 and §7 guards. Inventory token and ledger/evidence/complete-record byte fit per fixture under P1 before enforcement. Persist oversize disposition under R8/§5.5. Extend M1 crash-worker fault/torn-tail tests (§6.5). Hold uncovered routes, never assume evidence. | C1; P1/P2 for enforcement/disposition; sound accounting and journal guarantees |
+| C3    | Optional priority removal on detached effective views; T12–T14 plus expanded T9, T10 and failure boundaries.                                                                                                                                                                                                                                                                                                                                                                                 | C2                                                                             |
+| C4    | Per-site managed profiles, preparation and durable owner integration below; T17 and site-specific T8/T9/T15/T16; assembler-coverage check with red fixtures.                                                                                                                                                                                                                                                                                                                                 | C2; P1/P2 per site                                                             |
+| C5    | Revised Weft contract for policy ceiling, request term, full/used/reduced bounds and refusal metrics/references; T18.                                                                                                                                                                                                                                                                                                                                                                        | C2                                                                             |
+| C6    | `context.ledger@2` and tightened token term only, leaving money reservations explicit; T19 plus T9–T11 and §7 guards.                                                                                                                                                                                                                                                                                                                                                                        | C2                                                                             |
+| C7    | More efficient certified accounting, possibly per-route, admitted with a proof rather than calibration alone; historical-version retention and T20. Engineering derives scheduling from A5 measurements and the P4 tolerance (§9).                                                                                                                                                                                                                                                           | C2; P4 tolerance informs scheduling                                            |
 
 C3–C5 can proceed independently after C2; C6/C7 can also be developed against
 fixed C2 contracts with their schema dependencies declared. If C2 is split into
@@ -730,8 +846,14 @@ following concrete persistence ownership:
 | `task.criteria` and `task.validate` / managed task caller | Add a required injected durable decision append/load port at the managed composition boundary; the pure/direct helpers currently own no journal. Persist full prepared boolean questions, state and evidence before evaluate. Retain the existing no-call paths for lexical rejection, code predicates and no shown facts. Outstanding intent cannot be auto-reasked on load; results and refusals link the decision id. Benchmarks retain the direct helpers. |
 | `input.route` / managed workstream caller                 | Persist preparation/intent via an explicit caller journal port before the shared `evaluateSite` call, and link the route record to it. Operator direction/no-active-work rules still make zero calls; unknown outcome follows existing uncertainty handling. No automatic reclassification from an outstanding intent; new invocation needs fresh authorized input.                                                                                            |
 
+Apply R8's separate byte measurements and bounded durable failure semantics in
+each owner's versioned journal/checkpoint, with the same recovery guarantees.
+Do not import Loom's runtime-only observation types or widen its two-site union
+to store C4 failures.
+
 Every row starts with red assertions for fit, excess, unavailable historical
-evidence, append failure/ambiguity, crash before/after intent, cancellation and
+evidence, full-record/refusal evidence oversize and its bounded durable failure
+disposition, append failure/ambiguity, crash before/after intent, cancellation and
 distinct concurrent owners. For task criteria and validation test both sites
 separately; for input routing test rule bypass as well as the inference path.
 Any other `.generate`/`.evaluate` or aliased shared site discovered by the C4
@@ -781,7 +903,14 @@ Loom or adopt its scheduling. These records introduce no new authority to act.
   disclosed optional-part drops, linked to the unchanged original slice assembly.
 - **Context overflow.** Typed fail-closed refusal for required or total excess,
   invalid input or unsupported accounting, durably recorded as `context.refused`;
-  it reserves no inference budget and authorizes no recovery call.
+  it reserves no inference budget and authorizes no recovery call. Evidence
+  oversize follows the distinct persistence-failure contract below.
+- **Context persistence failure.** A complete fit/refusal decision cannot be
+  durably stored. For known evidence-size rejection, the bounded
+  `context.persistence_failed@1` marker records only that failure and stops the
+  owner without reservation or dispatch. It is not a ledger or full refusal
+  evidence; replay reconstructs only its recorded failure/disposition. A failed
+  or ambiguous marker append is an explicit error, never claimed durable.
 - **Part class.** `required` or `optional`, derived from the trusted site/profile
   contract; only optional whole parts can be dropped by its deterministic policy.
 
@@ -803,9 +932,16 @@ current meanings. Token ceilings and monetary reservations are distinct.
   safety claim; separate prerequisite work must preserve benchmark semantics.
 - **A5 (measurement outstanding).** No fixture excess measurements have been run
   for this plan-only task. C2 inventories fixtures under the certified contracts,
-  reports excesses/unsupported routes and applies P1's explicit merge/hold gate.
+  reports token excesses/unsupported routes and ledger/evidence/complete-payload
+  bytes against each configured log bound, including refusal shapes and marker
+  fit, and applies P1's explicit merge/hold gate. C7 priority is derived from
+  those measurements and P4's tolerance, not another owner choice.
   Existing 8_000 defaults confer no evidence that any fixture fits.
 - **A6 (durability prerequisite).** Existing `FileJournal` does not demonstrate
   atomic, flushed decision appends. C2 must establish/require that contract and
   fault-test it before claiming crash-safe byte-for-byte ledger replay. Missing
   journal guarantees or historical evidence block enforcement, not validation.
+  Extend the M1 crash-worker/real-file reload pattern named in §6.5 for torn-tail,
+  ambiguous append and refusal/failure-marker crashes. R8 also requires a proven
+  bounded durable marker; unavailable storage guarantees cannot be replaced by
+  `appendStep`'s diagnostic-only oversize rejection.
