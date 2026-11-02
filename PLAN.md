@@ -4,13 +4,16 @@ Planning parent: https://github.com/CrowBe/weave/issues/347. This document is th
 only deliverable on `wv-347-memory-plan`. No implementation is authorized until
 captain go. Child issues below are proposed work, not filed issues or approvals.
 
-Review target and inventory baseline: `7082342b98f97ea3dbba028d10f8efea0105a1f4`
-(`plan: 3-tier memory + eviction (#347)`). It changes only `PLAN.md` relative to
-`0281c5ed13ee0b3fbedd50399f9ed19837a58c17`, so every source/test citation below
-holds at both commits and was rechecked at 7082342. Proposed names and versions
-are explicitly marked; they do not claim existing APIs. This revision (plan3)
-addresses the Claude Opus review of 7082342 (operator workspace file
-`WV-347-review-7082342.json`, not tracked). The issue brief supplies the
+Review target and inventory baseline: `056c521729309df61d564c6827cfaf6a6f6c8c13`
+(`plan: WV-347 plan3 address Claude review of 7082342`). Both it and its parent
+`7082342` change only `PLAN.md` relative to
+`0281c5ed13ee0b3fbedd50399f9ed19837a58c17` (`git diff --stat 0281c5e 056c521`),
+so every source/test citation below holds at all three commits and was rechecked
+at 056c521. Proposed names and versions are explicitly marked; they do not claim
+existing APIs. This revision (plan4) addresses the Codex review of 056c521
+(operator workspace file `WV-347-review-056c521.json`, not tracked); plan3's
+fixes for the Claude Opus review of 7082342 (`WV-347-review-7082342.json`) are
+kept. The issue brief supplies the
 relationship to SLEEP scout #346 and D-ENG-021; neither a SLEEP product contract
 nor D-ENG-021's decision record was found in tracked repository text. Applying
 D-ENG-021 as briefed, architectural/code-health questions are decided in §7 with
@@ -23,9 +26,10 @@ inference was performed.
 | --- | --- | --- |
 | State and time | [types.ts](packages/weave/src/types.ts): `State`, `Observation`, `Seq`, `ClockTickPayload`, `ReadSetEntry`, `AuthorityScope`; [state.ts](packages/weave/src/state.ts): `initialState`, `applyAccepted`, `foldState`, `expireApprovals` | Accepted observations deterministically update State. `clock.tick` supplies time and expires approvals. Opening a goal resets selected goal fields, but retains sources, conclusions, policies and other history. Goal status is `active`, `complete` or `missed` (`State.goal`); there is no cancelled/abandoned goal status. There is no generic memory record, scratchpad lifecycle, or memory TTL here. Whole State must not become evictable. |
 | Cached conclusions | [types.ts](packages/weave/src/types.ts): `CachedConclusion`, `InvalidationCondition`, `PolicyRecord`; [reuse.ts](packages/weave/src/reuse.ts): `reuseVerdict`, `callerInScope`, `readSetFreshness`; [runtime.ts](packages/weave/src/runtime.ts): `maybeCacheConclusion`, `reuseConclusion`, `importRetainedConclusions` | Records carry operation/contract/implementation, input digest, output, evidence, resource revisions, scope and invalidation conditions. The runtime produces/reuses these for `text.normalize`; reuse checks admission, scope, matching inputs and resource revisions. Missing revision evidence is uncertain. `applyAccepted` appends conclusions; there is no TTL or score eviction. The optional `conclusion` view slice currently lists all State conclusions' ids/evidence. |
-| Conclusion import and dedup | [runtime.ts](packages/weave/src/runtime.ts): `Runtime.importedConclusions`, `conclusionCursor`, `observationIds`, `importRetainedConclusions`, `load`; [host.ts](packages/agentfabric/src/host.ts): `AgentFabricHost.conclusionsSince`, `retainedConclusions`; tests [wv-026d.test.ts](packages/weave/test/wv-026d.test.ts), [wv-n275.test.ts](packages/weave/test/wv-n275.test.ts) | `importRetainedConclusions` reads `host.conclusionsSince(conclusionCursor)` and appends runtime-sourced `conclusion.cached` observations with id `conclusion:imported:<conclusion_id>`, skipping ids in `importedConclusions` or `observationIds`. It returns early in `replayMode`. `conclusionCursor` is process-local (starts at 0), so every restart re-reads from position 0; `load()` rebuilds `importedConclusions` only from retained accepted `conclusion.cached` observations. Retiring the segments that hold those observations would therefore re-import every evicted conclusion. |
+| Conclusion import and dedup | [runtime.ts](packages/weave/src/runtime.ts): `Runtime.importedConclusions`, `conclusionCursor`, `observationIds`, `importRetainedConclusions`, `load`; [host.ts](packages/agentfabric/src/host.ts): `AgentFabricHost.conclusionsSince`, `retainedConclusions`; tests [wv-026d.test.ts](packages/weave/test/wv-026d.test.ts), [wv-n275.test.ts](packages/weave/test/wv-n275.test.ts) | `importRetainedConclusions` reads `host.conclusionsSince(conclusionCursor)` and appends runtime-sourced `conclusion.cached` observations with id `conclusion:imported:<conclusion_id>`, skipping ids in `importedConclusions` or `observationIds`. It returns early in `replayMode`. `conclusionCursor` is process-local (starts at 0), so every restart re-reads from position 0; `load()` rebuilds `importedConclusions` only from retained accepted `conclusion.cached` observations. Retiring the segments that hold those observations would therefore re-import every evicted conclusion. Imports are runtime-sourced (`EXPECTED_SOURCE['conclusion.cached']` is `['runtime']` in [validation.ts](packages/weave/src/validation.ts)), so `replay()` skips them as `CYCLE_APPENDED` and nothing regenerates them: by inspection, a recording containing an import fails `checkPrefix`. wv-n275's "preserves every observation and cycle" test (lines 123–136) deliberately compares two such replays to each other, keeping "any divergence" rather than asserting `ok: true`. |
 | Durable knowledge and mirrors | [store.ts](packages/agentfabric/src/store.ts): `FabricStore`, `FabricSnapshot`, `StoredAdmission`, `StoredWorkload`, `retainConclusion`, `conclusions`; [host.ts](packages/agentfabric/src/host.ts): `AgentFabricHost.retainConclusion`, `conclusionsSince`, `retainedConclusions` | Fabric persists resources, invocation history, admissions, conclusions, workload and cost; the host rebuilds retained conclusion copies. These are useful existing durable knowledge, not a general semantic recall service. Position-based `conclusionsSince(cursor)` slices an append-only array; deleting array entries would break cursors. `FabricLifecycle` in [lifecycle.ts](packages/agentfabric/src/lifecycle.ts) also holds construction/corpus evidence in process; do not claim every lifecycle artifact is durable. |
-| Observation journal and replay | [journal.ts](packages/weave/src/journal.ts): `ObservationJournal`, `MemoryJournal`, `FileJournal`, `PersistError`; [runtime.ts](packages/weave/src/runtime.ts): `CYCLE_APPENDED`, `appendStep`, `followAccepted`, `load`, `replay`, `checkPrefix`, `recover` | Accepted observations persist before State integration; rejected ones are logged in process but not journaled. `appendStep` rejects a reused `observation_id` with reason `duplicate` and returns no earlier outcome. `replay()` feeds recorded observations whose source is outside `CYCLE_APPENDED = ['runtime', 'judgment']` verbatim; the cycle regenerates runtime/judgment observations and `checkPrefix` requires a `stableStringify` match. `followAccepted` already appends runtime follow-ups synchronously (for example `goal.missed`), which replay regenerates. Replay invokes neither host nor decision layer and fails on missing required results; recovery separately reconciles unfinished work. `FileJournal` appends JSONL with a bare `appendFileSync` and `JSON.parse`s every nonempty line in `snapshot()`, so a torn final line throws and blocks load. It has no writer lock, fsync, torn-tail repair, checkpoint protocol, or retention policy. Do not infer FabricStore's stronger guarantees apply to it. |
+| Observation journal and replay | [journal.ts](packages/weave/src/journal.ts): `ObservationJournal`, `MemoryJournal`, `FileJournal`, `PersistError`; [runtime.ts](packages/weave/src/runtime.ts): `CYCLE_APPENDED`, `appendStep`, `followAccepted`, `load`, `replay`, `checkPrefix`, `recover` | Accepted observations persist before State integration; rejected ones are logged in process but not journaled. `appendStep` rejects a reused `observation_id` with reason `duplicate` and returns no earlier outcome. `replay()` feeds recorded observations whose source is outside `CYCLE_APPENDED = ['runtime', 'judgment']` verbatim; the cycle regenerates runtime/judgment observations and `checkPrefix` requires a `stableStringify` match. `followAccepted` already appends runtime follow-ups synchronously (for example `goal.missed`), which replay regenerates. Each such append is a separate `journal.persist` call made after the trigger was persisted and applied, and host notifications (`retainConclusion` in `maybeCacheConclusion`, `noteWorkload`) run between them. `load()` folds stored observations with `applyAccepted` and never runs `followAccepted`, so a crash after the trigger leaves a durable prefix that restart does not complete and replay would extend beyond the record. Replay invokes neither host nor decision layer and fails on missing required results; recovery separately reconciles unfinished work. `FileJournal` appends JSONL with a bare `appendFileSync` and `JSON.parse`s every nonempty line in `snapshot()`, so a torn final line throws and blocks load. It has no writer lock, fsync, torn-tail repair, checkpoint protocol, or retention policy. Do not infer FabricStore's stronger guarantees apply to it. |
+| Cancellation | [runtime.ts](packages/weave/src/runtime.ts): `Runtime.cancel`, `inferAbort`; [state.ts](packages/weave/src/state.ts): `action.cancel_requested` case; [types.ts](packages/weave/src/types.ts): `ActionRecord.cancel_requested`, `ActionState` | `Runtime.cancel(action_id, reason)` asks the host to cancel the invocation, aborts the action-scoped inference `inf:<action_id>`, revokes its grant and records an `action.cancel_requested` (operator or runtime source). The fold sets `cancel_requested` and moves only a `pending` action to `cancelled`; a running action's later result is still recorded. Cancellation of non-action asynchronous work has no recorded state today. |
 | Other journals | [store.ts](packages/agentfabric/src/store.ts): `mutate`, `append`, `compact`, `save`; [implement-step.ts](packages/weave/src/implement-step.ts): `FileAttemptJournal`, `MemoryAttemptJournal`, `repairTornTail`; [audit-loop.ts](packages/weave/src/audit-loop.ts): `AuditJournal`, `MemoryAuditJournal` | FabricStore validates, appends before applying, owns a writer lock, repairs torn tails and compacts by size into a snapshot preserving retained state. It is not TTL eviction; append/compaction do not fsync, so do not infer power-loss durability. FileAttemptJournal fsyncs appends, indexes ids, repairs a torn tail and detects some competing writes; its contract still requires one writer. MemoryAuditJournal is in-process; it is not crash durability. These stores have different contracts and must remain distinct. |
 | Weft tracing | [weft.ts](packages/weave/src/weft.ts): `LoomWeft.observed`, `loaded`; [runtime.ts](packages/weave/src/runtime.ts): `emitWeft`; [types.ts](packages/weft/src/types.ts): `DisclosureClass`; [validate.ts](packages/weft/src/validate.ts) | `appendStep` and `load` call `emitWeft` for every accepted/loaded observation; `LoomWeft.observed` projects selected payload types and emits content as `{ content_class, digest }` (for example `goal.intent`). The runtime constructs no `LoomWeft` when replaying (`recorded !== null`). GLOSSARY: replay and recovery never read a Weft trace. No memory payload is projected today. |
 | Context compression | [compaction.ts](packages/weave/src/compaction.ts): `compactContext`, `ContextSummarizer`, `CompactedContext`; [compaction.test.ts](packages/weave/test/compaction.test.ts) | Pure token-array helper: trigger at 80% capacity, keep last 5%, summary capped at 10%; without a summarizer it returns `summary_needed` and original tokens. It has no persistence, time, cancellation, provenance or memory acceptance contract. No production call site was found at this HEAD. |
@@ -84,7 +88,9 @@ provenance. It does not change the existing meaning of Session.
 Acceptance: finite aggregate records/bytes and finite TTL in every recall tier;
 active expiry on injected ticks even without reads; deterministic score eviction
 under pressure; no scope widening; no acknowledged memory lost or duplicated by
-restart; no evicted body resurrected by host import, before or after segment
+restart; no step durable in part (A9); no staged or reused body deleted before
+Loom's disposition (A10); no proposal from a cancelled producer accepted (A11);
+no evicted body resurrected by host import, before or after segment
 retirement. Historical replay performs no inference, host, gateway or body-store
 calls, effects or grant issuance: runtime-sourced memory events are regenerated
 byte-for-byte from fed observations, never decided anew. Eviction is a recorded
@@ -148,15 +154,50 @@ as `followAccepted` already does for `goal.missed`. Each is a pure function of
 State, the recorded policy revision and the triggering fed observation, so replay
 regenerates it byte-for-byte without inference, host, gateway or body I/O.
 
+### Durable step completion (decided, A9)
+
+A trigger and the observations its step generates commit together or not at
+all. At HEAD they do not (§1): `appendStep` persists the trigger, applies it, then
+`followAccepted` persists each follow-up separately, and `load()` never completes
+a missing suffix. Contract (C2, journal-wide):
+
+- The runtime computes the whole step on a staged copy of State: the trigger and
+  every observation `appendStep`/`followAccepted` would append for it (memory
+  writes, refusals, quota and `ttl` evictions, `scope_closed`, and today's
+  `goal.missed`, `conclusion.cached` and `baseline.recorded` follow-ups). This
+  is pure and bounded by the policy's sweep allowance, so the frame size is
+  validated before admission.
+- A proposed `ObservationJournal.persistStep(observations)` writes them as one
+  framed record (proposed `journal.step@1`: contiguous seqs, count and digest)
+  in a single append, then fsyncs. Snapshot treats a complete frame as all its
+  observations and a torn final frame as absent; it repairs that tail only under
+  sole-writer ownership and rejects any incomplete interior frame. A bare line
+  in an older journal reads as a one-observation frame, so old journals load
+  unchanged.
+- Only after the frame is durable does the runtime apply the staged State,
+  update indices, emit Weft and run host notifications (`retainConclusion`,
+  `noteWorkload`). A persistence failure applies nothing and leaves the journal
+  as it was; if completion is uncertain, the writer fails closed and accepts no
+  further work until reopening resolves the tail.
+- The asynchronous cycle that a fed trigger starts (`admitStep` → `runCycle`)
+  is outside the frame and keeps its existing recovery contract.
+
+Consequences: a durable `memory.proposed` always carries its outcome in the same
+frame, so the C2 operation-id lookup never finds a proposal without an outcome;
+`load()` stays a pure fold without `followAccepted`; and replay never meets a
+recorded prefix that it would extend. A pending-step record completed on load
+was rejected: it would make `load()` run `followAccepted`, which calls the host
+today, and would rewrite history at restart.
+
 Proposed payload types (initial `payload_version: 1`):
 
 | Event | Source and replay | Preconditions and transition |
 | --- | --- | --- |
-| `memory.proposed` | Fed: `operator` for operator notes, `host` for capability products and body-store acknowledgements, `gateway` for compression/matching inference outputs. Replay feeds it verbatim. | Carries an operation id, proposal kind (write, promotion, demotion, enrolment), expected source revisions, body inline or body reference + digest, evidence and the producing record (`action.result`, `inference.recorded`). A proposal is evidence, never authority; source kind alone grants nothing. |
+| `memory.proposed` | Fed: `operator` for operator notes, `host` for capability products and body-store acknowledgements, `gateway` for compression/matching inference outputs. Replay feeds it verbatim. | Carries an operation id, proposal kind (write, promotion, demotion, enrolment), expected source revisions, body inline or body reference + digest + staging reservation id (§3 bodies), evidence and the producing record (`action.result`, `inference.recorded`). Asynchronous products also name their producing action (A11); operator notes need none. A proposal is evidence, never authority; source kind alone grants nothing. |
 | `memory.written` | Runtime, regenerated. Emitted on an accepted write proposal. | Validated body/evidence, scope, expected previous revision and capacity. Inserts one revision and supersedes the named previous revision, if any. A stale expected revision yields a runtime `memory.refused` (below), not a write. |
 | `memory.transitioned` | Runtime, regenerated. Emitted on an accepted promotion/demotion proposal. | Names operation id, source revisions, destination record, target scope, policy revision, producing evidence and any source retirement. One durable append makes the destination visible and retires named source projections together. |
 | `memory.evicted` | Runtime, regenerated. Emitted on an accepted `clock.tick` (bounded `ttl` batch, `scope_closed`), on a write/transition needing space (`capacity`), on a resource/admission change (`invalidated`), or with a supersession. | Expected current revision, reason (`ttl`, `capacity`, `invalidated`, `superseded`, `scope_closed`), sweep identity and scored inputs. Removes recall eligibility/body projection and records a tombstone. It does not delete authority or recovery evidence. `scope_closed` is emitted when the owning goal reaches `complete`/`missed`, or when `goal.opened` replaces it, excluding records pinned as recovery evidence. |
-| `memory.refused` | Runtime, regenerated. | Records a deterministic refusal of a proposal (stale revision, quota with no evictable victim, scope, missing evidence, unknown version) with its reason, so the producer's retry is a new proposal rather than a silent loss. |
+| `memory.refused` | Runtime, regenerated. | Records a deterministic refusal of a proposal (stale revision, quota with no evictable victim, scope, missing evidence, unknown version, `cancelled`, `operation_closed`, `journal_quota`) with its reason, so the producer's retry is a new proposal rather than a silent loss. A refusal never copies the proposal's body. |
 
 There is no `memory.used` event (decided, A8). A use is a memory revision listed
 in the memory slice manifest of an accepted, journaled `inference.requested`
@@ -171,6 +212,27 @@ outside the transition lock and may only produce a fed `memory.proposed`. The
 order of fed proposals depends on timing, and the journal records that order;
 the runtime's acceptance is the deterministic step. A stale proposal is refused,
 and the producer may replan within its finite allowance as a new proposal.
+
+Producing operation and cancellation (decided, A11). An `AbortSignal` asks a
+producer to stop; it cannot stop an uncooperative producer from returning a
+valid result, and cancelling compression changes neither source revisions nor
+scope. Acceptance is therefore bound to recorded cancellation state:
+
+- Every asynchronous producer (compression, matching, SLEEP ingestion, scoring)
+  runs as a recorded action: an `action.started` whose `action_id` is the
+  producing operation, with its reservation and grant. Cancellation is the
+  existing `Runtime.cancel` → `action.cancel_requested`, which already aborts
+  `inf:<action_id>` and the host invocation. No new cancellation primitive.
+- A proposal names `producing_action_id`. Acceptance, in step order, refuses it
+  with `cancelled` if that action's `cancel_requested` is set, and with
+  `operation_closed` if the action is unknown, terminal before the proposal, or
+  already has an accepted proposal (one accepted proposal per action, like a
+  single-use grant). Revision and scope checks still apply after these.
+- The refused product is not discarded silently: `memory.refused` cites the
+  proposal's seq, and the action's `action.result` keeps its bounded outcome and
+  spent cost as evidence. The source stays intact.
+- Cancellation after acceptance is too late by step order. It cannot erase the
+  transition; undoing it is a new, separately validated proposal.
 
 Extend the existing source/version validation boundary in
 [validation.ts](packages/weave/src/validation.ts): `EXPECTED_SOURCE`, `validate`.
@@ -209,6 +271,33 @@ remain mandatory. A legacy conclusion enters bounded recall only through an
 explicit, idempotent enrolment proposal with a recorded policy/tick. Legacy
 replay still follows its historical contract. Unknown new versions fail closed.
 
+Replayable conclusion import (decided, A12). A host import is I/O, so under A1
+it must be a fed observation. Contract (C5):
+
+- New imports are `conclusion.cached` `payload_version: 2` with source `host`
+  and the same id `conclusion:imported:<conclusion_id>`, so the A2 dedup set
+  and tombstone rule apply unchanged. `EXPECTED_SOURCE` admits `host` for
+  version 2 only; runtime-sourced version 1 stays the form for conclusions the
+  runtime caches itself (`maybeCacheConclusion`).
+- Live, `importRetainedConclusions` appends them inside the cycle without
+  starting another cycle (the existing `admit(input, triggerCycle)` with
+  `triggerCycle` false), so the cycle structure at HEAD is unchanged.
+- Replay must not feed them from the top-level loop: the cycle runs inside
+  `feed()` of its trigger, so a top-level feed would arrive after the cycle's
+  records. Instead, in `replayMode`, `importRetainedConclusions` consumes the
+  recorded version 2 imports at the next seqs from the recording, as replay
+  already serves recorded inputs by seq (`replayBySeq`, `replayRequests`). It
+  calls no host accessor. A recorded import that the cycle does not consume, or
+  one consumed out of order, fails replay at that seq.
+- Historical recordings containing runtime-sourced version 1
+  `conclusion:imported:*` observations are outside exact-replay support: no
+  recorded input exists from which to regenerate them. `replay()` checks for
+  them before its loop and returns `ok: false` with reason
+  `unsupported: runtime-sourced conclusion import` at the first such seq,
+  instead of today's generic divergence. `recover()`/`load()` of those journals
+  stays supported, because load folds stored observations. Tombstones and
+  placeholders prevent resurrection; they are not replay input.
+
 Bodies and replay: a memory-aware view records episodic/durable bodies as
 `{ content_class, digest, body_ref }`, never text. The decision-layer composition
 (outside Loom and outside gateway routing) resolves a reference through a host
@@ -216,9 +305,40 @@ body port and verifies the digest before disclosure; an unavailable or
 mismatched body fails that inference with a recorded reason. Replay regenerates
 the identical digest-only view and checks it against the recorded
 `inference.requested`; it never dereferences a body. Inline working notes are
-already in the journal. Body cleanup therefore protects only digests referenced
-by live records, in-flight requests (requested without a recorded result) and
-recovery evidence; replay needs none.
+already in the journal. Body cleanup therefore protects only digests owned by a
+staging reservation (below), live records, in-flight requests (requested without
+a recorded result) and recovery evidence; replay needs none.
+
+Staging reservations and deletion (decided, A10). A staged body awaiting
+acceptance belongs to none of Loom's sets, so the host pins it explicitly:
+
+- The host body port's proposed `stage(producing_action_id, bytes)` writes the
+  body and durably records a reservation (reservation id, digest, size and
+  producing action id) in the body store's own metadata before returning
+  `{ body_ref: reservation_id, digest }`. Each reservation is counted against
+  the staged quota from that moment; when the quota is full, stage refuses
+  and the producer's action fails with a recorded reason.
+- A reservation is released only on an explicit disposition taken from Loom's
+  committed journal by the composition root, by id only (Fabric and the body
+  store import no Loom State, as in A2). Committed ownership: a `memory.written`
+  or `memory.transitioned` naming the `body_ref` turns the reservation into
+  ownership by that record revision. Explicit abandonment: the producing action
+  is terminal (result, cancellation, or reconciled after restart) with no
+  accepted proposal naming the reservation. While the action is pending,
+  running or uncertain, the body stays pinned. There is no time-based release,
+  because a lease could expire between a valid proposal and its commit.
+- Bodies are content-addressed by digest with a per-digest owner set. Acquiring
+  an owner (`stage`, ownership handoff) and deleting take the same per-digest
+  lock in the body store. Cleanup deletes only after it durably marks the digest
+  `deleting` with an empty owner set. A `stage` of a digest marked `deleting`
+  waits for the deletion to finish and then writes fresh bytes under its new
+  reservation; it never reuses the bytes being deleted. A crash during deletion
+  leaves the marker, and restart resumes the deletion idempotently before that
+  digest accepts new owners.
+- Loom acceptance stays pure: it checks the proposal's digest, size and
+  reservation id shape, not host state. The guarantee that the body exists at
+  commit comes from the pin, which no cleanup can release before Loom's
+  disposition.
 
 ## 4. Active TTL, score eviction and storage bounds
 
@@ -255,11 +375,21 @@ Order each maintenance decision:
    `memory.refused`. Include destination bytes and metadata in peak accounting,
    so promotion cannot temporarily double the allowed store. Never evict the
    source first.
-4. Rebuildable indices, mirror bodies, superseded bodies and unreferenced staged
-   bodies have finite budgets and bounded cleanup. Inline working bodies stay in
-   the journal until C6 retires their segment, so their aggregate is bounded by
-   the working quota; episodic/durable eviction reclaims host body bytes through
-   cleanup, not just hiding ids from a view.
+4. Rebuildable indices, mirror bodies, superseded bodies and reserved staged
+   bodies have finite budgets and bounded cleanup. Episodic/durable eviction
+   reclaims host body bytes through cleanup, not just hiding ids from a view.
+5. The working quota bounds live recall only; it does not bound physical bytes
+   (decided, A13). Inline working bodies stay in the journal until C6 retires
+   their segment, so an empty scratchpad can still hold many retained copies.
+   Every retained inline copy counts against the journal/storage quota until
+   safe segment retirement: the body in `memory.proposed`, its copy in
+   `memory.written`, and superseded, evicted and refused revisions. v1 does not
+   deduplicate them, so an accepted inline write costs about twice its body.
+   Admission sizes the whole step frame (A9) against the journal quota minus the
+   reserved settlement headroom. If the write does not fit but its refusal does,
+   the step journals `memory.refused` (`journal_quota`). If even that does not
+   fit, the proposal is rejected unjournaled, as rejected observations are at
+   HEAD. Results, cancellation and reconciliation still use the headroom.
 
 Keep authoritative journals separate from evictable recall. No TTL may delete a
 consumed invocation identity, uncertain effect, held reservation, current read
@@ -297,19 +427,24 @@ synchronously in the step that admitted their trigger and are pure functions of
 State, so their order is fixed by the journal, not by timing. A stale proposal is
 refused, never overwrites a newer write, and replanning stays within a finite
 allowance. H1's rule against trace eviction/slow maintenance under that lock
-remains intact: the in-step work is a bounded batch with no I/O beyond the
-journal append.
+remains intact: the in-step work is a bounded batch with no I/O beyond the one
+step-frame append (A9).
 
 | Boundary or race | Required behavior and behavioral check |
 | --- | --- |
 | Write vs eviction/use | Both are decided in step order. Test both orders: a new revision is not removed by an old eviction, and an evicted revision is not selected into a later view or counted as used. Already disclosed immutable inputs remain evidence for their recorded action; current-state acceptance checks still apply. |
 | Interleaved write and TTL sweep under replay | Record a run where a fed write proposal and `clock.tick`s interleave with sweeps and a quota eviction; `replay()` must return `ok: true` with identical memory events and zero host, gateway, decision-layer or body-port calls. |
-| Crash before promotion commit | Destination is invisible and source remains. Any staged body is bounded orphan storage. Restart must not rerun compression automatically merely because an acknowledgement is missing. |
+| Crash inside a step (A9) | Red first at HEAD with a fault-injecting journal that stops after the n-th `persist`: crash after the trigger (`memory.proposed`, `clock.tick`) and after each generated eviction or write, including a quota eviction followed by a failed destination append, and after an `action.result` before `goal.missed`. Today each leaves a durable prefix that `load()` does not complete. After C2, truncate the journal at every byte offset of the final frame: `load()` yields the whole step or none of it, the operation-id lookup finds the proposal and its outcome together or neither, replay returns `ok: true` with no events beyond the record, and no new work is accepted before the tail is resolved. |
+| Crash before promotion commit | Destination is invisible and source remains. Any staged body stays pinned by its reservation until the producing action's disposition releases it (A10). Restart must not rerun compression automatically merely because an acknowledgement is missing. |
 | Crash after commit, before acknowledgement or projection update | Fold the one transition and derive destination plus source retirement once. Under the proposed C2 contract, retrying the operation id with an identical digest returns its recorded outcome; changed bytes under that id are rejected; an id from before the horizon is refused. Repeated recovery/replay neither duplicates memory nor renews TTL. |
-| Crash between host body write and Loom proposal | The body is unreferenced orphan storage under a bounded staged quota; cleanup reclaims it. No acknowledgement is issued until the proposal's outcome is journaled. |
+| Crash between host body write and Loom proposal | The reservation was durable before `stage` returned, so the body is pinned, not an orphan. Restart reconciles the producing action (result or `uncertain`). Once it is terminal with no accepted proposal, that disposition releases the reservation and cleanup reclaims the body. A body written without a durable reservation (crash inside `stage`) is unreferenced and reclaimable. No acknowledgement is issued until the proposal's outcome is journaled. |
+| Staging vs orphan cleanup (A10) | Controlled interleaving, red first against a cleanup that protects only live records, in-flight requests and recovery evidence: stage a body, run cleanup before the proposal is fed, then accept the digest-valid proposal. Expected: the body survives and the committed reference resolves. Also cover cleanup between acceptance and the ownership handoff, and a reservation whose action is cancelled (released only after `action.cancel_requested` and its terminal result are journaled). |
+| Digest reuse vs deletion (A10) | Controlled interleaving with an injected pause inside cleanup after the `deleting` mark: a new `stage` of the same digest waits, then writes fresh bytes, and its later commit resolves. Order the other way (`stage` takes the lock first): cleanup sees a non-empty owner set and deletes nothing. Crash after the mark: restart finishes the deletion before the digest accepts an owner. Red first against a store that deduplicates by digest without the lock. |
 | Journal partial write, ENOSPC, malformed record | No acknowledgement before durable complete append. Repair only a provably incomplete tail under sole-writer ownership; reject malformed complete records/interior corruption. Fail closed if completion is uncertain. Preserve previously committed records. Test new-file durability and checkpoint replacement, not only process-local mocks. |
-| Cancellation during compression or matching | Propagate the signal through capability/gateway ports. Before a proposal is accepted, leave source intact and accept no replacement; record bounded outcome/cost. After acceptance, cancellation cannot erase the transition. A late proposal is evidence subject to current revision/scope checks. |
-| Physical cleanup races | Delete only retired body digests unreferenced by live records, in-flight requests and recovery dependencies (replay dereferences none). Cleanup has no power to release effect reservations or grants. An aborted cleanup resumes idempotently from recorded retirement; failed cleanup reports storage pressure. |
+| Cancellation during compression or matching (A11) | `Runtime.cancel` propagates the signal through capability/gateway ports and journals `action.cancel_requested`. A proposal accepted after that, in step order, is refused (`cancelled`); the source stays intact and the action's bounded outcome/cost stays as evidence. Red check: a fake producer ignores its signal and returns a digest-valid proposal with unchanged source revisions and scope; today's revision/scope checks alone would accept it. Also: a second proposal from the same action is refused (`operation_closed`); cancellation journaled after acceptance cannot erase the transition; replay of both orders reproduces the same outcome. |
+| Physical cleanup races | Delete only digests whose owner set is empty: no staging reservation, live record, in-flight request or recovery dependency (replay dereferences none). Cleanup has no power to release effect reservations or grants. An aborted cleanup resumes idempotently from its `deleting` mark and recorded retirement; failed cleanup reports storage pressure. |
+| Stopped-clock journal growth (A13) | With no ticks, repeat inline write, supersede and evict until the journal quota is reached while the live scratchpad stays small or empty. Expected: retained bytes counted across proposals, written copies and superseded revisions; further proposals refused (`journal_quota`) or rejected unjournaled; `action.result`, cancellation and recovery still accepted within the reserved headroom. Red first against accounting that charges only the working quota. |
+| Replay of `conclusion:imported:*` (A12) | Two separate red checks. New contract: a recording with host-sourced version 2 imports interleaved with cycles replays `ok: true` with zero host accessor reads and the same cycle count; dropping or reordering one recorded import fails at its seq. Historical contract: a recording with runtime-sourced version 1 imports returns `ok: false` with the explicit `unsupported` reason at the first import, and `recover()` of the same journal still loads. |
 | Host mirror import after eviction | Decided design in A2. Tests (C5/C6): evict a conclusion, publish a checkpoint and retire the segments holding its `conclusion.cached`/`conclusion:imported:*` observations, restart, and have the host re-serve from cursor 0. Expect zero new `conclusion.cached` observations, in both restart orders (Fabric host first, Loom first) and with the Fabric retire mutation applied or still pending. |
 | Goal closes while threads write | `scope_closed` eviction is emitted in the step that records the terminal status; a later write proposal for that goal is refused (`scope`). Two concurrent threads proposing against revision N: one is accepted, the other refused as stale. |
 | Missing evidence or stale semantic index | Fail/return explicit uncertainty; never synthesize approval, validity or action success. Index revision/digest mismatches rebuild from committed authorized records without inference in replay. |
@@ -321,7 +456,8 @@ tail/checkpoint failure semantics. This is journal-wide: it changes durability
 and latency for every observation, so there is no memory-only fast path. Compose
 the proven approaches in FabricStore and FileAttemptJournal without importing
 Loom concerns into Fabric or claiming a cross-journal transaction. For host body
-writes, durable body first then one Loom commit; acknowledgements follow both.
+writes: durable body and reservation first, then one Loom step frame, then the
+ownership handoff (A10). Acknowledgements follow the frame.
 Test process termination separately from storage durability; any
 body/checkpoint path used must prove file and directory sync semantics rather
 than inherit an unverified guarantee from FabricStore. A memory projection/index
@@ -342,8 +478,8 @@ grant object, secret, approval substitute or executable authority.
 source references, producer revisions and bounded uncertainty. Its output
 format/availability is unverified here. Agree on a contract fixture first; never
 assume a new SLEEP scheduler or embedding service exists. Ingest as fed
-`memory.proposed` through the same validation, provenance, disclosure, budget
-and retention gates. Reject missing source evidence, conflicting scopes,
+`memory.proposed` under a recorded producing action (A11) through the same
+validation, provenance, disclosure, budget and retention gates. Reject missing source evidence, conflicting scopes,
 secrets, oversized products and unsupported versions. No model can choose its
 own TTL, cross-goal policy or admission outcome. Repeated ingestion of the same
 product id/digest is idempotent; a changed product is a new revision, not a
@@ -374,7 +510,7 @@ tune/holdout; do not alter an existing reference route to measure memory
 quality. Preserve existing route-specific price, credential and pin checks and
 the documented competitor gateway exception in `competitors.ts`.
 
-Every Loom- or gateway-consuming benchmark route at 7082342 gets an exact
+Every Loom- or gateway-consuming benchmark route at 056c521 gets an exact
 frame/body and request-count assertion while production memory is configured
 elsewhere, including cancellation/retry, and proves no recall call, product text
 or memory option enters it:
@@ -448,11 +584,16 @@ needs that evidence, not preference.
 | A6: Repeated findings | DECIDED. Encode recurring invariants as regression tests/lint using existing check patterns and `recordCheckGaps` evidence (§9). Keep capability generation, admission and execution separate; no automatic self-admission or audit removal. | — |
 | A7: Body placement | DECIDED. Working bodies inline up to a policy cap bounded by `logBound`; episodic/durable bodies always host references with digest; views and replay carry digests only (§3). | A required consumer cannot operate on digest-only replay evidence. |
 | A8: Recording memory use | DECIDED. No `memory.used` event; uses are folded from memory slice manifests in journaled `inference.requested` views (§3). | A consumer of memory outside recorded views needs use accounting. |
+| A9: Durable step completion | DECIDED. The trigger and every observation its step generates are staged purely, persisted as one `journal.step@1` frame with one append and fsync, then applied; host notifications run after commit (§3). This is journal-wide, covering today's `followAccepted` follow-ups too. Load-time completion of a pending step was rejected (it would make `load()` call the host). | A required follow-up cannot be computed without I/O before commit, or the per-step frame bound cannot be validated at the C3 test policy. |
+| A10: Body staging and deletion | DECIDED. Host-owned durable reservations pin staged bodies until Loom's committed disposition (ownership or explicit abandonment), with no time-based release. A per-digest lock and a durable `deleting` mark serialize deletion against new owners (§3). Fabric/body store receive ids only. | The C4/C6 interleaving tests fail, or reservations held by uncertain actions exhaust the staged quota in normal operation. |
+| A11: Cancellation binding | DECIDED. Asynchronous producers run as recorded actions; acceptance refuses proposals whose action has `cancel_requested`, is closed, or already has an accepted proposal. This reuses `Runtime.cancel`/`action.cancel_requested` rather than adding a primitive (§3). | A producer that cannot be represented as an action needs memory proposals. |
+| A12: Replayable conclusion import | DECIDED. New imports are host-sourced `conclusion.cached@2`, appended without a cycle trigger live and consumed by seq from the recording in replay. Historical runtime-sourced v1 imports fail replay explicitly as unsupported; recovery of them stays supported (§3). | A supported historical recording must replay exactly, or version 2 changes cycle structure relative to HEAD. |
+| A13: Inline byte accounting | DECIDED. Retained inline copies count against the journal/storage quota until segment retirement; the working quota bounds only live recall. v1 counts duplicates explicitly rather than deduplicating (§4). | C6's growth test shows the ~2× inline cost makes useful working notes infeasible within P3's quotas; then `memory.written` cites the proposal's body by seq and digest instead of copying it. |
 
 Implementation children must add agreed terms to GLOSSARY before using them:
 **memory tier**, **working scratchpad**, **episodic memory**, **memory record**,
-**memory proposal**, **memory promotion/demotion**, **memory eviction**, and
-**memory tombstone**. Define TTL in injected ticks and the supported replay
+**memory proposal**, **memory promotion/demotion**, **memory eviction**,
+**memory tombstone**, **step frame** (A9) and **staging reservation** (A10). Define TTL in injected ticks and the supported replay
 horizon; reuse Durable knowledge, Cached conclusion, Slice, Evidence, Replay,
 Recovery, Thread, Content class, Disclosure class and Inline content policy as
 already defined. Do not redefine Session, Tier or Promotion. GLOSSARY is
@@ -470,13 +611,13 @@ prove correctness. No source/tests/schema edits are part of this parent.
 
 | Child / PR | Dependencies | Red evidence required first | Done means |
 | --- | --- | --- | --- |
-| C1 — Freeze memory contract and language | Captain go; P1/P2 semantics | Contract fixture/check rejects unbounded policy, ambiguous evidence identity, forged scope, a fed observation claiming a runtime-only memory event, an inline body over the cap and unknown version | Agreed records/events with fixed provenance and replay rule, body placement, scope, TTL boundary, score arithmetic, concurrency ordering and replay versions; GLOSSARY terms added; product choices still visibly owned. Contract validation fails unsafe examples and passes valid bounded ones. |
-| C2 — Journal-wide durability and idempotent outcomes | C1; A1/A3 | A torn final line currently makes `FileJournal.snapshot()` throw; plus crash, failed fsync, competing writer and duplicate-operation checks expose the gaps | `FileJournal` (journal-wide, no memory fast path) acknowledges only durable appends, repairs only a provably torn tail under sole ownership, fails closed on interior corruption/contention, and supports the proposed operation-id outcome lookup: retry after checkpoint returns the original outcome, a changed digest is rejected, a pre-horizon id is refused. Per-append fsync cost is measured on the existing m1/h1 suites and stated in the PR. Single-use grant and existing recovery regressions stay green. |
-| C3 — Working scratchpads with active eviction | C1/C2; approved test policy | Tick expiry without reads or an active goal, exact TTL boundary, quota overflow, both write/eviction orderings, `scope_closed` on `complete`/`missed`/replacement, and the interleaved write + sweep replay test (§5) fail | Revisioned working records survive acknowledged restart; finite bytes/count, deterministic TTL/score eviction and bounded in-step sweeps; replay regenerates every memory event with zero host/gateway/body calls; no required authority/recovery state deleted. Admission refuses when space cannot be made. |
-| C4 — Episodic compression and atomic movement | C3; P1/P5 | Proposal acceptance followed by crash before/after commit, cancellation, stale source, duplicate product, and replay after host bodies are deleted fail | Reuses compaction helper where appropriate; persisted source coverage/producer/tokenizer evidence; one transition publishes replacement plus retirement. No source loss on failure, duplicate episode or repeated inference on replay; replay passes with bodies deleted. Summary never supplies authority/check success. |
-| C5 — Durable recall and conclusion retirement | C3; P2/P6 | Cross-goal leak, stale read set/admission, evicted host reimport in both restart orders (retire mutation applied and pending), cursor shift, replay of a log containing `conclusion:imported:*`, and changed index revision fail | Authorized bounded durable recall plus existing exact reuse validity, A2 tombstone/placeholder handling and both host/Loom restart orders; no body resurrection, no implicit action success. Semantic matching, if enabled, abstains within explicit budget. |
-| C6 — Bounded physical storage and checkpoint retirement | C2/C3 | Repeated writes/evictions grow disk; checkpoint crash, failed cleanup, archive-full, and evict + checkpoint + segment retirement + restart with host re-serving from cursor 0 (expect zero new `conclusion.cached`) fail | Reclaims hot/mirror/orphan bodies and redundant safe segments under finite quotas; verified checkpoint with retained-id index precedes deletion; declared horizon exactly replays, recovery preserves grants/reservations, beyond-horizon ids and replays fail explicitly. No unbounded tombstone/placeholder/archive escape; backpressure plus settlement headroom demonstrated. Product-facing retention limits wait for P3/P4. |
-| C7 — Ingest SLEEP #346 products | C4/C5; actual #346 contract | Duplicate/changed product id, fabricated evidence, private cross-scope text, cancellation and oversize output fail | Producer fixture is pinned; validated products enter as fed proposals within scopes/limits. Missing producer evidence refuses ingestion; consolidation products never grant admission or execution. No new SLEEP scheduler in Fabric/gateway. |
+| C1 — Freeze memory contract and language | Captain go; P1/P2 semantics | Contract fixture/check rejects unbounded policy, ambiguous evidence identity, forged scope, a fed observation claiming a runtime-only memory event, an inline body over the cap, an asynchronous product without a producing action, a host-referenced body without a reservation id, a host-sourced `conclusion.cached@1` and unknown version | Agreed records/events with fixed provenance and replay rule, body placement, scope, TTL boundary, score arithmetic, concurrency ordering and replay versions; GLOSSARY terms added; product choices still visibly owned. Contract validation fails unsafe examples and passes valid bounded ones. |
+| C2 — Journal-wide durability and idempotent outcomes | C1; A1/A3 | A torn final line currently makes `FileJournal.snapshot()` throw; the A9 crash-inside-a-step checks (§5) show a durable trigger prefix that `load()` never completes, using HEAD's `goal.missed` follow-up before memory code exists; plus crash, failed fsync, competing writer and duplicate-operation checks expose the gaps | `FileJournal` (journal-wide, no memory fast path) commits each step as one `journal.step@1` frame (A9), acknowledges only durable frames, reads old bare-line journals unchanged, repairs only a provably torn final frame under sole ownership, fails closed on interior corruption/contention, and supports the proposed operation-id outcome lookup: retry after checkpoint returns the original outcome, a changed digest is rejected, a pre-horizon id is refused. A reusable crash-injection harness truncates a recorded run at every frame and byte boundary and asserts whole-step load plus `ok: true` replay. Per-append fsync cost is measured on the existing m1/h1 suites and stated in the PR. Single-use grant and existing recovery regressions stay green. |
+| C3 — Working scratchpads with active eviction | C1/C2; approved test policy | Tick expiry without reads or an active goal, exact TTL boundary, quota overflow, both write/eviction orderings, `scope_closed` on `complete`/`missed`/replacement, the interleaved write + sweep replay test (§5), and the C2 crash harness at every boundary of a write step whose quota eviction precedes a failed destination append fail | Revisioned working records survive acknowledged restart; finite bytes/count, deterministic TTL/score eviction and bounded in-step sweeps; replay regenerates every memory event with zero host/gateway/body calls; no required authority/recovery state deleted. Admission refuses when space cannot be made. |
+| C4 — Episodic compression and atomic movement | C3; P1/P5 | Proposal acceptance followed by crash before/after commit; an uncooperative producer that ignores cancellation and returns a valid proposal with unchanged revisions and scope (A11); a second proposal from one action; staging vs orphan cleanup (A10); stale source; duplicate product; and replay after host bodies are deleted fail | Reuses compaction helper where appropriate; compression runs as a recorded action; persisted source coverage/producer/tokenizer evidence; one transition publishes replacement plus retirement. A cancelled producer's proposal is refused with its outcome/cost kept as evidence; staged bodies stay pinned until disposition. No source loss on failure, duplicate episode or repeated inference on replay; replay passes with bodies deleted. Summary never supplies authority/check success. |
+| C5 — Durable recall and conclusion retirement | C3; P2/P6 | Cross-goal leak, stale read set/admission, evicted host reimport in both restart orders (retire mutation applied and pending), cursor shift, the two separate A12 import replay checks (new host-sourced version 2 replays `ok: true` with zero host reads; historical runtime-sourced version 1 fails as `unsupported` while `recover()` still loads), and changed index revision fail | Authorized bounded durable recall plus existing exact reuse validity, A2 tombstone/placeholder handling and both host/Loom restart orders; replayable imports per A12, with wv-n275's replay comparison updated to assert the explicit results instead of preserving divergence; no body resurrection, no implicit action success. Semantic matching, if enabled, abstains within explicit budget. |
+| C6 — Bounded physical storage and checkpoint retirement | C2/C3 | Repeated writes/evictions grow disk; the A13 stopped-clock growth test against working-quota-only accounting; digest reuse vs deletion and crash after the `deleting` mark (A10); checkpoint crash, failed cleanup, archive-full, and evict + checkpoint + segment retirement + restart with host re-serving from cursor 0 (expect zero new `conclusion.cached`) fail | Journal/storage quota counts every retained inline copy until segment retirement and refuses admission at the physical bound while keeping settlement headroom; reclaims hot/mirror/released-staged bodies (only through the per-digest protocol) and redundant safe segments under finite quotas; verified checkpoint with retained-id index precedes deletion; declared horizon exactly replays, recovery preserves grants/reservations, beyond-horizon ids and replays fail explicitly. No unbounded tombstone/placeholder/archive escape; backpressure plus settlement headroom demonstrated. Product-facing retention limits wait for P3/P4. |
+| C7 — Ingest SLEEP #346 products | C4/C5; actual #346 contract | Duplicate/changed product id, fabricated evidence, private cross-scope text, cancellation of the producing action followed by a late valid product (A11), and oversize output fail | Producer fixture is pinned; validated products enter as fed proposals within scopes/limits. Missing producer evidence refuses ingestion; consolidation products never grant admission or execution. No new SLEEP scheduler in Fabric/gateway. |
 | C8 — Integration gates and independently reviewed evaluation | C4/C5/C6; C7 when available | Every route in §6 fails its exact frame/body/count assertion against a deliberate leak fixture; Weft and credential canaries fail against a leaking fixture; restart interleavings fail | Offline route-isolation (all four route families), Weft, privacy, crash/replay and adversarial matrix pass; default/narrow frame profiles byte-identical; repeated review findings have targeted lint/tests. Memory quality, if model-touched, is evaluated through **Gauge**: a governed **criteria set** and a **case set** whose holdout and independently authored adversarial cases are frozen by **governed revision** before any comparison. Quality uncertainty is reported, not converted into authority or a weaker check. |
 
 Tracked follow-up: issue #347 lists a child “Gauge holdout for memory quality if
@@ -508,8 +649,11 @@ stopped clock; equal scores; exact TTL boundary; cancelled or oversized summary;
 source revision/permission change during compression; crash on either side of
 promotion/checkpoint publication; replay of interleaved writes and sweeps;
 mirror import after retirement and segment loss; duplicate id with changed
-digest; pre-horizon id; corrupt complete journal record; torn final line; full
-protected storage; goal closure with live scratch; and
+digest; pre-horizon id; corrupt complete journal record; torn final line; crash
+after a trigger or any generated event inside one step; staging vs cleanup and
+digest reuse vs deletion; a producer that ignores cancellation; inline journal
+growth with an empty scratchpad; replay of new and historical conclusion
+imports; full protected storage; goal closure with live scratch; and
 expired/revoked/copied/consumed grants.
 
 Repeated findings become checks, not reminders. Two findings have now recurred
@@ -520,8 +664,21 @@ no execution owner”, now `scope_closed`). Each is bound to a named red test (C
 mirror restart tests; C3 `scope_closed` test) and, at implementation time, cited
 through `recordCheckGaps` evidence so a third recurrence is caught by a check.
 
-Planning verification: confirm all cited files/symbols at 7082342,
+The 056c521 review shows two more recurrences, so each gets a general check,
+not one more case:
+
+- Conclusion import, a third time (resurrection, then cursor/dedup, now replay).
+  C5 adds a replay-closure test: every recording the fake host can produce,
+  including imports, replays `ok: true` with zero host accessor reads, or fails
+  with a named `unsupported` reason. It runs across the m1/wv-026d/wv-n275
+  fixtures, so a new runtime-sourced append that reads the host fails it.
+- Crash and partial-write boundaries (plan3 commit/ack rows, now step prefixes).
+  C2's crash-injection harness truncates at every frame and byte boundary of
+  every recorded fixture run, so a future follow-up type is covered without
+  writing a new crash test.
+
+Planning verification: confirm all cited files/symbols at 056c521,
 `git diff --check`, `npm run fmt:check`, and only root `PLAN.md` changed. No
 runtime suite or benchmark run is warranted by this documentation-only task.
-Commit as `plan: WV-347 plan3 address Claude review of 7082342` if Git permits,
+Commit as `plan: WV-347 plan4 address Codex review of 056c521` if Git permits,
 and do not push.
