@@ -190,6 +190,10 @@ def decide1(task: dict, ext: dict, fid: dict, d: Path) -> dict:
     return cf_run("@cf/cloudflare/clef-flash", body, d / "03_decide1.out.json")
 
 
+def is_gate_incomplete(fid: dict) -> bool:
+    return fid["answers"]["gate"]["choice"] == "reprompt"
+
+
 def decide2_tool(task: dict, d: Path) -> dict:
     body = {
         "model": "clef-flash",
@@ -254,6 +258,26 @@ def summarize(task, ext, fid, d1, d2=None, args=None):
     return row
 
 
+def summarize_incomplete(task, fid):
+    return {
+        "id": task["id"],
+        "expect_band": task["expect_band"],
+        "band": None,
+        "band_conf": None,
+        "band_match": None,
+        "fidelity_gate": fid["answers"]["gate"]["choice"],
+        "prefer_original": fid["answers"]["prefer_original"]["noul"],
+        "lists_usable": fid["answers"]["lists_usable"]["noul"],
+        "split_gain": None,
+        "irreversible_low_conf": None,
+        "tool": None,
+        "tool_conf": None,
+        "args": None,
+        "incomplete": True,
+        "incomplete_reason": "reprompt fidelity gate rejected extraction hints; stopped before decide-1",
+    }
+
+
 def main():
     tasks = json.loads((ROOT / "tasks.json").read_text())
     rows = []
@@ -265,6 +289,11 @@ def main():
         try:
             ext = extract(task, d)
             fid = fidelity(task, ext, d)
+            if is_gate_incomplete(fid):
+                row = summarize_incomplete(task, fid)
+                print("  → incomplete: reprompt fidelity gate rejected hints; stopped before decide-1", flush=True)
+                rows.append(row)
+                continue
             d1 = decide1(task, ext, fid, d)
             band = d1["answers"]["band"]["choice"]
             d2 = args = None
@@ -281,8 +310,23 @@ def main():
 
     (ROOT / "summary.json").write_text(json.dumps(rows, indent=2))
     matched = sum(1 for r in rows if r.get("band_match"))
-    print(f"\nDONE {matched}/{len(rows)} band matches", flush=True)
+    decided = sum(1 for r in rows if isinstance(r.get("band"), str))
+    print(f"\nDONE {matched}/{len(rows)} band matches ({decided} decided)", flush=True)
+
+
+def selftest() -> int:
+    for gate, want in (("reprompt", True), ("use_hints", False), ("original_only", False)):
+        fid = {"answers": {"gate": {"choice": gate}}}
+        assert is_gate_incomplete(fid) == want
+    fid = {"answers": {"gate": {"choice": "reprompt"}, "prefer_original": {"noul": 0.85}, "lists_usable": {"noul": 0.02}}}
+    row = summarize_incomplete({"id": "T09_two_reads", "expect_band": "spawn_subtasks"}, fid)
+    assert row["incomplete"] is True and row["band"] is None and row["band_match"] is None
+    assert row["fidelity_gate"] == "reprompt" and row["incomplete_reason"]
+    print("selftest ok (reprompt->incomplete, other gates proceed)", flush=True)
+    return 0
 
 
 if __name__ == "__main__":
+    if "--selftest" in sys.argv:
+        raise SystemExit(selftest())
     main()

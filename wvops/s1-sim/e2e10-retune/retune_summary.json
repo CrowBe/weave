@@ -6,9 +6,7 @@
     "raw_conf": 0.3115,
     "tuned_band": "spawn_subtasks",
     "match_expect": true,
-    "tune_notes": [
-      "conf_floor+multi\u2192spawn"
-    ],
+    "tune_notes": ["conf_floor+multi\u2192spawn"],
     "fidelity": {
       "multi": 0.8839,
       "reads_before_gen": 0.3949,
@@ -47,9 +45,7 @@
     "raw_conf": 0.321,
     "tuned_band": "spawn_subtasks",
     "match_expect": false,
-    "tune_notes": [
-      "conf_floor+multi\u2192spawn"
-    ],
+    "tune_notes": ["conf_floor+multi\u2192spawn"],
     "fidelity": {
       "multi": 0.5638,
       "reads_before_gen": 0.0176,
@@ -88,9 +84,7 @@
       "ask_human": 0.1339
     },
     "tuned_band_v2": "ask_human",
-    "tune_notes_v2": [
-      "conf_floor+clarify\u2192ask"
-    ],
+    "tune_notes_v2": ["conf_floor+clarify\u2192ask"],
     "match_expect_v2": true,
     "merge_upgrade": "ask_human",
     "clef_final": {

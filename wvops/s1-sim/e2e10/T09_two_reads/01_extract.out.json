@@ -4,48 +4,25 @@
     "intent": {
       "type": "text",
       "p_null": 0.013877586461603642,
-      "span": [
-        67,
-        119
-      ],
+      "span": [67, 119],
       "guess": "produce a short bullet list of tensions between them",
       "confidence": 0.2714245915412903,
       "value": "produce a short bullet list of tensions between them"
     },
     "entities": {
       "type": "list",
-      "value": [
-        "AGENTS.md",
-        "VISION.md",
-        "CrowBe/weave"
-      ],
+      "value": ["AGENTS.md", "VISION.md", "CrowBe/weave"],
       "spans": [
-        [
-          11,
-          20
-        ],
-        [
-          25,
-          34
-        ],
-        [
-          40,
-          52
-        ]
+        [11, 20],
+        [25, 34],
+        [40, 52]
       ],
       "confidence": 0.44756510633856067
     },
     "prohibitions": {
       "type": "list",
-      "value": [
-        "Do not edit either file"
-      ],
-      "spans": [
-        [
-          121,
-          144
-        ]
-      ],
+      "value": ["Do not edit either file"],
+      "spans": [[121, 144]],
       "confidence": 0.003206865801859455
     },
     "ask_triggers": {
@@ -57,10 +34,7 @@
     "needs_generation": {
       "type": "text",
       "p_null": 0.008485335856676102,
-      "span": [
-        121,
-        127
-      ],
+      "span": [121, 127],
       "guess": "Do not",
       "confidence": 0.28751298785209656,
       "value": "Do not"
@@ -68,10 +42,7 @@
     "multi_part": {
       "type": "text",
       "p_null": 0.008501996286213398,
-      "span": [
-        121,
-        127
-      ],
+      "span": [121, 127],
       "guess": "Do not",
       "confidence": 0.42544686794281006,
       "value": "Do not"
@@ -79,10 +50,7 @@
     "irreversible": {
       "type": "text",
       "p_null": 0.06727783381938934,
-      "span": [
-        121,
-        127
-      ],
+      "span": [121, 127],
       "guess": "Do not",
       "confidence": 0.5708540081977844,
       "value": "Do not"

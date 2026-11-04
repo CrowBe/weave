@@ -50,18 +50,9 @@
       {
         "id": "gen_edits",
         "kind": "escalate_gen",
-        "edit_paths": [
-          "AGENTS.md",
-          "docs/research/prompt-decomposition-extraction-vs-generation.md"
-        ],
-        "forbid_paths": [
-          "VISION.md",
-          "packages/weave/src/sites/boolean.ts"
-        ],
-        "depends_on": [
-          "read_0",
-          "read_1"
-        ]
+        "edit_paths": ["AGENTS.md", "docs/research/prompt-decomposition-extraction-vs-generation.md"],
+        "forbid_paths": ["VISION.md", "packages/weave/src/sites/boolean.ts"],
+        "depends_on": ["read_0", "read_1"]
       }
     ],
     "clef": {

@@ -1,1 +1,47 @@
-{"model": "clef-flash", "state": {"original_input": "USER: (1) List open PRs on CrowBe/weave touching packages/gateway. (2) Draft a Slack note for #eng summarizing those titles \u2014 do not post. (3) File a Linear issue titled 'gateway publish-gate follow-up' priority medium. Do not merge anything.", "extraction": {"intent": {"value": "List open PRs", "confidence": 0.2978562116622925, "p_null": 0.021243717521429062}, "entities": {"value": ["CrowBe/weave", "Slack", "#eng", "Linear", "gateway publish-gate"], "confidence": 0.026599597681092203, "p_null": null}, "prohibitions": {"value": ["do not post", "Do not", "merge anything"], "confidence": 0.0050746931075832565, "p_null": null}, "ask_triggers": {"value": [], "confidence": 0.01032768631551162, "p_null": null}, "needs_generation": {"value": "do not", "confidence": 0.29167211055755615, "p_null": 0.027362193912267685}, "multi_part": {"value": "do not", "confidence": 0.11439603567123413, "p_null": 0.0010659463005140424}, "irreversible": {"value": "do not", "confidence": 0.38376230001449585, "p_null": 0.021287649869918823}}, "policy": "Original is authoritative. Lists with near-zero confidence are hints only."}, "questions": {"prefer_original": {"type": "noul", "instructions": "Should decide treat original as authoritative and extraction as hints only?"}, "scalars_or_entities_usable": {"type": "noul", "instructions": "Are high-signal entities/ids from extraction safe enough as hints?"}, "lists_usable": {"type": "noul", "instructions": "Are list fields complete enough to drive planning without re-reading original?"}, "gate": {"type": "choice", "instructions": "Fidelity gate for the next decide pass.", "criteria": {"use_hints": "Use high-conf extract hints alongside original", "original_only": "Ignore weak extract; decide from original only", "reprompt": "Re-extract with tighter schema first"}}}}
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "USER: (1) List open PRs on CrowBe/weave touching packages/gateway. (2) Draft a Slack note for #eng summarizing those titles \u2014 do not post. (3) File a Linear issue titled 'gateway publish-gate follow-up' priority medium. Do not merge anything.",
+    "extraction": {
+      "intent": { "value": "List open PRs", "confidence": 0.2978562116622925, "p_null": 0.021243717521429062 },
+      "entities": {
+        "value": ["CrowBe/weave", "Slack", "#eng", "Linear", "gateway publish-gate"],
+        "confidence": 0.026599597681092203,
+        "p_null": null
+      },
+      "prohibitions": {
+        "value": ["do not post", "Do not", "merge anything"],
+        "confidence": 0.0050746931075832565,
+        "p_null": null
+      },
+      "ask_triggers": { "value": [], "confidence": 0.01032768631551162, "p_null": null },
+      "needs_generation": { "value": "do not", "confidence": 0.29167211055755615, "p_null": 0.027362193912267685 },
+      "multi_part": { "value": "do not", "confidence": 0.11439603567123413, "p_null": 0.0010659463005140424 },
+      "irreversible": { "value": "do not", "confidence": 0.38376230001449585, "p_null": 0.021287649869918823 }
+    },
+    "policy": "Original is authoritative. Lists with near-zero confidence are hints only."
+  },
+  "questions": {
+    "prefer_original": {
+      "type": "noul",
+      "instructions": "Should decide treat original as authoritative and extraction as hints only?"
+    },
+    "scalars_or_entities_usable": {
+      "type": "noul",
+      "instructions": "Are high-signal entities/ids from extraction safe enough as hints?"
+    },
+    "lists_usable": {
+      "type": "noul",
+      "instructions": "Are list fields complete enough to drive planning without re-reading original?"
+    },
+    "gate": {
+      "type": "choice",
+      "instructions": "Fidelity gate for the next decide pass.",
+      "criteria": {
+        "use_hints": "Use high-conf extract hints alongside original",
+        "original_only": "Ignore weak extract; decide from original only",
+        "reprompt": "Re-extract with tighter schema first"
+      }
+    }
+  }
+}

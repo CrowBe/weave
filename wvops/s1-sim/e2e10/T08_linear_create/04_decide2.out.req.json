@@ -1,1 +1,32 @@
-{"model": "clef-flash", "state": {"original_input": "USER: Create a Linear issue in team ENG titled 'Gauge session budget envelope' with priority high and description 'Session/period cost budget as primary; optional per-thread caps.'\nCONTEXT: linear_create(team, title, priority, description) available. Creating an issue is reversible (can close).", "phase": "decide-2 after band=tool_call", "policy": "Pick exactly one tool. Prefer the least irreversible matching tool."}, "questions": {"tool": {"type": "choice", "instructions": "Which tool?", "criteria": {"cancel_order": "Cancel an order by id", "refund_order": "Refund an order by id", "gh_pr_list": "List pull requests for a repo/path", "gh_pr_get": "Get one PR by number", "gh_pr_create": "Open a draft or ready PR", "gh_branch_delete": "Delete a remote branch", "linear_create": "Create a Linear issue", "slack_post": "Post a message to a Slack channel", "save_draft": "Save a draft note without posting", "read_file": "Read a file from a repo at a ref", "wipe_account": "Permanently delete account data", "none": "No matching tool"}}, "args_likely_in_input": {"type": "noul", "instructions": "Are the required arguments present in the original input?"}}}
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "USER: Create a Linear issue in team ENG titled 'Gauge session budget envelope' with priority high and description 'Session/period cost budget as primary; optional per-thread caps.'\nCONTEXT: linear_create(team, title, priority, description) available. Creating an issue is reversible (can close).",
+    "phase": "decide-2 after band=tool_call",
+    "policy": "Pick exactly one tool. Prefer the least irreversible matching tool."
+  },
+  "questions": {
+    "tool": {
+      "type": "choice",
+      "instructions": "Which tool?",
+      "criteria": {
+        "cancel_order": "Cancel an order by id",
+        "refund_order": "Refund an order by id",
+        "gh_pr_list": "List pull requests for a repo/path",
+        "gh_pr_get": "Get one PR by number",
+        "gh_pr_create": "Open a draft or ready PR",
+        "gh_branch_delete": "Delete a remote branch",
+        "linear_create": "Create a Linear issue",
+        "slack_post": "Post a message to a Slack channel",
+        "save_draft": "Save a draft note without posting",
+        "read_file": "Read a file from a repo at a ref",
+        "wipe_account": "Permanently delete account data",
+        "none": "No matching tool"
+      }
+    },
+    "args_likely_in_input": {
+      "type": "noul",
+      "instructions": "Are the required arguments present in the original input?"
+    }
+  }
+}

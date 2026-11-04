@@ -33,14 +33,11 @@
       "GLOSSARY.md",
       "Co"
     ],
-    "forbid": [
-      "boolean.ts",
-      "GLOSSARY.md"
-    ],
+    "forbid": ["boolean.ts", "GLOSSARY.md"],
     "conf": {
-      "read_paths": 1.2866366677325376e-07,
-      "edit_paths": 1.0965549312304123e-06,
-      "forbidden_paths": 1.0978760287610836e-05
+      "read_paths": 1.2866366677325376e-7,
+      "edit_paths": 1.0965549312304123e-6,
+      "forbidden_paths": 1.0978760287610836e-5
     }
   },
   "target_roles": {
@@ -82,18 +79,9 @@
       {
         "id": "gen_edits",
         "kind": "escalate_gen",
-        "edit_paths": [
-          "VISION.md",
-          "packages/weave/src/sites/CONTRACT.md"
-        ],
-        "forbid_paths": [
-          "packages/weave/src/sites/boolean.ts",
-          "GLOSSARY.md"
-        ],
-        "depends_on": [
-          "read_0",
-          "read_1"
-        ],
+        "edit_paths": ["VISION.md", "packages/weave/src/sites/CONTRACT.md"],
+        "forbid_paths": ["packages/weave/src/sites/boolean.ts", "GLOSSARY.md"],
+        "depends_on": ["read_0", "read_1"],
         "brief": "Amend only ['VISION.md', 'packages/weave/src/sites/CONTRACT.md']; respect forbid ['packages/weave/src/sites/boolean.ts', 'GLOSSARY.md']; evidence from prior reads."
       }
     ],

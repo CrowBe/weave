@@ -1,1 +1,25 @@
-{"model": "clairic", "state": "THREAD (stale): Jane wanted French FAQ translation \u2014 ignore. Mirror-to-marketing job is retired.\nCURRENT: Compare docs/pricing.md and docs/billing.md on CrowBe/weave main. Write eng-leads recommendation with quotations. Open draft PR adding CONFLICTS.md titled 'docs: pricing/billing conflict summary' priority medium \u2014 do not merge, do not modify pricing.md or billing.md, stay in docs/. Leave a draft #eng note with conflict count + PR URL; post nothing. If either doc missing, ask me. If a $ amount disagrees by >20%, escalate that conflict to me before the PR.", "fields": {"intent": {"type": "text", "instructions": "Primary action the user wants, as a short phrase."}, "entities": {"type": "list", "items": "text", "instructions": "Named ids, repos, files, channels, titles mentioned."}, "prohibitions": {"type": "list", "items": "text", "instructions": "Complete do-not / never phrases retaining negation."}, "ask_triggers": {"type": "list", "items": "text", "instructions": "Conditions that require asking the user first."}, "needs_generation": {"type": "text", "instructions": "yes if free-form drafting is required, no otherwise."}, "multi_part": {"type": "text", "instructions": "yes if the request has independent subtasks, no if single."}, "irreversible": {"type": "text", "instructions": "yes if an irreversible act is requested, no, or unclear."}}}
+{
+  "model": "clairic",
+  "state": "THREAD (stale): Jane wanted French FAQ translation \u2014 ignore. Mirror-to-marketing job is retired.\nCURRENT: Compare docs/pricing.md and docs/billing.md on CrowBe/weave main. Write eng-leads recommendation with quotations. Open draft PR adding CONFLICTS.md titled 'docs: pricing/billing conflict summary' priority medium \u2014 do not merge, do not modify pricing.md or billing.md, stay in docs/. Leave a draft #eng note with conflict count + PR URL; post nothing. If either doc missing, ask me. If a $ amount disagrees by >20%, escalate that conflict to me before the PR.",
+  "fields": {
+    "intent": { "type": "text", "instructions": "Primary action the user wants, as a short phrase." },
+    "entities": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Named ids, repos, files, channels, titles mentioned."
+    },
+    "prohibitions": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Complete do-not / never phrases retaining negation."
+    },
+    "ask_triggers": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Conditions that require asking the user first."
+    },
+    "needs_generation": { "type": "text", "instructions": "yes if free-form drafting is required, no otherwise." },
+    "multi_part": { "type": "text", "instructions": "yes if the request has independent subtasks, no if single." },
+    "irreversible": { "type": "text", "instructions": "yes if an irreversible act is requested, no, or unclear." }
+  }
+}

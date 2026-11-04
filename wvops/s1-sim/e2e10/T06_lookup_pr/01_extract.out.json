@@ -4,29 +4,17 @@
     "intent": {
       "type": "text",
       "p_null": 0.021874185651540756,
-      "span": [
-        52,
-        76
-      ],
+      "span": [52, 76],
       "guess": "Just the state and title",
       "confidence": 0.16607654094696045,
       "value": "Just the state and title"
     },
     "entities": {
       "type": "list",
-      "value": [
-        "PR #358",
-        "CrowBe/weave"
-      ],
+      "value": ["PR #358", "CrowBe/weave"],
       "spans": [
-        [
-          27,
-          34
-        ],
-        [
-          38,
-          50
-        ]
+        [27, 34],
+        [38, 50]
       ],
       "confidence": 0.29311996162963116
     },
@@ -38,24 +26,14 @@
     },
     "ask_triggers": {
       "type": "list",
-      "value": [
-        "gh_pr_get"
-      ],
-      "spans": [
-        [
-          87,
-          96
-        ]
-      ],
+      "value": ["gh_pr_get"],
+      "spans": [[87, 96]],
       "confidence": 0.0012022604928310172
     },
     "needs_generation": {
       "type": "text",
       "p_null": 0.08559217303991318,
-      "span": [
-        111,
-        120
-      ],
+      "span": [111, 120],
       "guess": "available",
       "confidence": 0.7503082752227783,
       "value": "available"
@@ -63,10 +41,7 @@
     "multi_part": {
       "type": "text",
       "p_null": 0.005564315244555473,
-      "span": [
-        52,
-        56
-      ],
+      "span": [52, 56],
       "guess": "Just",
       "confidence": 0.286287397146225,
       "value": "Just"
@@ -74,10 +49,7 @@
     "irreversible": {
       "type": "text",
       "p_null": 0.26365798711776733,
-      "span": [
-        111,
-        120
-      ],
+      "span": [111, 120],
       "guess": "available",
       "confidence": 0.9882614016532898,
       "value": "available"

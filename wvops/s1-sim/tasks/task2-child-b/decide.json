@@ -5,16 +5,10 @@
     "extracted": {
       "channel": "eng",
       "must_not_post": "Do not",
-      "pr_titles": [
-        "feat(gateway): standing-write publish gate",
-        "pin proof port"
-      ],
+      "pr_titles": ["feat(gateway): standing-write publish gate", "pin proof port"],
       "deliverable": "a short Slack note"
     },
-    "available_tools": [
-      "slack_post",
-      "save_draft"
-    ],
+    "available_tools": ["slack_post", "save_draft"],
     "policy": "Drafting free-form Slack copy is generation past frontier; save_draft holds the result. Do not post."
   },
   "questions": {

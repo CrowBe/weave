@@ -4,10 +4,7 @@
     "team": {
       "type": "text",
       "p_null": 0.9668294787406921,
-      "span": [
-        6,
-        9
-      ],
+      "span": [6, 9],
       "guess": "Fix",
       "confidence": 0.27590274810791016,
       "value": null
@@ -15,10 +12,7 @@
     "title": {
       "type": "text",
       "p_null": 0.09446093440055847,
-      "span": [
-        6,
-        12
-      ],
+      "span": [6, 12],
       "guess": "Fix it",
       "confidence": 0.8551837801933289,
       "value": "Fix it"
@@ -26,10 +20,7 @@
     "priority": {
       "type": "text",
       "p_null": 0.9996857643127441,
-      "span": [
-        202,
-        214
-      ],
+      "span": [202, 214],
       "guess": "confirmation",
       "confidence": 0.15736237168312073,
       "value": null
@@ -37,10 +28,7 @@
     "description": {
       "type": "text",
       "p_null": 0.19859597086906433,
-      "span": [
-        155,
-        214
-      ],
+      "span": [155, 214],
       "guess": "Irreversible force-push is not allowed without confirmation",
       "confidence": 0.19841131567955017,
       "value": "Irreversible force-push is not allowed without confirmation"

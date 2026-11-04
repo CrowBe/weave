@@ -1,1 +1,30 @@
-{"model": "clef-flash", "state": {"original_input": "USER: Delete the remote branch experiment/clairic-poc on CrowBe/weave \u2014 I'm done with it.\nCONTEXT: gh_branch_delete(repo, branch) is irreversible for unmerged work. Branch may still have an open PR #401.", "extraction_hints": "SUPPRESSED \u2014 use original only", "fidelity_gate": "original_only", "fidelity_scores": {"prefer_original": 0.6483, "lists_usable": 0.1397}, "policy": "Decide-1 is coarse only. Do NOT pick a concrete tool name. Bands: tool_call = one deterministic tool act; spawn_subtasks = independent children; escalate_gen = free-form generation past frontier; ask_human = irreversible+low-conf or user-only ambiguity (D-ENG-030)."}, "questions": {"band": {"type": "choice", "instructions": "Which coarse act band?", "criteria": {"tool_call": "A single deterministic tool action covers the request", "spawn_subtasks": "Independent subtasks should become child threads", "escalate_gen": "Needs generative drafting with a pre-targeted brief", "ask_human": "Ask the user before any consequential act"}}, "split_gain": {"type": "noul", "instructions": "If multi-part, would spawning children improve correctness/parallelism?"}, "irreversible_low_conf": {"type": "noul", "instructions": "Is there an irreversible act with unresolved identity or low confidence?"}}}
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "USER: Delete the remote branch experiment/clairic-poc on CrowBe/weave \u2014 I'm done with it.\nCONTEXT: gh_branch_delete(repo, branch) is irreversible for unmerged work. Branch may still have an open PR #401.",
+    "extraction_hints": "SUPPRESSED \u2014 use original only",
+    "fidelity_gate": "original_only",
+    "fidelity_scores": { "prefer_original": 0.6483, "lists_usable": 0.1397 },
+    "policy": "Decide-1 is coarse only. Do NOT pick a concrete tool name. Bands: tool_call = one deterministic tool act; spawn_subtasks = independent children; escalate_gen = free-form generation past frontier; ask_human = irreversible+low-conf or user-only ambiguity (D-ENG-030)."
+  },
+  "questions": {
+    "band": {
+      "type": "choice",
+      "instructions": "Which coarse act band?",
+      "criteria": {
+        "tool_call": "A single deterministic tool action covers the request",
+        "spawn_subtasks": "Independent subtasks should become child threads",
+        "escalate_gen": "Needs generative drafting with a pre-targeted brief",
+        "ask_human": "Ask the user before any consequential act"
+      }
+    },
+    "split_gain": {
+      "type": "noul",
+      "instructions": "If multi-part, would spawning children improve correctness/parallelism?"
+    },
+    "irreversible_low_conf": {
+      "type": "noul",
+      "instructions": "Is there an irreversible act with unresolved identity or low confidence?"
+    }
+  }
+}

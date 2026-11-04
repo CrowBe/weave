@@ -1,1 +1,79 @@
-{"model": "clef-flash", "state": {"original_input": "THREAD (stale): Jane wanted French FAQ translation \u2014 ignore. Mirror-to-marketing job is retired.\nCURRENT: Compare docs/pricing.md and docs/billing.md on CrowBe/weave main. Write eng-leads recommendation with quotations. Open draft PR adding CONFLICTS.md titled 'docs: pricing/billing conflict summary' priority medium \u2014 do not merge, do not modify pricing.md or billing.md, stay in docs/. Leave a draft #eng note with conflict count + PR URL; post nothing. If either doc missing, ask me. If a $ amount disagrees by >20%, escalate that conflict to me before the PR.", "extraction": {"intent": {"value": "Compare docs/pricing.md and docs/billing.md on CrowBe/weave main", "confidence": 0.286579966545105, "p_null": 0.012516770511865616}, "deliverable_count": {"value": "2", "confidence": 0.40855276584625244, "p_null": 0.005278536584228277}, "deliverables": {"value": ["THREAD", "Jane", "French FAQ translation", "Mirror-to-marketing job", "Compare docs/pricing.md", "docs/billing.md", "CrowBe/weave main", "Write", "eng-leads recommendation", "Open draft PR"], "confidence": 4.6221108248294135e-11, "p_null": null}, "entities": {"value": ["Mirror-to", "Compare", "docs/pricing.md", "docs/billing.md", "CrowBe/weave main", "eng-leads", "CONFLICTS.md", "docs: pricing/billing", "pricing.md", "billing.md", "docs/", "doc"], "confidence": 1.6610642227183277e-06, "p_null": null}, "prohibitions": {"value": ["do", "do not modify pricing.md"], "confidence": 8.577373676673777e-06, "p_null": null}, "needs_prior_reads": {"value": "nothing", "confidence": 0.10158341377973557, "p_null": 0.22324919700622559}, "needs_generation": {"value": "nothing", "confidence": 0.6583942770957947, "p_null": 0.10331566631793976}, "user_only_ambiguity": {"value": "nothing", "confidence": 0.15769007802009583, "p_null": 0.03310038894414902}, "irreversible": {"value": "retired", "confidence": 0.2291698455810547, "p_null": 0.034861501306295395}}, "policy": "Original authoritative. Near-zero list conf = hints only."}, "questions": {"prefer_original": {"type": "noul", "instructions": "Prefer original over extraction for planning?"}, "multi_deliverable": {"type": "noul", "instructions": "Does the request clearly have 2+ independent deliverables/subtasks?"}, "reads_before_gen": {"type": "noul", "instructions": "Must tool reads complete before any generation?"}, "user_must_clarify": {"type": "noul", "instructions": "Is the request too vague/ambiguous for any safe act without asking the user?"}, "gate": {"type": "choice", "instructions": "Fidelity gate", "criteria": {"use_hints": "use high-conf hints", "original_only": "original only", "reprompt": "re-extract first"}}}}
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "THREAD (stale): Jane wanted French FAQ translation \u2014 ignore. Mirror-to-marketing job is retired.\nCURRENT: Compare docs/pricing.md and docs/billing.md on CrowBe/weave main. Write eng-leads recommendation with quotations. Open draft PR adding CONFLICTS.md titled 'docs: pricing/billing conflict summary' priority medium \u2014 do not merge, do not modify pricing.md or billing.md, stay in docs/. Leave a draft #eng note with conflict count + PR URL; post nothing. If either doc missing, ask me. If a $ amount disagrees by >20%, escalate that conflict to me before the PR.",
+    "extraction": {
+      "intent": {
+        "value": "Compare docs/pricing.md and docs/billing.md on CrowBe/weave main",
+        "confidence": 0.286579966545105,
+        "p_null": 0.012516770511865616
+      },
+      "deliverable_count": { "value": "2", "confidence": 0.40855276584625244, "p_null": 0.005278536584228277 },
+      "deliverables": {
+        "value": [
+          "THREAD",
+          "Jane",
+          "French FAQ translation",
+          "Mirror-to-marketing job",
+          "Compare docs/pricing.md",
+          "docs/billing.md",
+          "CrowBe/weave main",
+          "Write",
+          "eng-leads recommendation",
+          "Open draft PR"
+        ],
+        "confidence": 4.6221108248294135e-11,
+        "p_null": null
+      },
+      "entities": {
+        "value": [
+          "Mirror-to",
+          "Compare",
+          "docs/pricing.md",
+          "docs/billing.md",
+          "CrowBe/weave main",
+          "eng-leads",
+          "CONFLICTS.md",
+          "docs: pricing/billing",
+          "pricing.md",
+          "billing.md",
+          "docs/",
+          "doc"
+        ],
+        "confidence": 1.6610642227183277e-6,
+        "p_null": null
+      },
+      "prohibitions": {
+        "value": ["do", "do not modify pricing.md"],
+        "confidence": 8.577373676673777e-6,
+        "p_null": null
+      },
+      "needs_prior_reads": { "value": "nothing", "confidence": 0.10158341377973557, "p_null": 0.22324919700622559 },
+      "needs_generation": { "value": "nothing", "confidence": 0.6583942770957947, "p_null": 0.10331566631793976 },
+      "user_only_ambiguity": { "value": "nothing", "confidence": 0.15769007802009583, "p_null": 0.03310038894414902 },
+      "irreversible": { "value": "retired", "confidence": 0.2291698455810547, "p_null": 0.034861501306295395 }
+    },
+    "policy": "Original authoritative. Near-zero list conf = hints only."
+  },
+  "questions": {
+    "prefer_original": { "type": "noul", "instructions": "Prefer original over extraction for planning?" },
+    "multi_deliverable": {
+      "type": "noul",
+      "instructions": "Does the request clearly have 2+ independent deliverables/subtasks?"
+    },
+    "reads_before_gen": { "type": "noul", "instructions": "Must tool reads complete before any generation?" },
+    "user_must_clarify": {
+      "type": "noul",
+      "instructions": "Is the request too vague/ambiguous for any safe act without asking the user?"
+    },
+    "gate": {
+      "type": "choice",
+      "instructions": "Fidelity gate",
+      "criteria": {
+        "use_hints": "use high-conf hints",
+        "original_only": "original only",
+        "reprompt": "re-extract first"
+      }
+    }
+  }
+}

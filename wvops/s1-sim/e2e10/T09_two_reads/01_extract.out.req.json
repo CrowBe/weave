@@ -1,1 +1,25 @@
-{"model": "clairic", "state": "USER: Read AGENTS.md and VISION.md from CrowBe/weave on main, then produce a short bullet list of tensions between them. Do not edit either file.\nCONTEXT: Reading is a tool; the tension list needs generation after both reads return.", "fields": {"intent": {"type": "text", "instructions": "Primary action the user wants, as a short phrase."}, "entities": {"type": "list", "items": "text", "instructions": "Named ids, repos, files, channels, titles mentioned."}, "prohibitions": {"type": "list", "items": "text", "instructions": "Complete do-not / never phrases retaining negation."}, "ask_triggers": {"type": "list", "items": "text", "instructions": "Conditions that require asking the user first."}, "needs_generation": {"type": "text", "instructions": "yes if free-form drafting is required, no otherwise."}, "multi_part": {"type": "text", "instructions": "yes if the request has independent subtasks, no if single."}, "irreversible": {"type": "text", "instructions": "yes if an irreversible act is requested, no, or unclear."}}}
+{
+  "model": "clairic",
+  "state": "USER: Read AGENTS.md and VISION.md from CrowBe/weave on main, then produce a short bullet list of tensions between them. Do not edit either file.\nCONTEXT: Reading is a tool; the tension list needs generation after both reads return.",
+  "fields": {
+    "intent": { "type": "text", "instructions": "Primary action the user wants, as a short phrase." },
+    "entities": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Named ids, repos, files, channels, titles mentioned."
+    },
+    "prohibitions": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Complete do-not / never phrases retaining negation."
+    },
+    "ask_triggers": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Conditions that require asking the user first."
+    },
+    "needs_generation": { "type": "text", "instructions": "yes if free-form drafting is required, no otherwise." },
+    "multi_part": { "type": "text", "instructions": "yes if the request has independent subtasks, no if single." },
+    "irreversible": { "type": "text", "instructions": "yes if an irreversible act is requested, no, or unclear." }
+  }
+}

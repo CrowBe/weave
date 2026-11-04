@@ -16,46 +16,16 @@
         "docs: pricing/billing conflict summary"
       ],
       "spans": [
-        [
-          298,
-          302
-        ],
-        [
-          420,
-          442
-        ],
-        [
-          443,
-          453
-        ],
-        [
-          457,
-          469
-        ],
-        [
-          471,
-          476
-        ],
-        [
-          551,
-          577
-        ],
-        [
-          648,
-          668
-        ],
-        [
-          793,
-          805
-        ],
-        [
-          1045,
-          1055
-        ],
-        [
-          1335,
-          1373
-        ]
+        [298, 302],
+        [420, 442],
+        [443, 453],
+        [457, 469],
+        [471, 476],
+        [551, 577],
+        [648, 668],
+        [793, 805],
+        [1045, 1055],
+        [1335, 1373]
       ],
       "confidence": 3.2891488094949974e-21
     },
@@ -69,72 +39,31 @@
         "docs: pricing/billing conflict summary\""
       ],
       "spans": [
-        [
-          443,
-          453
-        ],
-        [
-          457,
-          469
-        ],
-        [
-          676,
-          695
-        ],
-        [
-          846,
-          850
-        ],
-        [
-          1335,
-          1374
-        ]
+        [443, 453],
+        [457, 469],
+        [676, 695],
+        [846, 850],
+        [1335, 1374]
       ],
       "confidence": 5.431224473772676e-9
     },
     "source_files": {
       "type": "list",
-      "value": [
-        "pricing.md",
-        "billing.md",
-        "CrowBe/weave",
-        "docs"
-      ],
+      "value": ["pricing.md", "billing.md", "CrowBe/weave", "docs"],
       "spans": [
-        [
-          428,
-          438
-        ],
-        [
-          443,
-          453
-        ],
-        [
-          457,
-          469
-        ],
-        [
-          1045,
-          1055
-        ],
-        [
-          1059,
-          1069
-        ],
-        [
-          1335,
-          1339
-        ]
+        [428, 438],
+        [443, 453],
+        [457, 469],
+        [1045, 1055],
+        [1059, 1069],
+        [1335, 1339]
       ],
       "confidence": 0.00003271656316943663
     },
     "repo": {
       "type": "text",
       "p_null": 0.002901002299040556,
-      "span": [
-        457,
-        469
-      ],
+      "span": [457, 469],
       "guess": "CrowBe/weave",
       "confidence": 0.9999589920043945,
       "value": "CrowBe/weave"
@@ -142,53 +71,22 @@
     "path_scope": {
       "type": "text",
       "p_null": 0.013037794269621372,
-      "span": [
-        774,
-        779
-      ],
+      "span": [774, 779],
       "guess": "docs/",
       "confidence": 0.9513646960258484,
       "value": "docs/"
     },
     "prohibited_actions": {
       "type": "list",
-      "value": [
-        "do",
-        "post nothing",
-        "#",
-        "publish anything externally",
-        "pricing.md",
-        "docs"
-      ],
+      "value": ["do", "post nothing", "#", "publish anything externally", "pricing.md", "docs"],
       "spans": [
-        [
-          744,
-          746
-        ],
-        [
-          793,
-          805
-        ],
-        [
-          846,
-          847
-        ],
-        [
-          1002,
-          1029
-        ],
-        [
-          1031,
-          1033
-        ],
-        [
-          1045,
-          1055
-        ],
-        [
-          1335,
-          1339
-        ]
+        [744, 746],
+        [793, 805],
+        [846, 847],
+        [1002, 1029],
+        [1031, 1033],
+        [1045, 1055],
+        [1335, 1339]
       ],
       "confidence": 1.9576400728895246e-11
     },
@@ -197,12 +95,7 @@
       "value": [
         "if a conflict quotes a dollar amount that disagrees by more than 20%, escalate that single conflict to me before drafting the PR"
       ],
-      "spans": [
-        [
-          1171,
-          1299
-        ]
-      ],
+      "spans": [[1171, 1299]],
       "confidence": 1.4674063776942626e-9
     },
     "ask_conditions": {
@@ -213,44 +106,20 @@
     },
     "stale_or_ignore": {
       "type": "list",
-      "value": [
-        "Last week",
-        "French translation of the FAQ",
-        "Staging DB snapshot",
-        "snap-tue-19",
-        "billing.md"
-      ],
+      "value": ["Last week", "French translation of the FAQ", "Staging DB snapshot", "snap-tue-19", "billing.md"],
       "spans": [
-        [
-          57,
-          66
-        ],
-        [
-          187,
-          216
-        ],
-        [
-          256,
-          275
-        ],
-        [
-          298,
-          309
-        ],
-        [
-          443,
-          453
-        ]
+        [57, 66],
+        [187, 216],
+        [256, 275],
+        [298, 309],
+        [443, 453]
       ],
       "confidence": 1.7613469343369168e-10
     },
     "pr_title": {
       "type": "text",
       "p_null": 0.00006161569035612047,
-      "span": [
-        1335,
-        1373
-      ],
+      "span": [1335, 1373],
       "guess": "docs: pricing/billing conflict summary",
       "confidence": 0.5353376865386963,
       "value": "docs: pricing/billing conflict summary"
@@ -258,10 +127,7 @@
     "priority": {
       "type": "text",
       "p_null": 0.0008471030741930008,
-      "span": [
-        1313,
-        1319
-      ],
+      "span": [1313, 1319],
       "guess": "medium",
       "confidence": 0.9999547004699707,
       "value": "medium"
@@ -269,10 +135,7 @@
     "slack_channel": {
       "type": "text",
       "p_null": 0.0012998334132134914,
-      "span": [
-        846,
-        850
-      ],
+      "span": [846, 850],
       "guess": "#eng",
       "confidence": 0.9735984802246094,
       "value": "#eng"
@@ -280,10 +143,7 @@
     "data_source": {
       "type": "text",
       "p_null": 0.006714769173413515,
-      "span": [
-        1154,
-        1158
-      ],
+      "span": [1154, 1158],
       "guess": "main",
       "confidence": 0.9932994842529297,
       "value": "main"

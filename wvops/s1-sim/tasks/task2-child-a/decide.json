@@ -6,17 +6,9 @@
       "repo": "CrowBe/weave",
       "path_filter": "gateway",
       "output_needed": "titles",
-      "prohibited": [
-        "merge",
-        "draft Slack"
-      ]
+      "prohibited": ["merge", "draft Slack"]
     },
-    "available_tools": [
-      "gh_pr_list(repo, path)",
-      "gh_pr_merge",
-      "slack_post",
-      "linear_create"
-    ],
+    "available_tools": ["gh_pr_list(repo, path)", "gh_pr_merge", "slack_post", "linear_create"],
     "policy": "Only list; merge/post/create are out of scope for this child."
   },
   "questions": {

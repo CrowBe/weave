@@ -1,1 +1,47 @@
-{"model": "clef-flash", "state": {"original_input": "USER: Wipe everything for the Acme account \u2014 customer records, invoices, staging dump. Gone for good. Also write a polite goodbye email.\nCONTEXT: Acme Corp=acme-88; Acme Retail=acme-retail-12. Destruction needs human approval.", "extraction": {"intent": {"value": "Wipe everything for the Acme account", "confidence": 0.7915128469467163, "p_null": 0.02263837680220604}, "entities": {"value": ["Acme", "acme-88", "acme-retail-12"], "confidence": 0.008993371515125114, "p_null": null}, "prohibitions": {"value": ["Gone", "Destruction"], "confidence": 3.2595043320403283e-05, "p_null": null}, "ask_triggers": {"value": ["Acme Corp", "Destruction"], "confidence": 5.742373746662064e-05, "p_null": null}, "needs_generation": {"value": "Gone", "confidence": 0.4621409475803375, "p_null": 0.03238203004002571}, "multi_part": {"value": "Gone", "confidence": 0.49342066049575806, "p_null": 0.005273503717035055}, "irreversible": {"value": "Gone", "confidence": 0.5500277876853943, "p_null": 0.01196639146655798}}, "policy": "Original is authoritative. Lists with near-zero confidence are hints only."}, "questions": {"prefer_original": {"type": "noul", "instructions": "Should decide treat original as authoritative and extraction as hints only?"}, "scalars_or_entities_usable": {"type": "noul", "instructions": "Are high-signal entities/ids from extraction safe enough as hints?"}, "lists_usable": {"type": "noul", "instructions": "Are list fields complete enough to drive planning without re-reading original?"}, "gate": {"type": "choice", "instructions": "Fidelity gate for the next decide pass.", "criteria": {"use_hints": "Use high-conf extract hints alongside original", "original_only": "Ignore weak extract; decide from original only", "reprompt": "Re-extract with tighter schema first"}}}}
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "USER: Wipe everything for the Acme account \u2014 customer records, invoices, staging dump. Gone for good. Also write a polite goodbye email.\nCONTEXT: Acme Corp=acme-88; Acme Retail=acme-retail-12. Destruction needs human approval.",
+    "extraction": {
+      "intent": {
+        "value": "Wipe everything for the Acme account",
+        "confidence": 0.7915128469467163,
+        "p_null": 0.02263837680220604
+      },
+      "entities": {
+        "value": ["Acme", "acme-88", "acme-retail-12"],
+        "confidence": 0.008993371515125114,
+        "p_null": null
+      },
+      "prohibitions": { "value": ["Gone", "Destruction"], "confidence": 3.2595043320403283e-5, "p_null": null },
+      "ask_triggers": { "value": ["Acme Corp", "Destruction"], "confidence": 5.742373746662064e-5, "p_null": null },
+      "needs_generation": { "value": "Gone", "confidence": 0.4621409475803375, "p_null": 0.03238203004002571 },
+      "multi_part": { "value": "Gone", "confidence": 0.49342066049575806, "p_null": 0.005273503717035055 },
+      "irreversible": { "value": "Gone", "confidence": 0.5500277876853943, "p_null": 0.01196639146655798 }
+    },
+    "policy": "Original is authoritative. Lists with near-zero confidence are hints only."
+  },
+  "questions": {
+    "prefer_original": {
+      "type": "noul",
+      "instructions": "Should decide treat original as authoritative and extraction as hints only?"
+    },
+    "scalars_or_entities_usable": {
+      "type": "noul",
+      "instructions": "Are high-signal entities/ids from extraction safe enough as hints?"
+    },
+    "lists_usable": {
+      "type": "noul",
+      "instructions": "Are list fields complete enough to drive planning without re-reading original?"
+    },
+    "gate": {
+      "type": "choice",
+      "instructions": "Fidelity gate for the next decide pass.",
+      "criteria": {
+        "use_hints": "Use high-conf extract hints alongside original",
+        "original_only": "Ignore weak extract; decide from original only",
+        "reprompt": "Re-extract with tighter schema first"
+      }
+    }
+  }
+}

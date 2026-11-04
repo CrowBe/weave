@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Held-out T12: AGENTS.md + research doc edit; forbid VISION and runtime."""
 from __future__ import annotations
-import json, os, subprocess
+import json, os, subprocess, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+
+def eval_edit_ok(to_edit, expect_edit) -> bool:
+    return set(to_edit) == set(expect_edit)
 CF = os.environ.get("CF_BIN", "cf")
 ENV = os.environ.copy()
 if os.environ.get("CF_NODE22_BIN"):
@@ -137,7 +140,7 @@ def main():
         "band_match": tuned == TASK["expect_band"],
         "fidelity": {k: fid["answers"][k].get("noul", fid["answers"][k].get("choice")) for k in fid["answers"]},
         "target_roles": roles, "target_confs": confs,
-        "edit_ok": expect_edit.issubset(set(to_edit)),
+        "edit_ok": eval_edit_ok(to_edit, expect_edit),
         "forbid_ok": all(roles.get(p) in ("forbid", "skip") for p in expect_forbid_or_skip) and not any(p in to_edit for p in expect_forbid_or_skip),
         "plan": plan,
         "shape_match": spawn["answers"]["plan_ok"]["noul"] >= 0.35 and tuned == "spawn_subtasks",
@@ -146,5 +149,20 @@ def main():
     (d / "06_plan.json").write_text(json.dumps(plan, indent=2))
     print(json.dumps({k: summary[k] for k in ("tuned_band","band_match","edit_ok","forbid_ok","shape_match","target_roles")}, indent=2))
 
+def selftest() -> int:
+    want = "docs/research/prompt-decomposition-extraction-vs-generation.md"
+    cases = [
+        (["AGENTS.md", "docs/research/prompt-decomposition-extraction-vs-generation.md"], {"AGENTS.md", "docs/research/prompt-decomposition-extraction-vs-generation.md"}, True),
+        (["AGENTS.md", "docs/research/prompt-decomposition-extraction-vs-generation.md", "VISION.md"], {"AGENTS.md", "docs/research/prompt-decomposition-extraction-vs-generation.md"}, False),
+        (["AGENTS.md"], {"AGENTS.md", "docs/research/prompt-decomposition-extraction-vs-generation.md"}, False),
+    ]
+    for to_edit, expect_edit, want in cases:
+        got = eval_edit_ok(to_edit, expect_edit)
+        assert got == want, f"eval_edit_ok({to_edit}, {expect_edit}) -> {got}, want {want}"
+    print(f"selftest ok ({len(cases)} cases)", flush=True)
+    return 0
+
 if __name__ == "__main__":
+    if "--selftest" in sys.argv:
+        raise SystemExit(selftest())
     main()

@@ -1,1 +1,30 @@
-{"model": "clef-flash", "state": {"original_input": "THREAD (stale): Jane wanted French FAQ translation \u2014 ignore. Mirror-to-marketing job is retired.\nCURRENT: Compare docs/pricing.md and docs/billing.md on CrowBe/weave main. Write eng-leads recommendation with quotations. Open draft PR adding CONFLICTS.md titled 'docs: pricing/billing conflict summary' priority medium \u2014 do not merge, do not modify pricing.md or billing.md, stay in docs/. Leave a draft #eng note with conflict count + PR URL; post nothing. If either doc missing, ask me. If a $ amount disagrees by >20%, escalate that conflict to me before the PR.", "extraction_hints": "SUPPRESSED \u2014 use original only", "fidelity_gate": "original_only", "fidelity_scores": {"prefer_original": 0.7423, "lists_usable": 0.3923}, "policy": "Decide-1 is coarse only. Do NOT pick a concrete tool name. Bands: tool_call = one deterministic tool act; spawn_subtasks = independent children; escalate_gen = free-form generation past frontier; ask_human = irreversible+low-conf or user-only ambiguity (D-ENG-030)."}, "questions": {"band": {"type": "choice", "instructions": "Which coarse act band?", "criteria": {"tool_call": "A single deterministic tool action covers the request", "spawn_subtasks": "Independent subtasks should become child threads", "escalate_gen": "Needs generative drafting with a pre-targeted brief", "ask_human": "Ask the user before any consequential act"}}, "split_gain": {"type": "noul", "instructions": "If multi-part, would spawning children improve correctness/parallelism?"}, "irreversible_low_conf": {"type": "noul", "instructions": "Is there an irreversible act with unresolved identity or low confidence?"}}}
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "THREAD (stale): Jane wanted French FAQ translation \u2014 ignore. Mirror-to-marketing job is retired.\nCURRENT: Compare docs/pricing.md and docs/billing.md on CrowBe/weave main. Write eng-leads recommendation with quotations. Open draft PR adding CONFLICTS.md titled 'docs: pricing/billing conflict summary' priority medium \u2014 do not merge, do not modify pricing.md or billing.md, stay in docs/. Leave a draft #eng note with conflict count + PR URL; post nothing. If either doc missing, ask me. If a $ amount disagrees by >20%, escalate that conflict to me before the PR.",
+    "extraction_hints": "SUPPRESSED \u2014 use original only",
+    "fidelity_gate": "original_only",
+    "fidelity_scores": { "prefer_original": 0.7423, "lists_usable": 0.3923 },
+    "policy": "Decide-1 is coarse only. Do NOT pick a concrete tool name. Bands: tool_call = one deterministic tool act; spawn_subtasks = independent children; escalate_gen = free-form generation past frontier; ask_human = irreversible+low-conf or user-only ambiguity (D-ENG-030)."
+  },
+  "questions": {
+    "band": {
+      "type": "choice",
+      "instructions": "Which coarse act band?",
+      "criteria": {
+        "tool_call": "A single deterministic tool action covers the request",
+        "spawn_subtasks": "Independent subtasks should become child threads",
+        "escalate_gen": "Needs generative drafting with a pre-targeted brief",
+        "ask_human": "Ask the user before any consequential act"
+      }
+    },
+    "split_gain": {
+      "type": "noul",
+      "instructions": "If multi-part, would spawning children improve correctness/parallelism?"
+    },
+    "irreversible_low_conf": {
+      "type": "noul",
+      "instructions": "Is there an irreversible act with unresolved identity or low confidence?"
+    }
+  }
+}

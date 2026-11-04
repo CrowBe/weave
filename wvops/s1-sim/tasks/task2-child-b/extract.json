@@ -2,9 +2,9 @@
   "model": "clairic",
   "state": "PARENT ASSIGNED SUBTASK B\nDraft a short Slack note for the eng channel summarizing these PR titles. Do not post — leave as draft.\nPR titles from sibling A:\n- feat(gateway): standing-write publish gate\n- fix(gateway): refuse self-approval on live v1\n- chore(gateway): pin proof port 8787",
   "fields": {
-    "channel": {"type": "text", "instructions": "Slack channel named for the note."},
-    "must_not_post": {"type": "text", "instructions": "Whether posting is forbidden: yes or no."},
-    "pr_titles": {"type": "list", "items": "text", "instructions": "Each PR title to summarize."},
-    "deliverable": {"type": "text", "instructions": "The artifact this child must produce."}
+    "channel": { "type": "text", "instructions": "Slack channel named for the note." },
+    "must_not_post": { "type": "text", "instructions": "Whether posting is forbidden: yes or no." },
+    "pr_titles": { "type": "list", "items": "text", "instructions": "Each PR title to summarize." },
+    "deliverable": { "type": "text", "instructions": "The artifact this child must produce." }
   }
 }

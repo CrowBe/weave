@@ -1,1 +1,25 @@
-{"model": "clairic", "state": "USER: Delete the remote branch experiment/clairic-poc on CrowBe/weave \u2014 I'm done with it.\nCONTEXT: gh_branch_delete(repo, branch) is irreversible for unmerged work. Branch may still have an open PR #401.", "fields": {"intent": {"type": "text", "instructions": "Primary action the user wants, as a short phrase."}, "entities": {"type": "list", "items": "text", "instructions": "Named ids, repos, files, channels, titles mentioned."}, "prohibitions": {"type": "list", "items": "text", "instructions": "Complete do-not / never phrases retaining negation."}, "ask_triggers": {"type": "list", "items": "text", "instructions": "Conditions that require asking the user first."}, "needs_generation": {"type": "text", "instructions": "yes if free-form drafting is required, no otherwise."}, "multi_part": {"type": "text", "instructions": "yes if the request has independent subtasks, no if single."}, "irreversible": {"type": "text", "instructions": "yes if an irreversible act is requested, no, or unclear."}}}
+{
+  "model": "clairic",
+  "state": "USER: Delete the remote branch experiment/clairic-poc on CrowBe/weave \u2014 I'm done with it.\nCONTEXT: gh_branch_delete(repo, branch) is irreversible for unmerged work. Branch may still have an open PR #401.",
+  "fields": {
+    "intent": { "type": "text", "instructions": "Primary action the user wants, as a short phrase." },
+    "entities": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Named ids, repos, files, channels, titles mentioned."
+    },
+    "prohibitions": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Complete do-not / never phrases retaining negation."
+    },
+    "ask_triggers": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Conditions that require asking the user first."
+    },
+    "needs_generation": { "type": "text", "instructions": "yes if free-form drafting is required, no otherwise." },
+    "multi_part": { "type": "text", "instructions": "yes if the request has independent subtasks, no if single." },
+    "irreversible": { "type": "text", "instructions": "yes if an irreversible act is requested, no, or unclear." }
+  }
+}

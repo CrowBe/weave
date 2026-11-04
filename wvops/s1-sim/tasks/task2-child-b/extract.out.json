@@ -4,10 +4,7 @@
     "channel": {
       "type": "text",
       "p_null": 0.0015704743564128876,
-      "span": [
-        59,
-        62
-      ],
+      "span": [59, 62],
       "guess": "eng",
       "confidence": 0.9914574027061462,
       "value": "eng"
@@ -15,39 +12,24 @@
     "must_not_post": {
       "type": "text",
       "p_null": 0.004219633061438799,
-      "span": [
-        100,
-        106
-      ],
+      "span": [100, 106],
       "guess": "Do not",
       "confidence": 0.47236236929893494,
       "value": "Do not"
     },
     "pr_titles": {
       "type": "list",
-      "value": [
-        "feat(gateway): standing-write publish gate",
-        "pin proof port"
-      ],
+      "value": ["feat(gateway): standing-write publish gate", "pin proof port"],
       "spans": [
-        [
-          158,
-          200
-        ],
-        [
-          267,
-          281
-        ]
+        [158, 200],
+        [267, 281]
       ],
       "confidence": 0.003632018764146632
     },
     "deliverable": {
       "type": "text",
       "p_null": 0.010476808995008469,
-      "span": [
-        32,
-        50
-      ],
+      "span": [32, 50],
       "guess": "a short Slack note",
       "confidence": 0.3952675759792328,
       "value": "a short Slack note"

@@ -4,80 +4,43 @@
     "intent": {
       "type": "text",
       "p_null": 0.02263837680220604,
-      "span": [
-        6,
-        42
-      ],
+      "span": [6, 42],
       "guess": "Wipe everything for the Acme account",
       "confidence": 0.7915128469467163,
       "value": "Wipe everything for the Acme account"
     },
     "entities": {
       "type": "list",
-      "value": [
-        "Acme",
-        "acme-88",
-        "acme-retail-12"
-      ],
+      "value": ["Acme", "acme-88", "acme-retail-12"],
       "spans": [
-        [
-          30,
-          34
-        ],
-        [
-          156,
-          163
-        ],
-        [
-          177,
-          191
-        ]
+        [30, 34],
+        [156, 163],
+        [177, 191]
       ],
       "confidence": 0.008993371515125114
     },
     "prohibitions": {
       "type": "list",
-      "value": [
-        "Gone",
-        "Destruction"
-      ],
+      "value": ["Gone", "Destruction"],
       "spans": [
-        [
-          87,
-          91
-        ],
-        [
-          193,
-          204
-        ]
+        [87, 91],
+        [193, 204]
       ],
-      "confidence": 3.2595043320403283e-05
+      "confidence": 3.2595043320403283e-5
     },
     "ask_triggers": {
       "type": "list",
-      "value": [
-        "Acme Corp",
-        "Destruction"
-      ],
+      "value": ["Acme Corp", "Destruction"],
       "spans": [
-        [
-          146,
-          155
-        ],
-        [
-          193,
-          204
-        ]
+        [146, 155],
+        [193, 204]
       ],
-      "confidence": 5.742373746662064e-05
+      "confidence": 5.742373746662064e-5
     },
     "needs_generation": {
       "type": "text",
       "p_null": 0.03238203004002571,
-      "span": [
-        87,
-        91
-      ],
+      "span": [87, 91],
       "guess": "Gone",
       "confidence": 0.4621409475803375,
       "value": "Gone"
@@ -85,10 +48,7 @@
     "multi_part": {
       "type": "text",
       "p_null": 0.005273503717035055,
-      "span": [
-        87,
-        91
-      ],
+      "span": [87, 91],
       "guess": "Gone",
       "confidence": 0.49342066049575806,
       "value": "Gone"
@@ -96,10 +56,7 @@
     "irreversible": {
       "type": "text",
       "p_null": 0.01196639146655798,
-      "span": [
-        87,
-        91
-      ],
+      "span": [87, 91],
       "guess": "Gone",
       "confidence": 0.5500277876853943,
       "value": "Gone"

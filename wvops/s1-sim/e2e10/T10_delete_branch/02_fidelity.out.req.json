@@ -1,1 +1,47 @@
-{"model": "clef-flash", "state": {"original_input": "USER: Delete the remote branch experiment/clairic-poc on CrowBe/weave \u2014 I'm done with it.\nCONTEXT: gh_branch_delete(repo, branch) is irreversible for unmerged work. Branch may still have an open PR #401.", "extraction": {"intent": {"value": "Delete the remote branch experiment", "confidence": 0.2818254828453064, "p_null": 0.0021767665166407824}, "entities": {"value": ["experiment/clairic-poc", "CrowBe/weave"], "confidence": 0.014763672024279976, "p_null": null}, "prohibitions": {"value": ["gh_branch_delete(repo"], "confidence": 0.00016100217038760126, "p_null": null}, "ask_triggers": {"value": [], "confidence": 0.00622980264124293, "p_null": null}, "needs_generation": {"value": "done", "confidence": 0.5021157264709473, "p_null": 0.017542488873004913}, "multi_part": {"value": "done", "confidence": 0.8447199463844299, "p_null": 0.002425318118184805}, "irreversible": {"value": "irreversible", "confidence": 0.6770060658454895, "p_null": 0.02094000205397606}}, "policy": "Original is authoritative. Lists with near-zero confidence are hints only."}, "questions": {"prefer_original": {"type": "noul", "instructions": "Should decide treat original as authoritative and extraction as hints only?"}, "scalars_or_entities_usable": {"type": "noul", "instructions": "Are high-signal entities/ids from extraction safe enough as hints?"}, "lists_usable": {"type": "noul", "instructions": "Are list fields complete enough to drive planning without re-reading original?"}, "gate": {"type": "choice", "instructions": "Fidelity gate for the next decide pass.", "criteria": {"use_hints": "Use high-conf extract hints alongside original", "original_only": "Ignore weak extract; decide from original only", "reprompt": "Re-extract with tighter schema first"}}}}
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "USER: Delete the remote branch experiment/clairic-poc on CrowBe/weave \u2014 I'm done with it.\nCONTEXT: gh_branch_delete(repo, branch) is irreversible for unmerged work. Branch may still have an open PR #401.",
+    "extraction": {
+      "intent": {
+        "value": "Delete the remote branch experiment",
+        "confidence": 0.2818254828453064,
+        "p_null": 0.0021767665166407824
+      },
+      "entities": {
+        "value": ["experiment/clairic-poc", "CrowBe/weave"],
+        "confidence": 0.014763672024279976,
+        "p_null": null
+      },
+      "prohibitions": { "value": ["gh_branch_delete(repo"], "confidence": 0.00016100217038760126, "p_null": null },
+      "ask_triggers": { "value": [], "confidence": 0.00622980264124293, "p_null": null },
+      "needs_generation": { "value": "done", "confidence": 0.5021157264709473, "p_null": 0.017542488873004913 },
+      "multi_part": { "value": "done", "confidence": 0.8447199463844299, "p_null": 0.002425318118184805 },
+      "irreversible": { "value": "irreversible", "confidence": 0.6770060658454895, "p_null": 0.02094000205397606 }
+    },
+    "policy": "Original is authoritative. Lists with near-zero confidence are hints only."
+  },
+  "questions": {
+    "prefer_original": {
+      "type": "noul",
+      "instructions": "Should decide treat original as authoritative and extraction as hints only?"
+    },
+    "scalars_or_entities_usable": {
+      "type": "noul",
+      "instructions": "Are high-signal entities/ids from extraction safe enough as hints?"
+    },
+    "lists_usable": {
+      "type": "noul",
+      "instructions": "Are list fields complete enough to drive planning without re-reading original?"
+    },
+    "gate": {
+      "type": "choice",
+      "instructions": "Fidelity gate for the next decide pass.",
+      "criteria": {
+        "use_hints": "Use high-conf extract hints alongside original",
+        "original_only": "Ignore weak extract; decide from original only",
+        "reprompt": "Re-extract with tighter schema first"
+      }
+    }
+  }
+}

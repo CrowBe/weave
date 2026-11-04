@@ -4,34 +4,18 @@
     "intent": {
       "type": "text",
       "p_null": 0.0033671597484499216,
-      "span": [
-        6,
-        55
-      ],
+      "span": [6, 55],
       "guess": "Write a 600-word blog post for the Weave homepage",
       "confidence": 0.5343856811523438,
       "value": "Write a 600-word blog post for the Weave homepage"
     },
     "entities": {
       "type": "list",
-      "value": [
-        "the",
-        "Weave homepage",
-        "System-1 extract\u2192"
-      ],
+      "value": ["the", "Weave homepage", "System-1 extract\u2192"],
       "spans": [
-        [
-          37,
-          40
-        ],
-        [
-          41,
-          55
-        ],
-        [
-          67,
-          84
-        ]
+        [37, 40],
+        [41, 55],
+        [67, 84]
       ],
       "confidence": 0.00017046330420086522
     },
@@ -50,10 +34,7 @@
     "needs_generation": {
       "type": "text",
       "p_null": 0.028683342039585114,
-      "span": [
-        155,
-        157
-      ],
+      "span": [155, 157],
       "guess": "no",
       "confidence": 0.6656804084777832,
       "value": "no"
@@ -61,10 +42,7 @@
     "multi_part": {
       "type": "text",
       "p_null": 0.007425658870488405,
-      "span": [
-        155,
-        157
-      ],
+      "span": [155, 157],
       "guess": "no",
       "confidence": 0.6318544745445251,
       "value": "no"
@@ -72,10 +50,7 @@
     "irreversible": {
       "type": "text",
       "p_null": 0.09440246224403381,
-      "span": [
-        155,
-        157
-      ],
+      "span": [155, 157],
       "guess": "no",
       "confidence": 0.8432796597480774,
       "value": "no"

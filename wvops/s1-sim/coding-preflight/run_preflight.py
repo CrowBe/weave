@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Coding preflight sim: extract → fidelity → decide-1 → target-set decide → spawn plan (depends_on)."""
 from __future__ import annotations
-import json, os, subprocess
+import json, os, subprocess, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+
+def eval_edit_ok(to_edit, expect_edit) -> bool:
+    return set(to_edit) == set(expect_edit)
 CF = os.environ.get("CF_BIN", "cf")
 ENV = os.environ.copy()
 if os.environ.get("CF_NODE22_BIN"):
@@ -223,17 +226,28 @@ def main():
         },
         "target_roles": roles,
         "target_confs": confs,
-        "edit_ok": set(to_edit) == expect_edit or expect_edit.issubset(set(to_edit)),
-        "forbid_ok": expect_forbid.issubset(set(forbid)) or all(roles.get(p) == "forbid" for p in expect_forbid),
+        "edit_ok": eval_edit_ok(to_edit, expect_edit),
+        "forbid_ok": all(roles.get(p) in ("forbid", "skip") for p in expect_forbid) and not any(p in to_edit for p in expect_forbid),
         "plan": plan,
         "shape_match": plan["clef"]["plan_ok"] >= 0.35 and tuned == "spawn_subtasks",
     }
-    # soften edit_ok: allow extra reads; require both expected edits marked edit
-    summary["edit_ok"] = expect_edit.issubset(set(to_edit))
-    summary["forbid_ok"] = all(roles.get(p) in ("forbid", "skip") for p in expect_forbid) and not any(p in to_edit for p in expect_forbid)
 
     (ROOT / "summary.json").write_text(json.dumps(summary, indent=2))
     print(json.dumps({k: summary[k] for k in ("tuned_band", "band_match", "edit_ok", "forbid_ok", "shape_match", "target_roles")}, indent=2), flush=True)
 
+def selftest() -> int:
+    cases = [
+        (["VISION.md", "packages/weave/src/sites/CONTRACT.md"], {"VISION.md", "packages/weave/src/sites/CONTRACT.md"}, True),
+        (["VISION.md", "packages/weave/src/sites/CONTRACT.md", "ARCHITECTURE.md"], {"VISION.md", "packages/weave/src/sites/CONTRACT.md"}, False),
+        (["VISION.md"], {"VISION.md", "packages/weave/src/sites/CONTRACT.md"}, False),
+    ]
+    for to_edit, expect_edit, want in cases:
+        got = eval_edit_ok(to_edit, expect_edit)
+        assert got == want, f"eval_edit_ok({to_edit}, {expect_edit}) -> {got}, want {want}"
+    print(f"selftest ok ({len(cases)} cases)", flush=True)
+    return 0
+
 if __name__ == "__main__":
+    if "--selftest" in sys.argv:
+        raise SystemExit(selftest())
     main()

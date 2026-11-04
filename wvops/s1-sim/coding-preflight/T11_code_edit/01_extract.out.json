@@ -4,10 +4,7 @@
     "intent": {
       "type": "text",
       "p_null": 0.013898535631597042,
-      "span": [
-        31,
-        46
-      ],
+      "span": [31, 46],
       "guess": "amend VISION.md",
       "confidence": 0.3306761085987091,
       "value": "amend VISION.md"
@@ -25,40 +22,16 @@
         "Coordinated multi-file"
       ],
       "spans": [
-        [
-          0,
-          4
-        ],
-        [
-          6,
-          8
-        ],
-        [
-          9,
-          21
-        ],
-        [
-          25,
-          29
-        ],
-        [
-          37,
-          46
-        ],
-        [
-          188,
-          206
-        ],
-        [
-          366,
-          377
-        ],
-        [
-          478,
-          500
-        ]
+        [0, 4],
+        [6, 8],
+        [9, 21],
+        [25, 29],
+        [37, 46],
+        [188, 206],
+        [366, 377],
+        [478, 500]
       ],
-      "confidence": 1.2866366677325376e-07
+      "confidence": 1.2866366677325376e-7
     },
     "edit_paths": {
       "type": "list",
@@ -73,66 +46,30 @@
         "Co"
       ],
       "spans": [
-        [
-          0,
-          4
-        ],
-        [
-          6,
-          8
-        ],
-        [
-          9,
-          29
-        ],
-        [
-          37,
-          46
-        ],
-        [
-          50,
-          66
-        ],
-        [
-          188,
-          224
-        ],
-        [
-          366,
-          377
-        ],
-        [
-          478,
-          480
-        ]
+        [0, 4],
+        [6, 8],
+        [9, 29],
+        [37, 46],
+        [50, 66],
+        [188, 224],
+        [366, 377],
+        [478, 480]
       ],
-      "confidence": 1.0965549312304123e-06
+      "confidence": 1.0965549312304123e-6
     },
     "forbidden_paths": {
       "type": "list",
-      "value": [
-        "boolean.ts",
-        "GLOSSARY.md"
-      ],
+      "value": ["boolean.ts", "GLOSSARY.md"],
       "spans": [
-        [
-          321,
-          331
-        ],
-        [
-          366,
-          377
-        ]
+        [321, 331],
+        [366, 377]
       ],
-      "confidence": 1.0978760287610836e-05
+      "confidence": 1.0978760287610836e-5
     },
     "needs_generation": {
       "type": "text",
       "p_null": 0.13907045125961304,
-      "span": [
-        478,
-        527
-      ],
+      "span": [478, 527],
       "guess": "Coordinated multi-file docs edits need generation",
       "confidence": 0.16816943883895874,
       "value": "Coordinated multi-file docs edits need generation"
@@ -140,10 +77,7 @@
     "multi_part": {
       "type": "text",
       "p_null": 0.019946949556469917,
-      "span": [
-        411,
-        418
-      ],
+      "span": [411, 418],
       "guess": "nothing",
       "confidence": 0.5478175282478333,
       "value": "nothing"
@@ -151,54 +85,22 @@
     "irreversible": {
       "type": "text",
       "p_null": 0.28813934326171875,
-      "span": [
-        411,
-        418
-      ],
+      "span": [411, 418],
       "guess": "nothing",
       "confidence": 0.43908175826072693,
       "value": "nothing"
     },
     "constraints": {
       "type": "list",
-      "value": [
-        "intake.class",
-        "do",
-        "boolean.ts",
-        "Do",
-        "GLOSSARY.md",
-        "Open nothing",
-        "escalate_gen"
-      ],
+      "value": ["intake.class", "do", "boolean.ts", "Do", "GLOSSARY.md", "Open nothing", "escalate_gen"],
       "spans": [
-        [
-          238,
-          250
-        ],
-        [
-          307,
-          309
-        ],
-        [
-          321,
-          331
-        ],
-        [
-          353,
-          355
-        ],
-        [
-          366,
-          377
-        ],
-        [
-          406,
-          418
-        ],
-        [
-          597,
-          609
-        ]
+        [238, 250],
+        [307, 309],
+        [321, 331],
+        [353, 355],
+        [366, 377],
+        [406, 418],
+        [597, 609]
       ],
       "confidence": 5.402372857617906e-11
     }

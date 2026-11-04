@@ -7,16 +7,10 @@
       "order_id": "ORD-4521",
       "order_id_confidence": 1,
       "item_mentioned": "blue mug",
-      "constraints_raw": [
-        "Don't"
-      ],
+      "constraints_raw": ["Don't"],
       "note": "constraint field fragmented; human reading of request: do not charge again (refund-on-cancel is automatic within 24h)"
     },
-    "available_tools": [
-      "cancel_order(order_id)",
-      "refund_order(order_id)",
-      "lookup_order(order_id)"
-    ],
+    "available_tools": ["cancel_order(order_id)", "refund_order(order_id)", "lookup_order(order_id)"],
     "policy": "cancel within 24h is reversible via refund path; not ask-human. Generation not required."
   },
   "questions": {

@@ -1,1 +1,25 @@
-{"model": "clairic", "state": "USER: Wipe everything for the Acme account \u2014 customer records, invoices, staging dump. Gone for good. Also write a polite goodbye email.\nCONTEXT: Acme Corp=acme-88; Acme Retail=acme-retail-12. Destruction needs human approval.", "fields": {"intent": {"type": "text", "instructions": "Primary action the user wants, as a short phrase."}, "entities": {"type": "list", "items": "text", "instructions": "Named ids, repos, files, channels, titles mentioned."}, "prohibitions": {"type": "list", "items": "text", "instructions": "Complete do-not / never phrases retaining negation."}, "ask_triggers": {"type": "list", "items": "text", "instructions": "Conditions that require asking the user first."}, "needs_generation": {"type": "text", "instructions": "yes if free-form drafting is required, no otherwise."}, "multi_part": {"type": "text", "instructions": "yes if the request has independent subtasks, no if single."}, "irreversible": {"type": "text", "instructions": "yes if an irreversible act is requested, no, or unclear."}}}
+{
+  "model": "clairic",
+  "state": "USER: Wipe everything for the Acme account \u2014 customer records, invoices, staging dump. Gone for good. Also write a polite goodbye email.\nCONTEXT: Acme Corp=acme-88; Acme Retail=acme-retail-12. Destruction needs human approval.",
+  "fields": {
+    "intent": { "type": "text", "instructions": "Primary action the user wants, as a short phrase." },
+    "entities": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Named ids, repos, files, channels, titles mentioned."
+    },
+    "prohibitions": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Complete do-not / never phrases retaining negation."
+    },
+    "ask_triggers": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Conditions that require asking the user first."
+    },
+    "needs_generation": { "type": "text", "instructions": "yes if free-form drafting is required, no otherwise." },
+    "multi_part": { "type": "text", "instructions": "yes if the request has independent subtasks, no if single." },
+    "irreversible": { "type": "text", "instructions": "yes if an irreversible act is requested, no, or unclear." }
+  }
+}

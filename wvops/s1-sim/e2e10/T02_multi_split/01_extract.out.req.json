@@ -1,1 +1,25 @@
-{"model": "clairic", "state": "USER: (1) List open PRs on CrowBe/weave touching packages/gateway. (2) Draft a Slack note for #eng summarizing those titles \u2014 do not post. (3) File a Linear issue titled 'gateway publish-gate follow-up' priority medium. Do not merge anything.", "fields": {"intent": {"type": "text", "instructions": "Primary action the user wants, as a short phrase."}, "entities": {"type": "list", "items": "text", "instructions": "Named ids, repos, files, channels, titles mentioned."}, "prohibitions": {"type": "list", "items": "text", "instructions": "Complete do-not / never phrases retaining negation."}, "ask_triggers": {"type": "list", "items": "text", "instructions": "Conditions that require asking the user first."}, "needs_generation": {"type": "text", "instructions": "yes if free-form drafting is required, no otherwise."}, "multi_part": {"type": "text", "instructions": "yes if the request has independent subtasks, no if single."}, "irreversible": {"type": "text", "instructions": "yes if an irreversible act is requested, no, or unclear."}}}
+{
+  "model": "clairic",
+  "state": "USER: (1) List open PRs on CrowBe/weave touching packages/gateway. (2) Draft a Slack note for #eng summarizing those titles \u2014 do not post. (3) File a Linear issue titled 'gateway publish-gate follow-up' priority medium. Do not merge anything.",
+  "fields": {
+    "intent": { "type": "text", "instructions": "Primary action the user wants, as a short phrase." },
+    "entities": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Named ids, repos, files, channels, titles mentioned."
+    },
+    "prohibitions": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Complete do-not / never phrases retaining negation."
+    },
+    "ask_triggers": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Conditions that require asking the user first."
+    },
+    "needs_generation": { "type": "text", "instructions": "yes if free-form drafting is required, no otherwise." },
+    "multi_part": { "type": "text", "instructions": "yes if the request has independent subtasks, no if single." },
+    "irreversible": { "type": "text", "instructions": "yes if an irreversible act is requested, no, or unclear." }
+  }
+}

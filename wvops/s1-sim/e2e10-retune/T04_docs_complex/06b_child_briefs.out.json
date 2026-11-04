@@ -10,55 +10,27 @@
         "post nothing"
       ],
       "spans": [
-        [
-          106,
-          152
-        ],
-        [
-          172,
-          218
-        ],
-        [
-          220,
-          240
-        ],
-        [
-          443,
-          455
-        ]
+        [106, 152],
+        [172, 218],
+        [220, 240],
+        [443, 455]
       ],
       "confidence": 1.2990917175160607e-15
     },
     "shared_prohibitions": {
       "type": "list",
-      "value": [
-        "do not merge",
-        "do not modify pricing.md",
-        "stay"
-      ],
+      "value": ["do not merge", "do not modify pricing.md", "stay"],
       "spans": [
-        [
-          320,
-          332
-        ],
-        [
-          334,
-          358
-        ],
-        [
-          374,
-          378
-        ]
+        [320, 332],
+        [334, 358],
+        [374, 378]
       ],
-      "confidence": 2.2738324205696812e-07
+      "confidence": 2.2738324205696812e-7
     },
     "parent_goal": {
       "type": "text",
       "p_null": 0.06835434585809708,
-      "span": [
-        106,
-        165
-      ],
+      "span": [106, 165],
       "guess": "Compare docs/pricing.md and docs/billing.md on CrowBe/weave",
       "confidence": 0.3375602960586548,
       "value": "Compare docs/pricing.md and docs/billing.md on CrowBe/weave"

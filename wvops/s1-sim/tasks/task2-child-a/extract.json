@@ -2,9 +2,9 @@
   "model": "clairic",
   "state": "PARENT ASSIGNED SUBTASK A\nList open pull requests on CrowBe/weave that touch packages/gateway. Return their titles only.\nDo not merge. Do not draft Slack. Do not file Linear.",
   "fields": {
-    "repo": {"type": "text", "instructions": "Repository full name."},
-    "path_filter": {"type": "text", "instructions": "Path or package filter for which PRs matter."},
-    "output_needed": {"type": "text", "instructions": "What to return from this subtask."},
-    "prohibited": {"type": "list", "items": "text", "instructions": "Actions this child must not take."}
+    "repo": { "type": "text", "instructions": "Repository full name." },
+    "path_filter": { "type": "text", "instructions": "Path or package filter for which PRs matter." },
+    "output_needed": { "type": "text", "instructions": "What to return from this subtask." },
+    "prohibited": { "type": "list", "items": "text", "instructions": "Actions this child must not take." }
   }
 }

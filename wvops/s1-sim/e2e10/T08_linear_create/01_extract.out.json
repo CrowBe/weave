@@ -4,44 +4,20 @@
     "intent": {
       "type": "text",
       "p_null": 0.011449184268712997,
-      "span": [
-        6,
-        39
-      ],
+      "span": [6, 39],
       "guess": "Create a Linear issue in team ENG",
       "confidence": 0.4267185926437378,
       "value": "Create a Linear issue in team ENG"
     },
     "entities": {
       "type": "list",
-      "value": [
-        "Linear issue",
-        "team ENG",
-        "Gauge session budget envelope'",
-        "linear_create",
-        "team"
-      ],
+      "value": ["Linear issue", "team ENG", "Gauge session budget envelope'", "linear_create", "team"],
       "spans": [
-        [
-          15,
-          27
-        ],
-        [
-          31,
-          39
-        ],
-        [
-          48,
-          78
-        ],
-        [
-          190,
-          203
-        ],
-        [
-          204,
-          208
-        ]
+        [15, 27],
+        [31, 39],
+        [48, 78],
+        [190, 203],
+        [204, 208]
       ],
       "confidence": 0.0004368036558642507
     },
@@ -60,10 +36,7 @@
     "needs_generation": {
       "type": "text",
       "p_null": 0.013080045580863953,
-      "span": [
-        154,
-        162
-      ],
+      "span": [154, 162],
       "guess": "optional",
       "confidence": 0.8873265981674194,
       "value": "optional"
@@ -71,10 +44,7 @@
     "multi_part": {
       "type": "text",
       "p_null": 0.007698404137045145,
-      "span": [
-        154,
-        162
-      ],
+      "span": [154, 162],
       "guess": "optional",
       "confidence": 0.4398193359375,
       "value": "optional"
@@ -82,10 +52,7 @@
     "irreversible": {
       "type": "text",
       "p_null": 0.052355486899614334,
-      "span": [
-        154,
-        162
-      ],
+      "span": [154, 162],
       "guess": "optional",
       "confidence": 0.837349534034729,
       "value": "optional"

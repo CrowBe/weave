@@ -4,10 +4,7 @@
     "intent": {
       "type": "text",
       "p_null": 0.013877586461603642,
-      "span": [
-        67,
-        119
-      ],
+      "span": [67, 119],
       "guess": "produce a short bullet list of tensions between them",
       "confidence": 0.2714245915412903,
       "value": "produce a short bullet list of tensions between them"
@@ -15,85 +12,42 @@
     "deliverable_count": {
       "type": "text",
       "p_null": 0.00255833868868649,
-      "span": [
-        0,
-        4
-      ],
+      "span": [0, 4],
       "guess": "USER",
       "confidence": 0.046700358390808105,
       "value": "USER"
     },
     "deliverables": {
       "type": "list",
-      "value": [
-        "AGENTS.md",
-        "VISION.md",
-        "main"
-      ],
+      "value": ["AGENTS.md", "VISION.md", "main"],
       "spans": [
-        [
-          11,
-          20
-        ],
-        [
-          25,
-          34
-        ],
-        [
-          56,
-          60
-        ]
+        [11, 20],
+        [25, 34],
+        [56, 60]
       ],
-      "confidence": 6.2695202918597925e-06
+      "confidence": 6.2695202918597925e-6
     },
     "entities": {
       "type": "list",
-      "value": [
-        "AGENTS.md",
-        "VISION.md",
-        "CrowBe/weave",
-        "main"
-      ],
+      "value": ["AGENTS.md", "VISION.md", "CrowBe/weave", "main"],
       "spans": [
-        [
-          11,
-          20
-        ],
-        [
-          25,
-          34
-        ],
-        [
-          40,
-          52
-        ],
-        [
-          56,
-          60
-        ]
+        [11, 20],
+        [25, 34],
+        [40, 52],
+        [56, 60]
       ],
       "confidence": 0.3791019172396559
     },
     "prohibitions": {
       "type": "list",
-      "value": [
-        "Do"
-      ],
-      "spans": [
-        [
-          121,
-          123
-        ]
-      ],
+      "value": ["Do"],
+      "spans": [[121, 123]],
       "confidence": 0.04041601207959899
     },
     "needs_prior_reads": {
       "type": "text",
       "p_null": 0.0016518475022166967,
-      "span": [
-        121,
-        127
-      ],
+      "span": [121, 127],
       "guess": "Do not",
       "confidence": 0.24667967855930328,
       "value": "Do not"
@@ -101,10 +55,7 @@
     "needs_generation": {
       "type": "text",
       "p_null": 0.009197786450386047,
-      "span": [
-        191,
-        207
-      ],
+      "span": [191, 207],
       "guess": "needs generation",
       "confidence": 0.24015894532203674,
       "value": "needs generation"
@@ -112,10 +63,7 @@
     "user_only_ambiguity": {
       "type": "text",
       "p_null": 0.009446511045098305,
-      "span": [
-        121,
-        127
-      ],
+      "span": [121, 127],
       "guess": "Do not",
       "confidence": 0.41839325428009033,
       "value": "Do not"
@@ -123,10 +71,7 @@
     "irreversible": {
       "type": "text",
       "p_null": 0.17682857811450958,
-      "span": [
-        197,
-        207
-      ],
+      "span": [197, 207],
       "guess": "generation",
       "confidence": 0.0914035364985466,
       "value": "generation"

@@ -12,17 +12,10 @@
         "File a",
         "Linear issue"
       ],
-      "requested_actions_confidence": 1.4640552227652929e-06,
-      "repos_or_systems": [
-        "CrowBe/weave",
-        "Slack",
-        "eng channel",
-        "Linear"
-      ],
+      "requested_actions_confidence": 1.4640552227652929e-6,
+      "repos_or_systems": ["CrowBe/weave", "Slack", "eng channel", "Linear"],
       "needs_generation": "Draft a short Slack note summarizing those PR titles",
-      "prohibited_actions_fragments": [
-        "Do"
-      ]
+      "prohibited_actions_fragments": ["Do"]
     },
     "assembled_subtasks": [
       {
@@ -41,10 +34,7 @@
         "desc": "create Linear issue title=gateway publish-gate follow-up priority=medium"
       }
     ],
-    "prohibitions_authoritative": [
-      "do not merge",
-      "do not post Slack note \u2014 draft only"
-    ],
+    "prohibitions_authoritative": ["do not merge", "do not post Slack note \u2014 draft only"],
     "policy": "Independent subtasks with different act kinds \u2192 prefer split. Cost budget is session-level; free extract/decide do not consume it."
   },
   "questions": {

@@ -1,1 +1,47 @@
-{"model": "clef-flash", "state": {"original_input": "USER: Write a 600-word blog post for the Weave homepage explaining System-1 extract\u2192decide\u2192act for a technical but non-ML audience. Tone: clear, concrete, no hype. No tools needed \u2014 just the draft markdown.", "extraction": {"intent": {"value": "Write a 600-word blog post for the Weave homepage", "confidence": 0.5343856811523438, "p_null": 0.0033671597484499216}, "entities": {"value": ["the", "Weave homepage", "System-1 extract\u2192"], "confidence": 0.00017046330420086522, "p_null": null}, "prohibitions": {"value": [], "confidence": 0.015749095147188755, "p_null": null}, "ask_triggers": {"value": [], "confidence": 0.03416922018858985, "p_null": null}, "needs_generation": {"value": "no", "confidence": 0.6656804084777832, "p_null": 0.028683342039585114}, "multi_part": {"value": "no", "confidence": 0.6318544745445251, "p_null": 0.007425658870488405}, "irreversible": {"value": "no", "confidence": 0.8432796597480774, "p_null": 0.09440246224403381}}, "policy": "Original is authoritative. Lists with near-zero confidence are hints only."}, "questions": {"prefer_original": {"type": "noul", "instructions": "Should decide treat original as authoritative and extraction as hints only?"}, "scalars_or_entities_usable": {"type": "noul", "instructions": "Are high-signal entities/ids from extraction safe enough as hints?"}, "lists_usable": {"type": "noul", "instructions": "Are list fields complete enough to drive planning without re-reading original?"}, "gate": {"type": "choice", "instructions": "Fidelity gate for the next decide pass.", "criteria": {"use_hints": "Use high-conf extract hints alongside original", "original_only": "Ignore weak extract; decide from original only", "reprompt": "Re-extract with tighter schema first"}}}}
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "USER: Write a 600-word blog post for the Weave homepage explaining System-1 extract\u2192decide\u2192act for a technical but non-ML audience. Tone: clear, concrete, no hype. No tools needed \u2014 just the draft markdown.",
+    "extraction": {
+      "intent": {
+        "value": "Write a 600-word blog post for the Weave homepage",
+        "confidence": 0.5343856811523438,
+        "p_null": 0.0033671597484499216
+      },
+      "entities": {
+        "value": ["the", "Weave homepage", "System-1 extract\u2192"],
+        "confidence": 0.00017046330420086522,
+        "p_null": null
+      },
+      "prohibitions": { "value": [], "confidence": 0.015749095147188755, "p_null": null },
+      "ask_triggers": { "value": [], "confidence": 0.03416922018858985, "p_null": null },
+      "needs_generation": { "value": "no", "confidence": 0.6656804084777832, "p_null": 0.028683342039585114 },
+      "multi_part": { "value": "no", "confidence": 0.6318544745445251, "p_null": 0.007425658870488405 },
+      "irreversible": { "value": "no", "confidence": 0.8432796597480774, "p_null": 0.09440246224403381 }
+    },
+    "policy": "Original is authoritative. Lists with near-zero confidence are hints only."
+  },
+  "questions": {
+    "prefer_original": {
+      "type": "noul",
+      "instructions": "Should decide treat original as authoritative and extraction as hints only?"
+    },
+    "scalars_or_entities_usable": {
+      "type": "noul",
+      "instructions": "Are high-signal entities/ids from extraction safe enough as hints?"
+    },
+    "lists_usable": {
+      "type": "noul",
+      "instructions": "Are list fields complete enough to drive planning without re-reading original?"
+    },
+    "gate": {
+      "type": "choice",
+      "instructions": "Fidelity gate for the next decide pass.",
+      "criteria": {
+        "use_hints": "Use high-conf extract hints alongside original",
+        "original_only": "Ignore weak extract; decide from original only",
+        "reprompt": "Re-extract with tighter schema first"
+      }
+    }
+  }
+}

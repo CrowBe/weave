@@ -3,11 +3,8 @@
   "answers": {
     "repo": {
       "type": "text",
-      "p_null": 5.329828582034679e-06,
-      "span": [
-        153,
-        165
-      ],
+      "p_null": 5.329828582034679e-6,
+      "span": [153, 165],
       "guess": "CrowBe/weave",
       "confidence": 0.999987006187439,
       "value": "CrowBe/weave"
@@ -15,10 +12,7 @@
     "title": {
       "type": "text",
       "p_null": 0.0004371339164208621,
-      "span": [
-        262,
-        300
-      ],
+      "span": [262, 300],
       "guess": "docs: pricing/billing conflict summary",
       "confidence": 0.968950092792511,
       "value": "docs: pricing/billing conflict summary"
@@ -26,10 +20,7 @@
     "draft": {
       "type": "text",
       "p_null": 0.010416912846267223,
-      "span": [
-        225,
-        230
-      ],
+      "span": [225, 230],
       "guess": "draft",
       "confidence": 0.2878783047199249,
       "value": "draft"

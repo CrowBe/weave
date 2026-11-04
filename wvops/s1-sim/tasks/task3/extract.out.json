@@ -3,58 +3,23 @@
   "answers": {
     "destructive_targets": {
       "type": "list",
-      "value": [
-        "everything",
-        "the",
-        "Acme account",
-        "all their",
-        "customer records",
-        "invoices",
-        "staging dump"
-      ],
+      "value": ["everything", "the", "Acme account", "all their", "customer records", "invoices", "staging dump"],
       "spans": [
-        [
-          11,
-          21
-        ],
-        [
-          26,
-          29
-        ],
-        [
-          30,
-          42
-        ],
-        [
-          45,
-          54
-        ],
-        [
-          55,
-          71
-        ],
-        [
-          73,
-          81
-        ],
-        [
-          87,
-          90
-        ],
-        [
-          91,
-          103
-        ]
+        [11, 21],
+        [26, 29],
+        [30, 42],
+        [45, 54],
+        [55, 71],
+        [73, 81],
+        [87, 90],
+        [91, 103]
       ],
       "confidence": 0.044889456148694634
     },
     "account_name": {
       "type": "text",
       "p_null": 0.009556889533996582,
-      "span": [
-        30,
-        34
-      ],
+      "span": [30, 34],
       "guess": "Acme",
       "confidence": 0.46264806389808655,
       "value": "Acme"
@@ -62,10 +27,7 @@
     "account_id_if_stated": {
       "type": "text",
       "p_null": 0.7642568945884705,
-      "span": [
-        249,
-        256
-      ],
+      "span": [249, 256],
       "guess": "acme-88",
       "confidence": 0.9828616380691528,
       "value": null
@@ -73,44 +35,25 @@
     "ambiguous_identity": {
       "type": "text",
       "p_null": 0.002858061110600829,
-      "span": [
-        328,
-        404
-      ],
+      "span": [328, 404],
       "guess": "There is also Acme Retail (account_id=acme-retail-12) — do not confuse them.",
       "confidence": 0.29151618480682373,
       "value": "There is also Acme Retail (account_id=acme-retail-12) — do not confuse them."
     },
     "also_requested": {
       "type": "list",
-      "value": [
-        "write them a",
-        "polite goodbye email explaining we can't continue the engagement",
-        "gener"
-      ],
+      "value": ["write them a", "polite goodbye email explaining we can't continue the engagement", "gener"],
       "spans": [
-        [
-          140,
-          152
-        ],
-        [
-          153,
-          217
-        ],
-        [
-          316,
-          321
-        ]
+        [140, 152],
+        [153, 217],
+        [316, 321]
       ],
       "confidence": 0.005187021046812294
     },
     "irreversible": {
       "type": "text",
       "p_null": 0.020198725163936615,
-      "span": [
-        120,
-        133
-      ],
+      "span": [120, 133],
       "guess": "gone for good",
       "confidence": 0.2509806454181671,
       "value": "gone for good"

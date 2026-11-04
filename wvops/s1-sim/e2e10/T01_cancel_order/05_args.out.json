@@ -4,10 +4,7 @@
     "order_id": {
       "type": "text",
       "p_null": 0.0011139961425215006,
-      "span": [
-        19,
-        27
-      ],
+      "span": [19, 27],
       "guess": "ORD-4521",
       "confidence": 0.9999998807907104,
       "value": "ORD-4521"

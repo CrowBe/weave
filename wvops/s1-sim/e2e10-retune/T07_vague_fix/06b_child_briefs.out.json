@@ -9,24 +9,14 @@
     },
     "shared_prohibitions": {
       "type": "list",
-      "value": [
-        "Irreversible force-push"
-      ],
-      "spans": [
-        [
-          155,
-          178
-        ]
-      ],
+      "value": ["Irreversible force-push"],
+      "spans": [[155, 178]],
       "confidence": 0.13498500106277492
     },
     "parent_goal": {
       "type": "text",
       "p_null": 0.0259010661393404,
-      "span": [
-        6,
-        12
-      ],
+      "span": [6, 12],
       "guess": "Fix it",
       "confidence": 0.7266720533370972,
       "value": "Fix it"

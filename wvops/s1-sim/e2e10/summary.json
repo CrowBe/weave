@@ -67,7 +67,7 @@
       "repo": {
         "value": "CrowBe/weave",
         "confidence": 0.999987006187439,
-        "p_null": 5.329828582034679e-06
+        "p_null": 5.329828582034679e-6
       },
       "title": {
         "value": "docs: pricing/billing conflict summary",
@@ -113,7 +113,7 @@
       "repo": {
         "value": "CrowBe/weave",
         "confidence": 0.9995104074478149,
-        "p_null": 4.872540739597753e-05
+        "p_null": 4.872540739597753e-5
       },
       "number": {
         "value": "358",
@@ -180,7 +180,7 @@
       "title": {
         "value": "Gauge session budget envelope",
         "confidence": 0.9991492033004761,
-        "p_null": 2.24374707613606e-05
+        "p_null": 2.24374707613606e-5
       },
       "priority": {
         "value": "high",
@@ -197,17 +197,19 @@
   {
     "id": "T09_two_reads",
     "expect_band": "spawn_subtasks",
-    "band": "escalate_gen",
-    "band_conf": 0.4037,
-    "band_match": false,
+    "band": null,
+    "band_conf": null,
+    "band_match": null,
     "fidelity_gate": "reprompt",
     "prefer_original": 0.8531,
     "lists_usable": 0.0194,
-    "split_gain": 0.4801,
-    "irreversible_low_conf": 0.0519,
+    "split_gain": null,
+    "irreversible_low_conf": null,
     "tool": null,
     "tool_conf": null,
-    "args": null
+    "args": null,
+    "incomplete": true,
+    "incomplete_reason": "reprompt fidelity gate rejected extraction hints; stopped before decide-1"
   },
   {
     "id": "T10_delete_branch",
