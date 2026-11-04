@@ -1,0 +1,66 @@
+{
+  "model": "clairic",
+  "answers": {
+    "child_briefs": {
+      "type": "list",
+      "value": [
+        "Read",
+        "V",
+        "main",
+        "Do"
+      ],
+      "spans": [
+        [
+          6,
+          10
+        ],
+        [
+          25,
+          26
+        ],
+        [
+          56,
+          60
+        ],
+        [
+          121,
+          123
+        ]
+      ],
+      "confidence": 2.439409168403667e-06
+    },
+    "shared_prohibitions": {
+      "type": "list",
+      "value": [
+        "Do"
+      ],
+      "spans": [
+        [
+          121,
+          123
+        ]
+      ],
+      "confidence": 0.0015104027058435213
+    },
+    "parent_goal": {
+      "type": "text",
+      "p_null": 0.010107561945915222,
+      "span": [
+        6,
+        20
+      ],
+      "guess": "Read AGENTS.md",
+      "confidence": 0.1886773407459259,
+      "value": "Read AGENTS.md"
+    }
+  },
+  "truncated": false,
+  "usage": {
+    "state_tokens": 53,
+    "image_tokens": 0,
+    "schema_tokens": 312,
+    "input_tokens": 418,
+    "output_tokens": 0,
+    "passes": 2
+  }
+}

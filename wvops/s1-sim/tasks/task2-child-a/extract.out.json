@@ -1,0 +1,65 @@
+{
+  "model": "clairic",
+  "answers": {
+    "repo": {
+      "type": "text",
+      "p_null": 0.00009232907905243337,
+      "span": [
+        53,
+        65
+      ],
+      "guess": "CrowBe/weave",
+      "confidence": 0.9999744892120361,
+      "value": "CrowBe/weave"
+    },
+    "path_filter": {
+      "type": "text",
+      "p_null": 0.001810893532820046,
+      "span": [
+        86,
+        93
+      ],
+      "guess": "gateway",
+      "confidence": 0.9349788427352905,
+      "value": "gateway"
+    },
+    "output_needed": {
+      "type": "text",
+      "p_null": 0.003768156748265028,
+      "span": [
+        108,
+        114
+      ],
+      "guess": "titles",
+      "confidence": 0.4037197232246399,
+      "value": "titles"
+    },
+    "prohibited": {
+      "type": "list",
+      "value": [
+        "merge",
+        "draft Slack"
+      ],
+      "spans": [
+        [
+          128,
+          133
+        ],
+        [
+          142,
+          153
+        ]
+      ],
+      "confidence": 0.1698192530138109
+    }
+  },
+  "truncated": false,
+  "usage": {
+    "state_tokens": 43,
+    "image_tokens": 0,
+    "schema_tokens": 507,
+    "input_tokens": 679,
+    "output_tokens": 0,
+    "passes": 4
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "model": "clef-flash",
+  "state": {
+    "user_request": "Please cancel order ORD-4521. It was placed yesterday for the blue mug. Don't charge me again.",
+    "extracted": {
+      "intent": "cancel order ORD-4521",
+      "order_id": "ORD-4521",
+      "order_id_confidence": 1,
+      "item_mentioned": "blue mug",
+      "constraints_raw": [
+        "Don't"
+      ],
+      "note": "constraint field fragmented; human reading of request: do not charge again (refund-on-cancel is automatic within 24h)"
+    },
+    "available_tools": [
+      "cancel_order(order_id)",
+      "refund_order(order_id)",
+      "lookup_order(order_id)"
+    ],
+    "policy": "cancel within 24h is reversible via refund path; not ask-human. Generation not required."
+  },
+  "questions": {
+    "band": {
+      "type": "choice",
+      "instructions": "Which System-1 band should this thread take next?",
+      "criteria": {
+        "act_tool": "Call an available tool with extracted args; stay-S1",
+        "split": "Spawn child threads for independent subtasks",
+        "escalate_gen": "Needs a generative model with a pre-targeted brief",
+        "ask_human": "Irreversible+low-confidence, or ambiguity only the user can resolve"
+      }
+    },
+    "tool": {
+      "type": "choice",
+      "instructions": "If acting with a tool, which one?",
+      "criteria": {
+        "cancel_order": "Cancel the named order",
+        "refund_order": "Issue a refund without cancel",
+        "lookup_order": "Look up order first",
+        "none": "No tool \u2014 band is not act_tool"
+      }
+    },
+    "args_ready": {
+      "type": "noul",
+      "instructions": "Are the tool arguments complete and high-confidence enough to call without asking the user?"
+    }
+  }
+}

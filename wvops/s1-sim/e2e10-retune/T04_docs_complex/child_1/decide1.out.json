@@ -1,0 +1,20 @@
+{
+  "model": "clef-flash",
+  "answers": {
+    "band": {
+      "type": "choice",
+      "choice": "escalate_gen",
+      "probabilities": {
+        "tool_call": 0.165,
+        "escalate_gen": 0.4979,
+        "ask_human": 0.1295,
+        "spawn_subtasks": 0.2076
+      },
+      "confidence": 0.1133
+    }
+  },
+  "usage": {
+    "input_tokens": 277,
+    "output_tokens": 0
+  }
+}

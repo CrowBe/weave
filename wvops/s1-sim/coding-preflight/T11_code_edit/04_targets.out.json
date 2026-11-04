@@ -1,0 +1,86 @@
+{
+  "model": "clef-flash",
+  "answers": {
+    "VISION.md": {
+      "type": "choice",
+      "choice": "edit",
+      "probabilities": {
+        "edit": 0.9434,
+        "read": 0.0258,
+        "forbid": 0.0163,
+        "skip": 0.0145
+      },
+      "confidence": 0.8549
+    },
+    "packages/weave/src/sites/CONTRACT.md": {
+      "type": "choice",
+      "choice": "edit",
+      "probabilities": {
+        "edit": 0.9432,
+        "read": 0.0254,
+        "forbid": 0.0164,
+        "skip": 0.015
+      },
+      "confidence": 0.8544
+    },
+    "packages/weave/src/sites/boolean.ts": {
+      "type": "choice",
+      "choice": "forbid",
+      "probabilities": {
+        "edit": 0.0223,
+        "read": 0.0326,
+        "forbid": 0.8695,
+        "skip": 0.0756
+      },
+      "confidence": 0.6843
+    },
+    "GLOSSARY.md": {
+      "type": "choice",
+      "choice": "forbid",
+      "probabilities": {
+        "edit": 0.0121,
+        "read": 0.026,
+        "forbid": 0.8852,
+        "skip": 0.0767
+      },
+      "confidence": 0.7203
+    },
+    "ARCHITECTURE.md": {
+      "type": "choice",
+      "choice": "skip",
+      "probabilities": {
+        "edit": 0.0072,
+        "read": 0.0249,
+        "forbid": 0.2155,
+        "skip": 0.7524
+      },
+      "confidence": 0.4843
+    },
+    "AGENTS.md": {
+      "type": "choice",
+      "choice": "skip",
+      "probabilities": {
+        "edit": 0.0091,
+        "read": 0.0239,
+        "forbid": 0.0674,
+        "skip": 0.8996
+      },
+      "confidence": 0.7526
+    },
+    "docs/research/prompt-decomposition-extraction-vs-generation.md": {
+      "type": "choice",
+      "choice": "skip",
+      "probabilities": {
+        "edit": 0.0131,
+        "read": 0.051,
+        "forbid": 0.0947,
+        "skip": 0.8412
+      },
+      "confidence": 0.6259
+    }
+  },
+  "usage": {
+    "input_tokens": 1047,
+    "output_tokens": 0
+  }
+}

@@ -1,0 +1,156 @@
+{
+  "model": "clairic",
+  "answers": {
+    "requested_actions": {
+      "type": "list",
+      "value": [
+        "Pull the open PRs on",
+        "CrowBe/weave",
+        "list",
+        "Draft a short",
+        "Slack note summarizing",
+        "File a",
+        "Linear issue"
+      ],
+      "spans": [
+        [
+          30,
+          50
+        ],
+        [
+          51,
+          63
+        ],
+        [
+          96,
+          100
+        ],
+        [
+          118,
+          131
+        ],
+        [
+          132,
+          154
+        ],
+        [
+          195,
+          201
+        ],
+        [
+          202,
+          214
+        ]
+      ],
+      "confidence": 0.0000014640552227652929
+    },
+    "final_deliverables": {
+      "type": "list",
+      "value": [
+        "CrowBe/weave",
+        "list their titles",
+        "Draft a short",
+        "Slack note summarizing",
+        "File a",
+        "Linear issue titled '",
+        "gateway publish-gate follow-up'"
+      ],
+      "spans": [
+        [
+          51,
+          63
+        ],
+        [
+          96,
+          113
+        ],
+        [
+          118,
+          131
+        ],
+        [
+          132,
+          154
+        ],
+        [
+          195,
+          201
+        ],
+        [
+          202,
+          223
+        ],
+        [
+          223,
+          254
+        ]
+      ],
+      "confidence": 1.1169861303191077e-7
+    },
+    "prohibited_actions": {
+      "type": "list",
+      "value": [
+        "Do"
+      ],
+      "spans": [
+        [
+          277,
+          279
+        ],
+        [
+          300,
+          302
+        ]
+      ],
+      "confidence": 0.012794329623853127
+    },
+    "repos_or_systems": {
+      "type": "list",
+      "value": [
+        "CrowBe/weave",
+        "Slack",
+        "eng channel",
+        "Linear"
+      ],
+      "spans": [
+        [
+          51,
+          63
+        ],
+        [
+          132,
+          137
+        ],
+        [
+          179,
+          190
+        ],
+        [
+          202,
+          208
+        ]
+      ],
+      "confidence": 0.28129443607503096
+    },
+    "needs_generation": {
+      "type": "text",
+      "p_null": 0.052416324615478516,
+      "span": [
+        118,
+        170
+      ],
+      "guess": "Draft a short Slack note summarizing those PR titles",
+      "confidence": 0.17500141263008118,
+      "value": "Draft a short Slack note summarizing those PR titles"
+    }
+  },
+  "truncated": false,
+  "usage": {
+    "state_tokens": 87,
+    "image_tokens": 0,
+    "schema_tokens": 399,
+    "input_tokens": 573,
+    "output_tokens": 0,
+    "passes": 2
+  }
+}

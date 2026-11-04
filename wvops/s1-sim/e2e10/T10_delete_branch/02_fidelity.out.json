@@ -1,0 +1,31 @@
+{
+  "model": "clef-flash",
+  "answers": {
+    "prefer_original": {
+      "type": "noul",
+      "noul": 0.6483
+    },
+    "scalars_or_entities_usable": {
+      "type": "noul",
+      "noul": 0.1847
+    },
+    "lists_usable": {
+      "type": "noul",
+      "noul": 0.1397
+    },
+    "gate": {
+      "type": "choice",
+      "choice": "original_only",
+      "probabilities": {
+        "use_hints": 0.2663,
+        "original_only": 0.555,
+        "reprompt": 0.1787
+      },
+      "confidence": 0.1164
+    }
+  },
+  "usage": {
+    "input_tokens": 853,
+    "output_tokens": 0
+  }
+}

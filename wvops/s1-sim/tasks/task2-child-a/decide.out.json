@@ -1,0 +1,32 @@
+{
+  "model": "clef-flash",
+  "answers": {
+    "band": {
+      "type": "choice",
+      "choice": "act_tool",
+      "probabilities": {
+        "act_tool": 0.976,
+        "split": 0.0085,
+        "escalate_gen": 0.008,
+        "ask_human": 0.0075
+      },
+      "confidence": 0.937
+    },
+    "tool": {
+      "type": "choice",
+      "choice": "gh_pr_list",
+      "probabilities": {
+        "gh_pr_list": 0.9742,
+        "gh_pr_merge": 0.0071,
+        "slack_post": 0.0051,
+        "linear_create": 0.0065,
+        "none": 0.0071
+      },
+      "confidence": 0.9365
+    }
+  },
+  "usage": {
+    "input_tokens": 356,
+    "output_tokens": 0
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "model": "clef-flash",
+  "answers": {
+    "band": {
+      "type": "choice",
+      "choice": "spawn_subtasks",
+      "probabilities": {
+        "tool_call": 0.0155,
+        "spawn_subtasks": 0.9593,
+        "escalate_gen": 0.0145,
+        "ask_human": 0.0107
+      },
+      "confidence": 0.8943
+    },
+    "split_gain": {
+      "type": "noul",
+      "noul": 0.8509
+    },
+    "veto_tool_call": {
+      "type": "noul",
+      "noul": 0.873
+    },
+    "veto_bare_gen": {
+      "type": "noul",
+      "noul": 0.9438
+    }
+  },
+  "usage": {
+    "input_tokens": 705,
+    "output_tokens": 0
+  }
+}

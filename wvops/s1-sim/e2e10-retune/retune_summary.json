@@ -1,0 +1,147 @@
+[
+  {
+    "id": "T04_docs_complex",
+    "expect": "spawn_subtasks",
+    "raw_band": "spawn_subtasks",
+    "raw_conf": 0.3115,
+    "tuned_band": "spawn_subtasks",
+    "match_expect": true,
+    "tune_notes": [
+      "conf_floor+multi\u2192spawn"
+    ],
+    "fidelity": {
+      "multi": 0.8839,
+      "reads_before_gen": 0.3949,
+      "clarify": 0.0508,
+      "gate": "use_hints"
+    },
+    "tool": null,
+    "arg_gate": null,
+    "children": [
+      {
+        "brief": "Compare docs/pricing.md and docs/billing.md on",
+        "band_raw": "tool_call",
+        "band_conf": 0.5601,
+        "band": "tool_call",
+        "note": null
+      },
+      {
+        "brief": "Write eng-leads recommendation with quotations",
+        "band_raw": "escalate_gen",
+        "band_conf": 0.1133,
+        "band": "ask_human",
+        "note": "child_conf_floor"
+      }
+    ],
+    "probs": {
+      "tool_call": 0.1379,
+      "spawn_subtasks": 0.6615,
+      "escalate_gen": 0.159,
+      "ask_human": 0.0416
+    }
+  },
+  {
+    "id": "T07_vague_fix",
+    "expect": "ask_human",
+    "raw_band": "spawn_subtasks",
+    "raw_conf": 0.321,
+    "tuned_band": "spawn_subtasks",
+    "match_expect": false,
+    "tune_notes": [
+      "conf_floor+multi\u2192spawn"
+    ],
+    "fidelity": {
+      "multi": 0.5638,
+      "reads_before_gen": 0.0176,
+      "clarify": 0.3945,
+      "gate": "use_hints"
+    },
+    "tool": null,
+    "arg_gate": null,
+    "children": [
+      {
+        "brief": "child-0",
+        "band_raw": "tool_call",
+        "band_conf": 0.0042,
+        "band": "ask_human",
+        "note": "child_conf_floor"
+      },
+      {
+        "brief": "child-1",
+        "band_raw": "tool_call",
+        "band_conf": 0.0142,
+        "band": "ask_human",
+        "note": "child_conf_floor"
+      },
+      {
+        "brief": "child-2",
+        "band_raw": "tool_call",
+        "band_conf": 0.0166,
+        "band": "ask_human",
+        "note": "child_conf_floor"
+      }
+    ],
+    "probs": {
+      "tool_call": 0.1094,
+      "spawn_subtasks": 0.6738,
+      "escalate_gen": 0.0829,
+      "ask_human": 0.1339
+    },
+    "tuned_band_v2": "ask_human",
+    "tune_notes_v2": [
+      "conf_floor+clarify\u2192ask"
+    ],
+    "match_expect_v2": true,
+    "merge_upgrade": "ask_human",
+    "clef_final": {
+      "type": "choice",
+      "choice": "ask_human",
+      "probabilities": {
+        "ask_human": 0.9472,
+        "spawn_subtasks": 0.0152,
+        "tool_call": 0.0139,
+        "escalate_gen": 0.0237
+      },
+      "confidence": 0.8641
+    }
+  },
+  {
+    "id": "T09_two_reads",
+    "expect": "spawn_subtasks",
+    "raw_band": "spawn_subtasks",
+    "raw_conf": 0.8943,
+    "tuned_band": "spawn_subtasks",
+    "match_expect": true,
+    "tune_notes": [],
+    "fidelity": {
+      "multi": 0.2064,
+      "reads_before_gen": 0.9428,
+      "clarify": 0.0535,
+      "gate": "original_only"
+    },
+    "tool": null,
+    "arg_gate": null,
+    "children": [
+      {
+        "brief": "Read",
+        "band_raw": "tool_call",
+        "band_conf": 0.7116,
+        "band": "tool_call",
+        "note": null
+      },
+      {
+        "brief": "V",
+        "band_raw": "tool_call",
+        "band_conf": 0.2179,
+        "band": "ask_human",
+        "note": "child_conf_floor"
+      }
+    ],
+    "probs": {
+      "tool_call": 0.0155,
+      "spawn_subtasks": 0.9593,
+      "escalate_gen": 0.0145,
+      "ask_human": 0.0107
+    }
+  }
+]

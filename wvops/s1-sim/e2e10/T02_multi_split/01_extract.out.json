@@ -1,0 +1,120 @@
+{
+  "model": "clairic",
+  "answers": {
+    "intent": {
+      "type": "text",
+      "p_null": 0.021243717521429062,
+      "span": [
+        10,
+        23
+      ],
+      "guess": "List open PRs",
+      "confidence": 0.2978562116622925,
+      "value": "List open PRs"
+    },
+    "entities": {
+      "type": "list",
+      "value": [
+        "CrowBe/weave",
+        "Slack",
+        "#eng",
+        "Linear",
+        "gateway publish-gate"
+      ],
+      "spans": [
+        [
+          27,
+          39
+        ],
+        [
+          79,
+          84
+        ],
+        [
+          94,
+          98
+        ],
+        [
+          150,
+          156
+        ],
+        [
+          171,
+          191
+        ]
+      ],
+      "confidence": 0.026599597681092203
+    },
+    "prohibitions": {
+      "type": "list",
+      "value": [
+        "do not post",
+        "Do not",
+        "merge anything"
+      ],
+      "spans": [
+        [
+          126,
+          137
+        ],
+        [
+          220,
+          226
+        ],
+        [
+          227,
+          241
+        ]
+      ],
+      "confidence": 0.0050746931075832565
+    },
+    "ask_triggers": {
+      "type": "list",
+      "value": [],
+      "spans": [],
+      "confidence": 0.01032768631551162
+    },
+    "needs_generation": {
+      "type": "text",
+      "p_null": 0.027362193912267685,
+      "span": [
+        126,
+        132
+      ],
+      "guess": "do not",
+      "confidence": 0.29167211055755615,
+      "value": "do not"
+    },
+    "multi_part": {
+      "type": "text",
+      "p_null": 0.0010659463005140424,
+      "span": [
+        126,
+        132
+      ],
+      "guess": "do not",
+      "confidence": 0.11439603567123413,
+      "value": "do not"
+    },
+    "irreversible": {
+      "type": "text",
+      "p_null": 0.021287649869918823,
+      "span": [
+        126,
+        132
+      ],
+      "guess": "do not",
+      "confidence": 0.38376230001449585,
+      "value": "do not"
+    }
+  },
+  "truncated": false,
+  "usage": {
+    "state_tokens": 62,
+    "image_tokens": 0,
+    "schema_tokens": 759,
+    "input_tokens": 1069,
+    "output_tokens": 0,
+    "passes": 5
+  }
+}

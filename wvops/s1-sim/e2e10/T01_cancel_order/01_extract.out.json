@@ -1,0 +1,102 @@
+{
+  "model": "clairic",
+  "answers": {
+    "intent": {
+      "type": "text",
+      "p_null": 0.0065965550020337105,
+      "span": [
+        6,
+        27
+      ],
+      "guess": "Cancel order ORD-4521",
+      "confidence": 0.5882866978645325,
+      "value": "Cancel order ORD-4521"
+    },
+    "entities": {
+      "type": "list",
+      "value": [
+        "ORD-4521"
+      ],
+      "spans": [
+        [
+          19,
+          27
+        ]
+      ],
+      "confidence": 0.04891636806409959
+    },
+    "prohibitions": {
+      "type": "list",
+      "value": [
+        "Don",
+        "charge me again"
+      ],
+      "spans": [
+        [
+          46,
+          49
+        ],
+        [
+          52,
+          67
+        ]
+      ],
+      "confidence": 0.005968442782383356
+    },
+    "ask_triggers": {
+      "type": "list",
+      "value": [
+        "refund_order"
+      ],
+      "spans": [
+        [
+          95,
+          107
+        ]
+      ],
+      "confidence": 0.0012029165068966302
+    },
+    "needs_generation": {
+      "type": "text",
+      "p_null": 0.07914403825998306,
+      "span": [
+        46,
+        51
+      ],
+      "guess": "Don't",
+      "confidence": 0.4300978481769562,
+      "value": "Don't"
+    },
+    "multi_part": {
+      "type": "text",
+      "p_null": 0.004430276807397604,
+      "span": [
+        95,
+        101
+      ],
+      "guess": "refund",
+      "confidence": 0.4328683316707611,
+      "value": "refund"
+    },
+    "irreversible": {
+      "type": "text",
+      "p_null": 0.045766402035951614,
+      "span": [
+        46,
+        51
+      ],
+      "guess": "Don't",
+      "confidence": 0.1763589084148407,
+      "value": "Don't"
+    }
+  },
+  "truncated": false,
+  "usage": {
+    "state_tokens": 41,
+    "image_tokens": 0,
+    "schema_tokens": 759,
+    "input_tokens": 964,
+    "output_tokens": 0,
+    "passes": 5
+  }
+}

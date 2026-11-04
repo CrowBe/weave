@@ -1,0 +1,5 @@
+PARENT_GOAL: Fix it
+CHILD_BRIEF: child-0
+SHARED_PROHIBITIONS: ['Irreversible force-push']
+BUDGET: session-level; this child runs once then settles.
+DO NOT inherit full parent thread — only this slice.

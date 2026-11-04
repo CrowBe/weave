@@ -1,0 +1,32 @@
+{
+  "model": "clef-flash",
+  "answers": {
+    "tool": {
+      "type": "choice",
+      "choice": "linear_create",
+      "probabilities": {
+        "cancel_order": 0.0026,
+        "refund_order": 0.0026,
+        "gh_pr_list": 0.0031,
+        "gh_pr_get": 0.0026,
+        "gh_pr_create": 0.0032,
+        "gh_branch_delete": 0.0022,
+        "linear_create": 0.9713,
+        "slack_post": 0.0023,
+        "save_draft": 0.0019,
+        "read_file": 0.0022,
+        "wipe_account": 0.0024,
+        "none": 0.0036
+      },
+      "confidence": 0.9384
+    },
+    "args_likely_in_input": {
+      "type": "noul",
+      "noul": 0.9253
+    }
+  },
+  "usage": {
+    "input_tokens": 538,
+    "output_tokens": 0
+  }
+}

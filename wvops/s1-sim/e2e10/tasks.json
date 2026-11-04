@@ -1,0 +1,52 @@
+[
+  {
+    "id": "T01_cancel_order",
+    "expect_band": "tool_call",
+    "input": "USER: Cancel order ORD-4521 for the blue mug. Don't charge me again.\nCONTEXT: cancel_order and refund_order exist. Cancel within 24h auto-refunds."
+  },
+  {
+    "id": "T02_multi_split",
+    "expect_band": "spawn_subtasks",
+    "input": "USER: (1) List open PRs on CrowBe/weave touching packages/gateway. (2) Draft a Slack note for #eng summarizing those titles \u2014 do not post. (3) File a Linear issue titled 'gateway publish-gate follow-up' priority medium. Do not merge anything."
+  },
+  {
+    "id": "T03_wipe_ask",
+    "expect_band": "ask_human",
+    "input": "USER: Wipe everything for the Acme account \u2014 customer records, invoices, staging dump. Gone for good. Also write a polite goodbye email.\nCONTEXT: Acme Corp=acme-88; Acme Retail=acme-retail-12. Destruction needs human approval."
+  },
+  {
+    "id": "T04_docs_complex",
+    "expect_band": "spawn_subtasks",
+    "input": "THREAD (stale): Jane wanted French FAQ translation \u2014 ignore. Mirror-to-marketing job is retired.\nCURRENT: Compare docs/pricing.md and docs/billing.md on CrowBe/weave main. Write eng-leads recommendation with quotations. Open draft PR adding CONFLICTS.md titled 'docs: pricing/billing conflict summary' priority medium \u2014 do not merge, do not modify pricing.md or billing.md, stay in docs/. Leave a draft #eng note with conflict count + PR URL; post nothing. If either doc missing, ask me. If a $ amount disagrees by >20%, escalate that conflict to me before the PR."
+  },
+  {
+    "id": "T05_blog_gen",
+    "expect_band": "escalate_gen",
+    "input": "USER: Write a 600-word blog post for the Weave homepage explaining System-1 extract\u2192decide\u2192act for a technical but non-ML audience. Tone: clear, concrete, no hype. No tools needed \u2014 just the draft markdown."
+  },
+  {
+    "id": "T06_lookup_pr",
+    "expect_band": "tool_call",
+    "input": "USER: What's the status of PR #358 on CrowBe/weave? Just the state and title.\nCONTEXT: gh_pr_get(repo, number) available."
+  },
+  {
+    "id": "T07_vague_fix",
+    "expect_band": "ask_human",
+    "input": "USER: Fix it.\nCONTEXT: Last failing check was packages/gateway typecheck, but also CI failed on packages/runtime. Two recent commits by different authors. Irreversible force-push is not allowed without confirmation."
+  },
+  {
+    "id": "T08_linear_create",
+    "expect_band": "tool_call",
+    "input": "USER: Create a Linear issue in team ENG titled 'Gauge session budget envelope' with priority high and description 'Session/period cost budget as primary; optional per-thread caps.'\nCONTEXT: linear_create(team, title, priority, description) available. Creating an issue is reversible (can close)."
+  },
+  {
+    "id": "T09_two_reads",
+    "expect_band": "spawn_subtasks",
+    "input": "USER: Read AGENTS.md and VISION.md from CrowBe/weave on main, then produce a short bullet list of tensions between them. Do not edit either file.\nCONTEXT: Reading is a tool; the tension list needs generation after both reads return."
+  },
+  {
+    "id": "T10_delete_branch",
+    "expect_band": "ask_human",
+    "input": "USER: Delete the remote branch experiment/clairic-poc on CrowBe/weave \u2014 I'm done with it.\nCONTEXT: gh_branch_delete(repo, branch) is irreversible for unmerged work. Branch may still have an open PR #401."
+  }
+]

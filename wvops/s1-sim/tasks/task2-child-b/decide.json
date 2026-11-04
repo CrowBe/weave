@@ -1,0 +1,36 @@
+{
+  "model": "clef-flash",
+  "state": {
+    "subtask": "B",
+    "extracted": {
+      "channel": "eng",
+      "must_not_post": "Do not",
+      "pr_titles": [
+        "feat(gateway): standing-write publish gate",
+        "pin proof port"
+      ],
+      "deliverable": "a short Slack note"
+    },
+    "available_tools": [
+      "slack_post",
+      "save_draft"
+    ],
+    "policy": "Drafting free-form Slack copy is generation past frontier; save_draft holds the result. Do not post."
+  },
+  "questions": {
+    "band": {
+      "type": "choice",
+      "instructions": "Next band for this child?",
+      "criteria": {
+        "act_tool": "Only a tool call, no generation",
+        "split": "Split further",
+        "escalate_gen": "Generate the Slack draft with a pre-targeted brief, then save_draft",
+        "ask_human": "Need user before drafting"
+      }
+    },
+    "post_after": {
+      "type": "noul",
+      "instructions": "After drafting, should the note be posted to Slack immediately?"
+    }
+  }
+}

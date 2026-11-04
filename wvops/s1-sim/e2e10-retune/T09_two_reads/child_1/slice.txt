@@ -1,0 +1,5 @@
+PARENT_GOAL: Read AGENTS.md
+CHILD_BRIEF: V
+SHARED_PROHIBITIONS: ['Do']
+BUDGET: session-level; this child runs once then settles.
+DO NOT inherit full parent thread — only this slice.

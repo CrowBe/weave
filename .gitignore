@@ -9,3 +9,4 @@ __pycache__/
 benchmarks/inference/openjev/__pycache__/
 benchmarks/inference/kev/__pycache__/
 weave.routes.local.json
+_s1-sim-src/

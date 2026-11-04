@@ -1,0 +1,1 @@
+{"model": "clairic", "state": "USER: Cancel order ORD-4521 for the blue mug. Don't charge me again.\nCONTEXT: cancel_order and refund_order exist. Cancel within 24h auto-refunds.", "fields": {"order_id": {"type": "text", "instructions": "Order id exactly as written."}}}

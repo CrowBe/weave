@@ -1,0 +1,2 @@
+USER: Cancel order ORD-4521 for the blue mug. Don't charge me again.
+CONTEXT: cancel_order and refund_order exist. Cancel within 24h auto-refunds.

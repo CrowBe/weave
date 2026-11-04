@@ -1,0 +1,44 @@
+{
+  "model": "clairic",
+  "answers": {
+    "child_briefs": {
+      "type": "list",
+      "value": [],
+      "spans": [],
+      "confidence": 0.0006677081800497263
+    },
+    "shared_prohibitions": {
+      "type": "list",
+      "value": [
+        "Irreversible force-push"
+      ],
+      "spans": [
+        [
+          155,
+          178
+        ]
+      ],
+      "confidence": 0.13498500106277492
+    },
+    "parent_goal": {
+      "type": "text",
+      "p_null": 0.0259010661393404,
+      "span": [
+        6,
+        12
+      ],
+      "guess": "Fix it",
+      "confidence": 0.7266720533370972,
+      "value": "Fix it"
+    }
+  },
+  "truncated": false,
+  "usage": {
+    "state_tokens": 44,
+    "image_tokens": 0,
+    "schema_tokens": 312,
+    "input_tokens": 400,
+    "output_tokens": 0,
+    "passes": 2
+  }
+}

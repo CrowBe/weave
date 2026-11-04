@@ -1,0 +1,95 @@
+{
+  "model": "clairic",
+  "answers": {
+    "intent": {
+      "type": "text",
+      "p_null": 0.0021767665166407824,
+      "span": [
+        6,
+        41
+      ],
+      "guess": "Delete the remote branch experiment",
+      "confidence": 0.2818254828453064,
+      "value": "Delete the remote branch experiment"
+    },
+    "entities": {
+      "type": "list",
+      "value": [
+        "experiment/clairic-poc",
+        "CrowBe/weave"
+      ],
+      "spans": [
+        [
+          31,
+          53
+        ],
+        [
+          57,
+          69
+        ]
+      ],
+      "confidence": 0.014763672024279976
+    },
+    "prohibitions": {
+      "type": "list",
+      "value": [
+        "gh_branch_delete(repo"
+      ],
+      "spans": [
+        [
+          99,
+          120
+        ]
+      ],
+      "confidence": 0.00016100217038760126
+    },
+    "ask_triggers": {
+      "type": "list",
+      "value": [],
+      "spans": [],
+      "confidence": 0.00622980264124293
+    },
+    "needs_generation": {
+      "type": "text",
+      "p_null": 0.017542488873004913,
+      "span": [
+        76,
+        80
+      ],
+      "guess": "done",
+      "confidence": 0.5021157264709473,
+      "value": "done"
+    },
+    "multi_part": {
+      "type": "text",
+      "p_null": 0.002425318118184805,
+      "span": [
+        76,
+        80
+      ],
+      "guess": "done",
+      "confidence": 0.8447199463844299,
+      "value": "done"
+    },
+    "irreversible": {
+      "type": "text",
+      "p_null": 0.02094000205397606,
+      "span": [
+        133,
+        145
+      ],
+      "guess": "irreversible",
+      "confidence": 0.6770060658454895,
+      "value": "irreversible"
+    }
+  },
+  "truncated": false,
+  "usage": {
+    "state_tokens": 53,
+    "image_tokens": 0,
+    "schema_tokens": 759,
+    "input_tokens": 1024,
+    "output_tokens": 0,
+    "passes": 5
+  }
+}

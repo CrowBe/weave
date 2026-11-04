@@ -1,0 +1,25 @@
+{
+  "model": "clairic",
+  "answers": {
+    "order_id": {
+      "type": "text",
+      "p_null": 0.0011139961425215006,
+      "span": [
+        19,
+        27
+      ],
+      "guess": "ORD-4521",
+      "confidence": 0.9999998807907104,
+      "value": "ORD-4521"
+    }
+  },
+  "truncated": false,
+  "usage": {
+    "state_tokens": 41,
+    "image_tokens": 0,
+    "schema_tokens": 124,
+    "input_tokens": 165,
+    "output_tokens": 0,
+    "passes": 1
+  }
+}

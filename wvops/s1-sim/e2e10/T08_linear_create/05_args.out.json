@@ -1,0 +1,58 @@
+{
+  "model": "clairic",
+  "answers": {
+    "team": {
+      "type": "text",
+      "p_null": 0.0007655920926481485,
+      "span": [
+        36,
+        39
+      ],
+      "guess": "ENG",
+      "confidence": 1,
+      "value": "ENG"
+    },
+    "title": {
+      "type": "text",
+      "p_null": 2.24374707613606e-05,
+      "span": [
+        48,
+        77
+      ],
+      "guess": "Gauge session budget envelope",
+      "confidence": 0.9991492033004761,
+      "value": "Gauge session budget envelope"
+    },
+    "priority": {
+      "type": "text",
+      "p_null": 0.0028090188279747963,
+      "span": [
+        93,
+        97
+      ],
+      "guess": "high",
+      "confidence": 0.9999277591705322,
+      "value": "high"
+    },
+    "description": {
+      "type": "text",
+      "p_null": 0.000720219686627388,
+      "span": [
+        115,
+        179
+      ],
+      "guess": "Session/period cost budget as primary; optional per-thread caps.",
+      "confidence": 0.9993399977684021,
+      "value": "Session/period cost budget as primary; optional per-thread caps."
+    }
+  },
+  "truncated": false,
+  "usage": {
+    "state_tokens": 60,
+    "image_tokens": 0,
+    "schema_tokens": 462,
+    "input_tokens": 702,
+    "output_tokens": 0,
+    "passes": 4
+  }
+}

@@ -1,0 +1,1 @@
+{"model": "clairic", "state": "USER: What's the status of PR #358 on CrowBe/weave? Just the state and title.\nCONTEXT: gh_pr_get(repo, number) available.", "fields": {"repo": {"type": "text", "instructions": "owner/repo"}, "number": {"type": "text", "instructions": "PR number as digits only."}}}

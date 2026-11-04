@@ -1,0 +1,86 @@
+{
+  "model": "clef-flash",
+  "answers": {
+    "AGENTS.md": {
+      "type": "choice",
+      "choice": "edit",
+      "probabilities": {
+        "edit": 0.9174,
+        "read": 0.0551,
+        "forbid": 0.0126,
+        "skip": 0.0149
+      },
+      "confidence": 0.7934
+    },
+    "VISION.md": {
+      "type": "choice",
+      "choice": "forbid",
+      "probabilities": {
+        "edit": 0.0118,
+        "read": 0.0254,
+        "forbid": 0.5747,
+        "skip": 0.3881
+      },
+      "confidence": 0.309
+    },
+    "docs/research/prompt-decomposition-extraction-vs-generation.md": {
+      "type": "choice",
+      "choice": "edit",
+      "probabilities": {
+        "edit": 0.9456,
+        "read": 0.0344,
+        "forbid": 0.0097,
+        "skip": 0.0103
+      },
+      "confidence": 0.8607
+    },
+    "packages/weave/src/sites/boolean.ts": {
+      "type": "choice",
+      "choice": "forbid",
+      "probabilities": {
+        "edit": 0.0103,
+        "read": 0.0158,
+        "forbid": 0.7862,
+        "skip": 0.1877
+      },
+      "confidence": 0.5383
+    },
+    "packages/weave/src/sites/CONTRACT.md": {
+      "type": "choice",
+      "choice": "skip",
+      "probabilities": {
+        "edit": 0.006,
+        "read": 0.0212,
+        "forbid": 0.0435,
+        "skip": 0.9293
+      },
+      "confidence": 0.8214
+    },
+    "GLOSSARY.md": {
+      "type": "choice",
+      "choice": "skip",
+      "probabilities": {
+        "edit": 0.0069,
+        "read": 0.019,
+        "forbid": 0.053,
+        "skip": 0.9211
+      },
+      "confidence": 0.8023
+    },
+    "ARCHITECTURE.md": {
+      "type": "choice",
+      "choice": "skip",
+      "probabilities": {
+        "edit": 0.0072,
+        "read": 0.0223,
+        "forbid": 0.1155,
+        "skip": 0.855
+      },
+      "confidence": 0.6598
+    }
+  },
+  "usage": {
+    "input_tokens": 1007,
+    "output_tokens": 0
+  }
+}

@@ -1,0 +1,182 @@
+{
+  "model": "clairic",
+  "answers": {
+    "intent": {
+      "type": "text",
+      "p_null": 0.007056554313749075,
+      "span": [
+        28,
+        44
+      ],
+      "guess": "update AGENTS.md",
+      "confidence": 0.8133589029312134,
+      "value": "update AGENTS.md"
+    },
+    "read_paths": {
+      "type": "list",
+      "value": [
+        "CrowBe/weave main",
+        "docs/research",
+        "VISION.md",
+        "packages/weave/src/sites/boolean.ts",
+        "TypeScript",
+        "Docs/markdown",
+        "tools.",
+        "Multi-file markdown"
+      ],
+      "spans": [
+        [
+          9,
+          26
+        ],
+        [
+          197,
+          210
+        ],
+        [
+          361,
+          370
+        ],
+        [
+          385,
+          420
+        ],
+        [
+          428,
+          438
+        ],
+        [
+          440,
+          453
+        ],
+        [
+          486,
+          492
+        ],
+        [
+          493,
+          512
+        ]
+      ],
+      "confidence": 1.6666537016587275e-05
+    },
+    "edit_paths": {
+      "type": "list",
+      "value": [
+        "USER",
+        "On",
+        "CrowBe/weave main",
+        "AGENTS.md",
+        "docs/research/prompt-decomposition-extraction-vs-generation.md",
+        "VISION.md",
+        "packages/weave",
+        "tools",
+        "Multi-file markdown"
+      ],
+      "spans": [
+        [
+          0,
+          4
+        ],
+        [
+          6,
+          8
+        ],
+        [
+          9,
+          26
+        ],
+        [
+          35,
+          44
+        ],
+        [
+          197,
+          259
+        ],
+        [
+          361,
+          370
+        ],
+        [
+          385,
+          399
+        ],
+        [
+          486,
+          491
+        ],
+        [
+          493,
+          512
+        ]
+      ],
+      "confidence": 5.269543585463969e-05
+    },
+    "forbidden_paths": {
+      "type": "list",
+      "value": [
+        "VISION.md",
+        "packages/weave/src/sites/boolean.ts",
+        "TypeScript"
+      ],
+      "spans": [
+        [
+          361,
+          370
+        ],
+        [
+          385,
+          420
+        ],
+        [
+          428,
+          438
+        ]
+      ],
+      "confidence": 0.4551543561277972
+    },
+    "needs_generation": {
+      "type": "text",
+      "p_null": 0.06892956048250198,
+      "span": [
+        493,
+        534
+      ],
+      "guess": "Multi-file markdown edits need generation",
+      "confidence": 0.1535111516714096,
+      "value": "Multi-file markdown edits need generation"
+    },
+    "multi_part": {
+      "type": "text",
+      "p_null": 0.0205592792481184,
+      "span": [
+        460,
+        462
+      ],
+      "guess": "no",
+      "confidence": 0.9469441771507263,
+      "value": "no"
+    },
+    "irreversible": {
+      "type": "text",
+      "p_null": 0.07432328909635544,
+      "span": [
+        460,
+        462
+      ],
+      "guess": "no",
+      "confidence": 0.9485742449760437,
+      "value": "no"
+    }
+  },
+  "truncated": false,
+  "usage": {
+    "state_tokens": 136,
+    "image_tokens": 0,
+    "schema_tokens": 719,
+    "input_tokens": 1399,
+    "output_tokens": 0,
+    "passes": 5
+  }
+}

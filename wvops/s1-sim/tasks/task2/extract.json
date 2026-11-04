@@ -1,0 +1,30 @@
+{
+  "model": "clairic",
+  "state": "USER: Three things please:\n1) Pull the open PRs on CrowBe/weave that touch packages/gateway and list their titles.\n2) Draft a short Slack note summarizing those PR titles for the eng channel.\n3) File a Linear issue titled 'gateway publish-gate follow-up' with priority medium.\nDo not merge anything. Do not post the Slack note yet — leave it as a draft.",
+  "fields": {
+    "requested_actions": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Each distinct action requested, including its object and attached qualifiers."
+    },
+    "final_deliverables": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Each concrete deliverable the user expects."
+    },
+    "prohibited_actions": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Complete phrases stating actions explicitly prohibited."
+    },
+    "repos_or_systems": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Named repositories, channels, or trackers mentioned."
+    },
+    "needs_generation": {
+      "type": "text",
+      "instructions": "Which requested actions require drafting free-form text: list them, or none."
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "model": "clef-flash",
+  "answers": {
+    "prefer_original": {
+      "type": "noul",
+      "noul": 0.2817
+    },
+    "multi_deliverable": {
+      "type": "noul",
+      "noul": 0.5638
+    },
+    "reads_before_gen": {
+      "type": "noul",
+      "noul": 0.0176
+    },
+    "user_must_clarify": {
+      "type": "noul",
+      "noul": 0.3945
+    },
+    "gate": {
+      "type": "choice",
+      "choice": "use_hints",
+      "probabilities": {
+        "use_hints": 0.6199,
+        "original_only": 0.1967,
+        "reprompt": 0.1834
+      },
+      "confidence": 0.1849
+    }
+  },
+  "usage": {
+    "input_tokens": 1020,
+    "output_tokens": 0
+  }
+}
