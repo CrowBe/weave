@@ -6,6 +6,8 @@ Weave is the composable system. Loom is its reference runtime, Fabric its refere
 
 Most agent systems place a generative model at the centre of a loop: the model receives a message, decides what to do, calls tools, and speaks again. Weave treats that as an implementation accident. A user message, a tool result, an inference result, an approval, an error, and a change in the environment are all observations that update state. From that state, Weave continuously weighs the actions available to it, executes the viable frontier—concurrently when it can—and evaluates the state that follows.
 
+Weave is System-1 first. Typed extraction and decision models turn observations into structured state and choose actions. Generative models are invoked only when a task node exceeds the decomposition frontier, and then with a pre-targeted brief.
+
 Generative intelligence is part of this system, but it is not the system. It is invoked when the current software cannot adequately advance the goal. When that exploration produces a safe, repeatable solution, Weave can crystallize it into a capability that future runs can execute directly. Reasoning moves toward the frontier; proven work becomes software.
 
 Weave aims to make this cycle understandable, controllable, and empirically improvable:
@@ -27,6 +29,27 @@ Weave does not reduce agency to a single generated “next action.” Its contro
 Independent actions should proceed concurrently. Their results arrive as events and may change the value of work still in flight. Weave can continue, join, cancel, supersede, or open new threads as the frontier changes; it does not wait for an artificial conversational turn or batch boundary when useful state is already available.
 
 The decision mechanism may begin with Jev, but Weave is not a Jev wrapper. The durable contract is typed, uncertainty-aware evaluation of state against an available action space. Models and providers may change without changing what Weave is.
+
+## Decomposition frontier
+
+Not every task reduces to one action, and not every task should reach a generative model. The decomposition frontier is the boundary between work Weave can carry by extracting, deciding, and splitting, and work that must escalate to generation. It is distinct from the action frontier: one bounds how far typed judgment carries a task, the other is the set of actions viable now.
+
+> extract → check fidelity → decide band → decide action or spawn → act, ask, or escalate
+
+Extraction fills a typed schema from an observation; the original remains authoritative. A fidelity check decides whether a decision uses the original only, uses the extracted hints, or extracts again. The first decision chooses a coarse band from a closed set—`tool_call`, `spawn_subtasks`, `escalate_gen`, or `ask_human`—without seeing the capability catalogue, so its precision does not erode as the action vocabulary grows. Only after `tool_call` does a second decision choose the capability, and a targeted extraction fills that capability's arguments from the original and earlier extractions. A spawn produces child task nodes; a sequence is children joined by `depends_on`, not a separate kind of node.
+
+Preflight is a spawn, not a bare escalation. When work must read before it generates—a coordinated code change, a document revision, a ticket—a decision over a closed set of candidate targets assigns each one a role: `edit`, `read`, `forbid`, or `skip`. Children gather the targets, concurrently where they can, and a single `escalate_gen` child depends on them, carrying a brief that names what may change and what must not.
+
+A generative call reasons about what to produce; which capabilities to use and which resources to target are decided upstream wherever a judgment site exists. Its brief carries those targets, constraints, acceptance checks, and the chosen tier. Its output returns as an observation and passes through extraction and decision again—to be verified, applied, or split further.
+
+Each task node is scored on measurable axes: residual ambiguity after extraction, coupling among artifacts that must change together, context span that cannot be reduced, irreversibility of the action, judgment-site confidence and margin, novelty relative to crystallized or verified paths, and expected generation size. The scores place the node in one band:
+
+- **ACT** when no ambiguity remains, a single target is coupled, confidence and margin clear the site's thresholds, and the action is reversible or already approved.
+- **SPLIT** when coupling or ambiguity remains and a split proposes children that each score better than the parent. Splitting recurses while it shows gain within the goal's cost budget, not to a fixed depth.
+- **ESCALATE-GEN** when splitting yields no gain—the children are not simpler or the coupling is irreducible—or the output is inherently generative. A judgment site selects the tier from coupling, context span, and generation size.
+- **ASK-HUMAN** only when an irreversible action falls below its confidence threshold, or when the ambiguity is one only the operator can resolve.
+
+Thresholds are measured, not asserted. Escalation past the frontier is expected; it should happen because the work requires generation, not because Weave could not break the work down. The frontier is measured by the share of task nodes resolved below ESCALATE-GEN and by cost per resolved task, tracked over time. It moves outward through better extraction schemas, judgment sites with dispatch authority, splits that prove their gain, and crystallization of proven paths into software.
 
 ## Deterministic policy bounds probabilistic judgment
 
@@ -110,7 +133,7 @@ Loom is the goal-directed runtime inside Weave: it selects, parallelizes, evalua
 
 It is not a chatbot framework with a more elaborate tool loop. Conversation is one interface and responding is one action.
 
-It is not a model-training system. Weave improves the software and policy surrounding models; it does not claim that the models themselves learn through use.
+It is not a model-training system. Weave improves the software and policy surrounding models; it does not claim that the models themselves learn through use, and it does not train models in the near term. It measures per-site performance and, when thresholds are met, proposes fine-tunes of small decision models with a dataset manifest; training happens outside Weave.
 
 It is not permissionless self-modifying software. Capability creation, capability admission, and authority to execute are separate gates.
 
