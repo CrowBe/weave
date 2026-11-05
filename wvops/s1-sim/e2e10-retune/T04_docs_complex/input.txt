@@ -1,0 +1,2 @@
+THREAD (stale): Jane wanted French FAQ translation — ignore. Mirror-to-marketing job is retired.
+CURRENT: Compare docs/pricing.md and docs/billing.md on CrowBe/weave main. Write eng-leads recommendation with quotations. Open draft PR adding CONFLICTS.md titled 'docs: pricing/billing conflict summary' priority medium — do not merge, do not modify pricing.md or billing.md, stay in docs/. Leave a draft #eng note with conflict count + PR URL; post nothing. If either doc missing, ask me. If a $ amount disagrees by >20%, escalate that conflict to me before the PR.

@@ -1,0 +1,38 @@
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "USER: Read AGENTS.md and VISION.md from CrowBe/weave on main, then produce a short bullet list of tensions between them. Do not edit either file.\nCONTEXT: Reading is a tool; the tension list needs generation after both reads return.",
+    "extraction_hints": "SUPPRESSED",
+    "signals": {
+      "fidelity_gate": "original_only",
+      "multi_deliverable_noul": 0.2064,
+      "reads_before_gen_noul": 0.9428,
+      "user_must_clarify_noul": 0.0535,
+      "extract_deliverable_count": "USER",
+      "extract_needs_prior_reads": "Do not",
+      "extract_user_only_ambiguity": "Do not"
+    },
+    "policy": "Decide-1 coarse only \u2014 no tool names. If user_must_clarify is high \u2192 ask_human. If multi_deliverable is high \u2192 prefer spawn_subtasks over tool_call. If reads_before_gen is high \u2192 prefer spawn_subtasks (read children then gen child), not bare escalate_gen. escalate_gen only when no prior tool reads are required. tool_call only for a single deterministic tool with clear args."
+  },
+  "questions": {
+    "band": {
+      "type": "choice",
+      "instructions": "Coarse act band",
+      "criteria": {
+        "tool_call": "Exactly one deterministic tool; args present; not multi-deliverable",
+        "spawn_subtasks": "2+ subtasks and/or reads-then-gen pipeline",
+        "escalate_gen": "Pure generation; no required prior tool reads",
+        "ask_human": "Vague, identity-ambiguous, or irreversible+low-conf \u2014 ask first"
+      }
+    },
+    "split_gain": { "type": "noul", "instructions": "Would spawning children improve correctness?" },
+    "veto_tool_call": {
+      "type": "noul",
+      "instructions": "Should tool_call be vetoed because the request is multi-part or needs prior reads?"
+    },
+    "veto_bare_gen": {
+      "type": "noul",
+      "instructions": "Should bare escalate_gen be vetoed because reads must happen first?"
+    }
+  }
+}

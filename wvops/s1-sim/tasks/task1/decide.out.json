@@ -1,0 +1,35 @@
+{
+  "model": "clef-flash",
+  "answers": {
+    "band": {
+      "type": "choice",
+      "choice": "act_tool",
+      "probabilities": {
+        "act_tool": 0.9318,
+        "split": 0.0195,
+        "escalate_gen": 0.0243,
+        "ask_human": 0.0244
+      },
+      "confidence": 0.8265
+    },
+    "tool": {
+      "type": "choice",
+      "choice": "cancel_order",
+      "probabilities": {
+        "cancel_order": 0.9266,
+        "refund_order": 0.0165,
+        "lookup_order": 0.0214,
+        "none": 0.0355
+      },
+      "confidence": 0.8141
+    },
+    "args_ready": {
+      "type": "noul",
+      "noul": 0.8775
+    }
+  },
+  "usage": {
+    "input_tokens": 558,
+    "output_tokens": 0
+  }
+}

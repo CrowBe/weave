@@ -1,0 +1,17 @@
+{
+  "model": "clairic",
+  "state": "USER: Read AGENTS.md and VISION.md from CrowBe/weave on main, then produce a short bullet list of tensions between them. Do not edit either file.\nCONTEXT: Reading is a tool; the tension list needs generation after both reads return.",
+  "fields": {
+    "child_briefs": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Each child brief as one whole clause: what that child alone must do."
+    },
+    "shared_prohibitions": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Prohibitions every child must inherit."
+    },
+    "parent_goal": { "type": "text", "instructions": "One-line parent goal." }
+  }
+}

@@ -1,0 +1,4 @@
+
+┌ Error
+│ EACCES: permission denied, mkdir '/node_modules/.cache/cloudflare'
+└

@@ -1,0 +1,229 @@
+[
+  {
+    "id": "T01_cancel_order",
+    "expect_band": "tool_call",
+    "band": "tool_call",
+    "band_conf": 0.7257,
+    "band_match": true,
+    "fidelity_gate": "original_only",
+    "prefer_original": 0.8006,
+    "lists_usable": 0.226,
+    "split_gain": 0.0512,
+    "irreversible_low_conf": 0.1027,
+    "tool": "cancel_order",
+    "tool_conf": 0.7315,
+    "args": {
+      "order_id": {
+        "value": "ORD-4521",
+        "confidence": 0.9999998807907104,
+        "p_null": 0.0011139961425215006
+      }
+    }
+  },
+  {
+    "id": "T02_multi_split",
+    "expect_band": "spawn_subtasks",
+    "band": "spawn_subtasks",
+    "band_conf": 0.6644,
+    "band_match": true,
+    "fidelity_gate": "original_only",
+    "prefer_original": 0.8572,
+    "lists_usable": 0.0798,
+    "split_gain": 0.7281,
+    "irreversible_low_conf": 0.044,
+    "tool": null,
+    "tool_conf": null,
+    "args": null
+  },
+  {
+    "id": "T03_wipe_ask",
+    "expect_band": "ask_human",
+    "band": "ask_human",
+    "band_conf": 0.3517,
+    "band_match": true,
+    "fidelity_gate": "use_hints",
+    "prefer_original": 0.8606,
+    "lists_usable": 0.2468,
+    "split_gain": 0.4027,
+    "irreversible_low_conf": 0.2459,
+    "tool": null,
+    "tool_conf": null,
+    "args": null
+  },
+  {
+    "id": "T04_docs_complex",
+    "expect_band": "spawn_subtasks",
+    "band": "tool_call",
+    "band_conf": 0.1816,
+    "band_match": false,
+    "fidelity_gate": "original_only",
+    "prefer_original": 0.7423,
+    "lists_usable": 0.3923,
+    "split_gain": 0.2935,
+    "irreversible_low_conf": 0.084,
+    "tool": "gh_pr_create",
+    "tool_conf": 0.3263,
+    "args": {
+      "repo": {
+        "value": "CrowBe/weave",
+        "confidence": 0.999987006187439,
+        "p_null": 5.329828582034679e-6
+      },
+      "title": {
+        "value": "docs: pricing/billing conflict summary",
+        "confidence": 0.968950092792511,
+        "p_null": 0.0004371339164208621
+      },
+      "draft": {
+        "value": "draft",
+        "confidence": 0.2878783047199249,
+        "p_null": 0.010416912846267223
+      }
+    }
+  },
+  {
+    "id": "T05_blog_gen",
+    "expect_band": "escalate_gen",
+    "band": "escalate_gen",
+    "band_conf": 0.548,
+    "band_match": true,
+    "fidelity_gate": "original_only",
+    "prefer_original": 0.863,
+    "lists_usable": 0.0247,
+    "split_gain": 0.1373,
+    "irreversible_low_conf": 0.1274,
+    "tool": null,
+    "tool_conf": null,
+    "args": null
+  },
+  {
+    "id": "T06_lookup_pr",
+    "expect_band": "tool_call",
+    "band": "tool_call",
+    "band_conf": 0.8253,
+    "band_match": true,
+    "fidelity_gate": "original_only",
+    "prefer_original": 0.6658,
+    "lists_usable": 0.1215,
+    "split_gain": 0.0305,
+    "irreversible_low_conf": 0.0411,
+    "tool": "gh_pr_get",
+    "tool_conf": 0.9105,
+    "args": {
+      "repo": {
+        "value": "CrowBe/weave",
+        "confidence": 0.9995104074478149,
+        "p_null": 4.872540739597753e-5
+      },
+      "number": {
+        "value": "358",
+        "confidence": 0.9912097454071045,
+        "p_null": 0.005509485956281424
+      }
+    }
+  },
+  {
+    "id": "T07_vague_fix",
+    "expect_band": "ask_human",
+    "band": "tool_call",
+    "band_conf": 0.1205,
+    "band_match": false,
+    "fidelity_gate": "use_hints",
+    "prefer_original": 0.7413,
+    "lists_usable": 0.0977,
+    "split_gain": 0.1739,
+    "irreversible_low_conf": 0.0873,
+    "tool": "linear_create",
+    "tool_conf": 0.1255,
+    "args": {
+      "team": {
+        "value": null,
+        "confidence": 0.27590274810791016,
+        "p_null": 0.9668294787406921
+      },
+      "title": {
+        "value": "Fix it",
+        "confidence": 0.8551837801933289,
+        "p_null": 0.09446093440055847
+      },
+      "priority": {
+        "value": null,
+        "confidence": 0.15736237168312073,
+        "p_null": 0.9996857643127441
+      },
+      "description": {
+        "value": "Irreversible force-push is not allowed without confirmation",
+        "confidence": 0.19841131567955017,
+        "p_null": 0.19859597086906433
+      }
+    }
+  },
+  {
+    "id": "T08_linear_create",
+    "expect_band": "tool_call",
+    "band": "tool_call",
+    "band_conf": 0.8905,
+    "band_match": true,
+    "fidelity_gate": "original_only",
+    "prefer_original": 0.7896,
+    "lists_usable": 0.0603,
+    "split_gain": 0.0262,
+    "irreversible_low_conf": 0.0369,
+    "tool": "linear_create",
+    "tool_conf": 0.9384,
+    "args": {
+      "team": {
+        "value": "ENG",
+        "confidence": 1,
+        "p_null": 0.0007655920926481485
+      },
+      "title": {
+        "value": "Gauge session budget envelope",
+        "confidence": 0.9991492033004761,
+        "p_null": 2.24374707613606e-5
+      },
+      "priority": {
+        "value": "high",
+        "confidence": 0.9999277591705322,
+        "p_null": 0.0028090188279747963
+      },
+      "description": {
+        "value": "Session/period cost budget as primary; optional per-thread caps.",
+        "confidence": 0.9993399977684021,
+        "p_null": 0.000720219686627388
+      }
+    }
+  },
+  {
+    "id": "T09_two_reads",
+    "expect_band": "spawn_subtasks",
+    "band": null,
+    "band_conf": null,
+    "band_match": null,
+    "fidelity_gate": "reprompt",
+    "prefer_original": 0.8531,
+    "lists_usable": 0.0194,
+    "split_gain": null,
+    "irreversible_low_conf": null,
+    "tool": null,
+    "tool_conf": null,
+    "args": null,
+    "incomplete": true,
+    "incomplete_reason": "reprompt fidelity gate rejected extraction hints; stopped before decide-1"
+  },
+  {
+    "id": "T10_delete_branch",
+    "expect_band": "ask_human",
+    "band": "ask_human",
+    "band_conf": 0.6567,
+    "band_match": true,
+    "fidelity_gate": "original_only",
+    "prefer_original": 0.6483,
+    "lists_usable": 0.1397,
+    "split_gain": 0.0325,
+    "irreversible_low_conf": 0.5039,
+    "tool": null,
+    "tool_conf": null,
+    "args": null
+  }
+]

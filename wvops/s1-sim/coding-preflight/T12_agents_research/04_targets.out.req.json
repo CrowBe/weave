@@ -1,0 +1,53 @@
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "USER: On CrowBe/weave main, update AGENTS.md with a short 'System-1 loop' bullet: extract\u2192decide\u2192act/split/ask, escalate-gen only past frontier with a pre-targeted brief. Also add one paragraph to docs/research/prompt-decomposition-extraction-vs-generation.md pointing at the closed-set preflight target-role Decide pattern (edit|read|forbid|skip). Do not edit VISION.md. Do not touch packages/weave/src/sites/boolean.ts or any TypeScript. Docs/markdown only; no PR.\nCONTEXT: Reads are tools. Multi-file markdown edits need generation after the files to change are read.",
+    "candidate_paths": [
+      "AGENTS.md",
+      "VISION.md",
+      "docs/research/prompt-decomposition-extraction-vs-generation.md",
+      "packages/weave/src/sites/boolean.ts",
+      "packages/weave/src/sites/CONTRACT.md",
+      "GLOSSARY.md",
+      "ARCHITECTURE.md"
+    ],
+    "policy": "Mark each candidate edit|read|forbid|skip."
+  },
+  "questions": {
+    "AGENTS.md": {
+      "type": "choice",
+      "instructions": "Role for AGENTS.md",
+      "criteria": { "edit": "edit", "read": "read", "forbid": "forbid", "skip": "skip" }
+    },
+    "VISION.md": {
+      "type": "choice",
+      "instructions": "Role for VISION.md",
+      "criteria": { "edit": "edit", "read": "read", "forbid": "forbid", "skip": "skip" }
+    },
+    "docs/research/prompt-decomposition-extraction-vs-generation.md": {
+      "type": "choice",
+      "instructions": "Role for docs/research/prompt-decomposition-extraction-vs-generation.md",
+      "criteria": { "edit": "edit", "read": "read", "forbid": "forbid", "skip": "skip" }
+    },
+    "packages/weave/src/sites/boolean.ts": {
+      "type": "choice",
+      "instructions": "Role for packages/weave/src/sites/boolean.ts",
+      "criteria": { "edit": "edit", "read": "read", "forbid": "forbid", "skip": "skip" }
+    },
+    "packages/weave/src/sites/CONTRACT.md": {
+      "type": "choice",
+      "instructions": "Role for packages/weave/src/sites/CONTRACT.md",
+      "criteria": { "edit": "edit", "read": "read", "forbid": "forbid", "skip": "skip" }
+    },
+    "GLOSSARY.md": {
+      "type": "choice",
+      "instructions": "Role for GLOSSARY.md",
+      "criteria": { "edit": "edit", "read": "read", "forbid": "forbid", "skip": "skip" }
+    },
+    "ARCHITECTURE.md": {
+      "type": "choice",
+      "instructions": "Role for ARCHITECTURE.md",
+      "criteria": { "edit": "edit", "read": "read", "forbid": "forbid", "skip": "skip" }
+    }
+  }
+}

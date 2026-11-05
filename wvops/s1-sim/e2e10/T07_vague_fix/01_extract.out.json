@@ -1,0 +1,68 @@
+{
+  "model": "clairic",
+  "answers": {
+    "intent": {
+      "type": "text",
+      "p_null": 0.01284341886639595,
+      "span": [6, 12],
+      "guess": "Fix it",
+      "confidence": 0.53168123960495,
+      "value": "Fix it"
+    },
+    "entities": {
+      "type": "list",
+      "value": ["packages/gateway", "CI", "packages/runtime"],
+      "spans": [
+        [46, 62],
+        [83, 85],
+        [96, 112]
+      ],
+      "confidence": 0.1268565676559349
+    },
+    "prohibitions": {
+      "type": "list",
+      "value": ["Irreversible force-push"],
+      "spans": [[155, 178]],
+      "confidence": 0.283097250798292
+    },
+    "ask_triggers": {
+      "type": "list",
+      "value": ["Irreversible force-push"],
+      "spans": [[155, 178]],
+      "confidence": 0.1247566918104283
+    },
+    "needs_generation": {
+      "type": "text",
+      "p_null": 0.008186489343643188,
+      "span": [182, 185],
+      "guess": "not",
+      "confidence": 0.9545531272888184,
+      "value": "not"
+    },
+    "multi_part": {
+      "type": "text",
+      "p_null": 0.005099438596516848,
+      "span": [182, 185],
+      "guess": "not",
+      "confidence": 0.5484052896499634,
+      "value": "not"
+    },
+    "irreversible": {
+      "type": "text",
+      "p_null": 0.023589253425598145,
+      "span": [182, 185],
+      "guess": "not",
+      "confidence": 0.8527130484580994,
+      "value": "not"
+    }
+  },
+  "truncated": false,
+  "usage": {
+    "state_tokens": 44,
+    "image_tokens": 0,
+    "schema_tokens": 759,
+    "input_tokens": 979,
+    "output_tokens": 0,
+    "passes": 5
+  }
+}

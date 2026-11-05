@@ -1,0 +1,2 @@
+USER: What's the status of PR #358 on CrowBe/weave? Just the state and title.
+CONTEXT: gh_pr_get(repo, number) available.

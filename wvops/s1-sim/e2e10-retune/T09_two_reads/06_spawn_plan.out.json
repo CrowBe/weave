@@ -1,0 +1,27 @@
+{
+  "model": "clef-flash",
+  "answers": {
+    "n_children": {
+      "type": "choice",
+      "choice": "2",
+      "probabilities": {
+        "2": 0.6299,
+        "3": 0.2783,
+        "4": 0.0918
+      },
+      "confidence": 0.2239
+    },
+    "includes_read_then_gen": {
+      "type": "noul",
+      "noul": 0.6125
+    },
+    "parent_merge_after": {
+      "type": "noul",
+      "noul": 0.8614
+    }
+  },
+  "usage": {
+    "input_tokens": 436,
+    "output_tokens": 0
+  }
+}

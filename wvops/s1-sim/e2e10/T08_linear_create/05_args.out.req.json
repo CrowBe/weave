@@ -1,0 +1,10 @@
+{
+  "model": "clairic",
+  "state": "USER: Create a Linear issue in team ENG titled 'Gauge session budget envelope' with priority high and description 'Session/period cost budget as primary; optional per-thread caps.'\nCONTEXT: linear_create(team, title, priority, description) available. Creating an issue is reversible (can close).",
+  "fields": {
+    "team": { "type": "text", "instructions": "Linear team key or name" },
+    "title": { "type": "text", "instructions": "Issue title" },
+    "priority": { "type": "text", "instructions": "Priority" },
+    "description": { "type": "text", "instructions": "Issue description span" }
+  }
+}

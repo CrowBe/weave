@@ -1,0 +1,156 @@
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "THREAD (prior messages, for context \u2014 some are stale):\n- Last week we mirrored docs to the public marketing site. That mirror job is retired; do not resurrect it.\n- Jane once asked for a French translation of the FAQ. Ignore that \u2014 not this week's work.\n- Staging DB snapshot from Tuesday is named snap-tue-19; production is off-limits unless an incident commander says otherwise.\n\nCURRENT USER REQUEST (authoritative):\nCompare pricing.md and billing.md in CrowBe/weave (docs/ only). Identify conflicting statements about annual vs monthly plans, and write a recommendation for eng-leads that is supported by short quotations from both files. Also open a draft PR that adds a CONFLICTS.md summarizing those conflicts \u2014 but do not merge it, and do not touch any file outside docs/. Separately, post nothing to Slack; instead leave a draft note in #eng that lists the conflict count and the PR URL once the draft PR exists. If either doc is missing, stop and ask me rather than inventing content. Do not publish anything externally, do not modify pricing.md or billing.md themselves, and do not use the Tuesday staging snapshot for this \u2014 use the files on main. Exception: if a conflict quotes a dollar amount that disagrees by more than 20%, escalate that single conflict to me before drafting the PR. Priority is medium; title the PR \"docs: pricing/billing conflict summary\".\n",
+    "clairic_extraction": {
+      "requested_actions": {
+        "value": [
+          "snap",
+          "Compare pricing.md and",
+          "billing.md",
+          "CrowBe/weave",
+          "docs/",
+          "write a recommendation for",
+          "open a draft PR that",
+          "post nothing",
+          "pricing.md",
+          "docs: pricing/billing conflict summary"
+        ],
+        "confidence": 3.2891488094949974e-21,
+        "p_null": null
+      },
+      "final_deliverables": {
+        "value": [
+          "billing.md",
+          "CrowBe/weave",
+          "CONFLICTS.md summar",
+          "#eng",
+          "docs: pricing/billing conflict summary\""
+        ],
+        "confidence": 5.431224473772676e-9,
+        "p_null": null
+      },
+      "source_files": {
+        "value": ["pricing.md", "billing.md", "CrowBe/weave", "docs"],
+        "confidence": 3.271656316943663e-5,
+        "p_null": null
+      },
+      "repo": {
+        "value": "CrowBe/weave",
+        "confidence": 0.9999589920043945,
+        "p_null": 0.002901002299040556
+      },
+      "path_scope": {
+        "value": "docs/",
+        "confidence": 0.9513646960258484,
+        "p_null": 0.013037794269621372
+      },
+      "prohibited_actions": {
+        "value": ["do", "post nothing", "#", "publish anything externally", "pricing.md", "docs"],
+        "confidence": 1.9576400728895246e-11,
+        "p_null": null
+      },
+      "exceptions": {
+        "value": [
+          "if a conflict quotes a dollar amount that disagrees by more than 20%, escalate that single conflict to me before drafting the PR"
+        ],
+        "confidence": 1.4674063776942626e-9,
+        "p_null": null
+      },
+      "ask_conditions": {
+        "value": [],
+        "confidence": 3.4206661691294445e-6,
+        "p_null": null
+      },
+      "stale_or_ignore": {
+        "value": ["Last week", "French translation of the FAQ", "Staging DB snapshot", "snap-tue-19", "billing.md"],
+        "confidence": 1.7613469343369168e-10,
+        "p_null": null
+      },
+      "pr_title": {
+        "value": "docs: pricing/billing conflict summary",
+        "confidence": 0.5353376865386963,
+        "p_null": 6.161569035612047e-5
+      },
+      "priority": {
+        "value": "medium",
+        "confidence": 0.9999547004699707,
+        "p_null": 0.0008471030741930008
+      },
+      "slack_channel": {
+        "value": "#eng",
+        "confidence": 0.9735984802246094,
+        "p_null": 0.0012998334132134914
+      },
+      "data_source": {
+        "value": "main",
+        "confidence": 0.9932994842529297,
+        "p_null": 0.006714769173413515
+      }
+    },
+    "notes": "Clairic list confidences are near zero on several fields. Scalars may still be usable. Decide whether each claim is faithful to CURRENT USER REQUEST, not THREAD noise."
+  },
+  "questions": {
+    "overall_faithful": {
+      "type": "noul",
+      "instructions": "Is the extraction overall faithful enough that a downstream decide step can trust slots over re-reading the original?"
+    },
+    "prefer_original": {
+      "type": "noul",
+      "instructions": "Should the decide step treat the original_input as authoritative and treat extraction as hints only?"
+    },
+    "scalars_usable": {
+      "type": "noul",
+      "instructions": "Are the scalar fields (repo, path_scope, pr_title, priority, slack_channel, data_source) accurate enough to use?"
+    },
+    "lists_usable": {
+      "type": "noul",
+      "instructions": "Are the list fields (requested_actions, final_deliverables, prohibited_actions, ask_conditions, stale_or_ignore) complete and usable without re-reading the original?"
+    },
+    "negations_preserved": {
+      "type": "noul",
+      "instructions": "Were prohibitions preserved with their negation (do not merge, do not modify pricing/billing, post nothing / draft only, no external publish, do not use Tuesday snapshot)?"
+    },
+    "exception_captured": {
+      "type": "noul",
+      "instructions": "Was the >20% dollar-amount disagreement escalate-to-me exception correctly captured?"
+    },
+    "ask_conditions_captured": {
+      "type": "noul",
+      "instructions": "Was the ask-if-either-doc-missing condition captured? (extraction ask_conditions was empty)"
+    },
+    "stale_confused": {
+      "type": "noul",
+      "instructions": "Did extraction wrongly treat CURRENT USER REQUEST content as stale/ignore, or pull THREAD noise into actions (e.g. snap, French FAQ, marketing mirror)?"
+    },
+    "missing_actions": {
+      "type": "noul",
+      "instructions": "Are important actions missing or mangled: compare the two docs, write eng-leads recommendation with quotations, open draft PR adding CONFLICTS.md, leave draft Slack note with conflict count + PR URL?"
+    },
+    "safe_for_tool_args": {
+      "type": "noul",
+      "instructions": "Is it safe to bind tool arguments (repo, paths, PR title, channel) from extraction alone without checking original?"
+    },
+    "next_step": {
+      "type": "choice",
+      "instructions": "Given fidelity, what should the harness do next?",
+      "criteria": {
+        "use_slots": "Trust extraction slots; proceed to band decide",
+        "use_original": "Ignore weak lists; decide from original + only high-conf scalars",
+        "reprompt_schema": "Re-run extract with a tighter/narrower schema before deciding",
+        "ask_human": "Extraction too broken; ask the user to clarify"
+      }
+    },
+    "prompt_fix_priority": {
+      "type": "choice",
+      "instructions": "If we refine Clairic prompting for this use case, what should we fix first?",
+      "criteria": {
+        "list_clause_wholes": "Force list items to be whole clauses, not fragments",
+        "negation_retention": "Retain full do-not phrases",
+        "thread_vs_current": "Harder separation of THREAD noise vs CURRENT USER REQUEST",
+        "ask_and_exception": "Dedicated scalars for ask-conditions and exceptions",
+        "none_needed": "Prompting is fine; model limit \u2014 collect FT labels instead"
+      }
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "USER: Fix it.\nCONTEXT: Last failing check was packages/gateway typecheck, but also CI failed on packages/runtime. Two recent commits by different authors. Irreversible force-push is not allowed without confirmation.",
+    "extraction": {
+      "intent": { "value": "Fix it", "confidence": 0.5411052703857422, "p_null": 0.012788315303623676 },
+      "deliverable_count": { "value": "Two", "confidence": 0.9543336629867554, "p_null": 0.017086992040276527 },
+      "deliverables": {
+        "value": ["Fix it", "packages/gateway typecheck", "CI", "packages/runtime", "Ir"],
+        "confidence": 6.835828189313381e-5,
+        "p_null": null
+      },
+      "entities": {
+        "value": ["packages/gateway", "packages/runtime"],
+        "confidence": 0.11914673901127366,
+        "p_null": null
+      },
+      "prohibitions": { "value": ["Irreversible force-push"], "confidence": 0.11011080829056438, "p_null": null },
+      "needs_prior_reads": { "value": "not", "confidence": 0.808648943901062, "p_null": 0.011905869469046593 },
+      "needs_generation": { "value": "not", "confidence": 0.9318757057189941, "p_null": 0.01089885737746954 },
+      "user_only_ambiguity": {
+        "value": "not allowed",
+        "confidence": 0.14044107496738434,
+        "p_null": 0.025090277194976807
+      },
+      "irreversible": { "value": "not", "confidence": 0.8570694327354431, "p_null": 0.00396724883466959 }
+    },
+    "policy": "Original authoritative. Near-zero list conf = hints only."
+  },
+  "questions": {
+    "prefer_original": { "type": "noul", "instructions": "Prefer original over extraction for planning?" },
+    "multi_deliverable": {
+      "type": "noul",
+      "instructions": "Does the request clearly have 2+ independent deliverables/subtasks?"
+    },
+    "reads_before_gen": { "type": "noul", "instructions": "Must tool reads complete before any generation?" },
+    "user_must_clarify": {
+      "type": "noul",
+      "instructions": "Is the request too vague/ambiguous for any safe act without asking the user?"
+    },
+    "gate": {
+      "type": "choice",
+      "instructions": "Fidelity gate",
+      "criteria": {
+        "use_hints": "use high-conf hints",
+        "original_only": "original only",
+        "reprompt": "re-extract first"
+      }
+    }
+  }
+}

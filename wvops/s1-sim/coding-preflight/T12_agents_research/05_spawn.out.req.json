@@ -1,0 +1,14 @@
+{
+  "model": "clef-flash",
+  "state": {
+    "band": "spawn_subtasks",
+    "to_read": ["AGENTS.md", "docs/research/prompt-decomposition-extraction-vs-generation.md"],
+    "to_edit": ["AGENTS.md", "docs/research/prompt-decomposition-extraction-vs-generation.md"],
+    "forbid": ["VISION.md", "packages/weave/src/sites/boolean.ts"],
+    "policy": "Sequence via depends_on: reads then one escalate_gen."
+  },
+  "questions": {
+    "gen_depends_on_all_reads": { "type": "noul", "instructions": "Gen child depends_on every read?" },
+    "plan_ok": { "type": "noul", "instructions": "Is sequenced reads\u2192gen correct?" }
+  }
+}

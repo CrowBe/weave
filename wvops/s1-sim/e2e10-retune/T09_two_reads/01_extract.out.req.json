@@ -1,0 +1,27 @@
+{
+  "model": "clairic",
+  "state": "USER: Read AGENTS.md and VISION.md from CrowBe/weave on main, then produce a short bullet list of tensions between them. Do not edit either file.\nCONTEXT: Reading is a tool; the tension list needs generation after both reads return.",
+  "fields": {
+    "intent": { "type": "text", "instructions": "Primary action the user wants, as a short phrase." },
+    "deliverable_count": {
+      "type": "text",
+      "instructions": "How many distinct deliverables or independent subtasks: 1, 2, 3, or more."
+    },
+    "deliverables": { "type": "list", "items": "text", "instructions": "Each distinct deliverable as a whole clause." },
+    "entities": { "type": "list", "items": "text", "instructions": "Named ids, repos, files, channels, titles." },
+    "prohibitions": { "type": "list", "items": "text", "instructions": "Complete do-not phrases retaining negation." },
+    "needs_prior_reads": {
+      "type": "text",
+      "instructions": "yes if generation depends on reading files/PRs first, no otherwise."
+    },
+    "needs_generation": {
+      "type": "text",
+      "instructions": "yes if free-form drafting is required after any tools, no otherwise."
+    },
+    "user_only_ambiguity": {
+      "type": "text",
+      "instructions": "yes if the user must clarify what to do, no if the request is actionable."
+    },
+    "irreversible": { "type": "text", "instructions": "yes / no / unclear" }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "model": "clairic",
+  "state": "THREAD (prior messages, for context \u2014 some are stale):\n- Last week we mirrored docs to the public marketing site. That mirror job is retired; do not resurrect it.\n- Jane once asked for a French translation of the FAQ. Ignore that \u2014 not this week's work.\n- Staging DB snapshot from Tuesday is named snap-tue-19; production is off-limits unless an incident commander says otherwise.\n\nCURRENT USER REQUEST (authoritative):\nCompare pricing.md and billing.md in CrowBe/weave (docs/ only). Identify conflicting statements about annual vs monthly plans, and write a recommendation for eng-leads that is supported by short quotations from both files. Also open a draft PR that adds a CONFLICTS.md summarizing those conflicts \u2014 but do not merge it, and do not touch any file outside docs/. Separately, post nothing to Slack; instead leave a draft note in #eng that lists the conflict count and the PR URL once the draft PR exists. If either doc is missing, stop and ask me rather than inventing content. Do not publish anything externally, do not modify pricing.md or billing.md themselves, and do not use the Tuesday staging snapshot for this \u2014 use the files on main. Exception: if a conflict quotes a dollar amount that disagrees by more than 20%, escalate that single conflict to me before drafting the PR. Priority is medium; title the PR \"docs: pricing/billing conflict summary\".\n",
+  "fields": {
+    "requested_actions": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Each distinct action the CURRENT USER REQUEST asks for, including object and qualifiers. Ignore THREAD items marked stale or retired."
+    },
+    "final_deliverables": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Each concrete deliverable expected (files, notes, PR, recommendation)."
+    },
+    "source_files": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Document or path names to read or compare."
+    },
+    "repo": {
+      "type": "text",
+      "instructions": "Repository full name if stated."
+    },
+    "path_scope": {
+      "type": "text",
+      "instructions": "Directory or path scope the work must stay inside."
+    },
+    "prohibited_actions": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Complete phrases of actions explicitly forbidden, retaining negation (do not / never / nothing)."
+    },
+    "exceptions": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Exception clauses that override a general rule under a condition."
+    },
+    "ask_conditions": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Conditions under which the agent must stop and ask the user."
+    },
+    "stale_or_ignore": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Prior-thread items that must be ignored for this request."
+    },
+    "pr_title": {
+      "type": "text",
+      "instructions": "Exact PR title if specified."
+    },
+    "priority": {
+      "type": "text",
+      "instructions": "Priority if specified."
+    },
+    "slack_channel": {
+      "type": "text",
+      "instructions": "Slack channel named for the draft note, if any."
+    },
+    "data_source": {
+      "type": "text",
+      "instructions": "Which data source or branch to use for the docs."
+    }
+  }
+}

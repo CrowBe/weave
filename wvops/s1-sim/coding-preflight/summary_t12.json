@@ -1,0 +1,64 @@
+{
+  "id": "T12_agents_research",
+  "raw_band": "spawn_subtasks",
+  "raw_conf": 0.8717,
+  "tuned_band": "spawn_subtasks",
+  "notes": [],
+  "band_match": true,
+  "fidelity": {
+    "prefer_original": 0.8059,
+    "path_lists_usable": 0.2462,
+    "reads_before_gen": 0.5229,
+    "gate": "original_only"
+  },
+  "target_roles": {
+    "AGENTS.md": "edit",
+    "VISION.md": "forbid",
+    "docs/research/prompt-decomposition-extraction-vs-generation.md": "edit",
+    "packages/weave/src/sites/boolean.ts": "forbid",
+    "packages/weave/src/sites/CONTRACT.md": "skip",
+    "GLOSSARY.md": "skip",
+    "ARCHITECTURE.md": "skip"
+  },
+  "target_confs": {
+    "AGENTS.md": 0.7934,
+    "VISION.md": 0.309,
+    "docs/research/prompt-decomposition-extraction-vs-generation.md": 0.8607,
+    "packages/weave/src/sites/boolean.ts": 0.5383,
+    "packages/weave/src/sites/CONTRACT.md": 0.8214,
+    "GLOSSARY.md": 0.8023,
+    "ARCHITECTURE.md": 0.6598
+  },
+  "edit_ok": true,
+  "forbid_ok": true,
+  "plan": {
+    "children": [
+      {
+        "id": "read_0",
+        "kind": "tool_call",
+        "tool": "read_file",
+        "path": "AGENTS.md",
+        "depends_on": []
+      },
+      {
+        "id": "read_1",
+        "kind": "tool_call",
+        "tool": "read_file",
+        "path": "docs/research/prompt-decomposition-extraction-vs-generation.md",
+        "depends_on": []
+      },
+      {
+        "id": "gen_edits",
+        "kind": "escalate_gen",
+        "edit_paths": ["AGENTS.md", "docs/research/prompt-decomposition-extraction-vs-generation.md"],
+        "forbid_paths": ["VISION.md", "packages/weave/src/sites/boolean.ts"],
+        "depends_on": ["read_0", "read_1"]
+      }
+    ],
+    "clef": {
+      "gen_depends_on_all_reads": 0.4502,
+      "plan_ok": 0.8585
+    }
+  },
+  "shape_match": true
+}

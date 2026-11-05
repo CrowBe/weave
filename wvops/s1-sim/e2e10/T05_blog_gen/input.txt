@@ -1,0 +1,1 @@
+USER: Write a 600-word blog post for the Weave homepage explaining System-1 extract→decide→act for a technical but non-ML audience. Tone: clear, concrete, no hype. No tools needed — just the draft markdown.

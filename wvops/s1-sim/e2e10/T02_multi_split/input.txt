@@ -1,0 +1,1 @@
+USER: (1) List open PRs on CrowBe/weave touching packages/gateway. (2) Draft a Slack note for #eng summarizing those titles — do not post. (3) File a Linear issue titled 'gateway publish-gate follow-up' priority medium. Do not merge anything.

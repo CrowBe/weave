@@ -1,0 +1,5 @@
+PARENT_GOAL: Compare docs/pricing.md and docs/billing.md on CrowBe/weave
+CHILD_BRIEF: Compare docs/pricing.md and docs/billing.md on
+SHARED_PROHIBITIONS: ['do not merge', 'do not modify pricing.md', 'stay']
+BUDGET: session-level; this child runs once then settles.
+DO NOT inherit full parent thread — only this slice.

@@ -1,0 +1,23 @@
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "USER: Read AGENTS.md and VISION.md from CrowBe/weave on main, then produce a short bullet list of tensions between them. Do not edit either file.\nCONTEXT: Reading is a tool; the tension list needs generation after both reads return.",
+    "parent_slice_policy": "Children get: parent goal one-liner, this child brief, shared prohibitions, session budget note. Not full THREAD.",
+    "policy": "Propose 2-4 children. Each child runs extract\u2192decide\u2192act once; parent merges."
+  },
+  "questions": {
+    "n_children": {
+      "type": "choice",
+      "instructions": "How many children?",
+      "criteria": { "2": "two", "3": "three", "4": "four" }
+    },
+    "includes_read_then_gen": {
+      "type": "noul",
+      "instructions": "Is there at least one read child that must finish before a gen child?"
+    },
+    "parent_merge_after": {
+      "type": "noul",
+      "instructions": "Should parent run a reference/merge step after children settle (once each)?"
+    }
+  }
+}

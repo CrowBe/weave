@@ -1,0 +1,60 @@
+{
+  "model": "clef-flash",
+  "state": {
+    "user_request": "Three things: (1) list open PRs on CrowBe/weave touching packages/gateway; (2) draft Slack note summarizing those titles for eng channel \u2014 do not post yet; (3) file Linear issue 'gateway publish-gate follow-up' priority medium. Do not merge.",
+    "extracted_clairic": {
+      "requested_actions_fragments": [
+        "Pull the open PRs on",
+        "CrowBe/weave",
+        "list",
+        "Draft a short",
+        "Slack note summarizing",
+        "File a",
+        "Linear issue"
+      ],
+      "requested_actions_confidence": 1.4640552227652929e-6,
+      "repos_or_systems": ["CrowBe/weave", "Slack", "eng channel", "Linear"],
+      "needs_generation": "Draft a short Slack note summarizing those PR titles",
+      "prohibited_actions_fragments": ["Do"]
+    },
+    "assembled_subtasks": [
+      {
+        "id": "A",
+        "kind": "tool",
+        "desc": "list open PRs CrowBe/weave filter packages/gateway"
+      },
+      {
+        "id": "B",
+        "kind": "generate_then_hold",
+        "desc": "draft Slack note from PR titles; do not post"
+      },
+      {
+        "id": "C",
+        "kind": "tool",
+        "desc": "create Linear issue title=gateway publish-gate follow-up priority=medium"
+      }
+    ],
+    "prohibitions_authoritative": ["do not merge", "do not post Slack note \u2014 draft only"],
+    "policy": "Independent subtasks with different act kinds \u2192 prefer split. Cost budget is session-level; free extract/decide do not consume it."
+  },
+  "questions": {
+    "band": {
+      "type": "choice",
+      "instructions": "Which System-1 band should this thread take next?",
+      "criteria": {
+        "act_tool": "Single tool call covers the whole request",
+        "split": "Spawn child threads for independent subtasks",
+        "escalate_gen": "One generative call for the whole request",
+        "ask_human": "Need user before any child"
+      }
+    },
+    "split_gain": {
+      "type": "noul",
+      "instructions": "Would splitting into the three assembled_subtasks improve correctness or parallelism versus one escalate?"
+    },
+    "child_B_needs_gen": {
+      "type": "noul",
+      "instructions": "Does child B (Slack draft) need a generative act after A returns titles?"
+    }
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "model": "clairic",
+  "answers": {
+    "intent": {
+      "type": "text",
+      "p_null": 0.012516770511865616,
+      "span": [106, 170],
+      "guess": "Compare docs/pricing.md and docs/billing.md on CrowBe/weave main",
+      "confidence": 0.286579966545105,
+      "value": "Compare docs/pricing.md and docs/billing.md on CrowBe/weave main"
+    },
+    "deliverable_count": {
+      "type": "text",
+      "p_null": 0.005278536584228277,
+      "span": [516, 517],
+      "guess": "2",
+      "confidence": 0.40855276584625244,
+      "value": "2"
+    },
+    "deliverables": {
+      "type": "list",
+      "value": [
+        "THREAD",
+        "Jane",
+        "French FAQ translation",
+        "Mirror-to-marketing job",
+        "Compare docs/pricing.md",
+        "docs/billing.md",
+        "CrowBe/weave main",
+        "Write",
+        "eng-leads recommendation",
+        "Open draft PR"
+      ],
+      "spans": [
+        [0, 6],
+        [16, 20],
+        [28, 50],
+        [61, 84],
+        [106, 129],
+        [134, 149],
+        [153, 170],
+        [172, 177],
+        [178, 202],
+        [220, 233]
+      ],
+      "confidence": 4.6221108248294135e-11
+    },
+    "entities": {
+      "type": "list",
+      "value": [
+        "Mirror-to",
+        "Compare",
+        "docs/pricing.md",
+        "docs/billing.md",
+        "CrowBe/weave main",
+        "eng-leads",
+        "CONFLICTS.md",
+        "docs: pricing/billing",
+        "pricing.md",
+        "billing.md",
+        "docs/",
+        "doc"
+      ],
+      "spans": [
+        [61, 70],
+        [106, 113],
+        [114, 129],
+        [134, 149],
+        [153, 170],
+        [178, 187],
+        [241, 253],
+        [262, 283],
+        [348, 358],
+        [362, 372],
+        [382, 387],
+        [467, 470]
+      ],
+      "confidence": 1.6610642227183277e-6
+    },
+    "prohibitions": {
+      "type": "list",
+      "value": ["do", "do not modify pricing.md"],
+      "spans": [
+        [320, 322],
+        [334, 358]
+      ],
+      "confidence": 8.577373676673777e-6
+    },
+    "needs_prior_reads": {
+      "type": "text",
+      "p_null": 0.22324919700622559,
+      "span": [448, 455],
+      "guess": "nothing",
+      "confidence": 0.10158341377973557,
+      "value": "nothing"
+    },
+    "needs_generation": {
+      "type": "text",
+      "p_null": 0.10331566631793976,
+      "span": [448, 455],
+      "guess": "nothing",
+      "confidence": 0.6583942770957947,
+      "value": "nothing"
+    },
+    "user_only_ambiguity": {
+      "type": "text",
+      "p_null": 0.03310038894414902,
+      "span": [448, 455],
+      "guess": "nothing",
+      "confidence": 0.15769007802009583,
+      "value": "nothing"
+    },
+    "irreversible": {
+      "type": "text",
+      "p_null": 0.034861501306295395,
+      "span": [88, 95],
+      "guess": "retired",
+      "confidence": 0.2291698455810547,
+      "value": "retired"
+    }
+  },
+  "truncated": false,
+  "usage": {
+    "state_tokens": 130,
+    "image_tokens": 0,
+    "schema_tokens": 1061,
+    "input_tokens": 1971,
+    "output_tokens": 0,
+    "passes": 7
+  }
+}

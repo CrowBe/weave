@@ -1,0 +1,2 @@
+USER: Read AGENTS.md and VISION.md from CrowBe/weave on main, then produce a short bullet list of tensions between them. Do not edit either file.
+CONTEXT: Reading is a tool; the tension list needs generation after both reads return.

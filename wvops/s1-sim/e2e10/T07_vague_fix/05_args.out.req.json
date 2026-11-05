@@ -1,0 +1,10 @@
+{
+  "model": "clairic",
+  "state": "USER: Fix it.\nCONTEXT: Last failing check was packages/gateway typecheck, but also CI failed on packages/runtime. Two recent commits by different authors. Irreversible force-push is not allowed without confirmation.",
+  "fields": {
+    "team": { "type": "text", "instructions": "Linear team key or name" },
+    "title": { "type": "text", "instructions": "Issue title" },
+    "priority": { "type": "text", "instructions": "Priority" },
+    "description": { "type": "text", "instructions": "Issue description span" }
+  }
+}

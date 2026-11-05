@@ -1,0 +1,36 @@
+{
+  "children": [
+    {
+      "id": "read_0",
+      "kind": "tool_call",
+      "tool": "read_file",
+      "path": "VISION.md",
+      "depends_on": []
+    },
+    {
+      "id": "read_1",
+      "kind": "tool_call",
+      "tool": "read_file",
+      "path": "packages/weave/src/sites/CONTRACT.md",
+      "depends_on": []
+    },
+    {
+      "id": "gen_edits",
+      "kind": "escalate_gen",
+      "edit_paths": ["VISION.md", "packages/weave/src/sites/CONTRACT.md"],
+      "forbid_paths": ["packages/weave/src/sites/boolean.ts", "GLOSSARY.md"],
+      "depends_on": ["read_0", "read_1"],
+      "brief": "Amend only ['VISION.md', 'packages/weave/src/sites/CONTRACT.md']; respect forbid ['packages/weave/src/sites/boolean.ts', 'GLOSSARY.md']; evidence from prior reads."
+    }
+  ],
+  "clef": {
+    "child_count": "2",
+    "gen_depends_on_all_reads": 0.9541,
+    "plan_ok": 0.941,
+    "conf": {
+      "child_count": 0.4543,
+      "gen_depends_on_all_reads": null,
+      "plan_ok": null
+    }
+  }
+}

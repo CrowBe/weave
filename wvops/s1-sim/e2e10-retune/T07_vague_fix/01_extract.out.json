@@ -1,0 +1,89 @@
+{
+  "model": "clairic",
+  "answers": {
+    "intent": {
+      "type": "text",
+      "p_null": 0.012788315303623676,
+      "span": [6, 12],
+      "guess": "Fix it",
+      "confidence": 0.5411052703857422,
+      "value": "Fix it"
+    },
+    "deliverable_count": {
+      "type": "text",
+      "p_null": 0.017086992040276527,
+      "span": [114, 117],
+      "guess": "Two",
+      "confidence": 0.9543336629867554,
+      "value": "Two"
+    },
+    "deliverables": {
+      "type": "list",
+      "value": ["Fix it", "packages/gateway typecheck", "CI", "packages/runtime", "Ir"],
+      "spans": [
+        [6, 12],
+        [46, 72],
+        [83, 85],
+        [96, 112],
+        [155, 157]
+      ],
+      "confidence": 6.835828189313381e-5
+    },
+    "entities": {
+      "type": "list",
+      "value": ["packages/gateway", "packages/runtime"],
+      "spans": [
+        [46, 62],
+        [96, 112]
+      ],
+      "confidence": 0.11914673901127366
+    },
+    "prohibitions": {
+      "type": "list",
+      "value": ["Irreversible force-push"],
+      "spans": [[155, 178]],
+      "confidence": 0.11011080829056438
+    },
+    "needs_prior_reads": {
+      "type": "text",
+      "p_null": 0.011905869469046593,
+      "span": [182, 185],
+      "guess": "not",
+      "confidence": 0.808648943901062,
+      "value": "not"
+    },
+    "needs_generation": {
+      "type": "text",
+      "p_null": 0.01089885737746954,
+      "span": [182, 185],
+      "guess": "not",
+      "confidence": 0.9318757057189941,
+      "value": "not"
+    },
+    "user_only_ambiguity": {
+      "type": "text",
+      "p_null": 0.025090277194976807,
+      "span": [182, 193],
+      "guess": "not allowed",
+      "confidence": 0.14044107496738434,
+      "value": "not allowed"
+    },
+    "irreversible": {
+      "type": "text",
+      "p_null": 0.00396724883466959,
+      "span": [182, 185],
+      "guess": "not",
+      "confidence": 0.8570694327354431,
+      "value": "not"
+    }
+  },
+  "truncated": false,
+  "usage": {
+    "state_tokens": 44,
+    "image_tokens": 0,
+    "schema_tokens": 1061,
+    "input_tokens": 1369,
+    "output_tokens": 0,
+    "passes": 7
+  }
+}

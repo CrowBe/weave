@@ -1,0 +1,27 @@
+{
+  "model": "clairic",
+  "state": "USER: Please cancel order ORD-4521. It was placed yesterday for the blue mug. Don't charge me again.\nCONTEXT: Orders API supports cancel_order(order_id). Refunds are automatic on cancel within 24h.",
+  "fields": {
+    "intent": {
+      "type": "text",
+      "instructions": "The primary action the user wants performed."
+    },
+    "order_id": {
+      "type": "text",
+      "instructions": "The order identifier to act on, exactly as written."
+    },
+    "item_mentioned": {
+      "type": "text",
+      "instructions": "Any product or item named in the request, or null if none."
+    },
+    "constraints": {
+      "type": "list",
+      "items": "text",
+      "instructions": "User constraints or prohibitions attached to the request."
+    },
+    "irreversible": {
+      "type": "text",
+      "instructions": "Whether the requested action is irreversible once done: yes, no, or unclear."
+    }
+  }
+}

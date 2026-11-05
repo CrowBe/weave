@@ -1,0 +1,30 @@
+{
+  "model": "clairic",
+  "answers": {
+    "repo": {
+      "type": "text",
+      "p_null": 4.872540739597753e-5,
+      "span": [38, 50],
+      "guess": "CrowBe/weave",
+      "confidence": 0.9995104074478149,
+      "value": "CrowBe/weave"
+    },
+    "number": {
+      "type": "text",
+      "p_null": 0.005509485956281424,
+      "span": [31, 34],
+      "guess": "358",
+      "confidence": 0.9912097454071045,
+      "value": "358"
+    }
+  },
+  "truncated": false,
+  "usage": {
+    "state_tokens": 36,
+    "image_tokens": 0,
+    "schema_tokens": 238,
+    "input_tokens": 310,
+    "output_tokens": 0,
+    "passes": 2
+  }
+}

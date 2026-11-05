@@ -1,0 +1,28 @@
+{
+  "model": "clef-flash",
+  "answers": {
+    "band": {
+      "type": "choice",
+      "choice": "spawn_subtasks",
+      "probabilities": {
+        "tool_call": 0.0733,
+        "spawn_subtasks": 0.8603,
+        "escalate_gen": 0.0503,
+        "ask_human": 0.0161
+      },
+      "confidence": 0.6644
+    },
+    "split_gain": {
+      "type": "noul",
+      "noul": 0.7281
+    },
+    "irreversible_low_conf": {
+      "type": "noul",
+      "noul": 0.044
+    }
+  },
+  "usage": {
+    "input_tokens": 544,
+    "output_tokens": 0
+  }
+}

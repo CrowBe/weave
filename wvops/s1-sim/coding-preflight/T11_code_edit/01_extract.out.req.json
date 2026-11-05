@@ -1,0 +1,18 @@
+{
+  "model": "clairic",
+  "state": "USER: In CrowBe/weave on main, amend VISION.md so System-1 extract\u2192decide\u2192act/split/ask with escalate-to-gen past the frontier is explicit after the model-at-centre paragraph. Also update packages/weave/src/sites/CONTRACT.md to note that intake.classify / D1 / D2 will gain dispatch authority (D-ENG-031) \u2014 do not change boolean.ts or any runtime code. Do not touch GLOSSARY.md. Keep the change docs-only. Open nothing; just produce the edits.\nCONTEXT: Reading files is a tool. Coordinated multi-file docs edits need generation after the relevant files are read. Target set must be decided before escalate_gen.",
+  "fields": {
+    "intent": { "type": "text", "instructions": "Primary action as a short phrase." },
+    "read_paths": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Repo-relative paths that must be read before editing."
+    },
+    "edit_paths": { "type": "list", "items": "text", "instructions": "Repo-relative paths that may be edited." },
+    "forbidden_paths": { "type": "list", "items": "text", "instructions": "Paths explicitly must-not-touch." },
+    "needs_generation": { "type": "text", "instructions": "yes if free-form drafting/edits required after reads." },
+    "multi_part": { "type": "text", "instructions": "yes if independent subtasks, no if single sequenced plan." },
+    "irreversible": { "type": "text", "instructions": "yes/no/unclear for irreversible acts." },
+    "constraints": { "type": "list", "items": "text", "instructions": "Hard constraints retaining negation." }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "model": "clef-flash",
+  "state": {
+    "child_context": "PARENT_GOAL: Fix it\nCHILD_BRIEF: child-2\nSHARED_PROHIBITIONS: ['Irreversible force-push']\nBUDGET: session-level; this child runs once then settles.\nDO NOT inherit full parent thread \u2014 only this slice.\n",
+    "policy": "One-shot child. Coarse band only. No tool catalog."
+  },
+  "questions": {
+    "band": {
+      "type": "choice",
+      "instructions": "Child band",
+      "criteria": {
+        "tool_call": "One tool",
+        "escalate_gen": "Generate draft",
+        "ask_human": "Need user",
+        "spawn_subtasks": "Would need further split (prefer avoid at this depth)"
+      }
+    }
+  }
+}

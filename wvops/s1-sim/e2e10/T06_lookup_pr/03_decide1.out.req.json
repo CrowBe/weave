@@ -1,0 +1,30 @@
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "USER: What's the status of PR #358 on CrowBe/weave? Just the state and title.\nCONTEXT: gh_pr_get(repo, number) available.",
+    "extraction_hints": "SUPPRESSED \u2014 use original only",
+    "fidelity_gate": "original_only",
+    "fidelity_scores": { "prefer_original": 0.6658, "lists_usable": 0.1215 },
+    "policy": "Decide-1 is coarse only. Do NOT pick a concrete tool name. Bands: tool_call = one deterministic tool act; spawn_subtasks = independent children; escalate_gen = free-form generation past frontier; ask_human = irreversible+low-conf or user-only ambiguity (D-ENG-030)."
+  },
+  "questions": {
+    "band": {
+      "type": "choice",
+      "instructions": "Which coarse act band?",
+      "criteria": {
+        "tool_call": "A single deterministic tool action covers the request",
+        "spawn_subtasks": "Independent subtasks should become child threads",
+        "escalate_gen": "Needs generative drafting with a pre-targeted brief",
+        "ask_human": "Ask the user before any consequential act"
+      }
+    },
+    "split_gain": {
+      "type": "noul",
+      "instructions": "If multi-part, would spawning children improve correctness/parallelism?"
+    },
+    "irreversible_low_conf": {
+      "type": "noul",
+      "instructions": "Is there an irreversible act with unresolved identity or low confidence?"
+    }
+  }
+}

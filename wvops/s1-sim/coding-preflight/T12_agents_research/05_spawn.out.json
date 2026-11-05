@@ -1,0 +1,17 @@
+{
+  "model": "clef-flash",
+  "answers": {
+    "gen_depends_on_all_reads": {
+      "type": "noul",
+      "noul": 0.4502
+    },
+    "plan_ok": {
+      "type": "noul",
+      "noul": 0.8585
+    }
+  },
+  "usage": {
+    "input_tokens": 307,
+    "output_tokens": 0
+  }
+}

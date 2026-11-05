@@ -1,0 +1,32 @@
+{
+  "model": "clairic",
+  "state": "USER: Wipe everything for the Acme account — all their customer records, invoices, and the staging dump. Make sure it's gone for good. Also write them a polite goodbye email explaining we can't continue the engagement.\nCONTEXT: Acme Corp account_id=acme-88. Destructive ops require human approval. Email drafting is generative. There is also Acme Retail (account_id=acme-retail-12) — do not confuse them.",
+  "fields": {
+    "destructive_targets": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Each data target the user wants destroyed, as phrased."
+    },
+    "account_name": {
+      "type": "text",
+      "instructions": "The customer or account name named for destruction."
+    },
+    "account_id_if_stated": {
+      "type": "text",
+      "instructions": "Any explicit account id in the user message; null if the user did not state one."
+    },
+    "ambiguous_identity": {
+      "type": "text",
+      "instructions": "Whether more than one similar account exists in context that could be confused: yes or no, plus the names."
+    },
+    "also_requested": {
+      "type": "list",
+      "items": "text",
+      "instructions": "Non-destructive additional requests in the same message."
+    },
+    "irreversible": {
+      "type": "text",
+      "instructions": "yes if destruction is permanent, no otherwise."
+    }
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "USER: On CrowBe/weave main, update AGENTS.md with a short 'System-1 loop' bullet: extract\u2192decide\u2192act/split/ask, escalate-gen only past frontier with a pre-targeted brief. Also add one paragraph to docs/research/prompt-decomposition-extraction-vs-generation.md pointing at the closed-set preflight target-role Decide pattern (edit|read|forbid|skip). Do not edit VISION.md. Do not touch packages/weave/src/sites/boolean.ts or any TypeScript. Docs/markdown only; no PR.\nCONTEXT: Reads are tools. Multi-file markdown edits need generation after the files to change are read.",
+    "extraction": {
+      "intent": { "value": "update AGENTS.md", "confidence": 0.8133589029312134, "p_null": 0.007056554313749075 },
+      "read_paths": {
+        "value": [
+          "CrowBe/weave main",
+          "docs/research",
+          "VISION.md",
+          "packages/weave/src/sites/boolean.ts",
+          "TypeScript",
+          "Docs/markdown",
+          "tools.",
+          "Multi-file markdown"
+        ],
+        "confidence": 1.6666537016587275e-5,
+        "p_null": null
+      },
+      "edit_paths": {
+        "value": [
+          "USER",
+          "On",
+          "CrowBe/weave main",
+          "AGENTS.md",
+          "docs/research/prompt-decomposition-extraction-vs-generation.md",
+          "VISION.md",
+          "packages/weave",
+          "tools",
+          "Multi-file markdown"
+        ],
+        "confidence": 5.269543585463969e-5,
+        "p_null": null
+      },
+      "forbidden_paths": {
+        "value": ["VISION.md", "packages/weave/src/sites/boolean.ts", "TypeScript"],
+        "confidence": 0.4551543561277972,
+        "p_null": null
+      },
+      "needs_generation": {
+        "value": "Multi-file markdown edits need generation",
+        "confidence": 0.1535111516714096,
+        "p_null": 0.06892956048250198
+      },
+      "multi_part": { "value": "no", "confidence": 0.9469441771507263, "p_null": 0.0205592792481184 },
+      "irreversible": { "value": "no", "confidence": 0.9485742449760437, "p_null": 0.07432328909635544 }
+    },
+    "policy": "Original authoritative."
+  },
+  "questions": {
+    "prefer_original": { "type": "noul", "instructions": "Treat original as authoritative?" },
+    "path_lists_usable": { "type": "noul", "instructions": "Are open path lists usable?" },
+    "reads_before_gen": { "type": "noul", "instructions": "Must files be read before generation/edit?" },
+    "gate": {
+      "type": "choice",
+      "instructions": "Fidelity gate.",
+      "criteria": { "use_hints": "use hints", "original_only": "original only", "reprompt": "re-extract" }
+    }
+  }
+}

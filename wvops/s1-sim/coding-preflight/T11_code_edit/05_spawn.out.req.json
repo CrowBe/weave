@@ -1,0 +1,37 @@
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "USER: In CrowBe/weave on main, amend VISION.md so System-1 extract\u2192decide\u2192act/split/ask with escalate-to-gen past the frontier is explicit after the model-at-centre paragraph. Also update packages/weave/src/sites/CONTRACT.md to note that intake.classify / D1 / D2 will gain dispatch authority (D-ENG-031) \u2014 do not change boolean.ts or any runtime code. Do not touch GLOSSARY.md. Keep the change docs-only. Open nothing; just produce the edits.\nCONTEXT: Reading files is a tool. Coordinated multi-file docs edits need generation after the relevant files are read. Target set must be decided before escalate_gen.",
+    "band": "spawn_subtasks",
+    "target_roles": {
+      "VISION.md": "edit",
+      "packages/weave/src/sites/CONTRACT.md": "edit",
+      "packages/weave/src/sites/boolean.ts": "forbid",
+      "GLOSSARY.md": "forbid",
+      "ARCHITECTURE.md": "skip",
+      "AGENTS.md": "skip",
+      "docs/research/prompt-decomposition-extraction-vs-generation.md": "skip"
+    },
+    "to_read": ["VISION.md", "packages/weave/src/sites/CONTRACT.md"],
+    "to_edit": ["VISION.md", "packages/weave/src/sites/CONTRACT.md"],
+    "forbid": ["packages/weave/src/sites/boolean.ts", "GLOSSARY.md"],
+    "policy": "Plan children as a SEQUENCE with depends_on, not siblings. Child kinds: tool_call (read_file) then one escalate_gen that edits only to_edit paths. Never edit forbid paths."
+  },
+  "questions": {
+    "child_count": {
+      "type": "choice",
+      "instructions": "How many children in the sequence?",
+      "criteria": {
+        "2": "one gather + one gen",
+        "3": "two gathers + gen",
+        "4": "three gathers + gen",
+        "5": "four gathers + gen"
+      }
+    },
+    "gen_depends_on_all_reads": {
+      "type": "noul",
+      "instructions": "Should the escalate_gen child depend_on every read child?"
+    },
+    "plan_ok": { "type": "noul", "instructions": "Is sequenced reads\u2192gen the right shape for this task?" }
+  }
+}

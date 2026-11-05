@@ -1,0 +1,47 @@
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "USER: Read AGENTS.md and VISION.md from CrowBe/weave on main, then produce a short bullet list of tensions between them. Do not edit either file.\nCONTEXT: Reading is a tool; the tension list needs generation after both reads return.",
+    "extraction": {
+      "intent": {
+        "value": "produce a short bullet list of tensions between them",
+        "confidence": 0.2714245915412903,
+        "p_null": 0.013877586461603642
+      },
+      "entities": {
+        "value": ["AGENTS.md", "VISION.md", "CrowBe/weave"],
+        "confidence": 0.44756510633856067,
+        "p_null": null
+      },
+      "prohibitions": { "value": ["Do not edit either file"], "confidence": 0.003206865801859455, "p_null": null },
+      "ask_triggers": { "value": [], "confidence": 0.07536078046820101, "p_null": null },
+      "needs_generation": { "value": "Do not", "confidence": 0.28751298785209656, "p_null": 0.008485335856676102 },
+      "multi_part": { "value": "Do not", "confidence": 0.42544686794281006, "p_null": 0.008501996286213398 },
+      "irreversible": { "value": "Do not", "confidence": 0.5708540081977844, "p_null": 0.06727783381938934 }
+    },
+    "policy": "Original is authoritative. Lists with near-zero confidence are hints only."
+  },
+  "questions": {
+    "prefer_original": {
+      "type": "noul",
+      "instructions": "Should decide treat original as authoritative and extraction as hints only?"
+    },
+    "scalars_or_entities_usable": {
+      "type": "noul",
+      "instructions": "Are high-signal entities/ids from extraction safe enough as hints?"
+    },
+    "lists_usable": {
+      "type": "noul",
+      "instructions": "Are list fields complete enough to drive planning without re-reading original?"
+    },
+    "gate": {
+      "type": "choice",
+      "instructions": "Fidelity gate for the next decide pass.",
+      "criteria": {
+        "use_hints": "Use high-conf extract hints alongside original",
+        "original_only": "Ignore weak extract; decide from original only",
+        "reprompt": "Re-extract with tighter schema first"
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "USER: In CrowBe/weave on main, amend VISION.md so System-1 extract\u2192decide\u2192act/split/ask with escalate-to-gen past the frontier is explicit after the model-at-centre paragraph. Also update packages/weave/src/sites/CONTRACT.md to note that intake.classify / D1 / D2 will gain dispatch authority (D-ENG-031) \u2014 do not change boolean.ts or any runtime code. Do not touch GLOSSARY.md. Keep the change docs-only. Open nothing; just produce the edits.\nCONTEXT: Reading files is a tool. Coordinated multi-file docs edits need generation after the relevant files are read. Target set must be decided before escalate_gen.",
+    "extraction_hints": "SUPPRESSED",
+    "fidelity_gate": "original_only",
+    "fidelity_scores": { "prefer_original": 0.9236, "path_lists_usable": 0.5781, "reads_before_gen": 0.5525 },
+    "policy": "Decide-1 coarse only. Coding edits that need context first are spawn_subtasks (preflight reads \u2192 then escalate_gen), NOT bare escalate_gen. Bands: tool_call | spawn_subtasks | escalate_gen | ask_human."
+  },
+  "questions": {
+    "band": {
+      "type": "choice",
+      "instructions": "Which coarse act band?",
+      "criteria": {
+        "tool_call": "One deterministic tool covers it",
+        "spawn_subtasks": "Need children (incl. sequenced reads-before-gen)",
+        "escalate_gen": "Bare generation with brief already targeted \u2014 no further gathers",
+        "ask_human": "Irreversible+low-conf or user-only ambiguity"
+      }
+    },
+    "veto_bare_gen": {
+      "type": "noul",
+      "instructions": "Should bare escalate_gen be vetoed because reads/targets are still needed?"
+    },
+    "split_gain": { "type": "noul", "instructions": "Does splitting (preflight + gen) improve correctness?" }
+  }
+}

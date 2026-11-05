@@ -1,0 +1,64 @@
+{
+  "model": "clef-flash",
+  "state": {
+    "original_input": "THREAD (stale): Jane wanted French FAQ translation \u2014 ignore. Mirror-to-marketing job is retired.\nCURRENT: Compare docs/pricing.md and docs/billing.md on CrowBe/weave main. Write eng-leads recommendation with quotations. Open draft PR adding CONFLICTS.md titled 'docs: pricing/billing conflict summary' priority medium \u2014 do not merge, do not modify pricing.md or billing.md, stay in docs/. Leave a draft #eng note with conflict count + PR URL; post nothing. If either doc missing, ask me. If a $ amount disagrees by >20%, escalate that conflict to me before the PR.",
+    "extraction": {
+      "intent": {
+        "value": "Compare docs/pricing.md and docs/billing.md on CrowBe/weave main",
+        "confidence": 0.286579966545105,
+        "p_null": 0.012516770511865616
+      },
+      "entities": {
+        "value": [
+          "Compare",
+          "docs/pricing.md",
+          "docs/billing.md",
+          "CrowBe/weave main",
+          "eng-leads",
+          "draft PR",
+          "CONFLICTS.md",
+          "docs: pricing/billing",
+          "pricing.md",
+          "billing.md",
+          "docs/",
+          "doc"
+        ],
+        "confidence": 1.55412332729429e-5,
+        "p_null": null
+      },
+      "prohibitions": {
+        "value": ["docs", "do", "do not modify pricing.md", "billing.md"],
+        "confidence": 2.5292406820325978e-8,
+        "p_null": null
+      },
+      "ask_triggers": { "value": ["If", "either doc missing"], "confidence": 7.270302028540262e-6, "p_null": null },
+      "needs_generation": { "value": "nothing", "confidence": 0.6697990894317627, "p_null": 0.09864845871925354 },
+      "multi_part": { "value": "do not", "confidence": 0.47308990359306335, "p_null": 0.0057530878111720085 },
+      "irreversible": { "value": "nothing", "confidence": 0.3823446035385132, "p_null": 0.06680571287870407 }
+    },
+    "policy": "Original is authoritative. Lists with near-zero confidence are hints only."
+  },
+  "questions": {
+    "prefer_original": {
+      "type": "noul",
+      "instructions": "Should decide treat original as authoritative and extraction as hints only?"
+    },
+    "scalars_or_entities_usable": {
+      "type": "noul",
+      "instructions": "Are high-signal entities/ids from extraction safe enough as hints?"
+    },
+    "lists_usable": {
+      "type": "noul",
+      "instructions": "Are list fields complete enough to drive planning without re-reading original?"
+    },
+    "gate": {
+      "type": "choice",
+      "instructions": "Fidelity gate for the next decide pass.",
+      "criteria": {
+        "use_hints": "Use high-conf extract hints alongside original",
+        "original_only": "Ignore weak extract; decide from original only",
+        "reprompt": "Re-extract with tighter schema first"
+      }
+    }
+  }
+}
