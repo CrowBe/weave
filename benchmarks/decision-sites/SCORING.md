@@ -24,11 +24,26 @@ D1 top-p: 0, .4, .5, .6, .7, .8, .9. Boolean probability cutoffs: .1, .2,
 .3, .4, .5, .6, .7, .8, .9. D3 grids k=1,3,5,8; floor=0,.2,.5;
 max excluded=.2,.4,.6; margin=0,.1,.2,.3,.4; and both
 `best_kept` (production #145) and `kth_kept` minus best-excluded margins.
-Unknown confidence is below every tuned floor except the explicitly provisional OpenAI D5 profile below. Production D3 uniquely allows
-absent confidence at its boundary, matching runtime; published invalid confidence
-fails. D3 includes deterministic required entries in addition to k other entries,
-uses the capped top-k slice, and is covered only when its margin, max-excluded,
-and boundary-confidence gates pass. A full-index fallback is uncovered.
+Published confidence below its floor is uncovered. Missing confidence uses the
+production probability-only block band for D4 `guard.input`, `guard.output` and D5
+`eval.output`, with tune-fitted cutoffs `.5`, `.4` and `.5` on P(violation). For
+guards P(violation)=p, so p >= cutoff blocks; for D5 P(violation)=1-P(satisfied),
+so P(satisfied) <= .5 blocks. The band was fitted on the `live-20261015` tune
+split only (pooled `typesafe-jev`/`amos-small`, one terminal call per binding).
+The selection swept block cutoffs above the descriptive `.3` and required at
+least a 25% relative reduction in false-block rate versus `.3`; among the
+remaining cutoffs it maximised violation recall and preferred the cutoff nearest
+`.5`. That selects `guard.input` `.5` (violation recall/false block
+`.9167`/`.2115`, n=128), `guard.output` `.4` (`1.0`/`.1111`, n=36), and
+`eval.output` `.5` (violation recall `.9167`, false block `0`, n=24). All clear
+the `.5` tune coverage floor. Holdout was not read for this fit; the committed
+holdout report is re-rendered only under the resulting production thresholds.
+Missing probability or invalid confidence still fails closed. Production D3 uniquely allows absent confidence at its
+boundary, matching runtime. The explicitly provisional OpenAI D5 profile below
+remains separate. D3 includes deterministic required entries in addition to k
+other entries, uses the capped top-k slice, and is covered only when its margin,
+max-excluded, and boundary-confidence gates pass. A full-index fallback is
+uncovered.
 
 Item coverage is items with every gold question valid and admitted divided by
 all attempted items. A failed call, refusal, invalid/missing answer, or unknown
@@ -52,8 +67,9 @@ count are separate. Latency quantiles use sorted nearest-rank positions
 floor(q*(n-1)); tokens and cost sum recorded completed calls.
 
 Holdout is evaluated once with tune-selected and production thresholds. A looser
-guard block threshold (above its production value, currently .3), a lower guard
-confidence floor, or a lower D5 probability/confidence floor is reported as
+guard block threshold (above its production value, currently .3), a looser
+missing-confidence guard cutoff, a lower guard confidence floor, or a lower D5
+probability/confidence or missing-confidence cutoff is reported as
 `not_applied: needs captain (#142)`. D5's provisional profile also marks a higher
 fail cutoff. D3 uses the same label for lower confidence, margin or k, or
 higher floor or max-excluded. A higher floor discards more catalogue entries before k.

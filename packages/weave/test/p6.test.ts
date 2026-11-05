@@ -92,7 +92,7 @@ for (const site of ['guard.input', 'guard.output'] as const) {
     const good = recorded(site, keys);
     const failures = [
       recorded(site, keys, 0.1, 0.89),
-      recorded(site, keys, 0.1, undefined),
+      recorded(site, keys, 0.9, undefined),
       { ...good, observed_at: 9 },
       { ...good, state_revision: 0 },
       { ...good, outcome: { ...good.outcome, site: 'other' } },

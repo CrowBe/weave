@@ -21,8 +21,8 @@ export const OUTPUT_RULE = 'out_of_grant_effect' as const;
 export type GuardRule = (typeof INPUT_RULES)[number] | typeof OUTPUT_RULE;
 export const BOOLEAN_SITE_POLICY = Object.freeze({
   'loop.preselect': Object.freeze({ confidence: 0.75, k: 3, floor: 0, cap: 8, max_excluded: 0.4, min_margin: 0.3 }),
-  'guard.input': Object.freeze({ confidence: 0.9, threshold: 0.3 }),
-  'guard.output': Object.freeze({ confidence: 0.9, threshold: 0.3 }),
+  'guard.input': Object.freeze({ confidence: 0.9, threshold: 0.3, missing_confidence_threshold: 0.5 }),
+  'guard.output': Object.freeze({ confidence: 0.9, threshold: 0.3, missing_confidence_threshold: 0.4 }),
 });
 export type BooleanSite = 'loop.preselect' | 'guard.input' | 'guard.output';
 export interface CatalogueIndexEntry {
@@ -389,8 +389,16 @@ export function transitionBooleanSite(
     confidence: number | null;
     reason: BooleanObservation['reason'];
     accepted: boolean;
+    threshold: number | null;
   }[] = [];
   for (const [n, item] of parsed.entries()) {
+    const missingConfidence = item.confidence === null && !item.confidenceInvalid;
+    const threshold =
+      site === 'loop.preselect'
+        ? null
+        : missingConfidence
+          ? BOOLEAN_SITE_POLICY[site].missing_confidence_threshold
+          : BOOLEAN_SITE_POLICY[site].threshold;
     const reason: BooleanObservation['reason'] =
       site === 'loop.preselect'
         ? (metadata ??
@@ -410,16 +418,22 @@ export function transitionBooleanSite(
           (!answered
             ? 'no_answer'
             : answered.kind !== 'boolean' || item.p === null
-              ? 'invalid_answer'
-              : item.confidence === null
+              ? missingConfidence
                 ? 'missing_confidence'
-                : item.confidence < BOOLEAN_SITE_POLICY[site].confidence
-                  ? 'low_confidence'
-                  : item.p >= BOOLEAN_SITE_POLICY[site].threshold
-                    ? 'violation'
-                    : 'accepted'));
+                : 'invalid_answer'
+              : missingConfidence
+                ? item.p >= threshold!
+                  ? 'violation'
+                  : 'accepted'
+                : item.confidenceInvalid
+                  ? 'missing_confidence'
+                  : item.confidence !== null && item.confidence < BOOLEAN_SITE_POLICY[site].confidence
+                    ? 'low_confidence'
+                    : item.p >= threshold!
+                      ? 'violation'
+                      : 'accepted'));
     const accepted = reason === 'accepted' || reason === 'violation';
-    scanned.push({ p: item.p, confidence: item.confidence, reason, accepted });
+    scanned.push({ p: item.p, confidence: item.confidence, reason, accepted, threshold });
   }
   if (site === 'loop.preselect' && questions.length === 0)
     observations.push({
@@ -445,7 +459,7 @@ export function transitionBooleanSite(
           ? selection !== null && selection.kept.has(n)
             ? 'include'
             : 'exclude'
-          : fact.p >= BOOLEAN_SITE_POLICY[site].threshold
+          : fact.p >= fact.threshold!
             ? 'block'
             : 'pass';
     observations.push({

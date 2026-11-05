@@ -16,6 +16,7 @@ export interface Thresholds {
   readonly confidence: number;
   readonly top_p?: number;
   readonly probability?: number;
+  readonly missing_probability?: number;
   readonly fail_probability?: number;
   readonly profile?: 'openai-provisional-probability-band';
   readonly k?: number;
@@ -43,7 +44,12 @@ export function productionThresholds(site: string, provider?: string): Threshold
   }
   if (site === 'guard.input' || site === 'guard.output') {
     const p = BOOLEAN_SITE_POLICY[site];
-    return { confidence: p.confidence, probability: p.threshold };
+    return {
+      confidence: p.confidence,
+      probability: p.threshold,
+      missing_probability: p.missing_confidence_threshold,
+      allow_missing_confidence: true,
+    };
   }
   if (site === 'eval.output' && provider === 'openai-decisions')
     return {
@@ -54,7 +60,12 @@ export function productionThresholds(site: string, provider?: string): Threshold
       profile: 'openai-provisional-probability-band',
     };
   if (site === 'eval.output')
-    return { confidence: OUTPUT_EVAL_POLICY.confidence, probability: OUTPUT_EVAL_POLICY.probability };
+    return {
+      confidence: OUTPUT_EVAL_POLICY.confidence,
+      probability: OUTPUT_EVAL_POLICY.probability,
+      missing_probability: OUTPUT_EVAL_POLICY.missing_confidence_probability,
+      allow_missing_confidence: true,
+    };
   if (site === 'audit.dispose') return { confidence: 0.75 };
   if (!(site in SITE_POLICY)) throw new Error('Unknown decision site');
   const p = SITE_POLICY[site as keyof typeof SITE_POLICY];
@@ -135,7 +146,13 @@ function decide(site: string, o: Observed, t: Thresholds): Decision {
         answer.probability < (t.probability ?? 0.85)
       )
         return no;
-      predicted[key] = answer.probability >= (t.probability ?? 0.5);
+      const missing = answer.confidence === undefined && t.missing_probability !== undefined;
+      // The fitted missing-confidence value is a block threshold on P(violation).
+      predicted[key] = missing
+        ? site === 'eval.output'
+          ? 1 - answer.probability < t.missing_probability!
+          : answer.probability >= t.missing_probability!
+        : answer.probability >= (t.probability ?? 0.5);
     } else {
       if (!answer.choice || !choices(site).includes(answer.choice)) return no;
       if (t.top_p !== undefined || (site === 'audit.dispose' && !t.ungated)) {
@@ -355,7 +372,7 @@ export function probabilityOnly(site: string, observations: readonly Observed[])
 }
 function* grid(site: string, provider?: string): Generator<Thresholds> {
   const production = productionThresholds(site, provider);
-  const allow_missing_confidence = production.profile === 'openai-provisional-probability-band';
+  const allow_missing_confidence = guard(site) || site === 'eval.output';
   yield { ...production, allow_missing_confidence };
   const confidence = [...new Set([production.confidence, 0, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1])];
   for (const c of confidence) {
@@ -439,7 +456,9 @@ export function tune(site: string, observations: readonly Observed[], provider?:
 export function isLooser(site: string, best: Thresholds, production: Thresholds): boolean {
   return (
     best.confidence < production.confidence ||
-    (guard(site) && (best.probability ?? 0) > (production.probability ?? 0)) ||
+    (guard(site) &&
+      ((best.probability ?? 0) > (production.probability ?? 0) ||
+        (best.missing_probability ?? 0) > (production.missing_probability ?? 0))) ||
     (site === 'loop.triage' && (best.top_p ?? 0) < (production.top_p ?? 0)) ||
     (site === 'loop.preselect' &&
       ((best.margin ?? 0) < (production.margin ?? 0) ||
@@ -448,6 +467,7 @@ export function isLooser(site: string, best: Thresholds, production: Thresholds)
         (best.k ?? 0) < (production.k ?? 0))) ||
     (site === 'eval.output' &&
       ((best.probability ?? 0) < (production.probability ?? 0) ||
+        (best.missing_probability ?? 0) < (production.missing_probability ?? 0) ||
         (best.fail_probability ?? 0) > (production.fail_probability ?? 0)))
   );
 }

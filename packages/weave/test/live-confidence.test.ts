@@ -1,7 +1,7 @@
 /**
  * Live-shaped answers without a published confidence (#198, #142). The answer shapes copy tune-split rows
  * of benchmarks/decision-sites/results/live-20261015: jev-1.14.0 and amos-1-2b publish a probability per
- * question and no confidence. These fixtures pin what the unchanged rules do with them; no holdout row is used.
+ * question and no confidence. These fixtures pin the tune-fitted probability-only band; no holdout row is used.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -65,7 +65,7 @@ function liveGateway(probabilities: Readonly<Record<string, number>>) {
 }
 
 // #198: syn-eval.output-01-1 (tune), jev-1.14.0 answered {"criterion_0":{"probability":0.98}}.
-test('D5: a live-shaped answer with no confidence fails the criterion as missing_confidence', async () => {
+test('D5: a live-shaped answer with no confidence uses the fitted probability-only band', async () => {
   const result = await evaluateOutputEval(
     {
       ...revision,
@@ -78,19 +78,39 @@ test('D5: a live-shaped answer with no confidence fails the criterion as missing
     liveGateway({ criterion_0: 0.98 }),
     now,
   );
-  assert.ok(0.98 >= OUTPUT_EVAL_POLICY.probability, 'the probability alone would clear the band');
-  assert.equal(result.status, 'fail');
-  assert.deepEqual(result.failing_criterion_ids, ['c2']);
+  assert.ok(1 - 0.98 < OUTPUT_EVAL_POLICY.missing_confidence_probability, 'the probability alone clears the band');
+  assert.equal(result.status, 'pass');
+  assert.deepEqual(result.failing_criterion_ids, []);
   assert.deepEqual(
     result.evals.map(({ observation: _observation, ...item }) => item),
-    [{ criterion_id: 'c2', verdict_probability: 0.98, confidence: null, passed: false }],
+    [{ criterion_id: 'c2', verdict_probability: 0.98, confidence: null, passed: true }],
   );
   const [observation] = result.observations;
-  assert.equal(observation?.reason, 'missing_confidence');
-  assert.equal(observation?.answer, null);
-  assert.equal(observation?.accepted, false);
-  assert.equal(observation?.fallback_used, true);
+  assert.equal(observation?.reason, 'accepted');
+  assert.equal(observation?.answer, 'pass');
+  assert.equal(observation?.accepted, true);
+  assert.equal(observation?.fallback_used, false);
   assert.equal(observation?.provider_request_id, 'req_live_shape');
+
+  // Below the fitted band the answer still fails closed, but as a probability verdict, not missing_confidence.
+  const below = await evaluateOutputEval(
+    {
+      ...revision,
+      request_id: 'live-d5-below',
+      state: { artifact: 'disclosed' },
+      terms,
+      needs_dispatch: false,
+      criteria: [{ criterion_id: 'c2', statement: 'the summary names every changed file' }],
+    },
+    liveGateway({ criterion_0: OUTPUT_EVAL_POLICY.missing_confidence_probability - 0.01 }),
+    now,
+  );
+  assert.equal(below.status, 'fail');
+  assert.deepEqual(below.failing_criterion_ids, ['c2']);
+  assert.equal(below.observations[0]?.reason, 'below_probability');
+  assert.equal(below.observations[0]?.answer, 'fail');
+  assert.equal(below.observations[0]?.accepted, true);
+  assert.equal(below.observations[0]?.fallback_used, false);
 });
 
 /** Completion over a tidy state whose current iteration holds the D5 evidence above. */
@@ -129,7 +149,7 @@ const liveEval: AuditEval = {
   iteration: 1,
   verdict_probability: 0.98,
   confidence: null,
-  passed: false,
+  passed: true,
 };
 
 test('completion: a live-shaped D5 eval leaves a judgment criterion unmet; a check-proven criterion needs no D5', async () => {
@@ -160,8 +180,7 @@ for (const [site, probabilities] of [
   ],
   ['guard.output', { decision: 0.05 }],
 ] as const) {
-  test(`${site}: a clean live-shaped judgment without confidence still requests approval`, async () => {
-    const rules = site === 'guard.input' ? [...INPUT_RULES] : ['out_of_grant_effect'];
+  test(`${site}: a clean live-shaped judgment without confidence passes under the fitted band`, async () => {
     const result = await evaluateBooleanSite(
       site,
       { ...revision, request_id: `live-${site}`, state: { plan: 'disclosed' }, terms, needs_dispatch: true },
@@ -169,18 +188,22 @@ for (const [site, probabilities] of [
       now,
     );
     assert.ok(
-      Object.values(probabilities).every((p) => p < BOOLEAN_SITE_POLICY[site].threshold),
-      'every rule is clean by p',
+      Object.values(probabilities).every((p) => p < BOOLEAN_SITE_POLICY[site].missing_confidence_threshold),
+      'every rule is clean by the fitted band',
     );
-    assert.equal(result.status, 'needs_human');
-    assert.deepEqual(
-      result.approval_requests,
-      rules.map((rule) => ({ rule, reason: 'missing_confidence' })),
-    );
+    assert.equal(result.status, 'transition');
+    assert.deepEqual(result.approval_requests, []);
     assert.ok(
-      result.observations.every((item) => item.answer === 'pass' && !item.accepted && item.confidence === null),
+      result.observations.every(
+        (item) =>
+          item.answer === 'pass' &&
+          item.accepted &&
+          !item.fallback_used &&
+          item.reason === 'accepted' &&
+          item.confidence === null,
+      ),
     );
-    // A live violation is also escalated, recorded as missing_confidence rather than as a confident block.
+    // A live violation blocks from its probability, not as a missing-confidence fallback.
     const blocked = await evaluateBooleanSite(
       site,
       { ...revision, request_id: `live-${site}-block`, state: { plan: 'disclosed' }, terms, needs_dispatch: true },
@@ -188,6 +211,42 @@ for (const [site, probabilities] of [
       now,
     );
     assert.equal(blocked.status, 'needs_human');
-    assert.ok(blocked.observations.every((item) => item.answer === 'block' && item.reason === 'missing_confidence'));
+    assert.ok(
+      blocked.observations.every(
+        (item) =>
+          item.answer === 'block' &&
+          item.accepted &&
+          !item.fallback_used &&
+          item.reason === 'violation' &&
+          item.confidence === null,
+      ),
+    );
+
+    // No valid probability still fails closed as missing_confidence.
+    const missing = await evaluateBooleanSite(
+      site,
+      { ...revision, request_id: `live-${site}-missing`, state: { plan: 'disclosed' }, terms, needs_dispatch: true },
+      {
+        evaluate: (async () =>
+          ({
+            status: 'accepted',
+            kind: 'boolean',
+            site,
+            request_id: `live-${site}-missing`,
+            answers: Object.fromEntries(
+              Object.keys(probabilities).map((key) => [key, { type: 'boolean', probability: Number.NaN }]),
+            ),
+            confidence: undefined,
+            provider_response_id: 'req_live_shape',
+            routed_unit_id: 'live',
+            attempts: [],
+            spent: 0,
+            uncertainty: [],
+          }) as unknown as import('@weave/gateway').EvaluationOutcome<'boolean'>) as never,
+      },
+      now,
+    );
+    assert.equal(missing.status, 'needs_human');
+    assert.ok(missing.observations.every((item) => item.answer === null && item.reason === 'missing_confidence'));
   });
 }

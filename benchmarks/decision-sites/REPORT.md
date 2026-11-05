@@ -12,15 +12,15 @@ D3 headline accuracy is all-needed recall among covered steps: every needed entr
 | audit.dispose | amos-small | conf≥0.75; selected | 12 | 100.0% | 8.3% | 100.0% | 8.3% | — | — |
 | audit.dispose | openai-decisions | conf≥0.75; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
 | audit.dispose | typesafe-jev | conf≥0.95; selected | 12 | 100.0% | 50.0% | 88.9% | 75.0% | — | — |
-| eval.output | amos-small | conf≥0.9; p≥0.8; minimum_coverage_unmet | 12 | — | 0.0% | — | 0.0% | — | — |
+| eval.output | amos-small | conf≥0.9; p≥0.8; missing-conf p≥0.5; selected | 12 | 91.7% | 100.0% | 91.7% | 100.0% | — | — |
 | eval.output | openai-decisions | conf≥0.9; p≥0.85; fail-p≤0.15; openai-provisional-probability-band; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
-| eval.output | typesafe-jev | conf≥0.9; p≥0.8; minimum_coverage_unmet | 12 | — | 0.0% | — | 0.0% | — | — |
-| guard.input | amos-small | conf≥0.9; p≥0.3; minimum_coverage_unmet | 16 | — | 0.0% | — | 0.0% | — | — |
-| guard.input | openai-decisions | conf≥0.9; p≥0.3; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
-| guard.input | typesafe-jev | conf≥0.9; p≥0.3; minimum_coverage_unmet | 16 | — | 0.0% | — | 0.0% | — | — |
-| guard.output | amos-small | conf≥0.9; p≥0.3; minimum_coverage_unmet | 18 | — | 0.0% | — | 0.0% | — | — |
-| guard.output | openai-decisions | conf≥0.9; p≥0.3; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
-| guard.output | typesafe-jev | conf≥0.9; p≥0.3; minimum_coverage_unmet | 18 | — | 0.0% | — | 0.0% | — | — |
+| eval.output | typesafe-jev | conf≥0.9; p≥0.8; missing-conf p≥0.5; selected | 12 | 91.7% | 100.0% | 91.7% | 100.0% | — | — |
+| guard.input | amos-small | conf≥0.9; p≥0.3; missing-conf p≥0.5; selected | 16 | 43.8% | 100.0% | 43.8% | 100.0% | — | — |
+| guard.input | openai-decisions | conf≥0.9; p≥0.3; missing-conf p≥0.5; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
+| guard.input | typesafe-jev | conf≥0.9; p≥0.3; missing-conf p≥0.5; selected | 16 | 37.5% | 100.0% | 37.5% | 100.0% | — | — |
+| guard.output | amos-small | conf≥0.9; p≥0.3; missing-conf p≥0.4; selected | 18 | 88.9% | 100.0% | 88.9% | 100.0% | — | — |
+| guard.output | openai-decisions | conf≥0.9; p≥0.3; missing-conf p≥0.4; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
+| guard.output | typesafe-jev | conf≥0.9; p≥0.3; missing-conf p≥0.4; selected | 18 | 100.0% | 100.0% | 100.0% | 100.0% | — | — |
 | intake.classify | amos-small | conf≥0.5; selected; not_applied: looser than production (report only) | 60 | 87.9% | 55.0% | 100.0% | 26.7% | — | — |
 | intake.classify | openai-decisions | conf≥0.8; minimum_coverage_unmet | 0 | — | 0.0% | — | 0.0% | — | — |
 | intake.classify | typesafe-jev | conf≥0.75; selected; not_applied: looser than production (report only) | 60 | 94.9% | 65.0% | 97.1% | 56.7% | — | — |
@@ -37,7 +37,7 @@ D3 headline accuracy is all-needed recall among covered steps: every needed entr
 | loop.triage | openai-decisions | conf≥0.8; top-p≥0.6; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
 | loop.triage | typesafe-jev | conf≥0; top-p≥0.6; selected; not_applied: looser than production (report only) | 50 | 97.5% | 80.0% | 100.0% | 56.0% | — | — |
 
-Production thresholds are imported from the site policies (D1 top-p .6 and D6 confidence .75 follow their production transitions). Missing confidence counts below the floor except production D3 (unknown) and the explicitly provisional OpenAI D5 probability band (pass ≥.85, fail ≤.15). The OpenAI band is a benchmark assumption from docs §4b; its deferred adapter has no runtime production policy. Supplied D5 confidence still meets the floor.
+Production thresholds are imported from the site policies (D1 top-p .6 and D6 confidence .75 follow their production transitions). A published confidence below the floor fails. Missing confidence uses the tune-fitted probability-only band for D4 guard.input/guard.output and D5 eval.output; absent probability or invalid confidence still fails closed. Production D3 (unknown) and the explicitly provisional OpenAI D5 probability band (pass ≥.85, fail ≤.15) remain unchanged. The OpenAI band is a benchmark assumption from docs §4b; its deferred adapter has no runtime production policy. Supplied D5 confidence still meets the floor.
 
 | Site | Provider | Brier | ECE | Mean confidence | Missing confidence | Violation recall | Needed recall / all needed | Multi-entry steps | Best / kth gap | p50 / p90 ms | Input / output tokens | USD |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | --- | --- | --- | ---: |
@@ -47,12 +47,12 @@ Production thresholds are imported from the site policies (D1 top-p .6 and D6 co
 | eval.output | amos-small | 0.083 | 0.096 | — | 12 | — | — / — | 0 | — / — | 367.000 / 435.000 | 1657 / 0 | 0.000000 |
 | eval.output | openai-decisions | — | — | — | 0 | — | — / — | 0 | — / — | — / — | 0 / 0 | 0.000000 |
 | eval.output | typesafe-jev | 0.070 | 0.075 | — | 12 | — | — / — | 0 | — / — | 42.000 / 48.000 | 4374 / 288 | 0.000184 |
-| guard.input | amos-small | 0.182 | 0.183 | — | 64 | 0.0% | — / — | 0 | — / — | 482.000 / 553.000 | 3328 / 0 | 0.000000 |
+| guard.input | amos-small | 0.182 | 0.183 | — | 64 | 66.7% | — / — | 0 | — / — | 482.000 / 553.000 | 3328 / 0 | 0.000000 |
 | guard.input | openai-decisions | — | — | — | 0 | — | — / — | 0 | — / — | — / — | 0 / 0 | 0.000000 |
-| guard.input | typesafe-jev | 0.148 | 0.231 | — | 64 | 0.0% | — / — | 0 | — / — | 43.000 / 67.000 | 6117 / 1344 | 0.000257 |
-| guard.output | amos-small | 0.070 | 0.233 | — | 18 | 0.0% | — / — | 0 | — / — | 353.000 / 389.000 | 1975 / 0 | 0.000000 |
+| guard.input | typesafe-jev | 0.148 | 0.231 | — | 64 | 100.0% | — / — | 0 | — / — | 43.000 / 67.000 | 6117 / 1344 | 0.000257 |
+| guard.output | amos-small | 0.070 | 0.233 | — | 18 | 100.0% | — / — | 0 | — / — | 353.000 / 389.000 | 1975 / 0 | 0.000000 |
 | guard.output | openai-decisions | — | — | — | 0 | — | — / — | 0 | — / — | — / — | 0 / 0 | 0.000000 |
-| guard.output | typesafe-jev | 0.014 | 0.097 | — | 18 | 0.0% | — / — | 0 | — / — | 42.000 / 46.000 | 5651 / 360 | 0.000237 |
+| guard.output | typesafe-jev | 0.014 | 0.097 | — | 18 | 100.0% | — / — | 0 | — / — | 42.000 / 46.000 | 5651 / 360 | 0.000237 |
 | intake.classify | amos-small | 0.171 | 0.075 | 0.579 | 0 | — | — / — | 0 | — / — | 602.000 / 720.000 | 15277 / 0 | 0.000000 |
 | intake.classify | openai-decisions | — | — | — | 0 | — | — / — | 0 | — / — | — / — | 0 / 0 | 0.000000 |
 | intake.classify | typesafe-jev | 0.117 | 0.102 | 0.763 | 0 | — | — / — | 0 | — / — | 44.000 / 58.000 | 30512 / 3755 | 0.001282 |
@@ -71,7 +71,7 @@ Production thresholds are imported from the site policies (D1 top-p .6 and D6 co
 
 ## Probability-only safety diagnostics
 
-**descriptive only, not applied (#142)**. Holdout questions with valid probabilities only; confidence is ignored. Block at P(violation) ≥ .3. For D5, violation means an unsatisfied criterion: P(violation) = 1 − P(satisfied). AUC gives ties half credit and is undefined without both classes. Production gates above are unchanged.
+**descriptive only, not applied (#142)**. Holdout questions with valid probabilities only; confidence is ignored. Block at P(violation) ≥ .3. For D5, violation means an unsatisfied criterion: P(violation) = 1 − P(satisfied). AUC gives ties half credit and is undefined without both classes. This .3 diagnostic is not the applied missing-confidence band; that band is fitted on tune above.
 
 | Site | Provider | Violation recall | False-block rate | AUC | Probability coverage |
 | --- | --- | ---: | ---: | ---: | ---: |
