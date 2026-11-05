@@ -95,9 +95,10 @@ export function makeReport(metadata: ReportMetadata, records: readonly BoundCall
   const sites = [...new Set([...(metadata.sites ?? []), ...records.map((r) => r.site)])].sort();
   const rows: SiteRow[] = [],
     competitors: CompetitorRow[] = [];
-  for (const site of sites)
+  for (const site of sites) {
+    const siteRows = observations.filter((r) => r.site === site);
     for (const provider of providers) {
-      const subset = observations.filter((r) => r.site === site && r.provider === provider);
+      const subset = siteRows.filter((r) => r.provider === provider);
       const holdout = subset.filter((r) => r.split === 'holdout');
       if (isCompetitor(provider)) {
         let skip_reason = subset.find((r) => r.result.status === 'skipped')?.result.reason ?? null;
@@ -114,7 +115,7 @@ export function makeReport(metadata: ReportMetadata, records: readonly BoundCall
         });
         continue;
       }
-      const tuned = tune(site, subset, provider),
+      const tuned = tune(site, subset, provider, siteRows),
         production = productionThresholds(site, provider);
       rows.push({
         site,
@@ -128,6 +129,7 @@ export function makeReport(metadata: ReportMetadata, records: readonly BoundCall
         ...(PROBABILITY_SITES.includes(site) ? { probability_only: probabilityOnly(site, holdout) } : {}),
       });
     }
+  }
   const models = [
     ...new Set(ordered.map((r) => r.result.model).filter((m): m is string => !!m && m !== 'chatgpt-sign-in')),
   ].sort();

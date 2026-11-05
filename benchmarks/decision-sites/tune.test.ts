@@ -447,11 +447,31 @@ test('guard loosening compares the candidate with its production threshold', () 
   assert.equal(
     isLooser(
       'eval.output',
-      { confidence: 0.9, probability: 0.8, missing_probability: 0.4 },
       { confidence: 0.9, probability: 0.8, missing_probability: 0.5 },
+      { confidence: 0.9, probability: 0.8, missing_probability: 0.4 },
     ),
     true,
   );
+  assert.equal(
+    isLooser(
+      'eval.output',
+      { confidence: 0.9, probability: 0.8, missing_probability: 0.4 },
+      { confidence: 0.9, probability: 0.8, missing_probability: 0.5 },
+    ),
+    false,
+  );
+});
+
+test('tune independently fits the missing-confidence cutoff from tune rows', () => {
+  const positive = row('guard.output', 'tune', {
+    item: { id: 'p', scenario_id: 'p', site: 'guard.output', state: {}, gold: { decision: true } },
+    result: { status: 'ok', answers: { decision: { probability: 0.65 } } },
+  });
+  const negative = row('guard.output', 'tune', {
+    item: { id: 'n', scenario_id: 'n', site: 'guard.output', state: {}, gold: { decision: false } },
+    result: { status: 'ok', answers: { decision: { probability: 0.1 } } },
+  });
+  assert.equal(tune('guard.output', [positive, negative]).missing_probability, 0.5);
 });
 
 test('loosening compares every site knob with production and leaves equal or stricter values unmarked', () => {

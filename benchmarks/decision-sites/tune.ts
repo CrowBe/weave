@@ -370,13 +370,60 @@ export function probabilityOnly(site: string, observations: readonly Observed[])
     auc: positive.length && negative.length ? wins / (positive.length * negative.length) : null,
   };
 }
-function* grid(site: string, provider?: string): Generator<Thresholds> {
+/** Missing-confidence block cutoffs swept above the descriptive .3 diagnostic. */
+const MISSING_PROBABILITY_CANDIDATES = [0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95];
+/** Required relative false-block reduction versus blocking at the descriptive .3. */
+const MISSING_PROBABILITY_FALSE_BLOCK_REDUCTION = 0.25;
+/**
+ * Tune-split-only fit for a missing-confidence block cutoff. Cutoffs are on
+ * P(violation), so guards block at p >= cutoff and D5 blocks at 1-p >= cutoff.
+ * Candidates must reduce false blocks by at least 25% relative to .3; among
+ * those the fit maximises violation recall and prefers the cutoff nearest .5.
+ */
+export function selectMissingProbability(site: string, observations: readonly Observed[]): number | undefined {
+  if (!guard(site) && site !== 'eval.output') return undefined;
+  const questions = probabilityPoints(
+    site,
+    observations.filter((o) => o.split === 'tune'),
+  );
+  const points = questions.filter((p): p is { p: number; violation: boolean } => p !== null);
+  if (!questions.length || points.length / questions.length < 0.5) return undefined;
+  const positive = points.filter((p) => p.violation),
+    negative = points.filter((p) => !p.violation);
+  const at = (cutoff: number) => ({
+    recall: positive.length ? positive.filter((p) => p.p >= cutoff).length / positive.length : 0,
+    false_block: negative.length ? negative.filter((p) => p.p >= cutoff).length / negative.length : 0,
+  });
+  const allowed = at(BLOCK_PROBABILITY).false_block * (1 - MISSING_PROBABILITY_FALSE_BLOCK_REDUCTION);
+  const candidates = MISSING_PROBABILITY_CANDIDATES.filter(
+    (cutoff) => cutoff > BLOCK_PROBABILITY && at(cutoff).false_block <= allowed + Number.EPSILON,
+  );
+  let best: number | undefined,
+    bestRecall = -1;
+  for (const cutoff of candidates) {
+    const recall = at(cutoff).recall;
+    if (
+      recall > bestRecall ||
+      (recall === bestRecall &&
+        (best === undefined ||
+          Math.abs(cutoff - 0.5) < Math.abs(best - 0.5) ||
+          (Math.abs(cutoff - 0.5) === Math.abs(best - 0.5) && cutoff < best)))
+    ) {
+      best = cutoff;
+      bestRecall = recall;
+    }
+  }
+  return best;
+}
+function* grid(site: string, provider?: string, missingProbability?: number): Generator<Thresholds> {
   const production = productionThresholds(site, provider);
+  const baseProduction =
+    missingProbability === undefined ? production : { ...production, missing_probability: missingProbability };
   const allow_missing_confidence = guard(site) || site === 'eval.output';
-  yield { ...production, allow_missing_confidence };
+  yield { ...baseProduction, allow_missing_confidence };
   const confidence = [...new Set([production.confidence, 0, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1])];
   for (const c of confidence) {
-    const base = { ...production, confidence: c, allow_missing_confidence };
+    const base = { ...baseProduction, confidence: c, allow_missing_confidence };
     if (site === 'loop.preselect') {
       for (const k of [1, 3, 5, 8])
         for (const floor of [0, 0.2, 0.5])
@@ -394,17 +441,24 @@ function* grid(site: string, provider?: string): Generator<Thresholds> {
     } else yield base;
   }
 }
-export function tune(site: string, observations: readonly Observed[], provider?: string): Thresholds {
+export function tune(
+  site: string,
+  observations: readonly Observed[],
+  provider?: string,
+  missingEvidence: readonly Observed[] = observations,
+): Thresholds {
   // Filter before reading labels/results: callers can supply inaccessible holdout observations.
   const rows = observations.filter((o) => o.split === 'tune');
   const production = productionThresholds(site, provider);
   if (!rows.length) return { ...production, tuning_status: 'no_tune_data' };
+  const fittedMissing =
+    production.missing_probability === undefined ? undefined : selectMissingProbability(site, missingEvidence);
   // Selection uses only these three measures. Full reporting metrics (including
   // calibration and sorted latencies) need not be rebuilt for every grid point.
   const labelled = rows.map((o) => ({ o, gold: Object.entries(o.item.gold) }));
   type Selection = Pick<Metrics, 'coverage' | 'accuracy' | 'violation_recall'>;
   let best: Thresholds | undefined, score: Selection | undefined;
-  for (const candidate of grid(site, provider)) {
+  for (const candidate of grid(site, provider, fittedMissing)) {
     let covered = 0,
       correct = 0,
       violations = 0,
@@ -467,7 +521,7 @@ export function isLooser(site: string, best: Thresholds, production: Thresholds)
         (best.k ?? 0) < (production.k ?? 0))) ||
     (site === 'eval.output' &&
       ((best.probability ?? 0) < (production.probability ?? 0) ||
-        (best.missing_probability ?? 0) < (production.missing_probability ?? 0) ||
+        (best.missing_probability ?? 0) > (production.missing_probability ?? 0) ||
         (best.fail_probability ?? 0) > (production.fail_probability ?? 0)))
   );
 }
