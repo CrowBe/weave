@@ -17,7 +17,10 @@ tuning maximises that objective; exact-set agreement is secondary reporting only
 Guards first maximise violation recall, then covered
 accuracy. Ties prefer coverage, then the production candidate, then stable grid
 order. If no candidate meets minimum coverage, retain production thresholds and
-report `minimum_coverage_unmet`; an empty tune split is `no_tune_data`.
+report `minimum_coverage_unmet`; an empty tune split is `no_tune_data`. If the
+missing-confidence fit lacks evidence or finds no candidate meeting its criteria,
+retain production thresholds and report `missing_probability_unfit`; the
+production fallback is never reported as `selected`.
 
 Confidence grid: 0, .5, .6, .7, .75, .8, .85, .9, .95, 1 plus production.
 D1 top-p: 0, .4, .5, .6, .7, .8, .9. Boolean probability cutoffs: .1, .2,

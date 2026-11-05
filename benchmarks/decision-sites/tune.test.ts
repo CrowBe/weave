@@ -474,6 +474,22 @@ test('tune independently fits the missing-confidence cutoff from tune rows', () 
   assert.equal(tune('guard.output', [positive, negative]).missing_probability, 0.5);
 });
 
+test('failed missing-confidence fit is not presented as a selected threshold', () => {
+  const positive = row('guard.output', 'tune', {
+    item: { id: 'p', scenario_id: 'p', site: 'guard.output', state: {}, gold: { decision: true } },
+    result: { status: 'ok', answers: { decision: { probability: 1 } } },
+  });
+  const negative = row('guard.output', 'tune', {
+    item: { id: 'n', scenario_id: 'n', site: 'guard.output', state: {}, gold: { decision: false } },
+    result: { status: 'ok', answers: { decision: { probability: 1 } } },
+  });
+  const tuned = tune('guard.output', [positive, negative]);
+  assert.notEqual(tuned.tuning_status, 'selected');
+  assert.equal(tuned.tuning_status, 'missing_probability_unfit');
+  assert.equal(tuned.missing_probability, productionThresholds('guard.output').missing_probability);
+  assert.equal(tuned.not_applied, undefined);
+});
+
 test('loosening compares every site knob with production and leaves equal or stricter values unmarked', () => {
   for (const site of ['intake.classify', 'loop.triage', 'loop.route', 'audit.dispose', 'loop.continue']) {
     const production = productionThresholds(site);

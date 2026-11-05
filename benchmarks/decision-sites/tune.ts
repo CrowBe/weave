@@ -26,7 +26,7 @@ export interface Thresholds {
   readonly margin_reference?: 'best_kept' | 'kth_kept';
   readonly allow_missing_confidence?: boolean;
   readonly ungated?: boolean;
-  readonly tuning_status?: 'selected' | 'no_tune_data' | 'minimum_coverage_unmet';
+  readonly tuning_status?: 'selected' | 'no_tune_data' | 'minimum_coverage_unmet' | 'missing_probability_unfit';
   readonly not_applied?: 'needs captain (#142)' | 'looser than production (report only)';
 }
 export function productionThresholds(site: string, provider?: string): Thresholds {
@@ -380,14 +380,21 @@ const MISSING_PROBABILITY_FALSE_BLOCK_REDUCTION = 0.25;
  * Candidates must reduce false blocks by at least 25% relative to .3; among
  * those the fit maximises violation recall and prefers the cutoff nearest .5.
  */
-export function selectMissingProbability(site: string, observations: readonly Observed[]): number | undefined {
+export type MissingProbabilityFit =
+  | { readonly tuning_status: 'selected'; readonly missing_probability: number }
+  | { readonly tuning_status: 'missing_probability_unfit' };
+export function selectMissingProbability(
+  site: string,
+  observations: readonly Observed[],
+): MissingProbabilityFit | undefined {
   if (!guard(site) && site !== 'eval.output') return undefined;
   const questions = probabilityPoints(
     site,
     observations.filter((o) => o.split === 'tune'),
   );
   const points = questions.filter((p): p is { p: number; violation: boolean } => p !== null);
-  if (!questions.length || points.length / questions.length < 0.5) return undefined;
+  if (!questions.length || points.length / questions.length < 0.5)
+    return { tuning_status: 'missing_probability_unfit' };
   const positive = points.filter((p) => p.violation),
     negative = points.filter((p) => !p.violation);
   const at = (cutoff: number) => ({
@@ -413,7 +420,9 @@ export function selectMissingProbability(site: string, observations: readonly Ob
       bestRecall = recall;
     }
   }
-  return best;
+  return best === undefined
+    ? { tuning_status: 'missing_probability_unfit' }
+    : { tuning_status: 'selected', missing_probability: best };
 }
 function* grid(site: string, provider?: string, missingProbability?: number): Generator<Thresholds> {
   const production = productionThresholds(site, provider);
@@ -451,8 +460,11 @@ export function tune(
   const rows = observations.filter((o) => o.split === 'tune');
   const production = productionThresholds(site, provider);
   if (!rows.length) return { ...production, tuning_status: 'no_tune_data' };
-  const fittedMissing =
+  const missingFit =
     production.missing_probability === undefined ? undefined : selectMissingProbability(site, missingEvidence);
+  if (missingFit?.tuning_status === 'missing_probability_unfit')
+    return { ...production, tuning_status: 'missing_probability_unfit' };
+  const fittedMissing = missingFit?.tuning_status === 'selected' ? missingFit.missing_probability : undefined;
   // Selection uses only these three measures. Full reporting metrics (including
   // calibration and sorted latencies) need not be rebuilt for every grid point.
   const labelled = rows.map((o) => ({ o, gold: Object.entries(o.item.gold) }));
