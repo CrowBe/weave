@@ -6,6 +6,28 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 
+def is_gate_incomplete(fid: dict) -> bool:
+    return fid["answers"]["gate"]["choice"] == "reprompt"
+
+
+def summarize_incomplete(fid: dict) -> dict:
+    return {
+        "id": TASK["id"],
+        "expect_band": TASK["expect_band"],
+        "fidelity_gate": fid["answers"]["gate"]["choice"],
+        "fidelity": {
+            k: fid["answers"][k].get("noul", fid["answers"][k].get("choice"))
+            for k in fid["answers"]
+        },
+        "incomplete": True,
+        "incomplete_reason": "reprompt fidelity gate rejected extraction hints; stopped before decide-1",
+        "band_match": None,
+        "edit_ok": None,
+        "forbid_ok": None,
+        "shape_match": None,
+    }
+
+
 def eval_edit_ok(to_edit, expect_edit) -> bool:
     return set(to_edit) == set(expect_edit)
 CF = os.environ.get("CF_BIN", "cf")
@@ -78,6 +100,11 @@ def main():
     }, d / "02_fidelity.out.json")
 
     gate = fid["answers"]["gate"]["choice"]
+    if is_gate_incomplete(fid):
+        summary = summarize_incomplete(fid)
+        (ROOT / "summary.json").write_text(json.dumps(summary, indent=2))
+        print(json.dumps(summary, indent=2), flush=True)
+        return
     print("3 decide-1…", flush=True)
     d1 = cf_run("@cf/cloudflare/clef-flash", {
         "model": "clef-flash",
@@ -236,6 +263,14 @@ def main():
     print(json.dumps({k: summary[k] for k in ("tuned_band", "band_match", "edit_ok", "forbid_ok", "shape_match", "target_roles")}, indent=2), flush=True)
 
 def selftest() -> int:
+    for gate, want in (("reprompt", True), ("use_hints", False), ("original_only", False)):
+        fid = {"answers": {"gate": {"choice": gate}}}
+        assert is_gate_incomplete(fid) == want
+    fid = {"answers": {"gate": {"choice": "reprompt"}, "prefer_original": {"noul": 0.9}}}
+    row = summarize_incomplete(fid)
+    assert row["incomplete"] is True and row["band_match"] is None
+    assert row["edit_ok"] is None and row["forbid_ok"] is None and row["shape_match"] is None
+    assert row["fidelity_gate"] == "reprompt" and row["incomplete_reason"]
     cases = [
         (["VISION.md", "packages/weave/src/sites/CONTRACT.md"], {"VISION.md", "packages/weave/src/sites/CONTRACT.md"}, True),
         (["VISION.md", "packages/weave/src/sites/CONTRACT.md", "ARCHITECTURE.md"], {"VISION.md", "packages/weave/src/sites/CONTRACT.md"}, False),
@@ -244,7 +279,7 @@ def selftest() -> int:
     for to_edit, expect_edit, want in cases:
         got = eval_edit_ok(to_edit, expect_edit)
         assert got == want, f"eval_edit_ok({to_edit}, {expect_edit}) -> {got}, want {want}"
-    print(f"selftest ok ({len(cases)} cases)", flush=True)
+    print(f"selftest ok (reprompt->incomplete, {len(cases)} eval_edit_ok cases)", flush=True)
     return 0
 
 if __name__ == "__main__":
