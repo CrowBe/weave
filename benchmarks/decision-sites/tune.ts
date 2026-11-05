@@ -16,6 +16,7 @@ export interface Thresholds {
   readonly confidence: number;
   readonly top_p?: number;
   readonly probability?: number;
+  readonly missing_probability?: number;
   readonly fail_probability?: number;
   readonly profile?: 'openai-provisional-probability-band';
   readonly k?: number;
@@ -25,7 +26,7 @@ export interface Thresholds {
   readonly margin_reference?: 'best_kept' | 'kth_kept';
   readonly allow_missing_confidence?: boolean;
   readonly ungated?: boolean;
-  readonly tuning_status?: 'selected' | 'no_tune_data' | 'minimum_coverage_unmet';
+  readonly tuning_status?: 'selected' | 'no_tune_data' | 'minimum_coverage_unmet' | 'missing_probability_unfit';
   readonly not_applied?: 'needs captain (#142)' | 'looser than production (report only)';
 }
 export function productionThresholds(site: string, provider?: string): Thresholds {
@@ -43,7 +44,12 @@ export function productionThresholds(site: string, provider?: string): Threshold
   }
   if (site === 'guard.input' || site === 'guard.output') {
     const p = BOOLEAN_SITE_POLICY[site];
-    return { confidence: p.confidence, probability: p.threshold };
+    return {
+      confidence: p.confidence,
+      probability: p.threshold,
+      missing_probability: p.missing_confidence_threshold,
+      allow_missing_confidence: true,
+    };
   }
   if (site === 'eval.output' && provider === 'openai-decisions')
     return {
@@ -54,7 +60,12 @@ export function productionThresholds(site: string, provider?: string): Threshold
       profile: 'openai-provisional-probability-band',
     };
   if (site === 'eval.output')
-    return { confidence: OUTPUT_EVAL_POLICY.confidence, probability: OUTPUT_EVAL_POLICY.probability };
+    return {
+      confidence: OUTPUT_EVAL_POLICY.confidence,
+      probability: OUTPUT_EVAL_POLICY.probability,
+      missing_probability: OUTPUT_EVAL_POLICY.missing_confidence_probability,
+      allow_missing_confidence: true,
+    };
   if (site === 'audit.dispose') return { confidence: 0.75 };
   if (!(site in SITE_POLICY)) throw new Error('Unknown decision site');
   const p = SITE_POLICY[site as keyof typeof SITE_POLICY];
@@ -135,7 +146,13 @@ function decide(site: string, o: Observed, t: Thresholds): Decision {
         answer.probability < (t.probability ?? 0.85)
       )
         return no;
-      predicted[key] = answer.probability >= (t.probability ?? 0.5);
+      const missing = answer.confidence === undefined && t.missing_probability !== undefined;
+      // The fitted missing-confidence value is a block threshold on P(violation).
+      predicted[key] = missing
+        ? site === 'eval.output'
+          ? 1 - answer.probability < t.missing_probability!
+          : answer.probability >= t.missing_probability!
+        : answer.probability >= (t.probability ?? 0.5);
     } else {
       if (!answer.choice || !choices(site).includes(answer.choice)) return no;
       if (t.top_p !== undefined || (site === 'audit.dispose' && !t.ungated)) {
@@ -353,13 +370,69 @@ export function probabilityOnly(site: string, observations: readonly Observed[])
     auc: positive.length && negative.length ? wins / (positive.length * negative.length) : null,
   };
 }
-function* grid(site: string, provider?: string): Generator<Thresholds> {
+/** Missing-confidence block cutoffs swept above the descriptive .3 diagnostic. */
+const MISSING_PROBABILITY_CANDIDATES = [0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95];
+/** Required relative false-block reduction versus blocking at the descriptive .3. */
+const MISSING_PROBABILITY_FALSE_BLOCK_REDUCTION = 0.25;
+/**
+ * Tune-split-only fit for a missing-confidence block cutoff. Cutoffs are on
+ * P(violation), so guards block at p >= cutoff and D5 blocks at 1-p >= cutoff.
+ * Candidates must reduce false blocks by at least 25% relative to .3; among
+ * those the fit maximises violation recall and prefers the cutoff nearest .5.
+ */
+export type MissingProbabilityFit =
+  | { readonly tuning_status: 'selected'; readonly missing_probability: number }
+  | { readonly tuning_status: 'missing_probability_unfit' };
+export function selectMissingProbability(
+  site: string,
+  observations: readonly Observed[],
+): MissingProbabilityFit | undefined {
+  if (!guard(site) && site !== 'eval.output') return undefined;
+  const questions = probabilityPoints(
+    site,
+    observations.filter((o) => o.split === 'tune'),
+  );
+  const points = questions.filter((p): p is { p: number; violation: boolean } => p !== null);
+  if (!questions.length || points.length / questions.length < 0.5)
+    return { tuning_status: 'missing_probability_unfit' };
+  const positive = points.filter((p) => p.violation),
+    negative = points.filter((p) => !p.violation);
+  const at = (cutoff: number) => ({
+    recall: positive.length ? positive.filter((p) => p.p >= cutoff).length / positive.length : 0,
+    false_block: negative.length ? negative.filter((p) => p.p >= cutoff).length / negative.length : 0,
+  });
+  const allowed = at(BLOCK_PROBABILITY).false_block * (1 - MISSING_PROBABILITY_FALSE_BLOCK_REDUCTION);
+  const candidates = MISSING_PROBABILITY_CANDIDATES.filter(
+    (cutoff) => cutoff > BLOCK_PROBABILITY && at(cutoff).false_block <= allowed + Number.EPSILON,
+  );
+  let best: number | undefined,
+    bestRecall = -1;
+  for (const cutoff of candidates) {
+    const recall = at(cutoff).recall;
+    if (
+      recall > bestRecall ||
+      (recall === bestRecall &&
+        (best === undefined ||
+          Math.abs(cutoff - 0.5) < Math.abs(best - 0.5) ||
+          (Math.abs(cutoff - 0.5) === Math.abs(best - 0.5) && cutoff < best)))
+    ) {
+      best = cutoff;
+      bestRecall = recall;
+    }
+  }
+  return best === undefined
+    ? { tuning_status: 'missing_probability_unfit' }
+    : { tuning_status: 'selected', missing_probability: best };
+}
+function* grid(site: string, provider?: string, missingProbability?: number): Generator<Thresholds> {
   const production = productionThresholds(site, provider);
-  const allow_missing_confidence = production.profile === 'openai-provisional-probability-band';
-  yield { ...production, allow_missing_confidence };
+  const baseProduction =
+    missingProbability === undefined ? production : { ...production, missing_probability: missingProbability };
+  const allow_missing_confidence = guard(site) || site === 'eval.output';
+  yield { ...baseProduction, allow_missing_confidence };
   const confidence = [...new Set([production.confidence, 0, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1])];
   for (const c of confidence) {
-    const base = { ...production, confidence: c, allow_missing_confidence };
+    const base = { ...baseProduction, confidence: c, allow_missing_confidence };
     if (site === 'loop.preselect') {
       for (const k of [1, 3, 5, 8])
         for (const floor of [0, 0.2, 0.5])
@@ -377,17 +450,27 @@ function* grid(site: string, provider?: string): Generator<Thresholds> {
     } else yield base;
   }
 }
-export function tune(site: string, observations: readonly Observed[], provider?: string): Thresholds {
+export function tune(
+  site: string,
+  observations: readonly Observed[],
+  provider?: string,
+  missingEvidence: readonly Observed[] = observations,
+): Thresholds {
   // Filter before reading labels/results: callers can supply inaccessible holdout observations.
   const rows = observations.filter((o) => o.split === 'tune');
   const production = productionThresholds(site, provider);
   if (!rows.length) return { ...production, tuning_status: 'no_tune_data' };
+  const missingFit =
+    production.missing_probability === undefined ? undefined : selectMissingProbability(site, missingEvidence);
+  if (missingFit?.tuning_status === 'missing_probability_unfit')
+    return { ...production, tuning_status: 'missing_probability_unfit' };
+  const fittedMissing = missingFit?.tuning_status === 'selected' ? missingFit.missing_probability : undefined;
   // Selection uses only these three measures. Full reporting metrics (including
   // calibration and sorted latencies) need not be rebuilt for every grid point.
   const labelled = rows.map((o) => ({ o, gold: Object.entries(o.item.gold) }));
   type Selection = Pick<Metrics, 'coverage' | 'accuracy' | 'violation_recall'>;
   let best: Thresholds | undefined, score: Selection | undefined;
-  for (const candidate of grid(site, provider)) {
+  for (const candidate of grid(site, provider, fittedMissing)) {
     let covered = 0,
       correct = 0,
       violations = 0,
@@ -439,7 +522,9 @@ export function tune(site: string, observations: readonly Observed[], provider?:
 export function isLooser(site: string, best: Thresholds, production: Thresholds): boolean {
   return (
     best.confidence < production.confidence ||
-    (guard(site) && (best.probability ?? 0) > (production.probability ?? 0)) ||
+    (guard(site) &&
+      ((best.probability ?? 0) > (production.probability ?? 0) ||
+        (best.missing_probability ?? 0) > (production.missing_probability ?? 0))) ||
     (site === 'loop.triage' && (best.top_p ?? 0) < (production.top_p ?? 0)) ||
     (site === 'loop.preselect' &&
       ((best.margin ?? 0) < (production.margin ?? 0) ||
@@ -448,6 +533,7 @@ export function isLooser(site: string, best: Thresholds, production: Thresholds)
         (best.k ?? 0) < (production.k ?? 0))) ||
     (site === 'eval.output' &&
       ((best.probability ?? 0) < (production.probability ?? 0) ||
+        (best.missing_probability ?? 0) > (production.missing_probability ?? 0) ||
         (best.fail_probability ?? 0) > (production.fail_probability ?? 0)))
   );
 }

@@ -26,7 +26,7 @@ test('tuning never reads holdout answers or labels', () => {
   } as unknown as Observed;
   assert.deepEqual(tune('guard.output', [row('guard.output'), hidden]), tune('guard.output', [row('guard.output')]));
 });
-test('failures remain in coverage denominator and missing confidence is below zero floor', () => {
+test('failures remain in coverage denominator and missing confidence is below a gated zero floor', () => {
   const good = row('guard.output');
   const failed = row('guard.output', 'holdout', { result: { status: 'failed', reason: 'timeout' } });
   const missing = row('guard.output', 'holdout', {
@@ -35,10 +35,29 @@ test('failures remain in coverage denominator and missing confidence is below ze
   const score = metrics('guard.output', [good, failed, missing], {
     ...productionThresholds('guard.output'),
     confidence: 0,
+    allow_missing_confidence: false,
   });
   assert.equal(score.coverage, 1 / 3);
   assert.equal(score.missing_confidence, 2);
   assert.equal(score.violation_recall, 1 / 3);
+});
+test('production guards and D5 cover missing confidence through their fitted probability band', () => {
+  for (const [site, probability, passes] of [
+    ['guard.input', 0.5, true],
+    ['guard.input', 0.49, false],
+    ['guard.output', 0.4, true],
+    ['guard.output', 0.39, false],
+    ['eval.output', 0.51, true],
+    ['eval.output', 0.5, false],
+    ['eval.output', 0.49, false],
+  ] as const) {
+    const observed = row(site, 'holdout', {
+      result: { status: 'ok', answers: { decision: { probability } } },
+    });
+    const score = metrics(site, [observed], productionThresholds(site));
+    assert.equal(score.coverage, 1, `${site} p=${probability}`);
+    assert.equal(score.accuracy, passes ? 1 : 0, `${site} p=${probability}`);
+  }
 });
 test('guard loosening is marked for captain and guards maximise recall', () => {
   const low = row('guard.output', 'tune', {
@@ -259,14 +278,13 @@ test('OpenAI provisional D5 accepts absent confidence only outside its probabili
     result: { status: 'ok', answers: { decision: { probability: 0.95, confidence: 0.89 } } },
   });
   assert.equal(metrics('eval.output', [supplied], policy).coverage, 0);
-  assert.equal(
-    metrics(
-      'eval.output',
-      [row('eval.output', 'holdout', { result: { status: 'ok', answers: { decision: { probability: 0.95 } } } })],
-      productionThresholds('eval.output', 'typesafe-jev'),
-    ).coverage,
-    0,
+  const production = metrics(
+    'eval.output',
+    [row('eval.output', 'holdout', { result: { status: 'ok', answers: { decision: { probability: 0.95 } } } })],
+    productionThresholds('eval.output', 'typesafe-jev'),
   );
+  assert.equal(production.coverage, 1);
+  assert.equal(production.accuracy, 1);
 });
 test('OpenAI provisional D5 tunes its band without reading holdout and marks loosening', () => {
   const observed = row('eval.output', 'tune', {
@@ -333,7 +351,11 @@ test('probability-only safety diagnostics ignore confidence, preserve production
       row(site, 'holdout', {
         item: { id: String(n), scenario_id: String(n), site, state: {}, gold: { decision: gold } },
         // D5 probabilities describe satisfaction; diagnostics use P(violation)=1-p.
-        result: { status: 'ok', answers: { decision: { probability: site === 'eval.output' ? 1 - p : p } } },
+        // Supplied sub-floor confidence keeps production coverage at zero regardless of the missing-confidence band.
+        result: {
+          status: 'ok',
+          answers: { decision: { probability: site === 'eval.output' ? 1 - p : p, confidence: 0.8 } },
+        },
       }),
     );
     const score = metrics(site, rows, productionThresholds(site));
@@ -414,6 +436,58 @@ test('guard loosening compares the candidate with its production threshold', () 
     isLooser('guard.output', { confidence: 0.89, probability: 0.2 }, { confidence: 0.9, probability: 0.4 }),
     true,
   );
+  assert.equal(
+    isLooser(
+      'guard.output',
+      { confidence: 0.9, probability: 0.3, missing_probability: 0.5 },
+      { confidence: 0.9, probability: 0.3, missing_probability: 0.4 },
+    ),
+    true,
+  );
+  assert.equal(
+    isLooser(
+      'eval.output',
+      { confidence: 0.9, probability: 0.8, missing_probability: 0.5 },
+      { confidence: 0.9, probability: 0.8, missing_probability: 0.4 },
+    ),
+    true,
+  );
+  assert.equal(
+    isLooser(
+      'eval.output',
+      { confidence: 0.9, probability: 0.8, missing_probability: 0.4 },
+      { confidence: 0.9, probability: 0.8, missing_probability: 0.5 },
+    ),
+    false,
+  );
+});
+
+test('tune independently fits the missing-confidence cutoff from tune rows', () => {
+  const positive = row('guard.output', 'tune', {
+    item: { id: 'p', scenario_id: 'p', site: 'guard.output', state: {}, gold: { decision: true } },
+    result: { status: 'ok', answers: { decision: { probability: 0.65 } } },
+  });
+  const negative = row('guard.output', 'tune', {
+    item: { id: 'n', scenario_id: 'n', site: 'guard.output', state: {}, gold: { decision: false } },
+    result: { status: 'ok', answers: { decision: { probability: 0.1 } } },
+  });
+  assert.equal(tune('guard.output', [positive, negative]).missing_probability, 0.5);
+});
+
+test('failed missing-confidence fit is not presented as a selected threshold', () => {
+  const positive = row('guard.output', 'tune', {
+    item: { id: 'p', scenario_id: 'p', site: 'guard.output', state: {}, gold: { decision: true } },
+    result: { status: 'ok', answers: { decision: { probability: 1 } } },
+  });
+  const negative = row('guard.output', 'tune', {
+    item: { id: 'n', scenario_id: 'n', site: 'guard.output', state: {}, gold: { decision: false } },
+    result: { status: 'ok', answers: { decision: { probability: 1 } } },
+  });
+  const tuned = tune('guard.output', [positive, negative]);
+  assert.notEqual(tuned.tuning_status, 'selected');
+  assert.equal(tuned.tuning_status, 'missing_probability_unfit');
+  assert.equal(tuned.missing_probability, productionThresholds('guard.output').missing_probability);
+  assert.equal(tuned.not_applied, undefined);
 });
 
 test('loosening compares every site knob with production and leaves equal or stricter values unmarked', () => {

@@ -21,8 +21,8 @@ export const OUTPUT_RULE = 'out_of_grant_effect' as const;
 export type GuardRule = (typeof INPUT_RULES)[number] | typeof OUTPUT_RULE;
 export const BOOLEAN_SITE_POLICY = Object.freeze({
   'loop.preselect': Object.freeze({ confidence: 0.75, k: 3, floor: 0, cap: 8, max_excluded: 0.4, min_margin: 0.3 }),
-  'guard.input': Object.freeze({ confidence: 0.9, threshold: 0.3 }),
-  'guard.output': Object.freeze({ confidence: 0.9, threshold: 0.3 }),
+  'guard.input': Object.freeze({ confidence: 0.9, threshold: 0.3, missing_confidence_threshold: 0.5 }),
+  'guard.output': Object.freeze({ confidence: 0.9, threshold: 0.3, missing_confidence_threshold: 0.4 }),
 });
 export type BooleanSite = 'loop.preselect' | 'guard.input' | 'guard.output';
 export interface CatalogueIndexEntry {
@@ -203,12 +203,19 @@ function requiredIds(ids: unknown): { readonly ids: readonly string[]; readonly 
 function gap(high: number, low: number): number {
   return nonNegativeZero(Math.round((high - low) * 1e10) / 1e10);
 }
+/** A confidence container must be a plain object; null, arrays, scalars and class instances are malformed. */
+function confidenceMap(value: unknown): value is Record<string, unknown> {
+  return plain(value) && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+}
 /**
- * A missing key is unknown. A key that is present and is not a finite number in [0, 1]
- * is published-invalid. Those two must not collapse: invalid is fail-closed for D3.
+ * An absent map or a missing key is unknown. A supplied malformed container, or a key that
+ * is present and is not a finite number in [0, 1], is published-invalid. Those must not
+ * collapse: invalid is fail-closed for D3 and stops a valid probability using the band.
  */
 function readConfidence(map: unknown, key: string): { readonly confidence: number | null; readonly invalid: boolean } {
-  if (!plain(map) || !Object.hasOwn(map, key)) return { confidence: null, invalid: false };
+  if (map === undefined) return { confidence: null, invalid: false };
+  if (!confidenceMap(map)) return { confidence: null, invalid: true };
+  if (!Object.hasOwn(map, key)) return { confidence: null, invalid: false };
   const value: unknown = map[key];
   return unit(value) ? { confidence: value, invalid: false } : { confidence: null, invalid: true };
 }
@@ -389,8 +396,16 @@ export function transitionBooleanSite(
     confidence: number | null;
     reason: BooleanObservation['reason'];
     accepted: boolean;
+    threshold: number | null;
   }[] = [];
   for (const [n, item] of parsed.entries()) {
+    const missingConfidence = item.confidence === null && !item.confidenceInvalid;
+    const threshold =
+      site === 'loop.preselect'
+        ? null
+        : missingConfidence
+          ? BOOLEAN_SITE_POLICY[site].missing_confidence_threshold
+          : BOOLEAN_SITE_POLICY[site].threshold;
     const reason: BooleanObservation['reason'] =
       site === 'loop.preselect'
         ? (metadata ??
@@ -410,16 +425,22 @@ export function transitionBooleanSite(
           (!answered
             ? 'no_answer'
             : answered.kind !== 'boolean' || item.p === null
-              ? 'invalid_answer'
-              : item.confidence === null
+              ? missingConfidence
                 ? 'missing_confidence'
-                : item.confidence < BOOLEAN_SITE_POLICY[site].confidence
-                  ? 'low_confidence'
-                  : item.p >= BOOLEAN_SITE_POLICY[site].threshold
-                    ? 'violation'
-                    : 'accepted'));
+                : 'invalid_answer'
+              : missingConfidence
+                ? item.p >= threshold!
+                  ? 'violation'
+                  : 'accepted'
+                : item.confidenceInvalid
+                  ? 'missing_confidence'
+                  : item.confidence !== null && item.confidence < BOOLEAN_SITE_POLICY[site].confidence
+                    ? 'low_confidence'
+                    : item.p >= threshold!
+                      ? 'violation'
+                      : 'accepted'));
     const accepted = reason === 'accepted' || reason === 'violation';
-    scanned.push({ p: item.p, confidence: item.confidence, reason, accepted });
+    scanned.push({ p: item.p, confidence: item.confidence, reason, accepted, threshold });
   }
   if (site === 'loop.preselect' && questions.length === 0)
     observations.push({
@@ -445,7 +466,7 @@ export function transitionBooleanSite(
           ? selection !== null && selection.kept.has(n)
             ? 'include'
             : 'exclude'
-          : fact.p >= BOOLEAN_SITE_POLICY[site].threshold
+          : fact.p >= fact.threshold!
             ? 'block'
             : 'pass';
     observations.push({

@@ -5,8 +5,16 @@ import { admissionReason, correlation, unit, type SiteInput, type SiteReason, ty
 export const OUTPUT_EVAL_SITE = 'eval.output' as const;
 /** Fixed question text. Criterion statements stay in the disclosed state, not in the record. */
 export const OUTPUT_EVAL_QUESTION = 'Does the artifact satisfy this success criterion?';
-/** Matches task-acceptance `confidence_floor`. Missing confidence is below the floor. */
-export const OUTPUT_EVAL_POLICY = Object.freeze({ probability: 0.8, confidence: 0.9 });
+/**
+ * Matches task-acceptance `confidence_floor`. A published confidence is below the floor.
+ * An absent confidence uses the tune-fitted probability-only threshold instead; an
+ * invalid one still fails closed.
+ */
+export const OUTPUT_EVAL_POLICY = Object.freeze({
+  probability: 0.8,
+  confidence: 0.9,
+  missing_confidence_probability: 0.5,
+});
 
 export interface OutputCriterion {
   readonly criterion_id: string;
@@ -53,6 +61,16 @@ export interface OutputEvalTransition {
 
 export function criterionKey(index: number): string {
   return `criterion_${index}`;
+}
+
+/** A confidence container must be a plain object; null, arrays, scalars and class instances are malformed. */
+function confidenceMap(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)
+  );
 }
 
 function observe(
@@ -115,7 +133,23 @@ export function transitionOutputEval(
     const safeId = correlation(criterion.criterion_id);
     const raw = answered?.answers?.[key];
     const probability = raw?.type === 'boolean' && unit(raw.probability) ? raw.probability : null;
-    const statistic = answered?.confidence?.[key];
+    const container = answered?.confidence;
+    let statistic: unknown;
+    let confidenceMissing: boolean;
+    let confidenceInvalid: boolean;
+    if (container === undefined) {
+      statistic = undefined;
+      confidenceMissing = true;
+      confidenceInvalid = false;
+    } else if (!confidenceMap(container)) {
+      statistic = undefined;
+      confidenceMissing = false;
+      confidenceInvalid = true;
+    } else {
+      statistic = container[key];
+      confidenceMissing = !Object.hasOwn(container, key);
+      confidenceInvalid = !confidenceMissing && !unit(statistic);
+    }
     const confidence = unit(statistic) ? statistic : null;
     let reason: OutputEvalReason;
     let answer: OutputEvalObservation['answer'] = null;
@@ -123,9 +157,21 @@ export function transitionOutputEval(
     if (metadata) reason = metadata;
     else if (!safeId) reason = 'invalid_answer';
     else if (!answered) reason = 'no_answer';
-    else if (answered.kind !== 'boolean' || probability === null) reason = 'invalid_answer';
-    else if (confidence === null) reason = 'missing_confidence';
-    else if (confidence < OUTPUT_EVAL_POLICY.confidence) reason = 'low_confidence';
+    else if (answered.kind !== 'boolean') reason = 'invalid_answer';
+    else if (probability === null) reason = confidenceMissing ? 'missing_confidence' : 'invalid_answer';
+    else if (confidenceInvalid) reason = 'missing_confidence';
+    else if (confidenceMissing) {
+      // The fitted cutoff is a block threshold on P(violation) = 1 - P(satisfied).
+      if (1 - probability >= OUTPUT_EVAL_POLICY.missing_confidence_probability) {
+        reason = 'below_probability';
+        answer = 'fail';
+        accepted = true;
+      } else {
+        reason = 'accepted';
+        answer = 'pass';
+        accepted = true;
+      }
+    } else if (confidence !== null && confidence < OUTPUT_EVAL_POLICY.confidence) reason = 'low_confidence';
     else if (probability < OUTPUT_EVAL_POLICY.probability) {
       reason = 'below_probability';
       answer = 'fail';

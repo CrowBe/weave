@@ -239,9 +239,16 @@ published D3 confidence outside [0, 1] is `invalid_confidence` for the whole
 index. Shape is the fixed question set, gate is P5 metadata admission plus
 per-answer shape validation, and for D3 the margin gate before the boundary
 confidence check. An invalid published confidence is decided with admission,
-before that margin gate. D4/D7 still require a confidence on every rule, and a
-non-unit confidence there remains `missing_confidence`. Decide is the
-deterministic threshold.
+before that margin gate. D4/D7 keep the .90 floor on a published confidence; a
+published non-unit (out of [0, 1]) confidence there remains
+`missing_confidence`. An absent confidence on D4/D7 now decides through the
+fitted probability-only band: p >= .5 for `guard.input` and p >= .4 for
+`guard.output` is a `violation` (`block`), otherwise `accepted` (`pass`); a
+clean rule still passes on the site transition and a violation still asks for
+approval before the effect runs. An absent confidence with a missing or
+malformed probability remains `missing_confidence`. Decide is the
+deterministic threshold. See "Fitted probability-only band (#142, #198, #383)"
+below for the fit.
 One round, no refinement or semantic substitution on outage. Unknown answers
 cannot repair missing required answers. Observations retain decision-site@1 key
 order; boolean answer is a fixed pass/block/include/exclude vocabulary, top_p
@@ -431,12 +438,14 @@ D5 (#198) options and the evidence each rests on:
    criterion proof. It rests on structure, not a statistic: a check whose
    oracle generation cannot write establishes the property, so D5 is not asked.
    It removes the dependency for those criteria only.
-2. A probability-only D5 rule with a stricter band. Does not apply. The only
-   evidence is the report's descriptive holdout diagnostic: 83.3% violation
-   recall at P(violation) >= .3 for both providers, on 12 holdout items each.
-   About one unsatisfied criterion in six would pass, which is not enough for a
-   completion gate. A holdout figure cannot fit a threshold, and no tune-split
-   fit exists: the 12 tune items per provider ended `minimum_coverage_unmet`.
+2. A probability-only D5 rule with a stricter band. Applies from the tune fit
+   recorded below (5 Nov 2026). At the time of this record it did not: the only
+   evidence was the report's descriptive holdout diagnostic (83.3% violation
+   recall at P(violation) >= .3 for both providers, on 12 holdout items each;
+   about one unsatisfied criterion in six would pass), a holdout figure cannot
+   fit a threshold, and no tune-split fit existed yet: the 12 tune items per
+   provider ended `minimum_coverage_unmet` because the tune split came from the
+   same confidence-less providers.
 3. Per-provider calibration from P10 before any rule change. Deferred; it is a
    prerequisite of option 2 and needs a tune split with enough judgment
    criteria per provider. The recorded Brier .070 / .083 and ECE .075 / .096
@@ -448,14 +457,47 @@ implementation step retries, escalates once and raises an `open_issue@1` with
 source `eval`. A goal with any judgment criterion ends a clean audit round as
 `evidence_missing`. Check-proven criteria complete on current green checks.
 
-D4/D7 (#142) follow the same record. Every live guard evaluation requests
-approval with reason `missing_confidence`, for clean judgments and violations
-alike. The descriptive holdout diagnostic is mixed. For `guard.input`,
-violation recall is 100% / 75.0% with false-block rates of 34.6% / 28.8%
-(jev / amos). For `guard.output` it is 100% / 100% with 0% / 55.6%. A
-probability-only guard rule would need a tune-split fit per provider, one
-holdout scoring, and the captain's approval before any guard could pass
+D4/D7 (#142) follow the same record. At the time of this record every live
+guard evaluation requested approval with reason `missing_confidence`, for clean
+judgments and violations alike. The descriptive holdout diagnostic is mixed.
+For `guard.input`, violation recall is 100% / 75.0% with false-block rates of
+34.6% / 28.8% (jev / amos). For `guard.output` it is 100% / 100% with 0% /
+55.6%. A probability-only guard rule would need a tune-split fit per provider,
+one holdout scoring, and the captain's approval before any guard could pass
 without a confidence. Deterministic D4/D7 pre-checks remain an open question
-under #197. `packages/weave/test/live-confidence.test.ts` pins the D5,
-completion and guard outcomes with answers shaped like tune-split rows of that
-run.
+under #197. `packages/weave/test/live-confidence.test.ts` pinned that record.
+
+## Fitted probability-only band (#142, #198, #383)
+
+Recorded 5 Nov 2026 from the `live-20261015` tune split (the tune evidence of
+#327). The confidence gates are unchanged: a published confidence still needs
+
+> = .90 on D4/D7 and >= .90 per D5 criterion, and a published invalid confidence
+> still fails closed. Only the absent-confidence path changes, and only when the
+> answer carries a valid probability:
+
+- D4 `guard.input` and D7 `guard.output`: P(violation) = p. p >= .5
+  (`guard.input`) or p >= .4 (`guard.output`) is a `violation` — the
+  observation says `block` and the transition still requests approval. Below
+  the cutoff the observation is a clean `pass` and the transition proceeds
+  without an approval request.
+- D5 `eval.output`: P(violation) = 1 - P(satisfied). P(violation) >= .5 blocks:
+  the criterion fails as `below_probability` (not `missing_confidence`) with
+  verdict_probability. Below it the criterion passes at any p; published
+  confidence floors are untouched.
+- Missing confidence together with a missing or malformed probability, and
+  invalid or missing confidence from any other unreadable shape, remains
+  `missing_confidence` fail-safe on D4/D7/D5.
+
+Fit, on the pooled tune-split rows of `typesafe-jev` and `amos-small` (one
+terminal call per binding; P(violation) as above): the candidate cutoffs swept
+block thresholds above the descriptive .3 and required at least a 25% relative
+reduction in false-block rate versus .3, then maximised violation recall and
+preferred the cutoff nearest .5 among ties. That selects `guard.input` .5
+(violation recall .9167, false-block rate .2115, n = 128 questions),
+`guard.output` .4 (recall 1.0, false-block .1111, n = 36), and `eval.output`
+.5 (recall .9167, false-block 0, n = 24). All clear the .5 tune coverage floor.
+The holdout was not read for the fit; the committed holdout report is
+evaluation-only evidence re-rendered under the resulting thresholds.
+`packages/weave/test/live-confidence.test.ts` pins the new D5, completion and
+guard outcomes with answers shaped like tune-split rows of that run.

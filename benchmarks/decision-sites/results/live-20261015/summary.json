@@ -285,18 +285,22 @@
       "tuned_thresholds": {
         "confidence": 0.9,
         "probability": 0.8,
-        "tuning_status": "minimum_coverage_unmet"
+        "missing_probability": 0.5,
+        "allow_missing_confidence": true,
+        "tuning_status": "selected"
       },
       "production_thresholds": {
         "confidence": 0.9,
-        "probability": 0.8
+        "probability": 0.8,
+        "missing_probability": 0.5,
+        "allow_missing_confidence": true
       },
       "holdout": {
         "attempted": 12,
-        "covered": 0,
-        "coverage": 0,
-        "accuracy": null,
-        "exact_set_accuracy": null,
+        "covered": 12,
+        "coverage": 1,
+        "accuracy": 0.9166666666666666,
+        "exact_set_accuracy": 0.9166666666666666,
         "failures": 0,
         "missing_confidence": 12,
         "confidence_coverage": 0,
@@ -321,10 +325,10 @@
       },
       "production": {
         "attempted": 12,
-        "covered": 0,
-        "coverage": 0,
-        "accuracy": null,
-        "exact_set_accuracy": null,
+        "covered": 12,
+        "coverage": 1,
+        "accuracy": 0.9166666666666666,
+        "exact_set_accuracy": 0.9166666666666666,
         "failures": 0,
         "missing_confidence": 12,
         "confidence_coverage": 0,
@@ -451,18 +455,22 @@
       "tuned_thresholds": {
         "confidence": 0.9,
         "probability": 0.8,
-        "tuning_status": "minimum_coverage_unmet"
+        "missing_probability": 0.5,
+        "allow_missing_confidence": true,
+        "tuning_status": "selected"
       },
       "production_thresholds": {
         "confidence": 0.9,
-        "probability": 0.8
+        "probability": 0.8,
+        "missing_probability": 0.5,
+        "allow_missing_confidence": true
       },
       "holdout": {
         "attempted": 12,
-        "covered": 0,
-        "coverage": 0,
-        "accuracy": null,
-        "exact_set_accuracy": null,
+        "covered": 12,
+        "coverage": 1,
+        "accuracy": 0.9166666666666666,
+        "exact_set_accuracy": 0.9166666666666666,
         "failures": 0,
         "missing_confidence": 12,
         "confidence_coverage": 0,
@@ -487,10 +495,10 @@
       },
       "production": {
         "attempted": 12,
-        "covered": 0,
-        "coverage": 0,
-        "accuracy": null,
-        "exact_set_accuracy": null,
+        "covered": 12,
+        "coverage": 1,
+        "accuracy": 0.9166666666666666,
+        "exact_set_accuracy": 0.9166666666666666,
         "failures": 0,
         "missing_confidence": 12,
         "confidence_coverage": 0,
@@ -531,18 +539,22 @@
       "tuned_thresholds": {
         "confidence": 0.9,
         "probability": 0.3,
-        "tuning_status": "minimum_coverage_unmet"
+        "missing_probability": 0.5,
+        "allow_missing_confidence": true,
+        "tuning_status": "selected"
       },
       "production_thresholds": {
         "confidence": 0.9,
-        "probability": 0.3
+        "probability": 0.3,
+        "missing_probability": 0.5,
+        "allow_missing_confidence": true
       },
       "holdout": {
         "attempted": 16,
-        "covered": 0,
-        "coverage": 0,
-        "accuracy": null,
-        "exact_set_accuracy": null,
+        "covered": 16,
+        "coverage": 1,
+        "accuracy": 0.4375,
+        "exact_set_accuracy": 0.4375,
         "failures": 0,
         "missing_confidence": 64,
         "confidence_coverage": 0,
@@ -550,7 +562,7 @@
         "brier": 0.18183187118627792,
         "ece": 0.18273935478646308,
         "calibration_n": 64,
-        "violation_recall": 0,
+        "violation_recall": 0.6666666666666666,
         "needed_recall": null,
         "all_needed_recall": null,
         "multi_entry_steps": 0,
@@ -567,10 +579,10 @@
       },
       "production": {
         "attempted": 16,
-        "covered": 0,
-        "coverage": 0,
-        "accuracy": null,
-        "exact_set_accuracy": null,
+        "covered": 16,
+        "coverage": 1,
+        "accuracy": 0.4375,
+        "exact_set_accuracy": 0.4375,
         "failures": 0,
         "missing_confidence": 64,
         "confidence_coverage": 0,
@@ -578,7 +590,7 @@
         "brier": 0.18183187118627792,
         "ece": 0.18273935478646308,
         "calibration_n": 64,
-        "violation_recall": 0,
+        "violation_recall": 0.6666666666666666,
         "needed_recall": null,
         "all_needed_recall": null,
         "multi_entry_steps": 0,
@@ -611,11 +623,15 @@
       "tuned_thresholds": {
         "confidence": 0.9,
         "probability": 0.3,
+        "missing_probability": 0.5,
+        "allow_missing_confidence": true,
         "tuning_status": "no_tune_data"
       },
       "production_thresholds": {
         "confidence": 0.9,
-        "probability": 0.3
+        "probability": 0.3,
+        "missing_probability": 0.5,
+        "allow_missing_confidence": true
       },
       "holdout": {
         "attempted": 0,
@@ -691,18 +707,22 @@
       "tuned_thresholds": {
         "confidence": 0.9,
         "probability": 0.3,
-        "tuning_status": "minimum_coverage_unmet"
+        "missing_probability": 0.5,
+        "allow_missing_confidence": true,
+        "tuning_status": "selected"
       },
       "production_thresholds": {
         "confidence": 0.9,
-        "probability": 0.3
+        "probability": 0.3,
+        "missing_probability": 0.5,
+        "allow_missing_confidence": true
       },
       "holdout": {
         "attempted": 16,
-        "covered": 0,
-        "coverage": 0,
-        "accuracy": null,
-        "exact_set_accuracy": null,
+        "covered": 16,
+        "coverage": 1,
+        "accuracy": 0.375,
+        "exact_set_accuracy": 0.375,
         "failures": 0,
         "missing_confidence": 64,
         "confidence_coverage": 0,
@@ -710,7 +730,7 @@
         "brier": 0.14757031250000002,
         "ece": 0.23078125000000005,
         "calibration_n": 64,
-        "violation_recall": 0,
+        "violation_recall": 1,
         "needed_recall": null,
         "all_needed_recall": null,
         "multi_entry_steps": 0,
@@ -727,10 +747,10 @@
       },
       "production": {
         "attempted": 16,
-        "covered": 0,
-        "coverage": 0,
-        "accuracy": null,
-        "exact_set_accuracy": null,
+        "covered": 16,
+        "coverage": 1,
+        "accuracy": 0.375,
+        "exact_set_accuracy": 0.375,
         "failures": 0,
         "missing_confidence": 64,
         "confidence_coverage": 0,
@@ -738,7 +758,7 @@
         "brier": 0.14757031250000002,
         "ece": 0.23078125000000005,
         "calibration_n": 64,
-        "violation_recall": 0,
+        "violation_recall": 1,
         "needed_recall": null,
         "all_needed_recall": null,
         "multi_entry_steps": 0,
@@ -771,18 +791,22 @@
       "tuned_thresholds": {
         "confidence": 0.9,
         "probability": 0.3,
-        "tuning_status": "minimum_coverage_unmet"
+        "missing_probability": 0.4,
+        "allow_missing_confidence": true,
+        "tuning_status": "selected"
       },
       "production_thresholds": {
         "confidence": 0.9,
-        "probability": 0.3
+        "probability": 0.3,
+        "missing_probability": 0.4,
+        "allow_missing_confidence": true
       },
       "holdout": {
         "attempted": 18,
-        "covered": 0,
-        "coverage": 0,
-        "accuracy": null,
-        "exact_set_accuracy": null,
+        "covered": 18,
+        "coverage": 1,
+        "accuracy": 0.8888888888888888,
+        "exact_set_accuracy": 0.8888888888888888,
         "failures": 0,
         "missing_confidence": 18,
         "confidence_coverage": 0,
@@ -790,7 +814,7 @@
         "brier": 0.07029617698167528,
         "ece": 0.2326485680209266,
         "calibration_n": 18,
-        "violation_recall": 0,
+        "violation_recall": 1,
         "needed_recall": null,
         "all_needed_recall": null,
         "multi_entry_steps": 0,
@@ -807,10 +831,10 @@
       },
       "production": {
         "attempted": 18,
-        "covered": 0,
-        "coverage": 0,
-        "accuracy": null,
-        "exact_set_accuracy": null,
+        "covered": 18,
+        "coverage": 1,
+        "accuracy": 0.8888888888888888,
+        "exact_set_accuracy": 0.8888888888888888,
         "failures": 0,
         "missing_confidence": 18,
         "confidence_coverage": 0,
@@ -818,7 +842,7 @@
         "brier": 0.07029617698167528,
         "ece": 0.2326485680209266,
         "calibration_n": 18,
-        "violation_recall": 0,
+        "violation_recall": 1,
         "needed_recall": null,
         "all_needed_recall": null,
         "multi_entry_steps": 0,
@@ -851,11 +875,15 @@
       "tuned_thresholds": {
         "confidence": 0.9,
         "probability": 0.3,
+        "missing_probability": 0.4,
+        "allow_missing_confidence": true,
         "tuning_status": "no_tune_data"
       },
       "production_thresholds": {
         "confidence": 0.9,
-        "probability": 0.3
+        "probability": 0.3,
+        "missing_probability": 0.4,
+        "allow_missing_confidence": true
       },
       "holdout": {
         "attempted": 0,
@@ -931,18 +959,22 @@
       "tuned_thresholds": {
         "confidence": 0.9,
         "probability": 0.3,
-        "tuning_status": "minimum_coverage_unmet"
+        "missing_probability": 0.4,
+        "allow_missing_confidence": true,
+        "tuning_status": "selected"
       },
       "production_thresholds": {
         "confidence": 0.9,
-        "probability": 0.3
+        "probability": 0.3,
+        "missing_probability": 0.4,
+        "allow_missing_confidence": true
       },
       "holdout": {
         "attempted": 18,
-        "covered": 0,
-        "coverage": 0,
-        "accuracy": null,
-        "exact_set_accuracy": null,
+        "covered": 18,
+        "coverage": 1,
+        "accuracy": 1,
+        "exact_set_accuracy": 1,
         "failures": 0,
         "missing_confidence": 18,
         "confidence_coverage": 0,
@@ -950,7 +982,7 @@
         "brier": 0.014350000000000002,
         "ece": 0.09722222222222224,
         "calibration_n": 18,
-        "violation_recall": 0,
+        "violation_recall": 1,
         "needed_recall": null,
         "all_needed_recall": null,
         "multi_entry_steps": 0,
@@ -967,10 +999,10 @@
       },
       "production": {
         "attempted": 18,
-        "covered": 0,
-        "coverage": 0,
-        "accuracy": null,
-        "exact_set_accuracy": null,
+        "covered": 18,
+        "coverage": 1,
+        "accuracy": 1,
+        "exact_set_accuracy": 1,
         "failures": 0,
         "missing_confidence": 18,
         "confidence_coverage": 0,
@@ -978,7 +1010,7 @@
         "brier": 0.014350000000000002,
         "ece": 0.09722222222222224,
         "calibration_n": 18,
-        "violation_recall": 0,
+        "violation_recall": 1,
         "needed_recall": null,
         "all_needed_recall": null,
         "multi_entry_steps": 0,

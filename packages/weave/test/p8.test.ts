@@ -177,7 +177,7 @@ test('D5 passes only at p >= .8 and confidence >= .9, and keeps decision-site ke
   assert.equal(lowP.evals[1]?.passed, true);
 });
 
-test('D5 low confidence, missing confidence, stale, unparseable and outage each fail that criterion', () => {
+test('D5 low confidence, stale, unparseable and outage fail; missing confidence uses the fitted band', () => {
   const low = transitionOutputEval(
     d5Input,
     recorded({ criterion_0: { p: 0.95, conf: 0.899 }, criterion_1: { p: 1, conf: 1 } }),
@@ -191,8 +191,17 @@ test('D5 low confidence, missing confidence, stale, unparseable and outage each 
     recorded({ criterion_0: { p: 0.95 }, criterion_1: { p: 1, conf: 1 } }, true),
     state,
   );
-  assert.equal(missing.observations[0]?.reason, 'missing_confidence');
-  assert.equal(missing.evals[0]?.passed, false);
+  assert.equal(missing.observations[0]?.reason, 'accepted');
+  assert.equal(missing.observations[0]?.answer, 'pass');
+  assert.equal(missing.evals[0]?.passed, true);
+  const belowBand = transitionOutputEval(
+    d5Input,
+    recorded({ criterion_0: { p: 0.49 }, criterion_1: { p: 1, conf: 1 } }, true),
+    state,
+  );
+  assert.equal(belowBand.observations[0]?.reason, 'below_probability');
+  assert.equal(belowBand.observations[0]?.answer, 'fail');
+  assert.equal(belowBand.evals[0]?.passed, false);
   const stale = transitionOutputEval(
     d5Input,
     { ...recorded({ criterion_0: { p: 1, conf: 1 }, criterion_1: { p: 1, conf: 1 } }), observed_at: 9 },
@@ -990,7 +999,7 @@ test('D5 uncertainty fails the step, and red checks fail it without asking D5', 
   // An outage pauses instead (#129); see the outage test below.
   const cases = [
     { name: 'low confidence', evaluation: { c1: { p: 0.95, conf: 0.89 } } as const, reason: 'low_confidence' },
-    { name: 'missing confidence', evaluation: { c1: { p: 0.95 } } as const, reason: 'missing_confidence' },
+    { name: 'missing confidence below band', evaluation: { c1: { p: 0.49 } } as const, reason: 'below_probability' },
     { name: 'stale', evaluation: 'stale' as const, reason: 'stale_answer' },
   ];
   for (const item of cases) {
