@@ -203,12 +203,19 @@ function requiredIds(ids: unknown): { readonly ids: readonly string[]; readonly 
 function gap(high: number, low: number): number {
   return nonNegativeZero(Math.round((high - low) * 1e10) / 1e10);
 }
+/** A confidence container must be a plain object; null, arrays, scalars and class instances are malformed. */
+function confidenceMap(value: unknown): value is Record<string, unknown> {
+  return plain(value) && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+}
 /**
- * A missing key is unknown. A key that is present and is not a finite number in [0, 1]
- * is published-invalid. Those two must not collapse: invalid is fail-closed for D3.
+ * An absent map or a missing key is unknown. A supplied malformed container, or a key that
+ * is present and is not a finite number in [0, 1], is published-invalid. Those must not
+ * collapse: invalid is fail-closed for D3 and stops a valid probability using the band.
  */
 function readConfidence(map: unknown, key: string): { readonly confidence: number | null; readonly invalid: boolean } {
-  if (!plain(map) || !Object.hasOwn(map, key)) return { confidence: null, invalid: false };
+  if (map === undefined) return { confidence: null, invalid: false };
+  if (!confidenceMap(map)) return { confidence: null, invalid: true };
+  if (!Object.hasOwn(map, key)) return { confidence: null, invalid: false };
   const value: unknown = map[key];
   return unit(value) ? { confidence: value, invalid: false } : { confidence: null, invalid: true };
 }

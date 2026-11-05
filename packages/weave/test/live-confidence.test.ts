@@ -40,7 +40,7 @@ const unit: RoutedUnit = {
   price: { input_per_mtok: 0, output_per_mtok: 0 },
 };
 /** The gateway path a live provider takes: completed answers, probability only, `confidence: undefined`. */
-function liveGateway(probabilities: Readonly<Record<string, number>>) {
+function liveGateway(probabilities: Readonly<Record<string, number>>, confidence: unknown = undefined) {
   const answers: EvaluationAnswers = Object.fromEntries(
     Object.entries(probabilities).map(([key, probability]) => [key, { type: 'boolean' as const, probability }]),
   );
@@ -54,7 +54,7 @@ function liveGateway(probabilities: Readonly<Record<string, number>>) {
           return {
             status: 'completed',
             answers,
-            confidence: undefined,
+            confidence: confidence as Readonly<Record<string, number>> | undefined,
             usage: { input_tokens: 1, output_tokens: 1 },
             provider_response_id: 'req_live_shape',
           };
@@ -249,4 +249,69 @@ for (const [site, probabilities] of [
     assert.equal(missing.status, 'needs_human');
     assert.ok(missing.observations.every((item) => item.answer === null && item.reason === 'missing_confidence'));
   });
+}
+
+// A malformed container is supplied evidence, not an absent one. It must not reach the probability-only band.
+const malformedConfidence: readonly (readonly [string, unknown])[] = [
+  ['null', null],
+  ['array', []],
+  ['scalar', 0.98],
+  ['non-plain object', new Map()],
+];
+
+for (const [label, confidence] of malformedConfidence) {
+  test(`D5: malformed confidence container (${label}) fails closed when p would clear the band`, async () => {
+    const result = await evaluateOutputEval(
+      {
+        ...revision,
+        request_id: `live-d5-malformed-${label}`,
+        state: { artifact: 'disclosed' },
+        terms,
+        needs_dispatch: false,
+        criteria: [{ criterion_id: 'c2', statement: 'the summary names every changed file' }],
+      },
+      liveGateway({ criterion_0: 0.98 }, confidence),
+      now,
+    );
+    assert.equal(result.status, 'fail');
+    assert.deepEqual(result.failing_criterion_ids, ['c2']);
+    const [observation] = result.observations;
+    assert.equal(observation?.reason, 'missing_confidence');
+    assert.equal(observation?.answer, null);
+    assert.equal(observation?.accepted, false);
+    assert.equal(observation?.confidence, null);
+  });
+}
+
+for (const [site, probabilities] of [
+  [
+    'guard.input',
+    { secret_exfiltration: 0.06, scope_broadening: 0.12, destructive_without_grant: 0.03, prompt_injection: 0.15 },
+  ],
+  ['guard.output', { decision: 0.05 }],
+] as const) {
+  for (const [label, confidence] of malformedConfidence) {
+    test(`${site}: malformed confidence container (${label}) fails closed when p would clear the band`, async () => {
+      const result = await evaluateBooleanSite(
+        site,
+        {
+          ...revision,
+          request_id: `live-${site}-malformed-${label}`,
+          state: { plan: 'disclosed' },
+          terms,
+          needs_dispatch: true,
+        },
+        liveGateway(probabilities, confidence),
+        now,
+      );
+      assert.equal(result.status, 'needs_human');
+      assert.ok(result.approval_requests.length > 0);
+      assert.ok(
+        result.observations.every(
+          (item) =>
+            !item.accepted && item.fallback_used && item.reason === 'missing_confidence' && item.confidence === null,
+        ),
+      );
+    });
+  }
 }

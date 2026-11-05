@@ -63,6 +63,16 @@ export function criterionKey(index: number): string {
   return `criterion_${index}`;
 }
 
+/** A confidence container must be a plain object; null, arrays, scalars and class instances are malformed. */
+function confidenceMap(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)
+  );
+}
+
 function observe(
   input: OutputEvalInput,
   fields: {
@@ -123,9 +133,23 @@ export function transitionOutputEval(
     const safeId = correlation(criterion.criterion_id);
     const raw = answered?.answers?.[key];
     const probability = raw?.type === 'boolean' && unit(raw.probability) ? raw.probability : null;
-    const statistic = answered?.confidence?.[key];
-    const confidenceMissing = statistic === undefined;
-    const confidenceInvalid = !confidenceMissing && !unit(statistic);
+    const container = answered?.confidence;
+    let statistic: unknown;
+    let confidenceMissing: boolean;
+    let confidenceInvalid: boolean;
+    if (container === undefined) {
+      statistic = undefined;
+      confidenceMissing = true;
+      confidenceInvalid = false;
+    } else if (!confidenceMap(container)) {
+      statistic = undefined;
+      confidenceMissing = false;
+      confidenceInvalid = true;
+    } else {
+      statistic = container[key];
+      confidenceMissing = !Object.hasOwn(container, key);
+      confidenceInvalid = !confidenceMissing && !unit(statistic);
+    }
     const confidence = unit(statistic) ? statistic : null;
     let reason: OutputEvalReason;
     let answer: OutputEvalObservation['answer'] = null;
