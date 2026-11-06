@@ -14,6 +14,9 @@ budget/authority). D2 requires .75, fallback standard. D8 requires .70, fallback
 stalled. Intake requires .80 (provisional, until P10 calibration), fallback
 ask_user / needs_human. Intake state contains a disclosed message and running
 thread summaries; classification grants no authority to interrupt or dispatch.
+When reached through `decideIntake`, intake is asked only after typed extraction
+and its fidelity gate; grounded hints may accompany the original, which remains
+authoritative.
 The type enforces that shape: for `intake.classify`, `transitionSite` and
 `evaluateSite` take `IntakeSiteInput`, whose state is `IntakeState`. Other choice
 sites take any disclosed evaluation content. A caller that holds a union of
@@ -79,6 +82,71 @@ its provider.
 choices or a currently reappearing issue with at least two recorded fix attempts.
 Transport, persistence and full-loop integration remain
 outside this contract. ScriptedDecisionLayer remains unchanged.
+
+## WV-S1 P2a typed extraction before intake
+
+`decideIntake(ask, port, now, signal?)` first asks the gateway for an
+`extract@1` answer, gates it against the original message, and only then asks
+`intake.classify`. Extraction uses the existing generation kind `extract` at
+tier `flash`; it names no provider and adds no gateway kind. The extract request
+and the site request are sequential because the site depends on the hints.
+Separate `decideIntake` calls share no state and may run concurrently.
+
+An extraction schema declares span and choice slots only. There is no list kind,
+so an open path or target list cannot be extracted. The intake schema
+`intake.message@1` has a required `thread_ref` choice over the disclosed
+`running_threads[].thread_id` values that pass `correlation()`, plus `none`, and
+an optional `request` span. Thread ids that fail the correlation screen are not
+options and are never recorded. A choice option set that is empty, a list kind,
+or an option that fails the correlation screen is a static programmer error and
+throws when the schema is built.
+
+`parseExtract` rejects any answer whose object keys differ from the schema, whose
+slot objects have extra or missing keys, or whose values are neither strings nor
+null, with reason `invalid_extract`; it is also the gateway `accept`. The
+deterministic `gateExtract` assigns one status per slot. A span is `grounded`
+only when a non-empty value occurs verbatim in the original; null is `empty` and
+anything else is `ungrounded`. A choice is `grounded` when its value is an
+option and it is `none` or its non-empty cue occurs verbatim. A null value with
+a grounded cue is `unresolved`, null with no cue is `empty`, a non-option is
+`out_of_set`, and a non-`none` option without a grounded cue is `ungrounded`.
+No admitted answer is `unread`. Matching is an exact UTF-16 substring
+(`indexOf`); there is no trimming, case folding or Unicode normalization, and
+the empty string is never grounded.
+
+The `extract@1` record is `{ schema, site, extract_schema, request_id, attempt,
+state_revision, verdict, reason, slots, residual_ambiguity,
+provider_request_id }` in that key order. `value` is recorded only for a grounded
+choice and is always null for a span; `span` is the first verbatim occurrence's
+`[start, end]` offsets, or null. `residual_ambiguity` lists required slots whose
+final status is not `grounded`, in schema order. A grounded answer yields
+`use_hints`; an `ungrounded` or `out_of_set` answer re-extracts once and then
+falls back to `original_only`; no admitted answer or a mismatched request/site
+does the same. An extract outage, including a thrown port, budget, deadline or
+`no_route`, is `original_only` with no reprompt and never pauses, whatever
+`needs_dispatch` says. A revision change after an attempt stops as
+`needs_human` / `stale_answer`, and cancellation stops as `paused` / `cancelled`;
+neither asks the site.
+
+The site always receives the original `message` and `running_threads`
+unchanged. It receives `hints` only on `use_hints`, and hints contain only
+grounded values. On `original_only` the site state is byte-identical to the
+direct `evaluateSite` state. When the final verdict is `use_hints`, `thread_ref`
+is `unresolved`, and at least two threads are running, the decision is
+`decided_by: 'extract'`, `choice: 'ask_user'`, `status: 'needs_human'`, reason
+`ambiguous_reference`, and the site is not asked. With fewer than two threads
+the site decides from the original and the residual ambiguity stays on the
+record. Extract failure never pauses dispatch-dependent work; the site's own
+outage still follows the existing rule. The decision record is
+`{ schema, request_id, decided_by, choice, status, reason, extract, site }` in
+that key order, holds one or two extract observations in attempt order, and
+carries no grant, scope or dispatch field.
+
+`transitionIntake(ask, recorded, current)` rebuilds the same record from
+`{ extracts, site }` recorded outcomes with no port. Replay throws on more than
+two recorded extracts or a duplicated attempt, so it cannot invent one. Records
+copy no message text, extracted text, provider text or thread summaries; ids
+pass `correlation()` and credential-shaped ids are omitted.
 
 ## P6 boolean sites
 

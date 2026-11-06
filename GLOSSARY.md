@@ -156,7 +156,39 @@ The channel-agnostic `intake.classify` judgment site proposes how an inbound
 message relates to summaries of running threads: `new_thread`,
 `continue_thread`, `queue`, `steer`, `interrupt`, or `stop`. A deterministic
 confidence rule records the observation and returns `ask_user` / `needs_human`
-when uncertain. Classification grants no authority to execute or interrupt.
+when uncertain. Through `decideIntake`, it is asked only after typed extraction
+and the fidelity gate; grounded hints may accompany the original, which remains
+authoritative. Classification grants no authority to execute or interrupt.
+
+### Typed extraction
+
+The `extract@1` stage in which a model proposes values for the slots a caller
+declares in an extraction schema. A span slot copies text that must occur
+verbatim in the original; a choice slot names one closed option and may quote a
+verbatim cue. Extraction produces only **hints**: closed-vocabulary ids,
+verbatim substrings and source offsets. The **original** disclosed observation
+stays authoritative, and an extraction grants no authority, mints no grant and
+widens no disclosure. Extract schemas have no list kind, so an open target or
+path list cannot be extracted.
+
+### Fidelity gate
+
+The deterministic `gateExtract` check run before any extracted value reaches a
+judgment site. Each slot is `grounded` only when a span occurs verbatim in the
+original or a choice is a member of its option set with a verbatim cue (`none`
+needs no cue); otherwise it is `empty`, `unresolved`, `ungrounded`,
+`out_of_set`, or `unread`. Matching is exact UTF-16 substring matching, with no
+trimming, case folding or normalization. A failed gate falls back to the
+original or re-extracts once; it never passes an ungrounded, out-of-set or
+stale value to the site.
+
+### Residual ambiguity
+
+The required slots whose final gate status is not `grounded`, in schema order,
+recorded as `{ count, slots }` on `extract@1`. An `unresolved` thread reference
+with two or more running threads is ambiguity only the operator can resolve, so
+intake asks instead of guessing. The confidence half of residual ambiguity
+waits for the P2d answer shape.
 
 ### Input routing
 
