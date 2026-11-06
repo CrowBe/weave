@@ -69,8 +69,6 @@ export function modelHints(observation: ExtractObservation, original: string): M
   return {
     schema: observation.extract_schema as ModelExtractSchemaId,
     intent:
-      intent?.status === 'grounded' && intent.span !== null
-        ? original.slice(intent.span[0], intent.span[1])
-        : null,
+      intent?.status === 'grounded' && intent.span !== null ? original.slice(intent.span[0], intent.span[1]) : null,
   };
 }
