@@ -1,9 +1,9 @@
 # PLAN — strict pre-flight context budget assembler (#353)
 
-Status: **plan only. This revision addresses the Claude Opus review of `c8e6197` (plan18 dispositions in §27; plan17 in §26; plan16 in §25; plan15 in §24); no implementation is authorized by it.**
+Status: **plan only. This revision addresses the Claude Opus review of `2b227b7` (plan19 dispositions in §28; plan18 in §27; plan17 in §26; plan16 in §25; plan15 in §24); no implementation is authorized by it.**
 Issue: CrowBe/weave#353 (architecture parent). Branch `wv-353-context-budget-plan`, base `0281c5e`.
-Review target `c8e6197` (Git parent `593a125`, grandparent `442b62a`; provenance correction in §27); source, tests and benchmarks there are identical to base `0281c5e`
-(`git diff --stat 0281c5e c8e6197` lists only `PLAN.md`).
+Review target `2b227b7` (Git parent `c8e6197`, grandparent `593a125`); source, tests and benchmarks there are identical to base `0281c5e`
+(`git diff --stat 0281c5e 2b227b7` lists only `PLAN.md`). §27 retains its historical provenance correction under A7.
 
 The issue text used here is the copy in the task brief. This plan revision did
 not read the remote issue; that source assumption is recorded as A1. Review
@@ -29,12 +29,22 @@ goal and audit material are never dropped to make a request fit.
 If the complete evidence cannot fit the observation bound, record the distinct
 durable persistence failure in §5.5; never claim a complete refusal was stored.
 
-## 2. Inventory at HEAD (`c8e6197`; code identical to base `0281c5e`)
+## 2. Inventory at HEAD (`2b227b7`; code identical to base `0281c5e`)
 
 Symbols are the primary references; line numbers are secondary navigation hints,
 rechecked against this HEAD. A bare `symbol (file:N)` pin is the definition;
 use-site pins are labelled ("term at", "comparison at", "call at").
-Children must resolve the symbols at their own base.
+Children must resolve the symbols at their own base. Active labelled call pins
+use the actual callee and a full repository-relative path (§13 FU3).
+Other navigation pins may use a basename only when it uniquely resolves among
+tracked files; a bare `:N` inherits the nearest preceding explicit file pin in
+the same prose paragraph or table row, never across a heading or paragraph.
+The §2.7 legend explicitly scopes that table's runtime.ts shorthand. Its retained
+grouped stillAuthorized use-site pin resolves to this.stillAuthorized at
+packages/weave/src/runtime.ts:1802; this legacy navigation form does not label
+the declaration at :1399 as the call. The focused resolver expands that exact
+retained form; any other unverifiable labelled call syntax fails. C1 generalizes
+navigation resolution with the declaration/call AST check.
 
 ### 2.1 The context window is declared, never measured
 
@@ -89,7 +99,8 @@ input. Loom separately reserves the whole `cost_ceiling`, not `worstCaseCost`.
 
 - goal.frame: `Runtime.frameGoal` (instruction string at `runtime.ts:1300-1302`) has an inline instruction string. The prompt
   is `stableStringify(view.content)`.
-- frontier.weigh: `GatewayDecisionLayer.weigh` (`gateway-decision.ts:29`; `evaluate` call at `:40`) sends `view.content` as `state`, plus
+- frontier.weigh: `GatewayDecisionLayer.weigh` (`gateway-decision.ts:29`) uses
+  `this.gateway.evaluate` (call at `packages/weave/src/gateway-decision.ts:40`) to send `view.content` as `state`, plus
   `frontierWeighQuestions` (`frontier-weigh.ts:37`).
 - audit: `runAuditLoop` (`audit-loop.ts:233`; instructions at `:368`) has inline instructions. The prompt is
   `JSON.stringify(observed.state)`.
@@ -191,7 +202,8 @@ are not in `ViewSliceManifest` and are not counted anywhere.
     and races a `setTimeout` (`:122-140`);
   - `main` (`benchmarks/task-acceptance/live.ts:38`; gateway built at `:47`,
     term at `:59`) declares an 8_000 term.
-- `buildCase` (`benchmarks/frontier-weigh/build.ts:222`; call at `:233`) calls `renderWeighView` directly,
+- `buildCase` (`benchmarks/frontier-weigh/build.ts:222`) calls
+  `renderWeighView` (call at `benchmarks/frontier-weigh/build.ts:233`) directly,
   so any byte change to a renderer changes benchmark cases.
 - `checks/no-ambient-clock.mjs` scans `packages/*/src` only (`:17-22`), so it
   covers the new `context-budget.ts` but not `benchmarks/`.
@@ -215,6 +227,10 @@ Plan17 rechecks at `593a125`, preserves those 17 rows byte-for-byte, and adds
 term/premeasurement and running-review prefix evidence below (19 rows total).
 Plan18 rechecks at `c8e6197`, preserves all 19 rows byte-for-byte, and adds
 append-citation and refusal-ledger evidence below (21 rows total).
+Plan19 rechecks at `2b227b7`, preserves all 21 rows byte-for-byte, and adds
+active-callee resolution and admitted refusal-recomputation evidence (23 rows).
+The new citation row narrows the older recovery-append row: only closed
+dispositions receive FU3 shape exemption; the current disposition stays active.
 In this table `runtime.ts` means
 `packages/weave/src/runtime.ts`; other source paths are written in full.
 
@@ -241,6 +257,8 @@ In this table `runtime.ts` means
 | Running-review prefix proof | Replay compares regenerated canonical observations (`packages/weave/src/runtime.ts:2833-2845`), then checks length before unfinished actions (`:2789-2797`). A prefix with running X cannot return ok:true even after successful prefix reproduction. | Before either restart suffix, C2d replay must reproduce all stop/v2 prefix records through q-1, then fail only for X's missing result at :2794-2797. Recovery is the only fixture variant input (0/1); suffix failures at q use the existing final-length or feedReviewResult/checkPrefix reporters. |
 | Recovery append citation boundary | `this.append` (call range `packages/weave/src/runtime.ts:1859-1866`) records recovery.attempted before grant lookup (`:1875-1876`); payload_type is a property at `:1863`. | FU3 checks labelled call starts and whole expression ranges outside review history. History uses FU5's unfenced heading predicate and receives path/symbol resolution only; §16 O1 is preserved without a semantic supersession lookup. |
 | Refusal accounting evidence | frameGoal records terms before dispatch (`packages/weave/src/runtime.ts:1248-1275,1284-1307`); HEAD has no certified bound ledger. §4 proposes complete assembly_evidence on context.refused@1 and historical recomputation of per-route bounds. | §6.6 retains P_overflow under overflow storage and P_marker under frozen marker storage. For B under measuredCeiling, retain a ledger recomputed from refusal evidence through the historical accounting family; use its per-route bounds/allowances in the term-only check. Marker rerun equality checks determinism; the term-only check proves term invariance for both A and B. |
+| Active callee resolution | `renderFrameView` (call at `packages/weave/src/runtime.ts:1236`) uses the shareAssemblies argument at `packages/weave/src/runtime.ts:1240`; `this.frameGoal` (call at `packages/weave/src/runtime.ts:2545`) runs inside liveEnvironment.execute. Reconcile uses `this.abandonUnrecordedInferences` (call at `packages/weave/src/runtime.ts:1846`). | FU3's closed-disposition boundary is §§14–27 for plan19; §28 and future sections receive full shape checks. The focused resolver runs on active PLAN.md prose, including this row and the current disposition; wrong callees, property-only pins and unverifiable shorthand fail. |
+| Admitted refusal recomputation | frameGoal appends the declared request terms at `packages/weave/src/runtime.ts:1266-1275`, then dispatches at `packages/weave/src/runtime.ts:1284-1307`; no accounting family or context.refused record exists at HEAD. | Proposed §4 C2 step 4 validates complete refusal evidence before recomputation. §6.6/FU5 retain B's ledger from the same injected historical accounting-family member used by runtime assembly, with version and digest; a test-local estimator cannot establish term invariance. |
 
 ## 3. Decisions (architectural recommendations under D-ENG-021)
 
@@ -508,8 +526,14 @@ C2 must change admission and historical transitions together:
    across fit, refusal and marker types before indexing/folding; digests are
    verified bindings, not uniqueness components. A second decision or binding
    mismatch is an integrity error, including on load/replay (§5.5).
-4. For v2, reconstruct from sealed evidence and trusted historical contracts.
-   Validate inventory completeness, protected classifications, exact inclusion
+4. For inference.requested@2 and context.refused@1 with complete
+   assembly_evidence, resolve and verify the immutable historical contracts and
+   accounting-family version/digest. Validate sealed evidence before recomputation,
+   then reconstruct with the same injected historical accounting-family member
+   used by runtime assembly; retain that member's version and digest with the
+   recomputed ledger. Do not substitute a test-local estimator. Witness-only
+   refusals instead validate the §5.2 rejection witness; they cannot supply
+   uncomputable per-route bounds. Validate inventory completeness, protected classifications, exact inclusion
    set/order, safe arithmetic, every per-route bound/allowance, aggregate totals,
    part and manifest digests, full and effective view bindings, request digest,
    `fit_input_digest`, `policy_digest`, `storage_policy_digest`, the named
@@ -859,8 +883,9 @@ reassemble. C2d therefore:
   list is empty: no tick-tolerant recapture/reuse is supported for an existing
   framing action. Bind its original terms, view and manifest in full, including
   `manifest.slices[].assembly_id`. `stampAssemblies` and `sliceAssemblyId`
-  (`views.ts:80,74`) derive that id from `state_revision`, both on direct render
-  (call at `runtime.ts:1236`; shareAssemblies option at `:1240`) and via
+  (`views.ts:80,74`) derive that id from `state_revision`, both through
+  `renderFrameView` (call at `packages/weave/src/runtime.ts:1236`)
+  (shareAssemblies option at `packages/weave/src/runtime.ts:1240`) and via
   `prepareSharedViews` (`runtime.ts:805`; prepared view stored at `:810`). A tick can therefore change that binding as
   well as deadline, cost ceiling and state revision. Its `request_id = inf:${started.action_id}`
   and optional `prefix_digest = digest(stablePrefixBytes(profile, view))`
@@ -876,7 +901,8 @@ reassemble. C2d therefore:
   explicit owner input instead (§10).
 - In live `Runtime.frameGoal`, consults the action-keyed decision index before
   accounting or append as a fail-closed guard. HEAD's only live call is
-  `liveEnvironment.execute` (call at `runtime.ts:2545`); there is no live
+  `this.frameGoal` (call at `packages/weave/src/runtime.ts:2545`) inside
+  liveEnvironment.execute; there is no live
   frameGoal re-entry for an existing action id. Restarted running actions go to
   `reconcileStep`, not back to framing. Direct guard tests with the exact
   recorded bindings reuse only the stored decision/bytes without append or
@@ -888,7 +914,7 @@ reassemble. C2d therefore:
   action with an accepted `context.refused@1` or
   `context.persistence_failed@1` for its owner scope and `action_id` in a
   pre-pass over **every** such running action, after
-  `abandonUnrecordedInferences` (call at `:1846`) and before constructing
+  `this.abandonUnrecordedInferences` (call at `packages/weave/src/runtime.ts:1846`) and before constructing
   `unfinished` (`:1847`) or entering its loop (`:1850`). Finish and fold these
   local dispositions, then construct `unfinished` excluding resolved actions;
   do not place the branch inside that loop. The allowance check (`:1854`)
@@ -1427,7 +1453,11 @@ or a claim that the proposed stop exists at HEAD:
    total_tokens is the full bound (§4), not a dispatched fit ledger.
    For B under measuredCeiling, recompute per-route bounds and framing allowances
    from the refusal's complete assembly_evidence through the historical accounting family
-   (§4 C2 step 4); retain the recomputed ledger with the precursor output for the
+   (§4 C2 step 4). Validate evidence before recomputation, then use the
+   same injected historical accounting-family member used by runtime assembly,
+   recording its version and digest. Assert the invoked member's identity and
+   bound version/digest; a mutation substituting a test-local estimator must fail
+   even if its numeric results agree. Retain the recomputed ledger with the precursor output for the
    term-only check, and never read per-route fields from the refusal itself.
    For the marker, whose record has no token claims (§4), retain recomputed
    full-decision ledgers before storage selection and assert the same equalities.
@@ -2128,7 +2158,7 @@ current meanings. Token ceilings and monetary reservations are distinct.
   contract, never scheduler reachability. No temporary fixture run is claimed
   by plan15.
 
-Tracked follow-ups (from the earlier reviews, extended through `442b62a`; none blocks C1):
+Tracked follow-ups (from the earlier reviews, extended through `2b227b7`; none blocks C1):
 
 - **FU1 (benchmark ambient clock).** `checks/no-ambient-clock.mjs` does not scan
   `benchmarks/`, and the frontier-weigh harness legitimately reads the wall
@@ -2151,11 +2181,18 @@ Tracked follow-ups (from the earlier reviews, extended through `442b62a`; none b
   definition pins (`` `symbol` (`file:N`) ``), including grouped symbols/pins
   throughout PLAN.md, not just contract/code references or §2. Review-disposition
   history uses FU5's unfenced heading predicate `^## \d+\. Review disposition — `
-  until the next unfenced level-two heading: path and symbol resolution only,
-  exempt from declaration/call/range shape checks. No fenced heading arms this
-  exemption. Outside history it asserts that line N declares that symbol, not merely
+  until the next unfenced level-two heading, but exempts only closed dispositions:
+  `14 <= section_number < N`, where N is the current open disposition (28 here).
+  Those sections receive path and symbol resolution only, exempt from
+  declaration/call/range shape checks. The current open disposition and every
+  future section receive full shape checks. No fenced heading arms this
+  exemption. FU5's obsolete-label placement rule is separate; its allowed future
+  history fixture does not grant a FU3 citation exemption. Outside closed
+  history it asserts that line N declares that symbol, not merely
   that the symbol exists somewhere; comment and JSDoc lines never count as
-  declarations. Labelled `call at` pins must identify the start of the named
+  declarations. Labelled `call at`/`call range` pins must name the actual callee and use a
+  full repository-relative path; bare-line and basename pins are forbidden in
+  that labelled grammar. They identify the start of the named
   call expression, not an argument line; other labelled use-site pins are
   checked for file existence only. This plan keeps line numbers as
   navigation hints only (§2). This revision rechecked §2 definition pins
@@ -2180,13 +2217,16 @@ Tracked follow-ups (from the earlier reviews, extended through `442b62a`; none b
   its start line; `call range` pins the inclusive start/end lines of the whole call expression.
   Reject a range omitting either end, including property-only :1863 and
   :1863-1866 negative fixtures; :1863 names payload_type, not the call start.
-  Review-disposition history is exempt from call/range shape checks under the
-  predicate above; §16 O1 stays unchanged and §26 N2 records the correct range.
-  There is no supersession lookup or semantic prose classification. Require
-  positive start/whole-range fixtures, historical O1 and synthetic future-history
-  fixtures, plus failures for a missing path/symbol in history, a fenced fake
-  history heading and an active citation after leaving history.
-  This is a required C1 follow-up, not an implemented lint in this plan-only task.
+  Closed review-disposition history alone is exempt from call/range shape checks
+  under the predicate and numeric bound above; §16 O1 stays unchanged because
+  §16 is closed. There is no supersession lookup or semantic prose classification.
+  Require positive start/whole-range and closed-property fixtures, plus synthetic open/future
+  dispositions whose property-only pins fail. Missing paths/symbols fail even in
+  closed history; a fenced fake heading and leaving history grant no exemption.
+  The §28 focused resolver must run on active PLAN.md text, including the current
+  disposition, and reject every unverifiable labelled call pin; run document
+  wrong-callee/open-property mutations too. General TypeScript AST resolution
+  remains a required C1 follow-up, not an implemented repository lint here.
 - **FU4 (repeated finding becomes a check: unjournaled append rejection).**
   Earlier oversize and `mid_value` findings now include ignored result
   validation (§19 W1, refined by §20 W1/W2). T11 is table-driven from both §5.5 append-outcome
@@ -2226,6 +2266,11 @@ Tracked follow-ups (from the earlier reviews, extended through `442b62a`; none b
   comparison separate from the term-only invariance check. B's per-route bounds
   under measuredCeiling come from a retained ledger recomputed from complete
   refusal evidence through the historical accounting family, not fields on the refusal.
+  Validate sealed evidence before recomputation (§4 C2 step 4); invoke the
+  same injected historical accounting-family member used by runtime assembly,
+  recording its version and digest with B's retained ledger. Require the
+  identity/version/digest assertion and test-local-estimator substitution mutation,
+  even when the substitute returns identical numbers.
   <!-- fu5-label-spec:start -->
   The document lint rejects the exact qualified obsolete label `T9-R2(b)`
   in active text. Drop bare R2(b) from the banned tokens: decision R2's subclause
@@ -2803,7 +2848,7 @@ Retain all 17 existing §2.7 trace rows in order and extend the table to 19.
 | --- | --- | --- |
 | W1 | warning / auto-fix | Terms enter the recorded request at `packages/weave/src/runtime.ts:1248-1275`; §4's proposed ledger also records the ceiling and terms. §6.6 fixes a premeasurement markerTerm admitting both full bounds, with identical profile/accounting family/coverage snapshot/storage policy and route membership. Overflow reruns assert measured-bound equality; marker decision bytes are measured under its final term. C2d retains the term-only mutation and both full-bound comparisons; FU5 makes them required evidence. No certified bound is implemented at HEAD. |
 | N1 | note / no-change | Preserve §16 O1–O4. Rechecked abandonment/allowance at `packages/weave/src/runtime.ts:1845-1856,1906`, lookup declarations at `:1523,1541`, indexes at `:282-288`, profile helpers at `:2178,2199`, frame replay at `:1281`, replay framing at `:2625-2627` and test declarations at `packages/weave/test/p8.test.ts:1096,1903`. §17 W3 remains the active O2 refinement. No historical disposition rewrite. |
-| N2 | note / auto-fix | §16 O1's property pin `:1863` is inside the full append call at `packages/weave/src/runtime.ts:1859-1866`; lookup follows at `:1875-1876`. Preserve O1's text. FU3's history exemption preserves O1 without a supersession lookup; new active append-call evidence uses labelled call-start or whole-call-range pins. §27 W1 makes that boundary mechanically checkable. |
+| N2 | note / auto-fix | §16 O1's property pin `:1863` is inside the full append call at `packages/weave/src/runtime.ts:1859-1866`; lookup follows at `:1875-1876`. Preserve O1's text. FU3 requires the complete call range for this append claim, rejects the property-only citation and distinguishes it from a declaration or call-start pin. |
 | N3 | note / auto-fix | Restore closed §24 from `442b62a`; its N1 history-only rule is superseded by current FU5 and this section, without editing the old row. The plan16 formatter paragraph belongs in §25. The retained verification recipe checks §24 against that original revision as well as §7/§9/§14–§23 against `593a125`. |
 | N4 | note / auto-fix | FU5 defines review sections by the unfenced heading predicate `^## \d+\. Review disposition — ` and bounds its declaration exception by exact anchors within the FU5 bullet. Fixtures cover §13's declaration, each §22–§26 disposition and a synthetic future disposition; active uses and a copied exception are rejected. Only the qualified obsolete T9 label is banned; a bare decision-R2 subclause is valid. The retained recipe exercises this document rule; C1 still owes repository lint. |
 | N5 | note / auto-fix | Stop/v2 prefix reproduction requires C2d replay. Before either suffix fork, compare through q-1 and require only the unfinished-X terminal failure (`packages/weave/src/runtime.ts:2794-2797`), never an earlier stop/version divergence or `ok:true`. Set recovery in variantGoal before goal.opened, the only variant input changed (0 versus 1; seed at `packages/weave/src/state.ts:161`). Zero suffix retains final-length failure at q (`runtime.ts:2791-2792`); positive suffix retains feedReviewResult/checkPrefix failure at q (`:2780-2787,2840-2841`) after one spend (`state.ts:417-419`) and FakeHost's exact unresolved reason (`packages/weave/test/fake-host.ts:144-148`). No generic replay feed or grant reuse. |
@@ -2881,7 +2926,7 @@ def rows(text):
     return [line for line in table.splitlines() if line.startswith("| ")][2:]
 
 old_rows, new_rows = rows(base), rows(doc)
-requirements["trace rows intact and extended"] = new_rows[:17] == old_rows and len(new_rows) == 21
+requirements["trace rows intact and extended"] = new_rows[:17] == old_rows and len(new_rows) >= 19
 trace = doc.split("### 2.7 ", 1)[1].split("## 3. ", 1)[0]
 trace_lines = trace.splitlines()
 indices = [i for i, line in enumerate(trace_lines) if line.startswith("| ")]
@@ -3201,3 +3246,281 @@ pass at unchanged HEAD; `git diff --name-only c8e6197` lists only PLAN.md and
 are not reached. FU-fmt remains open; neither formatting nor full-suite green
 is claimed. FU3/FU5 remain required implementation-child lint/behavioral work.
 No runtime tests, source, schemas, GLOSSARY, permissions or held-out cases change.
+
+## 28. Review disposition — Claude Opus review of `2b227b7` (plan19)
+
+Source read: `/workspace/wvops/WV-353-review-2b227b7.json` (A7): risk low,
+zero errors, two warnings and five notes; W1/W2/N1–N3/N5 auto-fix, N4 no-change,
+no ask_user. Git identifies the reviewed HEAD as
+`2b227b7501ff33f9664950f9315a8e6c0c0588b4`, parent `c8e6197`, grandparent
+`593a125`; `git diff --name-only 0281c5e 2b227b7` lists only PLAN.md.
+Review artifacts remain external operator evidence under A7: Git cannot verify
+§27's artifact-hash mismatch claim; its Git ancestry is independently checked.
+Concrete engineering recommendations follow D-ENG-021. Locked
+D-ENG-025/026/027 and all earlier acceptance boundaries stay closed.
+
+Preserve §7/§9/§14–§25/§27 and all 21 existing §2.7 rows byte-for-byte;
+append two trace rows. For §26, restore the original N2 row from `c8e6197`
+and retain only two checked corrections relative to that revision: the
+newline-delimited extractor and `len(new_rows) >= 19`. The recipe checks both
+exact section equality after those replacements and a two-line difflib allowlist.
+§27 remains historical evidence: its broad exemption and future-history fixture
+are superseded by FU3 and this section's closed/open/future fixtures, not adopted
+by the active validator. Run plan18's original recipe only against its own target
+`2b227b7`; run the corrected plan17 prerequisite on current text. An old recipe's
+exact row count is not a requirement on future revisions. The exact current
+trace count belongs solely in the current recipe.
+
+| ID | Severity / action | HEAD evidence and disposition |
+| --- | --- | --- |
+| W1 | warning / auto-fix | The recovery `this.append` (call range `packages/weave/src/runtime.ts:1859-1866`) contains payload_type at `packages/weave/src/runtime.ts:1863`. FU3 exempts only closed dispositions §§14–27 (`14 <= section_number < N`, N=28 here), bounded by unfenced headings. §28 and future dispositions receive full declaration/call/range checks. Replace the active future-history-exempt fixture with closed-property pass and open/future-property fail fixtures. §16 O1 stays unchanged because §16 is closed; closed history still requires path/symbol resolution. FU5's separate obsolete-label placement exception is unchanged. |
+| W2 | warning / auto-fix | Active pins now identify `renderFrameView` (call at `packages/weave/src/runtime.ts:1236`), `this.frameGoal` (call at `packages/weave/src/runtime.ts:2545`) inside liveEnvironment.execute, and `this.abandonUnrecordedInferences` (call at `packages/weave/src/runtime.ts:1846`). §2.3 and §2.6 also name their actual callees with full paths. §2 defines navigation shorthand and the single preserved trace-row expansion; active labelled calls otherwise forbid bare-line/basename paths. The focused resolver runs on actual active PLAN.md prose, including §28, and fails unverifiable syntax, callee, start or range. Document mutations prove the check executes; general AST lint remains FU3/C1 work. |
+| N1 | note / auto-fix | Restore §26 N2 byte-for-byte from `c8e6197`; keep its historical append-range correction and put the closed-history qualification only in active FU3/§28. The recipe compares all of §26 against that original revision after only the extractor and lower-bound replacements; difflib rejects any other changed line. §27 is frozen in full. |
+| N2 | note / auto-fix | The corrected plan17 prerequisite preserves its 17 original trace rows and requires at least 19, passing its original target `c8e6197` as well as later extensions. Plan19 alone requires exactly 23 rows and preserves all 21 reviewed rows. Red against `2b227b7` now reports plan19 failures without an unrelated prerequisite count failure. |
+| N3 | note / auto-fix | HEAD appends declared framing terms at `packages/weave/src/runtime.ts:1266-1275` and dispatches at `packages/weave/src/runtime.ts:1284-1307`; there is no context ledger/refusal implementation. Proposed §4 C2 step 4 now covers complete inference.requested@2 and context.refused@1 evidence: validate before recomputation, then invoke the same injected historical accounting-family member runtime assembly uses. §6.6/FU5 record its version/digest and retain B's recomputed ledger; assert member identity and reject a test-local-estimator substitution even when numbers agree. Witness-only refusals retain §5.2 validation and supply no invented bounds. |
+| N4 | note / no-change | Keep earlier closed fixes, §16 O1–O4, P_overflow/P_marker, the measuredCeiling source and separate determinism/term-only assertions. Rechecked framing-term capture at `packages/weave/src/runtime.ts:1248-1275`, recovery append/lookup at `packages/weave/src/runtime.ts:1859-1876`, and original recipe extraction. Preservation and retained source checks provide document evidence; future stop behavior remains child work. |
+| N5 | note / auto-fix | Update the follow-up provenance through reviewed `2b227b7`, including plan17/18. Retain A7 for operator review files and §27's artifact mismatch claim. Git ancestry is verified separately; no remote issue or artifact provenance is inferred from it. |
+| FU3 | follow-up / open, C1 | Generalize the focused resolver to the child's TypeScript AST, including grouped declaration/test-title pins, whole-call ranges and path/symbol checks in closed history. Freeze §§14–N-1 before advancing N. Carry the actual-document scan, wrong-callee mutation, missing-path/symbol failures and closed/open/future boundary fixtures into repository lint. A repeated citation finding must become a failing lint/test. |
+| FU5 | follow-up / open, C1/C2d | Retain P_overflow/P_marker, the production-member version/digest/identity assertion, B's admitted refusal-ledger recomputation and both A/B term-only mutation checks in the formation precursor and T9 coverage. Keep the contiguous nine-row T9 table, exact reload points, failure/cancellation/concurrency and durable write-order mutations; synthetic ordering evidence cannot establish reachable success. |
+| FU-fmt | follow-up / open, first implementation child with working tooling | `package.json:36-37` defines fmt/fmt:check and `package.json:16` starts full verify with fmt:check. Run those gates with working tooling, preserving closed text. The current commands and blocker are recorded below; no historical green substitutes for them. |
+
+Failure, cancellation and concurrency remain required in T8/T9/T11/T15/T16.
+Inject crashes between every durable stop/request/result/response/queue/start
+write and after acknowledged writes. Recovery must complete only missing writes;
+double reload and non-executing replay must reproduce ordered evidence without
+duplication or loss, with zero replay host/gateway/journal effects. Preserve
+single-use grants and bound response consumption across failed, cancelled or
+uncertain execution; never renew authority on reload. Existing pending-grant
+reuse rejection is `packages/agentfabric/test/host.test.ts:268-280`.
+HEAD FileJournal still appends without fsync and directly parses stored lines
+(`packages/weave/src/journal.ts:57-72`); do not claim crash safety for it.
+§6.5 composes FileAttemptJournal's fsync/incomplete-write discipline
+(`packages/weave/src/implement-step.ts:1182-1210`) and retained torn-tail/resume
+witnesses (`packages/weave/test/p8.test.ts:1096-1117,1903-1941`). These bound the
+planned durability work rather than proving the future context-stop behavior.
+§7 stays byte-for-byte intact: guardrails and shuffles must never leak into
+benchmark routes; the existing direct route still calls layer.weigh
+(`benchmarks/frontier-weigh/weighers.ts:71-84`). No benchmark or hosted model
+call is needed for these document corrections.
+
+Plan19 retained verification recipe: append `2b227b7` to the first command for
+document red, then run without an argument for document green. The focused
+resolver checks verified HEAD spans and the current document; it fails closed on
+unknown call syntax/callees. It is deliberately narrower than C1's required
+repository-wide AST lint. Fenced recipes are executable examples, not source
+citations; a fenced heading cannot change the surrounding prose's history state.
+The active fixtures replace plan18's future-history exemption. Historical
+plan18 is reproduced only against its target, never used to approve current pins.
+
+```sh
+python3 -c 'from pathlib import Path; exec(Path("PLAN.md").read_text().split("\n<!-- plan19-check -->\n```python\n", 1)[1].split("\n```", 1)[0])'
+git rev-parse 2b227b7 2b227b7^ 2b227b7^^
+git diff --name-only 0281c5e 2b227b7
+git diff --check 2b227b7 -- PLAN.md
+npm run fmt -- PLAN.md
+npm run fmt:check
+npm run verify
+```
+
+<!-- plan19-check -->
+```python
+import difflib
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+
+def git(*args):
+    return subprocess.check_output(['git', *args], text=True)
+
+
+def section(text, number):
+    return text.split(f'\n## {number}. ', 1)[1].split('\n## ', 1)[0]
+
+
+def extract(text, name):
+    return text.split(f'\n<!-- {name} -->\n```python\n', 1)[1].split('\n```', 1)[0]
+
+
+BASE, OPEN = '2b227b7', 28
+current = Path('PLAN.md').read_text()
+base = git('show', f'{BASE}:PLAN.md')
+doc = git('show', f'{sys.argv[1]}:PLAN.md') if len(sys.argv) > 1 else current
+active = doc.split('\n## 14. ', 1)[0]
+fu3 = active.split('- **FU3 ', 1)[1].split('- **FU4 ', 1)[0]
+fu5 = active.split('- **FU5 ', 1)[1].split('- **FU6 ', 1)[0]
+precursor = active.split('**C2d first precursor check', 1)[1].split('**Scoped cancellation', 1)[0]
+checks = {}
+
+# Historical recipes are evidence about their own target, never future grammar.
+old = subprocess.run([sys.executable, '-c', extract(base, 'plan18-check'), BASE], check=False)
+checks['plan18 reproduced at its target'] = old.returncode == 0
+old = subprocess.run([sys.executable, '-c', extract(current, 'plan17-check'), *sys.argv[1:]], check=False)
+checks['retained plan17 requirements'] = old.returncode == 0
+for number in [7, 9, *range(14, 26), 27]:
+    checks[f'closed section {number} unchanged'] = section(doc, number) == section(base, number)
+original26 = section(git('show', 'c8e6197:PLAN.md'), 26)
+expected26 = original26.replace('.split("<!-- plan17-check -->", 1)[1].split("```python\\n", 1)[1]', '.split("\\n<!-- plan17-check -->\\n```python\\n", 1)[1]')
+expected26 = expected26.replace('len(new_rows) == 19', 'len(new_rows) >= 19')
+checks['section26 only extractor and lower-bound corrections'] = section(doc, 26) == expected26
+changes26 = [x for x in difflib.ndiff(original26.splitlines(), section(doc, 26).splitlines()) if x[:2] in ('- ', '+ ')]
+checks['section26 exactly two changed lines'] = len(changes26) == 4 and all('python3 -c ' in x or 'requirements["trace rows intact and extended"]' in x for x in changes26)
+checks['follow-up provenance updated'] = 'extended through `2b227b7`' in active
+for literal in ['closed dispositions', '14 <= section_number < N', 'current open disposition', 'full repository-relative path', 'synthetic open/future']:
+    checks[f'FU3 {literal}'] = literal in fu3
+checks['no future-history FU3 fixture requirement'] = 'synthetic future-history' not in fu3
+checks['C2 validates refusal before recomputation'] = 'For inference.requested@2 and context.refused@1' in active and 'Validate sealed evidence before recomputation' in active
+for name, text in [('precursor', precursor), ('FU5', fu5)]:
+    for literal in ['same injected historical accounting-family member', 'version and digest', 'before recomputation']:
+        checks[f'{name} {literal}'] = literal in text
+
+# Focused resolver: verified HEAD call spans, not the general C1 TypeScript AST lint.
+RUNTIME = 'packages/weave/src/runtime.ts'
+spans = {
+    (RUNTIME, 'this.append'): (1859, 1866),
+    (RUNTIME, 'renderFrameView'): (1236, 1241),
+    (RUNTIME, 'this.frameGoal'): (2545, 2545),
+    (RUNTIME, 'this.abandonUnrecordedInferences'): (1846, 1846),
+    (RUNTIME, 'this.stillAuthorized'): (1802, 1802),
+    ('packages/weave/src/gateway-decision.ts', 'this.gateway.evaluate'): (40, 59),
+    ('benchmarks/frontier-weigh/build.ts', 'renderWeighView'): (233, 233),
+}
+sources = {path: git('show', f'{BASE}:{path}') for path, _ in spans}
+for path, source in sources.items():
+    checks[f'unchanged source {path}'] = Path(path).read_text() == source
+for (path, symbol), (start, end) in spans.items():
+    lines = sources[path].splitlines()
+    checks[f'callee at {path}:{start}'] = bool(re.search(r'(?<![\w.])' + re.escape(symbol) + r'\s*\(', lines[start - 1]))
+    checks[f'call end {path}:{end}'] = ')' in lines[end - 1]
+checks['append property is not start'] = "payload_type: 'recovery.attempted'" in sources[RUNTIME].splitlines()[1862]
+
+
+def prose(text):
+    closed, fence = False, None
+    for number, line in enumerate(text.splitlines(), 1):
+        mark = re.match(r'^\s*(`{3,}|~{3,})', line)
+        if mark:
+            run = mark[1]
+            if fence is None:
+                fence = run
+            elif run[0] == fence[0] and len(run) >= len(fence) and not line.strip()[len(run):]:
+                fence = None
+            continue
+        if fence is not None:
+            continue
+        if line.startswith('## '):
+            match = re.match(r'^## (\d+)\. Review disposition — ', line)
+            closed = bool(match and 14 <= int(match[1]) < OPEN)
+        yield number, line, closed
+
+
+label = re.compile(r'`([^`]+)`\s+\(call (at|range) `([^`]+)`\)')
+# Preserve the existing trace row. Its scoped shorthand is explicit in §2;
+# every other labelled call must use the full-path grammar above.
+legacy = '`stillAuthorized` (`:1399`, call at `:1802`)'
+expanded = f'`this.stillAuthorized` (call at `{RUNTIME}:1802`)'
+legacy_row = next(line for line in base.splitlines() if line.startswith('| Drain stale-authority branch'))
+
+
+def resolve(text):
+    errors, count = [], 0
+    lines = list(prose(text))
+    for number, line, closed in lines:
+        # Expand only the byte-preserved trace row, never copied shorthand elsewhere.
+        if not closed and line == legacy_row:
+            line = line.replace(legacy, expanded)
+        pins = list(label.finditer(line))
+        if not closed and len(pins) != len(re.findall(r'\bcall (?:at|range)\s+', line)):
+            errors.append(f'{number}: unverifiable labelled call syntax')
+        for pin in pins:
+            symbol, kind, location = pin.groups()
+            match = re.fullmatch(r'([^:]+):(\d+)(?:-(\d+))?', location)
+            if not match or match[1] not in sources:
+                errors.append(f'{number}: unresolved path {location}')
+                continue
+            path, start, end = match[1], int(match[2]), int(match[3] or match[2])
+            source = sources[path]
+            # Closed sections skip shape only; still resolve path and symbol.
+            if not (re.search(r'(?<![\w.])' + re.escape(symbol) + r'\s*\(', source) or
+                    (symbol == 'liveEnvironment.execute' and 'private liveEnvironment()' in source and 'execute: (started, contract) =>' in source)):
+                errors.append(f'{number}: missing symbol {symbol}')
+            elif not closed:
+                count += 1
+                span = spans.get((path, symbol))
+                expected = (start, end) if kind == 'range' else (start, span[1] if span else start)
+                if span is None or expected != span or (kind == 'at' and match[3] is not None):
+                    errors.append(f'{number}: wrong callee/start/range {symbol} {location}')
+    return errors, count
+
+
+errors, count = resolve(doc)
+checks['focused resolver on active PLAN.md text'] = not errors
+checks['active labelled calls actually checked'] = count >= 7
+for error in errors:
+    print('PIN:', error)
+start = f'`this.append` (call at `{RUNTIME}:1859`)'
+whole = f'`this.append` (call range `{RUNTIME}:1859-1866`)'
+prop = f'`this.append` (call at `{RUNTIME}:1863`)'
+fixtures = {
+    'start': (start, True), 'whole range': (whole, True),
+    'property': (prop, False), 'partial range': (whole.replace('1859-', '1863-'), False),
+    'truncated end': (whole.replace('-1866', '-1863'), False),
+    'closed property': ('## 16. Review disposition — O1\n' + prop, True),
+    'open property': (f'## {OPEN}. Review disposition — current\n' + prop, False),
+    'future property': ('## 99. Review disposition — future\n' + prop, False),
+    'closed missing path': ('## 16. Review disposition — O1\n' + prop.replace(RUNTIME, 'missing.ts'), False),
+    'closed missing symbol': ('## 16. Review disposition — O1\n' + prop.replace('this.append', 'this.missing'), False),
+    'leaving history': ('## 16. Review disposition — O1\n## Active\n' + prop, False),
+    'fenced fake heading': ('## Active\n```md\n## 16. Review disposition — fake\n```\n' + prop, False),
+    'wrong callee': (f'`liveEnvironment.execute` (call at `{RUNTIME}:2545`)', False),
+    'bare line': (start.replace(RUNTIME, ''), False),
+    'basename': (start.replace(RUNTIME, 'runtime.ts'), False),
+    'copied legacy shorthand': (legacy, False),
+    'unknown syntax': (f'call at `{RUNTIME}:1859`', False),
+    'unquoted path': (f'`this.append` (call at {RUNTIME}:1859)', False),
+    'future valid start': ('## 99. Review disposition — future\n' + start, True),
+}
+for name, (fixture, accepted) in fixtures.items():
+    checks[f'fixture {name}'] = (not resolve(fixture)[0]) == accepted
+# Run a mutation through the actual document, not just synthetic strings.
+checks['document wrong-callee mutation rejected'] = bool(resolve(doc.replace('`this.frameGoal` (call at', '`liveEnvironment.execute` (call at', 1))[0])
+checks['document open property mutation rejected'] = bool(resolve(doc + f'\n## {OPEN}. Review disposition — mutation\n' + prop)[0])
+
+
+def rows(text):
+    table = text.split('### 2.7 ', 1)[1].split('## 3. ', 1)[0]
+    return [line for line in table.splitlines() if line.startswith('| ')][2:]
+
+
+checks['all 21 trace rows preserved; exactly two appended'] = rows(doc)[:21] == rows(base) and len(rows(doc)) == 23
+checks['current disposition exists'] = f'\n## {OPEN}. Review disposition — ' in doc
+checks['PLAN.md-only diff'] = set(git('diff', '--name-only', BASE).splitlines()) <= {'PLAN.md'}
+failed = [name for name, passed in checks.items() if not passed]
+print(f'{len(checks) - len(failed)}/{len(checks)} plan19 document/source/fixture checks pass; {count} active labelled calls resolved')
+for name in failed:
+    print('FAIL:', name)
+sys.exit(bool(failed))
+```
+
+Plan19 observed results: the committed recipe against `2b227b7` exits 1 with
+57/77 checks passing and 20 plan19 requirements failing; the focused resolver
+reports the existing active syntax/path defects. Both prerequisites pass during
+that red run, so no old exact-count failure contaminates red. Against current
+text the recipe exits 0 with 77/77 passing and 16 active labelled calls resolved.
+Historical plan18 at `2b227b7` passes 57/57 plus its 114/114 prerequisite; the
+corrected plan17 passes 114/114 against both `c8e6197` and current text.
+Preservation checks cover §7/§9/§14–§25/§27, §26's exact two-line correction
+allowlist relative to `c8e6197`, all 21 original trace rows, exactly 23 current
+rows and the contiguous nine-row T9 table. Closed/open/future property fixtures,
+whole/partial range cases, wrong callee, missing paths/symbols, copied/bare-line/
+basename/unquoted shorthand and actual-document mutations pass their expected
+accept/reject checks. Source assertions resolve against unchanged reviewed HEAD.
+`git diff --check 2b227b7 -- PLAN.md` passes; only PLAN.md changes.
+
+`npm run fmt -- PLAN.md`, `npm run fmt:check` and `npm run verify` each exit
+127 with `sh: 1: vp: not found`; full verify stops at its formatter gate and
+later suite stages are not reached. FU-fmt remains open; no formatter or full
+suite green is claimed. FU3/FU5 remain the concrete C1/C2d follow-ups above.
+No runtime behavior, source, tests, schemas, GLOSSARY, permissions, held-out
+cases or benchmark routes change in this planning revision.
