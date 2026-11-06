@@ -193,6 +193,7 @@ function plainObject(value: unknown): value is Record<string, unknown> {
   );
 }
 const EXTRACT_VERDICTS = ['use_hints', 'original_only', 're_extract'] as const;
+const FINAL_EXTRACT_VERDICTS: readonly (typeof EXTRACT_VERDICTS)[number][] = ['use_hints', 'original_only'];
 const EXTRACT_REASONS = [
   'faithful',
   'unfaithful',
@@ -203,10 +204,27 @@ const EXTRACT_REASONS = [
   'cancelled',
 ] as const;
 const SLOT_STATUSES = ['grounded', 'empty', 'unresolved', 'ungrounded', 'out_of_set', 'unread'] as const;
+interface ExpectedExtract {
+  readonly schema: string;
+  readonly slots: readonly { readonly slot: string; readonly kind: 'span' | 'choice' }[];
+}
+const EXPECTED_EXTRACT: Readonly<Record<string, ExpectedExtract>> = {
+  'intake.classify': {
+    schema: 'intake.message@1',
+    slots: [
+      { slot: 'thread_ref', kind: 'choice' },
+      { slot: 'request', kind: 'span' },
+    ],
+  },
+  'input.route': { schema: 'input.route@1', slots: [{ slot: 'intent', kind: 'span' }] },
+  'loop.triage': { schema: 'loop.triage@1', slots: [{ slot: 'intent', kind: 'span' }] },
+  'loop.route': { schema: 'loop.route@1', slots: [{ slot: 'intent', kind: 'span' }] },
+};
 function validExtractRecord(site: string, input: SiteInput, value: unknown): value is ExtractObservation {
   if (!plainObject(value)) return false;
   if (value['schema'] !== 'extract@1' || value['site'] !== site) return false;
-  if (typeof value['extract_schema'] !== 'string' || value['extract_schema'].length === 0) return false;
+  const expected = EXPECTED_EXTRACT[site];
+  if (expected === undefined || value['extract_schema'] !== expected.schema) return false;
   if (value['request_id'] !== null && correlation(value['request_id']) === null) return false;
   if (value['attempt'] !== 1 && value['attempt'] !== 2) return false;
   if (value['state_revision'] !== input.state_revision) return false;
@@ -214,11 +232,11 @@ function validExtractRecord(site: string, input: SiteInput, value: unknown): val
   if (!EXTRACT_REASONS.includes(value['reason'] as (typeof EXTRACT_REASONS)[number])) return false;
   if (value['provider_request_id'] !== null && correlation(value['provider_request_id']) === null) return false;
   const slots = value['slots'];
-  if (!Array.isArray(slots)) return false;
-  for (const slot of slots) {
+  if (!Array.isArray(slots) || slots.length !== expected.slots.length) return false;
+  for (const [index, slot] of slots.entries()) {
     if (!plainObject(slot)) return false;
-    if (typeof slot['slot'] !== 'string' || slot['slot'].length === 0) return false;
-    if (slot['kind'] !== 'span' && slot['kind'] !== 'choice') return false;
+    const shape = expected.slots[index]!;
+    if (slot['slot'] !== shape.slot || slot['kind'] !== shape.kind) return false;
     if (!SLOT_STATUSES.includes(slot['status'] as (typeof SLOT_STATUSES)[number])) return false;
     if (slot['value'] !== null && typeof slot['value'] !== 'string') return false;
     const span = slot['span'];
@@ -238,6 +256,12 @@ function validExtractRecord(site: string, input: SiteInput, value: unknown): val
   const residualSlots = residual['slots'];
   return Array.isArray(residualSlots) && residualSlots.every((slot) => typeof slot === 'string');
 }
+function extractOriginReason(site: string, input: SiteInput, value: unknown): SiteReason | null {
+  if (!validExtractRecord(site, input, value)) return 'invalid_extract';
+  if (value.reason === 'cancelled') return 'cancelled';
+  if (value.reason === 'stale_answer') return 'stale_answer';
+  return FINAL_EXTRACT_VERDICTS.includes(value.verdict) ? null : 'invalid_extract';
+}
 /** Why a site cannot be asked from this input, or null when its declared origin is adequate. */
 export function originReason(site: string, input: SiteInput): SiteReason | null {
   const structural = (STRUCTURAL_SOURCE_FOR as Readonly<Record<string, StructuralSource | undefined>>)[site];
@@ -248,10 +272,16 @@ export function originReason(site: string, input: SiteInput): SiteReason | null 
   if (!(MODEL_SITES as readonly string[]).includes(site)) return null;
   if (input.origin === undefined) return 'extract_missing';
   if (input.origin.kind !== 'model') return 'invalid_extract';
-  return validExtractRecord(site, input, input.origin.extract) ? null : 'invalid_extract';
+  return extractOriginReason(site, input, input.origin.extract);
 }
 function originFailure(reason: SiteReason | null): boolean {
-  return reason === 'extract_missing' || reason === 'invalid_extract' || reason === 'structural_origin_missing';
+  return (
+    reason === 'extract_missing' ||
+    reason === 'invalid_extract' ||
+    reason === 'structural_origin_missing' ||
+    reason === 'stale_answer' ||
+    reason === 'cancelled'
+  );
 }
 
 /** Failure codes meaning no answer could be obtained, unlike a refusal or a malformed answer. */
@@ -316,12 +346,13 @@ export function transitionSite<S extends DecisionSite>(
   else if (site === 'loop.triage' && !validTopProbability(probabilities, top_p, policy.options)) reason = 'low_top_p';
   else reason = 'accepted';
   const accepted = reason === 'accepted';
-  const originFailed = originFailure(reason);
+  const origin = originReason(site, input);
+  const originFailed = originFailure(origin);
   const choice = accepted ? answer! : policy.fallback;
   // An unavailable decision takes no executive authority even when its fallback says implement.
   const unavailable = decisionUnavailable(outcome);
   const status =
-    recorded.cancelled
+    recorded.cancelled || origin === 'cancelled'
       ? 'paused'
       : originFailed
         ? 'needs_human'

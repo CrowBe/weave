@@ -13,6 +13,8 @@ import {
 } from '../src/sites/boolean.js';
 import { modelOrigin, structuralOrigin, transitionSite } from '../src/sites/index.js';
 import { gateExtract } from '../src/sites/extract.js';
+import { modelExtractSchema } from '../src/sites/model-extract.js';
+import { intakeExtractSchema } from '../src/intake.js';
 const current = { state_revision: 1, state_updated_at: 10 };
 type ChoiceSite = 'loop.triage' | 'loop.route' | 'loop.continue' | 'intake.classify';
 function withOrigin<T extends { readonly request_id: string; readonly state_revision: number }>(
@@ -24,9 +26,13 @@ function withOrigin<T extends { readonly request_id: string; readonly state_revi
       ? structuralOrigin('progress.delta@1')
       : modelOrigin(
           gateExtract(
-            { id: `${site}@1`, slots: {} },
-            '',
-            {},
+            site === 'intake.classify'
+              ? intakeExtractSchema({ message: 'disclosed', running_threads: [] })
+              : modelExtractSchema(site),
+            'disclosed',
+            site === 'intake.classify'
+              ? { thread_ref: { value: 'none', cue: null }, request: { value: null } }
+              : { intent: { value: 'disclosed' } },
             { site, request_id: value.request_id, state_revision: value.state_revision },
           ),
         );

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { budgetRoute, createInferenceGateway, type EvaluationAdapter, type EvaluationOutcome, type InferenceGateway, type RoutedUnit } from '@weave/gateway';
 import { correlation, evaluateSite, modelOrigin, structuralOrigin, transitionSite, stopForNoProgress } from '../src/sites/index.js';
 import { gateExtract } from '../src/sites/extract.js';
+import { modelExtractSchema } from '../src/sites/model-extract.js';
+import { intakeExtractSchema } from '../src/intake.js';
 
 type Site = 'loop.triage' | 'loop.route' | 'loop.continue' | 'intake.classify';
 const current = { state_revision: 1, state_updated_at: 10 };
@@ -16,9 +18,13 @@ function withOrigin<T extends { readonly request_id: string; readonly state_revi
   const origin = site === 'loop.continue'
     ? structuralOrigin('progress.delta@1')
     : modelOrigin(gateExtract(
-      { id: `${site}@1`, slots: {} },
-      '',
-      {},
+      site === 'intake.classify'
+        ? intakeExtractSchema({ message: 'disclosed', running_threads: [] })
+        : modelExtractSchema(site),
+      'disclosed',
+      site === 'intake.classify'
+        ? { thread_ref: { value: 'none', cue: null }, request: { value: null } }
+        : { intent: { value: 'disclosed' } },
       { site, request_id: value.request_id, state_revision: value.state_revision },
     ));
   return { ...value, origin };

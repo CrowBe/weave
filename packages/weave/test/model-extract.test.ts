@@ -9,7 +9,7 @@ import {
   type SiteInput,
   type SiteState,
 } from '../src/sites/index.js';
-import { gateExtract } from '../src/sites/extract.js';
+import { gateExtract, type ExtractObservation } from '../src/sites/extract.js';
 import {
   INPUT_ROUTE_EXTRACT_SCHEMA,
   LOOP_ROUTE_EXTRACT_SCHEMA,
@@ -132,6 +132,67 @@ test('a malformed extract cannot reach the provider and fails closed', async () 
   assert.equal(calls, 0);
   assert.equal(record.status, 'needs_human');
   assert.equal(record.observation.reason, 'invalid_extract');
+});
+
+test('a non-final, cancelled or stale extract stops before the provider', async () => {
+  const site = 'input.route';
+  const valid = extractFor(site);
+  const cases: [ExtractObservation, string, 'paused' | 'needs_human'][] = [
+    [{ ...valid, verdict: 're_extract', reason: 'unfaithful' }, 'invalid_extract', 'needs_human'],
+    [{ ...valid, verdict: 'original_only', reason: 'cancelled' }, 'cancelled', 'paused'],
+    [{ ...valid, verdict: 'original_only', reason: 'stale_answer' }, 'stale_answer', 'needs_human'],
+  ];
+  for (const [extract, reason, status] of cases) {
+    const input = { ...base, origin: { kind: 'model', extract } } as SiteInput;
+    assert.equal(originReason(site, input), reason);
+    let calls = 0;
+    const record = await evaluateSite(
+      site,
+      input,
+      {
+        async evaluate() {
+          calls += 1;
+          return answer(site, 'steer').outcome;
+        },
+      },
+      () => ({ ...current, observed_at: 10 }),
+    );
+    assert.equal(calls, 0, reason);
+    assert.equal(record.status, status, reason);
+    assert.equal(record.observation.reason, reason);
+    assert.equal(record.observation.answer, null);
+    assert.equal(record.observation.provider_request_id, null);
+  }
+});
+
+test('a free-text site accepts only its expected schema and slot structure', async () => {
+  const site = 'loop.route';
+  const valid = extractFor(site);
+  const invalid: [string, ExtractObservation][] = [
+    ['an unrelated schema', { ...valid, extract_schema: 'other@1' }],
+    ['zero slots', { ...valid, slots: [] }],
+    ['an unexpected slot name', { ...valid, slots: [{ ...valid.slots[0]!, slot: 'other' }] }],
+    ['an unexpected slot kind', { ...valid, slots: [{ ...valid.slots[0]!, kind: 'choice' }] }],
+  ];
+  for (const [name, extract] of invalid) {
+    const input = { ...base, origin: { kind: 'model', extract } } as SiteInput;
+    assert.equal(originReason(site, input), 'invalid_extract', name);
+    let calls = 0;
+    const record = await evaluateSite(
+      site,
+      input,
+      {
+        async evaluate() {
+          calls += 1;
+          return answer(site, 'strong').outcome;
+        },
+      },
+      () => ({ ...current, observed_at: 10 }),
+    );
+    assert.equal(calls, 0, name);
+    assert.equal(record.status, 'needs_human', name);
+    assert.equal(record.observation.reason, 'invalid_extract', name);
+  }
 });
 
 test('cancellation pauses and never reaches the provider even with no origin', async () => {
