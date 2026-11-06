@@ -1,9 +1,9 @@
 # PLAN — strict pre-flight context budget assembler (#353)
 
-Status: **plan only. This revision addresses the Claude Opus review of `442b62a` (plan16 dispositions in §25; plan15 in §24; plan14 in §23); no implementation is authorized by it.**
+Status: **plan only. This revision addresses the Claude Opus review of `593a125` (plan17 dispositions in §26; plan16 in §25; plan15 in §24); no implementation is authorized by it.**
 Issue: CrowBe/weave#353 (architecture parent). Branch `wv-353-context-budget-plan`, base `0281c5e`.
-Review target `442b62a` (parent `4af3f4f`); source, tests and benchmarks there are identical to base `0281c5e`
-(`git diff --stat 0281c5e 442b62a` lists only `PLAN.md`).
+Review target `593a125` (Git parent `442b62a`, grandparent `4af3f4f`; provenance correction in §26); source, tests and benchmarks there are identical to base `0281c5e`
+(`git diff --stat 0281c5e 593a125` lists only `PLAN.md`).
 
 The issue text used here is the copy in the task brief. This plan revision did
 not read the remote issue; that source assumption is recorded as A1. Review
@@ -29,7 +29,7 @@ goal and audit material are never dropped to make a request fit.
 If the complete evidence cannot fit the observation bound, record the distinct
 durable persistence failure in §5.5; never claim a complete refusal was stored.
 
-## 2. Inventory at HEAD (`442b62a`; code identical to base `0281c5e`)
+## 2. Inventory at HEAD (`593a125`; code identical to base `0281c5e`)
 
 Symbols are the primary references; line numbers are secondary navigation hints,
 rechecked against this HEAD. A bare `symbol (file:N)` pin is the definition;
@@ -211,6 +211,8 @@ cited in §20/§21. The formation, review-feed and started-review recovery rows
 (the last from §24 W1) below bound the active contract; §21/§22 retain the
 historical assessments superseded by §23. Plan16 rechecks at `442b62a` and
 extends the recovery/feed evidence in place without removing a row.
+Plan17 rechecks at `593a125`, preserves those 17 rows byte-for-byte, and adds
+term/premeasurement and running-review prefix evidence below (19 rows total).
 In this table `runtime.ts` means
 `packages/weave/src/runtime.ts`; other source paths are written in full.
 
@@ -233,6 +235,8 @@ In this table `runtime.ts` means
 | Supported queue formation               | Scripted weighing orders framing A before review X (`packages/weave/src/decision.ts:7-33`); selection includes both (`packages/weave/src/scheduler.ts:13-45`). A runs async (`runtime.ts:1288-1341`), so dispatch queues X at capacity in that same cycle (`:1371-1394`). A's incomplete proposal succeeds via gateway result (`:1331-1337,1479-1486`).                                                | With synchronous weighing, A's result cycle dispatches B before either enclosing drain. C2d must demonstrate this supported path and the fit-A/stop-B inventory (§6.6) before claiming red; never manufacture host work or change formation.                                                                                                                                                                                                                                                                                 |
 | Review continuation result feed         | `reviewGoal` returns null (`runtime.ts:1203-1214`); `finishReview` records its runtime-source result (`:1185-1200`). Replay returns null for review (`:2622-2623`) and feeds review results (`:2780-2786`).                                                                                                                                                                                            | T9-L2/R2(a) complete X via finishReview, never a host result. Reconstruct the queued start once, feed its result once, and preserve exact observation order with zero replay effects. Finish a started review in the same process before a success-witness reload; otherwise generic recovery applies, and the lost view cannot be treated as a restored review.                                                                                                                                                             |
 | Started review recovery                 | `reviews` is a fresh in-memory map (`runtime.ts:242`); review stores its view and returns null (`:1203-1214`). Every running action enters generic reconcile (`:1847-1849`): exhausted allowance returns (`:1854-1856`); otherwise attempt/lookup (`:1859-1876`).                                                                                                                                      | T9-R1/R2(a) must finish each selected/started review in the first process before the inert second reload. The running-review restart variant fixes q as the next seq after the settled prefix with X running: zero allowance ends at exhaustion (final-length failure at q, `:2791-2792`); positive allowance writes attempt then uncertain review result, whose existing feedReviewResult causes checkPrefix failure at q (`:2780-2787,2840-2841`). No review-view restoration, grant renewal or new generic feed is added. |
+| Term capture and premeasurement | RuntimeOptions exposes framing terms (`packages/weave/src/runtime.ts:120-124`); frameGoal copies max_context_tokens into terms and appends those terms (`:1248-1275`). No certified full_tokens ledger exists at HEAD. | §6.6 premeasures under fixed markerTerm with the same profile/accounting/coverage/routes; final runs assert identical A/B full bounds. Changing only max_context_tokens must preserve every full/per-route bound. Freeze the storage snapshot before retained premeasurement; measure marker decision bytes under its final term and bound. |
+| Running-review prefix proof | Replay compares regenerated canonical observations (`packages/weave/src/runtime.ts:2833-2845`), then checks length before unfinished actions (`:2789-2797`). A prefix with running X cannot return ok:true even after successful prefix reproduction. | Before either restart suffix, C2d replay must reproduce all stop/v2 prefix records through q-1, then fail only for X's missing result at :2794-2797. Recovery is the only fixture variant input (0/1); suffix failures at q use the existing final-length or feedReviewResult/checkPrefix reporters. |
 
 ## 3. Decisions (architectural recommendations under D-ENG-021)
 
@@ -1331,9 +1335,19 @@ or a claim that the proposed stop exists at HEAD:
    fixtureGateway with an injected clock reading runtime.state().clock.tick,
    and Runtime with executionSlots=1 and explicit
    framingTerms={quality:'baseline', max_context_tokens:measuredCeiling,
-   cost_ceiling:1000000}. Premeasure the A/B inventories in step 5, then open
-   a fresh fixture with that immutable measured term; do not mutate a running
-   fixture to change its ceiling. RuntimeOptions.framingTerms declares these
+   cost_ceiling:1000000} for the final overflow fixture. Premeasurement uses markerTerm,
+   a fixed positive safe-integer max_context_tokens admitting both A/B full
+   bounds, under the same immutable profile, accounting family, coverage snapshot
+   and storage policy as the final run. Fix and retain their versions/digests,
+   covered route membership, certified input capacities and framing allowances;
+   C2a must admit both markerTerm and measuredCeiling under this one snapshot.
+   If a provisional markerTerm does not admit both bounds, discard that run,
+   choose an admitted larger term and rerun fresh; a token/capacity refusal is
+   not premeasurement evidence. Do not change coverage/routes to make either
+   term pass. Step 5 selects measuredCeiling from that retained premeasurement; open a fresh
+   final fixture with its immutable term, never mutate a running fixture.
+   The marker fixture uses max_context_tokens=markerTerm in both premeasurement
+   and final runs. RuntimeOptions.framingTerms declares these
    fields (`packages/weave/src/runtime.ts:120-124`), and frameGoal reads the
    override instead of its default 8_000 (`:1248-1260`). Use the same terms
    on replay. Use a local generation adapter whose
@@ -1357,30 +1371,65 @@ or a claim that the proposed stop exists at HEAD:
    A remains running and X pending. authority.read already contains this id;
    registered grows while goal.sources stays fixed (`views.ts:141-172`;
    `state.ts:146-154,306-310`). Record both A/B frame-view inventories using
-   the same immutable profile, accounting and storage policies.
+   the same immutable profile, accounting family, coverage snapshot and storage
+   policy. In premeasurement both A and B are admitted token fits. Retain their
+   assembly output before storage selection, including B when the marker branch
+   cannot persist its complete fit record. Compare the captured authorized
+   pre-trim inventories at the corresponding A/B
+   assembly points, not the differing post-decision log suffixes.
 4. Release only A, wait for runtime.settle(A.action_id), and assert the exact
    sequence: A inference.recorded; its cycle/no-op drain while A holds the
    slot; A succeeded action.result with an empty validated proposal; its
-   cycle selects only B with A's candidate id and a fresh action id; both
-   enclosing drains append nothing while B holds the slot and X stays pending
+   cycle selects only B with A's candidate id and a fresh action id
    (`runtime.ts:453-457,1311-1337,1479-1486,584-592,757-760`;
    `proposals.ts:20-35,38-67`; `candidates.ts:92-127`). At HEAD the second
-   generation call remains held; this proves formation/scheduling only.
-5. Before the final fixture run, C2d measures actual certified bounds. For
-   overflow choose a positive safe-integer measuredCeiling with
+   generation call remains held; B holds the slot, X stays pending and both
+   enclosing drains append nothing. This proves formation/scheduling only.
+   C2d's premeasurement retains this branch when B's complete fit record
+   persists. In final stop runs and the same-storage marker premeasurement,
+   B stops, its result drain starts X, and X holds the slot before the two
+   enclosing drains; each still appends nothing, as required by T9-L2.
+5. Before the final fixture run, C2d measures actual certified bounds under
+   markerTerm. For overflow choose a positive safe-integer measuredCeiling with
    A.full_tokens <= measuredCeiling < B.full_tokens. This ceiling is exactly
    framingTerms.max_context_tokens (and §4's reserved_tokens), not a separate knob.
    C2a's immutable managed coverage snapshot must admit that term (§3 R7/§10 C2a);
    a route-capacity refusal cannot stand in for the intended overflow. For the
-   marker, keep a term admitting both full token bounds and choose one fixed
+   marker, keep markerTerm admitting both full token bounds and choose one fixed
    encoded log bound admitting A's full decision but refusing B's, while all
-   closed required records fit (§5.5). Record the inventories, byte counts and chosen bounds;
+   closed required records fit (§5.5). Measure marker byte counts under markerTerm in the final run,
+   including its original/effective terms and proposed ledger fields in each
+   encoded complete decision; token equality never implies decision-byte equality.
+   Do not reuse encoded counts from the overflow term. Choose the marker log
+   bound in a provisional sizing pass, then freeze its final storage snapshot
+   and rerun both retained premeasurement and final fixture under that identical
+   snapshot. Its configured bound is itself recorded (§4), so recompute complete
+   encoded bytes and reassert the A/B storage interval under the chosen bound;
+   provisional sizing bytes are not final-run evidence.
+   Record the inventories, byte counts and chosen bounds;
    do not assume that 1024 characters proves either inequality. If no interval
    exists, adjust growthId length before opening a fresh fixture and remeasure.
    On the implementation child, B must stop before its second generation
    dispatch; use T9-L2/R2(a) for the resulting stop/start/reload/replay checks.
-   Retain precursor output with the child; neither the unretained plan14 run
-   nor this static recipe is behavioral green for the future stop.
+   In the final overflow run assert A.full_tokens === premeasured.A.full_tokens
+   and B.full_tokens === premeasured.B.full_tokens; B's recorded overflow
+   total_tokens is the full bound (§4), not a dispatched fit ledger.
+   For the marker, whose record has no token claims (§4), retain recomputed
+   full-decision ledgers before storage selection and assert the same equalities.
+   Add a check that changes only max_context_tokens between markerTerm and
+   measuredCeiling for each frozen A/B inventory, holding all other terms and
+   contract/route/storage inputs fixed: full_tokens and every per-route bound
+   and framing allowance must be identical. A term-dependent-estimator mutation
+   must fail this check, even if both fit/stop inequalities still hold; never
+   silently replace the premeasured bounds. Decision status, ceiling/reservation
+   fields, digests and encoded bytes may differ and must be measured separately.
+   If equality fails or admission changes route membership, stop and fix the
+   accounting/fixture rather than tune the term around the drift.
+   Retain precursor output with both terms, contract/snapshot identities,
+   inventories, both runs' per-route/full bounds, equality and mutation results,
+   and final-term marker encoded byte counts. FU5/C2d require these assertions.
+   Neither the unretained plan14 run nor this static recipe is behavioral
+   green for the future stop.
 
 **Scoped cancellation invariant.** Already-cancelled work is filtered out
 (`runtime.ts:1781-1783`). Rebuilt eligibility is allowed (`:1799`), and only
@@ -1423,8 +1472,14 @@ with double reload proving no duplication or loss.
 Success rows pin the first reload at the stopped-framing crash, finish any
 review via finishReview in that same process, and only then perform the second
 reload with no unfinished actions. Run separate otherwise-identical fixtures
-with goal.budget.recovery=0 and 1 configured before goal.opened
-(`packages/weave/src/state.ts:161`); never rewrite stored goal/allowance state.
+with goal.budget.recovery=0 and 1 configured in variantGoal before goal.opened
+(`packages/weave/src/state.ts:161`); recovery is the only variant parameter
+changed from §6.6's precursor goal/Runtime configuration (0 versus 1). Keep
+each row's already specified formation/abandonment script. Within that row,
+freeze all other fixture inputs, including terms, profile, accounting, coverage,
+storage and scripted responses;
+recompute each fork's records from its own opened goal, never rewrite stored
+goal/allowance state.
 Fork the durable log after X starts but
 before finishReview, after the selecting ingress has fully settled. For R1,
 include the fresh weighing's inference.recorded after weights ingress
@@ -1441,9 +1496,18 @@ X's durable start ends the prefix). Assert X has null recorded grant
 unfinished work, unrecorded inference or later external arrival is present in
 this fork.
 
+Before appending either recovery suffix, require that C2d replay's prefix comparison succeeds
+through q-1 with identical canonical observations and no effects. These prefixes
+contain proposed stops/v2 records, so HEAD replay alone cannot prove this.
+The prefix-only replay still ends with the expected unfinished-X failure
+at `packages/weave/src/runtime.ts:2794-2797`: at_seq=null, action_id=X and exact
+reason `missing recorded action.result for ${X.action_id}`. Do not require ok:true,
+waive the unfinished-action check or accept an earlier stop/version divergence.
+Only after this prerequisite passes may the suffix assert its first failure at q.
+
 - With limit=0/spent=0, reconcile writes only `recovery.exhausted` at q and
   returns (`runtime.ts:1509-1520,1854-1856`). Outside the scoped pre-continuation
-  barrier that record remains skipped. Replay reproduces through q-1, then
+  barrier that record remains skipped. The fork, under C2d replay, reproduces through q-1, then
   fails with at_seq=q and `recorded log continues beyond what replay reproduced`
   from the final-length check (`:2782-2784,2791-2792`), before the unfinished
   review check. There is no review result to feed.
@@ -2087,6 +2151,13 @@ Tracked follow-ups (from the earlier reviews, extended through `442b62a`; none b
   itself off by one at HEAD; source declarations take precedence over the
   review. Also reject candidates.ts:303 (body statement) as a declaration of
   frameCandidate, whose positive pin is :302.
+  For §16 O1's recovery append, accept the full runtime.ts:1859-1866 call
+  range and reject property-only :1863 as evidence for the append call;
+  :1863 names payload_type, not the call's start. Keep that historical row
+  unchanged and record the range correction in §26 N2. A labelled call-start
+  pin may use :1859; a property pin needs the enclosing full call range.
+  Resolve historical O1 through §26 N2's explicit superseding range; the
+  property-only negative fixture is a new citation without that correction.
   This is a required C1 follow-up, not an implemented lint in this plan-only task.
 - **FU4 (repeated finding becomes a check: unjournaled append rejection).**
   Earlier oversize and `mid_value` findings now include ignored result
@@ -2118,15 +2189,29 @@ Tracked follow-ups (from the earlier reviews, extended through `442b62a`; none b
   L1/L2/R0/R1/R1x/R2/Q0/G1/C1 rows, each with a reachable or synthetic label,
   construction/formation evidence and explicit reload points where required.
   Require validate/load construction for synthetic rows and C2d's retained
-  formation precursor for success rows; reject unsupported compositions.
-  The document lint must reject exact obsolete label tokens `T9-R2(b)` and
-  `R2(b)` in active text, allowing them only in all review-disposition sections (§14 onward),
-  including §24 and later dispositions. Match these exact tokens rather than
-  the descriptive phrase delayed-queued. Add a positive fixture with each token
-  in active text (rejected), and a negative fixture with §22/§23 historical
-  occurrences (allowed); the lint's own token specification here is a narrowly
-  scoped declaration exception, not an active-contract use. Reject
-  split/missing/duplicate table rows. The synthetic construction check must
+  formation precursor for success rows, including §6.6's retained full-bound
+  equalities and term-invariance assertions for both A/B inventories, fixed
+  coverage/route membership and final-term marker byte counts; reject
+  unsupported compositions or term-dependent bounds.
+  <!-- fu5-label-spec:start -->
+  The document lint rejects the exact qualified obsolete label `T9-R2(b)`
+  in active text. Drop bare R2(b) from the banned tokens: decision R2's subclause
+  references are legitimate and are not obsolete T9 labels. Review history is
+  allowed only under an unfenced level-two heading matching
+  `^## \d+\. Review disposition — `, until the next level-two heading.
+  The sole active declaration exception is the text between the exact
+  fu5-label-spec:start/end HTML-comment anchor lines in this FU5 bullet (§13),
+  each occurring once; copied anchors elsewhere grant no exception. Require
+  allowed fixtures for this declaration, §22/§23/§24/§25/§26 and a synthetic future disposition,
+  each containing both spellings; also enumerate any other disposition that
+  contains either spelling at the child's base. Require rejection fixtures
+  for the qualified token in every active contract/table, in FU5 outside these
+  anchors and under a copied exception. Require an allowed §3 decision-R2
+  subclause fixture containing only R2(b), plus a descriptive delayed-queued
+  phrase fixture. Match the qualified token with label boundaries, not arbitrary
+  substrings; this rule does not ban explanatory exclusion prose.
+  <!-- fu5-label-spec:end -->
+  Reject split/missing/duplicate table rows. The synthetic construction check must
   require no managed v1 request in prefixes, scripted C1 weighing and the
   intended first divergence seq, so earlier version drift cannot mask it.
   These structural checks supplement the required behavioral witnesses.
@@ -2550,7 +2635,7 @@ test, schema, GLOSSARY or parked-parent changes are authorized.
 | W1            | warning / auto-fix      | Running review is generic unfinished work (`packages/weave/src/runtime.ts:1847-1876`), its view lives only in reviews (`:242,1209`), and finishReview writes the result (`:1185-1200`). §2.7/§6.6/T9-R1/R2(a) pin first reload, finish in the same process, then inert second reload. The separate running-review restart variant expects exhaustion at zero allowance or one attempt/spend/lookup at positive allowance and HEAD replay divergence (`:2782-2797,2833-2845`). Scope exhaustion feed to the pre-continuation barrier; no review restoration or generic recovery feed is added. FU5 requires both variants. |
 | W2            | warning / auto-fix      | The blank line after T9-Q0 split the HEAD document table. §8 now has one contiguous nine-row T9 table; the temporary document check and future FU5 C1 lint require all nine identities, labels and reload points, rather than relying on formatting alone.                                                                                                                                                                                                                                                                                                                                                                |
 | W3            | warning / auto-fix      | Formation restricts uncovered framing to frame/review (`packages/weave/src/candidates.ts:108-127`). Success rows require reachability; synthetic R0/R1x/C1/Q0 have per-row construction instructions and a common hand-authored journal recipe. Validate each v1 input before load, which otherwise trusts stored validation (`validation.ts:113-121,367-405`; `runtime.ts:1932-1956`). New stop/v2 records require C2c's real admission path, not a HEAD bypass (`validation.ts:117-118`). Prefer a running review where generic work need not be host-backed. Synthetic acceptance is never formation proof.            |
-| N1            | note / auto-fix         | Removed the obsolete subcase from active contracts. Plan16 precision (§25 N1): lint exact tokens `T9-R2(b)` / `R2(b)`; allow historical uses in all review-disposition sections (§14 onward), including §24 and later sections, plus FU5's narrow token-specification declaration. Require active-use rejection and historical-use allowance fixtures, together with split/duplicate/missing T9 checks.                                                                                                                                                                                                                   |
+| N1            | note / auto-fix         | Removed the obsolete delayed-queued subcase label from active contracts and FU5; historical §14–§23 dispositions retain it. The document check rejects its recurrence outside that history, together with split/duplicate/missing T9 rows.                                                                                                                                                                                                                                                                                                                                                                                |
 | N2            | note / auto-fix         | T9-R1's running B excludes framing (`packages/weave/src/candidates.ts:111-116`), leaving a new {report.review} candidate_set, pinned by candidateSetDigest (`digest.ts:15-17`) and needed at `runtime.ts:1040-1049`. FW-T08 only establishes slot release/no resend here (`packages/weave/test/frontier-weigh.test.ts:516-529`); its same-set count at :511-515 is a different assertion. §6.6 and §23 N4 are corrected.                                                                                                                                                                                                  |
 | N3            | note / auto-fix         | The old temporary fixture is not retained and is an explicit evidence limitation, not a repeatable check. §6.6 now names C2d's first precursor with fixed goal/authority/budgets, deferred local generation, exact growth-id recipe, incomplete proposal and assertions. T9-L2 includes A's earlier inference.recorded ingress cycle/no-op drain (`packages/weave/src/runtime.ts:1311-1324,584-592`) before its action.result cycle. Measured fit-A/stop-B bounds remain required child evidence, not assumed from string length. No test file is added.                                                                  |
 | N4            | note / no-change        | Retain §16 O1–O4 and the closed §23 E1/W1/N1/N2 corrections. Pins still resolve: reconcile abandonment/unfinished/allowance (`packages/weave/src/runtime.ts:1845-1856`), lookup helper declarations (:1523,1541), replay indexes/profile helpers (:282-288,2178,2199), frame replay (:1281), WEIGH_CONTROL_RECORDS (:161) and p8 declarations (`packages/weave/test/p8.test.ts:1096,1903`). Proposal writes remain only `packages/weave/src/state.ts:154,538`; stillAuthorized re-forms only publish (`runtime.ts:1399-1407`). Locked decisions and parked issues remain closed.                                          |
@@ -2563,6 +2648,7 @@ must preserve the ordered prefix, never repair or execute effects, and fail at
 unsupported generic recovery records. Single-use grants and bound responses are
 never reused. §7 keeps guardrails and shuffles out of direct benchmark routes.
 No hosted inference or benchmark run is required for these planning corrections.
+
 
 Plan15 verification (Node 22 at `/home/box/.local/node22/bin`): the temporary
 review-requirement document check failed 14/16 requirements before editing and
@@ -2589,12 +2675,6 @@ checks.test.mjs. Reproducing its subprocess call returns status=1, EPERM and
 empty stdout/stderr. Later full-suite stages were not reached. No permissions,
 validation, test or held-out check was weakened; this does not reuse plan14's
 older build/format/verification results as current evidence.
-
-Plan16 formatter follow-up (§25 W1/FU-fmt): `npx prettier --write PLAN.md`
-exits 1 with `EAI_AGAIN` resolving registry.npmjs.org; `npm run fmt:check`
-exits 127 with `sh: 1: vp: not found`. The extra blank line is removed, but
-no formatter pass or fmt green is claimed. §25 records the current full-verify
-attempt and the remaining child obligation.
 
 ## 25. Review disposition — Claude Opus review of `442b62a` (plan16)
 
@@ -2664,3 +2744,224 @@ FU3/FU5 remain required C1 child work with the exact-token/history fixtures,
 synthetic version guard, supported formation precursor and recovery reporters
 specified above. No source, test, schema, benchmark or GLOSSARY edit is used
 to satisfy this plan's document checks.
+
+Plan16 formatter follow-up (§25 W1/FU-fmt): `npx prettier --write PLAN.md`
+exits 1 with `EAI_AGAIN` resolving registry.npmjs.org; `npm run fmt:check`
+exits 127 with `sh: 1: vp: not found`. The extra blank line is removed, but
+no formatter pass or fmt green is claimed. §25 records the current full-verify
+attempt and the remaining child obligation.
+
+## 26. Review disposition — Claude Opus review of `593a125` (plan17)
+
+Source read: `/workspace/wvops/WV-353-review-593a125.json` (A7). Risk low,
+no errors; W1/N2–N6 auto-fix, N1 no-change, no ask_user. Git identifies the
+target as `593a125b664f2d7ceee04bda11628ddf0370d17d`, parent `442b62a`,
+grandparent `4af3f4f`; the review file's full target hash and the brief's
+parent differ from Git. This revision uses the actual checked-out target.
+Plan15 dispositions are §24, plan16 §25, plan7 O1–O4 §16. Evidence below
+is checked at `593a125`; only PLAN.md differs from base `0281c5e`.
+Concrete recommendations follow D-ENG-021; locked D-ENG-025/026/027 stay
+closed. §7/§9/§14–§23 remain unchanged. Restore §24's section contents
+byte-for-byte from `442b62a`, including N1 and its historical formatting;
+keep corrections here. Move the plan16 formatter follow-up into §25.
+Retain all 17 existing §2.7 trace rows in order and extend the table to 19.
+
+| ID | Severity / action | HEAD evidence and disposition |
+| --- | --- | --- |
+| W1 | warning / auto-fix | Terms enter the recorded request at `packages/weave/src/runtime.ts:1248-1275`; §4's proposed ledger also records the ceiling and terms. §6.6 fixes a premeasurement markerTerm admitting both full bounds, with identical profile/accounting family/coverage snapshot/storage policy and route membership. Overflow reruns assert measured-bound equality; marker decision bytes are measured under its final term. C2d retains the term-only mutation and both full-bound comparisons; FU5 makes them required evidence. No certified bound is implemented at HEAD. |
+| N1 | note / no-change | Preserve §16 O1–O4. Rechecked abandonment/allowance at `packages/weave/src/runtime.ts:1845-1856,1906`, lookup declarations at `:1523,1541`, indexes at `:282-288`, profile helpers at `:2178,2199`, frame replay at `:1281`, replay framing at `:2625-2627` and test declarations at `packages/weave/test/p8.test.ts:1096,1903`. §17 W3 remains the active O2 refinement. No historical disposition rewrite. |
+| N2 | note / auto-fix | §16 O1's property pin `:1863` is inside the full append call at `packages/weave/src/runtime.ts:1859-1866`; lookup follows at `:1875-1876`. Preserve O1's text. FU3 requires the complete call range for this append claim, rejects the property-only citation and distinguishes it from a declaration or call-start pin. |
+| N3 | note / auto-fix | Restore closed §24 from `442b62a`; its N1 history-only rule is superseded by current FU5 and this section, without editing the old row. The plan16 formatter paragraph belongs in §25. The retained verification recipe checks §24 against that original revision as well as §7/§9/§14–§23 against `593a125`. |
+| N4 | note / auto-fix | FU5 defines review sections by the unfenced heading predicate `^## \d+\. Review disposition — ` and bounds its declaration exception by exact anchors within the FU5 bullet. Fixtures cover §13's declaration, each §22–§26 disposition and a synthetic future disposition; active uses and a copied exception are rejected. Only the qualified obsolete T9 label is banned; a bare decision-R2 subclause is valid. The retained recipe exercises this document rule; C1 still owes repository lint. |
+| N5 | note / auto-fix | Stop/v2 prefix reproduction requires C2d replay. Before either suffix fork, compare through q-1 and require only the unfinished-X terminal failure (`packages/weave/src/runtime.ts:2794-2797`), never an earlier stop/version divergence or `ok:true`. Set recovery in variantGoal before goal.opened, the only variant input changed (0 versus 1; seed at `packages/weave/src/state.ts:161`). Zero suffix retains final-length failure at q (`runtime.ts:2791-2792`); positive suffix retains feedReviewResult/checkPrefix failure at q (`:2780-2787,2840-2841`) after one spend (`state.ts:417-419`) and FakeHost's exact unresolved reason (`packages/weave/test/fake-host.ts:144-148`). No generic replay feed or grant reuse. |
+| N6 | note / auto-fix | §25's temporary 14/23→23/23, 173-pin and token-spec runs were not retained or content-addressed. Treat those figures as unreproducible historical document evidence, not repeatable checks. The complete current recipe and assertions are committed below in PLAN.md; no temporary verification script is an admission artifact. §6.6 retains the future behavioral recipe, not a claim of runtime green. |
+| FU-fmt | follow-up / record only | Formatter/full verify remain required with working tooling (`package.json:16,36`). Record current commands below; older green runs cannot substitute. Restoring historical §24 preserves its separator blank line; formatting follow-up must respect closed-section preservation. |
+| FU3/FU5 | follow-up / record only | C1 owes declaration/call-range pins, T9 table/formation/label lint and all token-placement fixtures. C2d owes retained bound-invariance, prefix, failure/cancellation/concurrency and durable crash/replay witnesses. A repeated finding becomes a child lint or behavioral test. This revision changes no source, tests or schemas. |
+
+Failure, cancellation and concurrency remain T8/T9/T11/T15/T16 obligations.
+Crash between every durable stop/request/result/response/queue/start write;
+acknowledged journals must survive crash and double reload without duplicating
+or losing state. Replay compares the exact ordered prefix and executes no
+effects. Unsupported generic recovery still fails at its specified first seq.
+Single-use grants and bound responses are never reused. §7 keeps guardrails
+and shuffles out of benchmark routes. No hosted inference or benchmark run is
+needed for these document corrections; no parked parent or acceptance boundary
+changes.
+
+Plan17 verification is the following committed recipe. From the repository root,
+run the command once with `593a125` appended to demonstrate document red against
+the reviewed plan, then without an argument for document green. This checks
+document requirements and source evidence only; it is not C1's repository lint
+or C2d's future behavioral tests. The source pins deliberately bind to this
+HEAD; a child must re-resolve them after source changes.
+
+```sh
+python3 -c 'from pathlib import Path; exec(Path("PLAN.md").read_text().split("<!-- plan17-check -->", 1)[1].split("```python\n", 1)[1].split("\n```", 1)[0])'
+git rev-parse 593a125 593a125^ 593a125^^
+git diff --name-only 0281c5e 593a125
+git diff --check 593a125 -- PLAN.md
+npm run fmt:check
+npm run verify
+```
+
+<!-- plan17-check -->
+```python
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+def git(*args):
+    return subprocess.check_output(["git", *args], text=True)
+
+def section(text, number):
+    body = text[text.index(f"## {number}. "):]
+    return body.split("\n## ", 1)[0]
+
+base = git("show", "593a125:PLAN.md")
+doc = git("show", f"{sys.argv[1]}:PLAN.md") if len(sys.argv) > 1 else Path("PLAN.md").read_text()
+active = doc.split("## 14. ", 1)[0]
+precursor = active.split("**C2d first precursor check", 1)[1].split("**Scoped cancellation", 1)[0]
+restart = active.split("**Running-review restart variant", 1)[1].split("**Generic recovery", 1)[0]
+requirements = {
+    "W1 fixed premeasurement term": "Premeasurement uses markerTerm" in precursor,
+    "W1 fixed coverage": "same immutable profile, accounting family, coverage snapshot" in precursor,
+    "W1 recorded equality": "A.full_tokens === premeasured.A.full_tokens" in precursor and "B.full_tokens === premeasured.B.full_tokens" in precursor,
+    "W1 term-only mutation": "changes only max_context_tokens" in precursor,
+    "W1 final-term marker bytes": "marker byte counts under markerTerm in the final run" in precursor,
+    "W1 FU5 retained evidence": "term-invariance assertions" in active.split("- **FU5", 1)[1],
+    "N2 FU3 call range": "property-only :1863" in active.split("- **FU3", 1)[1],
+    "N3 restored section": section(doc, 24) == section(git("show", "442b62a:PLAN.md"), 24),
+    "N3 moved formatter note": "Plan16 formatter follow-up" not in section(doc, 24) and "Plan16 formatter follow-up" in section(doc, 25),
+    "N4 exact heading predicate": r"^## \d+\. Review disposition — " in active,
+    "N4 all fixture placements": "§22/§23/§24/§25/§26" in active and "synthetic future disposition" in active,
+    "N4 decision-R2 exception": "bare R2(b)" in active,
+    "N5 C2d prefix": "under C2d replay, reproduces through q-1" in restart,
+    "N5 prefix prerequisite": "prefix comparison succeeds" in restart and "2794-2797" in restart,
+    "N5 recovery-only change": "recovery is the only variant parameter" in restart,
+}
+for number in [7, 9, *range(14, 24)]:
+    requirements[f"closed section {number}"] = section(doc, number) == section(base, number)
+
+def rows(text):
+    table = text.split("### 2.7 ", 1)[1].split("## 3. ", 1)[0]
+    return [line for line in table.splitlines() if line.startswith("| ")][2:]
+
+old_rows, new_rows = rows(base), rows(doc)
+requirements["trace rows intact and extended"] = new_rows[:17] == old_rows and len(new_rows) == 19
+trace = doc.split("### 2.7 ", 1)[1].split("## 3. ", 1)[0]
+trace_lines = trace.splitlines()
+indices = [i for i, line in enumerate(trace_lines) if line.startswith("| ")]
+requirements["contiguous trace table"] = indices == list(range(indices[0], indices[-1] + 1))
+t9 = [(i, re.match(r"^\| (T9-\w+)\s+\|", line)) for i, line in enumerate(section(doc, 8).splitlines())]
+t9 = [(i, match[1]) for i, match in t9 if match]
+requirements["contiguous nine-row T9 table"] = [name for _, name in t9] == ["T9-L1", "T9-L2", "T9-R0", "T9-R1", "T9-R2", "T9-R1x", "T9-Q0", "T9-G1", "T9-C1"] and t9[-1][0] - t9[0][0] == 8
+
+# This is a document-rule exercise; the full C1 T9 lint remains child work.
+fu5_title = "- **FU5 (repeated finding becomes a check: replay write-site/continuation policy).**"
+
+def violations(text):
+    history, fenced, declaration = False, False, False
+    errors = []
+    start, end = "  <!-- fu5-label-spec:start -->", "  <!-- fu5-label-spec:end -->"
+    fu5, section13 = False, False
+    for line in text.splitlines():
+        if line.startswith("- **"):
+            fu5 = section13 and line == fu5_title and not fenced
+            declaration = False
+        if line.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+        if not fenced and line.startswith("## "):
+            history = bool(re.match(r"^## \d+\. Review disposition — ", line))
+            section13 = line.startswith("## 13. ")
+            fu5 = False
+            declaration = False
+        if line == start and fu5 and not fenced:
+            declaration = True
+        if re.search(r"(?<![\w-])T9-R2\(b\)(?![\w-])", line) and not (history or declaration):
+            errors.append(line)
+        if line == end:
+            declaration = False
+    return errors
+
+requirements["current token placements"] = not violations(doc)
+for anchor in ["start", "end"]:
+    requirements[f"unique FU5 {anchor} anchor"] = doc.splitlines().count(f"  <!-- fu5-label-spec:{anchor} -->") == 1
+# Isolate every actual occurrence, including bare-token history/declaration text.
+heading = ""
+for i, line in enumerate(doc.splitlines(), 1):
+    if re.match(r"^## \d+\. ", line):
+        heading = line
+    if re.search(r"T9-R2\(b\)|(?<![\w-])R2\(b\)", line):
+        fixture = heading + "\n" + line
+        if heading.startswith("## 13. "):
+            fixture = "## 13. Follow-ups\n" + fu5_title + "\n  <!-- fu5-label-spec:start -->\n" + line + "\n  <!-- fu5-label-spec:end -->\n"
+        requirements[f"actual token placement at {i}"] = not violations(fixture)
+for number in [22, 23, 24, 25, 26, 99]:
+    fixture = f"## {number}. Review disposition — fixture\nT9-R2(b) / R2(b)\n"
+    requirements[f"history fixture {number}"] = not violations(fixture)
+spec = fu5_title + "\n  <!-- fu5-label-spec:start -->\n  T9-R2(b) / R2(b)\n  <!-- fu5-label-spec:end -->\n"
+requirements["FU5 declaration fixture"] = not violations("## 13. Follow-ups\n" + spec)
+requirements["FU5 active text fixture"] = bool(violations("## 13. Follow-ups\n" + spec + "  T9-R2(b)\n"))
+requirements["copied exception fixture"] = bool(violations("## 3. Decisions\n" + spec.split("\n", 1)[1]))
+requirements["copied FU5 bullet fixture"] = bool(violations("## 3. Decisions\n" + spec))
+requirements["wrong bullet fixture"] = bool(violations("## 13. Follow-ups\n" + spec.replace(fu5_title, "- **FU4 (fixture)**")))
+requirements["leaving history fixture"] = bool(violations("## 99. Review disposition — fixture\n" + spec + "## Active requirements\n" + spec))
+requirements["decision R2 fixture"] = not violations("## 3. Decisions\nDecision R2(b)\n")
+requirements["active T9 fixture"] = bool(violations("## 8. Tests\nT9-R2(b)\n"))
+requirements["fenced fake history fixture"] = bool(violations("## 8. Tests\n```md\n## 99. Review disposition — fake\nT9-R2(b)\n```\n"))
+requirements["descriptive fixture"] = not violations("## 8. Tests\ndelayed-queued\n")
+requirements["label boundary fixture"] = not violations("## 8. Tests\nT9-R2(b)-other\n")
+
+pins = {
+    "packages/weave/src/runtime.ts": {
+        120: "readonly framingTerms?", 1248: "this.options.framingTerms",
+        1258: "max_context_tokens: framing?.max_context_tokens", 1274: "terms,",
+        1845: "private reconcileStep()", 1846: "this.abandonUnrecordedInferences()",
+        1854: "this.current.recovery.limit === 0", 1859: "const attempted = this.append({",
+        1863: "payload_type: 'recovery.attempted'", 1866: "});",
+        1875: "this.grantForLookup(action)", 1876: "this.options.host.lookup(invocation_id, grant)",
+        1894: "reason: looked.reason", 1906: "private abandonUnrecordedInferences()",
+        1523: "private grantForLookup(", 1526: "return action.grant;", 1541: "private lookupAuthorized(",
+        282: "observation.payload_type === 'inference.requested'", 288: "}",
+        2178: "private recordedFrameProfile()", 2199: "private nextReplayRequest(",
+        1281: "if (this.replayMode)", 2625: "started.operation === 'goal.frame'", 2626: "this.frameGoal(started)",
+        2780: "const feedReviewResult", 2782: "!feedReviewResult", 2786: "runtime.feed(input)",
+        2787: "checkPrefix(liveLog(runtime)", 2791: "replayed.length !== ordered.length",
+        2792: "recorded log continues beyond what replay reproduced", 2794: "const running =",
+        2796: "missing recorded action.result", 2840: "stableStringify(actual) !== stableStringify(expected)",
+        2841: "replay diverged from the record at seq",
+    },
+    "packages/weave/src/state.ts": {161: "limit: goal.budget.recovery ?? 0", 417: "case 'recovery.attempted'", 418: "state.recovery.spent += 1"},
+    "packages/weave/test/fake-host.ts": {144: "lookup(invocation_id:", 148: "no durable record for ${invocation_id}"},
+    "packages/weave/test/p8.test.ts": {1096: "test('a torn final line", 1903: "test('a part-written file journal append"},
+    "package.json": {16: '"verify": "npm run fmt:check &&', 36: '"fmt:check": "vp fmt --check"'},
+}
+for path, assertions in pins.items():
+    source = git("show", f"593a125:{path}")
+    requirements[f"unchanged {path}"] = Path(path).read_text() == source
+    for line, literal in assertions.items():
+        requirements[f"{path}:{line}"] = literal in source.splitlines()[line - 1]
+requirements["PLAN.md-only diff"] = set(git("diff", "--name-only", "593a125").splitlines()) <= {"PLAN.md"}
+failed = [name for name, passed in requirements.items() if not passed]
+print(f"{len(requirements) - len(failed)}/{len(requirements)} document/source checks pass")
+for name in failed:
+    print("FAIL:", name)
+sys.exit(bool(failed))
+```
+
+Plan17 observed results (Node v24.22.1 / npm 11.21.1): the retained recipe
+against `593a125` exits 1 with 87/106 checks passing and 19 failed requirements;
+against the revised plan it exits 0 with 114/114 passing. The totals include
+one fixture per actual token placement, so they differ between documents.
+Closed §7/§9/§14–§23, restored §24, all 17 earlier trace rows and the contiguous
+nine-row T9 table pass preservation checks. The extended trace has 19 rows.
+All retained source-line assertions pass against unchanged HEAD files.
+`git diff --check 593a125 -- PLAN.md` passes; only PLAN.md changes.
+
+`npm run fmt:check` exits 127 with `sh: 1: vp: not found`.
+`npm run verify` exits 127 at that same formatter gate; later suite stages are
+not reached. Neither formatting nor full-suite green is claimed. FU-fmt stays
+open for the first implementation child with working tooling; FU3/FU5 remain
+required lint/behavioral follow-ups. No permissions, validation, held-out cases
+or closed decisions are weakened to bypass the missing tool.
