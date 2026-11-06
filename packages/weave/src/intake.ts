@@ -176,6 +176,8 @@ function planIntake(ask: IntakeSiteInput, recorded: RecordedIntake): IntakePlan 
   const observations = recorded.extracts.map((extract) =>
     observeExtract(callFor(ask, schema, extract.attempt), extract),
   );
+  if (observations.length === 2 && observations[0]!.verdict !== 're_extract')
+    throw new Error('a recorded stop cannot be followed by a second extraction');
   const final = observations[observations.length - 1]!;
   if (final.reason === 'cancelled')
     return { observations, final, hints: null, askOperator: false, stop: 'paused', needsExtract: false };

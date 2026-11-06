@@ -478,6 +478,66 @@ test('replay rebuilds the same record from recorded outcomes without a port', as
   );
 });
 
+test('replay rejects a second extract after a recorded stop', () => {
+  const generationFor = (request_id: string, body: unknown): GenerationOutcome =>
+    acceptedGeneration({ request_id, site: 'intake.extract' } as GenerationRequest, body);
+  const first = generationFor('intake-1:x1', payload('T2', 'T2'));
+  const second = generationFor('intake-1:x2', payload('T2', 'T2'));
+  const recordedFirst = {
+    attempt: 1,
+    state_revision: revision.state_revision,
+    state_updated_at: revision.state_updated_at,
+    outcome: first,
+  } as RecordedExtract;
+  const recordedSecond = {
+    attempt: 2,
+    state_revision: revision.state_revision,
+    state_updated_at: revision.state_updated_at,
+    outcome: second,
+  } as RecordedExtract;
+  const site = recordedSite(
+    acceptedChoice(
+      { request_id: 'intake-1', site: 'intake.classify' } as EvaluationRequest<'choice'>,
+    ),
+  );
+
+  assert.throws(
+    () =>
+      transitionIntake(
+        ask,
+        { extracts: [{ ...recordedFirst, cancelled: true }, recordedSecond], site },
+        revision,
+      ),
+    /recorded stop cannot be followed by a second extraction/,
+  );
+  assert.throws(
+    () =>
+      transitionIntake(
+        ask,
+        {
+          extracts: [{ ...recordedFirst, state_revision: 2, state_updated_at: 11 }, recordedSecond],
+          site,
+        },
+        revision,
+      ),
+    /recorded stop cannot be followed by a second extraction/,
+  );
+
+  const retryFirst = {
+    ...recordedFirst,
+    outcome: generationFor('intake-1:x1', payload('T2', 'not in the message')),
+  };
+  const replayed = transitionIntake(
+    ask,
+    { extracts: [retryFirst, recordedSecond], site },
+    revision,
+  );
+  assert.equal(replayed.decided_by, 'site');
+  assert.equal(replayed.extract.length, 2);
+  assert.equal(replayed.extract[0]!.verdict, 're_extract');
+  assert.equal(replayed.extract[1]!.verdict, 'use_hints');
+});
+
 test('records carry no message, summary, provider text or credential id and no grant', async () => {
   const fake = port({
     generate: async (request) =>
