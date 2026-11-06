@@ -1,11 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import type { InferenceGateway } from '@weave/gateway';
 import {
   evaluateSite,
   modelOrigin,
   originReason,
   structuralOrigin,
   transitionSite,
+  type RouteSiteInput,
   type SiteInput,
   type SiteState,
 } from '../src/sites/index.js';
@@ -36,12 +38,12 @@ const base = {
   needs_dispatch: false,
 };
 
-function extractFor(site: string, text = 'read the archive') {
+function extractFor(site: string, text = 'read the archive', requestId = 'r1:x1') {
   return gateExtract(
     { id: `${site}@1`, slots: { intent: { kind: 'span', required: true, instructions: 'intent' } } },
     text,
     { intent: { value: text } },
-    { site, request_id: `${site}:x1`, state_revision: 1 },
+    { site, request_id: requestId, state_revision: 1 },
   );
 }
 
@@ -109,7 +111,7 @@ test('a free-text site needs a matching extract record, not a bare or malformed 
         calls += 1;
         return answer(site, choice).outcome;
       },
-    };
+    } as unknown as Pick<InferenceGateway, 'evaluate'>;
     const live = await evaluateSite(site, input, port, () => ({ ...current, observed_at: 10 }));
     assert.equal(calls, 1, site);
     assert.equal(live.observation.accepted, true, `${site}: ${live.observation.reason}`);
@@ -123,15 +125,93 @@ test('a malformed extract cannot reach the provider and fails closed', async () 
       calls += 1;
       return answer('input.route', 'conversation').outcome;
     },
-  };
+  } as unknown as Pick<InferenceGateway, 'evaluate'>;
   const input = {
     ...base,
     origin: { kind: 'model', extract: { schema: 'extract@1', site: 'input.route' } },
-  } as unknown as SiteInput;
+  } as unknown as RouteSiteInput;
   const record = await evaluateSite('input.route', input, port, () => ({ ...current, observed_at: 10 }));
   assert.equal(calls, 0);
   assert.equal(record.status, 'needs_human');
   assert.equal(record.observation.reason, 'invalid_extract');
+});
+
+test('an extract from another request cannot authorize this input', async () => {
+  const site = 'input.route';
+  const foreign = extractFor(site);
+  const input = {
+    ...base,
+    request_id: 'r2',
+    origin: { kind: 'model', extract: foreign },
+  } as unknown as RouteSiteInput;
+  assert.equal(originReason(site, input), 'invalid_extract');
+  let calls = 0;
+  const record = await evaluateSite(
+    site,
+    input,
+    {
+      async evaluate() {
+        calls += 1;
+        return answer(site, 'steer').outcome;
+      },
+    } as unknown as Pick<InferenceGateway, 'evaluate'>,
+    () => ({ ...current, observed_at: 10 }),
+  );
+  assert.equal(calls, 0);
+  assert.equal(record.status, 'needs_human');
+  assert.equal(record.observation.reason, 'invalid_extract');
+  assert.equal(record.observation.answer, null);
+
+  const wrongAttempt = {
+    ...base,
+    request_id: site,
+    origin: { kind: 'model', extract: { ...foreign, request_id: `${site}:x2` } },
+  } as unknown as RouteSiteInput;
+  assert.equal(originReason(site, wrongAttempt), 'invalid_extract');
+
+  const own = {
+    ...base,
+    request_id: site,
+    origin: modelOrigin(extractFor(site, 'read the archive', `${site}:x1`)),
+  } as unknown as RouteSiteInput;
+  assert.equal(originReason(site, own), null);
+
+  const owner = {
+    ...base,
+    request_id: 'owner',
+    origin: modelOrigin(extractFor(site, 'read the archive', 'owner:x1')),
+  } as unknown as RouteSiteInput;
+  const borrower = { ...owner, request_id: 'borrower' } as unknown as RouteSiteInput;
+  let concurrentCalls = 0;
+  const read = () => ({ ...current, observed_at: 10 });
+  const [ownerRecord, borrowerRecord] = await Promise.all([
+    evaluateSite(
+      site,
+      owner,
+      {
+        async evaluate(request: { readonly request_id: string; readonly site: string }) {
+          concurrentCalls += 1;
+          await new Promise((resolve) => setTimeout(resolve, 1));
+          return answer(request.site, 'steer', request.request_id).outcome;
+        },
+      } as unknown as Pick<InferenceGateway, 'evaluate'>,
+      read,
+    ),
+    evaluateSite(
+      site,
+      borrower,
+      {
+        async evaluate() {
+          concurrentCalls += 1;
+          return answer(site, 'steer', 'borrower').outcome;
+        },
+      } as unknown as Pick<InferenceGateway, 'evaluate'>,
+      read,
+    ),
+  ]);
+  assert.equal(concurrentCalls, 1);
+  assert.equal(ownerRecord.observation.accepted, true);
+  assert.equal(borrowerRecord.observation.reason, 'invalid_extract');
 });
 
 test('a non-final, cancelled or stale extract stops before the provider', async () => {
@@ -143,7 +223,7 @@ test('a non-final, cancelled or stale extract stops before the provider', async 
     [{ ...valid, verdict: 'original_only', reason: 'stale_answer' }, 'stale_answer', 'needs_human'],
   ];
   for (const [extract, reason, status] of cases) {
-    const input = { ...base, origin: { kind: 'model', extract } } as SiteInput;
+    const input = { ...base, origin: { kind: 'model', extract } } as unknown as RouteSiteInput;
     assert.equal(originReason(site, input), reason);
     let calls = 0;
     const record = await evaluateSite(
@@ -154,7 +234,7 @@ test('a non-final, cancelled or stale extract stops before the provider', async 
           calls += 1;
           return answer(site, 'steer').outcome;
         },
-      },
+      } as unknown as Pick<InferenceGateway, 'evaluate'>,
       () => ({ ...current, observed_at: 10 }),
     );
     assert.equal(calls, 0, reason);
@@ -186,7 +266,7 @@ test('a free-text site accepts only its expected schema and slot structure', asy
           calls += 1;
           return answer(site, 'strong').outcome;
         },
-      },
+      } as unknown as Pick<InferenceGateway, 'evaluate'>,
       () => ({ ...current, observed_at: 10 }),
     );
     assert.equal(calls, 0, name);
@@ -204,7 +284,7 @@ test('cancellation pauses and never reaches the provider even with no origin', a
       calls += 1;
       return answer('loop.route', 'strong').outcome;
     },
-  };
+  } as unknown as Pick<InferenceGateway, 'evaluate'>;
   const record = await evaluateSite(
     'loop.route',
     base,
@@ -218,8 +298,16 @@ test('cancellation pauses and never reaches the provider even with no origin', a
 });
 
 test('concurrent site calls keep their own origin and fail closed independently', async () => {
-  const triage = { ...base, request_id: 'triage', origin: modelOrigin(extractFor('loop.triage')) };
-  const route = { ...base, request_id: 'route', origin: modelOrigin(extractFor('loop.route')) };
+  const triage = {
+    ...base,
+    request_id: 'triage',
+    origin: modelOrigin(extractFor('loop.triage', 'read the archive', 'triage:x1')),
+  };
+  const route = {
+    ...base,
+    request_id: 'route',
+    origin: modelOrigin(extractFor('loop.route', 'read the archive', 'route:x1')),
+  };
   const seen: string[] = [];
   const port = {
     async evaluate(request: { readonly request_id: string; readonly site: string }) {
@@ -228,7 +316,7 @@ test('concurrent site calls keep their own origin and fail closed independently'
       const choice = request.site === 'loop.triage' ? 'implement' : 'strong';
       return answer(request.site, choice, request.request_id).outcome;
     },
-  };
+  } as unknown as Pick<InferenceGateway, 'evaluate'>;
   const read = () => ({ ...current, observed_at: 10 });
   const [triageRecord, missingRecord, routeRecord] = await Promise.all([
     evaluateSite('loop.triage', triage, port, read),

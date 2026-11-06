@@ -220,13 +220,19 @@ const EXPECTED_EXTRACT: Readonly<Record<string, ExpectedExtract>> = {
   'loop.triage': { schema: 'loop.triage@1', slots: [{ slot: 'intent', kind: 'span' }] },
   'loop.route': { schema: 'loop.route@1', slots: [{ slot: 'intent', kind: 'span' }] },
 };
+/** An extract is usable only by the request that produced it, or its `:x<attempt>` suffix. */
+function extractBelongsToRequest(requestId: string, value: Record<string, unknown>): boolean {
+  const recorded = value['request_id'];
+  if (recorded === null || typeof recorded !== 'string' || correlation(recorded) === null) return false;
+  return recorded === requestId || recorded === `${requestId}:x${value['attempt']}`;
+}
 function validExtractRecord(site: string, input: SiteInput, value: unknown): value is ExtractObservation {
   if (!plainObject(value)) return false;
   if (value['schema'] !== 'extract@1' || value['site'] !== site) return false;
   const expected = EXPECTED_EXTRACT[site];
   if (expected === undefined || value['extract_schema'] !== expected.schema) return false;
-  if (value['request_id'] !== null && correlation(value['request_id']) === null) return false;
   if (value['attempt'] !== 1 && value['attempt'] !== 2) return false;
+  if (!extractBelongsToRequest(input.request_id, value)) return false;
   if (value['state_revision'] !== input.state_revision) return false;
   if (!EXTRACT_VERDICTS.includes(value['verdict'] as (typeof EXTRACT_VERDICTS)[number])) return false;
   if (!EXTRACT_REASONS.includes(value['reason'] as (typeof EXTRACT_REASONS)[number])) return false;

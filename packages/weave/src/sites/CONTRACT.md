@@ -152,14 +152,19 @@ pass `correlation()` and credential-shaped ids are omitted.
 
 Every `SiteInput` declares an `origin`. Free-text sites (`intake.classify`,
 `input.route`, `loop.triage`, `loop.route`) require `{ kind: 'model', extract }`,
-where `extract` is an `extract@1` observation for that exact site and input
-revision. Structural sites require `{ kind: 'structural', source }`:
+where `extract` is an `extract@1` observation for that exact site, input
+revision and request. The extract's `request_id` must be the input's
+`request_id`, or that id with intake's `:x<attempt>` suffix for its own
+`attempt`; a record that belongs to another request is never reused, even at
+the same site and revision. Structural sites require
+`{ kind: 'structural', source }`:
 `progress.delta@1` for `loop.continue`, `audit.findings` for `audit.dispose`,
 and `criteria` for `eval.output`. `modelOrigin`, `structuralOrigin` and
 `originReason` are the small constructors and validator.
 
 A missing model record is `extract_missing`; a non-model, wrong-site,
-malformed or revision-mismatched record is `invalid_extract`; a structural site
+foreign-request, malformed or revision-mismatched record is `invalid_extract`;
+a structural site
 with the wrong source is `structural_origin_missing`. Each fails before the
 provider call. The observation records `answer: null`, `confidence: null`,
 `top_p: null`, `accepted: false`, `fallback_used: true`, and status
