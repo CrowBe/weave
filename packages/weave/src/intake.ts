@@ -8,6 +8,7 @@ import { stableStringify } from './stable-json.js';
 import {
   correlation,
   evaluateSite,
+  modelOrigin,
   transitionSite,
   type IntakeHints,
   type IntakeSiteInput,
@@ -224,7 +225,12 @@ export function transitionIntake(ask: IntakeSiteInput, recorded: RecordedIntake,
     return decision(ask, 'extract', 'ask_user', 'needs_human', 'ambiguous_reference', plan.observations, null);
   if (recorded.site === null) throw new Error('intake site answer is missing');
   const siteInput: IntakeSiteInput = { ...ask, state: siteState(ask.state, plan.hints) };
-  const site = transitionSite('intake.classify', siteInput, recorded.site, current);
+  const site = transitionSite(
+    'intake.classify',
+    { ...siteInput, origin: modelOrigin(plan.final) },
+    recorded.site,
+    current,
+  );
   return decision(ask, 'site', site.choice, site.status, site.observation.reason, plan.observations, site.observation);
 }
 
@@ -252,7 +258,11 @@ export async function decideIntake(
   if (plan.needsExtract || plan.stop !== null || plan.askOperator)
     return transitionIntake(captured, { extracts, site: null }, lastState(extracts));
 
-  const siteInput: IntakeSiteInput = { ...captured, state: siteState(captured.state, plan.hints) };
+  const siteInput: IntakeSiteInput = {
+    ...captured,
+    state: siteState(captured.state, plan.hints),
+    origin: modelOrigin(plan.final),
+  };
   let siteOutcome: EvaluationOutcome<'choice'> | null = null;
   let siteNow: (SiteState & { readonly observed_at: number }) | null = null;
   const capturingPort: Pick<InferenceGateway, 'evaluate'> = {
@@ -265,7 +275,13 @@ export async function decideIntake(
       return outcome;
     },
   };
-  await evaluateSite('intake.classify', siteInput, capturingPort, () => (siteNow = now()), signal);
+  await evaluateSite(
+    'intake.classify',
+    { ...siteInput, origin: modelOrigin(plan.final) },
+    capturingPort,
+    () => (siteNow = now()),
+    signal,
+  );
   const observed = siteNow ?? { ...lastState(extracts), observed_at: lastState(extracts).state_updated_at };
   const recordedSite: RecordedSiteAnswer = {
     state_revision: siteInput.state_revision,

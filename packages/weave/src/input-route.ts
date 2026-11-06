@@ -8,6 +8,7 @@ import type { InferenceGateway, InferenceTerms } from '@weave/gateway';
 import {
   SITE_POLICY,
   evaluateSite,
+  modelOrigin,
   type RouteOutcome,
   type RouteState,
   type SiteChoice,
@@ -16,6 +17,7 @@ import {
   type SiteState,
   type SiteTransition,
 } from './sites/index.js';
+import type { ExtractObservation } from './sites/extract.js';
 import type { Seq } from './types.js';
 import { isLive } from './operating-process.js';
 import {
@@ -70,6 +72,8 @@ export interface RouteAsk extends SiteState {
   readonly terms: InferenceTerms;
   /** Already filtered for disclosure. Never copied into a record. */
   readonly disclosed: { readonly input: string; readonly summary: string };
+  /** The gated extract@1 record for the disclosed input; absent fails closed at the site. */
+  readonly extract?: ExtractObservation;
 }
 export interface RouteContext {
   /** The routing record's own observation; it supports every change the outcome makes. */
@@ -169,6 +173,7 @@ export async function decideRoute(
       terms: ask.terms,
       state,
       needs_dispatch: false,
+      ...(ask.extract === undefined ? {} : { origin: modelOrigin(ask.extract) }),
     },
     port,
     now,

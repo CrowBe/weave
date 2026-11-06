@@ -15,7 +15,15 @@ import {
   type RecordedExtract,
   type RecordedIntake,
 } from '../src/intake.js';
-import { evaluateSite, type IntakeSiteInput, type RecordedSiteAnswer, type SiteState } from '../src/sites/index.js';
+import {
+  evaluateSite,
+  modelOrigin,
+  type IntakeSiteInput,
+  type RecordedSiteAnswer,
+  type SiteState,
+} from '../src/sites/index.js';
+import { gateExtract } from '../src/sites/extract.js';
+import { assertRecordCopiesNoText } from './record-canary.js';
 
 const MESSAGE_CANARY = 'CANARY-7f3a';
 const PROVIDER_CANARY = 'PROVIDER-CANARY-9c2d';
@@ -41,6 +49,17 @@ const ask: IntakeSiteInput = {
   needs_dispatch: false,
 };
 const now = () => ({ ...revision, observed_at: 10 });
+function intakeOrigin(message: string = MESSAGE) {
+  return modelOrigin(
+    gateExtract(
+      intakeExtractSchema(ask.state),
+      message,
+      { thread_ref: { value: 'T2', cue: 'T2' }, request: { value: null } },
+      { site: 'intake.classify', request_id: 'intake-1', state_revision: 1 },
+    ),
+  );
+}
+const directAsk: IntakeSiteInput = { ...ask, origin: intakeOrigin() };
 
 type Generate = (request: GenerationRequest, signal?: AbortSignal) => Promise<GenerationOutcome>;
 type Evaluate = (request: EvaluationRequest<'choice'>, signal?: AbortSignal) => Promise<EvaluationOutcome<'choice'>>;
@@ -157,7 +176,7 @@ test('the site always receives the original message; hints appear only on use_hi
   assert.deepEqual(Object.keys(fallbackState), ['message', 'running_threads']);
 
   const direct = port({ evaluate: async (request) => acceptedChoice(request) });
-  await evaluateSite('intake.classify', ask, direct.fake, now);
+  await evaluateSite('intake.classify', directAsk, direct.fake, now);
   assert.deepEqual(fallbackState, direct.evaluateCalls[0]!.state);
 });
 
@@ -524,12 +543,14 @@ test('records carry no message, summary, provider text or credential id and no g
       acceptedChoice(request, 'queue', { provider_response_id: 'ghp_secret', request_id: request.request_id }),
   });
   const record = await decideIntake(ask, fake.fake, now);
-  const text = JSON.stringify(record);
-  assert.ok(!text.includes(MESSAGE_CANARY));
-  assert.ok(!text.includes('Bakery invoice reconciliation'));
-  assert.ok(!text.includes(PROVIDER_CANARY));
-  assert.ok(!text.includes('sk-secret'));
-  assert.ok(!text.includes('ghp_secret'));
+  assertRecordCopiesNoText(record, [
+    MESSAGE_CANARY,
+    MESSAGE,
+    'Bakery invoice reconciliation',
+    PROVIDER_CANARY,
+    'sk-secret',
+    'ghp_secret',
+  ]);
   assert.equal(extractOf(record).provider_request_id, null);
   assert.equal(record.site?.provider_request_id, null);
   assert.deepEqual(Object.keys(record), [
@@ -561,7 +582,7 @@ test('records carry no message, summary, provider text or credential id and no g
 
 test('a direct site call still receives a state with no hints key', async () => {
   const fake = port({ evaluate: async (request) => acceptedChoice(request) });
-  await evaluateSite('intake.classify', ask, fake.fake, now);
+  await evaluateSite('intake.classify', directAsk, fake.fake, now);
   assert.deepEqual(Object.keys(fake.evaluateCalls[0]!.state as object), ['message', 'running_threads']);
   const schema = intakeExtractSchema(ask.state);
   assert.deepEqual(Object.keys(schema.slots), ['thread_ref', 'request']);

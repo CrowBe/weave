@@ -88,3 +88,20 @@ test('no-swallowed-failures is green when every script and step gates, including
   assert.deepEqual(findings, []);
   assert.equal(status, 0);
 });
+
+test('extract-before-site is red when a free-text or structural site lacks its origin', () => {
+  const { status, findings } = run('extract-before-site', 'red');
+  assert.equal(status, 1);
+  assert.deepEqual(findings, [
+    'packages/weave/src/sites.ts:2: input.route is free text and needs an extract@1 model origin',
+    'packages/weave/src/sites.ts:3: intake.classify is free text and needs an extract@1 model origin',
+    'packages/weave/src/sites.ts:4: loop.continue needs its recorded structural origin',
+  ]);
+});
+
+test('extract-before-site is green when every site call declares its origin', () => {
+  const { status, findings, stdout } = run('extract-before-site', 'green');
+  assert.deepEqual(findings, []);
+  assert.equal(status, 0);
+  assert.match(stdout, /site calls declare an origin/);
+});

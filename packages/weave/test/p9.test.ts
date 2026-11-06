@@ -29,7 +29,7 @@ import {
   type AuditReport,
 } from '../src/audit-loop.js';
 import { evaluateAuditDispose, transitionAuditDispose } from '../src/sites/audit-dispose.js';
-import { correlation } from '../src/sites/index.js';
+import { correlation, structuralOrigin } from '../src/sites/index.js';
 import { digest } from '../src/digest.js';
 import { createInferenceGateway, type EvaluationOutcome, type InferenceTerms, type RoutedUnit } from '@weave/gateway';
 const terms: InferenceTerms = {
@@ -392,7 +392,15 @@ test('audit cap, D8 no progress, repeated issue and budget stops persist', async
   }
 });
 test('D6 low confidence, stale and outage fall back to needs_human', () => {
-  const input = { ...revision, request_id: 'r1', findings: [{}], state: {}, terms, needs_dispatch: false };
+  const input = {
+    ...revision,
+    request_id: 'r1',
+    findings: [{}],
+    state: {},
+    terms,
+    needs_dispatch: false,
+    origin: structuralOrigin('audit.findings'),
+  };
   const outcome: EvaluationOutcome<'choice'> = {
     status: 'accepted',
     kind: 'choice',

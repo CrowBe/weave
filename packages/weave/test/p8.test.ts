@@ -16,7 +16,7 @@ import type {
 } from '@weave/gateway';
 import { DECLARED_TASK_POLICY } from '../src/task-acceptance.js';
 import { transitionOutputEval, OUTPUT_EVAL_POLICY, OUTPUT_EVAL_QUESTION } from '../src/sites/output-eval.js';
-import { correlation } from '../src/sites/index.js';
+import { correlation, structuralOrigin } from '../src/sites/index.js';
 import { digest } from '../src/digest.js';
 import {
   DEFAULT_IMPLEMENT_RETRIES,
@@ -131,6 +131,7 @@ const d5Input = {
   state: { note: 'CANARY_STATE' },
   needs_dispatch: false,
   terms,
+  origin: structuralOrigin('criteria'),
   criteria: [
     { criterion_id: 'c1', statement: 'CANARY_STATEMENT' },
     { criterion_id: 'c2', statement: 'second' },

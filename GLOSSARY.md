@@ -171,6 +171,24 @@ stays authoritative, and an extraction grants no authority, mints no grant and
 widens no disclosure. Extract schemas have no list kind, so an open target or
 path list cannot be extracted.
 
+### Typed-state origin
+
+The evidence that grounds a decision site's disclosed state. A **model** origin
+carries the `extract@1` record produced before a free-text site (`intake.classify`,
+`input.route`, `loop.triage`, `loop.route`). A **structural** origin names the
+recorded evidence for a site that does not read free text: `progress.delta@1`
+for `loop.continue`, audit findings for `audit.dispose`, and success criteria for
+`eval.output`. Every `SiteInput` declares its origin. A missing, malformed,
+wrong-site or revision-mismatched model record fails closed: the provider is not
+asked, the observation carries no answer, and the transition is `needs_human`.
+
+### Model-extract schema
+
+The extraction schema for one free-text judgment site. `input.route@1`,
+`loop.triage@1`, and `loop.route@1` each declare a required verbatim `intent`
+span. A model proposal is only a hint; the fidelity gate decides whether it can
+reach the site, and the original text remains authoritative.
+
 ### Fidelity gate
 
 The deterministic `gateExtract` check run before any extracted value reaches a

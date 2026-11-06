@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { budgetRoute, createInferenceGateway, type EvaluationAdapter, type EvaluationOutcome, type InferenceGateway, type RoutedUnit } from '@weave/gateway';
-import { correlation, evaluateSite, transitionSite, stopForNoProgress } from '../src/sites/index.js';
+import { correlation, evaluateSite, modelOrigin, structuralOrigin, transitionSite, stopForNoProgress } from '../src/sites/index.js';
+import { gateExtract } from '../src/sites/extract.js';
 
 type Site = 'loop.triage' | 'loop.route' | 'loop.continue' | 'intake.classify';
 const current = { state_revision: 1, state_updated_at: 10 };
@@ -11,6 +12,17 @@ const input = {
     deadline: 100, cost_ceiling: 10, max_attempts: 1 },
   needs_dispatch: false,
 };
+function withOrigin<T extends { readonly request_id: string; readonly state_revision: number }>(site: Site, value: T) {
+  const origin = site === 'loop.continue'
+    ? structuralOrigin('progress.delta@1')
+    : modelOrigin(gateExtract(
+      { id: `${site}@1`, slots: {} },
+      '',
+      {},
+      { site, request_id: value.request_id, state_revision: value.state_revision },
+    ));
+  return { ...value, origin };
+}
 function answer(site: Site, choice: string, confidence: number | undefined, probabilities?: Record<string, number>) {
   const outcome: EvaluationOutcome<'choice'> = {
     status: 'accepted', kind: 'choice', request_id: 'r1', site,
@@ -28,12 +40,12 @@ const cases = [
 ] as const;
 for (const [site, choice, threshold, fallback] of cases) {
   test(`${site} accepts threshold inclusively and rejects below or missing confidence`, () => {
-    const accepted = transitionSite(site, input, answer(site, choice, threshold, { [choice]: 1 }), current);
+    const accepted = transitionSite(site, withOrigin(site, input), answer(site, choice, threshold, { [choice]: 1 }), current);
     assert.equal(accepted.choice, choice);
     assert.equal(accepted.observation.accepted, true);
     assert.equal(accepted.observation.provider_request_id, 'provider-1');
     for (const confidence of [threshold - .001, undefined]) {
-      const result = transitionSite(site, input, answer(site, choice, confidence, { [choice]: 1 }), current);
+      const result = transitionSite(site, withOrigin(site, input), answer(site, choice, confidence, { [choice]: 1 }), current);
       assert.equal(result.choice, fallback);
       assert.equal(result.observation.fallback_used, true);
       assert.equal(result.observation.accepted, false);
@@ -49,7 +61,7 @@ for (const [site, choice, threshold, fallback] of cases) {
       { ...recorded, observed_at: 9 },
       answer(site, 'secret-invalid-option', 1, { 'secret-invalid-option': 1 }),
     ]) {
-      const result = transitionSite(site, input, stale, current);
+      const result = transitionSite(site, withOrigin(site, input), stale, current);
       assert.equal(result.choice, fallback);
       assert.equal(result.observation.accepted, false);
       assert.ok(!JSON.stringify(result.observation).includes('secret-invalid-option'));
@@ -57,8 +69,8 @@ for (const [site, choice, threshold, fallback] of cases) {
   });
   test(`${site} replay preserves the transition and fixed observation field order`, () => {
     const recorded = answer(site, choice, 1, { [choice]: 1 });
-    const first = transitionSite(site, input, recorded, current);
-    const second = transitionSite(site, input, JSON.parse(JSON.stringify(recorded)), current);
+    const first = transitionSite(site, withOrigin(site, input), recorded, current);
+    const second = transitionSite(site, withOrigin(site, input), JSON.parse(JSON.stringify(recorded)), current);
     assert.deepEqual(first, second);
     assert.equal(JSON.stringify(first.observation), JSON.stringify(second.observation));
     assert.deepEqual(Object.keys(first.observation), [
@@ -69,32 +81,32 @@ for (const [site, choice, threshold, fallback] of cases) {
 }
 
 test('D1 requires selected top probability at least .6 and a valid distribution', () => {
-  assert.equal(transitionSite('loop.triage', input,
+  assert.equal(transitionSite('loop.triage', withOrigin('loop.triage', input),
     answer('loop.triage', 'done_check', .80, { done_check: .6, implement: .4 }), current).choice, 'done_check');
   for (const probabilities of [undefined, { done_check: .59, implement: .41 },
     { done_check: .6, implement: .7 }, { done_check: NaN }, { done_check: -1 }]) {
-    const result = transitionSite('loop.triage', input, answer('loop.triage', 'done_check', 1, probabilities), current);
+    const result = transitionSite('loop.triage', withOrigin('loop.triage', input), answer('loop.triage', 'done_check', 1, probabilities), current);
     assert.equal(result.choice, 'implement');
     assert.equal(result.observation.accepted, false);
   }
 });
 
 test('intake state is typed as a disclosed message plus running-thread summaries', async () => {
-  const typed = transitionSite('intake.classify', input, answer('intake.classify', 'queue', 1), current);
+  const typed = transitionSite('intake.classify', withOrigin('intake.classify', input), answer('intake.classify', 'queue', 1), current);
   assert.equal(typed.choice, 'queue');
   const untyped = { ...input, state: 'raw channel text' };
   // @ts-expect-error intake requires IntakeState, not arbitrary evaluation content (#90)
-  transitionSite('intake.classify', untyped, answer('intake.classify', 'queue', 1), current);
+  transitionSite('intake.classify', withOrigin('intake.classify', untyped), answer('intake.classify', 'queue', 1), current);
   // @ts-expect-error the evaluate entry point applies the same input type
-  await evaluateSite('intake.classify', untyped, port(async () => answer('intake.classify', 'queue', 1).outcome),
+  await evaluateSite('intake.classify', withOrigin('intake.classify', untyped), port(async () => answer('intake.classify', 'queue', 1).outcome),
     () => ({ ...current, observed_at: 10 }));
   // Other sites keep accepting any disclosed evaluation content.
-  assert.equal(transitionSite('loop.route', untyped, answer('loop.route', 'strong', 1), current).choice, 'strong');
+  assert.equal(transitionSite('loop.route', withOrigin('loop.route', untyped), answer('loop.route', 'strong', 1), current).choice, 'strong');
 });
 
 test('all intake choices are available without channel-specific input', () => {
   for (const choice of ['new_thread', 'continue_thread', 'queue', 'steer', 'interrupt', 'stop']) {
-    assert.equal(transitionSite('intake.classify', input, answer('intake.classify', choice, 1), current).choice, choice);
+    assert.equal(transitionSite('intake.classify', withOrigin('intake.classify', input), answer('intake.classify', choice, 1), current).choice, choice);
   }
 });
 
@@ -103,14 +115,14 @@ test('refusal and unavailable answers use deterministic fallbacks; outage pauses
     const refused = { state_revision: 1, observed_at: 10,
       outcome: { status: 'unaccepted' as const, request_id: 'r1', site,
         reason: 'provider_failed' as const, attempts: [], spent: 0, uncertainty: [] } };
-    assert.equal(transitionSite(site, input, refused, current).choice, fallback);
+    assert.equal(transitionSite(site, withOrigin(site, input), refused, current).choice, fallback);
     const unavailable = { ...refused, outcome: { ...refused.outcome,
       status: 'blocked' as const, reason: 'provider_unavailable' as const } };
     for (const recorded of [unavailable, { state_revision: 1, observed_at: 10, outcome: null }]) {
-      const readOnly = transitionSite(site, input, recorded, current);
+      const readOnly = transitionSite(site, withOrigin(site, input), recorded, current);
       assert.equal(readOnly.choice, fallback);
       assert.notEqual(readOnly.status, 'paused');
-      assert.equal(transitionSite(site, { ...input, needs_dispatch: true }, recorded, current).status, 'paused');
+      assert.equal(transitionSite(site, withOrigin(site, { ...input, needs_dispatch: true }), recorded, current).status, 'paused');
     }
   }
 });
@@ -143,7 +155,7 @@ test('evaluate port emits one choice question and rejects a revision change duri
     revision = { state_revision: 2, state_updated_at: 11 };
     return answer('loop.route', 'strong', 1).outcome;
   });
-  const result = await evaluateSite('loop.route', input, fake, () => ({ ...revision, observed_at: 11 }));
+  const result = await evaluateSite('loop.route', withOrigin('loop.route', input), fake, () => ({ ...revision, observed_at: 11 }));
   assert.equal(calls, 1);
   assert.equal(result.choice, 'standard');
   assert.equal(result.observation.accepted, false);
@@ -151,7 +163,7 @@ test('evaluate port emits one choice question and rejects a revision change duri
 
 test('port exceptions cannot leak diagnostics and pause dispatch-dependent work', async () => {
   const fake = port(async () => { throw new Error('secret-provider-diagnostic'); });
-  const result = await evaluateSite('loop.route', { ...input, needs_dispatch: true }, fake, () => ({ ...current, observed_at: 10 }));
+  const result = await evaluateSite('loop.route', withOrigin('loop.route', { ...input, needs_dispatch: true }), fake, () => ({ ...current, observed_at: 10 }));
   assert.equal(result.status, 'paused');
   assert.ok(!JSON.stringify(result).includes('secret-provider-diagnostic'));
 });
@@ -162,7 +174,7 @@ test('cancellation always pauses even if the port returns an accepted answer', a
     controller.abort();
     return answer('loop.route', 'strong', 1).outcome;
   });
-  const result = await evaluateSite('loop.route', input, fake, () => ({ ...current, observed_at: 10 }), controller.signal);
+  const result = await evaluateSite('loop.route', withOrigin('loop.route', input), fake, () => ({ ...current, observed_at: 10 }), controller.signal);
   assert.equal(result.status, 'paused');
   assert.equal(result.observation.accepted, false);
 });
@@ -192,7 +204,7 @@ for (const mode of ['normal', 'refusal', 'unavailable'] as const) {
     };
     const gateway = createInferenceGateway({ routes: [routed], evaluators: [evaluator],
       clock: { now: () => 10 }, ...(mode === 'unavailable' ? { availability: { fake: 'unavailable' as const } } : {}) });
-    const result = await evaluateSite('loop.route', { ...input, needs_dispatch: true }, gateway,
+    const result = await evaluateSite('loop.route', withOrigin('loop.route', { ...input, needs_dispatch: true }), gateway,
       () => ({ ...current, observed_at: 10 }));
     assert.equal(calls, mode === 'unavailable' ? 0 : 1);
     assert.equal(result.choice, mode === 'normal' ? 'strong' : 'standard');
@@ -215,7 +227,7 @@ for (const [code, retryable, outage] of [['invalid_request', false, false], ['ma
         state: 'disclosed', questions: { decision: { type: 'choice', instructions: 'q', criteria: { flash: null, strong: null } } },
         terms: { ...input.terms, max_attempts } });
       if (outcome.status === 'unaccepted') reasons.add(outcome.reason);
-      const dispatch = transitionSite('loop.route', { ...input, needs_dispatch: true, terms: { ...input.terms, max_attempts } },
+      const dispatch = transitionSite('loop.route', withOrigin('loop.route', { ...input, needs_dispatch: true, terms: { ...input.terms, max_attempts } }),
         { state_revision: 1, observed_at: 10, outcome: outcome as EvaluationOutcome<'choice'> }, current);
       assert.equal(dispatch.choice, 'standard');
       assert.equal(dispatch.status, outage ? 'paused' : 'transition');
@@ -229,7 +241,7 @@ for (const [code, retryable, outage] of [['invalid_request', false, false], ['ma
 test('provider_failed without any failed attempt is an abort before dispatch and stays an outage', () => {
   const outcome: EvaluationOutcome<'choice'> = { status: 'unaccepted', reason: 'provider_failed', request_id: 'r1',
     site: 'loop.route', attempts: [], spent: 0, uncertainty: [] };
-  const result = transitionSite('loop.route', { ...input, needs_dispatch: true }, { state_revision: 1, observed_at: 10, outcome }, current);
+  const result = transitionSite('loop.route', withOrigin('loop.route', { ...input, needs_dispatch: true }), { state_revision: 1, observed_at: 10, outcome }, current);
   assert.equal(result.status, 'paused');
   assert.equal(result.observation.reason, 'decision_unavailable');
 });
@@ -243,7 +255,7 @@ test('D2 ceiling composes with P4 downgrade and never upgrades unavailable lower
     { id: 'seven_day', percentRemaining: 90, resetsAt: 1000, pace: { status: 'ahead' } },
   ] }] };
   for (const selected of ['flash', 'standard', 'strong'] as const) {
-    const transition = transitionSite('loop.route', input, answer('loop.route', selected, 1), current);
+    const transition = transitionSite('loop.route', withOrigin('loop.route', input), answer('loop.route', selected, 1), current);
     assert.equal(transition.choice, selected);
     const target = { operation: 'generate' as const, kind: 'transform' as const, tier: selected };
     const decision = budgetRoute(routes, target, { ...input.terms, tier: selected }, 0, undefined, snapshot, 10);
@@ -261,7 +273,7 @@ test('exhausted attempts retain outage evidence and cannot permit dispatch', asy
       code: 'unavailable', retryable: true, message: 'sk-secret-outage-detail',
     } }; },
   }] });
-  const result = await evaluateSite('loop.route', { ...input, needs_dispatch: true }, gateway,
+  const result = await evaluateSite('loop.route', withOrigin('loop.route', { ...input, needs_dispatch: true }), gateway,
     () => ({ ...current, observed_at: 10 }));
   assert.equal(result.status, 'paused');
   assert.equal(result.observation.reason, 'decision_unavailable');
@@ -271,14 +283,14 @@ test('exhausted attempts retain outage evidence and cannot permit dispatch', asy
 test('mismatched request/site and invalid confidence fail closed for every site', () => {
   for (const [site, choice, , fallback] of cases) {
     for (const confidence of [NaN, Infinity, -1, 1.1]) {
-      const result = transitionSite(site, input, answer(site, choice, confidence, { [choice]: 1 }), current);
+      const result = transitionSite(site, withOrigin(site, input), answer(site, choice, confidence, { [choice]: 1 }), current);
       assert.equal(result.choice, fallback);
       assert.equal(result.observation.confidence, null);
     }
     const recorded = answer(site, choice, 1, { [choice]: 1 });
     assert.equal(recorded.outcome.status, 'accepted');
     for (const mismatch of [{ request_id: 'other' }, { site: 'other' }]) {
-      const result = transitionSite(site, input, { ...recorded, outcome: { ...recorded.outcome, ...mismatch } }, current);
+      const result = transitionSite(site, withOrigin(site, input), { ...recorded, outcome: { ...recorded.outcome, ...mismatch } }, current);
       assert.equal(result.choice, fallback);
       assert.equal(result.observation.reason, 'mismatched_answer');
     }
@@ -287,7 +299,7 @@ test('mismatched request/site and invalid confidence fail closed for every site'
 
 test('trace omits undisclosed state, diagnostics and recognizable credential correlation ids', () => {
   const recorded = answer('loop.route', 'strong', 1);
-  const result = transitionSite('loop.route', { ...input, request_id: 'sk-secret', state: { token: 'state-secret' } },
+  const result = transitionSite('loop.route', withOrigin('loop.route', { ...input, request_id: 'sk-secret', state: { token: 'state-secret' } }),
     { ...recorded, outcome: { ...recorded.outcome, request_id: 'sk-secret', provider_response_id: 'ghp_secret' } }, current);
   assert.equal(result.observation.request_id, null);
   assert.equal(result.observation.provider_request_id, null);
@@ -300,7 +312,7 @@ test('ids that start with bearer are correlation ids; real token markers are not
     assert.equal(correlation(id), null, id);
   }
   const recorded = answer('loop.route', 'strong', 1);
-  const result = transitionSite('loop.route', { ...input, request_id: 'bearer_request' },
+  const result = transitionSite('loop.route', withOrigin('loop.route', { ...input, request_id: 'bearer_request' }),
     { ...recorded, outcome: { ...recorded.outcome, request_id: 'bearer_request', provider_response_id: 'bearer_x' } }, current);
   assert.equal(result.observation.request_id, 'bearer_request');
   assert.equal(result.observation.provider_request_id, 'bearer_x');
@@ -309,7 +321,7 @@ test('ids that start with bearer are correlation ids; real token markers are not
 test('pre-cancelled evaluation does not call the port', async () => {
   const controller = new AbortController();
   controller.abort();
-  const result = await evaluateSite('loop.route', input, port(async () => { assert.fail('must not call'); }),
+  const result = await evaluateSite('loop.route', withOrigin('loop.route', input), port(async () => { assert.fail('must not call'); }),
     () => ({ ...current, observed_at: 10 }), controller.signal);
   assert.equal(result.status, 'paused');
   assert.equal(result.observation.reason, 'cancelled');
@@ -328,12 +340,12 @@ for (const failure of [
       const outcome: EvaluationOutcome<'choice'> = { ...failure, request_id: 'r1', site,
         attempts: [], spent: 0, uncertainty: [] };
       const recorded = { state_revision: 1, observed_at: 10, outcome };
-      const readOnly = transitionSite(site, input, recorded, current);
+      const readOnly = transitionSite(site, withOrigin(site, input), recorded, current);
       assert.equal(readOnly.choice, fallback);
       assert.equal(readOnly.status, site === 'intake.classify' ? 'needs_human' : 'transition');
       assert.equal(readOnly.observation.reason, 'decision_unavailable');
       assert.equal(readOnly.observation.accepted, false);
-      assert.equal(transitionSite(site, { ...input, needs_dispatch: true }, recorded, current).status, 'paused');
+      assert.equal(transitionSite(site, withOrigin(site, { ...input, needs_dispatch: true }), recorded, current).status, 'paused');
     }
   });
 }
@@ -345,11 +357,11 @@ test('explicit gateway pause makes the decision unavailable independently of out
       paused: { type: 'loop.paused', policy: 'budget.policy@1', request_id: 'r1', site,
         reason: 'five_hour_budget_low', until: 1000 } };
     const recorded = { state_revision: 1, observed_at: 10, outcome };
-    const readOnly = transitionSite(site, input, recorded, current);
+    const readOnly = transitionSite(site, withOrigin(site, input), recorded, current);
     assert.equal(readOnly.choice, fallback);
     assert.notEqual(readOnly.status, 'paused');
     assert.equal(readOnly.observation.reason, 'decision_unavailable');
-    assert.equal(transitionSite(site, { ...input, needs_dispatch: true }, recorded, current).status, 'paused');
+    assert.equal(transitionSite(site, withOrigin(site, { ...input, needs_dispatch: true }), recorded, current).status, 'paused');
   }
 });
 
@@ -374,7 +386,7 @@ test('Amos unavailable makes intake ask_user without calling TypeSafe', async ()
   const outcome = await gateway.evaluate({ request_id: 'availability', site: 'intake.classify', role: 'working', kind: 'choice', state: 'disclosed', questions: { decision: { type: 'choice', instructions: 'classify', criteria: { new_thread: null, queue: null } } }, terms: input.terms });
   assert.equal(outcome.status, 'blocked');
   if (outcome.status === 'blocked') assert.equal(outcome.reason, 'provider_unavailable');
-  const result = await evaluateSite('intake.classify', input, gateway, () => ({ ...current, observed_at: 10 }));
+  const result = await evaluateSite('intake.classify', withOrigin('intake.classify', input), gateway, () => ({ ...current, observed_at: 10 }));
   assert.equal(result.choice, 'ask_user');
   assert.equal(result.status, 'needs_human');
   assert.equal(result.observation.reason, 'decision_unavailable');

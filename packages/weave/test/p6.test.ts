@@ -11,8 +11,27 @@ import {
   INPUT_RULES,
   type BooleanTransition,
 } from '../src/sites/boolean.js';
-import { transitionSite } from '../src/sites/index.js';
+import { modelOrigin, structuralOrigin, transitionSite } from '../src/sites/index.js';
+import { gateExtract } from '../src/sites/extract.js';
 const current = { state_revision: 1, state_updated_at: 10 };
+type ChoiceSite = 'loop.triage' | 'loop.route' | 'loop.continue' | 'intake.classify';
+function withOrigin<T extends { readonly request_id: string; readonly state_revision: number }>(
+  site: ChoiceSite,
+  value: T,
+) {
+  const origin =
+    site === 'loop.continue'
+      ? structuralOrigin('progress.delta@1')
+      : modelOrigin(
+          gateExtract(
+            { id: `${site}@1`, slots: {} },
+            '',
+            {},
+            { site, request_id: value.request_id, state_revision: value.state_revision },
+          ),
+        );
+  return { ...value, origin };
+}
 const input = {
   ...current,
   request_id: 'r1',
@@ -175,7 +194,7 @@ test('one decision outage: P5 pauses dispatch, guards request approval, D3 widen
     ] as const) {
       const choice = transitionSite(
         site,
-        { ...input, needs_dispatch, state: { message: 'm', running_threads: [] } },
+        withOrigin(site, { ...input, needs_dispatch, state: { message: 'm', running_threads: [] } }),
         { state_revision: 1, observed_at: 10, outcome: { ...outage, site } },
         current,
       );

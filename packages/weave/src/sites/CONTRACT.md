@@ -148,6 +148,38 @@ two recorded extracts or a duplicated attempt, so it cannot invent one. Records
 copy no message text, extracted text, provider text or thread summaries; ids
 pass `correlation()` and credential-shaped ids are omitted.
 
+## WV-S1 P2b typed-state origin before every site
+
+Every `SiteInput` declares an `origin`. Free-text sites (`intake.classify`,
+`input.route`, `loop.triage`, `loop.route`) require `{ kind: 'model', extract }`,
+where `extract` is an `extract@1` observation for that exact site and input
+revision. Structural sites require `{ kind: 'structural', source }`:
+`progress.delta@1` for `loop.continue`, `audit.findings` for `audit.dispose`,
+and `criteria` for `eval.output`. `modelOrigin`, `structuralOrigin` and
+`originReason` are the small constructors and validator.
+
+A missing model record is `extract_missing`; a non-model, wrong-site,
+malformed or revision-mismatched record is `invalid_extract`; a structural site
+with the wrong source is `structural_origin_missing`. Each fails before the
+provider call. The observation records `answer: null`, `confidence: null`,
+`top_p: null`, `accepted: false`, `fallback_used: true`, and status
+`needs_human` (cancellation still pauses). Composition roots that already hold
+the structural evidence may supply the origin (`decideProgress`,
+`evaluateAuditDispose`, `evaluateOutputEval`); a caller-supplied origin is never
+replaced. `decideIntake` supplies the final gated extract record. `decideRoute`
+accepts a gated `extract` on `RouteAsk`; without it, routing across active work
+fails closed and asks the operator.
+
+The model-extract schemas are `input.route@1`, `loop.triage@1` and
+`loop.route@1`, each a required verbatim `intent` span. They add no new gateway
+kind: extraction still uses `extract` generation at tier `flash`, and the
+fidelity gate is unchanged.
+
+`checks/extract-before-site.mjs` is the source-shape guard: a runtime call that
+names a free-text site must show a model origin, and one that names a structural
+site must show a structural origin. The runtime validator remains authoritative;
+the check catches a missing call-site origin before tests run.
+
 ## P6 boolean sites
 
 D3 receives only the already-disclosed M6 index (id/purpose), an explicitly
