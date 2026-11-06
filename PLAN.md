@@ -1,9 +1,9 @@
 # PLAN — strict pre-flight context budget assembler (#353)
 
-Status: **plan only. This revision addresses the Claude Opus review of `593a125` (plan17 dispositions in §26; plan16 in §25; plan15 in §24); no implementation is authorized by it.**
+Status: **plan only. This revision addresses the Claude Opus review of `c8e6197` (plan18 dispositions in §27; plan17 in §26; plan16 in §25; plan15 in §24); no implementation is authorized by it.**
 Issue: CrowBe/weave#353 (architecture parent). Branch `wv-353-context-budget-plan`, base `0281c5e`.
-Review target `593a125` (Git parent `442b62a`, grandparent `4af3f4f`; provenance correction in §26); source, tests and benchmarks there are identical to base `0281c5e`
-(`git diff --stat 0281c5e 593a125` lists only `PLAN.md`).
+Review target `c8e6197` (Git parent `593a125`, grandparent `442b62a`; provenance correction in §27); source, tests and benchmarks there are identical to base `0281c5e`
+(`git diff --stat 0281c5e c8e6197` lists only `PLAN.md`).
 
 The issue text used here is the copy in the task brief. This plan revision did
 not read the remote issue; that source assumption is recorded as A1. Review
@@ -29,7 +29,7 @@ goal and audit material are never dropped to make a request fit.
 If the complete evidence cannot fit the observation bound, record the distinct
 durable persistence failure in §5.5; never claim a complete refusal was stored.
 
-## 2. Inventory at HEAD (`593a125`; code identical to base `0281c5e`)
+## 2. Inventory at HEAD (`c8e6197`; code identical to base `0281c5e`)
 
 Symbols are the primary references; line numbers are secondary navigation hints,
 rechecked against this HEAD. A bare `symbol (file:N)` pin is the definition;
@@ -213,6 +213,8 @@ historical assessments superseded by §23. Plan16 rechecks at `442b62a` and
 extends the recovery/feed evidence in place without removing a row.
 Plan17 rechecks at `593a125`, preserves those 17 rows byte-for-byte, and adds
 term/premeasurement and running-review prefix evidence below (19 rows total).
+Plan18 rechecks at `c8e6197`, preserves all 19 rows byte-for-byte, and adds
+append-citation and refusal-ledger evidence below (21 rows total).
 In this table `runtime.ts` means
 `packages/weave/src/runtime.ts`; other source paths are written in full.
 
@@ -237,6 +239,8 @@ In this table `runtime.ts` means
 | Started review recovery                 | `reviews` is a fresh in-memory map (`runtime.ts:242`); review stores its view and returns null (`:1203-1214`). Every running action enters generic reconcile (`:1847-1849`): exhausted allowance returns (`:1854-1856`); otherwise attempt/lookup (`:1859-1876`).                                                                                                                                      | T9-R1/R2(a) must finish each selected/started review in the first process before the inert second reload. The running-review restart variant fixes q as the next seq after the settled prefix with X running: zero allowance ends at exhaustion (final-length failure at q, `:2791-2792`); positive allowance writes attempt then uncertain review result, whose existing feedReviewResult causes checkPrefix failure at q (`:2780-2787,2840-2841`). No review-view restoration, grant renewal or new generic feed is added. |
 | Term capture and premeasurement | RuntimeOptions exposes framing terms (`packages/weave/src/runtime.ts:120-124`); frameGoal copies max_context_tokens into terms and appends those terms (`:1248-1275`). No certified full_tokens ledger exists at HEAD. | §6.6 premeasures under fixed markerTerm with the same profile/accounting/coverage/routes; final runs assert identical A/B full bounds. Changing only max_context_tokens must preserve every full/per-route bound. Freeze the storage snapshot before retained premeasurement; measure marker decision bytes under its final term and bound. |
 | Running-review prefix proof | Replay compares regenerated canonical observations (`packages/weave/src/runtime.ts:2833-2845`), then checks length before unfinished actions (`:2789-2797`). A prefix with running X cannot return ok:true even after successful prefix reproduction. | Before either restart suffix, C2d replay must reproduce all stop/v2 prefix records through q-1, then fail only for X's missing result at :2794-2797. Recovery is the only fixture variant input (0/1); suffix failures at q use the existing final-length or feedReviewResult/checkPrefix reporters. |
+| Recovery append citation boundary | `this.append` (call range `packages/weave/src/runtime.ts:1859-1866`) records recovery.attempted before grant lookup (`:1875-1876`); payload_type is a property at `:1863`. | FU3 checks labelled call starts and whole expression ranges outside review history. History uses FU5's unfenced heading predicate and receives path/symbol resolution only; §16 O1 is preserved without a semantic supersession lookup. |
+| Refusal accounting evidence | frameGoal records terms before dispatch (`packages/weave/src/runtime.ts:1248-1275,1284-1307`); HEAD has no certified bound ledger. §4 proposes complete assembly_evidence on context.refused@1 and historical recomputation of per-route bounds. | §6.6 retains P_overflow under overflow storage and P_marker under frozen marker storage. For B under measuredCeiling, retain a ledger recomputed from refusal evidence through the historical accounting family; use its per-route bounds/allowances in the term-only check. Marker rerun equality checks determinism; the term-only check proves term invariance for both A and B. |
 
 ## 3. Decisions (architectural recommendations under D-ENG-021)
 
@@ -1338,13 +1342,16 @@ or a claim that the proposed stop exists at HEAD:
    cost_ceiling:1000000} for the final overflow fixture. Premeasurement uses markerTerm,
    a fixed positive safe-integer max_context_tokens admitting both A/B full
    bounds, under the same immutable profile, accounting family, coverage snapshot
-   and storage policy as the final run. Fix and retain their versions/digests,
+   and storage policy as the corresponding final run: P_overflow uses overflow
+   storage and markerTerm; P_marker uses the frozen marker storage and markerTerm.
+   These are two named premeasurements, not one shared storage configuration.
+   Fix and retain their versions/digests,
    covered route membership, certified input capacities and framing allowances;
    C2a must admit both markerTerm and measuredCeiling under this one snapshot.
    If a provisional markerTerm does not admit both bounds, discard that run,
    choose an admitted larger term and rerun fresh; a token/capacity refusal is
    not premeasurement evidence. Do not change coverage/routes to make either
-   term pass. Step 5 selects measuredCeiling from that retained premeasurement; open a fresh
+   term pass. Step 5 selects measuredCeiling from P_overflow; open a fresh
    final fixture with its immutable term, never mutate a running fixture.
    The marker fixture uses max_context_tokens=markerTerm in both premeasurement
    and final runs. RuntimeOptions.framingTerms declares these
@@ -1372,7 +1379,8 @@ or a claim that the proposed stop exists at HEAD:
    registered grows while goal.sources stays fixed (`views.ts:141-172`;
    `state.ts:146-154,306-310`). Record both A/B frame-view inventories using
    the same immutable profile, accounting family, coverage snapshot and storage
-   policy. In premeasurement both A and B are admitted token fits. Retain their
+   policy of the corresponding final run. In P_overflow and P_marker both A and
+   B are admitted token fits before storage selection. Retain their
    assembly output before storage selection, including B when the marker branch
    cannot persist its complete fit record. Compare the captured authorized
    pre-trim inventories at the corresponding A/B
@@ -1385,12 +1393,13 @@ or a claim that the proposed stop exists at HEAD:
    `proposals.ts:20-35,38-67`; `candidates.ts:92-127`). At HEAD the second
    generation call remains held; B holds the slot, X stays pending and both
    enclosing drains append nothing. This proves formation/scheduling only.
-   C2d's premeasurement retains this branch when B's complete fit record
-   persists. In final stop runs and the same-storage marker premeasurement,
+   C2d's P_overflow retains this branch when B's complete fit record
+   persists. In final stop runs and P_marker under its frozen marker storage,
    B stops, its result drain starts X, and X holds the slot before the two
    enclosing drains; each still appends nothing, as required by T9-L2.
 5. Before the final fixture run, C2d measures actual certified bounds under
-   markerTerm. For overflow choose a positive safe-integer measuredCeiling with
+   markerTerm: measuredCeiling comes from P_overflow. For overflow choose a
+   positive safe-integer measuredCeiling with
    A.full_tokens <= measuredCeiling < B.full_tokens. This ceiling is exactly
    framingTerms.max_context_tokens (and §4's reserved_tokens), not a separate knob.
    C2a's immutable managed coverage snapshot must admit that term (§3 R7/§10 C2a);
@@ -1402,7 +1411,7 @@ or a claim that the proposed stop exists at HEAD:
    encoded complete decision; token equality never implies decision-byte equality.
    Do not reuse encoded counts from the overflow term. Choose the marker log
    bound in a provisional sizing pass, then freeze its final storage snapshot
-   and rerun both retained premeasurement and final fixture under that identical
+   and rerun both retained P_marker and the final marker fixture under that identical
    snapshot. Its configured bound is itself recorded (§4), so recompute complete
    encoded bytes and reassert the A/B storage interval under the chosen bound;
    provisional sizing bytes are not final-run evidence.
@@ -1411,11 +1420,20 @@ or a claim that the proposed stop exists at HEAD:
    exists, adjust growthId length before opening a fresh fixture and remeasure.
    On the implementation child, B must stop before its second generation
    dispatch; use T9-L2/R2(a) for the resulting stop/start/reload/replay checks.
+   For these equalities premeasured means P_overflow in the overflow comparison
+   and P_marker in the marker comparison.
    In the final overflow run assert A.full_tokens === premeasured.A.full_tokens
    and B.full_tokens === premeasured.B.full_tokens; B's recorded overflow
    total_tokens is the full bound (§4), not a dispatched fit ledger.
+   For B under measuredCeiling, recompute per-route bounds and framing allowances
+   from the refusal's complete assembly_evidence through the historical accounting family
+   (§4 C2 step 4); retain the recomputed ledger with the precursor output for the
+   term-only check, and never read per-route fields from the refusal itself.
    For the marker, whose record has no token claims (§4), retain recomputed
    full-decision ledgers before storage selection and assert the same equalities.
+   P_marker versus the final marker run is a determinism check under identical
+   inputs. The following term-only check is the required term-invariance evidence for both A and B;
+   overflow rerun equality additionally checks full bounds across the two terms.
    Add a check that changes only max_context_tokens between markerTerm and
    measuredCeiling for each frozen A/B inventory, holding all other terms and
    contract/route/storage inputs fixed: full_tokens and every per-route bound
@@ -1426,7 +1444,8 @@ or a claim that the proposed stop exists at HEAD:
    If equality fails or admission changes route membership, stop and fix the
    accounting/fixture rather than tune the term around the drift.
    Retain precursor output with both terms, contract/snapshot identities,
-   inventories, both runs' per-route/full bounds, equality and mutation results,
+   inventories, P_overflow/P_marker and both final runs' per-route/full bounds,
+   B's recomputed refusal ledger, equality and mutation results,
    and final-term marker encoded byte counts. FU5/C2d require these assertions.
    Neither the unretained plan14 run nor this static recipe is behavioral
    green for the future stop.
@@ -2130,8 +2149,11 @@ Tracked follow-ups (from the earlier reviews, extended through `442b62a`; none b
   test resolves every cited `path` and exported symbol at the child's base and
   fails on a missing one. The same test also parses this plan's bare
   definition pins (`` `symbol` (`file:N`) ``), including grouped symbols/pins
-  and review-disposition citations throughout PLAN.md, not just contract/code
-  references or §2. It asserts that line N declares that symbol, not merely
+  throughout PLAN.md, not just contract/code references or §2. Review-disposition
+  history uses FU5's unfenced heading predicate `^## \d+\. Review disposition — `
+  until the next unfenced level-two heading: path and symbol resolution only,
+  exempt from declaration/call/range shape checks. No fenced heading arms this
+  exemption. Outside history it asserts that line N declares that symbol, not merely
   that the symbol exists somewhere; comment and JSDoc lines never count as
   declarations. Labelled `call at` pins must identify the start of the named
   call expression, not an argument line; other labelled use-site pins are
@@ -2151,13 +2173,19 @@ Tracked follow-ups (from the earlier reviews, extended through `442b62a`; none b
   itself off by one at HEAD; source declarations take precedence over the
   review. Also reject candidates.ts:303 (body statement) as a declaration of
   frameCandidate, whose positive pin is :302.
-  For §16 O1's recovery append, accept the full runtime.ts:1859-1866 call
-  range and reject property-only :1863 as evidence for the append call;
-  :1863 names payload_type, not the call's start. Keep that historical row
-  unchanged and record the range correction in §26 N2. A labelled call-start
-  pin may use :1859; a property pin needs the enclosing full call range.
-  Resolve historical O1 through §26 N2's explicit superseding range; the
-  property-only negative fixture is a new citation without that correction.
+  New append-call evidence must use the explicit forms
+  `` `this.append` (call at `packages/weave/src/runtime.ts:1859`) `` or
+  `` `this.append` (call range `packages/weave/src/runtime.ts:1859-1866`) ``.
+  C1 resolves the named call with the child's TypeScript AST: `call at` pins
+  its start line; `call range` pins the inclusive start/end lines of the whole call expression.
+  Reject a range omitting either end, including property-only :1863 and
+  :1863-1866 negative fixtures; :1863 names payload_type, not the call start.
+  Review-disposition history is exempt from call/range shape checks under the
+  predicate above; §16 O1 stays unchanged and §26 N2 records the correct range.
+  There is no supersession lookup or semantic prose classification. Require
+  positive start/whole-range fixtures, historical O1 and synthetic future-history
+  fixtures, plus failures for a missing path/symbol in history, a fenced fake
+  history heading and an active citation after leaving history.
   This is a required C1 follow-up, not an implemented lint in this plan-only task.
 - **FU4 (repeated finding becomes a check: unjournaled append rejection).**
   Earlier oversize and `mid_value` findings now include ignored result
@@ -2193,6 +2221,11 @@ Tracked follow-ups (from the earlier reviews, extended through `442b62a`; none b
   equalities and term-invariance assertions for both A/B inventories, fixed
   coverage/route membership and final-term marker byte counts; reject
   unsupported compositions or term-dependent bounds.
+  Retain the two named P_overflow/P_marker premeasurements under their corresponding
+  final storage policies; P_overflow supplies measuredCeiling. Keep the determinism
+  comparison separate from the term-only invariance check. B's per-route bounds
+  under measuredCeiling come from a retained ledger recomputed from complete
+  refusal evidence through the historical accounting family, not fields on the refusal.
   <!-- fu5-label-spec:start -->
   The document lint rejects the exact qualified obsolete label `T9-R2(b)`
   in active text. Drop bare R2(b) from the banned tokens: decision R2's subclause
@@ -2770,7 +2803,7 @@ Retain all 17 existing §2.7 trace rows in order and extend the table to 19.
 | --- | --- | --- |
 | W1 | warning / auto-fix | Terms enter the recorded request at `packages/weave/src/runtime.ts:1248-1275`; §4's proposed ledger also records the ceiling and terms. §6.6 fixes a premeasurement markerTerm admitting both full bounds, with identical profile/accounting family/coverage snapshot/storage policy and route membership. Overflow reruns assert measured-bound equality; marker decision bytes are measured under its final term. C2d retains the term-only mutation and both full-bound comparisons; FU5 makes them required evidence. No certified bound is implemented at HEAD. |
 | N1 | note / no-change | Preserve §16 O1–O4. Rechecked abandonment/allowance at `packages/weave/src/runtime.ts:1845-1856,1906`, lookup declarations at `:1523,1541`, indexes at `:282-288`, profile helpers at `:2178,2199`, frame replay at `:1281`, replay framing at `:2625-2627` and test declarations at `packages/weave/test/p8.test.ts:1096,1903`. §17 W3 remains the active O2 refinement. No historical disposition rewrite. |
-| N2 | note / auto-fix | §16 O1's property pin `:1863` is inside the full append call at `packages/weave/src/runtime.ts:1859-1866`; lookup follows at `:1875-1876`. Preserve O1's text. FU3 requires the complete call range for this append claim, rejects the property-only citation and distinguishes it from a declaration or call-start pin. |
+| N2 | note / auto-fix | §16 O1's property pin `:1863` is inside the full append call at `packages/weave/src/runtime.ts:1859-1866`; lookup follows at `:1875-1876`. Preserve O1's text. FU3's history exemption preserves O1 without a supersession lookup; new active append-call evidence uses labelled call-start or whole-call-range pins. §27 W1 makes that boundary mechanically checkable. |
 | N3 | note / auto-fix | Restore closed §24 from `442b62a`; its N1 history-only rule is superseded by current FU5 and this section, without editing the old row. The plan16 formatter paragraph belongs in §25. The retained verification recipe checks §24 against that original revision as well as §7/§9/§14–§23 against `593a125`. |
 | N4 | note / auto-fix | FU5 defines review sections by the unfenced heading predicate `^## \d+\. Review disposition — ` and bounds its declaration exception by exact anchors within the FU5 bullet. Fixtures cover §13's declaration, each §22–§26 disposition and a synthetic future disposition; active uses and a copied exception are rejected. Only the qualified obsolete T9 label is banned; a bare decision-R2 subclause is valid. The retained recipe exercises this document rule; C1 still owes repository lint. |
 | N5 | note / auto-fix | Stop/v2 prefix reproduction requires C2d replay. Before either suffix fork, compare through q-1 and require only the unfinished-X terminal failure (`packages/weave/src/runtime.ts:2794-2797`), never an earlier stop/version divergence or `ok:true`. Set recovery in variantGoal before goal.opened, the only variant input changed (0 versus 1; seed at `packages/weave/src/state.ts:161`). Zero suffix retains final-length failure at q (`runtime.ts:2791-2792`); positive suffix retains feedReviewResult/checkPrefix failure at q (`:2780-2787,2840-2841`) after one spend (`state.ts:417-419`) and FakeHost's exact unresolved reason (`packages/weave/test/fake-host.ts:144-148`). No generic replay feed or grant reuse. |
@@ -2796,7 +2829,7 @@ or C2d's future behavioral tests. The source pins deliberately bind to this
 HEAD; a child must re-resolve them after source changes.
 
 ```sh
-python3 -c 'from pathlib import Path; exec(Path("PLAN.md").read_text().split("<!-- plan17-check -->", 1)[1].split("```python\n", 1)[1].split("\n```", 1)[0])'
+python3 -c 'from pathlib import Path; exec(Path("PLAN.md").read_text().split("\n<!-- plan17-check -->\n```python\n", 1)[1].split("\n```", 1)[0])'
 git rev-parse 593a125 593a125^ 593a125^^
 git diff --name-only 0281c5e 593a125
 git diff --check 593a125 -- PLAN.md
@@ -2848,7 +2881,7 @@ def rows(text):
     return [line for line in table.splitlines() if line.startswith("| ")][2:]
 
 old_rows, new_rows = rows(base), rows(doc)
-requirements["trace rows intact and extended"] = new_rows[:17] == old_rows and len(new_rows) == 19
+requirements["trace rows intact and extended"] = new_rows[:17] == old_rows and len(new_rows) == 21
 trace = doc.split("### 2.7 ", 1)[1].split("## 3. ", 1)[0]
 trace_lines = trace.splitlines()
 indices = [i for i, line in enumerate(trace_lines) if line.startswith("| ")]
@@ -2965,3 +2998,206 @@ not reached. Neither formatting nor full-suite green is claimed. FU-fmt stays
 open for the first implementation child with working tooling; FU3/FU5 remain
 required lint/behavioral follow-ups. No permissions, validation, held-out cases
 or closed decisions are weakened to bypass the missing tool.
+
+## 27. Review disposition — Claude Opus review of `c8e6197` (plan18)
+
+Source read: `/workspace/wvops/WV-353-review-c8e6197.json` (A7). Risk low,
+no errors; W1/N1/N2/N3 auto-fix, N4/N5 no-change, no ask_user. Git identifies
+HEAD as `c8e61974492a907c096b162a78c35e46ca6c88ea`, parent `593a125`,
+grandparent `442b62a`: the review JSON's full target hash and the brief's
+`4af3f4f` parent do not match Git. Use the checked-out commit. Plan15 dispositions
+remain §24. Source/tests/benchmarks are unchanged from base `0281c5e`;
+`git diff --name-only 0281c5e c8e6197` lists only PLAN.md.
+Concrete recommendations follow D-ENG-021; locked D-ENG-025/026/027 stay closed.
+Preserve §7/§9/§14–§25 and every earlier trace row byte-for-byte. Extend §2.7
+from 19 to 21 rows. §26 changes only its N2 clarification, exact-anchor extractor
+and trace-length assertion: its check now requires 21 rows, while the
+plan18 check additionally preserves all 19 existing rows byte-for-byte.
+
+| ID | Severity / action | HEAD evidence and disposition |
+| --- | --- | --- |
+| W1 | warning / auto-fix | `this.append` (call range `packages/weave/src/runtime.ts:1859-1866`) encloses the payload_type property at `:1863`; lookup follows at `:1875-1876`. FU3 adopts FU5's unfenced review-heading predicate: history gets path/symbol resolution only, never declaration/call/range shape checks. New append-call evidence uses labelled call-start or whole-expression range forms, resolved by C1 against the child's TypeScript AST. Property-only and partial-range fixtures fail outside history; missing paths/symbols still fail inside history. §16 O1 remains unchanged; §26 N2 explains the correct range. No special supersession relation or prose classifier is needed. |
+| N1 | note / auto-fix | Framing terms are declared at `packages/weave/src/runtime.ts:120-124`, copied into the request at `:1248-1275`, before gateway dispatch at `:1284-1307`. §6.6 names P_overflow (overflow storage, markerTerm) and P_marker (frozen marker storage, markerTerm). measuredCeiling comes from P_overflow. P_marker/final-marker equality proves determinism under identical inputs; the separate term-only check supplies required term-invariance evidence for both A and B. These certified bounds remain proposed, not implemented HEAD behavior. |
+| N2 | note / auto-fix | §4 proposes per-route bounds on context.ledger@1, while context.refused@1 carries the typed overflow and complete assembly_evidence; its overflow total_tokens alone cannot supply per-route evidence. For B under measuredCeiling, §6.6 now requires a recomputed ledger from the refusal's complete evidence through the historical accounting family (§4 C2 step 4), retained with the precursor output. Compare those per-route bounds/allowances in the term-only check, never nonexistent fields on the refusal. The HEAD request path remains `packages/weave/src/runtime.ts:1266-1275,1284-1307`; no ledger is claimed there. |
+| N3 | note / auto-fix | §26's extractor now splits on the complete newline-delimited HTML-anchor-plus-python-fence sequence. Its command-line literal cannot match that sequence. Retained fixtures insert another Python fence before the actual anchor and require the anchored block; a missing anchor fails. The plan18 extractor uses the same rule. |
+| N4 | note / no-change | Retain plan17's dispositions and closed fixes, with only the explicit §26 corrections above. Existing recovery reporters are still `packages/weave/src/runtime.ts:2780-2797,2833-2845`; recovery allowance folds at `packages/weave/src/state.ts:161,417-419`, and FakeHost's unresolved lookup remains `packages/weave/test/fake-host.ts:144-148`. No acceptance boundary changes. |
+| N5 | note / no-change | The review could only reconcile the old script statically. This session reproduces its 114/114 result at c8e6197 before editing and reruns the retained recipe below. Formatter/full verify are attempted again; their actual blocker is recorded below, without treating historical or static reconciliation as suite green. |
+| FU3/FU5 | follow-up / record only | C1 owes AST-based declaration/call-range lint with the shared history boundary and positive/negative fixtures. C1/FU5 and C2d must carry P_overflow/P_marker, retained refusal-ledger bounds and both A/B term-only mutation assertions into the retained precursor and T9 coverage. The focused document fixtures below do not implement repository lint or future stop behavior. Repeated findings become lint or behavioral tests. |
+| FU-fmt | follow-up / record only | The first implementation child with working tooling owes formatting, `npm run fmt:check` and full `npm run verify` (`package.json:16,36`), respecting closed-section preservation. Current command results follow below; no check is weakened to bypass missing tooling. |
+
+Failure, cancellation and concurrency remain T8/T9/T11/T15/T16 obligations.
+Inject a crash between every durable stop/request/result/response/queue/start
+write, including failures after an acknowledged write. Recovery must complete
+only missing writes; double reload and non-executing replay must reproduce the
+ordered evidence without duplication or loss. The durability gap remains real:
+FileJournal appends without fsync and parses each line directly
+(`packages/weave/src/journal.ts:57-72`). §6.5 composes the existing durable
+FileAttemptJournal pattern (fsync and incomplete-write latch at
+`packages/weave/src/implement-step.ts:1182-1210`), with torn-tail and resume
+witnesses at `packages/weave/test/p8.test.ts:1096,1903`. These are evidence for
+existing components and planned obligations, not a claim that #353 is implemented.
+Single-use grants and bound responses are never reused, including after failed,
+cancelled or uncertain execution (existing pending-grant rejection witness at
+`packages/agentfabric/test/host.test.ts:268-280`). §7 stays byte-for-byte intact:
+guardrails and shuffles must not leak into direct benchmark routes. No hosted
+inference or comparative benchmark is needed for these document corrections.
+
+Plan18 retained verification recipe: from the repository root, append `c8e6197`
+to the first command for document red, then run it without an argument for
+document green. The script runs the retained plan17 checks as a prerequisite,
+then checks the new contract text, closed sections, trace extension and focused
+citation/extractor fixtures. The citation fixtures resolve only the verified
+HEAD append span and symbol; C1 still owes general TypeScript AST resolution. No temporary script is required to reproduce the checks.
+
+```sh
+python3 -c 'from pathlib import Path; exec(Path("PLAN.md").read_text().split("\n<!-- plan18-check -->\n```python\n", 1)[1].split("\n```", 1)[0])'
+git rev-parse c8e6197 c8e6197^ c8e6197^^
+git diff --name-only 0281c5e c8e6197
+git diff --check c8e6197 -- PLAN.md
+npm run fmt:check
+npm run verify
+```
+
+<!-- plan18-check -->
+```python
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+
+def git(*args):
+    return subprocess.check_output(['git', *args], text=True)
+
+
+def section(text, number):
+    return text.split(f'## {number}. ', 1)[1].split('\n## ', 1)[0]
+
+
+def extract(text, name):
+    delimiter = f'\n<!-- {name} -->\n```python\n'
+    return text.split(delimiter, 1)[1].split('\n```', 1)[0]
+
+
+current = Path('PLAN.md').read_text()
+base = git('show', 'c8e6197:PLAN.md')
+doc = git('show', f'{sys.argv[1]}:PLAN.md') if len(sys.argv) > 1 else current
+active = doc.split('## 14. ', 1)[0]
+precursor = active.split('**C2d first precursor check', 1)[1].split('**Scoped cancellation', 1)[0]
+fu3 = active.split('- **FU3 ', 1)[1].split('- **FU4 ', 1)[0]
+fu5 = active.split('- **FU5 ', 1)[1].split('- **FU6 ', 1)[0]
+old = subprocess.run([sys.executable, '-c', extract(current, 'plan17-check'), *sys.argv[1:]], check=False)
+checks = {'retained plan17 checks': old.returncode == 0}
+for literal in ['history uses FU5', 'path and symbol resolution only', 'call/range shape checks',
+                'call range', 'whole call expression', 'property-only :1863', 'no supersession lookup']:
+    checks[f'W1 FU3 {literal}'] = literal in fu3
+checks['W1 remove semantic historical exception'] = 'Resolve historical O1 through' not in fu3
+checks['W1 section26 clarification'] = 'history exemption' in section(doc, 26).split('| N2 |', 1)[1].split('\n', 1)[0]
+for literal in ['P_overflow', 'P_marker', 'corresponding final run',
+                'measuredCeiling comes from P_overflow', 'determinism check',
+                'term-invariance evidence for both A and B',
+                "refusal's complete assembly_evidence", 'historical accounting family',
+                'retain the recomputed ledger', 'never read per-route fields from the refusal']:
+    checks[f'N1/N2 precursor {literal}'] = literal in precursor
+for literal in ['P_overflow/P_marker', 'refusal evidence']:
+    checks[f'N1/N2 FU5 {literal}'] = literal in fu5
+
+# Focused fixtures for the verified HEAD append only, not a TypeScript AST lint.
+# C1 must generalize call resolution to the child's AST and every cited symbol.
+path = 'packages/weave/src/runtime.ts'
+source = git('show', f'c8e6197:{path}').splitlines()
+checks['unchanged runtime'] = Path(path).read_text() == '\n'.join(source) + '\n'
+checks['call start pin'] = 'const attempted = this.append({' in source[1858]
+checks['property pin'] = "payload_type: 'recovery.attempted'" in source[1862]
+checks['call end pin'] = source[1865].strip() == '});'
+
+
+def append_pin_ok(text):
+    history = False
+    fence = None
+    for line in text.splitlines():
+        mark = re.match(r'^\s*(`{3,}|~{3,})', line)
+        if mark:
+            run = mark[1]
+            if fence is None:
+                fence = run
+            elif run[0] == fence[0] and len(run) >= len(fence) and not line.strip()[len(run):]:
+                fence = None
+            continue
+        if fence is None and line.startswith('## '):
+            history = bool(re.match(r'^## \d+\. Review disposition — ', line))
+        pins = re.findall(r'`([^`]+)` \(call (at|range) `([^`]+)`\)', line)
+        for symbol, kind, pin in pins:
+            file, lines = pin.rsplit(':', 1)
+            # Exemption skips shape only; nonexistent paths/symbols still fail.
+            if file != path or symbol != 'this.append' or 'this.append(' not in '\n'.join(source):
+                return False
+            if not history and (kind, lines) not in [('at', '1859'), ('range', '1859-1866')]:
+                return False
+    return True
+
+
+start = f'`this.append` (call at `{path}:1859`)'
+whole = f'`this.append` (call range `{path}:1859-1866`)'
+property_pin = f'`this.append` (call at `{path}:1863`)'
+partial = f'`this.append` (call range `{path}:1863-1866`)'
+checks['fixture call start accepted'] = append_pin_ok(start)
+checks['fixture whole call accepted'] = append_pin_ok(whole)
+checks['fixture property rejected'] = not append_pin_ok(property_pin)
+checks['fixture partial range rejected'] = not append_pin_ok(partial)
+checks['fixture truncated end rejected'] = not append_pin_ok(whole.replace('1859-1866', '1859-1863'))
+checks['fixture history shape exempt'] = append_pin_ok('## 16. Review disposition — O1\n' + property_pin)
+checks['fixture future history shape exempt'] = append_pin_ok('## 99. Review disposition — fixture\n' + partial)
+checks['fixture history path still checked'] = not append_pin_ok('## 16. Review disposition — O1\n' + property_pin.replace(path, 'missing.ts'))
+checks['fixture history symbol still checked'] = not append_pin_ok('## 16. Review disposition — O1\n' + property_pin.replace('this.append', 'this.missing'))
+checks['fixture leaving history rejects'] = not append_pin_ok('## 16. Review disposition — O1\n## Active\n' + property_pin)
+checks['fixture fenced heading grants no exemption'] = not append_pin_ok('## Active\n```md\n## 16. Review disposition — fake\n' + property_pin + '\n```')
+
+recipe = section(doc, 26).split('```sh\n', 1)[1].split('\n```', 1)[0].splitlines()[0]
+checks['N3 extractor anchored'] = r'.split("\n<!-- plan17-check -->\n```python\n", 1)' in recipe
+noise = recipe + '\n```python\nwrong block\n```\n'
+fixture = noise + '\n<!-- plan17-check -->\n```python\nright block\n```\n'
+checks['N3 extractor intervening fence fixture'] = extract(fixture, 'plan17-check') == 'right block'
+try:
+    extract(noise, 'plan17-check')
+except IndexError:
+    checks['N3 missing anchor fails closed'] = True
+else:
+    checks['N3 missing anchor fails closed'] = False
+for number in [7, 9, *range(14, 26)]:
+    checks[f'closed section {number} unchanged'] = section(doc, number) == section(base, number)
+
+
+def rows(text):
+    table = text.split('### 2.7 ', 1)[1].split('## 3. ', 1)[0]
+    return [line for line in table.splitlines() if line.startswith('| ')][2:]
+
+
+checks['all 19 trace rows preserved and two appended'] = rows(doc)[:19] == rows(base) and len(rows(doc)) == 21
+checks['section27 exists'] = '## 27. Review disposition — ' in doc
+checks['PLAN.md-only diff'] = set(git('diff', '--name-only', 'c8e6197').splitlines()) <= {'PLAN.md'}
+failed = [name for name, passed in checks.items() if not passed]
+print(f'{len(checks) - len(failed)}/{len(checks)} plan18 document/fixture checks pass')
+for name in failed:
+    print('FAIL:', name)
+sys.exit(bool(failed))
+```
+
+Plan18 observed results (Node v24.22.1 / npm 11.21.1): before editing, the
+original plan17 recipe passes 114/114 at c8e6197. The final retained plan18
+recipe against c8e6197 exits 1 with 34/57 checks passing and 23 failing;
+its prerequisite reports 113/114 because the updated exact trace count now
+requires 21 rows. Against the revised document it exits 0 with 57/57 passing,
+plus the prerequisite's 114/114 document/source checks. These include the
+property/partial-range/history-boundary fixtures, missing-path/symbol history
+fixtures, intervening-fence/missing-anchor extraction fixtures, preservation
+of §7/§9/§14–§25, all 19 original trace rows, exactly 21 resulting rows and
+the unchanged contiguous nine-row T9 table. All retained source-pin assertions
+pass at unchanged HEAD; `git diff --name-only c8e6197` lists only PLAN.md and
+`git diff --check c8e6197 -- PLAN.md` passes.
+
+`npm run fmt:check` exits 127 with `sh: 1: vp: not found`.
+`npm run verify` exits 127 at the same formatter gate, so later suite stages
+are not reached. FU-fmt remains open; neither formatting nor full-suite green
+is claimed. FU3/FU5 remain required implementation-child lint/behavioral work.
+No runtime tests, source, schemas, GLOSSARY, permissions or held-out cases change.
