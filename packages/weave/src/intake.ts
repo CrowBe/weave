@@ -28,6 +28,8 @@ import {
   type RecordedExtract,
 } from './sites/extract.js';
 
+export type { RecordedExtract };
+
 export const INTAKE_EXTRACT_SCHEMA = 'intake.message@1' as const;
 export const INTAKE_EXTRACT_SITE = 'intake.extract' as const;
 
