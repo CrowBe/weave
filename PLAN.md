@@ -1,9 +1,9 @@
 # PLAN — strict pre-flight context budget assembler (#353)
 
-Status: **plan only. This revision addresses the Claude Opus review of `25e1d0f` (plan11 dispositions in §20; plan10 in §19); no implementation is authorized by it.**
+Status: **plan only. This revision addresses the Claude Opus review of `a4c5825` (plan12 dispositions in §21; plan11 in §20; plan10 in §19); no implementation is authorized by it.**
 Issue: CrowBe/weave#353 (architecture parent). Branch `wv-353-context-budget-plan`, base `0281c5e`.
-Review target `25e1d0f`; source, tests and benchmarks there are identical to base `0281c5e`
-(`git diff --stat 0281c5e 25e1d0f` lists only `PLAN.md`).
+Review target `a4c5825`; source, tests and benchmarks there are identical to base `0281c5e`
+(`git diff --stat 0281c5e a4c5825` lists only `PLAN.md`).
 
 The issue text used here is the copy in the task brief. This plan revision did
 not read the remote issue; that source assumption is recorded as A1. Review
@@ -29,7 +29,7 @@ goal and audit material are never dropped to make a request fit.
 If the complete evidence cannot fit the observation bound, record the distinct
 durable persistence failure in §5.5; never claim a complete refusal was stored.
 
-## 2. Inventory at HEAD (`25e1d0f`; code identical to base `0281c5e`)
+## 2. Inventory at HEAD (`a4c5825`; code identical to base `0281c5e`)
 
 Symbols are the primary references; line numbers are secondary navigation hints,
 rechecked against this HEAD. A bare `symbol (file:N)` pin is the definition;
@@ -203,8 +203,9 @@ are not in `ViewSliceManifest` and are not counted anywhere.
 
 Traced before the plan11 design edits, at `25e1d0f`. HEAD has no context-stop
 records or clarification mechanism; those writes below are proposed C2d/C2d-Q
-insertions into the actual call paths, not existing HEAD behaviour. All pins
-in this table are in `packages/weave/src/runtime.ts`.
+insertions into the actual call paths, not existing HEAD behaviour. Rechecked
+at `a4c5825` and extended for plan12 without replacing the plan11 rows cited
+in §20. All pins in this table are in `packages/weave/src/runtime.ts`.
 
 | Path                                | HEAD calls and sequence/effect boundary                                                                                                                                                                                                                                                                                                                                             | Constraint on the proposed fix                                                                                                                                                                                                                                                                                                                                                 |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -214,6 +215,9 @@ in this table are in `packages/weave/src/runtime.ts`.
 | Reconcile's existing nested effects | Abandonment submits gateway ingress (`runtime.ts:1911-1923`, ingress wired at `:304`) which can cycle/drain through `admitStep` (`:583-593`). Generic lookup outcomes call `recordResult` (`:1879-1894`) or `recordReconciledStep` (`:1493`, drain at `:1506`), which can also drain.                                                                                               | HEAD does **not** have only one possible drain during all of reconcile. Preserve those existing generic/ingress paths; the new pre-pass adds none. The zero-allowance no-start fixture has no unrecorded inference, so abandonment cannot itself start work before that assertion. Test the intervening-abandonment path separately.                                           |
 | Replay execute versus feed          | `replayEnvironment.execute` calls framing (`runtime.ts:2625-2627`), finds a result by action (`:2628-2631`) and immediately reproduces runtime-source results (`:2640-2646`). `replay` skips runtime/judgment sources except review results (`:173`, `:2780-2784`). Trusted feed goes to `admitStep` (`:450-451`, `:583-593`); a fed runtime record does not trigger a cycle/drain. | Live synchronous stop dispositions need inline reproduction; recovery-delayed dispositions need feed at recorded seq. Selection, request/result consumption and queue continuation must be pinned together, with exactly one consumer per record. `reviewGoal` returns null even in live (`:1203-1214`), so its result-feed precedent cannot justify a uniform framing policy. |
 | Replay queue and equality           | `drainQueue` is disabled in replay (`runtime.ts:1778-1779`). `checkPrefix` compares complete canonical observations, including seq (`:2833-2845`); replay also checks log length and unfinished actions (`:2789-2797`).                                                                                                                                                             | Merely calling the same drain cannot reconstruct queued starts. C2d must explicitly reconstruct the recorded queue continuation at the live stop boundary through replay's non-executing environment, retaining strict seq/equality checks and zero host/gateway/journal calls. Recovery-fed runtime dispositions do not acquire a drain.                                      |
+| Drain stale-authority branch        | `drainQueue` rebuilds each pending candidate (`runtime.ts:1781-1801`); failed `stillAuthorized` (`:1399`, call at `:1802`) appends runtime-source `action.cancel_requested`, id `cancel:${action_id}:stale-authority`, then continues (`:1803-1812`). Replay's no-op drain and runtime-source skip omit that cancel too (`:1778-1779,2782-2784`).                                   | Stop-backed continuations must reconstruct and compare the cancel at its recorded seq using historical authority; never feed it as a runtime arrival. Generic drain replay remains out of scope (FU6).                                                                                                                                                                         |
+| Generic recovery replay gap         | `reconcileStep` appends runtime-source `recovery.attempted` (`runtime.ts:1859-1866`), may append runtime-source uncertain results (`:1879-1884,1893-1894`), then drains at `:1897`. Replay never reconciles and skips these arrivals (`:2754-2797`); `checkPrefix` (`:2833-2845`) detects displaced records.                                                                        | T9's non-exhausted generic recovery extension is recover/reload only; replay retains HEAD's failure at the first unreproduced recovery position. No generic recovery feed policy is added under #353 (FU6).                                                                                                                                                                    |
+| Crash during selected dispatches    | `runCycleOnce` dispatches all selected candidates with `forEach` (`runtime.ts:757-764`). Replay's execute-time result match (`:2628-2646`) does not suppress later selected dispatches after a crash.                                                                                                                                                                               | Crash-recovery cursor fixtures end selection with framing. A crash before later selected starts still fails closed in replay; T9-C1 pins prefix divergence against the recovery suffix. Only non-crash T9-L1 requires multiple selected candidates with replay success.                                                                                                        |
 
 ## 3. Decisions (architectural recommendations under D-ENG-021)
 
@@ -876,11 +880,10 @@ reassemble. C2d therefore:
   `recovery.attempted`, no recovery spend, no lookup grant and no host/gateway
   call for these framing actions, even with zero recovery allowance. An already
   accepted result is inert on later reload. The pre-pass never calls ordinary
-  `recordResult`, `drainQueue` or `environment.execute`. Queue draining added by
-  this feature stays at the existing end of reconcile (`:1897`), after remaining
-  generic work, and is not reached on its exhaustion early return (`:1856`).
-  Existing generic result/ingress nested drains remain as traced in §2.7; do not
-  mistake the final explicit drain for HEAD's only possible drain.
+  `recordResult`, `drainQueue` or `environment.execute`. The pre-pass adds no
+  drain; HEAD's end-of-reconcile drain (`:1897`) and existing nested
+  generic/ingress drains (§2.7) are unchanged, and the exhaustion early return
+  (`:1856`) still skips `:1897`.
   With no open inference to abandon, a pending queued action, an exhausted
   generic action ordered first and a stopped framing action second, the pre-pass
   finishes the framing disposition and then exhaustion returns: zero new
@@ -1158,52 +1161,110 @@ recovery-delayed after a crash between those writes; decide per record, not
 once for the whole action. An adjacent recovery-written record may be
 observationally identical to an inline record; adjacency permits in-memory
 reproduction only, never a new live effect or an unrecorded queue start.
+This cursor does not repair a crash-interrupted selection: `runCycleOnce` still
+visits later selected candidates (`runtime.ts:757-764`). T9-R0/R1 and the
+adjacent-suffix extension use a crashed cycle whose framing action is the last
+selected dispatch. If the crash prevented later selected starts from being
+written, the cursor does not skip those dispatches. T9-C1 uses a later
+report.review (replay returns null at `runtime.ts:2622-2623`) and an exhausted
+generic action so its regenerated start displaces the recovery suffix and
+fails with HEAD's prefix divergence, whether the framing disposition was
+inline or delayed. Assert that ordered prefix and failure in T9-C1; do not
+skip candidates, invent starts or relax equality to claim replay success.
 
 C1's feed-or-regenerate contract is keyed by **(record type, write site)**,
 including the continuation caused by that write:
 
-| Record / write site                                                                  | Replay policy and continuation                                                                                                                                                                                                                                                                                  |
-| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| C2d-Q overflow request / live execute                                                | Reproduce inline when next in seq, before the result and later selected starts. A crash-delayed suffix uses the feed branch. No drain from the request itself.                                                                                                                                                  |
-| Stopped `action.result@2` / live execute                                             | Reproduce inline through the checked v2 result step when next in seq; return outcome and reconstruct recorded queued starts before later selected candidates. Never call ordinary v1 `recordResult` or use a blanket feed policy.                                                                               |
-| C2d-Q request or stopped result / reconcile pre-pass                                 | When delayed past execute, return null there and feed at recorded seq. Feeding either runtime record admits/folds only, with no cycle or queue drain. Complete only the missing suffix, including request-durable/result-missing crashes; never invoke reconcile during replay.                                 |
-| `action.started` of already queued work / live result drain or recovery continuation | Reconstruct at the original recorded position using the pending queue identity and historical payload, through the non-executing replay environment below; never a host invocation or a freshly issued grant.                                                                                                   |
-| `recovery.exhausted` / generic early return after the new stop pre-pass              | In logs containing the new stopped-framing disposition, consume at recorded seq only after verifying remaining generic unfinished work and its recorded exhausted allowance. No drain, recovery attempt, lookup or repair. C2d owns this scoped ordering case; do not silently skip this runtime-source record. |
+| Record / write site                                                                                                                           | Replay policy and continuation                                                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C2d-Q overflow request / live execute                                                                                                         | Reproduce inline when next in seq, before the result and later selected starts. A crash-delayed suffix uses the feed branch. No drain from the request itself.                                                                                                                                                  |
+| Stopped `action.result@2` / live execute                                                                                                      | Reproduce inline through the checked v2 result step when next in seq; return outcome and reconstruct its recorded queued starts or stale-authority cancels before later selected candidates. Never call ordinary v1 `recordResult` or use a blanket feed policy.                                                |
+| C2d-Q request or stopped result / reconcile pre-pass                                                                                          | When delayed past execute, return null there and feed at recorded seq. Feeding either runtime record admits/folds only, with no cycle or queue drain. Complete only the missing suffix, including request-durable/result-missing crashes; never invoke reconcile during replay.                                 |
+| `action.started` of already queued work / stop-backed live v2 result drain or post-pre-pass end-of-reconcile drain in a log containing a stop | Reconstruct at the original recorded position using pending identity, historical payload and authority through the non-executing replay environment below. Only these two sites qualify; no host invocation or freshly issued grant.                                                                            |
+| `action.cancel_requested` / live-drain stale-authority at those same two stop-backed continuation sites                                       | Re-run historical `stillAuthorized` at the recorded seq, require rejection, and reconstruct the complete canonical cancel envelope inline (`runtime.ts:1802-1811`). Compare bytes and validation; never feed it as a runtime arrival. No general runtime-cancel predicate.                                      |
+| `recovery.exhausted` / generic early return after the new stop pre-pass                                                                       | In logs containing the new stopped-framing disposition, consume at recorded seq only after verifying remaining generic unfinished work and its recorded exhausted allowance. No drain, recovery attempt, lookup or repair. C2d owns this scoped ordering case; do not silently skip this runtime-source record. |
 
 C2d extends `replay()` (`packages/weave/src/runtime.ts:2754`) with
 `feedStopResult` beside `feedReviewResult` (`:2780-2781`), and C2d-Q adds its
-request predicate. C2d also adds scoped feed-loop predicates for a pending
-queue start not already reconstructed inline and for the exhausted-recovery
-record in the table above. They use the same seq/consumption checks; no general
-runtime-source bypass is introduced. Each disposition or queued start has
-exactly one cursor state: pending,
-reproduced inline, or fed. At its feed-loop entry, skip it only if already
-reproduced inline with identical bytes/seq; otherwise consume it only at nextSeq
-through trusted replay admission, preserving its recorded v2 payload and
-reference. Double consumption, no consumption, unknown/mismatched reference,
+request predicate. C2d also adds scoped feed-loop continuation predicates for a pending
+queue start or stale-authority cancel not already reconstructed inline,
+restricted to the two stop-backed continuation sites below, and a separate
+predicate for the scoped exhausted-recovery record in the table above. Both
+queue predicates enter checked in-memory reconstruction, never runtime
+arrival admission; matching the payload type, pending state or merely finding
+a stop somewhere in a log is insufficient.
+Stale-authority cancels at those sites are reconstructed inline by the same
+continuation cursor, including when reached from that feed-loop entry, and
+are never runtime arrivals. They use the same seq/consumption checks; no
+general runtime-source bypass is introduced. Each disposition, queued start
+or stale-authority cancel has exactly one cursor state: pending, reproduced
+inline, or fed (fed is unavailable for queue reconstruction). At its feed-loop
+entry, skip it only if already reproduced inline with identical bytes/seq;
+otherwise consume it only at nextSeq through the table's checked path:
+trusted replay admission for dispositions/exhaustion, in-memory reconstruction
+for queue starts/cancels. Preserve the recorded payload, version and reference.
+Double consumption, no consumption, unknown/mismatched reference,
 wrong order or validation failure is replay failure. No live ingress gains
 runtime-source authority. Keep `checkPrefix` (`:2833-2845`), final log-length
 and unfinished-action checks (`:2789-2797`) intact.
 
 **Recorded queue continuation.** HEAD `drainQueue` returns immediately in
 replay (`runtime.ts:1778-1779`), so calling it after an inline result cannot
-satisfy T9-L2. C2d composes its pending filtering/order, slot and historical
-authority checks (`:1781-1802`) with replay's non-executing environment. Consume
-only a next-seq recorded queue start matching an already accepted pending
-`action.queued`, including its action/candidate id, inputs, read set,
-reservation, recorded grant and invocation identity; cancelled work cannot
-start. Reconstruct the same canonical start (`:1813-1832`) and call only
+satisfy T9-L2. Only two queue continuation sites are in scope: the drain of a
+stop-backed inline result in the live v2 stopped-result step, and the existing
+post-pre-pass end-of-reconcile drain (`:1897`) in logs containing an accepted
+framing stop. The latter is eligible only after the non-draining pre-pass and
+any preceding generic records have been reproduced; it cannot bypass a generic
+recovery replay failure. These are checked historical write-site continuations,
+not permission to feed every queue record in a log containing a stop. Every
+other drain keeps HEAD's replay failure for unreproduced queue continuations:
+ingress (`:592`), ordinary result (`:1486`), reconciled result (`:1506`) and end-of-reconcile without a stop
+(`:1897`), including generic/ingress nested drains in stop-containing logs.
+FU6 tracks the generic gap outside #353; T9-G1 pins the unchanged failure.
+Arm the continuation cursor only inside the checked inline stopped-result step,
+or after the recorded pre-pass suffix is complete with no remaining non-pending
+generic unfinished action. An intervening ingress, ordinary result/reconciled
+write or generic recovery record ends that scope. A feed-loop entry must prove
+one of these cursor origins from the preceding recorded sequence and historical
+state; an ambiguous write site fails closed. A stop elsewhere in the log never
+arms this cursor.
+
+At either scoped site C2d composes pending filtering/order, slot and historical
+`stillAuthorized` checks (`:1781-1802`) with replay's non-executing environment.
+Already cancelled work is filtered out. For an unauthorized pending candidate,
+require a next-seq recorded `action.cancel_requested`, reconstruct the complete
+runtime-source envelope (`:1803-1811`), including
+`cancel:${action_id}:stale-authority`, null cause and the exact reason, compare
+canonical bytes/validation, then continue in the recorded queue order. An
+accepted start for that candidate, missing/wrong cancel or feeding it as an
+arrival fails. For authorized work, consume only a next-seq recorded start
+matching an accepted pending `action.queued`, including action/candidate id,
+inputs, read set, effects, reservation, recorded grant and invocation identity.
+Reconstruct the same canonical start (`:1813-1832`) and call only
 `replayEnvironment.execute` for its recorded outcome/decision, never
 `liveEnvironment`, `invokeHost`, `grantForLookup` or `reconcile`. Inline result
 continuations run before dispatch returns to later selected candidates.
-Recovery-delayed results fed from the pre-pass do not initiate this drain;
-any later recorded queued start is consumed separately at its recorded position
-under the queue entry above. Do not start another pending action just because
-it could run, or feed arbitrary runtime starts: no matching recorded start,
-no reconstruction; missing expected records or leftover pending work fail.
-No grant is issued, renewed or consumed and no journal/Weft/gateway/host effect
-occurs. T9 pins complete observation order and cycle/state equality, not only
-the final framing failure.
+Recovery-delayed results fed from the pre-pass do not initiate a drain; later
+queue entries qualify only at the scoped end-of-reconcile continuation above.
+Do not start another pending action just because it could run: no matching
+recorded start/cancel, no reconstruction. Missing expected records fail;
+leftover pending work retains HEAD's unfinished-action failure. No grant is
+issued, renewed or consumed and no journal/Weft/gateway/host effect occurs.
+T9 pins complete observation order and cycle/state equality, not only the
+final framing failure.
+
+**Generic recovery records remain unreplayable.** `recovery.attempted`
+(`runtime.ts:1859-1866`; runtime-only source in
+`packages/weave/src/validation.ts:35`) and runtime-source uncertain
+`action.result@1` written by `reconcileStep` (`runtime.ts:1879-1884,1893-1894`)
+keep HEAD's skip/divergence behaviour (`:2782-2784,2833-2845`). No feed rows for
+`recovery.attempted` or those uncertain results are added under #353, even in
+a log containing a stop. In T9's non-exhausted recovery fixture, compare the
+ordered reproduced prefix through the position before the first
+`recovery.attempted`, then assert the existing divergence at that position
+when the next fed record takes its seq. Do not claim queued replay success
+past it. A future generic recovery replay contract needs its own FU5 entries
+and ordering tests under FU6.
 
 The stop precedes its referencing result, exactly one of each per framing
 action; adjacency is not required. `reconcileStep` calls abandonment first
@@ -1345,23 +1406,37 @@ T9's required ordering rows (C2d/C2d-Q; deterministic fixtures, no hosted calls)
 finish other live actions before asserting full replay success. Incomplete crash
 prefixes retain HEAD's missing-result/unfinished-action failure; compare the
 ordered reproduced prefix as well as that failure, never relax it to pass.
+Crash-interrupted selections and generic recovery records also retain HEAD's
+prefix divergence, as specified in §6.6 and T9-C1/G1 below. T9-L1 is the only
+multi-selection replay-success row and is non-crash; all crash-success rows
+put framing last. T9-C1 separately pins multi-selection crash failure.
 
-| Row   | Fixture and required assertion                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Mutation that must fail                                                                                                                                                      |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T9-L1 | Live, non-crash overflow **and** marker, each with at least two candidates selected in the same cycle, slots >= 2 and framing first. Enable goal.review so formation offers goal.frame plus report.review (packages/weave/src/candidates.ts:108-130), with deterministic weights selecting both. Pin stop, overflow request if any, v2 result, then the later selected start; assert framing is terminal before that dispatch. Replay has identical ordered observations, cycles and state, one disposition, and zero journal/host/gateway/Weft calls.                                                                                                                       | Return null and feed all stop-backed dispositions uniformly; omit inline-request generation; duplicate inline records through feed.                                          |
-| T9-L2 | Live overflow with an already pending queued action that the accepted result's live drain actually starts. Establish the queue through supported slot-limited scheduling, not concurrent mutation of runtime state. Assert the new start/invocation follows the accepted result and precedes any later selected dispatch. Replay reconstructs exactly that pending action's start/outcome without invoking it or minting/consuming a grant. Include marker and cancelled/revoked queued-action variants: cancelled or unauthorized work never starts.                                                                                                                        | Leave HEAD's replay drain no-op as the only mechanism; feed the live result without its queue continuation; start all eligible pending work instead of only recorded starts. |
-| T9-R0 | Crash after refusal or marker, plus a generic running action first, stopped framing second, and a pending queued action; zero remaining recovery allowance and no unrecorded inference. Recovery writes missing request/result in the non-draining pre-pass, then generic recovery.exhausted. Assert zero new action.started and zero host invoke, no framing recovery attempt/spend/grant/lookup, one result after double reload. Replay consumes exhaustion at seq and reproduces the same no-start prefix without reconcile, then reports the existing unfinished-action failure while generic/pending work remains; do not claim replay success for this incomplete log. | Use ordinary recordResult or drain inside the pre-pass; move the pre-pass into the unfinished loop; skip the runtime recovery.exhausted record during replay.                |
-| T9-R1 | Real intervening frontier.weigh abandonment from the FW-T08 recovery fixture (packages/weave/test/frontier-weigh.test.ts:493), composed with the framing stop crash fixture. No pending queue in this row. Derive the order through recover/reconcile: stop, gateway abandonment and its actual cycle records, missing overflow request/result. Feed only delayed dispositions at seq, with no drain. Also crash after request acknowledgment before result, preserving the inline request and feeding only its delayed result; double reload/replay loses or duplicates nothing.                                                                                            | Regenerate all dispositions at execute, assume stop/result adjacency, reproduce the already durable request twice, or drain on a fed pre-pass result.                        |
+| Row   | Fixture and required assertion                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Mutation that must fail                                                                                                                                                                                         |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T9-L1 | Live, non-crash overflow **and** marker, each with at least two candidates selected in the same cycle, slots >= 2 and framing first. Enable goal.review so formation offers goal.frame plus report.review (packages/weave/src/candidates.ts:108-130), with deterministic weights selecting both. Pin stop, overflow request if any, v2 result, then the later selected start; assert framing is terminal before that dispatch. Replay has identical ordered observations, cycles and state, one disposition, and zero journal/host/gateway/Weft calls.                                                                                                                                                                                                    | Return null and feed all stop-backed dispositions uniformly; omit inline-request generation; duplicate inline records through feed.                                                                             |
+| T9-L2 | Live overflow with an already pending queued action and only framing selected in this cycle; the accepted result's live drain starts that pending work. Establish the queue through supported slot-limited scheduling, not concurrent mutation of runtime state. Assert start/invocation follows the accepted result. Replay reconstructs exactly that pending action's start/outcome without invoking it or minting/consuming a grant. Include marker, already-cancelled and revoked-authority variants: already-cancelled work is filtered; revoked work emits the exact runtime-source stale-authority cancel at the drain position and never starts. Pin bytes, seq and one consumer for each cancel/start, including cancel-then-next-eligible work. | Leave HEAD's replay drain no-op as the only mechanism; feed a live result without its continuation; omit or feed the stale-authority cancel; start all eligible pending work; duplicate a reconstructed record. |
+| T9-R0 | Crash after refusal or marker, plus a generic running action first, stopped framing second, and a pending queued action; zero remaining recovery allowance and no unrecorded inference. Recovery writes missing request/result in the non-draining pre-pass, then generic recovery.exhausted. Assert zero new action.started and zero host invoke, no framing recovery attempt/spend/grant/lookup, one result after double reload. Replay consumes exhaustion at seq and reproduces the same no-start prefix without reconcile, then reports the existing unfinished-action failure while generic/pending work remains; do not claim replay success for this incomplete log.                                                                              | Use ordinary recordResult or drain inside the pre-pass; move the pre-pass into the unfinished loop; skip the runtime recovery.exhausted record during replay.                                                   |
+| T9-R1 | Real intervening frontier.weigh abandonment from the FW-T08 recovery fixture (packages/weave/test/frontier-weigh.test.ts:493), composed with the framing stop crash fixture. No pending queue in this row. Derive the order through recover/reconcile: stop, gateway abandonment and its actual cycle records, missing overflow request/result. Feed only delayed dispositions at seq, with no drain. Also crash after request acknowledgment before result, preserving the inline request and feeding only its delayed result; double reload/replay loses or duplicates nothing.                                                                                                                                                                         | Regenerate all dispositions at execute, assume stop/result adjacency, reproduce the already durable request twice, or drain on a fed pre-pass result.                                                           |
+| T9-G1 | HEAD-shaped non-stop log where a host-result-triggered drain actually starts queued work, with complete results so missing-result checks do not mask the gap. Establish HEAD's replay baseline first, then require the same failure seq, reason and ordered prefix before and after C2d. Repeat with an unrelated stop elsewhere in the log: it must not qualify that generic drain for the new predicate.                                                                                                                                                                                                                                                                                                                                                | Apply queue feed/reconstruction to ordinary result, ingress or reconciled drains, or authorize it solely because the log contains a stop.                                                                       |
+| T9-C1 | Crash after framing stop but before the later selected report.review start was durably written, using T9-L1's goal.frame/report.review selection, plus a generic running action, zero recovery allowance and no open inference. Recovery writes recovery.exhausted after the pre-pass so the regenerated review start displaces that suffix. Exercise adjacent inline and delayed recovered dispositions; framing is not last. Assert HEAD's prefix divergence at the first regenerated later dispatch against the recovery suffix, with the ordered prefix and zero replay effects.                                                                                                                                                                      | Suppress later selected dispatches, invent missing journal records or relax prefix equality to turn this into replay success.                                                                                   |
 
 Keep fixture setup within the existing single-writer scheduling contract;
 FW-T08 alone does not prove that the composite state is reachable. Each child
 must establish that reachability before claiming red/green, including valid
 request admission and one pending frontier weighing. Extend T9-R1 with an
-adjacent recovery suffix (no intervening arrival) and with non-exhausted
-recovery that eventually starts queued work: reconstruct only its recorded
-starts at their original positions, never a pre-pass-triggered drain. Missing
-or duplicate queue starts/results must fail, not be silently omitted. T8/T16
-repeat the relevant cancellation, response/grant non-reuse and distinct-owner
+adjacent recovery suffix (no intervening arrival), with framing last selected;
+the per-record cursor may reproduce that suffix inline without live effects.
+The non-exhausted recovery extension is recover/reload only: no open inference
+to abandon; the remaining generic action is already uncertain and lookup
+remains unknown, so it writes `recovery.attempted` but no new result/reconciled
+record or nested drain (`runtime.ts:1878-1895`). Queued starts happen only at
+reconcile end, never from the pre-pass. Finish queued work and reload twice:
+exactly one queued start and result, no duplication or loss. For replay assert
+the ordered prefix up to the first `recovery.attempted` and HEAD's divergence
+there (§6.6), rather than replay success for this generic recovery log. Missing
+or duplicate queue starts/results fail recover/reload assertions; do not add
+feeds to get beyond generic recovery records. T8/T16 repeat the relevant
+cancellation, response/grant non-reuse and distinct-owner
 cases. T11/T15 fault each durable stop/request/result boundary, including
 PersistError-as-rejected and written-then-throws, with queued work present;
 replay neither repairs nor duplicates an ambiguous write.
@@ -1662,7 +1737,7 @@ current meanings. Token ceilings and monetary reservations are distinct.
   sources, not repository evidence. No remote issue/model call or network
   verification is claimed.
 
-Tracked follow-ups (from the earlier reviews, extended by `25e1d0f`; none blocks C1):
+Tracked follow-ups (from the earlier reviews, extended through `a4c5825`; none blocks C1):
 
 - **FU1 (benchmark ambient clock).** `checks/no-ambient-clock.mjs` does not scan
   `benchmarks/`, and the frontier-weigh harness legitimately reads the wall
@@ -1717,7 +1792,7 @@ Tracked follow-ups (from the earlier reviews, extended by `25e1d0f`; none blocks
   ordinary recordResult has already drained must fail T11/T15 with queued
   work present and zero subsequent starts/invokes after a failed write.
 - **FU5 (repeated finding becomes a check: replay write-site/continuation policy).**
-  §16 O3/§17 N1, §19 E1 and §20 E1/W2 require an explicit feed-or-regenerate
+  §16 O3/§17 N1, §19 E1, §20 E1/W2 and §21 W1/W2/N1 require an explicit feed-or-regenerate
   policy per **(record type, write site)**, covering synchronous live writes
   inside dispatch as well as recovery writes, not just records recovery can
   append after a crash. Each entry names its owner, validation, ordering and
@@ -1726,13 +1801,27 @@ Tracked follow-ups (from the earlier reviews, extended by `25e1d0f`; none blocks
   the next-seq contiguous prefix inline and its recorded queue continuation;
   recovery-delayed records feed at seq with no drain. Exactly one cursor
   consumes each record; a partial inline prefix cannot cause double feed.
-  Include queued-start reconstruction and the generic exhaustion record in
-  affected recovery traces. T9-L1/L2/R0/R1 must reject uniform-feed,
-  uniform-regenerate, replay-drain-no-op and pre-pass-drain mutations.
+  Include queued-start and stale-authority cancel reconstruction as separate
+  required continuation entries, scoped to §6.6's two stop-backed sites, plus
+  the generic exhaustion record in affected recovery traces. Generic recovery
+  records remain outside this policy (FU6). T9-L1/L2/R0/R1/C1/G1 must reject
+  uniform-feed, uniform-regenerate, replay-drain-no-op, pre-pass-drain,
+  omitted-cancel and unscoped-queue-feed mutations. The coverage check also
+  requires T9-G1's preserved HEAD failure and T9-C1's mid-selection divergence;
+  a broad queue predicate cannot pass on stop-only success fixtures.
   A missing (type, write site) entry or a changed feed/continuation policy
   without an ordering test fails the child's contract/coverage check. No
   runtime-source record gains a blanket feed bypass. This is required child
   test/lint work, not a check implemented in this PLAN.md-only revision.
+- **FU6-generic-queue-replay (record only; out of scope for #353).** At HEAD,
+  `drainQueue` is a replay no-op (`packages/weave/src/runtime.ts:1778-1779`),
+  so queued starts and stale-authority runtime cancels (`:1802-1832`) from
+  ingress/result/reconciled/end-of-reconcile drains (`:592,1486,1506,1897`)
+  are not reproduced. Generic recovery's runtime-source `recovery.attempted`
+  and uncertain results (`:1859-1866,1879-1884,1893-1894`) also lack replay
+  policy. Track a separate contract and FU5 coverage outside #353. C2d only
+  handles the two stop-backed continuation sites in §6.6; all other drains
+  and generic recovery records retain HEAD's fail-closed replay, pinned by T9.
 
 ## 14. Review disposition — GLM review of `4306bf0`
 
@@ -1928,3 +2017,51 @@ with `spawnSync(process.execPath, ...)` returns status 1, error `EPERM`
 full-suite stages were not reached. No test, fixture, permission or validation
 was changed to bypass this environment blocker. Implementation children must
 run the full suite where subprocesses work before claiming behavioral green.
+
+## 21. Review disposition — Claude Opus review of `a4c5825` (plan12)
+
+Source read: `/workspace/wvops/WV-353-review-a4c5825.json` (A7). Reported risk
+medium, no errors: W1/W2 warnings and N1/N2 notes auto-fix; N3–N5 no-change;
+empty `ask_user`. Claims were checked against HEAD `a4c5825` source and tests.
+These are concrete engineering recommendations under D-ENG-021, with no new
+product fork. D-ENG-025/026/027 remain closed. §7, §9, §14–§16 (including H1–H5
+and plan6/plan7), and §18–§20 remain intact; §2.7's call-path trace cited in §20
+is extended without replacing its earlier rows. Only PLAN.md changes.
+
+| ID  | Severity / action  | HEAD evidence and disposition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| W1  | warning / auto-fix | Confirmed: `drainQueue` (`packages/weave/src/runtime.ts:1777`) is a replay no-op (`:1778-1779`), and its failed `stillAuthorized` (`:1399`, call at `:1802`) writes runtime-source `action.cancel_requested` (`:1803-1811`), skipped by `replay` (`:2782-2784`). §6.6/FU5 add the required stale-authority cancel write-site/continuation entry with historical authority, canonical equality and inline-only consumption. Queue reconstruction is restricted to the stop-backed live v2 result drain and post-pre-pass end-of-reconcile drain in stop logs; generic/ingress nested drains stay unchanged. T9-L2 covers cancelled/revoked work and cancel-then-start order; T9-G1 preserves the generic host-result drain replay failure, including an unrelated-stop variant. FU6 records the broader gap outside #353. |
+| W2  | warning / auto-fix | Confirmed: `reconcileStep` appends runtime-only `recovery.attempted` (`packages/weave/src/runtime.ts:1859-1866`; source gate `packages/weave/src/validation.ts:35`) and may append runtime-source uncertain results (`runtime.ts:1879-1884,1893-1894`); replay skips them and never calls reconcile (`:2754-2797`). §6.6 adds no feed rows for generic recovery. T9-R1's non-exhausted extension is recover/reload only, using already-uncertain generic work and unknown lookup to avoid nested result drains. Assert starts only at reconcile end, one queued start/result across double reload, and replay's existing divergence at the first recovery.attempted position with its reproduced prefix. Any future generic replay policy needs a separate FU6 contract and FU5 rows/tests.                              |
+| N1  | note / auto-fix    | Confirmed: `runCycleOnce` dispatches every selected candidate (`packages/weave/src/runtime.ts:757-764`); the per-record cursor cannot suppress starts lost to a mid-selection crash. §6.6/T9-R0/R1 and the adjacent suffix put framing last selected. T9-C1 asserts prefix divergence when later selected starts were never written, for inline and delayed dispositions. T9-L1 remains the only multi-selection success row and is non-crash.                                                                                                                                                                                                                                                                                                                                                                           |
+| N2  | note / auto-fix    | Confirmed: `reconcileStep` already ends with `drainQueue` (`packages/weave/src/runtime.ts:1897`); its exhaustion return is `:1856`, and nested drains remain at `:592,1486,1506`. §5.5 now says the pre-pass adds no drain and preserves these existing paths, matching §2.7/§20 W2.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| N3  | note / no-change   | No change: plan11's dispositions are in §20, plan7's O1–O4 in §16; source/test pins rechecked against `Runtime.reconcileStep`, `grantForLookup`, `lookupAuthorized`, replay/profile helpers and the p8 declarations (`packages/weave/test/p8.test.ts:1096,1903`); §16 remains intact.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| N4  | note / no-change   | No change to §20 E1/W1/W2 or its earlier trace rows: `Runtime.dispatch`, live/replay environments, `recordResultStep`, `admitStep` and `reconcileStep` confirm the recorded ordering, validation and non-draining pre-pass evidence; W1/W2 above narrow the continuation scope.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| N5  | note / no-change   | No change to historical verification reports: this review reran no npm scripts; plan12 records its own observed checks below, and implementation children still owe `npm run verify` where subprocesses work.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+
+FU6-generic-queue-replay is record-only and out of scope for #353 (§13).
+FU5 requires child test/lint coverage for this repeated replay finding; no
+implemented runtime check or behavioral green is claimed by this plan revision.
+Cancellation, concurrent owners, single-use response/grant non-reuse and
+crashes between durable stop/request/result/queue writes remain required by
+T8/T9/T11/T15/T16. No parked parent, hosted inference, benchmark route, shuffle
+setting, permission or grant contract changes.
+
+Plan12 verification (Node 22 at `/home/box/.local/node22/bin`): a temporary
+review-requirement document check failed on twelve missing requirements before
+editing and passes all fourteen checks afterwards, including preservation of
+§7/§9/§14–§16/§18–§20, all earlier call-path rows and the PLAN.md-only scope.
+Source/test symbols and pins were checked directly at `a4c5825`. Prettier
+`--write PLAN.md` and `--check PLAN.md` pass, as does `git diff --check`.
+These are document checks, not runtime behavioral red/green or an implemented
+FU5 lint.
+
+`npm run verify` passes `npm run fmt:check` (506 files) and `npm run check`
+(benchmark digest/cache tests and all five source-policy checks), then stops
+at `npm run test:checks`: unchanged `checks/test/checks.test.mjs` fails; the
+other two files pass. Direct execution reports five fixture-output assertion
+failures. Reproducing its no-ambient-env child call with
+`spawnSync(process.execPath, ...)` returns status 1 and `EPERM`
+(`spawnSync /home/box/.local/node22/bin/node`), with empty stdout/stderr.
+Later full-suite stages were not reached. No source, test, fixture, permission
+or validation was changed to bypass the environment blocker. Implementation
+children must run the full suite where subprocesses work.
