@@ -127,6 +127,7 @@ export {
   type SiteState,
   type SiteInput,
   type IntakeState,
+  type IntakeHints,
   type IntakeSiteInput,
   type SiteInputFor,
   type RouteOutcome,
@@ -138,6 +139,29 @@ export {
   type SiteTransition,
   type ProgressChoice,
 } from './sites/index.js';
+export {
+  assertExtractSchema,
+  defineExtractSchema,
+  evaluateExtract,
+  extractInstructions,
+  gateExtract,
+  observeExtract,
+  parseExtract,
+  type ExtractAnswer,
+  type ExtractCall,
+  type ExtractChoiceAnswer,
+  type ExtractGateMeta,
+  type ExtractObservation,
+  type ExtractParseResult,
+  type ExtractReason,
+  type ExtractSchema,
+  type ExtractSlotObservation,
+  type ExtractSlotSpec,
+  type ExtractSlotStatus,
+  type ExtractSpanAnswer,
+  type ExtractVerdict,
+  type RecordedExtract,
+} from './sites/extract.js';
 
 export {
   progressDelta,
@@ -291,3 +315,12 @@ export {
   type RouteRefusal,
   type RouteRequest,
 } from './input-route.js';
+export {
+  INTAKE_EXTRACT_SCHEMA,
+  INTAKE_EXTRACT_SITE,
+  decideIntake,
+  intakeExtractSchema,
+  transitionIntake,
+  type IntakeDecision,
+  type RecordedIntake,
+} from './intake.js';

@@ -1,5 +1,11 @@
 /** P5 judgments are observations; these transitions confer no dispatch authority. */
-import type { EvaluationContent, EvaluationOutcome, InferenceGateway, InferenceTerms } from '@weave/gateway';
+import type {
+  EvaluationContent,
+  EvaluationOutcome,
+  GenerationOutcome,
+  InferenceGateway,
+  InferenceTerms,
+} from '@weave/gateway';
 import type { ProcessState } from '../operating-process.js';
 
 export const SITE_POLICY = {
@@ -53,6 +59,12 @@ export interface SiteInput extends SiteState {
   /** True for a step that needs dispatch: an outage must pause it. */
   readonly needs_dispatch: boolean;
 }
+/** Hints are grounded substrings and closed-vocabulary ids only; the original stays authoritative. */
+export type IntakeHints = {
+  readonly schema: 'intake.message@1';
+  readonly thread_ref: { readonly value: string; readonly cue: string | null } | null;
+  readonly request: string | null;
+};
 /** Intake discloses one inbound message and running-thread summaries; nothing channel-specific. */
 export type IntakeState = {
   readonly message: string;
@@ -60,6 +72,7 @@ export type IntakeState = {
     readonly thread_id: string;
     readonly summary: string;
   }[];
+  readonly hints?: IntakeHints;
 };
 export interface IntakeSiteInput extends SiteInput {
   readonly state: IntakeState;
@@ -150,7 +163,7 @@ const OUTAGE_FAILURES: readonly string[] = [
   'timeout',
   'cancelled',
 ];
-export function decisionUnavailable(outcome: EvaluationOutcome | null): boolean {
+export function decisionUnavailable(outcome: EvaluationOutcome | GenerationOutcome | null): boolean {
   if (!outcome || outcome.paused !== undefined) return true;
   if (outcome.status === 'accepted') return false;
   if (outcome.status === 'blocked')
