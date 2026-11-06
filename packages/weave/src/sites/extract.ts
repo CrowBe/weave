@@ -7,11 +7,7 @@
  * explicit empty value. A gate failure never reaches the site.
  */
 import type { GenerationOutcome, InferenceGateway, InferenceTerms } from '@weave/gateway';
-import {
-  correlation,
-  decisionUnavailable,
-  type SiteState,
-} from './index.js';
+import { correlation, decisionUnavailable, type SiteState } from './index.js';
 
 export type ExtractSlotSpec =
   | { readonly kind: 'span'; readonly required: boolean; readonly instructions: string }
@@ -271,18 +267,14 @@ export function gateExtract(
   const checked = assertExtractSchema(schema);
   const attempt = meta.attempt ?? 1;
   const admitted = admittedAnswer(answer);
-  const slots = Object.entries(checked.slots).map(([slot, spec]) =>
-    observeSlot(slot, spec, original, admitted),
-  );
+  const slots = Object.entries(checked.slots).map(([slot, spec]) => observeSlot(slot, spec, original, admitted));
   const residual = Object.entries(checked.slots)
     .filter(([slot, spec]) => spec.required && slots.find((item) => item.slot === slot)?.status !== 'grounded')
     .map(([slot]) => slot);
   const unfaithful = slots.some((item) => item.status === 'ungrounded' || item.status === 'out_of_set');
   const verdict =
-    meta.verdict ??
-    (admitted === null || unfaithful ? (attempt === 1 ? 're_extract' : 'original_only') : 'use_hints');
-  const reason =
-    meta.reason ?? (admitted === null ? 'no_answer' : unfaithful ? 'unfaithful' : 'faithful');
+    meta.verdict ?? (admitted === null || unfaithful ? (attempt === 1 ? 're_extract' : 'original_only') : 'use_hints');
+  const reason = meta.reason ?? (admitted === null ? 'no_answer' : unfaithful ? 'unfaithful' : 'faithful');
   return {
     schema: 'extract@1',
     site: meta.site ?? 'intake.classify',

@@ -15,12 +15,7 @@ import {
   type RecordedExtract,
   type RecordedIntake,
 } from '../src/intake.js';
-import {
-  evaluateSite,
-  type IntakeSiteInput,
-  type RecordedSiteAnswer,
-  type SiteState,
-} from '../src/sites/index.js';
+import { evaluateSite, type IntakeSiteInput, type RecordedSiteAnswer, type SiteState } from '../src/sites/index.js';
 
 const MESSAGE_CANARY = 'CANARY-7f3a';
 const PROVIDER_CANARY = 'PROVIDER-CANARY-9c2d';
@@ -48,10 +43,7 @@ const ask: IntakeSiteInput = {
 const now = () => ({ ...revision, observed_at: 10 });
 
 type Generate = (request: GenerationRequest, signal?: AbortSignal) => Promise<GenerationOutcome>;
-type Evaluate = (
-  request: EvaluationRequest<'choice'>,
-  signal?: AbortSignal,
-) => Promise<EvaluationOutcome<'choice'>>;
+type Evaluate = (request: EvaluationRequest<'choice'>, signal?: AbortSignal) => Promise<EvaluationOutcome<'choice'>>;
 
 function acceptedGeneration(
   request: GenerationRequest,
@@ -174,8 +166,7 @@ test('an unfaithful first attempt re-extracts with fixed feedback and never echo
   const fake = port({
     generate: async (request) => {
       calls.push(request);
-      if (request.request_id.endsWith(':x1'))
-        return acceptedGeneration(request, payload('T2', PROVIDER_CANARY));
+      if (request.request_id.endsWith(':x1')) return acceptedGeneration(request, payload('T2', PROVIDER_CANARY));
       return acceptedGeneration(request, payload('T2', 'T2'));
     },
     evaluate: async (request) => acceptedChoice(request),
@@ -246,10 +237,10 @@ test('an extract outage degrades to the original, never pauses, and keeps diagno
       const record = await decideIntake({ ...ask, needs_dispatch }, fake.fake, now);
       assert.equal(fake.generateCalls.length, 1);
       assert.equal(fake.evaluateCalls.length, 1);
-      assert.deepEqual([extractOf(record).verdict, extractOf(record).reason], [
-        'original_only',
-        'decision_unavailable',
-      ]);
+      assert.deepEqual(
+        [extractOf(record).verdict, extractOf(record).reason],
+        ['original_only', 'decision_unavailable'],
+      );
       assert.ok(!JSON.stringify(record).includes(PROVIDER_CANARY));
     }
   }
@@ -261,18 +252,12 @@ test('unresolved required ambiguity asks the operator only when several threads 
     generate: async (request) => acceptedGeneration(request, payload(null, 'the second thread')),
     evaluate: async (request) => acceptedChoice(request),
   });
-  const asked = await decideIntake(
-    { ...ask, state: { message: ambiguous, running_threads: threads } },
-    two.fake,
-    now,
-  );
+  const asked = await decideIntake({ ...ask, state: { message: ambiguous, running_threads: threads } }, two.fake, now);
   assert.equal(two.evaluateCalls.length, 0);
-  assert.deepEqual([asked.decided_by, asked.choice, asked.status, asked.reason], [
-    'extract',
-    'ask_user',
-    'needs_human',
-    'ambiguous_reference',
-  ]);
+  assert.deepEqual(
+    [asked.decided_by, asked.choice, asked.status, asked.reason],
+    ['extract', 'ask_user', 'needs_human', 'ambiguous_reference'],
+  );
   assert.deepEqual(extractOf(asked).residual_ambiguity, { count: 1, slots: ['thread_ref'] });
 
   const one = port({
@@ -306,7 +291,12 @@ test('cancellation makes no further calls and records a paused decision', async 
   const before = new AbortController();
   before.abort();
   const none = port();
-  const pre = await decideIntake(ask, { ...none.fake, generate: async () => assert.fail('must not generate') }, now, before.signal);
+  const pre = await decideIntake(
+    ask,
+    { ...none.fake, generate: async () => assert.fail('must not generate') },
+    now,
+    before.signal,
+  );
   assert.deepEqual([pre.status, pre.reason], ['paused', 'cancelled']);
   assert.equal(pre.extract.length, 1);
   assert.equal(extractOf(pre).reason, 'cancelled');
@@ -358,8 +348,7 @@ test('a revision change after extraction stops before the site and marks the ans
   assert.deepEqual([extractOf(record).verdict, extractOf(record).reason], ['original_only', 'stale_answer']);
 
   const mismatched = port({
-    generate: async (request) =>
-      acceptedGeneration(request, payload('T2', 'T2'), { request_id: 'other:x1' }),
+    generate: async (request) => acceptedGeneration(request, payload('T2', 'T2'), { request_id: 'other:x1' }),
     evaluate: async (request) => acceptedChoice(request),
   });
   const retried = await decideIntake(ask, mismatched.fake, now);
@@ -386,12 +375,15 @@ test('concurrent decisions bind to their own request ids and captured input', as
   deferred[0]!.resolve(acceptedGeneration(deferred[0]!.request, payload('T2', 'T2')));
   const [r1, r2] = await Promise.all([p1, p2]);
   assert.deepEqual([r1.request_id, r2.request_id], ['first', 'second']);
-  assert.deepEqual(r1.extract.map((item) => item.request_id), ['first:x1']);
-  assert.deepEqual(r2.extract.map((item) => item.request_id), ['second:x1']);
   assert.deepEqual(
-    fake.evaluateCalls.map((item) => item.request_id).sort(),
-    ['first', 'second'],
+    r1.extract.map((item) => item.request_id),
+    ['first:x1'],
   );
+  assert.deepEqual(
+    r2.extract.map((item) => item.request_id),
+    ['second:x1'],
+  );
+  assert.deepEqual(fake.evaluateCalls.map((item) => item.request_id).sort(), ['first', 'second']);
 
   const mutationDeferred: { request: GenerationRequest; resolve: (value: GenerationOutcome) => void }[] = [];
   const mutablePort = port({
@@ -410,9 +402,7 @@ test('concurrent decisions bind to their own request ids and captured input', as
     message: 'MUTATED',
     running_threads: [],
   };
-  mutationDeferred[0]!.resolve(
-    acceptedGeneration(mutationDeferred[0]!.request, payload('T2', 'T2')),
-  );
+  mutationDeferred[0]!.resolve(acceptedGeneration(mutationDeferred[0]!.request, payload('T2', 'T2')));
   const record = await pending;
   assert.equal(mutationDeferred[0]!.request.input.prompt.includes(MESSAGE), true);
   assert.equal((mutablePort.evaluateCalls[0]!.state as { message: string }).message, MESSAGE);
@@ -420,8 +410,7 @@ test('concurrent decisions bind to their own request ids and captured input', as
 });
 
 test('replay rebuilds the same record from recorded outcomes without a port', async () => {
-  const generateOutcome = (request: GenerationRequest) =>
-    acceptedGeneration(request, payload('T2', 'T2'));
+  const generateOutcome = (request: GenerationRequest) => acceptedGeneration(request, payload('T2', 'T2'));
   let generated: GenerationOutcome | null = null;
   let evaluated: EvaluationOutcome<'choice'> | null = null;
   const fake = port({
@@ -496,18 +485,11 @@ test('replay rejects a second extract after a recorded stop', () => {
     outcome: second,
   } as RecordedExtract;
   const site = recordedSite(
-    acceptedChoice(
-      { request_id: 'intake-1', site: 'intake.classify' } as EvaluationRequest<'choice'>,
-    ),
+    acceptedChoice({ request_id: 'intake-1', site: 'intake.classify' } as EvaluationRequest<'choice'>),
   );
 
   assert.throws(
-    () =>
-      transitionIntake(
-        ask,
-        { extracts: [{ ...recordedFirst, cancelled: true }, recordedSecond], site },
-        revision,
-      ),
+    () => transitionIntake(ask, { extracts: [{ ...recordedFirst, cancelled: true }, recordedSecond], site }, revision),
     /recorded stop cannot be followed by a second extraction/,
   );
   assert.throws(
@@ -527,11 +509,7 @@ test('replay rejects a second extract after a recorded stop', () => {
     ...recordedFirst,
     outcome: generationFor('intake-1:x1', payload('T2', 'not in the message')),
   };
-  const replayed = transitionIntake(
-    ask,
-    { extracts: [retryFirst, recordedSecond], site },
-    revision,
-  );
+  const replayed = transitionIntake(ask, { extracts: [retryFirst, recordedSecond], site }, revision);
   assert.equal(replayed.decided_by, 'site');
   assert.equal(replayed.extract.length, 2);
   assert.equal(replayed.extract[0]!.verdict, 're_extract');

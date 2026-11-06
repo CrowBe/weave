@@ -3,12 +3,7 @@
  * original message, then ask `intake.classify` only when no stop or operator
  * ambiguity decides first. The original message is always authoritative.
  */
-import type {
-  EvaluationKind,
-  EvaluationOutcome,
-  EvaluationRequest,
-  InferenceGateway,
-} from '@weave/gateway';
+import type { EvaluationKind, EvaluationOutcome, EvaluationRequest, InferenceGateway } from '@weave/gateway';
 import { stableStringify } from './stable-json.js';
 import {
   correlation,
@@ -184,16 +179,13 @@ function planIntake(ask: IntakeSiteInput, recorded: RecordedIntake): IntakePlan 
   if (final.reason === 'stale_answer')
     return { observations, final, hints: null, askOperator: false, stop: 'needs_human', needsExtract: false };
   if (final.verdict === 're_extract') {
-    if (observations.length >= 2)
-      throw new Error('a second extraction cannot request another extraction');
+    if (observations.length >= 2) throw new Error('a second extraction cannot request another extraction');
     return { observations, final, hints: null, askOperator: false, stop: null, needsExtract: true };
   }
   const hints = final.verdict === 'use_hints' ? hintsFor(ask.state, final) : null;
   const thread = final.slots.find((slot) => slot.slot === 'thread_ref');
   const askOperator =
-    final.verdict === 'use_hints' &&
-    thread?.status === 'unresolved' &&
-    ask.state.running_threads.length >= 2;
+    final.verdict === 'use_hints' && thread?.status === 'unresolved' && ask.state.running_threads.length >= 2;
   return { observations, final, hints, askOperator, stop: null, needsExtract: false };
 }
 
@@ -219,11 +211,7 @@ function decision(
 }
 
 /** Pure record construction and replay from recorded outcomes; no port is touched. */
-export function transitionIntake(
-  ask: IntakeSiteInput,
-  recorded: RecordedIntake,
-  current: SiteState,
-): IntakeDecision {
+export function transitionIntake(ask: IntakeSiteInput, recorded: RecordedIntake, current: SiteState): IntakeDecision {
   const plan = planIntake(ask, recorded);
   if (plan.needsExtract) throw new Error('intake extraction needs a second recorded attempt');
   if (plan.stop === 'paused')
@@ -231,27 +219,11 @@ export function transitionIntake(
   if (plan.stop === 'needs_human')
     return decision(ask, 'extract', 'ask_user', 'needs_human', 'stale_answer', plan.observations, null);
   if (plan.askOperator)
-    return decision(
-      ask,
-      'extract',
-      'ask_user',
-      'needs_human',
-      'ambiguous_reference',
-      plan.observations,
-      null,
-    );
+    return decision(ask, 'extract', 'ask_user', 'needs_human', 'ambiguous_reference', plan.observations, null);
   if (recorded.site === null) throw new Error('intake site answer is missing');
   const siteInput: IntakeSiteInput = { ...ask, state: siteState(ask.state, plan.hints) };
   const site = transitionSite('intake.classify', siteInput, recorded.site, current);
-  return decision(
-    ask,
-    'site',
-    site.choice,
-    site.status,
-    site.observation.reason,
-    plan.observations,
-    site.observation,
-  );
+  return decision(ask, 'site', site.choice, site.status, site.observation.reason, plan.observations, site.observation);
 }
 
 /**
@@ -271,12 +243,7 @@ export async function decideIntake(
   extracts.push(first.recorded);
   let plan = planIntake(captured, { extracts, site: null });
   if (plan.needsExtract) {
-    const second = await attemptExtract(
-      callFor(captured, schema, 2, feedbackFor(plan.final)),
-      port,
-      now,
-      signal,
-    );
+    const second = await attemptExtract(callFor(captured, schema, 2, feedbackFor(plan.final)), port, now, signal);
     extracts.push(second.recorded);
     plan = planIntake(captured, { extracts, site: null });
   }
@@ -296,13 +263,7 @@ export async function decideIntake(
       return outcome;
     },
   };
-  await evaluateSite(
-    'intake.classify',
-    siteInput,
-    capturingPort,
-    () => (siteNow = now()),
-    signal,
-  );
+  await evaluateSite('intake.classify', siteInput, capturingPort, () => (siteNow = now()), signal);
   const observed = siteNow ?? { ...lastState(extracts), observed_at: lastState(extracts).state_updated_at };
   const recordedSite: RecordedSiteAnswer = {
     state_revision: siteInput.state_revision,

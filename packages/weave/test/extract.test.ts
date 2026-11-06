@@ -67,7 +67,13 @@ test('span grounding is exact UTF-16 substring matching with offsets', () => {
     value: null,
     span: [MESSAGE.indexOf('invoice reconciliation'), MESSAGE.indexOf('invoice reconciliation') + 22],
   });
-  for (const value of ['invoice reconciliatioN', 'Invoice reconciliation', 'invoice reconciliation ', ' invoice reconciliation ', '']) {
+  for (const value of [
+    'invoice reconciliatioN',
+    'Invoice reconciliation',
+    'invoice reconciliation ',
+    ' invoice reconciliation ',
+    '',
+  ]) {
     const result = gate({ thread_ref: { value: null, cue: null }, request: { value } });
     assert.equal(slot(result, 'request').status, 'ungrounded', value);
     assert.equal(slot(result, 'request').span, null);
@@ -154,11 +160,8 @@ test('a list kind, empty options, or a credential-shaped option is rejected when
     assert.throws(() => assertExtractSchema({ ...base, slots } as ExtractSchema));
   }
   assert.throws(() =>
-    gateExtract(
-      { id: 'bad@1', slots: { target: { kind: 'list' } } } as unknown as ExtractSchema,
-      MESSAGE,
-      null,
-      { attempt: 1 },
-    ),
+    gateExtract({ id: 'bad@1', slots: { target: { kind: 'list' } } } as unknown as ExtractSchema, MESSAGE, null, {
+      attempt: 1,
+    }),
   );
 });
