@@ -186,6 +186,13 @@ Recovery without an explicit resume returns paused / `dispatch_unconfirmed` and
 makes no port call; an explicit resume re-presents the same intent once, and
 only when no dispatch attempt for it is live.
 
+A **presented intent** is one an attempt journaled as presented just before it
+called the port, with no receipt appended since. The port may have carried it
+out, so an explicit resume first reads the port's settlement for the decision
+id: a settled receipt is journaled once, and an unresolved read leaves it paused
+/ `dispatch_unconfirmed` (re-presented only if the state is unchanged). A
+presented intent is never paused `stale_answer`; an intent never presented is.
+
 ### Dispatch attempt
 
 The journal-issued, single holder of the right to present a claimed dispatch

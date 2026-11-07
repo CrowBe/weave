@@ -130,6 +130,9 @@ export interface DispatchDecision {
  * Attempt ids are single-use. An attempt ends only when its holder appends or releases it, or when
  * recovery supersedes it on the port's own settlement; elapsed time never ends one. An ended id is
  * retired: it never appends, releases or supersedes again, and is never reissued.
+ *
+ * A holder records `present` before it calls the port. Until a decision with a receipt is appended
+ * the intent stays presented, so recovery reconciles it through the settlement and never pauses it stale.
  */
 export interface DispatchJournal {
   load(decision_id: string): {
@@ -137,6 +140,8 @@ export interface DispatchJournal {
     readonly decisions: readonly DispatchDecision[];
     /** The live attempt on the claimed intent, if any. */
     readonly attempt: string | null;
+    /** An attempt presented the claimed intent and no receipt has been appended since. */
+    readonly presented: boolean;
   };
   /** Ignored once the decision is claimed or terminal: its owner's stage evidence stands. */
   checkpoint(entry: DispatchCheckpoint): void;
@@ -150,6 +155,8 @@ export interface DispatchJournal {
   acquire(decision_id: string, supersedes?: string): string | null;
   /** Retires the attempt if it is still the live one; any other attempt is left alone. */
   release(decision_id: string, attempt: string): void;
+  /** Marks the claimed intent presented, only while `attempt` is the live one; false writes nothing. */
+  present(decision_id: string, attempt: string): boolean;
   /**
    * open → open | terminal for an intent-less decision; claimed → claimed | terminal for its owner:
    * the live attempt's own id, or a tokenless caller when none is live. A successful append retires
@@ -218,6 +225,8 @@ export class MemoryDispatchJournal implements DispatchJournal {
   private readonly attempts = new Map<string, string>();
   private readonly retired = new Set<string>();
   private readonly issued = new Map<string, number>();
+  /** Presented intents awaiting a journaled receipt. */
+  private readonly presented = new Set<string>();
   private entries: DispatchDecision[] = [];
 
   load(decision_id: string) {
@@ -228,6 +237,7 @@ export class MemoryDispatchJournal implements DispatchJournal {
         checkpoint === undefined ? null : clone(intent === undefined ? checkpoint : { ...checkpoint, intent }),
       decisions: clone(this.entries.filter((entry) => entry.decision_id === decision_id)),
       attempt: this.attempts.get(decision_id) ?? null,
+      presented: this.presented.has(decision_id),
     };
   }
   private terminal(decision_id: string): boolean {
@@ -273,6 +283,11 @@ export class MemoryDispatchJournal implements DispatchJournal {
   release(decision_id: string, attempt: string): void {
     if (this.live(decision_id, attempt)) this.retire(decision_id);
   }
+  present(decision_id: string, attempt: string): boolean {
+    if (!this.live(decision_id, attempt)) return false;
+    this.presented.add(decision_id);
+    return true;
+  }
   append(decision: DispatchDecision, attempt?: string): boolean {
     const id = decision.decision_id;
     if (this.terminal(id)) return false;
@@ -286,6 +301,7 @@ export class MemoryDispatchJournal implements DispatchJournal {
       return false;
     }
     this.entries.push(clone(decision));
+    if (decision.receipt !== null) this.presented.delete(id);
     this.retire(id);
     return true;
   }
@@ -1028,21 +1044,13 @@ async function recoverAttempt(
   const entry = loaded.decisions.length + 1;
   if (live === null || ports.settlement === undefined) return yielded(request, journal);
   if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
-  let raw: unknown = null;
-  try {
-    raw = await ports.settlement(request.request_id, signal);
-  } catch {
-    raw = null;
-  }
+  const receipt = await readSettlement(request, intent, ports, signal);
   if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
-  const receipt = normalizeReceipt(raw, intent.dispatch_id);
   if (receipt === null) return yielded(request, journal);
   const attempt = journal.acquire(request.request_id, live);
   if (attempt === null) return yielded(request, journal);
   try {
-    const outcome = receiptResult(plan, receipt);
-    const decision = makeDecision(request, checkpoint, entry, plan, intent, receipt, outcome.status, outcome.reason);
-    return settle(request, decision, ports, journal, fresh, attempt);
+    return settleReceipt(request, checkpoint, entry, plan, intent, receipt, ports, journal, fresh, attempt);
   } finally {
     journal.release(request.request_id, attempt);
   }
@@ -1061,9 +1069,16 @@ async function dispatchIntent(
   attempt: string,
 ): Promise<DispatchDecision> {
   if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
-  if (!sameState(checkpoint, ports.now()))
+  if (journal.load(request.request_id).presented) {
+    // An earlier attempt may have carried the intent out, so its settlement decides before any stale gate.
+    const settled = await readSettlement(request, intent, ports, signal);
+    if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+    if (settled !== null || !sameState(checkpoint, ports.now()))
+      return settleReceipt(request, checkpoint, entry, plan, intent, settled, ports, journal, fresh, attempt);
+  } else if (!sameState(checkpoint, ports.now()))
     return finishFinal(request, checkpoint, entry, stalePlan(checkpoint), ports, journal, fresh, attempt);
   if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+  if (!journal.present(request.request_id, attempt)) return yielded(request, journal);
   let raw: unknown = null;
   try {
     raw = await ports.dispatch(intent, signal);
@@ -1072,6 +1087,39 @@ async function dispatchIntent(
   }
   if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
   const receipt = normalizeReceipt(raw, intent.dispatch_id);
+  return settleReceipt(request, checkpoint, entry, plan, intent, receipt, ports, journal, fresh, attempt);
+}
+
+/** The port's own settled receipt for the decision id; unreadable, unsettled or foreign reads are null. */
+async function readSettlement(
+  request: DispatchRequest,
+  intent: DispatchIntent,
+  ports: DispatchPorts,
+  signal: AbortSignal | undefined,
+): Promise<DispatchReceipt | null> {
+  if (ports.settlement === undefined) return null;
+  let raw: unknown = null;
+  try {
+    raw = await ports.settlement(request.request_id, signal);
+  } catch {
+    raw = null;
+  }
+  return normalizeReceipt(raw, intent.dispatch_id);
+}
+
+/** A null receipt leaves the presented intent paused / `dispatch_unconfirmed`, never terminal. */
+function settleReceipt(
+  request: DispatchRequest,
+  checkpoint: DispatchCheckpoint,
+  entry: number,
+  plan: Plan,
+  intent: DispatchIntent,
+  receipt: DispatchReceipt | null,
+  ports: DispatchPorts,
+  journal: DispatchJournal,
+  fresh: readonly SiteObservation[],
+  attempt: string,
+): DispatchDecision {
   const outcome = receiptResult(plan, receipt);
   const decision = makeDecision(request, checkpoint, entry, plan, intent, receipt, outcome.status, outcome.reason);
   return settle(request, decision, ports, journal, fresh, attempt);

@@ -199,7 +199,10 @@ checkpointed before the call; a durable intent with no receipt is
 resume. Only the live dispatch attempt presents and settles a claimed intent, so
 recovery never re-presents or terminalizes an attempt in flight. Elapsed time
 never ends an attempt; only an explicit resume that reads the port's own
-settlement for the decision id supersedes one whose holder never returned. Cancellation appends no decision, a stale or mismatched answer pauses,
+settlement for the decision id supersedes one whose holder never returned. An
+intent journaled as presented, with no receipt since, is reconciled through
+that settlement before any stale check and stays `dispatch_unconfirmed` until it
+is found. Cancellation appends no decision, a stale or mismatched answer pauses,
 and an unavailable provider pauses a dispatch-dependent step. Receipts map to a
 closed status/reason table; provider error text is never stored. Final
 decisions use `dispatch.decision@1` (checkpoint `dispatch.checkpoint@1`), and
