@@ -12,10 +12,16 @@ import type {
   EvaluationRequest,
   GenerationOutcome,
   GenerationRequest,
+  InferenceGateway,
   InferenceTerms,
 } from '@weave/gateway';
 import { DECLARED_TASK_POLICY } from '../src/task-acceptance.js';
-import { transitionOutputEval, OUTPUT_EVAL_POLICY, OUTPUT_EVAL_QUESTION } from '../src/sites/output-eval.js';
+import {
+  evaluateOutputEval,
+  transitionOutputEval,
+  OUTPUT_EVAL_POLICY,
+  OUTPUT_EVAL_QUESTION,
+} from '../src/sites/output-eval.js';
 import { correlation, structuralOrigin } from '../src/sites/index.js';
 import { digest } from '../src/digest.js';
 import {
@@ -262,6 +268,61 @@ test('D5 does not accept an answer from another semantic operation', () => {
   assert.equal(replay.status, 'pass');
   assert.equal(replay.observations.at(-1)?.reason, 'unknown_answer');
   assert.ok(!JSON.stringify(replay).includes('CANARY'));
+});
+
+function answering(answer: () => EvaluationOutcome<'boolean'>): Pick<InferenceGateway, 'evaluate'> {
+  return { evaluate: async () => answer() } as unknown as Pick<InferenceGateway, 'evaluate'>;
+}
+
+test('D5 replay without an origin applies the live structural default; forged origins fail closed in both', async () => {
+  const { origin: _origin, ...bare } = d5Input;
+  const answer = recorded({ criterion_0: { p: 1, conf: 1 }, criterion_1: { p: 1, conf: 1 } });
+  const now = () => ({ ...state, observed_at: 10 });
+  const port = answering(() => answer.outcome);
+  const replayed = transitionOutputEval(bare, answer, state);
+  assert.equal(replayed.status, 'pass');
+  assert.ok(replayed.observations.every((item) => item.reason === 'accepted'));
+  assert.deepEqual(replayed, await evaluateOutputEval(bare, port, now));
+  for (const origin of [null, structuralOrigin('audit.findings'), { kind: 'model', extract: {} }]) {
+    const forged = { ...bare, origin } as unknown as typeof d5Input;
+    const replay = transitionOutputEval(forged, answer, state);
+    assert.equal(replay.status, 'fail');
+    assert.ok(replay.observations.every((item) => item.reason === 'structural_origin_missing'));
+    // Live makes no provider call for a forged origin, so it records no outcome.
+    const live = await evaluateOutputEval(forged, port, now);
+    assert.deepEqual(live, transitionOutputEval(forged, { ...answer, outcome: null }, state));
+  }
+});
+
+test('D5 does not mutate or retain a caller-supplied origin', async () => {
+  const answer = recorded({ criterion_0: { p: 1, conf: 1 }, criterion_1: { p: 1, conf: 1 } });
+  const now = () => ({ ...state, observed_at: 10 });
+  const origin = structuralOrigin('criteria');
+  const supplied = { ...d5Input, origin };
+  const before = structuredClone(origin);
+  assert.equal(
+    (
+      await evaluateOutputEval(
+        supplied,
+        answering(() => answer.outcome),
+        now,
+      )
+    ).status,
+    'pass',
+  );
+  assert.equal(supplied.origin, origin);
+  assert.deepEqual(origin, before);
+  // A caller rebinding its origin while the answer is in flight cannot change the admitted origin.
+  const rebound = structuralOrigin('criteria');
+  const result = await evaluateOutputEval(
+    { ...d5Input, origin: rebound },
+    answering(() => {
+      (rebound as { source: string }).source = 'audit.findings';
+      return answer.outcome;
+    }),
+    now,
+  );
+  assert.equal(result.status, 'pass');
 });
 
 interface Driver {

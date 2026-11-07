@@ -171,7 +171,10 @@ provider call. The observation records `answer: null`, `confidence: null`,
 `needs_human` (cancellation still pauses). Composition roots that already hold
 the structural evidence may supply the origin (`decideProgress`,
 `evaluateAuditDispose`, `evaluateOutputEval`); a caller-supplied origin is never
-replaced. `decideIntake` supplies the final gated extract record. `decideRoute`
+replaced. The pure replays `transitionAuditDispose` and `transitionOutputEval`
+apply the same default to an input without an origin, so a recorded answer
+replays as it was decided live; a supplied wrong or `null` origin fails closed in
+both. `decideIntake` supplies the final gated extract record. `decideRoute`
 accepts a gated `extract` on `RouteAsk`; without it, routing across active work
 fails closed and asks the operator.
 

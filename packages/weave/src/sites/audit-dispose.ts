@@ -33,8 +33,12 @@ export interface AuditDisposal {
   readonly choices: readonly AuditDisposition[];
   readonly observations: readonly AuditDisposeObservation[];
 }
+/** Live and replay apply the same default; a supplied origin, even a forged one, is never replaced. */
+function withOrigin(input: AuditDisposeInput): AuditDisposeInput {
+  return input.origin === undefined ? { ...input, origin: structuralOrigin('audit.findings') } : input;
+}
 export function transitionAuditDispose(
-  input: AuditDisposeInput,
+  supplied: AuditDisposeInput,
   recorded: {
     readonly outcome: EvaluationOutcome<'choice'> | null;
     readonly state_revision: number;
@@ -43,6 +47,7 @@ export function transitionAuditDispose(
   },
   current: SiteState,
 ): AuditDisposal {
+  const input = withOrigin(supplied);
   const outcome = recorded.outcome?.status === 'accepted' ? recorded.outcome : null;
   const observations = input.findings.map((_, index): AuditDisposeObservation => {
     const key = `finding_${index}`;
@@ -98,9 +103,7 @@ export async function evaluateAuditDispose(
   current: () => SiteState & { observed_at: number },
   signal?: AbortSignal,
 ): Promise<AuditDisposal> {
-  const clone = structuredClone(input);
-  const captured: AuditDisposeInput =
-    clone.origin === undefined ? { ...clone, origin: structuralOrigin('audit.findings') } : clone;
+  const captured = withOrigin(structuredClone(input));
   const { audit: _audit, ...terms } = captured.terms;
   let outcome: EvaluationOutcome<'choice'> | null = null;
   if (!signal?.aborted && captured.findings.length && originReason('audit.dispose', captured) === null)

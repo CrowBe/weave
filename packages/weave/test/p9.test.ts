@@ -31,7 +31,13 @@ import {
 import { evaluateAuditDispose, transitionAuditDispose } from '../src/sites/audit-dispose.js';
 import { correlation, structuralOrigin } from '../src/sites/index.js';
 import { digest } from '../src/digest.js';
-import { createInferenceGateway, type EvaluationOutcome, type InferenceTerms, type RoutedUnit } from '@weave/gateway';
+import {
+  createInferenceGateway,
+  type EvaluationOutcome,
+  type InferenceGateway,
+  type InferenceTerms,
+  type RoutedUnit,
+} from '@weave/gateway';
 const terms: InferenceTerms = {
   quality: 'baseline',
   destinations: ['local'],
@@ -422,6 +428,48 @@ test('D6 low confidence, stale and outage fall back to needs_human', () => {
     const result = transitionAuditDispose(input, recorded, revision);
     assert.deepEqual(result.choices, ['needs_human']);
     assert.equal(result.observations[0]?.fallback_used, true);
+  }
+});
+test('D6 replay without an origin applies the live structural default; forged origins fail closed in both', async () => {
+  const { origin: _origin, ...bare } = {
+    ...revision,
+    request_id: 'r1',
+    findings: [{}],
+    state: {},
+    terms,
+    needs_dispatch: false,
+    origin: structuralOrigin('audit.findings'),
+  };
+  const outcome: EvaluationOutcome<'choice'> = {
+    status: 'accepted',
+    kind: 'choice',
+    site: 'audit.dispose',
+    request_id: 'r1',
+    answers: { finding_0: { type: 'choice', choice: 'fix_now', probabilities: { fix_now: 1 } } },
+    confidence: { finding_0: 1 },
+    provider_response_id: 'p1',
+    routed_unit_id: 'fake',
+    attempts: [],
+    spent: 0,
+    uncertainty: [],
+  };
+  const now = () => ({ ...revision, observed_at: 10 });
+  const port = { evaluate: async () => outcome } as unknown as Pick<InferenceGateway, 'evaluate'>;
+  const replayed = transitionAuditDispose(bare, { outcome, state_revision: 1, observed_at: 10 }, revision);
+  assert.deepEqual(replayed.choices, ['fix_now']);
+  assert.equal(replayed.observations[0]?.reason, 'accepted');
+  assert.deepEqual(replayed, await evaluateAuditDispose(bare, port, now));
+  for (const origin of [null, structuralOrigin('criteria'), { kind: 'model', extract: {} }]) {
+    const forged = { ...bare, origin } as unknown as typeof bare;
+    const replay = transitionAuditDispose(forged, { outcome, state_revision: 1, observed_at: 10 }, revision);
+    assert.deepEqual(replay.choices, ['needs_human']);
+    assert.equal(replay.observations[0]?.reason, 'structural_origin_missing');
+    // Live makes no provider call for a forged origin, so it records no outcome.
+    const live = await evaluateAuditDispose(forged, port, now);
+    assert.deepEqual(
+      live,
+      transitionAuditDispose(forged, { outcome: null, state_revision: 1, observed_at: 10 }, revision),
+    );
   }
 });
 test('D6 strips audit purpose while preserving other terms and strong audit generation', async () => {
