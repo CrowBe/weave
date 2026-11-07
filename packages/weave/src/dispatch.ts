@@ -10,7 +10,9 @@ import type { InferenceGateway, InferenceTerms } from '@weave/gateway';
 import { decideIntake, type IntakeDecision } from './intake.js';
 import { decideLoopRoute, decideTriage, type LoopDecisionAsk } from './sites/loop-decide.js';
 import {
+  SITE_POLICY,
   correlation,
+  unit,
   type IntakeSiteInput,
   type IntakeState,
   type SiteChoice,
@@ -106,7 +108,8 @@ export interface DispatchJournal {
     readonly decisions: readonly DispatchDecision[];
   };
   checkpoint(entry: DispatchCheckpoint): void;
-  claim(decision_id: string, intent: DispatchIntent): boolean;
+  /** Bind the claimed intent to the exact stage snapshot the plan was derived from. */
+  claim(decision_id: string, intent: DispatchIntent, checkpoint?: DispatchCheckpoint): boolean;
   append(decision: DispatchDecision): void;
 }
 
@@ -170,18 +173,28 @@ export class MemoryDispatchJournal implements DispatchJournal {
     };
   }
   checkpoint(entry: DispatchCheckpoint): void {
-    const intent = this.intents.get(entry.decision_id);
-    this.checkpoints.set(entry.decision_id, clone(intent === undefined ? entry : { ...entry, intent }));
+    // A claimed decision owns its stage snapshot: later deliveries must not rewrite the evidence.
+    if (this.intents.has(entry.decision_id)) return;
+    this.checkpoints.set(entry.decision_id, clone(entry));
   }
-  claim(decision_id: string, intent: DispatchIntent): boolean {
+  claim(decision_id: string, intent: DispatchIntent, snapshot?: DispatchCheckpoint): boolean {
     if (this.intents.has(decision_id)) return false;
-    const checkpoint = this.checkpoints.get(decision_id);
-    if (checkpoint !== undefined && checkpoint.intent !== null) return false;
+    const current = this.checkpoints.get(decision_id);
+    if (current !== undefined && current.intent !== null) return false;
+    const bound = snapshot ?? current;
+    if (bound !== undefined && bound.decision_id !== decision_id)
+      throw new Error('claimed intent belongs to another decision');
     this.intents.set(decision_id, clone(intent));
-    if (checkpoint !== undefined) this.checkpoints.set(decision_id, { ...checkpoint, intent: clone(intent) });
+    if (bound !== undefined) this.checkpoints.set(decision_id, clone({ ...bound, intent }));
     return true;
   }
   append(decision: DispatchDecision): void {
+    const id = decision.decision_id;
+    const recorded = this.entries.filter((entry) => entry.decision_id === id);
+    if (recorded.some((entry) => entry.status === 'dispatched')) return;
+    const claimed = this.intents.get(id);
+    // After a claim, only the owner of the claimed intent may append (dispatch, pause, cancellation).
+    if (claimed !== undefined && (decision.intent === null || !sameIntent(decision.intent, claimed))) return;
     this.entries.push(clone(decision));
   }
 }
@@ -298,10 +311,176 @@ function lastDecider(checkpoint: DispatchCheckpoint): { readonly decided_by: Dec
   return { decided_by: 'rule', choice: 'ask_user' };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function expectedStageRequest(checkpoint: DispatchCheckpoint, stage: 'intake' | 'triage' | 'route'): string {
+  const ask = checkpoint.asks[stage];
+  if (!Number.isSafeInteger(ask) || ask < 1) throw new Error(`recorded ${stage} stage has no matching ask`);
+  return stageId(checkpoint.decision_id, stage, ask);
+}
+
+function expectedStatus(choice: SiteChoice): SiteTransition['status'] {
+  return choice === 'ask_user' || choice === 'needs_human' ? 'needs_human' : 'transition';
+}
+
+/** A site observation is evidence only when it is bound to the expected request, revision and policy. */
+function assertObservation(
+  site: 'intake.classify' | 'loop.triage' | 'loop.route',
+  expected: string,
+  revision: number,
+  value: SiteObservation,
+): void {
+  const policy = SITE_POLICY[site];
+  if (!isRecord(value) || value.schema !== 'decision-site@1')
+    throw new Error(`recorded ${site} stage is not a site observation`);
+  if (value.site !== site) throw new Error(`recorded ${site} stage names a foreign site`);
+  if (value.request_id !== expected) throw new Error(`recorded ${site} stage names a foreign request`);
+  if (value.state_revision !== revision) throw new Error(`recorded ${site} stage names a foreign revision`);
+  if (value.question !== policy.question) throw new Error(`recorded ${site} stage has a foreign question`);
+  if (typeof value.accepted !== 'boolean' || typeof value.fallback_used !== 'boolean')
+    throw new Error(`recorded ${site} stage has no admission result`);
+  if (value.answer !== null && !(policy.options as readonly string[]).includes(value.answer))
+    throw new Error(`recorded ${site} stage has an invalid answer`);
+  if (value.confidence !== null && !unit(value.confidence))
+    throw new Error(`recorded ${site} stage has an invalid confidence`);
+  if (value.top_p !== null && !unit(value.top_p))
+    throw new Error(`recorded ${site} stage has an invalid top probability`);
+  if (value.accepted) {
+    if (value.reason !== 'accepted' || value.fallback_used)
+      throw new Error(`recorded ${site} stage is inconsistently accepted`);
+    if (value.answer === null || value.confidence === null || value.confidence < policy.confidence)
+      throw new Error(`recorded ${site} stage is accepted below its confidence threshold`);
+    if (site === 'loop.triage' && (value.top_p === null || value.top_p < 0.6))
+      throw new Error('recorded loop.triage stage is accepted below its top-probability threshold');
+    return;
+  }
+  if (value.reason === 'accepted' || !value.fallback_used)
+    throw new Error(`recorded ${site} stage is inconsistently rejected`);
+  switch (value.reason) {
+    case 'missing_confidence':
+      if (value.answer === null || value.confidence !== null)
+        throw new Error(`recorded ${site} stage has inconsistent missing confidence`);
+      break;
+    case 'low_confidence':
+      if (value.answer === null || value.confidence === null || value.confidence >= policy.confidence)
+        throw new Error(`recorded ${site} stage has inconsistent low confidence`);
+      break;
+    case 'low_top_p':
+      if (
+        site !== 'loop.triage' ||
+        value.answer === null ||
+        value.confidence === null ||
+        value.confidence < policy.confidence
+      )
+        throw new Error(`recorded ${site} stage has inconsistent low top probability`);
+      break;
+    case 'no_answer':
+    case 'invalid_answer':
+    case 'decision_unavailable':
+      if (value.answer !== null) throw new Error(`recorded ${site} stage has an answer without an outcome`);
+      break;
+    case 'stale_answer':
+    case 'mismatched_answer':
+    case 'cancelled':
+      break;
+    default:
+      throw new Error(`recorded ${site} stage has an invalid reason`);
+  }
+}
+
+function assertTransition(
+  site: 'loop.triage' | 'loop.route',
+  expected: string,
+  revision: number,
+  value: SiteTransition,
+): void {
+  const policy = SITE_POLICY[site];
+  const observation = value.observation;
+  assertObservation(site, expected, revision, observation);
+  if (observation.accepted) {
+    if (value.choice !== observation.answer || value.tier !== null)
+      throw new Error(`recorded ${site} stage does not match its accepted answer`);
+    if (value.status !== expectedStatus(value.choice))
+      throw new Error(`recorded ${site} stage has an invalid accepted status`);
+    return;
+  }
+  if (value.choice !== policy.fallback) throw new Error(`recorded ${site} stage does not use its fallback choice`);
+  if (value.tier !== (site === 'loop.triage' ? 'strong' : null))
+    throw new Error(`recorded ${site} stage has an invalid fallback tier`);
+  const fallbackStatus = expectedStatus(policy.fallback);
+  if (observation.reason === 'cancelled') {
+    if (value.status !== 'paused') throw new Error(`recorded ${site} stage has an invalid cancelled status`);
+    return;
+  }
+  if (observation.reason === 'decision_unavailable') {
+    if (value.status !== 'paused') throw new Error(`recorded ${site} stage has an invalid unavailable status`);
+    return;
+  }
+  if (observation.reason === 'stale_answer' || observation.reason === 'mismatched_answer') {
+    if (value.status !== 'paused' && value.status !== fallbackStatus)
+      throw new Error(`recorded ${site} stage has an invalid stale status`);
+    return;
+  }
+  if (value.status !== fallbackStatus) throw new Error(`recorded ${site} stage has an invalid fallback status`);
+}
+
+/** Fail closed on stage records that a foreign request, site, revision or threshold could have forged. */
+function assertRecordedStages(request: DispatchRequest, checkpoint: DispatchCheckpoint): void {
+  if (request.request_id !== checkpoint.decision_id) throw new Error('checkpoint belongs to another decision');
+  const intake = checkpoint.intake;
+  if (intake !== null) {
+    const expected = expectedStageRequest(checkpoint, 'intake');
+    if (!isRecord(intake) || intake.schema !== 'intake.decision@1')
+      throw new Error('recorded intake stage is not an intake decision');
+    if (intake.request_id !== expected) throw new Error('recorded intake stage names a foreign request');
+    if (!Array.isArray(intake.extract) || intake.extract.length === 0 || intake.extract.length > 2)
+      throw new Error('recorded intake stage has invalid extracts');
+    for (const [index, extract] of intake.extract.entries()) {
+      const attempt = index + 1;
+      if (!isRecord(extract) || extract.schema !== 'extract@1')
+        throw new Error('recorded intake extract is not an extract observation');
+      if (extract.site !== 'intake.classify') throw new Error('recorded intake extract names a foreign site');
+      if (extract.extract_schema !== 'intake.message@1')
+        throw new Error('recorded intake extract names a foreign schema');
+      if (extract.attempt !== attempt) throw new Error('recorded intake extract attempts are not ordered');
+      if (extract.request_id !== `${expected}:x${attempt}`)
+        throw new Error('recorded intake extract names a foreign request');
+      if (extract.state_revision !== checkpoint.state_revision)
+        throw new Error('recorded intake extract names a foreign revision');
+    }
+    if (intake.site !== null) {
+      assertObservation('intake.classify', expected, checkpoint.state_revision, intake.site);
+      if (intake.decided_by !== 'site') throw new Error('recorded intake stage has a site answer from a rule');
+      const choice = intake.site.accepted ? intake.site.answer : SITE_POLICY['intake.classify'].fallback;
+      if (intake.choice !== choice) throw new Error('recorded intake stage does not match its site answer');
+      if (intake.reason !== intake.site.reason) throw new Error('recorded intake stage has an inconsistent reason');
+    } else if (intake.decided_by !== 'extract') {
+      throw new Error('recorded intake stage has no site answer');
+    }
+  }
+  if (checkpoint.triage !== null)
+    assertTransition(
+      'loop.triage',
+      expectedStageRequest(checkpoint, 'triage'),
+      checkpoint.state_revision,
+      checkpoint.triage,
+    );
+  if (checkpoint.route !== null)
+    assertTransition(
+      'loop.route',
+      expectedStageRequest(checkpoint, 'route'),
+      checkpoint.state_revision,
+      checkpoint.route,
+    );
+}
+
 /** Pure outcome table over recorded stage records. The first ending stage decides. */
 function resolveOutcome(request: DispatchRequest, checkpoint: DispatchCheckpoint): Plan {
   const intake = checkpoint.intake;
   if (intake === null) throw new Error('a dispatch decision needs an intake record');
+  assertRecordedStages(request, checkpoint);
   const dispatch_id = `${checkpoint.decision_id}:dispatch`;
 
   if (intake.reason === 'stale_answer' || intake.reason === 'mismatched_answer')
@@ -797,7 +976,7 @@ export async function decideDispatch(
 
   let intent = checkpoint.intent;
   if (intent === null) {
-    if (!journal.claim(decision_id, plan.intent))
+    if (!journal.claim(decision_id, plan.intent, checkpoint))
       return makeDecision(captured, checkpoint, entry, plan, plan.intent, null, 'paused', 'dispatch_unconfirmed');
     intent = plan.intent;
     checkpoint = makeCheckpoint(

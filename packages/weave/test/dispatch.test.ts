@@ -548,7 +548,7 @@ test('9. the intent is durable before dispatch and recovery never implicitly re-
   const crashing: DispatchJournal = {
     load: (id) => storage.load(id),
     checkpoint: (entry) => storage.checkpoint(entry),
-    claim: (id, intent) => storage.claim(id, intent),
+    claim: (id, intent, entry) => storage.claim(id, intent, entry),
     append: (decision) => {
       if (crash) {
         crash = false;
@@ -621,7 +621,7 @@ test('10. recovery reuses paid answers and never reuses a request id', async () 
         throw new Error('crash-after-d1');
       }
     },
-    claim: (id, intent) => storage.claim(id, intent),
+    claim: (id, intent, entry) => storage.claim(id, intent, entry),
     append: (decision) => storage.append(decision),
   };
   const first = harness({}, { journal: crashing });
@@ -1053,5 +1053,119 @@ test('19. an unsafe or over-96-character request id throws before any call', asy
     assert.equal(h.evaluateCalls.length, 0);
     assert.equal(h.dispatchCalls.length, 0);
     assert.deepEqual(h.journal.load(request_id).decisions, []);
+  }
+});
+
+async function waitUntil(predicate: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 1000; attempt += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error('condition was not reached');
+}
+
+function withRouteObservation(
+  checkpoint: DispatchCheckpoint,
+  patch: Partial<NonNullable<DispatchCheckpoint['route']>['observation']>,
+): DispatchCheckpoint {
+  const route = checkpoint.route!;
+  return { ...checkpoint, route: { ...route, observation: { ...route.observation, ...patch } } };
+}
+
+test('20. a losing concurrent delivery cannot rewrite the winner stages', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const journal = new MemoryDispatchJournal();
+  const loser = harness(
+    { route: { choice: 'flash' }, gate: { match: (id) => id === 'd1:route', promise: gate } },
+    { journal },
+  );
+  const pending = run(loser);
+  await waitUntil(() => loser.evaluateCalls.some((request) => request.site === 'loop.route'));
+
+  const winner = harness({ route: { choice: 'strong' } }, { journal });
+  const won = await run(winner);
+  assert.equal(won.status, 'dispatched');
+  assert.equal(won.intent?.kind, 'implement');
+  release();
+  const lost = await pending;
+  assert.deepEqual([lost.status, lost.reason], ['paused', 'dispatch_unconfirmed']);
+  assert.equal(loser.dispatchCalls.length, 0);
+
+  const checkpoint = journal.load('d1').checkpoint!;
+  assert.equal(checkpoint.route?.observation.request_id, 'd1:route:e2');
+  assert.equal(checkpoint.route?.choice, 'strong');
+  assert.deepEqual(checkpoint.intent, won.intent);
+  assert.deepEqual(transitionDispatch(winner.request, checkpoint, won.receipt, won.entry), won);
+});
+
+test('21. a losing concurrent final cannot append after the winner dispatches', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const journal = new MemoryDispatchJournal();
+  const loser = harness(
+    { route: { mode: 'stale' }, gate: { match: (id) => id === 'd1:route', promise: gate } },
+    { journal },
+  );
+  const pending = run(loser);
+  await waitUntil(() => loser.evaluateCalls.some((request) => request.site === 'loop.route'));
+
+  const winner = harness({ route: { choice: 'strong' } }, { journal });
+  const won = await run(winner);
+  assert.equal(won.status, 'dispatched');
+  release();
+  const lost = await pending;
+  assert.deepEqual([lost.status, lost.reason], ['paused', 'stale_answer']);
+
+  const loaded = journal.load('d1');
+  assert.equal(loaded.decisions.length, 1);
+  assert.deepEqual(loaded.decisions[0], won);
+  const duplicate = harness({}, { journal });
+  assert.deepEqual(await run(duplicate), won);
+  assert.equal(duplicate.dispatchCalls.length, 0);
+});
+
+test('22. replay rejects foreign and below-threshold stage records', async () => {
+  const h = harness({ route: { choice: 'strong' } });
+  const live = await run(h);
+  const checkpoint = h.journal.load('d1').checkpoint!;
+  assert.deepEqual(transitionDispatch(h.request, checkpoint, live.receipt, live.entry), live);
+
+  const forged: readonly [string, DispatchCheckpoint, RegExp][] = [
+    ['foreign request', withRouteObservation(checkpoint, { request_id: 'other:route' }), /request/],
+    ['foreign site', withRouteObservation(checkpoint, { site: 'loop.triage' }), /site/],
+    ['foreign revision', withRouteObservation(checkpoint, { state_revision: 2 }), /revision/],
+    ['below threshold', withRouteObservation(checkpoint, { confidence: 0.5 }), /confidence/],
+  ];
+  for (const [label, value, reason] of forged)
+    assert.throws(() => transitionDispatch(h.request, value, live.receipt), reason, label);
+});
+
+test('23. live recovery rejects foreign and below-threshold loaded stages before dispatch', async () => {
+  const h = harness({ route: { choice: 'strong' } });
+  const live = await run(h);
+  const checkpoint = h.journal.load('d1').checkpoint!;
+  const forged: readonly [string, DispatchCheckpoint, RegExp][] = [
+    ['foreign request', withRouteObservation(checkpoint, { request_id: 'other:route' }), /request/],
+    ['foreign site', withRouteObservation(checkpoint, { site: 'loop.triage' }), /site/],
+    ['foreign revision', withRouteObservation(checkpoint, { state_revision: 2 }), /revision/],
+    ['below threshold', withRouteObservation(checkpoint, { confidence: 0.5 }), /confidence/],
+  ];
+  for (const [label, value, reason] of forged) {
+    const journal: DispatchJournal = {
+      load: () => ({ checkpoint: value, decisions: [] }),
+      checkpoint: () => {},
+      claim: () => false,
+      append: () => {},
+    };
+    const recovery = harness({}, { journal, request: makeRequest({ resume: true }) });
+    await assert.rejects(run(recovery), reason, label);
+    assert.equal(recovery.generateCalls.length, 0, label);
+    assert.equal(recovery.evaluateCalls.length, 0, label);
+    assert.equal(recovery.dispatchCalls.length, 0, label);
   }
 });
