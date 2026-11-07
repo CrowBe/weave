@@ -9,6 +9,7 @@
 import type { EvaluationContent, InferenceGateway, InferenceTerms } from '@weave/gateway';
 import { stableStringify } from '../stable-json.js';
 import {
+  SITE_POLICY,
   correlation,
   evaluateSite,
   modelOrigin,
@@ -163,6 +164,27 @@ function missingAnswer(ask: LoopDecisionAsk, current: SiteState): RecordedSiteAn
   };
 }
 
+/** A recorded transition is evidence only when it is bound to this decision and internally consistent. */
+function trustedTransition(
+  site: LoopDecisionSite,
+  ask: LoopDecisionAsk,
+  transition: SiteTransition,
+): boolean {
+  const observation = transition.observation;
+  if (observation?.schema !== 'decision-site@1') return false;
+  if (observation.site !== site) return false;
+  if (observation.request_id !== correlation(ask.request_id)) return false;
+  if (observation.state_revision !== ask.state_revision) return false;
+  const fallback = SITE_POLICY[site].fallback;
+  if (transition.choice !== (observation.accepted ? observation.answer : fallback)) return false;
+  const expectedStatus =
+    transition.choice === 'ask_user' || transition.choice === 'needs_human' ? 'needs_human' : 'transition';
+  if (observation.accepted) return transition.status === expectedStatus;
+  if (transition.status === 'paused')
+    return observation.reason === 'cancelled' || (ask.needs_dispatch && observation.reason === 'decision_unavailable');
+  return transition.status === expectedStatus;
+}
+
 /** Pure record construction and replay from recorded extracts; no port is touched. */
 export function transitionLoopDecision(
   site: LoopDecisionSite,
@@ -171,13 +193,23 @@ export function transitionLoopDecision(
   current: SiteState,
 ): LoopDecision {
   if (recorded.extracts.length > 2) throw new Error('loop decision needs at most two extract observations');
+  for (const [index, extract] of recorded.extracts.entries()) {
+    if (extract.attempt !== index + 1)
+      throw new Error('recorded extract attempts must be unique, ordered and consecutive');
+  }
   const captured = capture(ask);
   const observations = observationsFor(site, captured, recorded.extracts);
+  if (observations.length === 2 && !needsSecond(observations[0]!))
+    throw new Error('a second extraction is only allowed after re_extract');
   const final = observations[observations.length - 1];
   const input = siteInput(captured, final === undefined ? undefined : modelOrigin(final));
   const recordedSite = recorded.site ?? null;
-  if (recordedSite !== null && isTransition(recordedSite) && final !== undefined && originReason(site, input) === null)
-    return decision(captured, observations, recordedSite);
+  if (recordedSite !== null && isTransition(recordedSite) && final !== undefined && originReason(site, input) === null) {
+    if (trustedTransition(site, captured, recordedSite)) return decision(captured, observations, recordedSite);
+    // Do not let a malformed or foreign transition authorize this decision; fail closed without its origin.
+    const refused = transitionSite(site, siteInput(captured), missingAnswer(captured, current), current);
+    return decision(captured, observations, refused);
+  }
   const answer = recordedSite === null || isTransition(recordedSite) ? missingAnswer(captured, current) : recordedSite;
   const transition = transitionSite(site, input, answer, current);
   return decision(captured, observations, transition);

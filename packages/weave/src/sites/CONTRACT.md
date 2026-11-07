@@ -213,8 +213,13 @@ its `decision-site@1` observation. Records copy no disclosed state, extracted
 text, provider text or credential-shaped ids. `transitionTriage` and
 `transitionLoopRoute` rebuild the record without a port from recorded extract
 observations or recorded extract outcomes and an optional recorded site answer
-or transition, and fail closed the same way. They throw above two extracts, so
-replay cannot invent a third attempt.
+or transition, and fail closed the same way. They throw above two extracts, on a
+non-consecutive attempt, or when a second extract lacks the live `re_extract`
+precondition, so replay cannot invent an attempt. A recorded site transition is
+reused only when its `decision-site@1` observation matches the requested site,
+request and revision and its choice and status agree with `accepted` and the
+site's fallback; otherwise replay fails closed as `needs_human` rather than
+trusting the record.
 
 `decideLoopRoute` is separate from `decideRoute` (`input.route`); the latter's
 contract and name are unchanged. Neither loop composition dispatches, grants

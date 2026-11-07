@@ -17,6 +17,7 @@ import {
 } from '../src/sites/loop-decide.js';
 import { decideRoute } from '../src/input-route.js';
 import { gateExtract, type ExtractObservation } from '../src/sites/extract.js';
+import type { SiteTransition } from '../src/sites/index.js';
 import { loopRouteExtractSchema, loopTriageExtractSchema } from '../src/sites/model-extract.js';
 import { emptyWorkstreamIndex, openWorkstream, transitionWorkstream } from '../src/workstream.js';
 
@@ -106,7 +107,11 @@ function observed(
   site: 'loop.triage' | 'loop.route',
   text: string,
   requestId = 'triage-1:x1',
-  extra: { verdict?: 'use_hints' | 'original_only' | 're_extract'; reason?: 'faithful' | 'unfaithful' } = {},
+  extra: {
+    verdict?: 'use_hints' | 'original_only' | 're_extract';
+    reason?: 'faithful' | 'unfaithful';
+    attempt?: 1 | 2;
+  } = {},
 ): ExtractObservation {
   const schema = site === 'loop.triage' ? loopTriageExtractSchema() : loopRouteExtractSchema();
   return gateExtract(
@@ -171,10 +176,14 @@ test('grounded extraction lets loop.route decide without touching input.route', 
 });
 
 test('a remaining re_extract after two attempts makes no choice call and fails closed', () => {
-  const first = observed('loop.triage', 'fix the parser', 'triage-1:x1');
+  const first = observed('loop.triage', 'fix the parser', 'triage-1:x1', {
+    verdict: 're_extract',
+    reason: 'unfaithful',
+  });
   const final = observed('loop.triage', 'fix the parser', 'triage-1:x2', {
     verdict: 're_extract',
     reason: 'unfaithful',
+    attempt: 2,
   });
   const record = transitionTriage(triageAsk, { extracts: [first, final] }, revision);
   assert.deepEqual([record.site.status, record.site.observation.reason], ['needs_human', 'invalid_extract']);
@@ -255,6 +264,63 @@ test('a second extraction is requested at most once and only after re_extract', 
     revision,
   );
   assert.equal(replay.site.observation.reason, 'decision_unavailable');
+});
+
+test('replay refuses a forged site transition instead of trusting its fields', () => {
+  const extract = observed('loop.triage', 'fix the parser', 'triage-1:x1');
+  const base = transitionTriage(triageAsk, { extracts: [extract] }, revision).site;
+  const forged: readonly [string, SiteTransition][] = [
+    ['wrong site', { ...base, observation: { ...base.observation, site: 'loop.route' } }],
+    ['wrong request id', { ...base, observation: { ...base.observation, request_id: 'other' } }],
+    ['wrong state revision', { ...base, observation: { ...base.observation, state_revision: 2 } }],
+    [
+      'wrong schema',
+      { ...base, observation: { ...base.observation, schema: 'other@1' } } as unknown as SiteTransition,
+    ],
+    ['choice is not the fallback', { ...base, choice: 'capability' }],
+    ['status contradicts the fallback', { ...base, status: 'needs_human' }],
+    [
+      'accepted choice disagrees with the answer',
+      {
+        ...base,
+        choice: 'implement',
+        observation: { ...base.observation, accepted: true, answer: 'capability' },
+      },
+    ],
+  ];
+  for (const [name, transition] of forged) {
+    const replayed = transitionTriage(triageAsk, { extracts: [extract], site: transition }, revision);
+    assert.notDeepEqual(replayed.site, transition, name);
+    assert.equal(replayed.site.status, 'needs_human', name);
+    assert.equal(replayed.site.observation.accepted, false, name);
+    assert.equal(replayed.site.observation.request_id, 'triage-1', name);
+    assert.equal(replayed.site.observation.state_revision, revision.state_revision, name);
+  }
+});
+
+test('replay rejects out-of-order, attempt-2-only and unjustified second extracts', () => {
+  const first = observed('loop.triage', 'fix the parser', 'triage-1:x1');
+  const second = observed('loop.triage', 'fix the parser', 'triage-1:x2', { attempt: 2 });
+  assert.throws(
+    () => transitionTriage(triageAsk, { extracts: [second] }, revision),
+    /recorded extract attempts must be unique, ordered and consecutive/,
+  );
+  assert.throws(
+    () => transitionTriage(triageAsk, { extracts: [second, first] }, revision),
+    /recorded extract attempts must be unique, ordered and consecutive/,
+  );
+  assert.throws(
+    () => transitionTriage(triageAsk, { extracts: [first, second] }, revision),
+    /second extraction/,
+  );
+  const cancelledFirst = observed('loop.triage', 'fix the parser', 'triage-1:x1', {
+    verdict: 're_extract',
+    reason: 'unfaithful',
+  });
+  assert.throws(
+    () => transitionTriage(triageAsk, { extracts: [{ ...cancelledFirst, reason: 'cancelled' }, second] }, revision),
+    /second extraction/,
+  );
 });
 
 test('replay accepts the recorded extracts and site transition from a live decision', async () => {
