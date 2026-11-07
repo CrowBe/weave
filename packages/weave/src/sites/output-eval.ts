@@ -1,6 +1,15 @@
 /** D5 judges one criterion at a time. A pass is evidence, never goal completion or a grant. */
 import type { BooleanQuestion, EvaluationOutcome, InferenceGateway } from '@weave/gateway';
-import { admissionReason, correlation, unit, type SiteInput, type SiteReason, type SiteState } from './index.js';
+import {
+  admissionReason,
+  correlation,
+  originReason,
+  structuralOrigin,
+  unit,
+  type SiteInput,
+  type SiteReason,
+  type SiteState,
+} from './index.js';
 
 export const OUTPUT_EVAL_SITE = 'eval.output' as const;
 /** Fixed question text. Criterion statements stay in the disclosed state, not in the record. */
@@ -238,9 +247,13 @@ export async function evaluateOutputEval(
       }),
     ),
   );
-  const captured: OutputEvalInput = { ...input, criteria };
+  const captured: OutputEvalInput = {
+    ...input,
+    criteria,
+    ...(input.origin === undefined ? { origin: structuralOrigin('criteria') } : {}),
+  };
   let outcome: EvaluationOutcome<'boolean'> | null = null;
-  if (!signal?.aborted && criteria.length > 0) {
+  if (!signal?.aborted && criteria.length > 0 && originReason(OUTPUT_EVAL_SITE, captured) === null) {
     try {
       const questions: Record<string, BooleanQuestion> = {};
       for (const [index, criterion] of criteria.entries()) {

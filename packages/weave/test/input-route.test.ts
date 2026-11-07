@@ -13,7 +13,10 @@ import {
   type RouteRecord,
   type RouteRequest,
 } from '../src/input-route.js';
-import { SITE_POLICY, transitionSite, type SiteTransition } from '../src/sites/index.js';
+import { SITE_POLICY, modelOrigin, transitionSite, type SiteTransition } from '../src/sites/index.js';
+import { gateExtract, type ExtractObservation } from '../src/sites/extract.js';
+import { inputRouteExtractSchema } from '../src/sites/model-extract.js';
+import { assertRecordCopiesNoText } from './record-canary.js';
 import {
   emptyWorkstreamIndex,
   openWorkstream,
@@ -47,7 +50,21 @@ const terms = {
   max_attempts: 1,
 };
 const now = { state_revision: 7, state_updated_at: 10 };
-const ask = { request_id: 'route-1', ...now, terms, disclosed: { input: INPUT, summary: SUMMARY } };
+function routeExtract(): ExtractObservation {
+  return gateExtract(
+    inputRouteExtractSchema(),
+    INPUT,
+    { intent: { value: INPUT } },
+    { site: 'input.route', request_id: 'route-1:x1', state_revision: 7 },
+  );
+}
+const ask = {
+  request_id: 'route-1',
+  ...now,
+  terms,
+  disclosed: { input: INPUT, summary: SUMMARY },
+  extract: routeExtract(),
+};
 const clock = () => ({ ...now, observed_at: 11 });
 
 function answer(
@@ -134,6 +151,7 @@ test('input.route is a choice site over the five outcomes with an ask_user fallb
     terms,
     needs_dispatch: false,
     state: { input: INPUT, active_work: { summary: SUMMARY, process: 'running' as const } },
+    origin: modelOrigin(routeExtract()),
   };
   for (const choice of ROUTE_OUTCOMES) {
     assert.equal(
@@ -225,8 +243,20 @@ test('the site sees only the disclosed input, summary and process state; the rec
   assert.equal(record.reason, 'accepted');
   assert.equal(record.site?.site, 'input.route');
   assert.deepEqual(Object.keys(record), RECORD_KEYS);
-  const text = JSON.stringify(record);
-  assert.ok(!text.includes('archive') && !text.includes('migration'));
+  assertRecordCopiesNoText(record, [INPUT, SUMMARY, 'archive', 'migration']);
+});
+
+test('routing across active work fails closed without an extract record', async () => {
+  const { extract: _extract, ...bare } = ask;
+  const { fake, calls } = port(async () => answer('steer', 1));
+  const record = await decideRoute(request(busy()), bare, fake, clock);
+  assert.equal(calls.length, 0);
+  assert.equal(record.decided_by, 'site');
+  assert.equal(record.status, 'needs_human');
+  assert.equal(record.outcome, null);
+  assert.equal(record.reason, 'extract_missing');
+  assert.equal(record.site?.answer, null);
+  assert.equal(record.site?.provider_request_id, null);
 });
 
 test('fallback, outage and staleness ask the operator; cancellation pauses; none places the input', async () => {
@@ -298,6 +328,7 @@ test('replay rebuilds the record from the recorded site transition without a pro
       terms,
       needs_dispatch: false,
       state: { input: INPUT, active_work: { summary: SUMMARY, process: 'running' } },
+      origin: modelOrigin(routeExtract()),
     },
     { state_revision: 7, observed_at: 11, outcome: answer('queue', 0.95) },
     now,

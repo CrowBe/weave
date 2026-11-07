@@ -1,6 +1,15 @@
 /** D6 dispositions are observations, never execution authority. */
 import type { EvaluationOutcome, InferenceGateway } from '@weave/gateway';
-import { admissionReason, correlation, unit, type SiteInput, type SiteReason, type SiteState } from './index.js';
+import {
+  admissionReason,
+  correlation,
+  originReason,
+  structuralOrigin,
+  unit,
+  type SiteInput,
+  type SiteReason,
+  type SiteState,
+} from './index.js';
 export const AUDIT_DISPOSITIONS = ['fix_now', 'defer', 'reject_as_out_of_scope', 'needs_human'] as const;
 export type AuditDisposition = (typeof AUDIT_DISPOSITIONS)[number];
 export interface AuditDisposeInput extends SiteInput {
@@ -89,10 +98,12 @@ export async function evaluateAuditDispose(
   current: () => SiteState & { observed_at: number },
   signal?: AbortSignal,
 ): Promise<AuditDisposal> {
-  const captured = structuredClone(input);
+  const clone = structuredClone(input);
+  const captured: AuditDisposeInput =
+    clone.origin === undefined ? { ...clone, origin: structuralOrigin('audit.findings') } : clone;
   const { audit: _audit, ...terms } = captured.terms;
   let outcome: EvaluationOutcome<'choice'> | null = null;
-  if (!signal?.aborted && captured.findings.length)
+  if (!signal?.aborted && captured.findings.length && originReason('audit.dispose', captured) === null)
     try {
       outcome = await port.evaluate(
         {

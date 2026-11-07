@@ -1,6 +1,15 @@
 /** Capture the actual production request through its existing port; never route it. */
 import type { EvaluationRequest, InferenceGateway } from '@weave/gateway';
-import { evaluateSite, SITE_POLICY } from '@weave/weave';
+import {
+  evaluateSite,
+  gateExtract,
+  intakeExtractSchema,
+  modelExtractSchema,
+  modelOrigin,
+  SITE_POLICY,
+  structuralOrigin,
+  type IntakeState,
+} from '@weave/weave';
 import { evaluateBooleanSite } from '@weave/weave';
 import { evaluateOutputEval } from '@weave/weave';
 import { evaluateAuditDispose } from '@weave/weave';
@@ -16,6 +25,38 @@ export const SITES = [
   'guard.output',
   'loop.continue',
 ] as const;
+/** Supply the typed-state origin the production site now requires; it never changes captured state. */
+function originFor(item: Item) {
+  if (item.site === 'loop.continue') return structuralOrigin('progress.delta@1');
+  if (item.site === 'intake.classify') {
+    const state = item.state as Record<string, unknown>;
+    const intake: IntakeState = {
+      message: typeof state['message'] === 'string' ? state['message'] : '',
+      running_threads: Array.isArray(state['running_threads'])
+        ? (state['running_threads'] as IntakeState['running_threads'])
+        : [],
+    };
+    return modelOrigin(
+      gateExtract(
+        intakeExtractSchema(intake),
+        intake.message,
+        { thread_ref: { value: 'none', cue: null }, request: { value: null } },
+        { site: 'intake.classify', request_id: 'benchmark', state_revision: 1 },
+      ),
+    );
+  }
+  if (item.site === 'loop.triage' || item.site === 'loop.route') {
+    return modelOrigin(
+      gateExtract(
+        modelExtractSchema(item.site),
+        '',
+        { intent: { value: null } },
+        { site: item.site, request_id: 'benchmark', state_revision: 1 },
+      ),
+    );
+  }
+  return undefined;
+}
 export async function buildRequest(item: Item): Promise<Request> {
   const state = item.state as Record<string, any>;
   let captured: EvaluationRequest | undefined;
@@ -41,7 +82,9 @@ export async function buildRequest(item: Item): Promise<Request> {
     },
     needs_dispatch: false,
   };
-  if (item.site in SITE_POLICY) await evaluateSite(item.site as keyof typeof SITE_POLICY, input, port, current);
+  const origin = originFor(item);
+  const siteInput = origin === undefined ? input : { ...input, origin };
+  if (item.site in SITE_POLICY) await evaluateSite(item.site as keyof typeof SITE_POLICY, siteInput, port, current);
   else if (['loop.preselect', 'guard.input', 'guard.output'].includes(item.site))
     await evaluateBooleanSite(
       item.site as 'loop.preselect' | 'guard.input' | 'guard.output',

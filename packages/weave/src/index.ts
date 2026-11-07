@@ -119,13 +119,23 @@ export {
 } from './task-acceptance-eval.js';
 export {
   SITE_POLICY,
+  MODEL_SITES,
+  STRUCTURAL_SOURCE_FOR,
   evaluateSite,
+  modelOrigin,
+  originReason,
+  structuralOrigin,
   transitionSite,
   stopForNoProgress,
   type DecisionSite,
+  type ModelSite,
+  type ModelSiteOrigin,
   type SiteChoice,
+  type SiteOrigin,
   type SiteState,
   type SiteInput,
+  type StructuralSiteOrigin,
+  type StructuralSource,
   type IntakeState,
   type IntakeHints,
   type IntakeSiteInput,
@@ -162,6 +172,19 @@ export {
   type ExtractVerdict,
   type RecordedExtract,
 } from './sites/extract.js';
+export {
+  INPUT_ROUTE_EXTRACT_SCHEMA,
+  LOOP_ROUTE_EXTRACT_SCHEMA,
+  LOOP_TRIAGE_EXTRACT_SCHEMA,
+  inputRouteExtractSchema,
+  loopRouteExtractSchema,
+  loopTriageExtractSchema,
+  modelExtractSchema,
+  modelExtractSchemaIdFor,
+  modelHints,
+  type ModelExtractSchemaId,
+  type ModelHints,
+} from './sites/model-extract.js';
 
 export {
   progressDelta,

@@ -7,6 +7,7 @@ import type {
   InferenceTerms,
 } from '@weave/gateway';
 import type { ProcessState } from '../operating-process.js';
+import type { ExtractObservation } from './extract.js';
 
 export const SITE_POLICY = {
   'loop.triage': {
@@ -51,6 +52,31 @@ export interface SiteState {
   readonly state_revision: number;
   readonly state_updated_at: number;
 }
+/** Free-text sites must declare the extract@1 record that grounds their state. */
+export const MODEL_SITES = ['intake.classify', 'input.route', 'loop.triage', 'loop.route'] as const;
+export type ModelSite = (typeof MODEL_SITES)[number];
+/** Sites answered from recorded structured evidence, not from free text. */
+export const STRUCTURAL_SOURCE_FOR = {
+  'loop.continue': 'progress.delta@1',
+  'audit.dispose': 'audit.findings',
+  'eval.output': 'criteria',
+} as const;
+export type StructuralSource = (typeof STRUCTURAL_SOURCE_FOR)[keyof typeof STRUCTURAL_SOURCE_FOR];
+export interface ModelSiteOrigin {
+  readonly kind: 'model';
+  readonly extract: ExtractObservation;
+}
+export interface StructuralSiteOrigin {
+  readonly kind: 'structural';
+  readonly source: StructuralSource;
+}
+export type SiteOrigin = ModelSiteOrigin | StructuralSiteOrigin;
+export function modelOrigin(extract: ExtractObservation): ModelSiteOrigin {
+  return { kind: 'model', extract };
+}
+export function structuralOrigin(source: StructuralSource): StructuralSiteOrigin {
+  return { kind: 'structural', source };
+}
 export interface SiteInput extends SiteState {
   readonly request_id: string;
   /** Already filtered for disclosure; never copied to the observation. */
@@ -58,6 +84,8 @@ export interface SiteInput extends SiteState {
   readonly terms: InferenceTerms;
   /** True for a step that needs dispatch: an outage must pause it. */
   readonly needs_dispatch: boolean;
+  /** Required before a site can be asked; absent only while preprocessing a free-text site. */
+  readonly origin?: SiteOrigin;
 }
 /** Hints are grounded substrings and closed-vocabulary ids only; the original stays authoritative. */
 export type IntakeHints = {
@@ -114,7 +142,10 @@ export type SiteReason =
   | 'low_top_p'
   | 'no_answer'
   | 'decision_unavailable'
-  | 'cancelled';
+  | 'cancelled'
+  | 'extract_missing'
+  | 'invalid_extract'
+  | 'structural_origin_missing';
 export interface SiteObservation {
   readonly schema: 'decision-site@1';
   readonly site: DecisionSite;
@@ -151,6 +182,111 @@ export function unit(value: unknown): value is number {
 function validState(state: SiteState): boolean {
   return (
     Number.isSafeInteger(state.state_revision) && state.state_revision >= 0 && Number.isFinite(state.state_updated_at)
+  );
+}
+function plainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)
+  );
+}
+const EXTRACT_VERDICTS = ['use_hints', 'original_only', 're_extract'] as const;
+const FINAL_EXTRACT_VERDICTS: readonly (typeof EXTRACT_VERDICTS)[number][] = ['use_hints', 'original_only'];
+const EXTRACT_REASONS = [
+  'faithful',
+  'unfaithful',
+  'no_answer',
+  'mismatched_answer',
+  'decision_unavailable',
+  'stale_answer',
+  'cancelled',
+] as const;
+const SLOT_STATUSES = ['grounded', 'empty', 'unresolved', 'ungrounded', 'out_of_set', 'unread'] as const;
+interface ExpectedExtract {
+  readonly schema: string;
+  readonly slots: readonly { readonly slot: string; readonly kind: 'span' | 'choice' }[];
+}
+const EXPECTED_EXTRACT: Readonly<Record<string, ExpectedExtract>> = {
+  'intake.classify': {
+    schema: 'intake.message@1',
+    slots: [
+      { slot: 'thread_ref', kind: 'choice' },
+      { slot: 'request', kind: 'span' },
+    ],
+  },
+  'input.route': { schema: 'input.route@1', slots: [{ slot: 'intent', kind: 'span' }] },
+  'loop.triage': { schema: 'loop.triage@1', slots: [{ slot: 'intent', kind: 'span' }] },
+  'loop.route': { schema: 'loop.route@1', slots: [{ slot: 'intent', kind: 'span' }] },
+};
+/** An extract is usable only by the request that produced it, or its `:x<attempt>` suffix. */
+function extractBelongsToRequest(requestId: string, value: Record<string, unknown>): boolean {
+  const recorded = value['request_id'];
+  if (recorded === null || typeof recorded !== 'string' || correlation(recorded) === null) return false;
+  return recorded === requestId || recorded === `${requestId}:x${value['attempt']}`;
+}
+function validExtractRecord(site: string, input: SiteInput, value: unknown): value is ExtractObservation {
+  if (!plainObject(value)) return false;
+  if (value['schema'] !== 'extract@1' || value['site'] !== site) return false;
+  const expected = EXPECTED_EXTRACT[site];
+  if (expected === undefined || value['extract_schema'] !== expected.schema) return false;
+  if (value['attempt'] !== 1 && value['attempt'] !== 2) return false;
+  if (!extractBelongsToRequest(input.request_id, value)) return false;
+  if (value['state_revision'] !== input.state_revision) return false;
+  if (!EXTRACT_VERDICTS.includes(value['verdict'] as (typeof EXTRACT_VERDICTS)[number])) return false;
+  if (!EXTRACT_REASONS.includes(value['reason'] as (typeof EXTRACT_REASONS)[number])) return false;
+  if (value['provider_request_id'] !== null && correlation(value['provider_request_id']) === null) return false;
+  const slots = value['slots'];
+  if (!Array.isArray(slots) || slots.length !== expected.slots.length) return false;
+  for (const [index, slot] of slots.entries()) {
+    if (!plainObject(slot)) return false;
+    const shape = expected.slots[index]!;
+    if (slot['slot'] !== shape.slot || slot['kind'] !== shape.kind) return false;
+    if (!SLOT_STATUSES.includes(slot['status'] as (typeof SLOT_STATUSES)[number])) return false;
+    if (slot['value'] !== null && typeof slot['value'] !== 'string') return false;
+    const span = slot['span'];
+    if (
+      span !== null &&
+      (!Array.isArray(span) ||
+        span.length !== 2 ||
+        !Number.isSafeInteger(span[0]) ||
+        !Number.isSafeInteger(span[1]) ||
+        span[0] < 0 ||
+        span[1] < span[0])
+    )
+      return false;
+  }
+  const residual = value['residual_ambiguity'];
+  if (!plainObject(residual) || !Number.isSafeInteger(residual['count'])) return false;
+  const residualSlots = residual['slots'];
+  return Array.isArray(residualSlots) && residualSlots.every((slot) => typeof slot === 'string');
+}
+function extractOriginReason(site: string, input: SiteInput, value: unknown): SiteReason | null {
+  if (!validExtractRecord(site, input, value)) return 'invalid_extract';
+  if (value.reason === 'cancelled') return 'cancelled';
+  if (value.reason === 'stale_answer') return 'stale_answer';
+  return FINAL_EXTRACT_VERDICTS.includes(value.verdict) ? null : 'invalid_extract';
+}
+/** Why a site cannot be asked from this input, or null when its declared origin is adequate. */
+export function originReason(site: string, input: SiteInput): SiteReason | null {
+  const structural = (STRUCTURAL_SOURCE_FOR as Readonly<Record<string, StructuralSource | undefined>>)[site];
+  if (structural !== undefined) {
+    const origin = input.origin;
+    return origin?.kind === 'structural' && origin.source === structural ? null : 'structural_origin_missing';
+  }
+  if (!(MODEL_SITES as readonly string[]).includes(site)) return null;
+  if (input.origin === undefined) return 'extract_missing';
+  if (input.origin.kind !== 'model') return 'invalid_extract';
+  return extractOriginReason(site, input, input.origin.extract);
+}
+function originFailure(reason: SiteReason | null): boolean {
+  return (
+    reason === 'extract_missing' ||
+    reason === 'invalid_extract' ||
+    reason === 'structural_origin_missing' ||
+    reason === 'stale_answer' ||
+    reason === 'cancelled'
   );
 }
 
@@ -216,15 +352,21 @@ export function transitionSite<S extends DecisionSite>(
   else if (site === 'loop.triage' && !validTopProbability(probabilities, top_p, policy.options)) reason = 'low_top_p';
   else reason = 'accepted';
   const accepted = reason === 'accepted';
+  const origin = originReason(site, input);
+  const originFailed = originFailure(origin);
   const choice = accepted ? answer! : policy.fallback;
   // An unavailable decision takes no executive authority even when its fallback says implement.
   const unavailable = decisionUnavailable(outcome);
   const status =
-    recorded.cancelled || (input.needs_dispatch && unavailable)
+    recorded.cancelled || origin === 'cancelled'
       ? 'paused'
-      : choice === 'ask_user' || choice === 'needs_human'
+      : originFailed
         ? 'needs_human'
-        : 'transition';
+        : input.needs_dispatch && unavailable
+          ? 'paused'
+          : choice === 'ask_user' || choice === 'needs_human'
+            ? 'needs_human'
+            : 'transition';
   return {
     choice,
     tier: site === 'loop.triage' && !accepted ? 'strong' : null,
@@ -235,13 +377,13 @@ export function transitionSite<S extends DecisionSite>(
       question: policy.question,
       request_id: correlation(input.request_id),
       state_revision: input.state_revision,
-      answer,
-      confidence,
-      top_p,
+      answer: originFailed ? null : answer,
+      confidence: originFailed ? null : confidence,
+      top_p: originFailed ? null : top_p,
       accepted,
       fallback_used: !accepted,
       reason,
-      provider_request_id: correlation(answered?.provider_response_id),
+      provider_request_id: originFailed ? null : correlation(answered?.provider_response_id),
     },
   };
 }
@@ -267,10 +409,13 @@ export async function evaluateSite<S extends DecisionSite>(
   current: () => SiteState & { readonly observed_at: number },
   signal?: AbortSignal,
 ): Promise<SiteTransition> {
-  // Capture request metadata before await: caller mutation cannot rebind an in-flight answer.
-  const captured = { ...input };
+  // Capture request metadata before await: caller mutation cannot rebind an in-flight answer or origin.
+  const captured = {
+    ...input,
+    ...(input.origin === undefined ? {} : { origin: structuredClone(input.origin) }),
+  };
   let outcome: EvaluationOutcome<'choice'> | null = null;
-  if (!signal?.aborted) {
+  if (!signal?.aborted && originReason(site, captured) === null) {
     try {
       const policy = SITE_POLICY[site];
       outcome = await port.evaluate(
@@ -347,6 +492,8 @@ export function admissionReason(
 ): SiteReason | null {
   const outcome = recorded.outcome;
   if (recorded.cancelled) return 'cancelled';
+  const origin = originReason(site, input);
+  if (origin !== null) return origin;
   if (
     !validState(input) ||
     !validState(current) ||

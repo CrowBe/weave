@@ -12,6 +12,7 @@ import { digest } from './digest.js';
 import { OUTPUT_EVAL_POLICY } from './sites/output-eval.js';
 import {
   evaluateSite,
+  structuralOrigin,
   type ProgressChoice,
   type SiteInput,
   type SiteState,
@@ -157,5 +158,14 @@ export async function decideProgress(
 ): Promise<ProgressRecord> {
   const delta = previous === null ? null : progressDelta(previous, state);
   if (delta !== null && delta.rule !== null && !signal?.aborted) return transitionProgress(delta, null);
-  return transitionProgress(delta, await evaluateSite('loop.continue', input, port, now, signal));
+  return transitionProgress(
+    delta,
+    await evaluateSite(
+      'loop.continue',
+      input.origin === undefined ? { ...input, origin: structuralOrigin('progress.delta@1') } : input,
+      port,
+      now,
+      signal,
+    ),
+  );
 }
