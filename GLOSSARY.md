@@ -219,7 +219,48 @@ message relates to summaries of running threads: `new_thread`,
 confidence rule records the observation and returns `ask_user` / `needs_human`
 when uncertain. Through `decideIntake`, it is asked only after typed extraction
 and the fidelity gate; grounded hints may accompany the original, which remains
-authoritative. Classification grants no authority to execute or interrupt.
+authoritative. Classification grants no authority to execute or interrupt. A
+separate dispatch authority decides whether an accepted classification becomes
+a dispatch intent.
+
+### Dispatch authority
+
+The bounded authority to present one dispatch intent for an accepted intake or
+D1/D2 observation. It is separate from classification and routing, which grant
+no authority. `decideDispatch` records the intent durably before the injected
+idempotent dispatch port is called, then maps the receipt to a terminal or
+resumable decision. It never writes `routed_input@1` and never treats an
+observation as permission by itself.
+
+### Dispatch intent
+
+A durable, keyed statement that one action will be presented exactly once: an
+implement tier, a capability or done-check dispatch, a decline, or a thread
+relation. It carries the dispatch id and no operator text. A claimed intent
+prevents a second presentation; an unconfirmed intent is not re-presented
+without an explicit resume.
+
+### Unconfirmed dispatch
+
+The state in which a durable intent exists but no mapped receipt was recorded.
+Recovery without an explicit resume returns paused / `dispatch_unconfirmed` and
+makes no port call; an explicit resume re-presents the same intent once, and
+only when no dispatch attempt for it is live.
+
+### Dispatch attempt
+
+The journal-issued, single holder of the right to present a claimed dispatch
+intent and record its outcome. It is distinct from the intent's identity, which
+every recovering caller can read. While an attempt is live, no other caller can
+start one, and no decision naming the intent is appended except the holder's.
+An attempt ends when its holder appends, is cancelled or exits, or when an
+explicit resume reads the dispatch port's own settlement for the decision id.
+That **settlement read** supersedes the live attempt and records the settled
+receipt. Until one of these happens, recovery writes nothing and returns paused /
+`dispatch_unconfirmed`. A holder that never returns leaves its attempt live.
+Elapsed time never ends an attempt. Attempt ids are single-use: an ended or
+superseded id never appends, releases or supersedes again, and is never
+reissued. An attempt is not an execution claim, a grant or an approval.
 
 ### Typed extraction
 
