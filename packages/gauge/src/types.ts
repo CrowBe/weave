@@ -3,7 +3,7 @@
  * shape a valid record has; `validate` is the only thing that establishes it,
  * including every recomputed status and verdict.
  */
-import type { Kind } from '@weave/weft';
+import type { Disposition, Kind, Link } from '@weave/weft';
 
 export interface Governance {
   readonly kind: 'policy' | 'approval';
@@ -138,6 +138,264 @@ export interface FailureAttribution {
   readonly confidence: number | null;
   readonly evidence: readonly EvidenceRef[];
 }
+
+/**
+ * The conceptual category set. It maps to the existing wire values in
+ * `AttributionCategory`: `capability` becomes `capability_gap`; every other
+ * name is identical. `gauge.attribution@1` is unchanged.
+ */
+export type ConceptualAttributionCategory =
+  | 'capability'
+  | 'implementation'
+  | 'routing'
+  | 'orchestration'
+  | 'unattributed';
+
+/** The wire value for a conceptual category. Never accept a second spelling on the wire. */
+export type WireAttributionCategory<C extends ConceptualAttributionCategory> = C extends 'capability'
+  ? 'capability_gap'
+  : C;
+
+/** The closed deterministic signal for each attributed wire category. */
+export interface DeterministicSignals {
+  readonly capability_gap: 'no_contract_matched';
+  readonly implementation: 'contract_tests_failed' | 'effect_violation' | 'implementation_failed';
+  readonly routing: 'better_route_excluded' | 'wrong_contract_selected';
+  readonly orchestration: 'dependency_failed' | 'schedule_conflict' | 'budget_exhausted' | 'superseded';
+}
+
+export type DeterministicSignal = DeterministicSignals[keyof DeterministicSignals];
+export type DeterministicSignalFor<C extends keyof DeterministicSignals> = DeterministicSignals[C];
+
+/**
+ * One immutable Weft record resolved from an `EvidenceRef` of source
+ * `weft_trace`. It names the exact record and content digest in the frozen
+ * snapshot, not merely the run it belongs to.
+ */
+export interface WeftEvidenceFact {
+  readonly source: 'weft_trace';
+  readonly ref: string;
+  readonly trace_id: string;
+  readonly record_id: string;
+  readonly kind: Kind;
+  readonly digest: string;
+  readonly parent_id: string | null;
+  readonly links: readonly Link[];
+  readonly fields: Readonly<Record<string, unknown>>;
+}
+
+/** One check receipt bound to the case, revisions, invocation and producing attempt. */
+export interface CheckEvidenceFact {
+  readonly source: 'check';
+  readonly ref: string;
+  readonly case: string;
+  readonly contract_revision: string;
+  readonly implementation_revision: string;
+  readonly invocation: string;
+  readonly check_revision: string;
+  readonly attempt: string;
+  readonly passed: boolean;
+  readonly exit_code: number | null;
+  readonly digest: string;
+}
+
+/**
+ * What a recorded observation establishes. A model-authored assertion of an
+ * effect is not a check. A `judgment` here is an earlier recorded observation,
+ * never the receipt for the current decision: that receipt is cited evidence
+ * only and is excluded from the bundle and its digest.
+ */
+export type ObservationFactKind = 'search' | 'route' | 'policy' | 'schedule' | 'judgment';
+
+/** One recorded observation with its source revision and content digest. */
+export interface ObservationEvidenceFact {
+  readonly source: 'observation';
+  readonly ref: string;
+  readonly observation: ObservationFactKind;
+  readonly source_revision: string;
+  readonly case: string | null;
+  readonly digest: string;
+  readonly fields: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * A revision-bound catalogue search. Only a complete search over the
+ * authorized catalogue and compositions can establish a capability gap.
+ */
+export interface SearchInventoryFact {
+  readonly search: string;
+  readonly revision: string;
+  readonly catalogue_revision: string;
+  readonly complete: boolean;
+  readonly authorized: boolean;
+  readonly matches: readonly string[];
+  readonly compositions: readonly string[];
+  readonly informed_by_inference: boolean;
+  readonly revoked: readonly string[];
+  readonly missing_grants: readonly string[];
+  readonly evidence: readonly EvidenceRef[];
+}
+
+/** How one route candidate stood at the recorded decision revision. */
+export type RouteCandidateDisposition =
+  | 'selected'
+  | 'eligible'
+  | 'excluded'
+  | 'unavailable'
+  | 'prohibited'
+  | 'approval_required';
+
+export interface RouteCandidateFact {
+  readonly routed_unit: string;
+  readonly disposition: RouteCandidateDisposition;
+  readonly exclusion: string | null;
+  readonly terms_revision: string | null;
+}
+
+/** The recorded selection, availability, terms, policy revisions and comparative checks. */
+export interface RouteInventoryFact {
+  readonly decision: string;
+  readonly policy_revision: string;
+  readonly route_table_revision: string;
+  readonly preference_revision: string | null;
+  readonly selected: string;
+  readonly candidates: readonly RouteCandidateFact[];
+  readonly comparative_evidence: readonly EvidenceRef[];
+  readonly evidence: readonly EvidenceRef[];
+}
+
+/** One dependency's recorded state. A downstream failure does not prove its upstream cause. */
+export interface ScheduleDependencyFact {
+  readonly result: string;
+  readonly status: 'succeeded' | 'failed' | 'cancelled' | 'uncertain';
+}
+
+/** The recorded scheduler disposition, terminal outcome, budget and supersession state. */
+export interface ScheduleInventoryFact {
+  readonly scheduler_revision: string;
+  readonly policy_revision: string;
+  readonly disposition: Disposition;
+  readonly terminal: 'succeeded' | 'failed' | 'cancelled' | 'uncertain' | null;
+  readonly dependencies: readonly ScheduleDependencyFact[];
+  readonly budget: {
+    readonly line: 'actions' | 'judgments' | 'cost';
+    readonly limit: number;
+    readonly reserved: number;
+    readonly spent: number;
+  } | null;
+  readonly superseded: boolean;
+  readonly evidence: readonly EvidenceRef[];
+}
+
+/**
+ * The frozen, normalized deterministic facts for one failed case. Its
+ * `recordDigest` is the identity's `evidence_bundle_digest`. It contains no
+ * judgment receipt and no host objects.
+ */
+export interface AttributionEvidenceBundle {
+  readonly weft: readonly WeftEvidenceFact[];
+  readonly checks: readonly CheckEvidenceFact[];
+  readonly observations: readonly ObservationEvidenceFact[];
+  readonly search: readonly SearchInventoryFact[];
+  readonly route: readonly RouteInventoryFact[];
+  readonly schedule: readonly ScheduleInventoryFact[];
+}
+
+/**
+ * The revision digests injected by the composition layer. The classifier and
+ * rule revisions always require digests. The prompt and model revisions are
+ * explicit null only when no judgment is requested.
+ */
+export interface AttributionRevisions {
+  readonly classifier_revision: string;
+  readonly rule_revision: string;
+  readonly prompt_revision: string | null;
+  readonly model_revision: string | null;
+}
+
+/**
+ * The exact permitted judgment request, frozen before dispatch. Its
+ * `recordDigest` is `judgment_request_digest`. The response, rationale,
+ * latency and provider ids are receipt evidence, never part of this request.
+ */
+export interface AttributionJudgmentRequest {
+  readonly request: string;
+  readonly result: string;
+  readonly case: string;
+  readonly evidence_bundle_digest: string;
+  readonly categories: readonly ConceptualAttributionCategory[];
+  readonly evidence: readonly EvidenceRef[];
+  readonly allowed_destinations: readonly string[];
+  readonly budget: { readonly line: 'judgments' | 'cost'; readonly limit: number } | null;
+  readonly prompt_revision: string;
+  readonly model_revision: string;
+}
+
+/** Everything the pure decision step may observe. No ambient clock, entropy or provider. */
+export interface AttributionDecisionInput {
+  readonly result: string;
+  readonly case: string;
+  readonly split: Split;
+  readonly bundle: AttributionEvidenceBundle;
+  readonly revisions: AttributionRevisions;
+  readonly judgment_request: AttributionJudgmentRequest | null;
+}
+
+/**
+ * The closed `g7.claim` `id_inputs`: the pre-judgment identity preimage without
+ * `domain`. `evidence_bundle_digest` and `judgment_request_digest` are
+ * `recordDigest` values; the latter is explicit null when no judgment is
+ * requested.
+ */
+export interface AttributionIdInputs {
+  readonly result: string;
+  readonly case: string;
+  readonly evidence_bundle_digest: string;
+  readonly classifier_revision: string;
+  readonly rule_revision: string;
+  readonly prompt_revision: string | null;
+  readonly model_revision: string | null;
+  readonly judgment_request_digest: string | null;
+}
+
+/** A deterministic claim: a closed category signal, no confidence, cited evidence. */
+export type DeterministicAttributionDecision = {
+  readonly [C in keyof DeterministicSignals]: {
+    readonly category: C;
+    readonly basis: 'deterministic';
+    readonly signal: DeterministicSignals[C];
+    readonly confidence: null;
+    readonly evidence: readonly EvidenceRef[];
+  };
+}[keyof DeterministicSignals];
+
+/** A probabilistic claim: no signal, a confidence, cited evidence. */
+export interface JudgmentAttributionDecision {
+  readonly category: Exclude<AttributionCategory, 'unattributed'>;
+  readonly basis: 'judgment';
+  readonly signal: null;
+  readonly confidence: number;
+  readonly evidence: readonly EvidenceRef[];
+}
+
+/** An explicit abstention: the valid `unattributed` outcome when evidence does not decide. */
+export interface AbstentionAttributionDecision {
+  readonly category: 'unattributed';
+  readonly basis: 'none';
+  readonly signal: null;
+  readonly confidence: null;
+  readonly evidence: readonly EvidenceRef[];
+}
+
+/**
+ * What the pure decision step returns before result binding. The tune-only
+ * producer copies it into `gauge.attribution@1`; the holdout evaluator scores
+ * it without creating a holdout record.
+ */
+export type AttributionDecision =
+  | DeterministicAttributionDecision
+  | JudgmentAttributionDecision
+  | AbstentionAttributionDecision;
 
 /** How a cost line is known. An unknown line has no amount: it is never zero. */
 export type CostBasis = 'measured' | 'estimated' | 'unknown';

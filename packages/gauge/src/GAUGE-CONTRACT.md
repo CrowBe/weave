@@ -285,6 +285,135 @@ Rules:
 - `unattributed` is a valid result. It requires basis `none`, a null signal
   and a null confidence. Any other category forbids basis `none`.
 
+## Attribution facts and decision inputs
+
+This section is the G7 (#195) contract for failure attribution. It adds pure
+types only: `gauge.attribution@1` above is unchanged, and the tune-only producer
+still binds its decision into that record and validates it. The types are
+exported by `@weave/gauge` from `src/types.ts`. An evidence resolver outside
+Gauge translates serialized host receipts into these normalized facts; Gauge
+receives immutable validated Weft records and bounded check/search/route/schedule
+facts, never host objects.
+
+The terms **attribution evidence bundle**, **attribution abstention** and
+**judgment request digest** are defined in `GLOSSARY.md`.
+
+### Facts
+
+`AttributionEvidenceBundle` is the frozen deterministic evidence for one failed
+case; its `recordDigest` is the identity's `evidence_bundle_digest`. It holds:
+
+- `WeftEvidenceFact`: a `source: weft_trace` citation resolved to an exact
+  `(trace_id, record_id)` and content digest in an immutable snapshot, with its
+  kind, parent and links, not merely an entire run.
+- `CheckEvidenceFact`: a `source: check` receipt bound to the case, the
+  contract and implementation revisions, invocation, check revision and
+  producing attempt, including the recorded exit code and `passed` where
+  applicable.
+- `ObservationEvidenceFact`: a `source: observation` search, route, policy,
+  schedule or judgment observation with its source revision and digest. A
+  model-authored assertion of an effect violation is not a deterministic check.
+- `SearchInventoryFact`: a revision-bound search over the authorized catalogue
+  and compositions. Only a complete search can establish a capability gap; an
+  empty retrieval, an inference-informed guess, an unavailable catalogue, a
+  revoked implementation or a missing grant cannot.
+- `RouteInventoryFact`: the recorded selection, route table, preferences, terms,
+  policy revisions, candidate eligibility and comparative check evidence. A
+  route lawfully excluded by privacy, quality, credential, budget, context or
+  permission policy is not a routing defect.
+- `ScheduleInventoryFact`: the scheduler disposition, dependency results,
+  terminal outcome, budget and supersession state. Routine deferral, a lawful
+  budget refusal, requested cancellation or supersession alone does not
+  establish a defect.
+
+Refs fit Weave id rules; unbounded paths, URLs and raw text are never
+concatenated into an id. The resolver rejects dangling, wrong-case,
+wrong-attempt, stale and conflicting citations and preserves omissions
+explicitly. Unavailable or incomplete evidence yields an attribution
+abstention; a malformed envelope or binding is a typed producer error. Neither
+is a successful attribution. `validate` remains the final record gate.
+
+`AttributionRevisions` carries the injected `classifier_revision`,
+`rule_revision`, `prompt_revision` and `model_revision` digests. Classifier and
+rule revisions always require digests. Prompt and model revisions are explicit
+null only when no judgment is requested, regardless of whether an answer is
+accepted; the composition layer computes or supplies every digest, and Gauge
+never reads its own source or artifact files.
+
+`AttributionJudgmentRequest` is the exact permitted request, sent only after
+inconclusive deterministic analysis. It carries the permitted evidence view and
+category definitions, never labels. The response, rationale, latency and
+provider ids stay in a bounded judgment receipt.
+
+`AttributionDecisionInput` combines the result, case, split, bundle, revisions
+and optional frozen request. It reads no ambient clock, entropy, filesystem,
+network or provider.
+
+### Decision output
+
+`AttributionDecision` is what the pure decision step returns before result
+binding. It is one of:
+
+- a deterministic claim: a category-specific closed signal, `basis:
+  deterministic`, a null confidence and cited evidence;
+- a judgment claim: `basis: judgment`, a null signal, a finite confidence and
+  cited evidence;
+- an attribution abstention: `category: unattributed`, `basis: none`, a null
+  signal, a null confidence and any retained diagnostic evidence.
+
+The conceptual category set is `capability | implementation | routing |
+orchestration | unattributed`. Map conceptual `capability` to the existing wire
+value `capability_gap`; every other value maps identically. Do not accept a
+second spelling on the wire. The tune-only producer copies the decision into
+`gauge.attribution@1` and validates it; the isolated holdout evaluator may score
+the same decision step without creating a forbidden holdout attribution record.
+
+### Pre-judgment identity
+
+Derive `attribution` as `g7:` followed by all 64 lowercase hexadecimal
+characters of the SHA-256 digest of the UTF-8 canonical JSON object:
+
+```json
+{
+  "domain": "gauge.attribution-id@1",
+  "result": "<result id>",
+  "case": "<case id>",
+  "evidence_bundle_digest": "<recordDigest of the frozen evidence bundle>",
+  "classifier_revision": "<digest>",
+  "rule_revision": "<digest>",
+  "prompt_revision": "<digest or null>",
+  "model_revision": "<digest or null>",
+  "judgment_request_digest": "<digest or null>"
+}
+```
+
+The identity uses only pre-judgment inputs, exactly the fields of
+`AttributionIdInputs`. The judgment receipt is cited evidence only, excluded
+from this bundle digest and the identity, including its answer, rationale,
+latency and provider ids. Do not include the output category or claim content
+in the identity: a different claim for the same inputs must trigger the
+durability conflict rule.
+
+- `evidence_bundle_digest` is `recordDigest` of the frozen, normalized
+  deterministic evidence bundle, including resolved evidence contents.
+- `judgment_request_digest` is `recordDigest` of the exact permitted judgment
+  request, frozen before dispatch. It is explicit null when no judgment is
+  requested.
+- Revision digests are checked with Weft `isDigest`: `sha256:` plus 64 lowercase
+  hex. Reject bare hex, uppercase hex and wrong lengths. Classifier and rule
+  revisions always require digests; prompt and model revisions may be explicit
+  null only when no judgment is requested. A non-null revision digest enters the
+  id object in its `sha256:`-prefixed form.
+- Use `recordDigest` canonicalization: object keys sorted recursively, no
+  whitespace, array order preserved. Strip only the `sha256:` prefix from the
+  final object digest when forming `g7:`. The resulting 67-character id uses
+  only `g7:` and `[0-9a-f]`, within `isId`'s
+  `[A-Za-z0-9_.:@-]{1,128}` alphabet and length.
+
+This slice declares the rule only. Slice 3 G7-T07 pins the exact derivation,
+canonical-key-order invariance, changed-input identities and malformed revision
+digest refusal before the binder writes ids.
+
 ## `gauge.cost@1`: evaluation cost
 
 What producing one result cost, so an Experiment counts its whole cost and not
