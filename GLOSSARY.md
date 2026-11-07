@@ -641,7 +641,7 @@ A claim about why one case failed: **capability gap**, implementation, routing o
 
 ### Attribution evidence bundle
 
-The revision-bound facts and resolvable citations for one failed case that the deterministic attribution step consumes: normalized Weft records, check receipts, observations, and search, route and schedule inventories, together with the classifier, rule and, when a judgment is requested, prompt and model revision digests. Its `recordDigest` is the identity's evidence digest. Every citation resolves to an exact record, revision and content digest. The judgment receipt is cited evidence only and is excluded from the bundle and its digest. Unavailable or incomplete evidence yields an attribution abstention, never a guessed category.
+The revision-bound facts and resolvable citations for one failed case that the deterministic attribution step consumes: normalized Weft records, check receipts, observations, and search, route and schedule inventories. Its `recordDigest` is the identity's evidence digest. The classifier, rule, and, when a judgment is requested, prompt and model revision digests are injected separately as `AttributionRevisions`; they enter the identity as their own fields and not through the bundle or its digest. Every citation resolves to an exact record, revision and content digest. The judgment receipt is cited evidence only and is excluded from the bundle and its digest. Unavailable or incomplete evidence yields an attribution abstention, never a guessed category.
 
 ### Attribution abstention
 

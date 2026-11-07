@@ -101,10 +101,10 @@ test('the types reject conceptual wire values, a judgment receipt in the bundle 
     judgment_receipt: 'receipt-1',
   };
 
+  // @ts-expect-error a capability gap has exactly one signal
   const wrongSignal: DeterministicAttributionDecision = {
     category: 'capability_gap',
     basis: 'deterministic',
-    // @ts-expect-error a capability gap has exactly one signal
     signal: 'implementation_failed',
     confidence: null,
     evidence,
