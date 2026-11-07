@@ -6,15 +6,30 @@
  * call, maps the receipt to a closed decision record, and emits the existing
  * `judgment` kind for every site observation it made.
  */
-import type { InferenceGateway, InferenceTerms } from '@weave/gateway';
-import { decideIntake, type IntakeDecision } from './intake.js';
-import { decideLoopRoute, decideTriage, type LoopDecisionAsk } from './sites/loop-decide.js';
+import type { EvaluationOutcome, GenerationOutcome, InferenceGateway, InferenceTerms } from '@weave/gateway';
+import {
+  INTAKE_EXTRACT_SITE,
+  decideIntake,
+  intakeExtractSchema,
+  transitionIntake,
+  type IntakeDecision,
+  type RecordedExtract,
+} from './intake.js';
+import {
+  decideLoopRoute,
+  decideTriage,
+  transitionLoopDecision,
+  type LoopDecisionAsk,
+  type LoopDecisionSite,
+} from './sites/loop-decide.js';
+import { gateExtract, type ExtractObservation, type ExtractSchema } from './sites/extract.js';
+import { modelExtractSchema } from './sites/model-extract.js';
 import {
   SITE_POLICY,
   correlation,
-  unit,
   type IntakeSiteInput,
   type IntakeState,
+  type RecordedSiteAnswer,
   type SiteChoice,
   type SiteObservation,
   type SiteReason,
@@ -102,15 +117,23 @@ export interface DispatchDecision {
   readonly route: SiteTransition | null;
 }
 
+/**
+ * Each decision id is a single-writer state machine: open → claimed(intent) | terminal(decision),
+ * then claimed(intent) → terminal(a decision owning that intent). A resumable pause keeps the state.
+ * `claim` and `append` are each one atomic compare-and-set on that state: they return false and
+ * write nothing when another writer already moved it, and the losing caller fails closed.
+ */
 export interface DispatchJournal {
   load(decision_id: string): {
     readonly checkpoint: DispatchCheckpoint | null;
     readonly decisions: readonly DispatchDecision[];
   };
+  /** Ignored once the decision is claimed or terminal: its owner's stage evidence stands. */
   checkpoint(entry: DispatchCheckpoint): void;
-  /** Bind the claimed intent to the exact stage snapshot the plan was derived from. */
+  /** open → claimed: bind the intent to the exact stage snapshot the plan was derived from. */
   claim(decision_id: string, intent: DispatchIntent, checkpoint?: DispatchCheckpoint): boolean;
-  append(decision: DispatchDecision): void;
+  /** open → open | terminal for an intent-less decision; claimed → claimed | terminal for its owner. */
+  append(decision: DispatchDecision): boolean;
 }
 
 export type DispatchPort = (intent: DispatchIntent, signal?: AbortSignal) => DispatchReceipt | Promise<DispatchReceipt>;
@@ -172,13 +195,16 @@ export class MemoryDispatchJournal implements DispatchJournal {
       decisions: clone(this.entries.filter((entry) => entry.decision_id === decision_id)),
     };
   }
+  private terminal(decision_id: string): boolean {
+    const latest = this.entries.filter((entry) => entry.decision_id === decision_id).at(-1);
+    return latest !== undefined && !isResumable(latest);
+  }
   checkpoint(entry: DispatchCheckpoint): void {
-    // A claimed decision owns its stage snapshot: later deliveries must not rewrite the evidence.
-    if (this.intents.has(entry.decision_id)) return;
+    if (this.intents.has(entry.decision_id) || this.terminal(entry.decision_id)) return;
     this.checkpoints.set(entry.decision_id, clone(entry));
   }
   claim(decision_id: string, intent: DispatchIntent, snapshot?: DispatchCheckpoint): boolean {
-    if (this.intents.has(decision_id)) return false;
+    if (this.intents.has(decision_id) || this.terminal(decision_id)) return false;
     const current = this.checkpoints.get(decision_id);
     if (current !== undefined && current.intent !== null) return false;
     const bound = snapshot ?? current;
@@ -188,15 +214,17 @@ export class MemoryDispatchJournal implements DispatchJournal {
     if (bound !== undefined) this.checkpoints.set(decision_id, clone({ ...bound, intent }));
     return true;
   }
-  append(decision: DispatchDecision): void {
+  append(decision: DispatchDecision): boolean {
     const id = decision.decision_id;
-    const recorded = this.entries.filter((entry) => entry.decision_id === id);
-    if (recorded.some((entry) => entry.status === 'dispatched')) return;
+    if (this.terminal(id)) return false;
     const claimed = this.intents.get(id);
-    // After a claim, only the owner of the claimed intent may append (dispatch, pause, cancellation).
-    if (claimed !== undefined && (decision.intent === null || !sameIntent(decision.intent, claimed)))
-      throw new Error('appended decision does not own the claimed intent');
+    if (claimed === undefined) {
+      if (decision.intent !== null) throw new Error('appended decision names an intent that was never claimed');
+    } else if (decision.intent === null || !sameRecord(decision.intent, claimed)) {
+      return false;
+    }
     this.entries.push(clone(decision));
+    return true;
   }
 }
 
@@ -316,224 +344,273 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function expectedStageRequest(checkpoint: DispatchCheckpoint, stage: 'intake' | 'triage' | 'route'): string {
-  const ask = checkpoint.asks[stage];
-  if (!Number.isSafeInteger(ask) || ask < 1) throw new Error(`recorded ${stage} stage has no matching ask`);
-  return stageId(checkpoint.decision_id, stage, ask);
+/** Structural equality over journaled records: same keys and values, key order ignored, no coercion. */
+function sameRecord(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (Array.isArray(left) || Array.isArray(right))
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((item, index) => sameRecord(item, right[index]))
+    );
+  if (!isRecord(left) || !isRecord(right)) return false;
+  const keys = Object.keys(left);
+  return (
+    keys.length === Object.keys(right).length &&
+    keys.every((key) => Object.hasOwn(right, key) && sameRecord(left[key], right[key]))
+  );
 }
 
-function expectedStatus(choice: SiteChoice): SiteTransition['status'] {
-  return choice === 'ask_user' || choice === 'needs_human' ? 'needs_human' : 'transition';
+type Stage = 'intake' | 'triage' | 'route';
+
+function stageAsk(checkpoint: DispatchCheckpoint, stage: Stage): number {
+  const ask = isRecord(checkpoint.asks) ? checkpoint.asks[stage] : undefined;
+  if (typeof ask !== 'number' || !Number.isSafeInteger(ask) || ask < 1)
+    throw new Error(`recorded ${stage} stage has no matching ask`);
+  return ask;
 }
 
-/** A site observation is evidence only when it is bound to the expected request, revision and policy. */
-function assertObservation(
-  site: 'intake.classify' | 'loop.triage' | 'loop.route',
-  expected: string,
-  revision: number,
-  value: SiteObservation,
-): void {
-  const policy = SITE_POLICY[site];
-  if (!isRecord(value) || value.schema !== 'decision-site@1')
-    throw new Error(`recorded ${site} stage is not a site observation`);
-  if (value.site !== site) throw new Error(`recorded ${site} stage names a foreign site`);
-  if (value.request_id !== expected) throw new Error(`recorded ${site} stage names a foreign request`);
-  if (value.state_revision !== revision) throw new Error(`recorded ${site} stage names a foreign revision`);
-  if (value.question !== policy.question) throw new Error(`recorded ${site} stage has a foreign question`);
-  if (typeof value.accepted !== 'boolean' || typeof value.fallback_used !== 'boolean')
-    throw new Error(`recorded ${site} stage has no admission result`);
-  if (value.answer !== null && !(policy.options as readonly string[]).includes(value.answer))
-    throw new Error(`recorded ${site} stage has an invalid answer`);
-  if (value.confidence !== null && !unit(value.confidence))
-    throw new Error(`recorded ${site} stage has an invalid confidence`);
-  if (value.top_p !== null && !unit(value.top_p))
-    throw new Error(`recorded ${site} stage has an invalid top probability`);
-  if (value.accepted) {
-    if (value.reason !== 'accepted' || value.fallback_used)
-      throw new Error(`recorded ${site} stage is inconsistently accepted`);
-    if (value.answer === null || value.confidence === null || value.confidence < policy.confidence)
-      throw new Error(`recorded ${site} stage is accepted below its confidence threshold`);
-    if (site === 'loop.triage' && (value.top_p === null || value.top_p < 0.6))
-      throw new Error('recorded loop.triage stage is accepted below its top-probability threshold');
-    return;
+function notLive(stage: Stage): Error {
+  return new Error(`recorded ${stage} stage is not the live outcome of its recorded observations`);
+}
+
+/** A candidate the live function refuses to replay is no witness for the record. */
+function derive<T>(replay: () => T): T | null {
+  try {
+    return replay();
+  } catch {
+    return null;
   }
-  if (value.reason === 'accepted' || !value.fallback_used)
-    throw new Error(`recorded ${site} stage is inconsistently rejected`);
-  switch (value.reason) {
-    case 'missing_confidence':
-      if (value.answer === null || value.confidence !== null)
-        throw new Error(`recorded ${site} stage has inconsistent missing confidence`);
-      break;
-    case 'low_confidence':
-      if (value.answer === null || value.confidence === null || value.confidence >= policy.confidence)
-        throw new Error(`recorded ${site} stage has inconsistent low confidence`);
-      break;
-    case 'low_top_p':
-      if (
-        site !== 'loop.triage' ||
-        value.answer === null ||
-        value.confidence === null ||
-        value.confidence < policy.confidence
-      )
-        throw new Error(`recorded ${site} stage has inconsistent low top probability`);
-      break;
-    case 'no_answer':
-    case 'invalid_answer':
-    case 'decision_unavailable':
-      if (value.answer !== null) throw new Error(`recorded ${site} stage has an answer without an outcome`);
-      break;
+}
+
+/** The request as it stood when the checkpoint's asks were made. */
+function askedRequest(request: DispatchRequest, checkpoint: DispatchCheckpoint): DispatchRequest {
+  return { ...request, state_revision: checkpoint.state_revision, state_updated_at: checkpoint.state_updated_at };
+}
+
+function checkpointState(checkpoint: DispatchCheckpoint): SiteState {
+  return { state_revision: checkpoint.state_revision, state_updated_at: checkpoint.state_updated_at };
+}
+
+const REPLAY_UNIT = 'dispatch.replay';
+/** Never a policy option, so a raw answer naming it re-derives as `invalid_answer`. */
+const NO_OPTION = '';
+
+/** A gateway pause makes even an accepted answer an outage, which still keeps its content. */
+function budgetPause(request_id: string, site: string) {
+  return {
+    type: 'loop.paused',
+    policy: 'budget.policy@1',
+    request_id,
+    site,
+    reason: 'quota_unknown',
+    until: null,
+  } as const;
+}
+
+/**
+ * Raw `choice` answers the live site could have received, with content fixed by the recorded
+ * observation. The record does not show whether the answer was fresh, stale, cancelled, foreign
+ * or an outage, so each is offered and the live transition decides which, if any, reproduces it.
+ */
+function siteWitnesses(
+  site: 'intake.classify' | LoopDecisionSite,
+  request_id: string,
+  state: SiteState,
+  observation: unknown,
+): RecordedSiteAnswer[] {
+  const recorded = isRecord(observation) ? observation : {};
+  const answer = typeof recorded['answer'] === 'string' ? recorded['answer'] : null;
+  const confidence = typeof recorded['confidence'] === 'number' ? recorded['confidence'] : null;
+  const top_p = typeof recorded['top_p'] === 'number' ? recorded['top_p'] : null;
+  const provider = typeof recorded['provider_request_id'] === 'string' ? recorded['provider_request_id'] : undefined;
+  const other = (SITE_POLICY[site].options as readonly string[]).find((option) => option !== answer);
+  const distributions: (Readonly<Record<string, number>> | undefined)[] =
+    answer === null || top_p === null
+      ? [undefined]
+      : [
+          // An admissible distribution, then one naming a non-option, which the top-p gate refuses.
+          top_p < 1 && other !== undefined ? { [answer]: top_p, [other]: 1 - top_p } : { [answer]: top_p },
+          { [answer]: top_p, [NO_OPTION]: 0 },
+        ];
+  const base = { site, attempts: [], spent: 0, uncertainty: [] };
+  const accepted = (id: string, probabilities: Readonly<Record<string, number>> | undefined) =>
+    ({
+      ...base,
+      request_id: id,
+      status: 'accepted',
+      kind: 'choice',
+      answers: {
+        decision: { type: 'choice', choice: answer ?? NO_OPTION, ...(probabilities ? { probabilities } : {}) },
+      },
+      confidence: confidence === null ? undefined : { decision: confidence },
+      routed_unit_id: REPLAY_UNIT,
+      provider_response_id: provider,
+    }) satisfies EvaluationOutcome<'choice'>;
+  const outcomes: (EvaluationOutcome<'choice'> | null)[] = [
+    ...distributions.map((probabilities) => accepted(request_id, probabilities)),
+    accepted(`${request_id}:foreign`, distributions[0]),
+    { ...accepted(request_id, distributions[0]), paused: budgetPause(request_id, site) },
+    { ...base, request_id, status: 'blocked', reason: 'invalid_request' },
+    null,
+  ];
+  return outcomes.flatMap((outcome): RecordedSiteAnswer[] => [
+    { state_revision: state.state_revision, observed_at: state.state_updated_at, outcome },
+    { state_revision: state.state_revision + 1, observed_at: state.state_updated_at, outcome },
+    { state_revision: state.state_revision, observed_at: state.state_updated_at, outcome, cancelled: true },
+  ]);
+}
+
+/** The verbatim answer text that gates to the recorded slots; any slot left unread means no answer. */
+function extractText(schema: ExtractSchema, original: string, slots: readonly unknown[]): string {
+  // Longer than the original, so it can never be grounded in it.
+  const absent = `${original}#`;
+  const answer: Record<string, unknown> = {};
+  for (const [name, spec] of Object.entries(schema.slots)) {
+    const slot = slots.find((candidate) => isRecord(candidate) && candidate['slot'] === name);
+    if (!isRecord(slot) || slot['status'] === 'unread') return 'null';
+    const span = slot['span'];
+    const text =
+      Array.isArray(span) && typeof span[0] === 'number' && typeof span[1] === 'number'
+        ? original.slice(span[0], span[1])
+        : null;
+    const status = slot['status'];
+    if (spec.kind === 'span') {
+      answer[name] = { value: status === 'grounded' ? text : status === 'ungrounded' ? absent : null };
+      continue;
+    }
+    const value = typeof slot['value'] === 'string' ? slot['value'] : null;
+    answer[name] =
+      status === 'grounded'
+        ? { value, cue: text }
+        : status === 'unresolved'
+          ? { value: null, cue: text }
+          : status === 'ungrounded'
+            ? { value: null, cue: absent }
+            : status === 'out_of_set'
+              ? { value: `#${spec.options.join('#')}`, cue: null }
+              : { value: null, cue: null };
+  }
+  return JSON.stringify(answer);
+}
+
+/** The raw generation the live extract call would have recorded for this observation. */
+function extractWitness(
+  ask: IntakeSiteInput,
+  schema: ExtractSchema,
+  observation: unknown,
+  index: number,
+): RecordedExtract {
+  if (!isRecord(observation) || !Array.isArray(observation['slots'])) throw notLive('intake');
+  const attempt = index === 0 ? 1 : 2;
+  const request_id = `${ask.request_id}:x${attempt}`;
+  const provider = observation['provider_request_id'];
+  const text = extractText(schema, ask.state.message, observation['slots'] as readonly unknown[]);
+  const generated = (id: string): GenerationOutcome => ({
+    status: 'accepted',
+    request_id: id,
+    site: INTAKE_EXTRACT_SITE,
+    text,
+    routed_unit_id: REPLAY_UNIT,
+    provider_response_id: typeof provider === 'string' ? provider : undefined,
+    attempts: [],
+    spent: 0,
+    uncertainty: [],
+  });
+  const fresh = { attempt, state_revision: ask.state_revision, state_updated_at: ask.state_updated_at } as const;
+  switch (observation['reason']) {
+    case 'cancelled':
+      return { ...fresh, outcome: generated(request_id), cancelled: true };
     case 'stale_answer':
+      return { ...fresh, state_revision: ask.state_revision + 1, outcome: generated(request_id) };
     case 'mismatched_answer':
-    case 'cancelled':
-      break;
+      return { ...fresh, outcome: generated(`${request_id}:foreign`) };
+    case 'decision_unavailable':
+      return { ...fresh, outcome: { ...generated(request_id), paused: budgetPause(request_id, INTAKE_EXTRACT_SITE) } };
     default:
-      throw new Error(`recorded ${site} stage has an invalid reason`);
+      return { ...fresh, outcome: generated(request_id) };
   }
 }
 
-function assertTransition(
-  site: 'loop.triage' | 'loop.route',
-  expected: string,
-  revision: number,
-  value: SiteTransition,
-): void {
-  const policy = SITE_POLICY[site];
-  const observation = value.observation;
-  assertObservation(site, expected, revision, observation);
-  if (observation.accepted) {
-    if (value.choice !== observation.answer || value.tier !== null)
-      throw new Error(`recorded ${site} stage does not match its accepted answer`);
-    if (value.status !== expectedStatus(value.choice))
-      throw new Error(`recorded ${site} stage has an invalid accepted status`);
-    return;
+/** Intake: the extraction gate, the operator-ambiguity stop and the classify site, through `transitionIntake`. */
+function replayIntake(request: DispatchRequest, checkpoint: DispatchCheckpoint): void {
+  const recorded: unknown = checkpoint.intake;
+  if (!isRecord(recorded) || !Array.isArray(recorded['extract'])) throw notLive('intake');
+  const ask = askIntake(askedRequest(request, checkpoint), stageAsk(checkpoint, 'intake'));
+  const current = checkpointState(checkpoint);
+  const schema = intakeExtractSchema(ask.state);
+  const extracts = (recorded['extract'] as readonly unknown[]).map((observation, index) =>
+    extractWitness(ask, schema, observation, index),
+  );
+  const site = recorded['site'];
+  const answers = site === null ? [null] : siteWitnesses('intake.classify', ask.request_id, current, site);
+  for (const answer of answers) {
+    const derived = derive(() => transitionIntake(ask, { extracts, site: answer }, current));
+    if (derived !== null && sameRecord(derived, recorded)) return;
   }
-  if (value.choice !== policy.fallback) throw new Error(`recorded ${site} stage does not use its fallback choice`);
-  if (value.tier !== (site === 'loop.triage' ? 'strong' : null))
-    throw new Error(`recorded ${site} stage has an invalid fallback tier`);
-  const fallbackStatus = expectedStatus(policy.fallback);
-  if (observation.reason === 'cancelled') {
-    if (value.status !== 'paused') throw new Error(`recorded ${site} stage has an invalid cancelled status`);
-    return;
-  }
-  if (observation.reason === 'decision_unavailable') {
-    if (value.status !== 'paused') throw new Error(`recorded ${site} stage has an invalid unavailable status`);
-    return;
-  }
-  if (observation.reason === 'stale_answer' || observation.reason === 'mismatched_answer') {
-    if (value.status !== 'paused' && value.status !== fallbackStatus)
-      throw new Error(`recorded ${site} stage has an invalid stale status`);
-    return;
-  }
-  if (value.status !== fallbackStatus) throw new Error(`recorded ${site} stage has an invalid fallback status`);
+  throw notLive('intake');
 }
 
-/** Extract-only intake never dispatches: its outcome is a closed stopped table backed by extraction evidence. */
-function assertExtractOnlyIntake(request: DispatchRequest, intake: IntakeDecision): void {
-  const final = intake.extract[intake.extract.length - 1];
-  if (final === undefined) throw new Error('recorded extract-only intake has no extraction evidence');
-  if (intake.choice !== 'ask_user')
-    throw new Error('recorded extract-only intake has an executable choice without a site answer');
-  if (intake.status !== 'paused' && intake.status !== 'needs_human')
-    throw new Error('recorded extract-only intake does not stop');
-  switch (intake.reason) {
-    case 'cancelled':
-      if (intake.status !== 'paused' || final.reason !== 'cancelled')
-        throw new Error('recorded extract-only intake has inconsistent cancellation evidence');
-      break;
-    case 'stale_answer':
-      if (intake.status !== 'needs_human' || final.reason !== 'stale_answer')
-        throw new Error('recorded extract-only intake has inconsistent stale evidence');
-      break;
-    case 'ambiguous_reference': {
-      const slots: unknown = final.slots;
-      const thread = Array.isArray(slots)
-        ? slots.find((slot) => isRecord(slot) && slot['slot'] === 'thread_ref')
-        : undefined;
-      if (
-        intake.status !== 'needs_human' ||
-        final.verdict !== 'use_hints' ||
-        !isRecord(thread) ||
-        thread['status'] !== 'unresolved' ||
-        request.intake.running_threads.length < 2
-      )
-        throw new Error('recorded extract-only intake has inconsistent ambiguity evidence');
-      break;
+/**
+ * Loop extracts are not journaled; their only effect on the transition is an origin stop. So each
+ * witness origin is a live attempt-1 extract that falls back to the original, fresh, stale or cancelled.
+ */
+function loopOrigins(site: LoopDecisionSite, ask: LoopDecisionAsk): ExtractObservation[] {
+  const meta = { site, request_id: `${ask.request_id}:x1`, attempt: 1, state_revision: ask.state_revision } as const;
+  return (['decision_unavailable', 'stale_answer', 'cancelled'] as const).map((reason) =>
+    gateExtract(modelExtractSchema(site), '', null, { ...meta, verdict: 'original_only', reason }),
+  );
+}
+
+/** D1 and D2 through `transitionLoopDecision`, the replay half of the extract-composed live call. */
+function replayLoop(request: DispatchRequest, checkpoint: DispatchCheckpoint, stage: 'triage' | 'route'): void {
+  const site: LoopDecisionSite = stage === 'triage' ? 'loop.triage' : 'loop.route';
+  const recorded: unknown = checkpoint[stage];
+  if (!isRecord(recorded)) throw notLive(stage);
+  const ask = loopAsk(askedRequest(request, checkpoint), stage, stageAsk(checkpoint, stage));
+  const current = checkpointState(checkpoint);
+  const answers = siteWitnesses(site, ask.request_id, current, recorded['observation']);
+  for (const origin of loopOrigins(site, ask))
+    for (const answer of answers) {
+      const derived = derive(() => transitionLoopDecision(site, ask, { extracts: [origin], site: answer }, current));
+      if (derived !== null && sameRecord(derived.site, recorded)) return;
     }
-    default:
-      throw new Error('recorded extract-only intake has an outcome that needs a site answer');
-  }
+  throw notLive(stage);
 }
 
-/** A classify answer is admissible only after an extraction that completed without stopping. */
-function assertExtractCompleted(intake: IntakeDecision): void {
-  const final = intake.extract[intake.extract.length - 1];
-  if (final === undefined) throw new Error('recorded intake extract is missing');
-  if (intake.extract.length === 2) {
-    const first = intake.extract[0]!;
-    if (first.verdict !== 're_extract' || first.reason === 'cancelled' || first.reason === 'stale_answer')
-      throw new Error('recorded intake extract did not authorize a second attempt');
-  }
-  if (final.reason === 'cancelled' || final.reason === 'stale_answer' || final.verdict === 're_extract')
-    throw new Error('recorded intake extract stopped before a classify decision');
-}
-
-/** Fail closed on stage records that a foreign request, site, revision or threshold could have forged. */
-function assertRecordedStages(request: DispatchRequest, checkpoint: DispatchCheckpoint): void {
+function replayStage(request: DispatchRequest, checkpoint: DispatchCheckpoint, stage: Stage): void {
   if (request.request_id !== checkpoint.decision_id) throw new Error('checkpoint belongs to another decision');
-  const intake = checkpoint.intake;
-  if (intake !== null) {
-    const expected = expectedStageRequest(checkpoint, 'intake');
-    if (!isRecord(intake) || intake.schema !== 'intake.decision@1')
-      throw new Error('recorded intake stage is not an intake decision');
-    if (intake.request_id !== expected) throw new Error('recorded intake stage names a foreign request');
-    if (!Array.isArray(intake.extract) || intake.extract.length === 0 || intake.extract.length > 2)
-      throw new Error('recorded intake stage has invalid extracts');
-    for (const [index, extract] of intake.extract.entries()) {
-      const attempt = index + 1;
-      if (!isRecord(extract) || extract.schema !== 'extract@1')
-        throw new Error('recorded intake extract is not an extract observation');
-      if (extract.site !== 'intake.classify') throw new Error('recorded intake extract names a foreign site');
-      if (extract.extract_schema !== 'intake.message@1')
-        throw new Error('recorded intake extract names a foreign schema');
-      if (extract.attempt !== attempt) throw new Error('recorded intake extract attempts are not ordered');
-      if (extract.request_id !== `${expected}:x${attempt}`)
-        throw new Error('recorded intake extract names a foreign request');
-      if (extract.state_revision !== checkpoint.state_revision)
-        throw new Error('recorded intake extract names a foreign revision');
-    }
-    if (intake.site !== null) {
-      assertExtractCompleted(intake);
-      assertObservation('intake.classify', expected, checkpoint.state_revision, intake.site);
-      if (intake.decided_by !== 'site') throw new Error('recorded intake stage has a site answer from a rule');
-      const choice = intake.site.accepted ? intake.site.answer : SITE_POLICY['intake.classify'].fallback;
-      if (intake.choice !== choice) throw new Error('recorded intake stage does not match its site answer');
-      if (intake.reason !== intake.site.reason) throw new Error('recorded intake stage has an inconsistent reason');
-    } else {
-      if (intake.decided_by !== 'extract') throw new Error('recorded intake stage has no site answer');
-      assertExtractOnlyIntake(request, intake);
-    }
-  }
-  if (checkpoint.triage !== null)
-    assertTransition(
-      'loop.triage',
-      expectedStageRequest(checkpoint, 'triage'),
-      checkpoint.state_revision,
-      checkpoint.triage,
-    );
-  if (checkpoint.route !== null)
-    assertTransition(
-      'loop.route',
-      expectedStageRequest(checkpoint, 'route'),
-      checkpoint.state_revision,
-      checkpoint.route,
-    );
+  if (stage === 'intake') replayIntake(request, checkpoint);
+  else replayLoop(request, checkpoint, stage);
+}
+
+/**
+ * Recorded stages are accepted only as a fixed point of the live path. Each one is re-derived by the
+ * pure function its live call used, from raw answers rebuilt out of its own observations and the
+ * disclosed request, and must come back identical. A shape the live path stops on, or never
+ * produces, cannot come back, so no derived field is trusted on its own.
+ */
+function replayStages(request: DispatchRequest, checkpoint: DispatchCheckpoint): void {
+  if (request.request_id !== checkpoint.decision_id) throw new Error('checkpoint belongs to another decision');
+  const { intake, triage, route } = checkpoint;
+  if (route !== null && triage === null) throw new Error('a recorded route needs a recorded triage');
+  if (triage !== null && (intake === null || intake.status !== 'transition' || intake.choice !== 'new_thread'))
+    throw new Error('a recorded triage needs intake new_thread');
+  if (route !== null && triage?.observation?.accepted !== true)
+    throw new Error('a recorded route cannot follow a triage fallback');
+  if (route !== null && (triage?.status !== 'transition' || triage.choice !== 'implement'))
+    throw new Error('a recorded route needs triage implement');
+  if (intake !== null) replayStage(request, checkpoint, 'intake');
+  if (triage !== null) replayStage(request, checkpoint, 'triage');
+  if (route !== null) replayStage(request, checkpoint, 'route');
 }
 
 /** Pure outcome table over recorded stage records. The first ending stage decides. */
 function resolveOutcome(request: DispatchRequest, checkpoint: DispatchCheckpoint): Plan {
   const intake = checkpoint.intake;
   if (intake === null) throw new Error('a dispatch decision needs an intake record');
-  assertRecordedStages(request, checkpoint);
+  replayStages(request, checkpoint);
   const dispatch_id = `${checkpoint.decision_id}:dispatch`;
 
   if (intake.reason === 'stale_answer' || intake.reason === 'mismatched_answer')
@@ -703,19 +780,16 @@ function askIntake(request: DispatchRequest, ask: number): IntakeSiteInput {
   };
 }
 
-function askLoop(
-  request: DispatchRequest,
-  stage: 'triage' | 'route',
-  ask: number,
-  state:
-    | { readonly request: string; readonly context: string }
-    | { readonly unit_of_work: string; readonly context: string },
-): LoopDecisionAsk {
+/** D1 discloses `{request, context}` and D2 `{unit_of_work, context}`: the benchmark row shapes. */
+function loopAsk(request: DispatchRequest, stage: 'triage' | 'route', ask: number): LoopDecisionAsk {
   return {
     request_id: stageId(request.request_id, stage, ask),
     state_revision: request.state_revision,
     state_updated_at: request.state_updated_at,
-    state,
+    state:
+      stage === 'triage'
+        ? { request: request.intake.message, context: request.triage_context }
+        : { unit_of_work: request.intake.message, context: request.route_context },
     terms: { ...request.terms, destinations: [...request.terms.destinations] },
     needs_dispatch: true,
   };
@@ -817,9 +891,33 @@ function finishFinal(
   if (plan.kind !== 'final') throw new Error('finishFinal needs a final plan');
   const intent = plan.reason === 'stale_answer' ? checkpoint.intent : null;
   const decision = makeDecision(request, checkpoint, entry, plan, intent, null, plan.status, plan.reason);
-  journal.append(decision);
+  return settle(request, decision, ports, journal, fresh);
+}
+
+/** Append is the compare-and-set that ends this call; only its winner emits. */
+function settle(
+  request: DispatchRequest,
+  decision: DispatchDecision,
+  ports: DispatchPorts,
+  journal: DispatchJournal,
+  fresh: readonly SiteObservation[],
+): DispatchDecision {
+  if (!journal.append(decision)) return yielded(request, journal, decision.entry);
   emit(ports.weft, fresh);
   return clone(decision);
+}
+
+/**
+ * Another writer won the decision's compare-and-set. Fail closed on our own plan and report what the
+ * journal holds: its recorded decision, else the unconfirmed replay of the intent it claimed.
+ */
+function yielded(request: DispatchRequest, journal: DispatchJournal, entry: number): DispatchDecision {
+  const loaded = journal.load(request.request_id);
+  const latest = loaded.decisions.at(-1);
+  if (latest !== undefined) return clone(latest);
+  if (loaded.checkpoint === null || loaded.checkpoint.intent === null)
+    throw new Error('the journal refused this decision without recording its owner');
+  return transitionDispatch(request, loaded.checkpoint, null, entry);
 }
 
 async function dispatchIntent(
@@ -847,9 +945,7 @@ async function dispatchIntent(
   const receipt = normalizeReceipt(raw, intent.dispatch_id);
   const outcome = receiptResult(plan, receipt);
   const decision = makeDecision(request, checkpoint, entry, plan, intent, receipt, outcome.status, outcome.reason);
-  journal.append(decision);
-  emit(ports.weft, fresh);
-  return clone(decision);
+  return settle(request, decision, ports, journal, fresh);
 }
 
 export async function decideDispatch(
@@ -878,7 +974,7 @@ export async function decideDispatch(
   if (checkpoint.intent !== null) {
     const plan = resolveOutcome(captured, checkpoint);
     if (plan.kind !== 'dispatch') throw new Error('a recorded intent needs a dispatch plan');
-    if (!sameIntent(checkpoint.intent, plan.intent))
+    if (!sameRecord(checkpoint.intent, plan.intent))
       throw new Error('recorded intent does not match the recorded stages');
     if (!resume) {
       const decision = makeDecision(
@@ -891,8 +987,7 @@ export async function decideDispatch(
         'paused',
         'dispatch_unconfirmed',
       );
-      journal.append(decision);
-      return clone(decision);
+      return settle(captured, decision, ports, journal, []);
     }
     return dispatchIntent(captured, checkpoint, entry, plan, checkpoint.intent, ports, journal, signal, []);
   }
@@ -930,8 +1025,11 @@ export async function decideDispatch(
     if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
     journal.checkpoint(checkpoint);
     if (intake.site !== null) fresh.push(intake.site);
-  } else if (!sameState(checkpoint, ports.now())) {
-    return finishFinal(captured, checkpoint, entry, stalePlan(checkpoint), ports, journal, fresh);
+  } else {
+    // A reused stage steers which stage is asked next, so it must replay before it is trusted.
+    replayStage(captured, checkpoint, 'intake');
+    if (!sameState(checkpoint, ports.now()))
+      return finishFinal(captured, checkpoint, entry, stalePlan(checkpoint), ports, journal, fresh);
   }
 
   const intake = checkpoint.intake;
@@ -951,12 +1049,7 @@ export async function decideDispatch(
       );
       journal.checkpoint(checkpoint);
       if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
-      const decision = await decideTriage(
-        askLoop(captured, 'triage', ask, { request: captured.intake.message, context: captured.triage_context }),
-        ports,
-        ports.now,
-        signal,
-      );
+      const decision = await decideTriage(loopAsk(captured, 'triage', ask), ports, ports.now, signal);
       checkpoint = makeCheckpoint(
         checkpoint.decision_id,
         checkpoint.state_revision,
@@ -970,8 +1063,10 @@ export async function decideDispatch(
       if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
       journal.checkpoint(checkpoint);
       fresh.push(decision.site.observation);
-    } else if (!sameState(checkpoint, ports.now())) {
-      return finishFinal(captured, checkpoint, entry, stalePlan(checkpoint), ports, journal, fresh);
+    } else {
+      replayStage(captured, checkpoint, 'triage');
+      if (!sameState(checkpoint, ports.now()))
+        return finishFinal(captured, checkpoint, entry, stalePlan(checkpoint), ports, journal, fresh);
     }
 
     const triage = checkpoint.triage;
@@ -991,15 +1086,7 @@ export async function decideDispatch(
         );
         journal.checkpoint(checkpoint);
         if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
-        const decision = await decideLoopRoute(
-          askLoop(captured, 'route', ask, {
-            unit_of_work: captured.intake.message,
-            context: captured.route_context,
-          }),
-          ports,
-          ports.now,
-          signal,
-        );
+        const decision = await decideLoopRoute(loopAsk(captured, 'route', ask), ports, ports.now, signal);
         checkpoint = makeCheckpoint(
           checkpoint.decision_id,
           checkpoint.state_revision,
@@ -1013,8 +1100,10 @@ export async function decideDispatch(
         if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
         journal.checkpoint(checkpoint);
         fresh.push(decision.site.observation);
-      } else if (!sameState(checkpoint, ports.now())) {
-        return finishFinal(captured, checkpoint, entry, stalePlan(checkpoint), ports, journal, fresh);
+      } else {
+        replayStage(captured, checkpoint, 'route');
+        if (!sameState(checkpoint, ports.now()))
+          return finishFinal(captured, checkpoint, entry, stalePlan(checkpoint), ports, journal, fresh);
       }
     }
   }
@@ -1032,8 +1121,7 @@ export async function decideDispatch(
 
   let intent = checkpoint.intent;
   if (intent === null) {
-    if (!journal.claim(decision_id, plan.intent, checkpoint))
-      return makeDecision(captured, checkpoint, entry, plan, plan.intent, null, 'paused', 'dispatch_unconfirmed');
+    if (!journal.claim(decision_id, plan.intent, checkpoint)) return yielded(captured, journal, entry);
     intent = plan.intent;
     checkpoint = makeCheckpoint(
       checkpoint.decision_id,
@@ -1049,32 +1137,19 @@ export async function decideDispatch(
   return dispatchIntent(captured, checkpoint, entry, plan, intent, ports, journal, signal, fresh);
 }
 
-function sameIntent(left: DispatchIntent, right: DispatchIntent): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-/** Pure replay: rebuild the decision from the recorded stages and receipt. */
+/**
+ * Pure replay: re-derive every recorded stage through the live pure functions (see `replayStages`),
+ * then rebuild the decision from the outcome table and the receipt.
+ */
 export function transitionDispatch(
   request: DispatchRequest,
   checkpoint: DispatchCheckpoint,
   receipt: DispatchReceipt | null,
   entry = 1,
 ): DispatchDecision {
-  if (request.request_id !== checkpoint.decision_id) throw new Error('checkpoint belongs to another decision');
-  if (checkpoint.route !== null && checkpoint.triage === null)
-    throw new Error('a recorded route needs a recorded triage');
-  if (checkpoint.route !== null && checkpoint.triage !== null && !checkpoint.triage.observation.accepted)
-    throw new Error('a recorded route cannot follow a triage fallback');
-  if (
-    checkpoint.triage !== null &&
-    (checkpoint.intake === null ||
-      checkpoint.intake.status !== 'transition' ||
-      checkpoint.intake.choice !== 'new_thread')
-  )
-    throw new Error('a recorded triage needs intake new_thread');
   const plan = resolveOutcome(request, checkpoint);
   const intent = plan.kind === 'dispatch' ? (checkpoint.intent ?? plan.intent) : null;
-  if (plan.kind === 'dispatch' && checkpoint.intent !== null && !sameIntent(checkpoint.intent, plan.intent))
+  if (plan.kind === 'dispatch' && checkpoint.intent !== null && !sameRecord(checkpoint.intent, plan.intent))
     throw new Error('recorded intent does not match the recorded stages');
   if (plan.kind === 'final')
     return makeDecision(request, checkpoint, entry, plan, null, null, plan.status, plan.reason);

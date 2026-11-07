@@ -43,7 +43,7 @@ const terms: InferenceTerms = {
 };
 const CANARIES = ['CANARY-msg', 'CANARY-summary', 'CANARY-ctx', 'CANARY-provider', 'CANARY-error'];
 
-type Mode = 'ok' | 'stale' | 'mismatch' | 'outage' | 'no_answer';
+type Mode = 'ok' | 'stale' | 'mismatch' | 'outage' | 'no_answer' | 'paused';
 interface StagePlan {
   readonly choice?: string;
   readonly mode?: Mode;
@@ -55,6 +55,7 @@ interface Plan {
   readonly triage?: StagePlan;
   readonly route?: StagePlan;
   readonly thread?: { readonly value: string | null; readonly cue: string | null };
+  readonly intakeExtract?: 'outage' | 'mismatch' | 'garbage' | 'stale' | 'paused';
   readonly triageIntent?: string;
   readonly routeIntent?: string;
   readonly onEvaluate?: (request: EvaluationRequest<'choice'>, signal?: AbortSignal) => void;
@@ -77,6 +78,18 @@ function makeClock() {
   };
 }
 type Clock = ReturnType<typeof makeClock>;
+
+/** A gateway budget pause riding on an accepted answer: still an outage for every site and extract. */
+function budgetPause(request_id: string, site: string) {
+  return {
+    type: 'loop.paused',
+    policy: 'budget.policy@1',
+    request_id,
+    site,
+    reason: 'quota_unknown',
+    until: null,
+  } as const;
+}
 
 function acceptedGeneration(request: GenerationRequest, payload: unknown): GenerationOutcome {
   return {
@@ -118,6 +131,7 @@ function choiceOutcome(
   const confidence = stage?.confidence === undefined ? 1 : stage.confidence;
   const probabilities = stage?.probabilities ?? { [choice]: 1 };
   return {
+    ...(mode === 'paused' ? { paused: budgetPause(request.request_id, request.site) } : {}),
     status: 'accepted',
     kind: 'choice',
     request_id: mode === 'mismatch' ? 'other-request' : request.request_id,
@@ -142,6 +156,17 @@ function makeGateway(plan: Plan, clock: Clock) {
       events.push(`generate:${request.site}`);
       if (plan.gate?.match(request.request_id)) await plan.gate.promise;
       if (request.site === 'intake.extract') {
+        if (plan.intakeExtract === 'outage') throw new Error('CANARY-error');
+        if (plan.intakeExtract === 'stale') clock.advance();
+        if (plan.intakeExtract === 'mismatch')
+          return { ...acceptedGeneration(request, null), request_id: 'other-request' } as GenerationOutcome;
+        if (plan.intakeExtract === 'paused')
+          return {
+            ...acceptedGeneration(request, { thread_ref: { value: null, cue: null }, request: { value: null } }),
+            paused: budgetPause(request.request_id, request.site),
+          };
+        if (plan.intakeExtract === 'garbage')
+          return { ...acceptedGeneration(request, null), text: 'not json' } as GenerationOutcome;
         return acceptedGeneration(request, {
           thread_ref: plan.thread ?? { value: null, cue: null },
           request: { value: null },
@@ -554,7 +579,7 @@ test('9. the intent is durable before dispatch and recovery never implicitly re-
         crash = false;
         throw new Error('crash');
       }
-      storage.append(decision);
+      return storage.append(decision);
     },
   };
   const first = harness(
@@ -1064,6 +1089,9 @@ async function waitUntil(predicate: () => boolean): Promise<void> {
   throw new Error('condition was not reached');
 }
 
+/** Replay re-derives every stage through the live pure functions; any other record is rejected. */
+const REDERIVED = /is not the live outcome of its recorded observations/;
+
 function withRouteObservation(
   checkpoint: DispatchCheckpoint,
   patch: Partial<NonNullable<DispatchCheckpoint['route']>['observation']>,
@@ -1090,8 +1118,9 @@ test('20. a losing concurrent delivery cannot rewrite the winner stages', async 
   assert.equal(won.status, 'dispatched');
   assert.equal(won.intent?.kind, 'implement');
   release();
+  // The loser's claim fails its compare-and-set, so it reports the winner's recorded decision.
   const lost = await pending;
-  assert.deepEqual([lost.status, lost.reason], ['paused', 'dispatch_unconfirmed']);
+  assert.deepEqual(lost, won);
   assert.equal(loser.dispatchCalls.length, 0);
 
   const checkpoint = journal.load('d1').checkpoint!;
@@ -1118,8 +1147,9 @@ test('21. a losing concurrent final cannot append after the winner dispatches', 
   const won = await run(winner);
   assert.equal(won.status, 'dispatched');
   release();
+  // The loser's stale final fails its compare-and-set, so it reports the winner's recorded decision.
   const lost = await pending;
-  assert.deepEqual([lost.status, lost.reason], ['paused', 'stale_answer']);
+  assert.deepEqual(lost, won);
 
   const loaded = journal.load('d1');
   assert.equal(loaded.decisions.length, 1);
@@ -1136,10 +1166,12 @@ test('22. replay rejects foreign and below-threshold stage records', async () =>
   assert.deepEqual(transitionDispatch(h.request, checkpoint, live.receipt, live.entry), live);
 
   const forged: readonly [string, DispatchCheckpoint, RegExp][] = [
-    ['foreign request', withRouteObservation(checkpoint, { request_id: 'other:route' }), /request/],
-    ['foreign site', withRouteObservation(checkpoint, { site: 'loop.triage' }), /site/],
-    ['foreign revision', withRouteObservation(checkpoint, { state_revision: 2 }), /revision/],
-    ['below threshold', withRouteObservation(checkpoint, { confidence: 0.5 }), /confidence/],
+    ['foreign request', withRouteObservation(checkpoint, { request_id: 'other:route' }), REDERIVED],
+    ['foreign site', withRouteObservation(checkpoint, { site: 'loop.triage' }), REDERIVED],
+    ['foreign revision', withRouteObservation(checkpoint, { state_revision: 2 }), REDERIVED],
+    ['below threshold', withRouteObservation(checkpoint, { confidence: 0.5 }), REDERIVED],
+    ['unsafe provider id', withRouteObservation(checkpoint, { provider_request_id: 'sk-forged' }), REDERIVED],
+    ['answer without its accepted choice', withRouteObservation(checkpoint, { answer: 'flash' }), REDERIVED],
   ];
   for (const [label, value, reason] of forged)
     assert.throws(() => transitionDispatch(h.request, value, live.receipt), reason, label);
@@ -1150,10 +1182,12 @@ test('23. live recovery rejects foreign and below-threshold loaded stages before
   const live = await run(h);
   const checkpoint = h.journal.load('d1').checkpoint!;
   const forged: readonly [string, DispatchCheckpoint, RegExp][] = [
-    ['foreign request', withRouteObservation(checkpoint, { request_id: 'other:route' }), /request/],
-    ['foreign site', withRouteObservation(checkpoint, { site: 'loop.triage' }), /site/],
-    ['foreign revision', withRouteObservation(checkpoint, { state_revision: 2 }), /revision/],
-    ['below threshold', withRouteObservation(checkpoint, { confidence: 0.5 }), /confidence/],
+    ['foreign request', withRouteObservation(checkpoint, { request_id: 'other:route' }), REDERIVED],
+    ['foreign site', withRouteObservation(checkpoint, { site: 'loop.triage' }), REDERIVED],
+    ['foreign revision', withRouteObservation(checkpoint, { state_revision: 2 }), REDERIVED],
+    ['below threshold', withRouteObservation(checkpoint, { confidence: 0.5 }), REDERIVED],
+    ['unsafe provider id', withRouteObservation(checkpoint, { provider_request_id: 'sk-forged' }), REDERIVED],
+    ['answer without its accepted choice', withRouteObservation(checkpoint, { answer: 'flash' }), REDERIVED],
   ];
   for (const [label, value, reason] of forged) {
     const recovery = harness({}, { journal: forgedJournal(value), request: makeRequest({ resume: true }) });
@@ -1169,7 +1203,7 @@ function forgedJournal(checkpoint: DispatchCheckpoint): DispatchJournal {
     load: () => ({ checkpoint, decisions: [] }),
     checkpoint: () => {},
     claim: () => false,
-    append: () => {},
+    append: () => false,
   };
 }
 
@@ -1318,9 +1352,9 @@ test('25. extract-only checkpoints must match the closed stopped-outcome table',
   ];
 
   for (const [label, request, value] of cases) {
-    assert.throws(() => transitionDispatch(request, value, null), /extract-only/, `${label} replay`);
+    assert.throws(() => transitionDispatch(request, value, null), REDERIVED, `${label} replay`);
     const recovery = harness({}, { journal: forgedJournal(value), request: makeRequest({ resume: true }) });
-    await assert.rejects(run(recovery), /extract-only/, `${label} live`);
+    await assert.rejects(run(recovery), REDERIVED, `${label} live`);
     assert.equal(recovery.generateCalls.length, 0, `${label} live`);
     assert.equal(recovery.evaluateCalls.length, 0, `${label} live`);
     assert.equal(recovery.dispatchCalls.length, 0, `${label} live`);
@@ -1344,9 +1378,11 @@ test('26. legitimate extract-only stopped outcomes replay unchanged', async () =
   assert.deepEqual(transitionDispatch(request, checkpoint, null, live.entry), live);
 
   const final = checkpoint.intake!.extract.at(-1)!;
-  for (const [status, reason] of [
-    ['paused', 'cancelled'],
-    ['needs_human', 'stale_answer'],
+  // A cancelled extraction reads no slots; a stale one keeps the answer it gated.
+  const unread = final.slots.map((slot) => ({ ...slot, status: 'unread' as const, value: null, span: null }));
+  for (const [status, reason, slots] of [
+    ['paused', 'cancelled', unread],
+    ['needs_human', 'stale_answer', final.slots],
   ] as const) {
     const variant: DispatchCheckpoint = {
       ...checkpoint,
@@ -1354,7 +1390,7 @@ test('26. legitimate extract-only stopped outcomes replay unchanged', async () =
         ...checkpoint.intake!,
         status,
         reason,
-        extract: [...checkpoint.intake!.extract.slice(0, -1), { ...final, verdict: 'original_only', reason }],
+        extract: [...checkpoint.intake!.extract.slice(0, -1), { ...final, verdict: 'original_only', reason, slots }],
       },
     };
     const replayed = transitionDispatch(request, variant, null, live.entry);
@@ -1362,17 +1398,48 @@ test('26. legitimate extract-only stopped outcomes replay unchanged', async () =
   }
 });
 
-type StoppedExtract = 'cancelled' | 'stale_answer' | 're_extract';
+type ExtractObservationRecord = NonNullable<DispatchCheckpoint['intake']>['extract'][number];
+type ExtractForgery = (final: ExtractObservationRecord) => readonly ExtractObservationRecord[];
 
-function withStoppedExtract(checkpoint: DispatchCheckpoint, outcome: StoppedExtract): DispatchCheckpoint {
+/** Each forgery rewrites the final intake extraction into a shape the live path stops on or never produces. */
+const EXTRACT_FORGERIES: readonly (readonly [string, ExtractForgery])[] = [
+  ['cancelled', (final) => [{ ...final, verdict: 'original_only', reason: 'cancelled' }]],
+  ['stale_answer', (final) => [{ ...final, verdict: 'original_only', reason: 'stale_answer' }]],
+  ['re_extract', (final) => [{ ...final, verdict: 're_extract', reason: 'no_answer' }]],
+  [
+    'use_hints over an ungrounded slot',
+    (final) => [
+      {
+        ...final,
+        slots: final.slots.map((slot) =>
+          slot.slot === 'thread_ref' ? { ...slot, status: 'ungrounded' as const, value: null, span: null } : slot,
+        ),
+      },
+    ],
+  ],
+  ['unknown verdict', (final) => [{ ...final, verdict: 'accept' as never }]],
+  ['use_hints without an answer', (final) => [{ ...final, reason: 'no_answer' }]],
+  [
+    'unrequested second extraction',
+    (final) => [final, { ...final, attempt: 2, request_id: final.request_id!.replace(/:x1$/, ':x2') }],
+  ],
+];
+
+/** The Codex shape: use_hints, an unresolved thread_ref and two running threads is an operator-only ambiguity. */
+const operatorAmbiguity: ExtractForgery = (final) => [
+  {
+    ...final,
+    slots: final.slots.map((slot) =>
+      slot.slot === 'thread_ref' ? { ...slot, status: 'unresolved' as const, value: null } : slot,
+    ),
+    residual_ambiguity: { count: 1, slots: ['thread_ref'] },
+  },
+];
+
+function withForgedExtract(checkpoint: DispatchCheckpoint, forge: ExtractForgery): DispatchCheckpoint {
   const intake = checkpoint.intake!;
-  const extracts = intake.extract;
-  const final = extracts[extracts.length - 1]!;
-  const stopped =
-    outcome === 're_extract'
-      ? { ...final, verdict: 're_extract' as const, reason: 'no_answer' as const }
-      : { ...final, verdict: 'original_only' as const, reason: outcome };
-  return { ...checkpoint, intake: { ...intake, extract: [...extracts.slice(0, -1), stopped] } };
+  const final = intake.extract.at(-1)!;
+  return { ...checkpoint, intake: { ...intake, extract: [...intake.extract.slice(0, -1), ...forge(final)] } };
 }
 
 function mismatchedIntent(intent: DispatchIntent): DispatchIntent {
@@ -1387,7 +1454,7 @@ function mismatchedIntent(intent: DispatchIntent): DispatchIntent {
   };
 }
 
-test('27. forged stopped-extraction checkpoints across stages never dispatch on replay or recovery', async () => {
+test('27. forged extraction origins across stages never dispatch on replay or recovery', async () => {
   const threadRequest = makeRequest({
     intake: { message: 'continue T1', running_threads: [{ thread_id: 'T1', summary: 'alpha' }] },
   });
@@ -1395,43 +1462,67 @@ test('27. forged stopped-extraction checkpoints across stages never dispatch on 
     { intake: { choice: 'continue_thread' }, thread: { value: 'T1', cue: 'T1' } },
     { request: threadRequest },
   );
-  await run(intakeLive);
-  const intakeBase = intakeLive.journal.load('d1').checkpoint!;
+  const intakeDecision = await run(intakeLive);
 
   const triageLive = harness({ triage: { choice: 'capability' } });
-  await run(triageLive);
-  const triageBase = triageLive.journal.load('d1').checkpoint!;
+  const triageDecision = await run(triageLive);
 
   const routeLive = harness({ route: { choice: 'strong' } });
-  await run(routeLive);
-  const routeBase = routeLive.journal.load('d1').checkpoint!;
+  const routeDecision = await run(routeLive);
+
+  const twoThreadRequest = makeRequest({
+    intake: {
+      message: 'continue T1',
+      running_threads: [
+        { thread_id: 'T1', summary: 'first' },
+        { thread_id: 'T2', summary: 'second' },
+      ],
+    },
+  });
+  const ambiguityLive = harness(
+    { intake: { choice: 'new_thread' }, thread: { value: 'T1', cue: 'T1' } },
+    { request: twoThreadRequest },
+  );
+  const ambiguityDecision = await run(ambiguityLive);
 
   const bases = [
-    ['intake', intakeBase],
-    ['triage', triageBase],
-    ['route', routeBase],
+    ['intake', threadRequest, intakeLive.journal.load('d1').checkpoint!, intakeDecision],
+    ['triage', makeRequest(), triageLive.journal.load('d1').checkpoint!, triageDecision],
+    ['route', makeRequest(), routeLive.journal.load('d1').checkpoint!, routeDecision],
+    ['two threads', twoThreadRequest, ambiguityLive.journal.load('d1').checkpoint!, ambiguityDecision],
   ] as const;
 
-  for (const [stage, base] of bases) {
+  const forged: [string, DispatchRequest, DispatchCheckpoint][] = [];
+  for (const [stage, request, base, live] of bases) {
     assert.notEqual(base.intent, null, `${stage} basis needs a claimed intent`);
-    for (const outcome of ['cancelled', 'stale_answer', 're_extract'] as const) {
-      const stopped = withStoppedExtract(base, outcome);
-      const intents: readonly [string, DispatchIntent | null][] = [
-        ['unclaimed', null],
-        ['matching', stopped.intent],
-        ['mismatched', mismatchedIntent(base.intent!)],
-      ];
-      for (const [intentMode, intent] of intents) {
-        const label = `${stage} ${outcome} ${intentMode}`;
-        const value: DispatchCheckpoint = { ...stopped, intent };
-        assert.throws(() => transitionDispatch(makeRequest(), value, null), /extract/, `${label} replay`);
-        for (const resume of [false, true]) {
-          const recovery = harness({}, { journal: forgedJournal(value), request: makeRequest({ resume }) });
-          await assert.rejects(run(recovery), /extract/, `${label} live resume=${resume}`);
-          assert.equal(recovery.generateCalls.length, 0, `${label} live resume=${resume}`);
-          assert.equal(recovery.evaluateCalls.length, 0, `${label} live resume=${resume}`);
-          assert.equal(recovery.dispatchCalls.length, 0, `${label} live resume=${resume}`);
-        }
+    // The unforged basis replays, so every rejection below is caused by its forgery alone.
+    assert.deepEqual(transitionDispatch(request, base, live.receipt, live.entry), live, `${stage} basis`);
+    for (const [label, forge] of EXTRACT_FORGERIES)
+      forged.push([`${stage} ${label}`, request, withForgedExtract(base, forge)]);
+  }
+  const twoThreadBase = bases[3][2];
+  forged.push([
+    'two threads operator ambiguity',
+    twoThreadRequest,
+    withForgedExtract(twoThreadBase, operatorAmbiguity),
+  ]);
+
+  for (const [label, request, stopped] of forged) {
+    const intents: readonly [string, DispatchIntent | null][] = [
+      ['unclaimed', null],
+      ['matching', stopped.intent],
+      ['mismatched', mismatchedIntent(stopped.intent!)],
+    ];
+    for (const [intentMode, intent] of intents) {
+      const name = `${label} ${intentMode}`;
+      const value: DispatchCheckpoint = { ...stopped, intent };
+      assert.throws(() => transitionDispatch(request, value, null), REDERIVED, `${name} replay`);
+      for (const resume of [false, true]) {
+        const recovery = harness({}, { journal: forgedJournal(value), request: { ...request, resume } });
+        await assert.rejects(run(recovery), REDERIVED, `${name} live resume=${resume}`);
+        assert.equal(recovery.generateCalls.length, 0, `${name} live resume=${resume}`);
+        assert.equal(recovery.evaluateCalls.length, 0, `${name} live resume=${resume}`);
+        assert.equal(recovery.dispatchCalls.length, 0, `${name} live resume=${resume}`);
       }
     }
   }
@@ -1479,7 +1570,7 @@ test('28. a claimed intent survives a terminal stale pause and append surfaces f
         crash = false;
         throw new Error('crash');
       }
-      storage.append(decision);
+      return storage.append(decision);
     },
   };
   const unconfirmedRun = harness({}, { journal: crashing });
@@ -1496,7 +1587,7 @@ test('28. a claimed intent survives a terminal stale pause and append surfaces f
   assert.deepEqual(storage.load('d1').decisions.at(-1), recoveredDecision);
   assert.equal(recovered.dispatchCalls.length, 0);
 
-  // Append fails closed when a decision does not own the claimed intent.
+  // Append loses its compare-and-set when a decision does not own the claimed intent.
   const journal = new MemoryDispatchJournal();
   const request = makeRequest();
   assert.equal(journal.claim('d1', claimed), true);
@@ -1515,5 +1606,249 @@ test('28. a claimed intent survives a terminal stale pause and append surfaces f
     triage: null,
     route: null,
   };
-  assert.throws(() => journal.append(orphan), /intent/);
+  assert.equal(journal.append(orphan), false);
+  assert.deepEqual(journal.load('d1').decisions, []);
+});
+
+function deferred(): { readonly promise: Promise<void>; readonly release: () => void } {
+  let release!: () => void;
+  const promise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { promise, release };
+}
+
+test('29. a human-stop winner closes the decision to a delayed dispatch candidate', async () => {
+  const gate = deferred();
+  const journal = new MemoryDispatchJournal();
+  const candidate = harness({ gate: { match: (id) => id === 'd1:intake', promise: gate.promise } }, { journal });
+  const pending = run(candidate);
+  await waitUntil(() => candidate.evaluateCalls.some((request) => request.site === 'intake.classify'));
+
+  const stopper = harness({ intake: { choice: 'new_thread', confidence: 0.5 } }, { journal });
+  const stopped = await run(stopper);
+  assert.deepEqual([stopped.status, stopped.reason], ['needs_human', 'low_confidence']);
+  assert.equal(stopper.evaluateCalls[0]?.request_id, 'd1:intake:e2');
+
+  gate.release();
+  const late = await pending;
+  assert.equal(candidate.dispatchCalls.length, 0);
+  assert.deepEqual(late, stopped);
+  const loaded = journal.load('d1');
+  assert.deepEqual(loaded.decisions, [stopped]);
+  assert.equal(loaded.checkpoint?.intent, null);
+  // The terminal stop owns the stage evidence: the candidate's later answers never replace it.
+  assert.deepEqual(loaded.checkpoint?.intake, stopped.intake);
+
+  const later = harness({}, { journal, request: makeRequest({ resume: true }) });
+  assert.deepEqual(await run(later), stopped);
+  assert.equal(later.generateCalls.length + later.evaluateCalls.length + later.dispatchCalls.length, 0);
+});
+
+test('30. a delayed human stop cannot finalize a decision another writer has claimed', async () => {
+  const stopGate = deferred();
+  const dispatchGate = deferred();
+  const journal = new MemoryDispatchJournal();
+  const stopper = harness(
+    {
+      intake: { choice: 'new_thread', confidence: 0.5 },
+      gate: { match: (id) => id === 'd1:intake', promise: stopGate.promise },
+    },
+    { journal },
+  );
+  const pendingStop = run(stopper);
+  await waitUntil(() => stopper.evaluateCalls.some((request) => request.site === 'intake.classify'));
+
+  let entered = false;
+  const claimer = harness(
+    {},
+    {
+      journal,
+      dispatch: async (intent) => {
+        entered = true;
+        await dispatchGate.promise;
+        return dispatched(intent);
+      },
+    },
+  );
+  const pendingDispatch = run(claimer);
+  await waitUntil(() => entered);
+  const claimed = journal.load('d1').checkpoint!.intent!;
+  assert.equal(claimed.dispatch_id, 'd1:dispatch');
+
+  stopGate.release();
+  const lost = await pendingStop;
+  assert.deepEqual([lost.status, lost.reason], ['paused', 'dispatch_unconfirmed']);
+  assert.deepEqual(lost.intent, claimed);
+  assert.equal(stopper.dispatchCalls.length, 0);
+  assert.deepEqual(journal.load('d1').decisions, []);
+
+  dispatchGate.release();
+  const won = await pendingDispatch;
+  assert.equal(won.status, 'dispatched');
+  assert.deepEqual(journal.load('d1').decisions, [won]);
+  assert.equal(claimer.dispatchCalls.length, 1);
+});
+
+/** A journal holding one recorded checkpoint and no decision: the state a crash after the claim leaves. */
+function recoveredJournal(checkpoint: DispatchCheckpoint): DispatchJournal {
+  const storage = new MemoryDispatchJournal();
+  storage.checkpoint({ ...checkpoint, intent: null });
+  if (checkpoint.intent !== null)
+    assert.equal(storage.claim(checkpoint.decision_id, checkpoint.intent, checkpoint), true);
+  return storage;
+}
+
+test('31. property: every recorded checkpoint replays to the live decision on the same inputs', async () => {
+  const one = [{ thread_id: 'T1', summary: 'first' }];
+  const two = [...one, { thread_id: 'T2', summary: 'second' }];
+  const threadSets = [[], one, two];
+  const hints: readonly NonNullable<Plan['thread']>[] = [
+    { value: 'T1', cue: 'T1' },
+    { value: null, cue: 'T1' },
+    { value: null, cue: null },
+    { value: 'none', cue: null },
+    { value: 'T1', cue: 'not in the message' },
+    { value: 'T9', cue: 'T1' },
+  ];
+  const intakes: readonly StagePlan[] = [
+    ...SITE_POLICY['intake.classify'].options.map((choice) => ({ choice })),
+    { choice: 'new_thread', confidence: 0.5 },
+    { choice: 'new_thread', confidence: null },
+    { choice: 'flash' },
+    { mode: 'no_answer' },
+    { mode: 'stale' },
+    { mode: 'mismatch' },
+    { mode: 'outage' },
+    { mode: 'paused' },
+  ];
+  const loopPlans = (site: 'loop.triage' | 'loop.route'): readonly StagePlan[] => {
+    const first = SITE_POLICY[site].options[0];
+    return [
+      ...SITE_POLICY[site].options.map((choice) => ({ choice })),
+      { choice: first, confidence: 0.5 },
+      { choice: first, confidence: null },
+      { choice: first, probabilities: { [first]: 0.5 } },
+      { choice: 'ask_user' },
+      { mode: 'no_answer' },
+      { mode: 'stale' },
+      { mode: 'mismatch' },
+      { mode: 'outage' },
+      { mode: 'paused' },
+    ];
+  };
+  const receipts: readonly ((intent: DispatchIntent) => DispatchReceipt)[] = [
+    dispatched,
+    (intent) => ({ status: 'refused', dispatch_id: intent.dispatch_id, reason: 'approval_required' }),
+    (intent) => ({ status: 'refused', dispatch_id: intent.dispatch_id, reason: 'budget' }),
+    (intent) => ({ status: 'refused', dispatch_id: intent.dispatch_id, reason: 'conflict' }),
+    () => ({ status: 'dispatched', dispatch_id: 'other:dispatch', ref: 'action:1' }),
+  ];
+
+  interface Scenario {
+    readonly plan: Plan;
+    readonly request: DispatchRequest;
+    readonly receipt?: (intent: DispatchIntent) => DispatchReceipt;
+  }
+  const threadRequest = (running_threads: DispatchRequest['intake']['running_threads']) =>
+    makeRequest({ intake: { message: 'continue T1 please', running_threads } });
+  const scenarios: Scenario[] = [];
+  for (const threads of threadSets)
+    for (const thread of hints)
+      for (const intake of intakes) scenarios.push({ plan: { intake, thread }, request: threadRequest(threads) });
+  for (const intakeExtract of ['outage', 'mismatch', 'garbage', 'stale', 'paused'] as const)
+    for (const threads of threadSets) scenarios.push({ plan: { intakeExtract }, request: threadRequest(threads) });
+  for (const triage of loopPlans('loop.triage')) scenarios.push({ plan: { triage }, request: makeRequest() });
+  for (const route of loopPlans('loop.route')) scenarios.push({ plan: { route }, request: makeRequest() });
+  for (const receipt of receipts) scenarios.push({ plan: {}, request: makeRequest(), receipt });
+
+  let replayed = 0;
+  let recovered = 0;
+  for (const [index, scenario] of scenarios.entries()) {
+    const label = `scenario ${index}: ${JSON.stringify(scenario.plan)}`;
+    const h = harness(scenario.plan, {
+      request: scenario.request,
+      ...(scenario.receipt === undefined ? {} : { receipt: scenario.receipt }),
+    });
+    const live = await run(h);
+    const loaded = h.journal.load('d1');
+    assert.deepEqual(loaded.decisions.at(-1), live, label);
+    const checkpoint = loaded.checkpoint!;
+    assert.deepEqual(transitionDispatch(scenario.request, checkpoint, live.receipt, live.entry), live, label);
+    replayed += 1;
+    if (checkpoint.intent === null) continue;
+    // Live recovery accepts the same checkpoint and re-presents nothing without resume.
+    const recovery = harness({}, { journal: recoveredJournal(checkpoint), request: scenario.request });
+    const unconfirmed = await run(recovery);
+    assert.deepEqual([unconfirmed.status, unconfirmed.reason], ['paused', 'dispatch_unconfirmed'], label);
+    assert.deepEqual(unconfirmed.intent, checkpoint.intent, label);
+    assert.equal(
+      recovery.generateCalls.length + recovery.evaluateCalls.length + recovery.dispatchCalls.length,
+      0,
+      label,
+    );
+    recovered += 1;
+  }
+  assert.ok(replayed > 250, `replayed ${replayed}`);
+  assert.ok(recovered > 50, `recovered ${recovered}`);
+});
+
+test('32. the journal is a single-writer state machine per decision id', () => {
+  const intent: DispatchIntent = { kind: 'capability', dispatch_id: 'd1:dispatch' };
+  const decision = (patch: Partial<DispatchDecision>): DispatchDecision => ({
+    schema: 'dispatch.decision@1',
+    decision_id: 'd1',
+    entry: 1,
+    state_revision: REVISION.state_revision,
+    decided_by: 'triage',
+    choice: 'capability',
+    status: 'paused',
+    reason: 'decision_unavailable',
+    intent: null,
+    receipt: null,
+    intake: null,
+    triage: null,
+    route: null,
+    ...patch,
+  });
+
+  // open: a resumable pause keeps the decision open to one claim.
+  const open = new MemoryDispatchJournal();
+  assert.equal(open.append(decision({})), true);
+  assert.equal(open.claim('d1', intent), true);
+  assert.equal(open.claim('d1', intent), false);
+
+  // terminal: a recorded human stop refuses every later claim, append and checkpoint.
+  const terminal = new MemoryDispatchJournal();
+  assert.equal(terminal.append(decision({ status: 'needs_human', reason: 'accepted', choice: 'needs_human' })), true);
+  assert.equal(terminal.claim('d1', intent), false);
+  assert.equal(terminal.append(decision({ entry: 2, status: 'needs_human', reason: 'low_confidence' })), false);
+  terminal.checkpoint({
+    schema: 'dispatch.checkpoint@1',
+    decision_id: 'd1',
+    ...REVISION,
+    asks: { intake: 9, triage: 0, route: 0 },
+    intake: null,
+    triage: null,
+    route: null,
+    intent: null,
+  });
+  assert.equal(terminal.load('d1').checkpoint, null);
+  assert.equal(terminal.load('d1').decisions.length, 1);
+
+  // claimed: only the owner of the intent appends; a dispatch makes it terminal.
+  const claimed = new MemoryDispatchJournal();
+  assert.equal(claimed.claim('d1', intent), true);
+  assert.equal(claimed.append(decision({ status: 'needs_human', reason: 'accepted' })), false);
+  assert.equal(claimed.append(decision({ intent, reason: 'dispatch_unconfirmed' })), true);
+  const receipt: DispatchReceipt = { status: 'dispatched', dispatch_id: 'd1:dispatch', ref: 'action:1' };
+  assert.equal(claimed.append(decision({ entry: 2, intent, receipt, status: 'dispatched', reason: 'accepted' })), true);
+  assert.equal(
+    claimed.append(decision({ entry: 3, intent, receipt, status: 'dispatched', reason: 'accepted' })),
+    false,
+  );
+  assert.equal(claimed.load('d1').decisions.length, 2);
+
+  // An intent that was never claimed cannot be appended at all.
+  assert.throws(() => new MemoryDispatchJournal().append(decision({ intent })), /claim/);
 });
