@@ -637,7 +637,19 @@ A Gauge measure recorded so a report's numbers can be reproduced and inspected, 
 
 ### Failure attribution
 
-A claim about why one case failed: capability gap, implementation, routing or orchestration, with a deterministic signal or a recorded judgment and its confidence. _Unattributed_ is a valid result. An attribution never names a holdout case.
+A claim about why one case failed: **capability gap**, implementation, routing or orchestration, with a deterministic signal or a recorded judgment and its confidence. The conceptual category **capability** maps to the wire value `capability_gap`; every other category name is identical on both sides. A deterministic claim names a category-specific signal and no confidence; a judgment claim names no signal and a recorded confidence. _Unattributed_ is a valid result with basis `none`. An attribution never names a holdout case. Its inputs and abstention are the **attribution evidence bundle** and **attribution abstention**; a judgment also has a **judgment request digest**.
+
+### Attribution evidence bundle
+
+The revision-bound facts and resolvable citations for one failed case that the deterministic attribution step consumes: normalized Weft records, check receipts, observations, and search, route and schedule inventories, together with the classifier, rule and, when a judgment is requested, prompt and model revision digests. Its `recordDigest` is the identity's evidence digest. Every citation resolves to an exact record, revision and content digest. The judgment receipt is cited evidence only and is excluded from the bundle and its digest. Unavailable or incomplete evidence yields an attribution abstention, never a guessed category.
+
+### Attribution abstention
+
+An explicit `unattributed` failure attribution with basis `none`, accepted when evidence is unavailable, incomplete, conflicting or inconclusive. It is a recorded claim under the same uniqueness and history rules as any attribution, not a missing record or a retry permit. A transient timeout or cancellation persists no claim; a later authorized retry may still produce one.
+
+### Judgment request digest
+
+The `recordDigest` of the exact permitted judgment request frozen before dispatch, covering the permitted evidence view, category definitions and declared model configuration but excluding the response. It is an explicit null when no judgment is requested. The judgment receipt, including its answer, rationale, latency and provider ids, is cited evidence only and never enters this digest or the attribution identity.
 
 ## Real-time TDD
 
