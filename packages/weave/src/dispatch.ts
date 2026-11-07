@@ -4,7 +4,8 @@
  * Pure transitions return observations and dispatch nothing. This composition
  * is the only holder of the dispatch port: it journals the intent before the
  * call, maps the receipt to a closed decision record, and emits the existing
- * `judgment` kind for every site observation it made.
+ * `judgment` kind for every fresh site observation, followed by `dispatch.decided`
+ * carrying the versioned Decide-1 trace for each decision it appended.
  */
 import type { EvaluationOutcome, GenerationOutcome, InferenceGateway, InferenceTerms } from '@weave/gateway';
 import {
@@ -36,6 +37,14 @@ import {
   type SiteState,
   type SiteTransition,
 } from './sites/index.js';
+import {
+  DECIDE1_RULE_TABLE,
+  decideBand,
+  type Decide1Inputs,
+  type Decide1Trace,
+  type Decide1Fact,
+  type Decide1Judgment,
+} from './decide1.js';
 import type { ImplementTier } from './implement-step.js';
 import { deliver, type WeftPort, type WeftRecordShape } from './weft.js';
 
@@ -102,7 +111,7 @@ export interface DispatchCheckpoint {
 }
 
 export interface DispatchDecision {
-  readonly schema: 'dispatch.decision@1';
+  readonly schema: 'dispatch.decision@2';
   readonly decision_id: string;
   readonly entry: number;
   readonly state_revision: number;
@@ -110,6 +119,8 @@ export interface DispatchDecision {
   readonly choice: SiteChoice;
   readonly status: 'dispatched' | 'needs_human' | 'paused' | 'refused';
   readonly reason: DispatchReason;
+  readonly rule_table: typeof DECIDE1_RULE_TABLE;
+  readonly decide1: Omit<Decide1Trace, 'table'>;
   readonly intent: DispatchIntent | null;
   readonly receipt: DispatchReceipt | null;
   readonly intake: IntakeDecision | null;
@@ -188,7 +199,7 @@ export type ThreadTarget =
   | { readonly ok: false; readonly reason: 'no_target' | 'ambiguous_reference' };
 
 type Decider = DispatchDecision['decided_by'];
-type Plan =
+type Plan = { readonly trace: Decide1Trace } & (
   | {
       readonly kind: 'dispatch';
       readonly decided_by: Decider;
@@ -202,7 +213,8 @@ type Plan =
       readonly choice: SiteChoice;
       readonly status: 'needs_human' | 'paused' | 'refused';
       readonly reason: DispatchReason;
-    };
+    }
+);
 
 const RESUMABLE = new Set<DispatchReason>(['decision_unavailable', 'budget', 'dispatch_unconfirmed']);
 const THREAD_RELATIONS = ['continue_thread', 'steer', 'queue', 'interrupt'] as const;
@@ -377,7 +389,7 @@ function makeDecision(
   reason: DispatchReason,
 ): DispatchDecision {
   return {
-    schema: 'dispatch.decision@1',
+    schema: 'dispatch.decision@2',
     decision_id: checkpoint.decision_id,
     entry,
     state_revision: checkpoint.state_revision,
@@ -385,6 +397,8 @@ function makeDecision(
     choice: plan.choice,
     status,
     reason,
+    rule_table: plan.trace.table,
+    decide1: traceFields(plan.trace),
     intent,
     receipt,
     intake: checkpoint.intake,
@@ -399,17 +413,28 @@ function sameState(checkpoint: DispatchCheckpoint, current: SiteState): boolean 
   );
 }
 
+function traceFields({ judgments, facts, rule, band }: Decide1Trace): DispatchDecision['decide1'] {
+  return clone({ judgments, facts, rule, band });
+}
+
 function final(
+  trace: Decide1Trace,
   decided_by: Decider,
   choice: SiteChoice,
   status: 'needs_human' | 'paused',
   reason: DispatchReason,
 ): Plan {
-  return { kind: 'final', decided_by, choice, status, reason };
+  return { kind: 'final', trace, decided_by, choice, status, reason };
 }
 
-function dispatchPlan(decided_by: Decider, choice: SiteChoice, reason: DispatchReason, intent: DispatchIntent): Plan {
-  return { kind: 'dispatch', decided_by, choice, reason, intent };
+function dispatchPlan(
+  trace: Decide1Trace,
+  decided_by: Decider,
+  choice: SiteChoice,
+  reason: DispatchReason,
+  intent: DispatchIntent,
+): Plan {
+  return { kind: 'dispatch', trace, decided_by, choice, reason, intent };
 }
 
 function lastDecider(checkpoint: DispatchCheckpoint): { readonly decided_by: Decider; readonly choice: SiteChoice } {
@@ -685,90 +710,161 @@ function replayStages(request: DispatchRequest, checkpoint: DispatchCheckpoint):
   if (route !== null) replayStage(request, checkpoint, 'route');
 }
 
-/** Pure outcome table over recorded stage records. The first ending stage decides. */
-function resolveOutcome(request: DispatchRequest, checkpoint: DispatchCheckpoint): Plan {
-  const intake = checkpoint.intake;
-  if (intake === null) throw new Error('a dispatch decision needs an intake record');
-  replayStages(request, checkpoint);
+/** Fixed, bounded code facts and stage probabilities; no disclosed text is copied. */
+export function decide1Inputs(request: DispatchRequest, checkpoint: DispatchCheckpoint): Decide1Inputs {
+  const { intake, triage, route } = checkpoint;
+  const target =
+    intake !== null && isThreadRelation(intake.choice)
+      ? resolveThreadTarget(intake, request.intake.running_threads)
+      : null;
+  const facts: Decide1Fact[] = [
+    { name: 'intake.decided_by', value: intake?.decided_by ?? null },
+    { name: 'intake.choice', value: intake?.choice ?? null },
+    { name: 'intake.status', value: intake?.status ?? null },
+    { name: 'intake.reason', value: intake?.reason ?? null },
+    { name: 'intake.accepted', value: intake?.site?.accepted ?? false },
+    { name: 'thread_target', value: target === null ? null : target.ok ? 'resolved' : target.reason },
+  ];
+  for (const [stage, transition] of [
+    ['triage', triage],
+    ['route', route],
+  ] as const) {
+    facts.push(
+      { name: `${stage}.choice`, value: transition?.choice ?? null },
+      { name: `${stage}.status`, value: transition?.status ?? null },
+      { name: `${stage}.reason`, value: transition?.observation.reason ?? null },
+      { name: `${stage}.accepted`, value: transition?.observation.accepted ?? null },
+    );
+  }
+  const judgments: Decide1Judgment[] = [];
+  for (const [stage, observation] of [
+    ['intake', intake?.site],
+    ['triage', triage?.observation],
+    ['route', route?.observation],
+  ] as const) {
+    if (observation == null) continue;
+    if (observation.confidence !== null)
+      judgments.push({ name: `${stage}.confidence`, probability: observation.confidence });
+    if (observation.top_p !== null) judgments.push({ name: `${stage}.top_p`, probability: observation.top_p });
+  }
+  return { judgments, facts };
+}
+
+/** Rule ids fix the outcome. The request is needed only to bind the already-resolved thread id. */
+function planFor(trace: Decide1Trace, checkpoint: DispatchCheckpoint, request: DispatchRequest): Plan {
+  if (trace.band === 'spawn_subtasks') throw new Error('spawn_subtasks needs a sealed parent frame (D-ENG-044, P5)');
   const dispatch_id = `${checkpoint.decision_id}:dispatch`;
-
-  if (intake.reason === 'stale_answer' || intake.reason === 'mismatched_answer')
-    return final('intake', intake.choice, 'paused', intake.reason);
-  if (intake.reason === 'decision_unavailable') return final('intake', intake.choice, 'paused', intake.reason);
-  if (intake.reason === 'cancelled') return final('intake', intake.choice, 'paused', 'cancelled');
-  if (intake.status === 'needs_human') return final('intake', intake.choice, 'needs_human', intake.reason);
-  if (intake.status === 'paused') return final('intake', intake.choice, 'paused', intake.reason);
-
-  if (intake.choice === 'stop') return final('rule', 'stop', 'needs_human', 'irreversible');
-  if (isThreadRelation(intake.choice)) {
-    const target = resolveThreadTarget(intake, request.intake.running_threads);
-    if (!target.ok) return final('rule', intake.choice, 'needs_human', target.reason);
-    return dispatchPlan('intake', intake.choice, intake.reason, {
-      kind: 'thread',
-      dispatch_id,
-      relation: intake.choice,
-      thread_ref: target.thread_ref,
-    });
-  }
-  if (intake.choice !== 'new_thread') return final('intake', intake.choice, 'needs_human', intake.reason);
-
-  const triage = checkpoint.triage;
-  if (triage === null) throw new Error('a new thread needs a recorded triage');
-  const triageReason = triage.observation.reason;
-  if (triageReason === 'stale_answer' || triageReason === 'mismatched_answer')
-    return final('triage', triage.choice, 'paused', triageReason);
-  if (triageReason === 'decision_unavailable') return final('triage', triage.choice, 'paused', triageReason);
-  if (triageReason === 'cancelled') return final('triage', triage.choice, 'paused', 'cancelled');
-  if (triage.status === 'needs_human') return final('triage', triage.choice, 'needs_human', triageReason);
-  if (triage.status === 'paused') return final('triage', triage.choice, 'paused', triageReason);
-
-  if (triage.observation.accepted) {
-    switch (triage.choice) {
-      case 'capability':
-        return dispatchPlan('triage', 'capability', 'accepted', { kind: 'capability', dispatch_id });
-      case 'done_check':
-        return dispatchPlan('triage', 'done_check', 'accepted', { kind: 'done_check', dispatch_id });
-      case 'out_of_scope':
-        return dispatchPlan('triage', 'out_of_scope', 'accepted', { kind: 'decline', dispatch_id });
-      case 'implement':
-        break;
-      default:
-        return final('triage', triage.choice, 'needs_human', 'invalid_answer');
+  const facts = new Map(trace.facts.map((fact) => [fact.name, fact.value]));
+  const choice = (stage: Stage) => facts.get(`${stage}.choice`) as SiteChoice;
+  const reason = (stage: Stage) => facts.get(`${stage}.reason`) as DispatchReason;
+  switch (trace.rule) {
+    case 'hold.admission':
+    case 'hold.outage':
+    case 'hold.paused': {
+      const stage = (['intake', 'triage', 'route'] as const).find((stage) =>
+        trace.rule === 'hold.admission'
+          ? reason(stage) === 'stale_answer' || reason(stage) === 'mismatched_answer'
+          : trace.rule === 'hold.outage'
+            ? reason(stage) === 'decision_unavailable'
+            : facts.get(`${stage}.status`) === 'paused',
+      );
+      if (stage === undefined) throw new Error('decide1: no withheld stage');
+      return final(trace, checkpoint.intake === null ? 'rule' : stage, choice(stage), 'paused', reason(stage));
     }
-  } else {
-    if (triage.choice !== 'implement') return final('triage', triage.choice, 'needs_human', 'invalid_answer');
-    return dispatchPlan('triage', 'implement', triageReason, {
-      kind: 'implement',
-      dispatch_id,
-      tier: 'strong',
-      ceiling: 'strong',
-      tier_source: 'triage_fallback',
-    });
+    case 'ask.intake':
+      return final(trace, 'intake', choice('intake'), 'needs_human', reason('intake'));
+    case 'ask.irreversible':
+      return final(trace, 'rule', 'stop', 'needs_human', 'irreversible');
+    case 'ask.thread_target':
+      return final(
+        trace,
+        'rule',
+        choice('intake'),
+        'needs_human',
+        facts.get('thread_target') as 'no_target' | 'ambiguous_reference',
+      );
+    case 'act.thread': {
+      const target = resolveThreadTarget(checkpoint.intake!, request.intake.running_threads);
+      const relation = choice('intake');
+      if (!target.ok || !isThreadRelation(relation)) throw new Error('decide1: unresolved thread');
+      return dispatchPlan(trace, 'intake', relation, reason('intake'), {
+        kind: 'thread',
+        dispatch_id,
+        relation,
+        thread_ref: target.thread_ref,
+      });
+    }
+    case 'ask.triage':
+      return final(trace, 'triage', choice('triage'), 'needs_human', reason('triage'));
+    case 'act.capability':
+      return dispatchPlan(trace, 'triage', 'capability', 'accepted', { kind: 'capability', dispatch_id });
+    case 'act.done_check':
+      return dispatchPlan(trace, 'triage', 'done_check', 'accepted', { kind: 'done_check', dispatch_id });
+    case 'act.decline':
+      return dispatchPlan(trace, 'triage', 'out_of_scope', 'accepted', { kind: 'decline', dispatch_id });
+    case 'gen.triage_fallback':
+      return dispatchPlan(trace, 'triage', 'implement', reason('triage'), {
+        kind: 'implement',
+        dispatch_id,
+        tier: 'strong',
+        ceiling: 'strong',
+        tier_source: 'triage_fallback',
+      });
+    case 'gen.route': {
+      const tier = choice('route');
+      if (!isTier(tier)) throw new Error('decide1: invalid route tier');
+      return dispatchPlan(trace, 'route', tier, 'accepted', {
+        kind: 'implement',
+        dispatch_id,
+        tier,
+        ceiling: tier,
+        tier_source: 'route',
+      });
+    }
+    case 'gen.route_fallback':
+      return dispatchPlan(trace, 'route', 'standard', reason('route'), {
+        kind: 'implement',
+        dispatch_id,
+        tier: 'standard',
+        ceiling: 'standard',
+        tier_source: 'route_fallback',
+      });
+    default: {
+      const exhaustive: never = trace.rule;
+      throw new Error(`decide1: unknown rule ${exhaustive}`);
+    }
   }
+}
 
-  const route = checkpoint.route;
-  if (route === null) throw new Error('triage implement needs a recorded route');
-  const routeReason = route.observation.reason;
-  if (routeReason === 'stale_answer' || routeReason === 'mismatched_answer')
-    return final('route', route.choice, 'paused', routeReason);
-  if (routeReason === 'decision_unavailable') return final('route', route.choice, 'paused', routeReason);
-  if (routeReason === 'cancelled') return final('route', route.choice, 'paused', 'cancelled');
-  if (route.status === 'needs_human') return final('route', route.choice, 'needs_human', routeReason);
-  if (route.status === 'paused') return final('route', route.choice, 'paused', routeReason);
-  if (route.observation.accepted && isTier(route.choice))
-    return dispatchPlan('route', route.choice, 'accepted', {
-      kind: 'implement',
-      dispatch_id,
-      tier: route.choice,
-      ceiling: route.choice,
-      tier_source: 'route',
-    });
-  return dispatchPlan('route', 'standard', routeReason, {
-    kind: 'implement',
-    dispatch_id,
-    tier: 'standard',
-    ceiling: 'standard',
-    tier_source: 'route_fallback',
+function resolveOutcome(request: DispatchRequest, checkpoint: DispatchCheckpoint): Plan {
+  if (checkpoint.intake === null) throw new Error('a dispatch decision needs an intake record');
+  replayStages(request, checkpoint);
+  return planFor(decideBand(decide1Inputs(request, checkpoint)), checkpoint, request);
+}
+
+/**
+ * A composition admission/cancellation gate can stop between stages, before a site can record it.
+ * Project that code fact onto the last deciding stage; keep its stored observation untouched.
+ */
+function boundaryTrace(
+  request: DispatchRequest,
+  checkpoint: DispatchCheckpoint,
+  reason: 'stale_answer' | 'cancelled',
+): Decide1Trace {
+  const inputs = decide1Inputs(request, checkpoint);
+  const decider = lastDecider(checkpoint);
+  const stage = decider.decided_by === 'rule' ? 'intake' : decider.decided_by;
+  const overrides: Record<string, Decide1Fact['value']> = {
+    [`${stage}.choice`]: decider.choice,
+    [`${stage}.status`]: 'paused',
+    [`${stage}.reason`]: reason,
+  };
+  return decideBand({
+    judgments: inputs.judgments,
+    facts: inputs.facts.map((fact) => ({
+      name: fact.name,
+      value: Object.hasOwn(overrides, fact.name) ? overrides[fact.name]! : fact.value,
+    })),
   });
 }
 
@@ -883,6 +979,11 @@ function isResumable(decision: DispatchDecision): boolean {
   return decision.status === 'paused' && RESUMABLE.has(decision.reason);
 }
 
+function assertRuleTable(decision: DispatchDecision): void {
+  if (decision.rule_table !== DECIDE1_RULE_TABLE)
+    throw new Error('recorded dispatch rule table differs from decide1.rules@1');
+}
+
 const sequences = new WeakMap<WeftPort, number>();
 
 /** Pure builder: one `judgment` for each site observation, at an explicit starting sequence. */
@@ -923,21 +1024,73 @@ export function dispatchJudgments(
   return records;
 }
 
-function emit(port: WeftPort | undefined, observations: readonly SiteObservation[]): void {
-  if (port === undefined || observations.length === 0) return;
+/** Pure projection of an appended decision; never shorten or invent a correlation id. */
+export function dispatchDecided(
+  decision: DispatchDecision,
+  judgmentIds: readonly string[],
+  target: { readonly trace_id: string; readonly emitter_id: string },
+  sequence: number,
+): WeftRecordShape | null {
+  const record_id = `${target.emitter_id}:dispatch:${decision.decision_id}:${decision.entry}`;
+  const requests = [
+    decision.intake?.request_id,
+    decision.triage?.observation.request_id,
+    decision.route?.observation.request_id,
+  ].filter((id): id is string => id != null);
+  const ids = [target.trace_id, target.emitter_id, record_id, decision.decision_id, ...judgmentIds, ...requests];
+  if (decision.intent !== null) ids.push(decision.intent.dispatch_id);
+  if (ids.some((id) => correlation(id) === null)) return null;
+  const fields: Record<string, unknown> = {
+    decision_ref: decision.decision_id,
+    decided_by: decision.decided_by,
+    choice: decision.choice,
+    status: decision.status,
+  };
+  if (decision.intent?.kind === 'implement') fields['tier'] = decision.intent.tier;
+  if (decision.intent !== null) fields['dispatch_ref'] = decision.intent.dispatch_id;
+  Object.assign(fields, clone(decision.decide1));
+  return {
+    schema: 'weft.record@1',
+    trace_id: target.trace_id,
+    record_id,
+    emitter: { kind: 'loom', id: target.emitter_id },
+    sequence,
+    kind: 'dispatch.decided',
+    thread_id: null,
+    parent_id: null,
+    links: judgmentIds.map((record_id) => ({ rel: 'caused_by', record_id })),
+    evidence: [
+      { source: 'observation', ref: decision.decision_id },
+      ...requests.map((ref) => ({ source: 'inference_request', ref })),
+    ],
+    fields,
+  };
+}
+
+function emit(port: WeftPort | undefined, observations: readonly SiteObservation[], decision: DispatchDecision): void {
+  if (port === undefined) return;
   const start = (sequences.get(port) ?? 0) + 1;
   const records = dispatchJudgments(observations, port, start);
-  for (const record of records) deliver(port, record);
+  const decided = dispatchDecided(
+    decision,
+    records.map((record) => record.record_id),
+    port,
+    start + records.length,
+  );
+  if (decided !== null) records.push(decided);
+  // Reserve synchronously before the sink can call back into the composition.
   if (records.length > 0) sequences.set(port, start + records.length - 1);
+  for (const record of records) deliver(port, record);
 }
 
 function cancellation(
+  request: DispatchRequest,
   checkpoint: DispatchCheckpoint,
   entry: number,
   decider: { readonly decided_by: Decider; readonly choice: SiteChoice },
 ): DispatchDecision {
   return {
-    schema: 'dispatch.decision@1',
+    schema: 'dispatch.decision@2',
     decision_id: checkpoint.decision_id,
     entry,
     state_revision: checkpoint.state_revision,
@@ -945,6 +1098,8 @@ function cancellation(
     choice: decider.choice,
     status: 'paused',
     reason: 'cancelled',
+    rule_table: DECIDE1_RULE_TABLE,
+    decide1: traceFields(boundaryTrace(request, checkpoint, 'cancelled')),
     intent: checkpoint.intent,
     receipt: null,
     intake: checkpoint.intake,
@@ -953,9 +1108,8 @@ function cancellation(
   };
 }
 
-function stalePlan(checkpoint: DispatchCheckpoint): Plan {
-  const decider = lastDecider(checkpoint);
-  return final(decider.decided_by, decider.choice, 'paused', 'stale_answer');
+function stalePlan(request: DispatchRequest, checkpoint: DispatchCheckpoint): Plan {
+  return planFor(boundaryTrace(request, checkpoint, 'stale_answer'), checkpoint, request);
 }
 
 function finishFinal(
@@ -984,7 +1138,7 @@ function settle(
   attempt?: string,
 ): DispatchDecision {
   if (!journal.append(decision, attempt)) return yielded(request, journal);
-  emit(ports.weft, fresh);
+  emit(ports.weft, fresh, decision);
   return clone(decision);
 }
 
@@ -995,6 +1149,7 @@ function settle(
  */
 function yielded(request: DispatchRequest, journal: DispatchJournal): DispatchDecision {
   const loaded = journal.load(request.request_id);
+  for (const decision of loaded.decisions) assertRuleTable(decision);
   const latest = loaded.decisions.at(-1);
   const claimed = loaded.checkpoint !== null && loaded.checkpoint.intent !== null;
   if (latest !== undefined && (!isResumable(latest) || !claimed)) return clone(latest);
@@ -1043,9 +1198,9 @@ async function recoverAttempt(
   const live = loaded.attempt;
   const entry = loaded.decisions.length + 1;
   if (live === null || ports.settlement === undefined) return yielded(request, journal);
-  if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+  if (signal?.aborted) return cancellation(request, checkpoint, entry, lastDecider(checkpoint));
   const receipt = await readSettlement(request, intent, ports, signal);
-  if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+  if (signal?.aborted) return cancellation(request, checkpoint, entry, lastDecider(checkpoint));
   if (receipt === null) return yielded(request, journal);
   const attempt = journal.acquire(request.request_id, live);
   if (attempt === null) return yielded(request, journal);
@@ -1068,16 +1223,16 @@ async function dispatchIntent(
   fresh: readonly SiteObservation[],
   attempt: string,
 ): Promise<DispatchDecision> {
-  if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+  if (signal?.aborted) return cancellation(request, checkpoint, entry, lastDecider(checkpoint));
   if (journal.load(request.request_id).presented) {
     // An earlier attempt may have carried the intent out, so its settlement decides before any stale gate.
     const settled = await readSettlement(request, intent, ports, signal);
-    if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+    if (signal?.aborted) return cancellation(request, checkpoint, entry, lastDecider(checkpoint));
     if (settled !== null || !sameState(checkpoint, ports.now()))
       return settleReceipt(request, checkpoint, entry, plan, intent, settled, ports, journal, fresh, attempt);
   } else if (!sameState(checkpoint, ports.now()))
-    return finishFinal(request, checkpoint, entry, stalePlan(checkpoint), ports, journal, fresh, attempt);
-  if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+    return finishFinal(request, checkpoint, entry, stalePlan(request, checkpoint), ports, journal, fresh, attempt);
+  if (signal?.aborted) return cancellation(request, checkpoint, entry, lastDecider(checkpoint));
   if (!journal.present(request.request_id, attempt)) return yielded(request, journal);
   let raw: unknown = null;
   try {
@@ -1085,7 +1240,7 @@ async function dispatchIntent(
   } catch {
     raw = null;
   }
-  if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+  if (signal?.aborted) return cancellation(request, checkpoint, entry, lastDecider(checkpoint));
   const receipt = normalizeReceipt(raw, intent.dispatch_id);
   return settleReceipt(request, checkpoint, entry, plan, intent, receipt, ports, journal, fresh, attempt);
 }
@@ -1136,6 +1291,7 @@ export async function decideDispatch(
   const captured = captureRequest(request);
   const decision_id = captured.request_id;
   const loaded = journal.load(decision_id);
+  for (const decision of loaded.decisions) assertRuleTable(decision);
   let checkpoint = loaded.checkpoint ?? initialCheckpoint(captured);
   const latest = loaded.decisions.at(-1) ?? null;
   const entry = loaded.decisions.length + 1;
@@ -1146,7 +1302,7 @@ export async function decideDispatch(
   }
 
   const resume = captured.resume === true;
-  if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+  if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
 
   if (checkpoint.intent !== null) {
     const plan = resolveOutcome(captured, checkpoint);
@@ -1170,7 +1326,7 @@ export async function decideDispatch(
   }
 
   if (loaded.checkpoint !== null && !sameState(checkpoint, ports.now()))
-    return finishFinal(captured, checkpoint, entry, stalePlan(checkpoint), ports, journal, []);
+    return finishFinal(captured, checkpoint, entry, stalePlan(captured, checkpoint), ports, journal, []);
 
   const fresh: SiteObservation[] = [];
 
@@ -1187,7 +1343,7 @@ export async function decideDispatch(
       checkpoint.intent,
     );
     journal.checkpoint(checkpoint);
-    if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+    if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
     const intake = await decideIntake(askIntake(captured, ask), ports, ports.now, signal);
     checkpoint = makeCheckpoint(
       checkpoint.decision_id,
@@ -1199,14 +1355,14 @@ export async function decideDispatch(
       checkpoint.route,
       checkpoint.intent,
     );
-    if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+    if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
     journal.checkpoint(checkpoint);
     if (intake.site !== null) fresh.push(intake.site);
   } else {
     // A reused stage steers which stage is asked next, so it must replay before it is trusted.
     replayStage(captured, checkpoint, 'intake');
     if (!sameState(checkpoint, ports.now()))
-      return finishFinal(captured, checkpoint, entry, stalePlan(checkpoint), ports, journal, fresh);
+      return finishFinal(captured, checkpoint, entry, stalePlan(captured, checkpoint), ports, journal, fresh);
   }
 
   const intake = checkpoint.intake;
@@ -1225,7 +1381,7 @@ export async function decideDispatch(
         checkpoint.intent,
       );
       journal.checkpoint(checkpoint);
-      if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+      if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
       const decision = await decideTriage(loopAsk(captured, 'triage', ask), ports, ports.now, signal);
       checkpoint = makeCheckpoint(
         checkpoint.decision_id,
@@ -1237,13 +1393,13 @@ export async function decideDispatch(
         checkpoint.route,
         checkpoint.intent,
       );
-      if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+      if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
       journal.checkpoint(checkpoint);
       fresh.push(decision.site.observation);
     } else {
       replayStage(captured, checkpoint, 'triage');
       if (!sameState(checkpoint, ports.now()))
-        return finishFinal(captured, checkpoint, entry, stalePlan(checkpoint), ports, journal, fresh);
+        return finishFinal(captured, checkpoint, entry, stalePlan(captured, checkpoint), ports, journal, fresh);
     }
 
     const triage = checkpoint.triage;
@@ -1262,7 +1418,7 @@ export async function decideDispatch(
           checkpoint.intent,
         );
         journal.checkpoint(checkpoint);
-        if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+        if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
         const decision = await decideLoopRoute(loopAsk(captured, 'route', ask), ports, ports.now, signal);
         checkpoint = makeCheckpoint(
           checkpoint.decision_id,
@@ -1274,27 +1430,27 @@ export async function decideDispatch(
           decision.site,
           checkpoint.intent,
         );
-        if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+        if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
         journal.checkpoint(checkpoint);
         fresh.push(decision.site.observation);
       } else {
         replayStage(captured, checkpoint, 'route');
         if (!sameState(checkpoint, ports.now()))
-          return finishFinal(captured, checkpoint, entry, stalePlan(checkpoint), ports, journal, fresh);
+          return finishFinal(captured, checkpoint, entry, stalePlan(captured, checkpoint), ports, journal, fresh);
       }
     }
   }
 
-  if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+  if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
   const plan = resolveOutcome(captured, checkpoint);
   if (plan.kind === 'final') {
-    if (plan.reason === 'cancelled') return cancellation(checkpoint, entry, lastDecider(checkpoint));
+    if (plan.reason === 'cancelled') return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
     return finishFinal(captured, checkpoint, entry, plan, ports, journal, fresh);
   }
 
   if (!sameState(checkpoint, ports.now()))
-    return finishFinal(captured, checkpoint, entry, stalePlan(checkpoint), ports, journal, fresh);
-  if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+    return finishFinal(captured, checkpoint, entry, stalePlan(captured, checkpoint), ports, journal, fresh);
+  if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
 
   let intent = checkpoint.intent;
   if (intent === null) {

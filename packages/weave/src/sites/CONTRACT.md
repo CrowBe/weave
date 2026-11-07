@@ -44,8 +44,9 @@ present a dispatch intent only after an accepted observation, and only through
 the injected idempotent dispatch port. The intent is checkpointed before the
 call. An unconfirmed intent is returned as paused and is not re-presented
 without an explicit resume; cancellation appends nothing; a stale or mismatched
-answer pauses. A mapped receipt yields a `dispatch.decision@1` entry, and fresh
-site observations become Weft judgment records after the final append. The
+answer pauses. The outcome table is now `decide1.rules@1` (below). A mapped receipt yields a
+`dispatch.decision@2` entry, and fresh site observations become Weft judgment
+records followed by one `dispatch.decided` after the final append. The
 composition never writes `routed_input@1`.
 
 Records use schema decision-site@1 and fixed keys. Record only closed-vocabulary
@@ -89,6 +90,83 @@ its provider.
 choices or a currently reappearing issue with at least two recorded fix attempts.
 Transport, persistence and full-loop integration remain
 outside this contract. ScriptedDecisionLayer remains unchanged.
+
+## WV-S1 P4a Decide-1 rule table
+
+`decideBand(inputs)` is pure deterministic policy over named judgments and code
+facts. Its first matching row in the frozen `decide1.rules@1` table returns the
+rule id and coarse band. It imports no dispatch, site or gateway code. It asks
+no new question and changes no `SITE_POLICY` threshold, fallback or request.
+`decideDispatch` validates stored stages through P3a's live pure transitions,
+then adapts them with `decide1Inputs` and builds the plan through an exhaustive
+rule-id switch. Invalid inputs and impossible stage sets throw before a claim;
+they never become an operator ask.
+
+| Rule                  | Condition, in precedence order                              | Band           | Outcome                                     |
+| --------------------- | ----------------------------------------------------------- | -------------- | ------------------------------------------- |
+| `hold.admission`      | First asked stage with `stale_answer` / `mismatched_answer` | withheld       | Terminal pause at that stage                |
+| `hold.outage`         | First asked stage with `decision_unavailable`               | withheld       | Resumable pause at that stage               |
+| `hold.paused`         | First remaining paused stage                                | withheld       | Pause with its reason                       |
+| `ask.intake`          | Intake needs human                                          | `ask_human`    | Intake ask, no intent                       |
+| `ask.irreversible`    | Intake stop                                                 | `ask_human`    | Rule ask / irreversible                     |
+| `ask.thread_target`   | Thread relation with no or ambiguous target                 | `ask_human`    | Rule ask / target reason                    |
+| `act.thread`          | Thread relation with resolved target                        | `tool_call`    | Intake thread intent                        |
+| `ask.triage`          | D1 needs human                                              | `ask_human`    | D1 ask, no intent                           |
+| `act.capability`      | D1 accepted capability                                      | `tool_call`    | Capability intent                           |
+| `act.done_check`      | D1 accepted done check                                      | `tool_call`    | Done-check intent                           |
+| `act.decline`         | D1 accepted out of scope                                    | `tool_call`    | Decline intent                              |
+| `gen.triage_fallback` | D1 nonaccepted implement                                    | `escalate_gen` | Implement strong/strong, triage fallback    |
+| `gen.route`           | D2 accepted tier                                            | `escalate_gen` | Implement at that tier                      |
+| `gen.route_fallback`  | D2 asked, nonaccepted                                       | `escalate_gen` | Implement standard/standard, route fallback |
+
+`tool_call` is a deterministic act without generation; `escalate_gen` is a
+generative implementation step; `ask_human` asks. `spawn_subtasks` remains in
+the closed band vocabulary but no P4a row returns it. The plan builder rejects
+it with `spawn_subtasks needs a sealed parent frame (D-ENG-044, P5)`: P4a forms
+no child plan or spawn intent.
+
+A hold row resolves its withheld band from its stage choice: intake ask/stop
+and D1 needs-human withhold `ask_human`; thread relations and D1 capability,
+done-check or decline withhold `tool_call`; D1 implement and D2 tiers withhold
+`escalate_gen`. Merged P3a also admits stale-state pauses between stages: an
+accepted intake new-thread choice then withholds `escalate_gen`. Count asks by
+`status = needs_human` and escalations by `band = escalate_gen` together with
+`status = dispatched`, never by band alone.
+
+`dispatch.decision@2` inserts `rule_table` and `decide1` after `reason`, leaving
+`dispatch.checkpoint@1` unchanged. The trace contains judgments in stage order
+(`intake.confidence`, `intake.top_p`, then D1 and D2), every available probability,
+and all 14 code facts in fixed order: intake decided-by, choice, status, reason,
+accepted; thread target; D1 choice, status, reason, accepted; D2 equivalents.
+Unasked loop stages have null facts; extraction-only intake has no judgments.
+Names are unique bounded codes, probabilities are unit values, fact values are
+finite scalars or screened correlation ids, and each list has at most 64 items.
+The deciding rule and band are journaled alongside the table version; loaded
+decisions from another table version are refused. Receipt mapping changes
+status and reason, never the rule or band.
+
+A composition freshness gate may stop before the next site has a record. Its
+trace projects `stale_answer` / paused onto the last recorded stage's code
+facts, preserving all underlying stage observations. Pre-ask cancellation has
+an unjournaled ask-user / paused / cancelled trace with no judgments; intake's
+unasked decided-by fact remains null. Cancellation appends and emits nothing.
+These boundary traces are pure projections of the checkpoint and the explicit
+code-gate reason, rather than a reinterpretation of a site answer.
+
+After each successful append, fresh judgments precede one `dispatch.decided`.
+The pure builder mirrors the journal trace, includes tier only for implement
+and dispatch reference only for an intent, links only this call's judgments,
+and cites every used stage request as inference-request evidence. Reused
+stages are evidence without invented judgment links. Invalid derived ids omit
+the projection without truncation or changing the decision. Sequences advance
+synchronously per port before delivery. Replay, a losing compare-and-set, and
+cancellation emit nothing; a failing sink cannot change the decision.
+
+Merged P3a's single-use attempts, `present()` compare-and-set and settlement
+precedence are preserved: elapsed time cannot retire an attempt, unresolved
+settlements remain nonterminal `dispatch_unconfirmed`, and only an append
+winner emits. A same-id concurrent loser reports the journal's owner without
+appending a second entry. Durable-journal follow-up #397 remains separate.
 
 ## WV-S1 P2a typed extraction before intake
 

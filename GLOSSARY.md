@@ -688,9 +688,16 @@ The Weft records sharing one `trace_id`, a correlation scope chosen by the compo
 
 One closed, versioned entry in a Weft trace: an envelope, a kind, links to other records, evidence references and kind-specific fields. Content appears as a content class and digest. It appears as text only where an inline content policy for that trace permits its class. A record that fails validation is not stored.
 
+### Decide-1
+
+The deterministic rule table over isolated judgments and code-computed facts
+whose output is the coarse band: `tool_call`, `spawn_subtasks`, `escalate_gen`
+or `ask_human`. `decide1.rules@1` is the ordered, versioned table used by
+dispatch authority; its output grants no execution authority of its own.
+
 ### Decide-1 trace
 
-What a `dispatch.decided` Weft record carries about how a dispatch decision was reached (D-ENG-045): each isolated judgment's name and probability, each code-computed fact's name and scalar value, the rule-table row that decided, and the coarse band it returned (`tool_call`, `spawn_subtasks`, `escalate_gen` or `ask_human`). A decision no site answered carries empty judgments. A fact value is never text. Like every Weft record, the trace reports a decision and grants no authority to dispatch.
+What a `dispatch.decided` Weft record carries about how a dispatch decision was reached (D-ENG-045): each isolated judgment's name and probability, each code-computed fact's name and scalar value, the rule-table row that decided, and the coarse band it returned (`tool_call`, `spawn_subtasks`, `escalate_gen` or `ask_human`). A decision no site answered carries empty judgments. A fact value is never text. Like every Weft record, the trace reports a decision and grants no authority to dispatch. The `dispatch.decision@2` journal record carries the same trace and its rule-table version; a paused decision’s band is the band of the choice it withheld.
 
 ### Disclosure class
 

@@ -13,6 +13,8 @@ import {
   MemoryDispatchJournal,
   decideDispatch,
   dispatchJudgments,
+  decide1Inputs,
+  dispatchDecided,
   resolveThreadTarget,
   transitionDispatch,
   type DispatchCheckpoint,
@@ -24,6 +26,9 @@ import {
   type DispatchRequest,
   type DispatchSettlementPort,
 } from '../src/dispatch.js';
+import { DECIDE1_RULE_TABLE, decideBand } from '../src/decide1.js';
+import { decideIntake } from '../src/intake.js';
+import { decideTriage, decideLoopRoute } from '../src/sites/loop-decide.js';
 import { gateExtract } from '../src/sites/extract.js';
 import { evaluateSite, modelOrigin, SITE_POLICY, type SiteState } from '../src/sites/index.js';
 import { loopRouteExtractSchema, loopTriageExtractSchema } from '../src/sites/model-extract.js';
@@ -899,6 +904,8 @@ test('16. records keep their exact key order and carry no authority or copied te
     'choice',
     'status',
     'reason',
+    'rule_table',
+    'decide1',
     'intent',
     'receipt',
     'intake',
@@ -941,6 +948,7 @@ test('17. Weft judgment records are built once per fresh observation and deliver
     emitter_id: 'loom.dispatch',
     emit: (record) => {
       assert.equal(journal.load('d1').decisions.length, 1);
+      if (record.kind !== 'judgment') return;
       appended += 1;
       seen.records.push(record);
     },
@@ -1607,7 +1615,9 @@ test('28. a claimed intent survives a terminal stale pause and append surfaces f
   const request = makeRequest();
   assert.equal(journal.claim('d1', claimed), true);
   const orphan: DispatchDecision = {
-    schema: 'dispatch.decision@1',
+    schema: 'dispatch.decision@2',
+    rule_table: DECIDE1_RULE_TABLE,
+    decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: 'd1',
     entry: 1,
     state_revision: request.state_revision,
@@ -1811,7 +1821,9 @@ test('31. property: every recorded checkpoint replays to the live decision on th
 test('32. the journal is a single-writer state machine per decision id', () => {
   const intent: DispatchIntent = { kind: 'capability', dispatch_id: 'd1:dispatch' };
   const decision = (patch: Partial<DispatchDecision>): DispatchDecision => ({
-    schema: 'dispatch.decision@1',
+    schema: 'dispatch.decision@2',
+    rule_table: DECIDE1_RULE_TABLE,
+    decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: 'd1',
     entry: 1,
     state_revision: REVISION.state_revision,
@@ -2010,7 +2022,9 @@ test('34. a crashed attempt ends only on the port settlement, never by time, wit
   // The journal contract: one live attempt per claimed intent, single-use ids, no expiry.
   const intent: DispatchIntent = { kind: 'capability', dispatch_id: 'd1:dispatch' };
   const owned = (status: DispatchDecision['status'], reason: DispatchDecision['reason']): DispatchDecision => ({
-    schema: 'dispatch.decision@1',
+    schema: 'dispatch.decision@2',
+    rule_table: DECIDE1_RULE_TABLE,
+    decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: 'd1',
     entry: 1,
     state_revision: REVISION.state_revision,
@@ -2497,4 +2511,409 @@ test('42. concurrent recovery of a presented intent yields one reconciliation re
     callers.reduce((sum, caller) => sum + caller.dispatchCalls.length, 0),
     0,
   );
+});
+
+const FACT_NAMES = [
+  'intake.decided_by',
+  'intake.choice',
+  'intake.status',
+  'intake.reason',
+  'intake.accepted',
+  'thread_target',
+  'triage.choice',
+  'triage.status',
+  'triage.reason',
+  'triage.accepted',
+  'route.choice',
+  'route.status',
+  'route.reason',
+  'route.accepted',
+];
+const PARITY: readonly [Plan, string, string][] = [
+  [{}, 'gen.route', 'escalate_gen'],
+  [{ triage: { choice: 'capability' } }, 'act.capability', 'tool_call'],
+  [{ triage: { choice: 'done_check' } }, 'act.done_check', 'tool_call'],
+  [{ triage: { choice: 'out_of_scope' } }, 'act.decline', 'tool_call'],
+  [{ triage: { choice: 'needs_human' } }, 'ask.triage', 'ask_human'],
+  [{ triage: { confidence: 0.5 } }, 'gen.triage_fallback', 'escalate_gen'],
+  [{ route: { confidence: 0.5 } }, 'gen.route_fallback', 'escalate_gen'],
+  [{ intake: { confidence: 0.5 } }, 'ask.intake', 'ask_human'],
+  [{ intake: { choice: 'stop' } }, 'ask.irreversible', 'ask_human'],
+  [{ intake: { choice: 'steer' } }, 'act.thread', 'tool_call'],
+  ...(['intake', 'triage', 'route'] as const).flatMap((stage) =>
+    (['stale', 'mismatch', 'outage'] as const).map(
+      (mode) =>
+        [
+          { [stage]: { mode } },
+          mode === 'outage' ? 'hold.outage' : 'hold.admission',
+          stage === 'intake' ? 'ask_human' : 'escalate_gen',
+        ] as [Plan, string, string],
+    ),
+  ),
+];
+
+test('P4a-7 merged P3a parity cases use the named rule and band', async () => {
+  for (const [plan, rule, band] of PARITY) {
+    const h = harness(plan);
+    const result = await run(h);
+    assert.deepEqual([result.decide1.rule, result.decide1.band], [rule, band], JSON.stringify(plan));
+  }
+  for (const threads of [
+    [],
+    [
+      { thread_id: 'T1', summary: 'a' },
+      { thread_id: 'T2', summary: 'b' },
+    ],
+  ]) {
+    const h = harness(
+      { intake: { choice: 'queue' } },
+      { request: makeRequest({ intake: { message: MESSAGE, running_threads: threads } }) },
+    );
+    const result = await run(h);
+    assert.deepEqual([result.decide1.rule, result.decide1.band], ['ask.thread_target', 'ask_human']);
+  }
+});
+
+test('P4a-8 @2 stores exactly the pure trace, fixed facts and bounded judgments without text', async () => {
+  const h = harness();
+  const decision = await run(h);
+  const checkpoint = h.journal.load('d1').checkpoint!;
+  assert.equal(decision.schema, 'dispatch.decision@2');
+  assert.equal(decision.rule_table, DECIDE1_RULE_TABLE);
+  const { table, ...trace } = decideBand(decide1Inputs(h.request, checkpoint));
+  assert.equal(table, decision.rule_table);
+  assert.deepEqual(decision.decide1, trace);
+  assert.deepEqual(
+    decision.decide1.facts.map((fact) => fact.name),
+    FACT_NAMES,
+  );
+  assert.deepEqual(
+    decision.decide1.judgments.map((judgment) => judgment.name),
+    ['intake.confidence', 'intake.top_p', 'triage.confidence', 'triage.top_p', 'route.confidence', 'route.top_p'],
+  );
+  assertNoAuthorityKeys(decision);
+  assertNoCopiedText(h.journal.load('d1'), CANARIES);
+  const canary = harness(
+    { triageIntent: 'CANARY-ctx', routeIntent: 'CANARY-ctx' },
+    {
+      request: makeRequest({
+        intake: { message: 'CANARY-msg', running_threads: [{ thread_id: 'T1', summary: 'CANARY-summary' }] },
+        triage_context: 'CANARY-ctx',
+        route_context: 'CANARY-ctx',
+      }),
+    },
+  );
+  assertNoCopiedText(await run(canary), CANARIES);
+  assertNoCopiedText(canary.journal.load('d1'), CANARIES);
+});
+
+test('P4a-9 receipts and resumed presentations preserve the deciding rule and band', async () => {
+  for (const reason of ['approval_required', 'budget'] as const) {
+    const h = harness({}, { receipt: (intent) => ({ status: 'refused', dispatch_id: intent.dispatch_id, reason }) });
+    const decision = await run(h);
+    assert.equal(decision.status, reason === 'budget' ? 'paused' : 'needs_human');
+    assert.deepEqual([decision.decide1.rule, decision.decide1.band], ['gen.route', 'escalate_gen']);
+    if (reason === 'budget') {
+      const retry = harness({}, { journal: h.journal, request: makeRequest({ resume: true }) });
+      const resumed = await run(retry);
+      assert.equal(resumed.entry, 2);
+      assert.deepEqual(resumed.decide1, decision.decide1);
+    }
+  }
+});
+
+test('P4a-10 one valid dispatch.decided after append and judgments; reused stages are evidence only', async () => {
+  const seen = collector();
+  const journal = new MemoryDispatchJournal();
+  const port: WeftPort = {
+    ...seen.port,
+    emit: (record) => {
+      assert.equal(journal.load('d1').decisions.length, 1);
+      seen.records.push(record);
+    },
+  };
+  const h = harness({}, { journal, weft: port });
+  const decision = await run(h);
+  assert.deepEqual(
+    seen.records.map((record) => record.kind),
+    ['judgment', 'judgment', 'judgment', 'dispatch.decided'],
+  );
+  const record = seen.records.at(-1)!;
+  for (const item of seen.records) assert.deepEqual(validateRecord(item), { ok: true });
+  assert.deepEqual(record.fields, {
+    decision_ref: 'd1',
+    decided_by: 'route',
+    choice: 'flash',
+    status: 'dispatched',
+    tier: 'flash',
+    dispatch_ref: 'd1:dispatch',
+    ...decision.decide1,
+  });
+  assert.deepEqual(
+    record.links,
+    seen.records.slice(0, -1).map((item) => ({ rel: 'caused_by', record_id: item.record_id })),
+  );
+  assert.deepEqual(
+    seen.records.map((item) => item.sequence),
+    [1, 2, 3, 4],
+  );
+  assert.equal(record.record_id, 'loom.dispatch:dispatch:d1:1');
+  const before = seen.records.length;
+  await run(h);
+  transitionDispatch(h.request, journal.load('d1').checkpoint!, decision.receipt);
+  assert.equal(seen.records.length, before);
+
+  const resumedSeen = collector();
+  const first = harness({ route: { mode: 'outage' } }, { weft: resumedSeen.port });
+  await run(first);
+  const prior = resumedSeen.records.length;
+  const retry = harness({}, { journal: first.journal, request: makeRequest({ resume: true }), weft: resumedSeen.port });
+  const resumed = await run(retry);
+  const later = resumedSeen.records.slice(prior);
+  assert.deepEqual(
+    later.map((item) => item.kind),
+    ['judgment', 'dispatch.decided'],
+  );
+  assert.equal(later[1]!.record_id, 'loom.dispatch:dispatch:d1:2');
+  assert.deepEqual(later[1]!.links, [{ rel: 'caused_by', record_id: later[0]!.record_id }]);
+  assert.deepEqual(later[1]!.evidence, [
+    { source: 'observation', ref: 'd1' },
+    ...['d1:intake', 'd1:triage', 'd1:route:e2'].map((ref) => ({ source: 'inference_request', ref })),
+  ]);
+  assert.deepEqual(validateRecord(later[1]), { ok: true });
+  assert.equal(resumed.entry, 2);
+  for (const emit of [
+    () => {
+      throw new Error('CANARY-error');
+    },
+    () => Promise.reject(new Error('CANARY-error')),
+  ]) {
+    assert.deepEqual(await run(harness({}, { weft: { ...seen.port, emit } })), decision);
+  }
+  const long = harness(
+    {},
+    { request: makeRequest({ request_id: 'd'.repeat(96) }), weft: { ...seen.port, emitter_id: 'e'.repeat(64) } },
+  );
+  const longDecision = await run(long);
+  assert.equal(dispatchDecided(longDecision, [], { trace_id: 'trace-1', emitter_id: 'e'.repeat(64) }, 1), null);
+  assert.equal(dispatchDecided(decision, ['sk-bad'], seen.port, 1), null);
+  assert.deepEqual(longDecision.decide1, decision.decide1);
+  const aborted = new AbortController();
+  aborted.abort();
+  const cancelledSeen = collector();
+  const cancelled = harness({}, { weft: cancelledSeen.port });
+  await run(cancelled, aborted.signal);
+  assert.deepEqual(cancelledSeen.records, []);
+});
+
+test('P4a-11 asks and pauses emit, including extraction-only ambiguity with empty judgments', async () => {
+  const scenarios: readonly [Plan, DispatchRequest, string, string, string][] = [
+    [{ intake: { confidence: 0.5 } }, makeRequest(), 'ask.intake', 'ask_human', 'needs_human'],
+    [
+      { thread: { value: null, cue: 'T1' } },
+      makeRequest({
+        intake: {
+          message: 'which T1?',
+          running_threads: [
+            { thread_id: 'T1', summary: 'a' },
+            { thread_id: 'T2', summary: 'b' },
+          ],
+        },
+      }),
+      'ask.intake',
+      'ask_human',
+      'needs_human',
+    ],
+    [{ intake: { choice: 'stop' } }, makeRequest(), 'ask.irreversible', 'ask_human', 'needs_human'],
+    [{ route: { mode: 'outage' } }, makeRequest(), 'hold.outage', 'escalate_gen', 'paused'],
+  ];
+  for (const [plan, request, rule, band, status] of scenarios) {
+    const seen = collector();
+    const h = harness(plan, { request, weft: seen.port });
+    const decision = await run(h);
+    const records = seen.records.filter((record) => record.kind === 'dispatch.decided');
+    assert.equal(records.length, 1);
+    assert.deepEqual(
+      [records[0]!.fields['rule'], records[0]!.fields['band'], records[0]!.fields['status']],
+      [rule, band, status],
+    );
+    assert.deepEqual(validateRecord(records[0]), { ok: true });
+    if (decision.intake?.decided_by === 'extract') {
+      assert.deepEqual(decision.decide1.judgments, []);
+      assert.deepEqual(records[0]!.fields['judgments'], []);
+    }
+    assert.equal(Object.hasOwn(records[0]!.fields, 'dispatch_ref'), decision.intent !== null);
+    assert.equal(Object.hasOwn(records[0]!.fields, 'tier'), decision.intent?.kind === 'implement');
+  }
+});
+
+test('P4a-12 pure replay includes trace; recorded foreign table versions are refused before effects', async () => {
+  const h = harness();
+  const decision = await run(h);
+  assert.deepEqual(transitionDispatch(h.request, h.journal.load('d1').checkpoint!, decision.receipt), decision);
+  const load = h.journal.load.bind(h.journal);
+  const journal: DispatchJournal = {
+    ...forgedJournal(h.journal.load('d1').checkpoint!),
+    load: (id) => ({
+      ...load(id),
+      decisions: [{ ...decision, rule_table: 'decide1.rules@0' } as unknown as DispatchDecision],
+    }),
+  };
+  const replay = harness({}, { journal });
+  await assert.rejects(run(replay), /rule table/);
+  assert.equal(replay.generateCalls.length + replay.evaluateCalls.length + replay.dispatchCalls.length, 0);
+});
+
+test('P4a-13 concurrent decisions share monotonic Weft sequences; a losing writer emits nothing', async () => {
+  const seen = collector();
+  const gate = deferred();
+  const journal = new MemoryDispatchJournal();
+  const a = harness(
+    { gate: { match: (id) => id === 'a:intake', promise: gate.promise } },
+    { journal, request: makeRequest({ request_id: 'a' }), weft: seen.port },
+  );
+  const pending = run(a);
+  await waitUntil(() => a.evaluateCalls.length > 0);
+  const b = harness(
+    { triage: { choice: 'done_check' } },
+    { journal, request: makeRequest({ request_id: 'b' }), weft: seen.port },
+  );
+  await run(b);
+  gate.release();
+  await pending;
+  assert.deepEqual(
+    seen.records.map((item) => item.sequence),
+    seen.records.map((_, index) => index + 1),
+  );
+  const decisions = seen.records.filter((item) => item.kind === 'dispatch.decided');
+  assert.deepEqual(
+    decisions.map((item) => [item.fields['decision_ref'], item.fields['rule']]),
+    [
+      ['b', 'act.done_check'],
+      ['a', 'gen.route'],
+    ],
+  );
+  const shared = new MemoryDispatchJournal();
+  const sameSeen = collector();
+  const held = deferred();
+  let entered = false;
+  const winner = harness(
+    {},
+    {
+      journal: shared,
+      weft: sameSeen.port,
+      dispatch: async (intent) => {
+        entered = true;
+        await held.promise;
+        return dispatched(intent);
+      },
+    },
+  );
+  const win = run(winner);
+  await waitUntil(() => entered);
+  const loser = harness({}, { journal: shared, weft: sameSeen.port });
+  const lost = await run(loser);
+  assert.equal(lost.reason, 'dispatch_unconfirmed');
+  assert.equal(sameSeen.records.length, 0);
+  assert.deepEqual(shared.load('d1').decisions, []);
+  held.release();
+  await win;
+  assert.equal(sameSeen.records.filter((item) => item.kind === 'dispatch.decided').length, 1);
+  assert.equal(winner.dispatchCalls.length + loser.dispatchCalls.length, 1);
+});
+
+test('P4a-14 no new inference across parity cases and no policy mutation', async () => {
+  const policy = JSON.stringify(SITE_POLICY);
+  for (const [plan] of PARITY) {
+    const h = harness(plan);
+    const decision = await run(h);
+    const stages = [decision.intake, decision.triage, decision.route].filter((stage) => stage !== null).length;
+    assert.equal(h.evaluateCalls.length, stages);
+    assert.equal(h.generateCalls.length, stages);
+    // P3a's unchanged primitives provide an independent request oracle, including
+    // failed admissions and fallbacks. Compare full requests, not just site names.
+    const direct = harness(plan);
+    const request = direct.request;
+    const intake = await decideIntake(
+      {
+        request_id: `${request.request_id}:intake`,
+        ...REVISION,
+        state: request.intake,
+        terms: request.terms,
+        needs_dispatch: true,
+      },
+      direct.ports,
+      direct.clock.now,
+    );
+    if (intake.status === 'transition' && intake.choice === 'new_thread') {
+      const triage = await decideTriage(
+        {
+          request_id: `${request.request_id}:triage`,
+          ...REVISION,
+          state: { request: request.intake.message, context: request.triage_context },
+          terms: request.terms,
+          needs_dispatch: true,
+        },
+        direct.ports,
+        direct.clock.now,
+      );
+      if (
+        triage.site.status === 'transition' &&
+        triage.site.observation.accepted &&
+        triage.site.choice === 'implement'
+      ) {
+        await decideLoopRoute(
+          {
+            request_id: `${request.request_id}:route`,
+            ...REVISION,
+            state: { unit_of_work: request.intake.message, context: request.route_context },
+            terms: request.terms,
+            needs_dispatch: true,
+          },
+          direct.ports,
+          direct.clock.now,
+        );
+      }
+    }
+    // Each extract call creates a fresh admission closure. Compare its source
+    // alongside every wire field instead of requiring function identity.
+    const generationRequests = (calls: readonly GenerationRequest[]) =>
+      calls.map(({ accept, ...wire }) => ({ ...wire, accept: accept?.toString() }));
+    assert.deepEqual(generationRequests(h.generateCalls), generationRequests(direct.generateCalls));
+    assert.deepEqual(h.evaluateCalls, direct.evaluateCalls);
+  }
+  assert.equal(JSON.stringify(SITE_POLICY), policy);
+});
+
+test('P4a admission between stages uses a hold row without changing stored observations', async () => {
+  for (const stage of ['intake', 'triage', 'route'] as const) {
+    const live = harness();
+    await run(live);
+    const checkpoint = live.journal.load('d1').checkpoint!;
+    const partial: DispatchCheckpoint = {
+      ...checkpoint,
+      intent: null,
+      ...(stage === 'intake' ? { triage: null, route: null } : stage === 'triage' ? { route: null } : {}),
+    };
+    const journal = recoveredJournal(partial);
+    const clock = makeClock();
+    clock.advance();
+    const seen = collector();
+    const resumed = harness({}, { journal, clock, weft: seen.port, request: makeRequest({ resume: true }) });
+    const decision = await run(resumed);
+    assert.deepEqual(
+      [decision.status, decision.reason, decision.decide1.rule, decision.decide1.band],
+      ['paused', 'stale_answer', 'hold.admission', 'escalate_gen'],
+    );
+    assert.deepEqual(
+      [decision.intake, decision.triage, decision.route],
+      [partial.intake, partial.triage, partial.route],
+    );
+    assert.equal(decision.decide1.facts.find((fact) => fact.name === `${stage}.reason`)?.value, 'stale_answer');
+    assert.deepEqual(
+      seen.records.map((record) => record.kind),
+      ['dispatch.decided'],
+    );
+    assert.equal(resumed.generateCalls.length + resumed.evaluateCalls.length + resumed.dispatchCalls.length, 0);
+  }
 });
