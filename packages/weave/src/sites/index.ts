@@ -184,6 +184,15 @@ function validState(state: SiteState): boolean {
     Number.isSafeInteger(state.state_revision) && state.state_revision >= 0 && Number.isFinite(state.state_updated_at)
   );
 }
+/** Shared freshness boundary: the input and current reading must name the same revision and update. */
+export function stateFresh(input: SiteState, current: SiteState): boolean {
+  return (
+    validState(input) &&
+    validState(current) &&
+    input.state_revision === current.state_revision &&
+    input.state_updated_at === current.state_updated_at
+  );
+}
 function plainObject(value: unknown): value is Record<string, unknown> {
   return (
     typeof value === 'object' &&
@@ -495,12 +504,9 @@ export function admissionReason(
   const origin = originReason(site, input);
   if (origin !== null) return origin;
   if (
-    !validState(input) ||
-    !validState(current) ||
+    !stateFresh(input, current) ||
     !Number.isFinite(recorded.observed_at) ||
     recorded.state_revision !== input.state_revision ||
-    input.state_revision !== current.state_revision ||
-    input.state_updated_at !== current.state_updated_at ||
     recorded.observed_at < current.state_updated_at
   )
     return 'stale_answer';
