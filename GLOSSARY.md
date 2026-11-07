@@ -150,6 +150,67 @@ The opaque reference and SHA-256 digest that a paused operating process keeps un
 
 A bounded, typed, versioned rendering of authorized state for a particular consumer. It carries source revisions and disclosed omissions rather than serving as an independent source of truth.
 
+### Context ledger
+
+Versioned pre-flight record binding a complete prepared
+request to its policy ceiling, enforced token term, complete-input bounds,
+inclusions, digests and slice/template evidence. Sibling of the state view;
+content-free metrics/references do not grant disclosure.
+
+### Context estimator
+
+Injected versioned complete-input accounting algorithm,
+admitted with transformation/tokenizer/framing evidence. A byte heuristic or
+calibration alone is not a certified token upper bound.
+
+### Accounting contract / accounting family
+
+Immutable evidence-backed request
+reconstruction and bound for a covered route, and the complete set bound to a
+scoped gateway configuration. Loom treats provider details as opaque.
+
+### Site assembly contract
+
+Trusted versioned expected inventory, requiredness,
+content-path mapping, templates, reconstruction and budget for one site/profile.
+
+### Prepared request
+
+Sealed provider-neutral request whose exact content and
+terms are measured, durably recorded and passed unchanged to dispatch.
+
+### Assembly evidence
+
+Protected historical snapshots and immutable procedure
+references sufficient to reconstruct a fit/refusal, including pre-trim inputs
+and excluded bodies. This contains content; the ledger and Weft summaries do not.
+
+### Effective dispatched view
+
+Request-specific authorized view after any
+disclosed optional-part drops, linked to the unchanged original slice assembly.
+
+### Context overflow
+
+Typed fail-closed refusal for required or total excess,
+invalid input or unsupported accounting, durably recorded as `context.refused`;
+it reserves no inference budget and authorizes no recovery call. Evidence
+oversize follows the distinct persistence-failure contract below.
+
+### Context persistence failure
+
+A complete fit/refusal decision cannot be
+durably stored. For known evidence-size rejection, the bounded
+`context.persistence_failed@1` marker records only that failure and stops the
+owner without reservation or dispatch. It is not a ledger or full refusal
+evidence; replay reconstructs only its recorded failure/disposition. A failed
+or ambiguous marker append is an explicit error, never claimed durable.
+
+### Part class
+
+`required` or `optional`, derived from the trusted site/profile
+contract; only optional whole parts can be dropped by its deterministic policy.
+
 ### Intake classification
 
 The channel-agnostic `intake.classify` judgment site proposes how an inbound
