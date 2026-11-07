@@ -109,12 +109,18 @@ function observe(
   };
 }
 
+/** Live and replay apply the same default; a supplied origin, even a forged one, is never replaced. */
+function withOrigin(input: OutputEvalInput): OutputEvalInput {
+  return input.origin === undefined ? { ...input, origin: structuralOrigin('criteria') } : input;
+}
+
 /** Pure threshold rule. An outage fails every criterion; it does not read another site. */
 export function transitionOutputEval(
-  input: OutputEvalInput,
+  supplied: OutputEvalInput,
   recorded: RecordedOutputEval,
   current: SiteState,
 ): OutputEvalTransition {
+  const input = withOrigin(supplied);
   const criteria = input.criteria.map((criterion) => ({
     criterion_id: criterion.criterion_id,
     statement: criterion.statement,
@@ -247,11 +253,12 @@ export async function evaluateOutputEval(
       }),
     ),
   );
-  const captured: OutputEvalInput = {
+  // Capture the origin before await: caller mutation cannot rebind an in-flight answer, as in evaluateSite.
+  const captured = withOrigin({
     ...input,
     criteria,
-    ...(input.origin === undefined ? { origin: structuralOrigin('criteria') } : {}),
-  };
+    ...(input.origin === undefined ? {} : { origin: structuredClone(input.origin) }),
+  });
   let outcome: EvaluationOutcome<'boolean'> | null = null;
   if (!signal?.aborted && criteria.length > 0 && originReason(OUTPUT_EVAL_SITE, captured) === null) {
     try {
