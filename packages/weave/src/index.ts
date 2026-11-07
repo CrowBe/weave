@@ -364,3 +364,21 @@ export {
   type IntakeDecision,
   type RecordedIntake,
 } from './intake.js';
+export {
+  MemoryDispatchJournal,
+  decideDispatch,
+  dispatchJudgments,
+  resolveThreadTarget,
+  transitionDispatch,
+  type DispatchCheckpoint,
+  type DispatchDecision,
+  type DispatchIntent,
+  type DispatchJournal,
+  type DispatchPort,
+  type DispatchPorts,
+  type DispatchReason,
+  type DispatchReceipt,
+  type DispatchRequest,
+  type DispatchSettlementPort,
+  type ThreadTarget,
+} from './dispatch.js';
