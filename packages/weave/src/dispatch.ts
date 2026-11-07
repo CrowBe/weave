@@ -126,43 +126,53 @@ export interface DispatchDecision {
  * Intent identity is not writer ownership. A claimed intent is presented and settled only by the
  * dispatch attempt that holds it: `acquire` issues that attempt, and while it is live no other
  * caller can acquire, and no decision naming the intent appends except the holder's.
+ *
+ * Attempt ids are single-use. An attempt ends only when its holder appends or releases it, or when
+ * recovery supersedes it on the port's own settlement; elapsed time never ends one. An ended id is
+ * retired: it never appends, releases or supersedes again, and is never reissued.
  */
 export interface DispatchJournal {
   load(decision_id: string): {
     readonly checkpoint: DispatchCheckpoint | null;
     readonly decisions: readonly DispatchDecision[];
+    /** The live attempt on the claimed intent, if any. */
+    readonly attempt: string | null;
   };
   /** Ignored once the decision is claimed or terminal: its owner's stage evidence stands. */
   checkpoint(entry: DispatchCheckpoint): void;
   /** open → claimed: bind the intent to the exact stage snapshot the plan was derived from. */
   claim(decision_id: string, intent: DispatchIntent, checkpoint?: DispatchCheckpoint): boolean;
-  /** A fresh attempt on a claimed, non-terminal intent; null while another attempt is live. */
-  acquire(decision_id: string): string | null;
-  /** Ends the attempt if it is still the live one; any other attempt is left alone. */
+  /**
+   * A fresh attempt on a claimed, non-terminal intent; null while another attempt is live. With
+   * `supersedes`, only while that attempt is still the live one: it is retired and replaced. Only
+   * recovery holding the port's settlement of the decision supersedes.
+   */
+  acquire(decision_id: string, supersedes?: string): string | null;
+  /** Retires the attempt if it is still the live one; any other attempt is left alone. */
   release(decision_id: string, attempt: string): void;
   /**
    * open → open | terminal for an intent-less decision; claimed → claimed | terminal for its owner:
-   * the live attempt, or any caller when none is live. A successful append ends the live attempt.
+   * the live attempt's own id, or a tokenless caller when none is live. A successful append retires
+   * the live attempt.
    */
   append(decision: DispatchDecision, attempt?: string): boolean;
 }
 
-/**
- * The journal's own injected clock and how long an attempt stays live. Without it an attempt ends
- * only by append or release; with it, an attempt whose holder never returns lapses at `expires_after`.
- */
-export interface DispatchAttemptClock {
-  readonly now: () => number;
-  readonly expires_after: number;
-}
-
 export type DispatchPort = (intent: DispatchIntent, signal?: AbortSignal) => DispatchReceipt | Promise<DispatchReceipt>;
+
+/** The idempotent port's own record for a decision id: its receipt once settled, else null. */
+export type DispatchSettlementPort = (
+  decision_id: string,
+  signal?: AbortSignal,
+) => DispatchReceipt | null | Promise<DispatchReceipt | null>;
 
 export interface DispatchPorts {
   readonly generate: InferenceGateway['generate'];
   readonly evaluate: InferenceGateway['evaluate'];
   readonly now: () => SiteState & { readonly observed_at: number };
   readonly dispatch: DispatchPort;
+  /** Without it, recovery of an attempt in flight stays paused / `dispatch_unconfirmed`. */
+  readonly settlement?: DispatchSettlementPort;
   readonly weft?: WeftPort;
 }
 
@@ -204,11 +214,11 @@ export class MemoryDispatchJournal implements DispatchJournal {
   private readonly checkpoints = new Map<string, DispatchCheckpoint>();
   /** Claimed intents are monotonic: a later stage checkpoint never erases one. */
   private readonly intents = new Map<string, DispatchIntent>();
-  private readonly attempts = new Map<string, { readonly attempt: string; readonly expires_at: number | null }>();
+  /** The live attempt per decision. */
+  private readonly attempts = new Map<string, string>();
+  private readonly retired = new Set<string>();
   private readonly issued = new Map<string, number>();
   private entries: DispatchDecision[] = [];
-
-  constructor(private readonly clock?: DispatchAttemptClock) {}
 
   load(decision_id: string) {
     const checkpoint = this.checkpoints.get(decision_id);
@@ -217,6 +227,7 @@ export class MemoryDispatchJournal implements DispatchJournal {
       checkpoint:
         checkpoint === undefined ? null : clone(intent === undefined ? checkpoint : { ...checkpoint, intent }),
       decisions: clone(this.entries.filter((entry) => entry.decision_id === decision_id)),
+      attempt: this.attempts.get(decision_id) ?? null,
     };
   }
   private terminal(decision_id: string): boolean {
@@ -238,36 +249,44 @@ export class MemoryDispatchJournal implements DispatchJournal {
     if (bound !== undefined) this.checkpoints.set(decision_id, clone({ ...bound, intent }));
     return true;
   }
-  /** The live attempt other than `attempt`, if any. */
-  private heldByOther(decision_id: string, attempt: string | undefined): boolean {
-    const live = this.attempts.get(decision_id);
-    if (live === undefined || live.attempt === attempt) return false;
-    return live.expires_at === null || this.clock === undefined || this.clock.now() < live.expires_at;
+  /** True only for the live attempt itself; a retired id never matches again. */
+  private live(decision_id: string, attempt: string | undefined): boolean {
+    return attempt !== undefined && !this.retired.has(attempt) && this.attempts.get(decision_id) === attempt;
   }
-  acquire(decision_id: string): string | null {
+  private retire(decision_id: string): void {
+    const live = this.attempts.get(decision_id);
+    if (live === undefined) return;
+    this.retired.add(live);
+    this.attempts.delete(decision_id);
+  }
+  acquire(decision_id: string, supersedes?: string): string | null {
     if (!this.intents.has(decision_id) || this.terminal(decision_id)) return null;
-    if (this.heldByOther(decision_id, undefined)) return null;
+    if (supersedes === undefined ? this.attempts.has(decision_id) : !this.live(decision_id, supersedes)) return null;
+    this.retire(decision_id);
     const count = (this.issued.get(decision_id) ?? 0) + 1;
     this.issued.set(decision_id, count);
     const attempt = `${decision_id}:attempt:${count}`;
-    const expires_at = this.clock === undefined ? null : this.clock.now() + this.clock.expires_after;
-    this.attempts.set(decision_id, { attempt, expires_at });
+    if (this.retired.has(attempt)) throw new Error('an attempt id was reissued');
+    this.attempts.set(decision_id, attempt);
     return attempt;
   }
   release(decision_id: string, attempt: string): void {
-    if (this.attempts.get(decision_id)?.attempt === attempt) this.attempts.delete(decision_id);
+    if (this.live(decision_id, attempt)) this.retire(decision_id);
   }
   append(decision: DispatchDecision, attempt?: string): boolean {
     const id = decision.decision_id;
     if (this.terminal(id)) return false;
+    if (attempt !== undefined && !this.live(id, attempt)) return false;
     const claimed = this.intents.get(id);
     if (claimed === undefined) {
       if (decision.intent !== null) throw new Error('appended decision names an intent that was never claimed');
-    } else if (decision.intent === null || !sameRecord(decision.intent, claimed) || this.heldByOther(id, attempt)) {
+    } else if (decision.intent === null || !sameRecord(decision.intent, claimed)) {
+      return false;
+    } else if (attempt === undefined && this.attempts.has(id)) {
       return false;
     }
     this.entries.push(clone(decision));
-    this.attempts.delete(id);
+    this.retire(id);
     return true;
   }
 }
@@ -981,9 +1000,49 @@ async function attemptIntent(
   fresh: readonly SiteObservation[],
 ): Promise<DispatchDecision> {
   const attempt = journal.acquire(request.request_id);
-  if (attempt === null) return yielded(request, journal);
+  if (attempt === null) return recoverAttempt(request, checkpoint, plan, intent, ports, journal, signal, fresh);
   try {
     return await dispatchIntent(request, checkpoint, entry, plan, intent, ports, journal, signal, fresh, attempt);
+  } finally {
+    journal.release(request.request_id, attempt);
+  }
+}
+
+/**
+ * Another attempt is live, so this call presents nothing. Only the port's own settlement of the
+ * decision lets recovery end that attempt: it supersedes it and journals the settled receipt.
+ * Unsettled, unreadable or cancelled, the attempt stays live and nothing is written.
+ */
+async function recoverAttempt(
+  request: DispatchRequest,
+  checkpoint: DispatchCheckpoint,
+  plan: Plan,
+  intent: DispatchIntent,
+  ports: DispatchPorts,
+  journal: DispatchJournal,
+  signal: AbortSignal | undefined,
+  fresh: readonly SiteObservation[],
+): Promise<DispatchDecision> {
+  const loaded = journal.load(request.request_id);
+  const live = loaded.attempt;
+  const entry = loaded.decisions.length + 1;
+  if (live === null || ports.settlement === undefined) return yielded(request, journal);
+  if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+  let raw: unknown = null;
+  try {
+    raw = await ports.settlement(request.request_id, signal);
+  } catch {
+    raw = null;
+  }
+  if (signal?.aborted) return cancellation(checkpoint, entry, lastDecider(checkpoint));
+  const receipt = normalizeReceipt(raw, intent.dispatch_id);
+  if (receipt === null) return yielded(request, journal);
+  const attempt = journal.acquire(request.request_id, live);
+  if (attempt === null) return yielded(request, journal);
+  try {
+    const outcome = receiptResult(plan, receipt);
+    const decision = makeDecision(request, checkpoint, entry, plan, intent, receipt, outcome.status, outcome.reason);
+    return settle(request, decision, ports, journal, fresh, attempt);
   } finally {
     journal.release(request.request_id, attempt);
   }
