@@ -238,8 +238,14 @@ test('a second extraction is requested at most once and only after re_extract', 
   });
   const record = await decideTriage(triageAsk, fake.fake, now);
   assert.equal(fake.generateCalls.length, 2);
-  assert.deepEqual(fake.generateCalls.map((item) => item.request_id), ['triage-1:x1', 'triage-1:x2']);
-  assert.deepEqual(record.extracts.map((item) => item.verdict), ['re_extract', 'original_only']);
+  assert.deepEqual(
+    fake.generateCalls.map((item) => item.request_id),
+    ['triage-1:x1', 'triage-1:x2'],
+  );
+  assert.deepEqual(
+    record.extracts.map((item) => item.verdict),
+    ['re_extract', 'original_only'],
+  );
   assert.equal(fake.evaluateCalls.length, 1);
   assert.equal(record.site.observation.accepted, true);
 

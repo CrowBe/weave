@@ -111,9 +111,7 @@ function feedbackFor(observation: ExtractObservation): string {
 
 function needsSecond(observation: ExtractObservation): boolean {
   return (
-    observation.verdict === 're_extract' &&
-    observation.reason !== 'cancelled' &&
-    observation.reason !== 'stale_answer'
+    observation.verdict === 're_extract' && observation.reason !== 'cancelled' && observation.reason !== 'stale_answer'
   );
 }
 
