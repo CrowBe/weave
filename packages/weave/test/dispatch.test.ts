@@ -1156,16 +1156,208 @@ test('23. live recovery rejects foreign and below-threshold loaded stages before
     ['below threshold', withRouteObservation(checkpoint, { confidence: 0.5 }), /confidence/],
   ];
   for (const [label, value, reason] of forged) {
-    const journal: DispatchJournal = {
-      load: () => ({ checkpoint: value, decisions: [] }),
-      checkpoint: () => {},
-      claim: () => false,
-      append: () => {},
-    };
-    const recovery = harness({}, { journal, request: makeRequest({ resume: true }) });
+    const recovery = harness({}, { journal: forgedJournal(value), request: makeRequest({ resume: true }) });
     await assert.rejects(run(recovery), reason, label);
     assert.equal(recovery.generateCalls.length, 0, label);
     assert.equal(recovery.evaluateCalls.length, 0, label);
     assert.equal(recovery.dispatchCalls.length, 0, label);
+  }
+});
+
+function forgedJournal(checkpoint: DispatchCheckpoint): DispatchJournal {
+  return {
+    load: () => ({ checkpoint, decisions: [] }),
+    checkpoint: () => {},
+    claim: () => false,
+    append: () => {},
+  };
+}
+
+test('24. recovery rejects a recorded intent that disagrees with the recorded stages', async () => {
+  const h = harness({ route: { choice: 'strong' } });
+  const live = await run(h);
+  const checkpoint = h.journal.load('d1').checkpoint!;
+  const recorded = checkpoint.intent as Extract<DispatchIntent, { kind: 'implement' }>;
+  const mismatched: DispatchCheckpoint = {
+    ...checkpoint,
+    intent: { ...recorded, tier: 'flash', ceiling: 'flash' },
+  };
+
+  assert.throws(() => transitionDispatch(h.request, mismatched, live.receipt, live.entry), /intent/);
+  for (const resume of [false, true]) {
+    const recovery = harness({}, { journal: forgedJournal(mismatched), request: makeRequest({ resume }) });
+    await assert.rejects(run(recovery), /intent/, String(resume));
+    assert.equal(recovery.generateCalls.length, 0, String(resume));
+    assert.equal(recovery.evaluateCalls.length, 0, String(resume));
+    assert.equal(recovery.dispatchCalls.length, 0, String(resume));
+  }
+});
+
+test('25. extract-only checkpoints must match the closed stopped-outcome table', async () => {
+  const threadRequest = makeRequest({
+    intake: { message: 'continue T1', running_threads: [{ thread_id: 'T1', summary: 'alpha' }] },
+  });
+  const threadLive = harness(
+    { intake: { choice: 'continue_thread' }, thread: { value: 'T1', cue: 'T1' } },
+    { request: threadRequest },
+  );
+  await run(threadLive);
+  const threadBase = threadLive.journal.load('d1').checkpoint!;
+
+  const routeRequest = makeRequest();
+  const routeLive = harness({ route: { choice: 'strong' } }, { request: routeRequest });
+  await run(routeLive);
+  const routeBase = routeLive.journal.load('d1').checkpoint!;
+
+  const twoThreadRequest = makeRequest({
+    intake: {
+      message: 'continue T1',
+      running_threads: [
+        { thread_id: 'T1', summary: 'first' },
+        { thread_id: 'T2', summary: 'second' },
+      ],
+    },
+  });
+  const twoThreadLive = harness(
+    { intake: { choice: 'continue_thread' }, thread: { value: 'T1', cue: 'T1' } },
+    { request: twoThreadRequest },
+  );
+  await run(twoThreadLive);
+  const twoThreadBase = twoThreadLive.journal.load('d1').checkpoint!;
+
+  const extractOnly = (
+    base: DispatchCheckpoint,
+    patch: Partial<NonNullable<DispatchCheckpoint['intake']>>,
+  ): DispatchCheckpoint => ({
+    ...base,
+    intake: { ...base.intake!, site: null, decided_by: 'extract', ...patch },
+  });
+
+  const cases: readonly [string, DispatchRequest, DispatchCheckpoint][] = [
+    [
+      'executable thread choice',
+      threadRequest,
+      extractOnly(threadBase, {
+        choice: 'continue_thread',
+        status: 'transition',
+        reason: 'accepted',
+      }),
+    ],
+    [
+      'executable new thread',
+      routeRequest,
+      extractOnly(routeBase, {
+        choice: 'new_thread',
+        status: 'transition',
+        reason: 'accepted',
+      }),
+    ],
+    [
+      'executable stop',
+      threadRequest,
+      extractOnly(threadBase, {
+        choice: 'stop',
+        status: 'transition',
+        reason: 'accepted',
+      }),
+    ],
+    [
+      'ask_user transitioning',
+      threadRequest,
+      extractOnly(threadBase, {
+        choice: 'ask_user',
+        status: 'transition',
+        reason: 'accepted',
+      }),
+    ],
+    [
+      'ask_user paused accepted',
+      threadRequest,
+      extractOnly(threadBase, {
+        choice: 'ask_user',
+        status: 'paused',
+        reason: 'accepted',
+      }),
+    ],
+    [
+      'cancelled without evidence',
+      threadRequest,
+      extractOnly(threadBase, {
+        choice: 'ask_user',
+        status: 'paused',
+        reason: 'cancelled',
+      }),
+    ],
+    [
+      'stale without evidence',
+      threadRequest,
+      extractOnly(threadBase, {
+        choice: 'ask_user',
+        status: 'needs_human',
+        reason: 'stale_answer',
+      }),
+    ],
+    [
+      'ambiguous without evidence',
+      threadRequest,
+      extractOnly(threadBase, {
+        choice: 'ask_user',
+        status: 'needs_human',
+        reason: 'ambiguous_reference',
+      }),
+    ],
+    [
+      'ambiguous with grounded evidence',
+      twoThreadRequest,
+      extractOnly(twoThreadBase, {
+        choice: 'ask_user',
+        status: 'needs_human',
+        reason: 'ambiguous_reference',
+      }),
+    ],
+  ];
+
+  for (const [label, request, value] of cases) {
+    assert.throws(() => transitionDispatch(request, value, null), /extract-only/, `${label} replay`);
+    const recovery = harness({}, { journal: forgedJournal(value), request: makeRequest({ resume: true }) });
+    await assert.rejects(run(recovery), /extract-only/, `${label} live`);
+    assert.equal(recovery.generateCalls.length, 0, `${label} live`);
+    assert.equal(recovery.evaluateCalls.length, 0, `${label} live`);
+    assert.equal(recovery.dispatchCalls.length, 0, `${label} live`);
+  }
+});
+
+test('26. legitimate extract-only stopped outcomes replay unchanged', async () => {
+  const request = makeRequest({
+    intake: {
+      message: 'which one T1?',
+      running_threads: [
+        { thread_id: 'T1', summary: 'first' },
+        { thread_id: 'T2', summary: 'second' },
+      ],
+    },
+  });
+  const h = harness({ intake: { choice: 'new_thread' }, thread: { value: null, cue: 'T1' } }, { request });
+  const live = await run(h);
+  assert.deepEqual([live.status, live.reason, live.intake?.site], ['needs_human', 'ambiguous_reference', null]);
+  const checkpoint = h.journal.load('d1').checkpoint!;
+  assert.deepEqual(transitionDispatch(request, checkpoint, null, live.entry), live);
+
+  const final = checkpoint.intake!.extract.at(-1)!;
+  for (const [status, reason] of [
+    ['paused', 'cancelled'],
+    ['needs_human', 'stale_answer'],
+  ] as const) {
+    const variant: DispatchCheckpoint = {
+      ...checkpoint,
+      intake: {
+        ...checkpoint.intake!,
+        status,
+        reason,
+        extract: [...checkpoint.intake!.extract.slice(0, -1), { ...final, verdict: 'original_only', reason }],
+      },
+    };
+    const replayed = transitionDispatch(request, variant, null, live.entry);
+    assert.deepEqual([replayed.status, replayed.reason, replayed.intake?.site], ['paused', reason, null]);
   }
 });

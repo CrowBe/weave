@@ -426,6 +426,43 @@ function assertTransition(
   if (value.status !== fallbackStatus) throw new Error(`recorded ${site} stage has an invalid fallback status`);
 }
 
+/** Extract-only intake never dispatches: its outcome is a closed stopped table backed by extraction evidence. */
+function assertExtractOnlyIntake(request: DispatchRequest, intake: IntakeDecision): void {
+  const final = intake.extract[intake.extract.length - 1];
+  if (final === undefined) throw new Error('recorded extract-only intake has no extraction evidence');
+  if (intake.choice !== 'ask_user')
+    throw new Error('recorded extract-only intake has an executable choice without a site answer');
+  if (intake.status !== 'paused' && intake.status !== 'needs_human')
+    throw new Error('recorded extract-only intake does not stop');
+  switch (intake.reason) {
+    case 'cancelled':
+      if (intake.status !== 'paused' || final.reason !== 'cancelled')
+        throw new Error('recorded extract-only intake has inconsistent cancellation evidence');
+      break;
+    case 'stale_answer':
+      if (intake.status !== 'needs_human' || final.reason !== 'stale_answer')
+        throw new Error('recorded extract-only intake has inconsistent stale evidence');
+      break;
+    case 'ambiguous_reference': {
+      const slots: unknown = final.slots;
+      const thread = Array.isArray(slots)
+        ? slots.find((slot) => isRecord(slot) && slot['slot'] === 'thread_ref')
+        : undefined;
+      if (
+        intake.status !== 'needs_human' ||
+        final.verdict !== 'use_hints' ||
+        !isRecord(thread) ||
+        thread['status'] !== 'unresolved' ||
+        request.intake.running_threads.length < 2
+      )
+        throw new Error('recorded extract-only intake has inconsistent ambiguity evidence');
+      break;
+    }
+    default:
+      throw new Error('recorded extract-only intake has an outcome that needs a site answer');
+  }
+}
+
 /** Fail closed on stage records that a foreign request, site, revision or threshold could have forged. */
 function assertRecordedStages(request: DispatchRequest, checkpoint: DispatchCheckpoint): void {
   if (request.request_id !== checkpoint.decision_id) throw new Error('checkpoint belongs to another decision');
@@ -456,8 +493,9 @@ function assertRecordedStages(request: DispatchRequest, checkpoint: DispatchChec
       const choice = intake.site.accepted ? intake.site.answer : SITE_POLICY['intake.classify'].fallback;
       if (intake.choice !== choice) throw new Error('recorded intake stage does not match its site answer');
       if (intake.reason !== intake.site.reason) throw new Error('recorded intake stage has an inconsistent reason');
-    } else if (intake.decided_by !== 'extract') {
-      throw new Error('recorded intake stage has no site answer');
+    } else {
+      if (intake.decided_by !== 'extract') throw new Error('recorded intake stage has no site answer');
+      assertExtractOnlyIntake(request, intake);
     }
   }
   if (checkpoint.triage !== null)
@@ -824,6 +862,8 @@ export async function decideDispatch(
   if (checkpoint.intent !== null) {
     const plan = resolveOutcome(captured, checkpoint);
     if (plan.kind !== 'dispatch') throw new Error('a recorded intent needs a dispatch plan');
+    if (!sameIntent(checkpoint.intent, plan.intent))
+      throw new Error('recorded intent does not match the recorded stages');
     if (!resume) {
       const decision = makeDecision(
         captured,
