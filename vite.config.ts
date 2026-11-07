@@ -18,6 +18,8 @@ export default defineConfig({
       '**/fixtures/**/*.jsonl',
       // Check fixtures pin source layouts (e.g. a multiline import) that formatting would erase.
       'checks/fixtures/**',
+      // Pinned byte-for-byte by context-budget-pins.test.ts.
+      '_plan/PLAN.md',
       // Frozen corpus digest and generated report bytes are asserted by the harness.
       'benchmarks/frontier-weigh/cases.json',
       // These exact bytes are referenced by checked-in benchmark recordings.
@@ -69,6 +71,7 @@ export default defineConfig({
             'benchmarks/**',
             'examples/**',
             'docs/**',
+            '_plan/**',
             '!**/node_modules/**',
             '!**/dist/**',
             '!**/*.tsbuildinfo',

@@ -6,6 +6,11 @@ started). Branch: `wv-353-c1-context-budget-contract`. Reference:
 `_plan/WV-353-owner-locks.md` is left outside this commit. No production TS,
 gateway, Weft, benchmark, VISION, dependency or permission changes are included.
 
+The original C1 observations below describe `f8f24fc`. The fix1 section records
+the D-ENG-046 corrections and supersedes the original failing-check status.
+The plan's byte-level SHA-256, used without any historical Git object, is
+`3f59bef6e400fab64800e96595ba71521b66489f1242b958f0d4d3810730ad4d`.
+
 ## Demonstrated red
 
 ```sh
@@ -132,3 +137,94 @@ No live benchmark, hosted model call or remote issue/review verification was
 performed. D-ENG locks are applied from the brief; external owner/review records
 are not newly authenticated here. C2a/C2b/C2c/C2d and clarification integration
 remain unimplemented and unauthorized by this C1 commit. No merge claim.
+
+## Fix1 — D-ENG-046 / PR #395 review at f8f24fc
+
+All five findings are addressed without changing the plan or the FU3 resolver:
+
+1. The default `definitionPins(plan)` test compares the complete, ordered list
+   of 17 known diagnostics, retaining the minimum checked-declaration assertion
+   (81 checked at this base). New, removed or substituted diagnostics fail.
+   There is no todo or environment gate for this check.
+2. Plan provenance uses the literal SHA-256 above over raw file bytes. It no
+   longer runs `git show 841d7f4:PLAN.md`; tracked paths still use `git ls-files`.
+3. Exact AST line/start/range pins, their grammar fixtures and document mutations
+   are retained in `context-budget-pins.gate.ts`. Run
+   `npm run check:context-budget-pins` at C1 acceptance and at each child's base;
+   resolve source positions there before using them as implementation evidence.
+   Its `.gate.js` output is outside the unchanged default `*.test.js` glob.
+   The default suite retains provenance, the 22 exported-symbol references and
+   the exact definition/navigation diagnostics required by the owner.
+4. Formatting ignores only `_plan/PLAN.md`, preserving its pinned bytes.
+   Other Markdown formatting checks remain required.
+5. The verify cache fingerprints `_plan/**`. Regression coverage checks plan
+   creation/modification and another plan artifact's addition/removal, alongside
+   the existing unchanged-cache and other-source invalidation assertions.
+
+### Fix1 red before green
+
+Before the corrections, the focused FU3 suite had 40 passes and one behavioral
+failure: the definition/navigation assertion expected no diagnostics. The two
+format/cache regression tests were run before editing `vite.config.ts`: both
+failed behaviorally, on the immutable plan's formatting and a stale cache hit
+when `_plan/PLAN.md` was added. The default-test position-separation check also
+failed before moving the 38 position-dependent tests, then passed afterward.
+
+A temporary depth-one clone of `f8f24fc` reproduced the provenance failure with
+`fatal: invalid object name '841d7f4'`. Copying the revised compiled default
+suite into that same clone passed all three tests without the historical
+object. A one-byte plan mutation failed the SHA-256 assertion; restoring its
+bytes restored the pass. In-memory AST mutations adding, removing and
+substituting diagnostics each failed the exact-list assertion. No source or
+plan mutation from these probes was retained.
+
+### Fix1 verification
+
+Environment: Node `v24.22.1`, npm `11.21.1`. Dependencies installed successfully
+with `npm ci --offline` using a temporary copy of the local npm cache. npm itself
+is available; sandbox restrictions affect some child processes and loopback
+listeners. No permission/check was relaxed to obtain a pass.
+
+Passed:
+
+- `npm run fmt`, followed by `npm run verify`'s `fmt:check` and `check` stages.
+- `npm run check:context-budget-pins`: all 38 document-gate tests pass.
+- Focused default C1 corpus: 94/94 tests pass; together with the gate this
+  retains the original 132 checks. Detailed runs used
+  `node --test --test-isolation=none --test-reporter=tap` for visible subtests.
+- Both new format/cache regressions; the complete verify-cache tests pass
+  through `npm run check`, including required formatting and interruption checks.
+- Every top-level `checks/*.mjs` script invoked individually with Node:
+  `extract-before-site`, `gauge-attribution-contract`, `import-direction`,
+  `no-ambient-clock`, `no-ambient-entropy`, `no-ambient-env`,
+  `no-swallowed-failures`, and the shared `source-scan` module.
+- `typecheck:web`, `build:web`, `typecheck:examples`, `typecheck:benchmarks`,
+  `test:jev`, `test:entailment`, `test:decision` (22 existing optional skips),
+  `test:chatgpt-cli`, `test:muse-spark-example`, `test:nous-portal-example`,
+  `test:vercel-free-example`, `test:frontier-weigh`, `test:weigh-example`, and
+  `lint` (existing warnings).
+- Plan SHA-256 unchanged; FU3 resolver unchanged; `git diff --check` passes.
+
+Remaining verification limits:
+
+- Full `npm run verify` exits 1 at `test:checks`: 2/3 test files pass.
+  Direct inspection of the fixture runner's child result shows
+  `spawnSync /usr/local/lib/nodejs/node EPERM`, with empty child output.
+  The original `checks/test/checks.test.mjs` also fails in the temporary baseline
+  clone. The `checks/fixtures` and `checks/test` directories in the supplied
+  summary are not top-level executable check scripts.
+- Default `npm test`: 105/112 test files pass, including all C1 files. The seven
+  unchanged failing files are Fabric cli-generate/shell-run, gateway
+  amos/vercel-ai-gateway, Loom task-acceptance, and Weft
+  otel-isolation/sqlite-intake. Focused Amos output confirms
+  `listen EPERM: operation not permitted 127.0.0.1`; subprocess checks also
+  encounter the restriction above. These match the pre-fix non-C1 failures.
+- Remaining verify stages were invoked independently after the early stop.
+  `task-acceptance:offline` produces its offline report, then fails the unchanged
+  live-harness unit test on empty subprocess JSON. `test:decision-sites` passes
+  12/13 files; its CLI tests also report `Node 22 required` on this Node 24 host.
+  A fully green full-suite result therefore still requires the normal Node 22
+  CI environment with subprocess and loopback support.
+
+No hosted model calls or live benchmark runs were made. No domain term,
+production behavior or acceptance boundary was introduced by fix1.

@@ -260,6 +260,25 @@ test('verify cache rejects formatting-only changes to root and docs Markdown', (
   }
 });
 
+test('formatting preserves the immutable context-budget plan bytes', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weave-format-plan-'));
+  try {
+    symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'), 'dir');
+    writeFileSync(join(dir, 'package.json'), readFileSync(join(root, 'package.json')));
+    writeFileSync(join(dir, 'vite.config.ts'), readFileSync(join(root, 'vite.config.ts')));
+    mkdirSync(join(dir, '_plan'));
+    const plan = readFileSync(join(root, '_plan/PLAN.md'));
+    writeFileSync(join(dir, '_plan/PLAN.md'), plan);
+    for (const args of [['fmt', '--check'], ['fmt']]) {
+      const result = spawnSync(join(root, 'node_modules', '.bin', 'vp'), args, { cwd: dir, encoding: 'utf8' });
+      assert.equal(result.status, 0, result.stdout + result.stderr);
+      assert.deepEqual(readFileSync(join(dir, '_plan/PLAN.md')), plan);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('verify cache ignores removed Python cache directories but tracks source changes', () => {
   const dir = mkdtempSync(join(tmpdir(), 'weave-verify-cache-'));
   try {
@@ -296,6 +315,16 @@ test('verify cache ignores removed Python cache directories but tracks source ch
     assert.equal(run(), 'run\nrun\nrun\nrun\n');
     writeFileSync(join(dir, '.tool-versions'), 'nodejs 22.18.0\n');
     assert.equal(run(), 'run\nrun\nrun\nrun\nrun\n');
+    mkdirSync(join(dir, '_plan'));
+    writeFileSync(join(dir, '_plan/PLAN.md'), '# Plan\n');
+    assert.equal(run(), 'run\n'.repeat(6));
+    assert.equal(run(), 'run\n'.repeat(6));
+    writeFileSync(join(dir, '_plan/PLAN.md'), '# Changed plan\n');
+    assert.equal(run(), 'run\n'.repeat(7));
+    writeFileSync(join(dir, '_plan/child.md'), '# Child base\n');
+    assert.equal(run(), 'run\n'.repeat(8));
+    rmSync(join(dir, '_plan/child.md'));
+    assert.equal(run(), 'run\n'.repeat(9));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
