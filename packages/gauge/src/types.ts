@@ -152,8 +152,9 @@ export type ConceptualAttributionCategory =
   | 'unattributed';
 
 /** The wire value for a conceptual category. Never accept a second spelling on the wire. */
-export type WireAttributionCategory<C extends ConceptualAttributionCategory> =
-  C extends 'capability' ? 'capability_gap' : C;
+export type WireAttributionCategory<C extends ConceptualAttributionCategory> = C extends 'capability'
+  ? 'capability_gap'
+  : C;
 
 /** The closed deterministic signal for each attributed wire category. */
 export interface DeterministicSignals {

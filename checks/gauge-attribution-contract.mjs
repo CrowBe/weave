@@ -90,7 +90,8 @@ for (const name of TYPE_EXPORTS) {
 }
 
 for (const text of CONTRACT_TEXT) {
-  if (!squash(contract).includes(squash(text))) violations.push(`packages/gauge/src/GAUGE-CONTRACT.md: missing "${text}"`);
+  if (!squash(contract).includes(squash(text)))
+    violations.push(`packages/gauge/src/GAUGE-CONTRACT.md: missing "${text}"`);
 }
 
 for (const text of GLOSSARY_TEXT) {
