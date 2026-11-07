@@ -191,6 +191,18 @@ gateway reports it as `attempts_exhausted` or `provider_failed` (#91).
 Cancellation always pauses. ScriptedDecisionLayer and the M0–M6 runtime path
 are unchanged; wiring the full M7 loop is outside P5.
 
+P3a adds a dispatch authority above these sites. `decideDispatch` takes the
+intake decision, then asks D1 and D2 in dependency order, and presents at most
+one dispatch intent through an injected idempotent port. The intent is
+checkpointed before the call; a durable intent with no receipt is
+`paused` / `dispatch_unconfirmed` and is not re-presented without an explicit
+resume. Cancellation appends no decision, a stale or mismatched answer pauses,
+and an unavailable provider pauses a dispatch-dependent step. Receipts map to a
+closed status/reason table; provider error text is never stored. Final
+decisions use `dispatch.decision@1` (checkpoint `dispatch.checkpoint@1`), and
+the fresh site observations are emitted as Weft judgment records only after the
+final append. The composition never writes `routed_input@1`.
+
 ## 5. Tier configuration and availability
 
 The composition root supplies parsed JSON to `parseRouteConfig`; the gateway

@@ -392,7 +392,7 @@ function supersedeKey(started: ActionStartedPayload): string {
  * Hand one record to the port. Emission is one-way: a throw is swallowed, a
  * returned promise is never awaited and its rejection is handled.
  */
-function deliver(port: WeftPort, record: WeftRecordShape): void {
+export function deliver(port: WeftPort, record: WeftRecordShape): void {
   try {
     const result: unknown = port.emit(record);
     if (result !== null && (typeof result === 'object' || typeof result === 'function')) {

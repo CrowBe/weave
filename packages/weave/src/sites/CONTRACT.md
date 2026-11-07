@@ -39,7 +39,14 @@ attempt and stays an outage. `budget_exhausted`, `deadline_reached`, a gateway
 pause, and the blocked reasons `provider_unavailable`, `no_route`, `no_budget`,
 `quota_unknown`, `weekly_budget_cap`, and `deadline_passed` are outages.
 No returned transition dispatches or authorizes execution. D2's tier is a ceiling
-for the existing P4 gate.
+for the existing P4 gate. `decideDispatch` composes intake, D1 and D2; it may
+present a dispatch intent only after an accepted observation, and only through
+the injected idempotent dispatch port. The intent is checkpointed before the
+call. An unconfirmed intent is returned as paused and is not re-presented
+without an explicit resume; cancellation appends nothing; a stale or mismatched
+answer pauses. A mapped receipt yields a `dispatch.decision@1` entry, and fresh
+site observations become Weft judgment records after the final append. The
+composition never writes `routed_input@1`.
 
 Records use schema decision-site@1 and fixed keys. Record only closed-vocabulary
 answers, numeric statistics and safe correlation identifiers, never raw state,
