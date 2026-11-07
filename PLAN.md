@@ -3586,8 +3586,8 @@ results, remains frozen; this §29 recipe is authoritative for this round.
 
 | ID | Severity / action | HEAD evidence and disposition |
 | --- | --- | --- |
-| N2 | note / auto-fix | Add one relocation mutation per W2 scope (§2.7 and §5.5): remove the first W2 pin from that scope and append the same pin to active §3. Assert pins(relocated) == expected and not valid(relocated), isolating scope presence from exact-multiset validation. |
-| N3 | note / auto-fix | Initialize checks['carried plan19 requirements'] = False before exec(carried, ns). Silent completion retains a recorded failure; only the existing successful SystemExit path records a pass. |
+| P21-N2 | note / auto-fix | Add one relocation mutation per W2 scope (§2.7 and §5.5): remove the first W2 pin from that scope and append the same pin to active §3. Assert pins(relocated) == expected and not ns['resolve'](relocated)[0] and not w2_present(relocated), isolating missing scope presence with the exact multiset preserved and no resolution error. |
+| P21-N3 | note / auto-fix | Initialize checks['carried plan19 requirements'] = False before exec(carried, ns). Silent completion retains a recorded failure; only the existing successful SystemExit path records a pass. |
 
 Re-resolution at reviewed HEAD gives the following multiset. Counts change only
 because §28's four labelled pins become closed history; the added trace row and
@@ -3740,7 +3740,7 @@ for scope in ['### 2.7 ', '### 5.5 ']:
         checks[f'count-preserving substitution rejected {scope} {pin}'] = sum(pins(substituted).values()) == sum(pins(doc).values()) and not valid(substituted)
     relocated = head + scope + body.replace(w2[0], '', 1)
     relocated = relocated.replace('\n## 4. ', f'\n{w2[0]}\n\n## 4. ', 1)
-    checks[f'multiset-preserving relocation rejected {scope}'] = pins(relocated) == expected and not valid(relocated)
+    checks[f'multiset-preserving relocation rejected {scope}'] = pins(relocated) == expected and not ns['resolve'](relocated)[0] and not w2_present(relocated)
 # Required C1 negative inputs, not a claim of general lint implemented here.
 wrapped = [f'`this.frameGoal` (call\nat `{RUNTIME}:2545`)',
            f'`this.frameGoal` (call at\n`{RUNTIME}:2545`)',
@@ -3773,15 +3773,24 @@ recipe also passes 83/83 against `e7f163b` after §29 is added. N3's mixed-targe
 prerequisite qualification applies to these historical runs; they are not
 hermetic target-worktree results.
 
-The final plan20 recipe passes 44/44 (exit 0), with 83/83 carried requirements,
-12 active pins, six deletion rejections and six count-preserving substitution
-rejections. Against reviewed `e7f163b`, it passes 33/44 (exit 1), failing the
+Historical plan20 results: the then-current recipe passed 44/44 (exit 0), with
+83/83 carried requirements, 12 active pins, six deletion rejections and six count-preserving substitution
+rejections. Against reviewed `e7f163b`, it passed 33/44 (exit 1), failing the
 N1 recipe correction, active FU3 additions, trace extension and new disposition
 requirements. The carried prerequisite fails only its absent current-disposition
 check on that red target. Historical plan18 passes 57/57 and its plan17
 prerequisite passes 114/114. Preservation checks freeze §16 O1–O4 within §16,
 all closed sections except the explicit §28 recipe allowlist, and every earlier
 trace row. These are document/source/fixture checks, not runtime-stop tests.
+
+Plan21 observed results (plan22 rerun): the authoritative §29 recipe passes
+46/46 at HEAD (exit 0), with 83/83 carried requirements and 12 active pins.
+Against reviewed `e7f163b`, it passes 35/46 (exit 1), with the same 11 failing
+requirements listed in the historical plan20 results and 82/83 carried
+requirements. Both relocation rejections (§2.7 and §5.5) pass on both targets:
+each preserves the expected pin multiset, resolves without errors and fails
+w2_present. The two added relocation checks account for the increase from 44
+to 46 checks; the 44/44 and 33/44 totals above are historical plan20 evidence.
 
 `git diff --check e7f163b -- PLAN.md` passes; only PLAN.md changes.
 `npm run fmt:check` and `npm run verify` each exit 127 with
