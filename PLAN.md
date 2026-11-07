@@ -3589,6 +3589,8 @@ results, remains frozen; this §29 recipe is authoritative for this round.
 | P21-N2 | note / auto-fix | Add one relocation mutation per W2 scope (§2.7 and §5.5): remove the first W2 pin from that scope and append the same pin to active §3. Assert pins(relocated) == expected and not ns['resolve'](relocated)[0] and not w2_present(relocated), isolating missing scope presence with the exact multiset preserved and no resolution error. |
 | P21-N3 | note / auto-fix | Initialize checks['carried plan19 requirements'] = False before exec(carried, ns). Silent completion retains a recorded failure; only the existing successful SystemExit path records a pass. |
 
+Plan22 follow-up — Claude review of `65a8007`: W1 (historical vs current totals) and I1/I2 (relocation assertion strength, row ID collision) were fixed in place at P21-N2/P21-N3 and in the plan21 observed-results paragraph.
+
 Re-resolution at reviewed HEAD gives the following multiset. Counts change only
 because §28's four labelled pins become closed history; the added trace row and
 this section use ordinary navigation references. The resolver still checks
@@ -3785,8 +3787,8 @@ trace row. These are document/source/fixture checks, not runtime-stop tests.
 
 Plan21 observed results (plan22 rerun): the authoritative §29 recipe passes
 46/46 at HEAD (exit 0), with 83/83 carried requirements and 12 active pins.
-Against reviewed `e7f163b`, it passes 35/46 (exit 1), with the same 11 failing
-requirements listed in the historical plan20 results and 82/83 carried
+Against reviewed `e7f163b`, it passes 35/46 (exit 1), with 11 failures in the same four categories
+described in the historical plan20 results and 82/83 carried
 requirements. Both relocation rejections (§2.7 and §5.5) pass on both targets:
 each preserves the expected pin multiset, resolves without errors and fails
 w2_present. The two added relocation checks account for the increase from 44
@@ -3798,3 +3800,8 @@ to 46 checks; the 44/44 and 33/44 totals above are historical plan20 evidence.
 so later stages are not reached and FU-fmt stays open. No formatter or full
 suite green is claimed. No source, tests, schemas, GLOSSARY, permissions,
 held-out cases, benchmark routes or locked decisions change.
+
+### Plan23 — Claude review of `7f4e635` (I1/I2)
+
+This round addresses I1's failure-category wording and I2's missing Plan22
+disposition record. D-ENG-024–027 remain unchanged; no implementation is authorized.
