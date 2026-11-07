@@ -3589,7 +3589,7 @@ results, remains frozen; this §29 recipe is authoritative for this round.
 | P21-N2 | note / auto-fix | Add one relocation mutation per W2 scope (§2.7 and §5.5): remove the first W2 pin from that scope and append the same pin to active §3. Assert pins(relocated) == expected and not ns['resolve'](relocated)[0] and not w2_present(relocated), isolating missing scope presence with the exact multiset preserved and no resolution error. |
 | P21-N3 | note / auto-fix | Initialize checks['carried plan19 requirements'] = False before exec(carried, ns). Silent completion retains a recorded failure; only the existing successful SystemExit path records a pass. |
 
-Plan22 follow-up — Claude review of `65a8007`: W1 (historical vs current totals) and I1/I2 (relocation assertion strength, row ID collision) were fixed in place at P21-N2/P21-N3 and in the plan21 observed-results paragraph.
+Plan22 follow-up — Claude review of `65a8007`: P22-W1 (historical vs current totals) and P22-I1/P22-I2 (relocation assertion strength, row ID collision) were fixed in place at P21-N2/P21-N3, the §29 relocation check (plan20-check recipe) and the plan21 observed-results paragraph.
 
 Re-resolution at reviewed HEAD gives the following multiset. Counts change only
 because §28's four labelled pins become closed history; the added trace row and
@@ -3801,7 +3801,12 @@ so later stages are not reached and FU-fmt stays open. No formatter or full
 suite green is claimed. No source, tests, schemas, GLOSSARY, permissions,
 held-out cases, benchmark routes or locked decisions change.
 
-### Plan23 — Claude review of `7f4e635` (I1/I2)
+### Plan23 — Claude review of `7f4e635` (P23-I1/P23-I2)
 
-This round addresses I1's failure-category wording and I2's missing Plan22
+This round addresses P23-I1's failure-category wording and P23-I2's missing Plan22
 disposition record. D-ENG-024–027 remain unchanged; no implementation is authorized.
+
+### Plan24 — Claude review of `0d5ebe0` (P24-I1/P24-I2)
+
+This round addresses P24-I1's review-round ID collisions and P24-I2's missing
+recipe fix location in the Plan22 note. D-ENG-024–027 remain unchanged.
