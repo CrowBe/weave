@@ -17,7 +17,7 @@ import {
 } from '../src/sites/loop-decide.js';
 import { decideRoute } from '../src/input-route.js';
 import { gateExtract, type ExtractObservation } from '../src/sites/extract.js';
-import type { SiteTransition } from '../src/sites/index.js';
+import type { RecordedSiteAnswer, SiteState, SiteTransition } from '../src/sites/index.js';
 import { loopRouteExtractSchema, loopTriageExtractSchema } from '../src/sites/model-extract.js';
 import { emptyWorkstreamIndex, openWorkstream, transitionWorkstream } from '../src/workstream.js';
 
@@ -292,6 +292,140 @@ test('replay refuses a forged site transition instead of trusting its fields', (
     assert.equal(replayed.site.observation.accepted, false, name);
     assert.equal(replayed.site.observation.request_id, 'triage-1', name);
     assert.equal(replayed.site.observation.state_revision, revision.state_revision, name);
+  }
+});
+
+test('replay refuses accepted transitions whose admission evidence is invalid', () => {
+  const extract = observed('loop.triage', 'fix the parser', 'triage-1:x1');
+  const base = transitionTriage(triageAsk, { extracts: [extract] }, revision).site;
+  const accepted: SiteTransition = {
+    ...base,
+    choice: 'implement',
+    tier: null,
+    status: 'transition',
+    observation: {
+      ...base.observation,
+      answer: 'implement',
+      confidence: 1,
+      top_p: 1,
+      accepted: true,
+      fallback_used: false,
+      reason: 'accepted',
+    },
+  };
+  assert.deepEqual(transitionTriage(triageAsk, { extracts: [extract], site: accepted }, revision).site, accepted);
+  const forged: readonly [string, SiteTransition][] = [
+    ['confidence below the site floor', { ...accepted, observation: { ...accepted.observation, confidence: 0 } }],
+    ['top_p below the accepted threshold', { ...accepted, observation: { ...accepted.observation, top_p: 0 } }],
+    [
+      'accepted with a cancellation reason',
+      { ...accepted, observation: { ...accepted.observation, reason: 'cancelled' } },
+    ],
+    ['accepted but marked as fallback', { ...accepted, observation: { ...accepted.observation, fallback_used: true } }],
+    ['accepted with a fallback tier', { ...accepted, tier: 'strong' }],
+    [
+      'answer outside the triage options',
+      { ...accepted, choice: 'strong', observation: { ...accepted.observation, answer: 'strong' } },
+    ],
+    ['confidence outside the unit interval', { ...accepted, observation: { ...accepted.observation, confidence: 60 } }],
+    ['top_p outside the unit interval', { ...accepted, observation: { ...accepted.observation, top_p: -1 } }],
+    ['wrong fixed question', { ...accepted, observation: { ...accepted.observation, question: 'other' } }],
+  ];
+  for (const [name, transition] of forged) {
+    const replayed = transitionTriage(triageAsk, { extracts: [extract], site: transition }, revision);
+    assert.notDeepEqual(replayed.site, transition, name);
+    assert.equal(replayed.site.status, 'needs_human', name);
+    assert.equal(replayed.site.observation.accepted, false, name);
+  }
+});
+
+test('replay requires cancellation and outage transitions to keep their pause status', () => {
+  const extract = observed('loop.triage', 'fix the parser', 'triage-1:x1');
+  const base = transitionTriage(triageAsk, { extracts: [extract] }, revision).site;
+  const cancelled: SiteTransition = {
+    ...base,
+    choice: 'implement',
+    tier: 'strong',
+    status: 'paused',
+    observation: {
+      ...base.observation,
+      answer: null,
+      confidence: null,
+      top_p: null,
+      accepted: false,
+      fallback_used: true,
+      reason: 'cancelled',
+    },
+  };
+  assert.deepEqual(transitionTriage(triageAsk, { extracts: [extract], site: cancelled }, revision).site, cancelled);
+  const cancelledAsTransition: SiteTransition = { ...cancelled, status: 'transition' };
+  const replayedCancel = transitionTriage(triageAsk, { extracts: [extract], site: cancelledAsTransition }, revision);
+  assert.notDeepEqual(replayedCancel.site, cancelledAsTransition);
+  assert.equal(replayedCancel.site.status, 'needs_human');
+
+  const dispatchAsk = { ...triageAsk, needs_dispatch: true };
+  const outage: SiteTransition = {
+    ...cancelled,
+    observation: { ...cancelled.observation, reason: 'decision_unavailable' },
+  };
+  assert.deepEqual(transitionTriage(dispatchAsk, { extracts: [extract], site: outage }, revision).site, outage);
+  const outageAsTransition: SiteTransition = { ...outage, status: 'transition' };
+  const replayedOutage = transitionTriage(dispatchAsk, { extracts: [extract], site: outageAsTransition }, revision);
+  assert.notDeepEqual(replayedOutage.site, outageAsTransition);
+  assert.equal(replayedOutage.site.status, 'needs_human');
+
+  const readOnlyOutage: SiteTransition = { ...outage, status: 'transition' };
+  assert.deepEqual(
+    transitionTriage(triageAsk, { extracts: [extract], site: readOnlyOutage }, revision).site,
+    readOnlyOutage,
+  );
+  const readOnlyOutagePaused: SiteTransition = { ...outage, status: 'paused' };
+  const replayedReadOnly = transitionTriage(triageAsk, { extracts: [extract], site: readOnlyOutagePaused }, revision);
+  assert.notDeepEqual(replayedReadOnly.site, readOnlyOutagePaused);
+  assert.equal(replayedReadOnly.site.status, 'needs_human');
+});
+
+test('replay rejects a live transition when the current state has moved', async () => {
+  const fake = port({
+    generate: async (request) => acceptedGeneration(request, 'fix the parser'),
+    evaluate: async (request) => acceptedChoice(request, 'implement'),
+  });
+  const live = await decideTriage(triageAsk, fake.fake, now);
+  const recordedAnswer: RecordedSiteAnswer = {
+    state_revision: revision.state_revision,
+    observed_at: revision.state_updated_at,
+    outcome: acceptedChoice(
+      { request_id: 'triage-1', site: 'loop.triage' } as EvaluationRequest<'choice'>,
+      'implement',
+    ),
+  };
+  const moved: readonly SiteState[] = [
+    { state_revision: 2, state_updated_at: 20 },
+    { state_revision: 1, state_updated_at: 11 },
+  ];
+  for (const current of moved) {
+    const transitionReplay = transitionTriage(triageAsk, { extracts: live.extracts, site: live.site }, current);
+    const answerReplay = transitionTriage(triageAsk, { extracts: live.extracts, site: recordedAnswer }, current);
+    assert.notDeepEqual(transitionReplay.site, live.site);
+    assert.deepEqual(
+      [
+        transitionReplay.site.choice,
+        transitionReplay.site.tier,
+        transitionReplay.site.status,
+        transitionReplay.site.observation.accepted,
+        transitionReplay.site.observation.reason,
+      ],
+      [
+        answerReplay.site.choice,
+        answerReplay.site.tier,
+        answerReplay.site.status,
+        answerReplay.site.observation.accepted,
+        answerReplay.site.observation.reason,
+      ],
+    );
+    assert.equal(transitionReplay.site.observation.reason, 'stale_answer');
+    assert.equal(transitionReplay.site.observation.accepted, false);
+    assert.equal(transitionReplay.site.status, 'transition');
   }
 });
 

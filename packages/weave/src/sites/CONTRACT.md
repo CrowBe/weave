@@ -216,10 +216,17 @@ observations or recorded extract outcomes and an optional recorded site answer
 or transition, and fail closed the same way. They throw above two extracts, on a
 non-consecutive attempt, or when a second extract lacks the live `re_extract`
 precondition, so replay cannot invent an attempt. A recorded site transition is
-reused only when its `decision-site@1` observation matches the requested site,
-request and revision and its choice and status agree with `accepted` and the
-site's fallback; otherwise replay fails closed as `needs_human` rather than
-trusting the record.
+reused only when its `decision-site@1` observation is fresh against `current`
+and matches the requested site, request, revision and fixed question. An
+accepted observation must also carry an option answer, reason `accepted`,
+`fallback_used: false`, confidence at or above the site floor, the triage
+selected probability at or above .6, no tier, and the status its answer implies.
+A fallback must use the site's fallback choice, the tier `strong` for triage and
+null otherwise, and the status implied by its reason: cancellation always
+pauses, a dispatch-dependent outage pauses, and a read-only outage keeps the
+fallback status. Otherwise replay rebuilds the transition without trusting the
+record, so a stale record follows the same `stale_answer` path as a recorded
+answer and a malformed or foreign record fails closed as `needs_human`.
 
 `decideLoopRoute` is separate from `decideRoute` (`input.route`); the latter's
 contract and name are unchanged. Neither loop composition dispatches, grants

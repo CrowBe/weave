@@ -14,7 +14,9 @@ import {
   evaluateSite,
   modelOrigin,
   originReason,
+  stateFresh,
   transitionSite,
+  unit,
   type RecordedSiteAnswer,
   type SiteInput,
   type SiteState,
@@ -164,21 +166,67 @@ function missingAnswer(ask: LoopDecisionAsk, current: SiteState): RecordedSiteAn
   };
 }
 
+function expectedStatus(choice: SiteTransition['choice']): SiteTransition['status'] {
+  return choice === 'ask_user' || choice === 'needs_human' ? 'needs_human' : 'transition';
+}
+
 /** A recorded transition is evidence only when it is bound to this decision and internally consistent. */
 function trustedTransition(site: LoopDecisionSite, ask: LoopDecisionAsk, transition: SiteTransition): boolean {
   const observation = transition.observation;
+  const policy = SITE_POLICY[site];
   if (observation?.schema !== 'decision-site@1') return false;
   if (observation.site !== site) return false;
   if (observation.request_id !== correlation(ask.request_id)) return false;
   if (observation.state_revision !== ask.state_revision) return false;
-  const fallback = SITE_POLICY[site].fallback;
-  if (transition.choice !== (observation.accepted ? observation.answer : fallback)) return false;
-  const expectedStatus =
-    transition.choice === 'ask_user' || transition.choice === 'needs_human' ? 'needs_human' : 'transition';
-  if (observation.accepted) return transition.status === expectedStatus;
-  if (transition.status === 'paused')
-    return observation.reason === 'cancelled' || (ask.needs_dispatch && observation.reason === 'decision_unavailable');
-  return transition.status === expectedStatus;
+  if (observation.question !== policy.question) return false;
+  if (typeof observation.accepted !== 'boolean' || typeof observation.fallback_used !== 'boolean') return false;
+  const answer = observation.answer;
+  const confidence = observation.confidence;
+  const topP = observation.top_p;
+  if (answer !== null && !(policy.options as readonly string[]).includes(answer)) return false;
+  if (confidence !== null && !unit(confidence)) return false;
+  if (topP !== null && !unit(topP)) return false;
+  const fallback = policy.fallback;
+  if (observation.accepted) {
+    if (observation.reason !== 'accepted' || observation.fallback_used) return false;
+    if (answer === null || confidence === null || confidence < policy.confidence) return false;
+    if (site === 'loop.triage' && (topP === null || topP < 0.6)) return false;
+    if (transition.choice !== answer || transition.tier !== null) return false;
+    return transition.status === expectedStatus(answer);
+  }
+  if (observation.reason === 'accepted' || !observation.fallback_used) return false;
+  if (transition.choice !== fallback) return false;
+  if (transition.tier !== (site === 'loop.triage' ? 'strong' : null)) return false;
+  switch (observation.reason) {
+    case 'no_answer':
+    case 'invalid_answer':
+    case 'decision_unavailable':
+      if (answer !== null) return false;
+      break;
+    case 'missing_confidence':
+      if (answer === null || confidence !== null) return false;
+      break;
+    case 'low_confidence':
+      if (answer === null || confidence === null || confidence >= policy.confidence) return false;
+      break;
+    case 'low_top_p':
+      if (site !== 'loop.triage' || answer === null || confidence === null || confidence < policy.confidence)
+        return false;
+      break;
+    case 'stale_answer':
+    case 'mismatched_answer':
+    case 'cancelled':
+      break;
+    default:
+      return false;
+  }
+  const fallbackStatus = expectedStatus(fallback);
+  if (observation.reason === 'cancelled') return transition.status === 'paused';
+  if (observation.reason === 'decision_unavailable')
+    return transition.status === (ask.needs_dispatch ? 'paused' : fallbackStatus);
+  if (observation.reason === 'stale_answer' || observation.reason === 'mismatched_answer')
+    return transition.status === fallbackStatus || (ask.needs_dispatch && transition.status === 'paused');
+  return transition.status === fallbackStatus;
 }
 
 /** Pure record construction and replay from recorded extracts; no port is touched. */
@@ -204,7 +252,8 @@ export function transitionLoopDecision(
     recordedSite !== null &&
     isTransition(recordedSite) &&
     final !== undefined &&
-    originReason(site, input) === null
+    originReason(site, input) === null &&
+    stateFresh(captured, current)
   ) {
     if (trustedTransition(site, captured, recordedSite)) return decision(captured, observations, recordedSite);
     // Do not let a malformed or foreign transition authorize this decision; fail closed without its origin.
