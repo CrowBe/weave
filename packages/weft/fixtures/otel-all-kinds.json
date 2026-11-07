@@ -3128,6 +3128,342 @@
                 "code": 0
               },
               "parentSpanId": "d986a3066ff5cfb0"
+            },
+            {
+              "traceId": "cc7164fb61c9511e2c53464234b3f9e2",
+              "spanId": "1bedc5015f56dfc5",
+              "name": "dispatch.decided",
+              "kind": 1,
+              "startTimeUnixNano": "14",
+              "endTimeUnixNano": "14",
+              "attributes": [
+                {
+                  "key": "weft.emitter",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "id",
+                          "value": {
+                            "stringValue": "all-kinds-emitter"
+                          }
+                        },
+                        {
+                          "key": "kind",
+                          "value": {
+                            "stringValue": "external"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.evidence",
+                  "value": {
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-check"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "check"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-external"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "external"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-inference_request"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "inference_request"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-invocation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "invocation"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "ref",
+                                "value": {
+                                  "stringValue": "evidence-observation"
+                                }
+                              },
+                              {
+                                "key": "source",
+                                "value": {
+                                  "stringValue": "observation"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.fields",
+                  "value": {
+                    "kvlistValue": {
+                      "values": [
+                        {
+                          "key": "band",
+                          "value": {
+                            "stringValue": "escalate_gen"
+                          }
+                        },
+                        {
+                          "key": "choice",
+                          "value": {
+                            "stringValue": "flash"
+                          }
+                        },
+                        {
+                          "key": "decided_by",
+                          "value": {
+                            "stringValue": "route"
+                          }
+                        },
+                        {
+                          "key": "decision_ref",
+                          "value": {
+                            "stringValue": "req-9"
+                          }
+                        },
+                        {
+                          "key": "dispatch_ref",
+                          "value": {
+                            "stringValue": "req-9:dispatch"
+                          }
+                        },
+                        {
+                          "key": "facts",
+                          "value": {
+                            "arrayValue": {
+                              "values": [
+                                {
+                                  "kvlistValue": {
+                                    "values": [
+                                      {
+                                        "key": "name",
+                                        "value": {
+                                          "stringValue": "running_threads"
+                                        }
+                                      },
+                                      {
+                                        "key": "value",
+                                        "value": {
+                                          "intValue": "0"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "kvlistValue": {
+                                    "values": [
+                                      {
+                                        "key": "name",
+                                        "value": {
+                                          "stringValue": "hint_grounded"
+                                        }
+                                      },
+                                      {
+                                        "key": "value",
+                                        "value": {
+                                          "boolValue": false
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "kvlistValue": {
+                                    "values": [
+                                      {
+                                        "key": "name",
+                                        "value": {
+                                          "stringValue": "thread_ref"
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "key": "judgments",
+                          "value": {
+                            "arrayValue": {
+                              "values": [
+                                {
+                                  "kvlistValue": {
+                                    "values": [
+                                      {
+                                        "key": "name",
+                                        "value": {
+                                          "stringValue": "clarify"
+                                        }
+                                      },
+                                      {
+                                        "key": "probability",
+                                        "value": {
+                                          "doubleValue": 0.12
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "kvlistValue": {
+                                    "values": [
+                                      {
+                                        "key": "name",
+                                        "value": {
+                                          "stringValue": "reads_before_gen"
+                                        }
+                                      },
+                                      {
+                                        "key": "probability",
+                                        "value": {
+                                          "doubleValue": 0.08
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "key": "rule",
+                          "value": {
+                            "stringValue": "r2.route_accepted"
+                          }
+                        },
+                        {
+                          "key": "status",
+                          "value": {
+                            "stringValue": "dispatched"
+                          }
+                        },
+                        {
+                          "key": "tier",
+                          "value": {
+                            "stringValue": "flash"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "key": "weft.kind",
+                  "value": {
+                    "stringValue": "dispatch.decided"
+                  }
+                },
+                {
+                  "key": "weft.parent_id",
+                  "value": {
+                    "stringValue": "kind-0"
+                  }
+                },
+                {
+                  "key": "weft.record_id",
+                  "value": {
+                    "stringValue": "kind-13"
+                  }
+                },
+                {
+                  "key": "weft.schema",
+                  "value": {
+                    "stringValue": "weft.record@1"
+                  }
+                },
+                {
+                  "key": "weft.sequence",
+                  "value": {
+                    "intValue": "13"
+                  }
+                },
+                {
+                  "key": "weft.time_basis",
+                  "value": {
+                    "stringValue": "sequence"
+                  }
+                },
+                {
+                  "key": "weft.trace_id",
+                  "value": {
+                    "stringValue": "all-kinds"
+                  }
+                }
+              ],
+              "links": [],
+              "status": {
+                "code": 0
+              },
+              "parentSpanId": "d986a3066ff5cfb0"
             }
           ]
         }

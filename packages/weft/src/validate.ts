@@ -147,6 +147,18 @@ const CANDIDATE = {
   disposition: code('selected', ...SCHEDULER_REASONS, 'not_reached', 'policy_filtered'),
 };
 const EXCLUSION = { routed_unit: isId, reason: isCode };
+const DECIDE_JUDGMENT = { name: isCode, probability: isRatio };
+/** A JSON-safe scalar a reader can compare; a string is an id, so no text rides in a fact. */
+const DECIDE_FACT = {
+  name: isCode,
+  value: (x: unknown) => x === null || typeof x === 'boolean' || Number.isFinite(x) || isId(x),
+};
+
+/** Decide-1 names a judgment or fact at most once per record. */
+const namesUnique = (items: unknown): boolean => {
+  const names = (items as readonly Obj[]).map((item) => item.name);
+  return new Set(names).size === names.length;
+};
 
 /** One disposition per path through Loom's cycle; see the `cycle.weighed` table. */
 function candidatePathHolds(c: Obj): boolean {
@@ -177,6 +189,18 @@ export const FIELDS: { readonly [K in Kind]: Readonly<Record<string, Field>> } =
     accepted: req(met(flag)),
     confidence: met(isRatio),
     routed_unit: ref(isId),
+  },
+  'dispatch.decided': {
+    decision_ref: req(ref(isId)),
+    decided_by: req(ref(code('intake', 'triage', 'route', 'rule'))),
+    choice: req(ref(isCode)),
+    status: req(ref(code('dispatched', 'needs_human', 'paused', 'refused'))),
+    tier: ref(code('flash', 'standard', 'strong')),
+    dispatch_ref: ref(isId),
+    judgments: req(ref(list(shape(DECIDE_JUDGMENT), 64), Object.keys(DECIDE_JUDGMENT))),
+    facts: req(ref(list(shape(DECIDE_FACT), 64), Object.keys(DECIDE_FACT))),
+    rule: req(ref(isCode)),
+    band: req(ref(code('tool_call', 'spawn_subtasks', 'escalate_gen', 'ask_human'))),
   },
   'route.selected': {
     request_ref: req(ref(isId)),
@@ -268,6 +292,8 @@ function crossFieldHolds(kind: Kind, f: Obj): boolean {
       return (f.candidates as readonly Obj[]).every(candidatePathHolds);
     case 'capability.invoked':
       return !Object.hasOwn(f, 'failure') || f.status === 'failed';
+    case 'dispatch.decided':
+      return namesUnique(f.judgments) && namesUnique(f.facts);
     case 'outcome':
       return (
         !(Object.hasOwn(f, 'criteria_met') && Object.hasOwn(f, 'criteria_total')) ||

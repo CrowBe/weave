@@ -623,6 +623,113 @@
           "event": "revoked"
         }
       }
+    },
+    {
+      "name": "dispatch decision with its Decide-1 trace, caused by its judgments",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "loom.dispatch:decided:req-9:1",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.dispatch"
+        },
+        "sequence": 12,
+        "kind": "dispatch.decided",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [
+          {
+            "rel": "caused_by",
+            "record_id": "loom.dispatch:judgment:req-9:triage"
+          },
+          {
+            "rel": "caused_by",
+            "record_id": "loom.dispatch:judgment:req-9:route"
+          }
+        ],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "seq:31"
+          },
+          {
+            "source": "inference_request",
+            "ref": "req-9:triage"
+          },
+          {
+            "source": "inference_request",
+            "ref": "req-9:route"
+          }
+        ],
+        "fields": {
+          "decision_ref": "req-9",
+          "decided_by": "route",
+          "choice": "flash",
+          "status": "dispatched",
+          "tier": "flash",
+          "dispatch_ref": "req-9:dispatch",
+          "judgments": [
+            {
+              "name": "clarify",
+              "probability": 0.12
+            },
+            {
+              "name": "reads_before_gen",
+              "probability": 0.08
+            }
+          ],
+          "facts": [
+            {
+              "name": "running_threads",
+              "value": 0
+            },
+            {
+              "name": "hint_grounded",
+              "value": false
+            },
+            {
+              "name": "thread_ref",
+              "value": null
+            }
+          ],
+          "rule": "r2.route_accepted",
+          "band": "escalate_gen"
+        }
+      }
+    },
+    {
+      "name": "dispatch decision no site answered, with no tier or dispatch ref",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "loom.dispatch:decided:req-10:1",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.dispatch"
+        },
+        "sequence": 12,
+        "kind": "dispatch.decided",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "seq:31"
+          }
+        ],
+        "fields": {
+          "decision_ref": "req-10",
+          "decided_by": "rule",
+          "choice": "stop",
+          "status": "needs_human",
+          "judgments": [],
+          "facts": [],
+          "rule": "r0.irreversible_stop_asks",
+          "band": "ask_human"
+        }
+      }
     }
   ],
   "invalid": [
@@ -2503,6 +2610,200 @@
         "fields": {
           "implementation": "impl-2",
           "event": "selected"
+        }
+      }
+    },
+    {
+      "name": "a dispatch decision with an unknown band",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "loom.dispatch:decided:req-9:1",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.dispatch"
+        },
+        "sequence": 12,
+        "kind": "dispatch.decided",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "seq:31"
+          }
+        ],
+        "fields": {
+          "decision_ref": "req-9",
+          "decided_by": "route",
+          "choice": "flash",
+          "status": "dispatched",
+          "tier": "flash",
+          "dispatch_ref": "req-9:dispatch",
+          "judgments": [
+            {
+              "name": "clarify",
+              "probability": 0.12
+            },
+            {
+              "name": "reads_before_gen",
+              "probability": 0.08
+            }
+          ],
+          "facts": [
+            {
+              "name": "running_threads",
+              "value": 0
+            },
+            {
+              "name": "hint_grounded",
+              "value": false
+            },
+            {
+              "name": "thread_ref",
+              "value": null
+            }
+          ],
+          "rule": "r2.route_accepted",
+          "band": "tool"
+        }
+      }
+    },
+    {
+      "name": "a dispatch decision with no Decide-1 trace",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "loom.dispatch:decided:req-9:1",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.dispatch"
+        },
+        "sequence": 12,
+        "kind": "dispatch.decided",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "seq:31"
+          }
+        ],
+        "fields": {
+          "decision_ref": "req-9",
+          "decided_by": "route",
+          "choice": "flash",
+          "status": "dispatched",
+          "tier": "flash",
+          "dispatch_ref": "req-9:dispatch"
+        }
+      }
+    },
+    {
+      "name": "a Decide-1 judgment probability above one",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "loom.dispatch:decided:req-9:1",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.dispatch"
+        },
+        "sequence": 12,
+        "kind": "dispatch.decided",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "seq:31"
+          }
+        ],
+        "fields": {
+          "decision_ref": "req-9",
+          "decided_by": "route",
+          "choice": "flash",
+          "status": "dispatched",
+          "tier": "flash",
+          "dispatch_ref": "req-9:dispatch",
+          "judgments": [
+            {
+              "name": "clarify",
+              "probability": 1.2
+            }
+          ],
+          "facts": [
+            {
+              "name": "running_threads",
+              "value": 0
+            },
+            {
+              "name": "hint_grounded",
+              "value": false
+            },
+            {
+              "name": "thread_ref",
+              "value": null
+            }
+          ],
+          "rule": "r2.route_accepted",
+          "band": "escalate_gen"
+        }
+      }
+    },
+    {
+      "name": "a Decide-1 fact holding text",
+      "reason": "field",
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "goal-17",
+        "record_id": "loom.dispatch:decided:req-9:1",
+        "emitter": {
+          "kind": "loom",
+          "id": "loom.dispatch"
+        },
+        "sequence": 12,
+        "kind": "dispatch.decided",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "seq:31"
+          }
+        ],
+        "fields": {
+          "decision_ref": "req-9",
+          "decided_by": "route",
+          "choice": "flash",
+          "status": "dispatched",
+          "tier": "flash",
+          "dispatch_ref": "req-9:dispatch",
+          "judgments": [
+            {
+              "name": "clarify",
+              "probability": 0.12
+            },
+            {
+              "name": "reads_before_gen",
+              "probability": 0.08
+            }
+          ],
+          "facts": [
+            {
+              "name": "summary",
+              "value": "the operator asked to stop"
+            }
+          ],
+          "rule": "r2.route_accepted",
+          "band": "escalate_gen"
         }
       }
     }
