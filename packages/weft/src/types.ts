@@ -65,6 +65,18 @@ export interface Exclusion {
   readonly reason: string;
 }
 
+/** One isolated Decide-1 judgment: its name and the probability it answered. */
+export interface DecideJudgment {
+  readonly name: string;
+  readonly probability: number;
+}
+
+/** One code-computed Decide-1 fact. A string value is an id, never text. */
+export interface DecideFact {
+  readonly name: string;
+  readonly value: string | number | boolean | null;
+}
+
 export interface KindFields {
   readonly 'goal.intent': {
     readonly goal_ref: string;
@@ -88,6 +100,18 @@ export interface KindFields {
     readonly accepted: boolean;
     readonly confidence?: number;
     readonly routed_unit?: string;
+  };
+  readonly 'dispatch.decided': {
+    readonly decision_ref: string;
+    readonly decided_by: 'intake' | 'triage' | 'route' | 'rule';
+    readonly choice: string;
+    readonly status: 'dispatched' | 'needs_human' | 'paused' | 'refused';
+    readonly tier?: 'flash' | 'standard' | 'strong';
+    readonly dispatch_ref?: string;
+    readonly judgments: readonly DecideJudgment[];
+    readonly facts: readonly DecideFact[];
+    readonly rule: string;
+    readonly band: 'tool_call' | 'spawn_subtasks' | 'escalate_gen' | 'ask_human';
   };
   readonly 'route.selected': {
     readonly request_ref: string;

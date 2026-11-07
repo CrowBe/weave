@@ -8,7 +8,8 @@ in-repo (`checks/import-direction.mjs`). W3 (#185) moved `weave.trace@1` here
 as a supported version (see `weave.trace@1` below). W4 (#186) added disclosure
 classes, the inline content policy and the redacting serializer (see
 Disclosure). W5 (#187) wired Loom, the gateway and the Fabric host to emit
-through a port and added `capability.lifecycle` (see Emission).
+through a port and added `capability.lifecycle` (see Emission). WV-S1 P3b
+(#381) added `dispatch.decided` with the Decide-1 trace (D-ENG-045).
 
 ## What a Weft trace is
 
@@ -169,6 +170,41 @@ The answer a judgment site received. It is an observation, not authority.
 - `accepted` flag, required
 - `confidence` ratio
 - `routed_unit` id
+
+### `dispatch.decided`
+
+One dispatch decision as Loom recorded it (`dispatch.decision@1`), including
+those no site answered: an extract-decided ask, a rule's ask, a pause before
+any ask. It reports the decision; it is not authority to dispatch, and no
+dispatch, grant or approval may be derived from it.
+
+- `decision_ref` id, required: the decision's id
+- `decided_by` code, required: `intake`, `triage`, `route`, `rule`. The stage
+  that ended the chain; `rule` is a deterministic Loom rule (target resolution,
+  the irreversible-stop ask)
+- `choice` code, required: the deciding stage's choice
+- `status` code, required: `dispatched`, `needs_human`, `paused`, `refused`
+- `tier` code: `flash`, `standard`, `strong`. The implementation tier of an
+  `implement` intent
+- `dispatch_ref` id: the intent's dispatch id, when one was formed
+- `judgments` judgment[] ≤ 64, required. Each is
+  `{ "name": code, "probability": ratio }`: one isolated Decide-1 judgment and
+  the probability it answered
+- `facts` fact[] ≤ 64, required. Each is `{ "name": code, "value": scalar }`:
+  one code-computed fact. `value` is `null`, a flag, a finite number or an id;
+  never text, a list or an object
+- `rule` code, required: the rule-table row that decided
+- `band` code, required: `tool_call`, `spawn_subtasks`, `escalate_gen`,
+  `ask_human`
+
+`judgments`, `facts`, `rule` and `band` are the Decide-1 trace (D-ENG-045):
+everything the rule table read and what it returned. A decision that asked no
+site, or computed no fact, records an empty list; it does not omit the field.
+A name appears at most once in `judgments` and at most once in `facts`. Each
+site answer the decision used is linked with `caused_by` to its `judgment`
+record; there is no separate link field. Evidence follows the envelope rules: a
+Loom emitter cites an observation, and may cite each site request as
+`inference_request`.
 
 ### `route.selected`
 
@@ -666,8 +702,9 @@ including code fields. Arbitrary environment values require the composition
 root's redactor; Weft never reads the environment to discover secrets.
 
 W6 namespaced attributes reconstruct the Weft record, including semantic fields,
-links and evidence. Null envelope parents/threads and null candidate weights are
-restored; optional nulls become absent (the W6 loss rule). Native ids are checked
+links and evidence. Null envelope parents/threads, null candidate weights and
+null `dispatch.decided` fact values are restored; optional nulls become absent
+(the W6 loss rule). Native ids are checked
 against W6's derived OTLP identities; inconsistent or malformed attributes reject.
 Other attributes, resources, scopes, names, timing and status do not override
 native semantic fields. Unknown Weft schema versions reject.

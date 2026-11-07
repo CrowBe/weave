@@ -78,11 +78,21 @@ test('all W6 kinds including links/evidence and structured fields survive intake
   const result = mapOtlp(exported, { redact: identity });
   assert.ok(result.ok);
   if (result.ok) {
-    assert.equal(result.records.length, 13);
-    assert.equal(new Set(result.records.map((r) => r.kind)).size, 13);
+    assert.equal(result.records.length, 14);
+    assert.equal(new Set(result.records.map((r) => r.kind)).size, 14);
     const cycle = result.records.find((r) => r.kind === 'cycle.weighed');
     assert.ok(cycle?.kind === 'cycle.weighed');
     assert.equal(cycle.fields.candidates.find((c) => c.eligibility === 'prohibited')?.weight, null);
+    const decided = result.records.find((r) => r.kind === 'dispatch.decided');
+    assert.ok(decided?.kind === 'dispatch.decided');
+    assert.deepEqual(
+      decided.fields.facts.map((f) => [f.name, f.value]),
+      [
+        ['running_threads', 0],
+        ['hint_grounded', false],
+        ['thread_ref', null],
+      ],
+    );
     assert.equal(result.records[1]!.links.length, 6);
     assert.equal(result.records[0]!.evidence.length, 5);
   }

@@ -117,6 +117,136 @@ test('optional fields are typed when present', () => {
   assert.equal(reason(fields({ site: 'Frontier' })), 'field');
 });
 
+/** A decision no site answered: an intake pause before any ask, with an empty Decide-1 trace. */
+const decided = {
+  ...judgment,
+  record_id: 'r-dispatch',
+  kind: 'dispatch.decided',
+  thread_id: null,
+  fields: {
+    decision_ref: 'req-9',
+    decided_by: 'intake',
+    choice: 'ask_user',
+    status: 'paused',
+    judgments: [],
+    facts: [],
+    rule: 'decision_unavailable',
+    band: 'ask_human',
+  },
+};
+const decidedWith = (extra: object) => ({ ...decided, fields: { ...decided.fields, ...extra } });
+
+test('a dispatch decision no site answered is valid without tier or dispatch ref', () => {
+  assert.equal(reason(decided), 'ok');
+});
+
+test('a dispatch decision carries its full Decide-1 trace', () => {
+  assert.equal(
+    reason({
+      ...decidedWith({
+        decided_by: 'route',
+        choice: 'flash',
+        status: 'dispatched',
+        tier: 'flash',
+        dispatch_ref: 'req-9:dispatch',
+        judgments: [
+          { name: 'clarify', probability: 0.12 },
+          { name: 'multi_deliverable', probability: 1 },
+          { name: 'reads_before_gen', probability: 0 },
+        ],
+        facts: [
+          { name: 'running_threads', value: 2 },
+          { name: 'margin', value: -0.25 },
+          { name: 'hint_grounded', value: false },
+          { name: 'thread_ref', value: 'thread-4' },
+          { name: 'tau_irrev', value: null },
+        ],
+        rule: 'r3.multi_force_spawn',
+        band: 'spawn_subtasks',
+      }),
+      links: [
+        { rel: 'caused_by', record_id: 'loom.dispatch:judgment:req-9:intake' },
+        { rel: 'caused_by', record_id: 'loom.dispatch:judgment:req-9:route' },
+      ],
+    }),
+    'ok',
+  );
+  for (const decided_by of ['intake', 'triage', 'route', 'rule'])
+    assert.equal(reason(decidedWith({ decided_by })), 'ok', decided_by);
+  for (const status of ['dispatched', 'needs_human', 'paused', 'refused'])
+    assert.equal(reason(decidedWith({ status })), 'ok', status);
+  for (const tier of ['flash', 'standard', 'strong']) assert.equal(reason(decidedWith({ tier })), 'ok', tier);
+  for (const band of ['tool_call', 'spawn_subtasks', 'escalate_gen', 'ask_human'])
+    assert.equal(reason(decidedWith({ band })), 'ok', band);
+});
+
+test('a dispatch decision without any required field is rejected', () => {
+  for (const name of ['decision_ref', 'decided_by', 'choice', 'status', 'judgments', 'facts', 'rule', 'band']) {
+    const { [name]: _, ...fields } = decided.fields as Record<string, unknown>;
+    assert.equal(reason({ ...decided, fields }), 'field', name);
+  }
+});
+
+test('dispatch decision ids, codes and closed vocabularies fail closed', () => {
+  assert.equal(reason(decidedWith({ decision_ref: 'req 9' })), 'field');
+  assert.equal(reason(decidedWith({ decision_ref: 'sk-live123' })), 'field');
+  assert.equal(reason(decidedWith({ dispatch_ref: 'ghp_x' })), 'field');
+  assert.equal(reason(decidedWith({ dispatch_ref: null })), 'field');
+  assert.equal(reason(decidedWith({ decided_by: 'extract' })), 'field');
+  assert.equal(reason(decidedWith({ decided_by: 'model' })), 'field');
+  assert.equal(reason(decidedWith({ status: 'cancelled' })), 'field');
+  assert.equal(reason(decidedWith({ tier: 'decision' })), 'field');
+  assert.equal(reason(decidedWith({ band: 'tool' })), 'field');
+  assert.equal(reason(decidedWith({ band: 'ASK_HUMAN' })), 'field');
+  assert.equal(reason(decidedWith({ choice: 'Implement the change' })), 'field');
+  assert.equal(reason(decidedWith({ rule: 'R 3' })), 'field');
+  assert.equal(reason(decidedWith({ reason: 'accepted' })), 'field');
+});
+
+test('Decide-1 judgments carry a code name and a probability in [0, 1]', () => {
+  const judged = (...judgments: unknown[]) => reason(decidedWith({ judgments }));
+  assert.equal(judged({ name: 'clarify', probability: 0.5 }), 'ok');
+  assert.equal(judged({ name: 'clarify', probability: 1.01 }), 'field');
+  assert.equal(judged({ name: 'clarify', probability: -0.01 }), 'field');
+  assert.equal(judged({ name: 'clarify', probability: Number.NaN }), 'field');
+  assert.equal(judged({ name: 'clarify', probability: '0.5' }), 'field');
+  assert.equal(judged({ name: 'clarify', probability: null }), 'field');
+  assert.equal(judged({ name: 'clarify' }), 'field');
+  assert.equal(judged({ name: 'Clarify?', probability: 0.5 }), 'field');
+  assert.equal(judged({ name: 'clarify', probability: 0.5, confidence: 0.9 }), 'field');
+  assert.equal(judged({ name: 'clarify', probability: 0.5 }, { name: 'clarify', probability: 0.6 }), 'field');
+  assert.equal(judged('clarify'), 'field');
+  assert.equal(reason(decidedWith({ judgments: {} })), 'field');
+  const many = Array.from({ length: 65 }, (_, i) => ({ name: `j${i}`, probability: 0.5 }));
+  assert.equal(reason(decidedWith({ judgments: many })), 'field');
+  assert.equal(reason(decidedWith({ judgments: many.slice(0, 64) })), 'ok');
+});
+
+test('Decide-1 facts carry a code name and a JSON-safe scalar, never text or structure', () => {
+  const fact = (...facts: unknown[]) => reason(decidedWith({ facts }));
+  for (const value of [0, -3, 2.5, true, false, null, 'thread-4', 'boolean.task@jev-1.13.0'])
+    assert.equal(fact({ name: 'f', value }), 'ok', String(value));
+  assert.equal(fact({ name: 'f', value: { nested: 1 } }), 'field');
+  assert.equal(fact({ name: 'f', value: [1] }), 'field');
+  assert.equal(fact({ name: 'f', value: Number.POSITIVE_INFINITY }), 'field');
+  assert.equal(fact({ name: 'f', value: Number.NaN }), 'field');
+  assert.equal(fact({ name: 'f', value: 'the operator said stop' }), 'field');
+  assert.equal(fact({ name: 'f', value: 'sk-live123' }), 'field');
+  assert.equal(fact({ name: 'f', value: '' }), 'field');
+  assert.equal(fact({ name: 'f' }), 'field');
+  assert.equal(fact({ name: 'F', value: 1 }), 'field');
+  assert.equal(fact({ name: 'f', value: 1, note: 'x' }), 'field');
+  assert.equal(fact({ name: 'f', value: 1 }, { name: 'f', value: 2 }), 'field');
+  const many = Array.from({ length: 65 }, (_, i) => ({ name: `f${i}`, value: i }));
+  assert.equal(reason(decidedWith({ facts: many })), 'field');
+  assert.equal(reason(decidedWith({ facts: many.slice(0, 64) })), 'ok');
+});
+
+test('a dispatch decision follows the envelope rules of every kind', () => {
+  assert.equal(reason({ ...decided, evidence: [{ source: 'inference_request', ref: 'req-9:intake' }] }), 'evidence');
+  assert.equal(reason({ ...decided, links: [{ rel: 'caused_by', record_id: 'r-dispatch' }] }), 'link');
+});
+
 test('every v1 kind lists its fields', () => {
   assert.deepEqual(Object.keys(KIND_FIELDS).sort(), [
     'action.transition',
@@ -125,6 +255,7 @@ test('every v1 kind lists its fields', () => {
     'capability.lifecycle',
     'context.assembled',
     'cycle.weighed',
+    'dispatch.decided',
     'error',
     'goal.intent',
     'inference.attempt',
@@ -135,4 +266,16 @@ test('every v1 kind lists its fields', () => {
   ]);
   assert.deepEqual(KIND_FIELDS.judgment, ['site', 'request_ref', 'accepted', 'confidence', 'routed_unit']);
   assert.deepEqual(KIND_FIELDS['capability.lifecycle'], ['operation', 'implementation', 'event', 'contract_rev']);
+  assert.deepEqual(KIND_FIELDS['dispatch.decided'], [
+    'decision_ref',
+    'decided_by',
+    'choice',
+    'status',
+    'tier',
+    'dispatch_ref',
+    'judgments',
+    'facts',
+    'rule',
+    'band',
+  ]);
 });

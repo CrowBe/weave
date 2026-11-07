@@ -38,9 +38,9 @@ function allKinds(): FixtureRecord[] {
   }));
 }
 
-test('all thirteen Weft kinds have an independently specified OTLP golden', () => {
+test('all fourteen Weft kinds have an independently specified OTLP golden', () => {
   const input = allKinds();
-  assert.equal(input.length, 13);
+  assert.equal(input.length, 14);
   // This static golden was calculated independently with Python hashlib and the
   // documented mapping; it was never captured from exportOtlp output.
   const expected = JSON.parse(

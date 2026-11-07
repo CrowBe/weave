@@ -82,6 +82,12 @@ function native(span: Obj, attrs: Obj, traceId: string, spanId: string): WeftRec
       return { ...candidate, weight: candidate['weight'] ?? null };
     });
   }
+  if (attrs['weft.kind'] === 'dispatch.decided') {
+    fields['facts'] = array(fields['facts']).map((raw) => {
+      const fact = obj(raw);
+      return { ...fact, value: fact['value'] ?? null };
+    });
+  }
   const links = (span['links'] === undefined ? [] : array(span['links'])).map((raw) => {
     const link = obj(raw);
     const linkAttrs = attributes(link['attributes']);
