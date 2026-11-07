@@ -1,6 +1,6 @@
 # PLAN — strict pre-flight context budget assembler (#353)
 
-Status: **plan only. This revision addresses the Claude Opus review of `e7f163b` (plan20 dispositions in §29; plan19 in §28; plan18 in §27; plan17 in §26; plan16 in §25; plan15 in §24); no implementation is authorized by it.**
+Status: **plan only. Plan21 addresses N2/N3 of the Claude Opus review of `61193cd` (§29 follow-up; prior plan20 dispositions retained); no implementation is authorized by it.**
 Issue: CrowBe/weave#353 (architecture parent). Branch `wv-353-context-budget-plan`, base `0281c5e`.
 Review target `e7f163b` (Git parent `2b227b7`, grandparent `c8e6197`); source, tests and benchmarks there are identical to base `0281c5e`
 (`git diff --stat 0281c5e e7f163b` lists only `PLAN.md`). §27 retains its historical provenance correction under A7.
@@ -3579,6 +3579,16 @@ cannot approve later extensions.
 | FU3 | follow-up / open, C1 | Carry exact multisets, W2 scope presence, deletion/substitution mutations, wrapped-pin negatives and tracked-path/AST checks into repository lint; repeated findings become failing lint/tests before implementation admission. |
 | FU5 / FU-fmt | follow-up / open, C1/C2d / first implementation child with working tooling | Retain §28's accounting-family identity/version/digest, test-local-estimator mutation, B's recomputed refusal ledger and both term-only checks; run fmt:check and full verify with working vp tooling (package.json:16,36-37). |
 
+Plan21 follow-up — Claude Opus review of `61193cd`, supplied in the task brief:
+risk low, zero errors, zero warnings. Prior N1–N5 dispositions above remain
+unchanged; wrapped-pin grammar stays FU3/C1 work. §28, including its observed
+results, remains frozen; this §29 recipe is authoritative for this round.
+
+| ID | Severity / action | HEAD evidence and disposition |
+| --- | --- | --- |
+| N2 | note / auto-fix | Add one relocation mutation per W2 scope (§2.7 and §5.5): remove the first W2 pin from that scope and append the same pin to active §3. Assert pins(relocated) == expected and not valid(relocated), isolating scope presence from exact-multiset validation. |
+| N3 | note / auto-fix | Initialize checks['carried plan19 requirements'] = False before exec(carried, ns). Silent completion retains a recorded failure; only the existing successful SystemExit path records a pass. |
+
 Re-resolution at reviewed HEAD gives the following multiset. Counts change only
 because §28's four labelled pins become closed history; the added trace row and
 this section use ordinary navigation references. The resolver still checks
@@ -3675,6 +3685,7 @@ carried = corrected.replace("BASE, OPEN = '2b227b7', 28", "BASE, OPEN = '2b227b7
 carried = carried.replace('count == 16', 'count >= 12').replace('len(rows(doc)) == 23', 'len(rows(doc)) >= 23')
 carried = carried.replace('plan19 document/source/fixture', 'carried plan19 document/source/fixture')
 ns = {}
+checks['carried plan19 requirements'] = False
 try:
     exec(carried, ns)
 except SystemExit as result:
@@ -3727,6 +3738,9 @@ for scope in ['### 2.7 ', '### 5.5 ']:
         substituted = head + scope + body.replace(pin, w2[(w2.index(pin) + 1) % 3], 1)
         checks[f'deletion rejected {scope} {pin}'] = not valid(deleted)
         checks[f'count-preserving substitution rejected {scope} {pin}'] = sum(pins(substituted).values()) == sum(pins(doc).values()) and not valid(substituted)
+    relocated = head + scope + body.replace(w2[0], '', 1)
+    relocated = relocated.replace('\n## 4. ', f'\n{w2[0]}\n\n## 4. ', 1)
+    checks[f'multiset-preserving relocation rejected {scope}'] = pins(relocated) == expected and not valid(relocated)
 # Required C1 negative inputs, not a claim of general lint implemented here.
 wrapped = [f'`this.frameGoal` (call\nat `{RUNTIME}:2545`)',
            f'`this.frameGoal` (call at\n`{RUNTIME}:2545`)',
