@@ -1361,3 +1361,159 @@ test('26. legitimate extract-only stopped outcomes replay unchanged', async () =
     assert.deepEqual([replayed.status, replayed.reason, replayed.intake?.site], ['paused', reason, null]);
   }
 });
+
+type StoppedExtract = 'cancelled' | 'stale_answer' | 're_extract';
+
+function withStoppedExtract(checkpoint: DispatchCheckpoint, outcome: StoppedExtract): DispatchCheckpoint {
+  const intake = checkpoint.intake!;
+  const extracts = intake.extract;
+  const final = extracts[extracts.length - 1]!;
+  const stopped =
+    outcome === 're_extract'
+      ? { ...final, verdict: 're_extract' as const, reason: 'no_answer' as const }
+      : { ...final, verdict: 'original_only' as const, reason: outcome };
+  return { ...checkpoint, intake: { ...intake, extract: [...extracts.slice(0, -1), stopped] } };
+}
+
+function mismatchedIntent(intent: DispatchIntent): DispatchIntent {
+  if (intent.kind === 'implement')
+    return { kind: 'thread', dispatch_id: intent.dispatch_id, relation: 'steer', thread_ref: 'T1' };
+  return {
+    kind: 'implement',
+    dispatch_id: intent.dispatch_id,
+    tier: 'flash',
+    ceiling: 'flash',
+    tier_source: 'route',
+  };
+}
+
+test('27. forged stopped-extraction checkpoints across stages never dispatch on replay or recovery', async () => {
+  const threadRequest = makeRequest({
+    intake: { message: 'continue T1', running_threads: [{ thread_id: 'T1', summary: 'alpha' }] },
+  });
+  const intakeLive = harness(
+    { intake: { choice: 'continue_thread' }, thread: { value: 'T1', cue: 'T1' } },
+    { request: threadRequest },
+  );
+  await run(intakeLive);
+  const intakeBase = intakeLive.journal.load('d1').checkpoint!;
+
+  const triageLive = harness({ triage: { choice: 'capability' } });
+  await run(triageLive);
+  const triageBase = triageLive.journal.load('d1').checkpoint!;
+
+  const routeLive = harness({ route: { choice: 'strong' } });
+  await run(routeLive);
+  const routeBase = routeLive.journal.load('d1').checkpoint!;
+
+  const bases = [
+    ['intake', intakeBase],
+    ['triage', triageBase],
+    ['route', routeBase],
+  ] as const;
+
+  for (const [stage, base] of bases) {
+    assert.notEqual(base.intent, null, `${stage} basis needs a claimed intent`);
+    for (const outcome of ['cancelled', 'stale_answer', 're_extract'] as const) {
+      const stopped = withStoppedExtract(base, outcome);
+      const intents: readonly [string, DispatchIntent | null][] = [
+        ['unclaimed', null],
+        ['matching', stopped.intent],
+        ['mismatched', mismatchedIntent(base.intent!)],
+      ];
+      for (const [intentMode, intent] of intents) {
+        const label = `${stage} ${outcome} ${intentMode}`;
+        const value: DispatchCheckpoint = { ...stopped, intent };
+        assert.throws(() => transitionDispatch(makeRequest(), value, null), /extract/, `${label} replay`);
+        for (const resume of [false, true]) {
+          const recovery = harness({}, { journal: forgedJournal(value), request: makeRequest({ resume }) });
+          await assert.rejects(run(recovery), /extract/, `${label} live resume=${resume}`);
+          assert.equal(recovery.generateCalls.length, 0, `${label} live resume=${resume}`);
+          assert.equal(recovery.evaluateCalls.length, 0, `${label} live resume=${resume}`);
+          assert.equal(recovery.dispatchCalls.length, 0, `${label} live resume=${resume}`);
+        }
+      }
+    }
+  }
+});
+
+test('28. a claimed intent survives a terminal stale pause and append surfaces foreign ownership', async () => {
+  // Budget pause: the intent is claimed and recorded with the pause.
+  const budgeted = harness(
+    {},
+    { receipt: () => ({ status: 'refused', dispatch_id: 'd1:dispatch', reason: 'budget' }) },
+  );
+  const paused = await run(budgeted);
+  assert.deepEqual([paused.status, paused.reason], ['paused', 'budget']);
+  const claimed = budgeted.journal.load('d1').checkpoint!.intent!;
+  assert.notEqual(claimed, null);
+
+  // Advancing the state before an explicit resume reaches the terminal stale pause.
+  budgeted.clock.advance();
+  const resumed = harness(
+    {},
+    { journal: budgeted.journal, clock: budgeted.clock, request: makeRequest({ resume: true }) },
+  );
+  const stale = await run(resumed);
+  assert.deepEqual([stale.status, stale.reason], ['paused', 'stale_answer']);
+  assert.deepEqual(stale.intent, claimed);
+  const stored = budgeted.journal.load('d1');
+  assert.deepEqual(stored.decisions.at(-1), stale);
+  assert.equal(resumed.dispatchCalls.length, 0);
+
+  // The terminal pause is durable: the next delivery returns it rather than the old budget pause.
+  const next = harness({}, { journal: budgeted.journal, request: makeRequest() });
+  const repeated = await run(next);
+  assert.deepEqual(repeated, stale);
+  assert.equal(next.dispatchCalls.length, 0);
+
+  // The same path holds after a crash that left an unconfirmed claim.
+  const storage = new MemoryDispatchJournal();
+  let crash = true;
+  const crashing: DispatchJournal = {
+    load: (id) => storage.load(id),
+    checkpoint: (entry) => storage.checkpoint(entry),
+    claim: (id, intent, entry) => storage.claim(id, intent, entry),
+    append: (decision) => {
+      if (crash) {
+        crash = false;
+        throw new Error('crash');
+      }
+      storage.append(decision);
+    },
+  };
+  const unconfirmedRun = harness({}, { journal: crashing });
+  await assert.rejects(run(unconfirmedRun), /crash/);
+  const unconfirmedClaim = storage.load('d1').checkpoint!.intent!;
+  unconfirmedRun.clock.advance();
+  const recovered = harness(
+    {},
+    { journal: storage, clock: unconfirmedRun.clock, request: makeRequest({ resume: true }) },
+  );
+  const recoveredDecision = await run(recovered);
+  assert.deepEqual([recoveredDecision.status, recoveredDecision.reason], ['paused', 'stale_answer']);
+  assert.deepEqual(recoveredDecision.intent, unconfirmedClaim);
+  assert.deepEqual(storage.load('d1').decisions.at(-1), recoveredDecision);
+  assert.equal(recovered.dispatchCalls.length, 0);
+
+  // Append fails closed when a decision does not own the claimed intent.
+  const journal = new MemoryDispatchJournal();
+  const request = makeRequest();
+  assert.equal(journal.claim('d1', claimed), true);
+  const orphan: DispatchDecision = {
+    schema: 'dispatch.decision@1',
+    decision_id: 'd1',
+    entry: 1,
+    state_revision: request.state_revision,
+    decided_by: 'rule',
+    choice: 'ask_user',
+    status: 'paused',
+    reason: 'stale_answer',
+    intent: null,
+    receipt: null,
+    intake: null,
+    triage: null,
+    route: null,
+  };
+  assert.throws(() => journal.append(orphan), /intent/);
+});

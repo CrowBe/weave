@@ -194,7 +194,8 @@ export class MemoryDispatchJournal implements DispatchJournal {
     if (recorded.some((entry) => entry.status === 'dispatched')) return;
     const claimed = this.intents.get(id);
     // After a claim, only the owner of the claimed intent may append (dispatch, pause, cancellation).
-    if (claimed !== undefined && (decision.intent === null || !sameIntent(decision.intent, claimed))) return;
+    if (claimed !== undefined && (decision.intent === null || !sameIntent(decision.intent, claimed)))
+      throw new Error('appended decision does not own the claimed intent');
     this.entries.push(clone(decision));
   }
 }
@@ -463,6 +464,19 @@ function assertExtractOnlyIntake(request: DispatchRequest, intake: IntakeDecisio
   }
 }
 
+/** A classify answer is admissible only after an extraction that completed without stopping. */
+function assertExtractCompleted(intake: IntakeDecision): void {
+  const final = intake.extract[intake.extract.length - 1];
+  if (final === undefined) throw new Error('recorded intake extract is missing');
+  if (intake.extract.length === 2) {
+    const first = intake.extract[0]!;
+    if (first.verdict !== 're_extract' || first.reason === 'cancelled' || first.reason === 'stale_answer')
+      throw new Error('recorded intake extract did not authorize a second attempt');
+  }
+  if (final.reason === 'cancelled' || final.reason === 'stale_answer' || final.verdict === 're_extract')
+    throw new Error('recorded intake extract stopped before a classify decision');
+}
+
 /** Fail closed on stage records that a foreign request, site, revision or threshold could have forged. */
 function assertRecordedStages(request: DispatchRequest, checkpoint: DispatchCheckpoint): void {
   if (request.request_id !== checkpoint.decision_id) throw new Error('checkpoint belongs to another decision');
@@ -488,6 +502,7 @@ function assertRecordedStages(request: DispatchRequest, checkpoint: DispatchChec
         throw new Error('recorded intake extract names a foreign revision');
     }
     if (intake.site !== null) {
+      assertExtractCompleted(intake);
       assertObservation('intake.classify', expected, checkpoint.state_revision, intake.site);
       if (intake.decided_by !== 'site') throw new Error('recorded intake stage has a site answer from a rule');
       const choice = intake.site.accepted ? intake.site.answer : SITE_POLICY['intake.classify'].fallback;
@@ -800,7 +815,8 @@ function finishFinal(
   fresh: readonly SiteObservation[],
 ): DispatchDecision {
   if (plan.kind !== 'final') throw new Error('finishFinal needs a final plan');
-  const decision = makeDecision(request, checkpoint, entry, plan, null, null, plan.status, plan.reason);
+  const intent = plan.reason === 'stale_answer' ? checkpoint.intent : null;
+  const decision = makeDecision(request, checkpoint, entry, plan, intent, null, plan.status, plan.reason);
   journal.append(decision);
   emit(ports.weft, fresh);
   return clone(decision);
