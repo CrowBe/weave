@@ -574,12 +574,14 @@ test('9. the intent is durable before dispatch and recovery never implicitly re-
     load: (id) => storage.load(id),
     checkpoint: (entry) => storage.checkpoint(entry),
     claim: (id, intent, entry) => storage.claim(id, intent, entry),
-    append: (decision) => {
+    acquire: (id) => storage.acquire(id),
+    release: (id, attempt) => storage.release(id, attempt),
+    append: (decision, attempt) => {
       if (crash) {
         crash = false;
         throw new Error('crash');
       }
-      return storage.append(decision);
+      return storage.append(decision, attempt);
     },
   };
   const first = harness(
@@ -647,7 +649,9 @@ test('10. recovery reuses paid answers and never reuses a request id', async () 
       }
     },
     claim: (id, intent, entry) => storage.claim(id, intent, entry),
-    append: (decision) => storage.append(decision),
+    acquire: (id) => storage.acquire(id),
+    release: (id, attempt) => storage.release(id, attempt),
+    append: (decision, attempt) => storage.append(decision, attempt),
   };
   const first = harness({}, { journal: crashing });
   await assert.rejects(run(first), /crash-after-d1/);
@@ -1203,6 +1207,8 @@ function forgedJournal(checkpoint: DispatchCheckpoint): DispatchJournal {
     load: () => ({ checkpoint, decisions: [] }),
     checkpoint: () => {},
     claim: () => false,
+    acquire: () => null,
+    release: () => {},
     append: () => false,
   };
 }
@@ -1565,12 +1571,14 @@ test('28. a claimed intent survives a terminal stale pause and append surfaces f
     load: (id) => storage.load(id),
     checkpoint: (entry) => storage.checkpoint(entry),
     claim: (id, intent, entry) => storage.claim(id, intent, entry),
-    append: (decision) => {
+    acquire: (id) => storage.acquire(id),
+    release: (id, attempt) => storage.release(id, attempt),
+    append: (decision, attempt) => {
       if (crash) {
         crash = false;
         throw new Error('crash');
       }
-      return storage.append(decision);
+      return storage.append(decision, attempt);
     },
   };
   const unconfirmedRun = harness({}, { journal: crashing });
@@ -1851,4 +1859,180 @@ test('32. the journal is a single-writer state machine per decision id', () => {
 
   // An intent that was never claimed cannot be appended at all.
   assert.throws(() => new MemoryDispatchJournal().append(decision({ intent })), /claim/);
+});
+
+/** A dispatch port that holds every presentation until released, counting the ones it entered. */
+function heldDispatch(gate: Promise<void>) {
+  const state = { entered: 0 };
+  const dispatch = async (intent: DispatchIntent): Promise<DispatchReceipt> => {
+    state.entered += 1;
+    await gate;
+    return dispatched(intent);
+  };
+  return { state, dispatch };
+}
+
+test('33. recovery never terminalizes or re-presents an attempt in flight; its receipt is journaled', async () => {
+  const gate = deferred();
+  const held = heldDispatch(gate.promise);
+  const journal = new MemoryDispatchJournal();
+  const a = harness({}, { journal, dispatch: held.dispatch });
+  const pending = run(a);
+  await waitUntil(() => held.state.entered === 1);
+  const claimed = journal.load('d1').checkpoint!.intent!;
+
+  // Same state: an explicit resume does not present the intent a second time.
+  const same = harness({}, { journal, clock: a.clock, request: makeRequest({ resume: true }) });
+  const sameDecision = await run(same);
+  assert.deepEqual([sameDecision.status, sameDecision.reason], ['paused', 'dispatch_unconfirmed']);
+  assert.deepEqual(sameDecision.intent, claimed);
+
+  // The finding: the state advances, and a resume reaches the stale check while A is in flight.
+  a.clock.advance();
+  const b = harness({}, { journal, clock: a.clock, request: makeRequest({ resume: true }) });
+  const inFlight = await run(b);
+  assert.deepEqual([inFlight.status, inFlight.reason], ['paused', 'dispatch_unconfirmed']);
+  assert.deepEqual(inFlight.intent, claimed);
+  const implicit = harness({}, { journal, clock: a.clock });
+  const unconfirmed = await run(implicit);
+  assert.deepEqual([unconfirmed.status, unconfirmed.reason], ['paused', 'dispatch_unconfirmed']);
+  // Recovery wrote nothing over the attempt in flight.
+  assert.deepEqual(journal.load('d1').decisions, []);
+
+  gate.release();
+  const won = await pending;
+  assert.equal(won.status, 'dispatched');
+  assert.deepEqual(won.intent, claimed);
+  assert.deepEqual(won.receipt, dispatched(claimed));
+  assert.deepEqual(journal.load('d1').decisions, [won]);
+
+  // B's next delivery sees A's decision.
+  const again = harness({}, { journal, clock: a.clock, request: makeRequest({ resume: true }) });
+  assert.deepEqual(await run(again), won);
+  assert.equal(held.state.entered, 1);
+  assert.equal(
+    a.dispatchCalls.length +
+      same.dispatchCalls.length +
+      b.dispatchCalls.length +
+      implicit.dispatchCalls.length +
+      again.dispatchCalls.length,
+    1,
+  );
+});
+
+test('34. an attempt lost on the journal clock is recovered to a terminal decision without a second dispatch', async () => {
+  let time = 0;
+  const journal = new MemoryDispatchJournal({ now: () => time, expires_after: 100 });
+  let entered = 0;
+  // A crashes inside the port: it never returns, releases or appends.
+  const a = harness(
+    {},
+    {
+      journal,
+      dispatch: () => {
+        entered += 1;
+        return new Promise<DispatchReceipt>(() => {});
+      },
+    },
+  );
+  void run(a);
+  await waitUntil(() => entered === 1);
+  const claimed = journal.load('d1').checkpoint!.intent!;
+  a.clock.advance();
+
+  // Until the journal clock says the attempt is lost, recovery writes nothing.
+  time = 99;
+  const early = harness({}, { journal, clock: a.clock, request: makeRequest({ resume: true }) });
+  const inFlight = await run(early);
+  assert.deepEqual([inFlight.status, inFlight.reason], ['paused', 'dispatch_unconfirmed']);
+  assert.deepEqual(journal.load('d1').decisions, []);
+
+  time = 100;
+  const late = harness({}, { journal, clock: a.clock, request: makeRequest({ resume: true }) });
+  const stale = await run(late);
+  assert.deepEqual([stale.status, stale.reason], ['paused', 'stale_answer']);
+  assert.deepEqual(stale.intent, claimed);
+  assert.deepEqual(journal.load('d1').decisions, [stale]);
+  const repeated = harness({}, { journal, clock: a.clock, request: makeRequest({ resume: true }) });
+  assert.deepEqual(await run(repeated), stale);
+  assert.equal(entered, 1);
+  assert.equal(
+    a.dispatchCalls.length + early.dispatchCalls.length + late.dispatchCalls.length + repeated.dispatchCalls.length,
+    1,
+  );
+
+  // The journal contract: one live attempt per claimed intent, fenced appends, explicit or clocked end.
+  const intent: DispatchIntent = { kind: 'capability', dispatch_id: 'd1:dispatch' };
+  const owned = (status: DispatchDecision['status'], reason: DispatchDecision['reason']): DispatchDecision => ({
+    schema: 'dispatch.decision@1',
+    decision_id: 'd1',
+    entry: 1,
+    state_revision: REVISION.state_revision,
+    decided_by: 'triage',
+    choice: 'capability',
+    status,
+    reason,
+    intent,
+    receipt: null,
+    intake: null,
+    triage: null,
+    route: null,
+  });
+  let tick = 0;
+  const leased = new MemoryDispatchJournal({ now: () => tick, expires_after: 10 });
+  assert.equal(leased.acquire('d1'), null, 'an unclaimed decision has no attempt');
+  assert.equal(leased.claim('d1', intent), true);
+  const first = leased.acquire('d1')!;
+  assert.equal(leased.acquire('d1'), null);
+  assert.equal(leased.append(owned('paused', 'dispatch_unconfirmed')), false);
+  leased.release('d1', 'd1:attempt:other');
+  assert.equal(leased.acquire('d1'), null, 'only the holder ends its attempt');
+  tick = 10;
+  const second = leased.acquire('d1')!;
+  assert.notEqual(second, first);
+  assert.equal(leased.append(owned('paused', 'stale_answer'), first), false, 'a lost attempt is fenced');
+  assert.equal(leased.append(owned('paused', 'budget'), second), true);
+  const third = leased.acquire('d1')!;
+  leased.release('d1', third);
+  assert.equal(leased.append(owned('paused', 'stale_answer')), true);
+  assert.equal(leased.acquire('d1'), null, 'a terminal decision has no attempt');
+});
+
+test('35. cancelling an attempt in flight hands it to recovery without a second dispatch', async () => {
+  const journal = new MemoryDispatchJournal();
+  const controller = new AbortController();
+  let entered = 0;
+  const a = harness(
+    {},
+    {
+      journal,
+      dispatch: (_intent, signal) =>
+        new Promise<DispatchReceipt>((_resolve, reject) => {
+          entered += 1;
+          signal?.addEventListener('abort', () => reject(new Error('CANARY-error')), { once: true });
+        }),
+    },
+  );
+  const pending = run(a, controller.signal);
+  await waitUntil(() => entered === 1);
+  const claimed = journal.load('d1').checkpoint!.intent!;
+  a.clock.advance();
+
+  const b = harness({}, { journal, clock: a.clock, request: makeRequest({ resume: true }) });
+  const recovering = run(b);
+  controller.abort();
+  const [cancelled, inFlight] = await Promise.all([pending, recovering]);
+  assert.deepEqual([cancelled.status, cancelled.reason], ['paused', 'cancelled']);
+  assert.deepEqual([inFlight.status, inFlight.reason], ['paused', 'dispatch_unconfirmed']);
+  assert.deepEqual(inFlight.intent, claimed);
+  assert.deepEqual(journal.load('d1').decisions, []);
+
+  // The cancelled attempt has ended, so the next recovery may settle the claimed intent.
+  const c = harness({}, { journal, clock: a.clock, request: makeRequest({ resume: true }) });
+  const stale = await run(c);
+  assert.deepEqual([stale.status, stale.reason], ['paused', 'stale_answer']);
+  assert.deepEqual(stale.intent, claimed);
+  assert.deepEqual(journal.load('d1').decisions, [stale]);
+  assert.equal(entered, 1);
+  assert.equal(a.dispatchCalls.length + b.dispatchCalls.length + c.dispatchCalls.length, 1);
 });

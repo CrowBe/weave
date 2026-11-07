@@ -196,7 +196,9 @@ intake decision, then asks D1 and D2 in dependency order, and presents at most
 one dispatch intent through an injected idempotent port. The intent is
 checkpointed before the call; a durable intent with no receipt is
 `paused` / `dispatch_unconfirmed` and is not re-presented without an explicit
-resume. Cancellation appends no decision, a stale or mismatched answer pauses,
+resume. Only the live dispatch attempt presents and settles a claimed intent, so
+recovery never re-presents or terminalizes an attempt in flight; a holder that
+never returns lapses on the journal's injected clock. Cancellation appends no decision, a stale or mismatched answer pauses,
 and an unavailable provider pauses a dispatch-dependent step. Receipts map to a
 closed status/reason table; provider error text is never stored. Final
 decisions use `dispatch.decision@1` (checkpoint `dispatch.checkpoint@1`), and

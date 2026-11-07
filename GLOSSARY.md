@@ -183,7 +183,21 @@ without an explicit resume.
 
 The state in which a durable intent exists but no mapped receipt was recorded.
 Recovery without an explicit resume returns paused / `dispatch_unconfirmed` and
-makes no port call; an explicit resume re-presents the same intent once.
+makes no port call; an explicit resume re-presents the same intent once, and
+only when no dispatch attempt for it is live.
+
+### Dispatch attempt
+
+The journal-issued, single holder of the right to present a claimed dispatch
+intent and record its outcome. It is distinct from the intent's identity, which
+every recovering caller can read. While an attempt is live, no other caller can
+start one, and no decision naming the intent is appended except the holder's.
+Recovery then writes nothing and returns paused / `dispatch_unconfirmed`. An
+attempt ends when its holder appends, is cancelled or exits. If the holder never
+returns, the attempt lapses only on the journal's injected clock. A lapsed
+attempt's late outcome is refused while a later attempt is live or once the
+decision is terminal. Attempt ids are never reissued. An attempt is not an
+execution claim, a grant or an approval.
 
 ### Typed extraction
 

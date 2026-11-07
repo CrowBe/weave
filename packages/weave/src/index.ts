@@ -370,6 +370,7 @@ export {
   dispatchJudgments,
   resolveThreadTarget,
   transitionDispatch,
+  type DispatchAttemptClock,
   type DispatchCheckpoint,
   type DispatchDecision,
   type DispatchIntent,
