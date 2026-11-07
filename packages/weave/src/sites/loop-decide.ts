@@ -252,13 +252,17 @@ export function transitionLoopDecision(
     recordedSite !== null &&
     isTransition(recordedSite) &&
     final !== undefined &&
-    originReason(site, input) === null &&
-    stateFresh(captured, current)
+    originReason(site, input) === null
   ) {
-    if (trustedTransition(site, captured, recordedSite)) return decision(captured, observations, recordedSite);
-    // Do not let a malformed or foreign transition authorize this decision; fail closed without its origin.
-    const refused = transitionSite(site, siteInput(captured), missingAnswer(captured, current), current);
-    return decision(captured, observations, refused);
+    const trusted = trustedTransition(site, captured, recordedSite);
+    // A validated cancellation is preserved even when the state moved: cancellation always pauses.
+    if (trusted && (stateFresh(captured, current) || recordedSite.observation.reason === 'cancelled'))
+      return decision(captured, observations, recordedSite);
+    if (stateFresh(captured, current)) {
+      // Do not let a malformed or foreign transition authorize this decision; fail closed without its origin.
+      const refused = transitionSite(site, siteInput(captured), missingAnswer(captured, current), current);
+      return decision(captured, observations, refused);
+    }
   }
   const answer = recordedSite === null || isTransition(recordedSite) ? missingAnswer(captured, current) : recordedSite;
   const transition = transitionSite(site, input, answer, current);

@@ -429,6 +429,41 @@ test('replay rejects a live transition when the current state has moved', async 
   }
 });
 
+test('replay preserves a live cancellation when the current state has moved', async () => {
+  for (const needs_dispatch of [false, true]) {
+    const ask = { ...triageAsk, needs_dispatch };
+    const duringSite = new AbortController();
+    const fake = port({
+      generate: async (request) => acceptedGeneration(request, 'fix the parser'),
+      evaluate: async (request) => {
+        duringSite.abort();
+        return acceptedChoice(request, 'implement');
+      },
+    });
+    const live = await decideTriage(ask, fake.fake, now, duringSite.signal);
+    assert.deepEqual([live.site.status, live.site.observation.reason], ['paused', 'cancelled']);
+    const recordedAnswer: RecordedSiteAnswer = {
+      state_revision: revision.state_revision,
+      observed_at: revision.state_updated_at,
+      outcome: acceptedChoice(
+        { request_id: 'triage-1', site: 'loop.triage' } as EvaluationRequest<'choice'>,
+        'implement',
+      ),
+      cancelled: true,
+    };
+    const moved: readonly SiteState[] = [
+      { state_revision: 2, state_updated_at: 20 },
+      { state_revision: 1, state_updated_at: 11 },
+    ];
+    for (const current of moved) {
+      const transitionReplay = transitionTriage(ask, { extracts: live.extracts, site: live.site }, current);
+      const answerReplay = transitionTriage(ask, { extracts: live.extracts, site: recordedAnswer }, current);
+      assert.deepEqual(transitionReplay.site, live.site);
+      assert.deepEqual(transitionReplay.site, answerReplay.site);
+    }
+  }
+});
+
 test('replay rejects out-of-order, attempt-2-only and unjustified second extracts', () => {
   const first = observed('loop.triage', 'fix the parser', 'triage-1:x1');
   const second = observed('loop.triage', 'fix the parser', 'triage-1:x2', { attempt: 2 });

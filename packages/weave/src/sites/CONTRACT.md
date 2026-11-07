@@ -217,7 +217,9 @@ or transition, and fail closed the same way. They throw above two extracts, on a
 non-consecutive attempt, or when a second extract lacks the live `re_extract`
 precondition, so replay cannot invent an attempt. A recorded site transition is
 reused only when its `decision-site@1` observation is fresh against `current`
-and matches the requested site, request, revision and fixed question. An
+and matches the requested site, request, revision and fixed question. The one
+exception is a validated cancellation, which is preserved even when the state
+has moved because cancellation always pauses. An
 accepted observation must also carry an option answer, reason `accepted`,
 `fallback_used: false`, confidence at or above the site floor, the triage
 selected probability at or above .6, no tier, and the status its answer implies.
