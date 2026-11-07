@@ -187,6 +187,23 @@ export {
 } from './sites/model-extract.js';
 
 export {
+  LOOP_DECISION_SITES,
+  LOOP_ROUTE_EXTRACT_SITE,
+  LOOP_TRIAGE_EXTRACT_SITE,
+  decideLoopRoute,
+  decideTriage,
+  transitionLoopDecision,
+  transitionLoopRoute,
+  transitionTriage,
+  type LoopDecision,
+  type LoopDecisionAsk,
+  type LoopDecisionSite,
+  type LoopExtractRecord,
+  type LoopRecordedSite,
+  type RecordedLoopDecision,
+} from './sites/loop-decide.js';
+
+export {
   progressDelta,
   progressRule,
   transitionProgress,

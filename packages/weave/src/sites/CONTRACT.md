@@ -185,6 +185,43 @@ names a free-text site must show a model origin, and one that names a structural
 site must show a structural origin. The runtime validator remains authoritative;
 the check catches a missing call-site origin before tests run.
 
+## WV-S1 P2c extract-composed decisions for loop.triage and loop.route
+
+`decideTriage(ask, port, now, signal?)` and `decideLoopRoute(ask, port, now,
+signal?)` mirror `decideIntake` for D1 and D2. They capture the disclosed state
+before the first await, run `attemptExtract` once with `loop.triage@1` or
+`loop.route@1`, re-extract at most once with fixed feedback when the first
+extract says `re_extract`, then ask the choice site through `evaluateSite` with
+`modelOrigin(finalExtract)`. The original state is the canonical JSON of the
+disclosed state, and the extract prompt carries that same state. Extract
+requests use `<request_id>:x1` and `<request_id>:x2`; the site request keeps the
+caller's `request_id`. The extract generation site is `loop.triage.extract` or
+`loop.route.extract`.
+
+The site is never asked with a missing, non-final, cancelled or foreign extract.
+A missing final extract is `extract_missing`; a wrong schema, wrong site, wrong
+revision, foreign request id or remaining `re_extract` verdict is
+`invalid_extract`; cancellation is `paused` / `cancelled`. Those paths fail
+closed with no provider choice call, as the runtime origin gate already does for
+a direct `evaluateSite`. An unfaithful second attempt becomes `original_only`
+and still asks the site from the unchanged original, as intake does.
+
+The returned `loop.decision@1` record is `{ schema, request_id, extracts, site }`
+in that key order. `extracts` holds one or two text-free `extract@1`
+observations in attempt order; `site` is the full `SiteTransition`, including
+its `decision-site@1` observation. Records copy no disclosed state, extracted
+text, provider text or credential-shaped ids. `transitionTriage` and
+`transitionLoopRoute` rebuild the record without a port from recorded extract
+observations or recorded extract outcomes and an optional recorded site answer
+or transition, and fail closed the same way. They throw above two extracts, so
+replay cannot invent a third attempt.
+
+`decideLoopRoute` is separate from `decideRoute` (`input.route`); the latter's
+contract and name are unchanged. Neither loop composition dispatches, grants
+authority or edits the P2b origin schema. Provider independence is preserved:
+both use only the injected `generate` and `evaluate` ports and the injected
+`now`.
+
 ## P6 boolean sites
 
 D3 receives only the already-disclosed M6 index (id/purpose), an explicitly
