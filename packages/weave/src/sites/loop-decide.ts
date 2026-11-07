@@ -165,11 +165,7 @@ function missingAnswer(ask: LoopDecisionAsk, current: SiteState): RecordedSiteAn
 }
 
 /** A recorded transition is evidence only when it is bound to this decision and internally consistent. */
-function trustedTransition(
-  site: LoopDecisionSite,
-  ask: LoopDecisionAsk,
-  transition: SiteTransition,
-): boolean {
+function trustedTransition(site: LoopDecisionSite, ask: LoopDecisionAsk, transition: SiteTransition): boolean {
   const observation = transition.observation;
   if (observation?.schema !== 'decision-site@1') return false;
   if (observation.site !== site) return false;
@@ -204,7 +200,12 @@ export function transitionLoopDecision(
   const final = observations[observations.length - 1];
   const input = siteInput(captured, final === undefined ? undefined : modelOrigin(final));
   const recordedSite = recorded.site ?? null;
-  if (recordedSite !== null && isTransition(recordedSite) && final !== undefined && originReason(site, input) === null) {
+  if (
+    recordedSite !== null &&
+    isTransition(recordedSite) &&
+    final !== undefined &&
+    originReason(site, input) === null
+  ) {
     if (trustedTransition(site, captured, recordedSite)) return decision(captured, observations, recordedSite);
     // Do not let a malformed or foreign transition authorize this decision; fail closed without its origin.
     const refused = transitionSite(site, siteInput(captured), missingAnswer(captured, current), current);

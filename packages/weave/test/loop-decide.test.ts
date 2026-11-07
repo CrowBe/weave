@@ -273,10 +273,7 @@ test('replay refuses a forged site transition instead of trusting its fields', (
     ['wrong site', { ...base, observation: { ...base.observation, site: 'loop.route' } }],
     ['wrong request id', { ...base, observation: { ...base.observation, request_id: 'other' } }],
     ['wrong state revision', { ...base, observation: { ...base.observation, state_revision: 2 } }],
-    [
-      'wrong schema',
-      { ...base, observation: { ...base.observation, schema: 'other@1' } } as unknown as SiteTransition,
-    ],
+    ['wrong schema', { ...base, observation: { ...base.observation, schema: 'other@1' } } as unknown as SiteTransition],
     ['choice is not the fallback', { ...base, choice: 'capability' }],
     ['status contradicts the fallback', { ...base, status: 'needs_human' }],
     [
@@ -309,10 +306,7 @@ test('replay rejects out-of-order, attempt-2-only and unjustified second extract
     () => transitionTriage(triageAsk, { extracts: [second, first] }, revision),
     /recorded extract attempts must be unique, ordered and consecutive/,
   );
-  assert.throws(
-    () => transitionTriage(triageAsk, { extracts: [first, second] }, revision),
-    /second extraction/,
-  );
+  assert.throws(() => transitionTriage(triageAsk, { extracts: [first, second] }, revision), /second extraction/);
   const cancelledFirst = observed('loop.triage', 'fix the parser', 'triage-1:x1', {
     verdict: 're_extract',
     reason: 'unfaithful',
