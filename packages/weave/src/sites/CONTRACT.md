@@ -44,8 +44,8 @@ present a dispatch intent only after an accepted observation, and only through
 the injected idempotent dispatch port. The intent is checkpointed before the
 call. An unconfirmed intent is returned as paused and is not re-presented
 without an explicit resume; cancellation appends nothing; a stale or mismatched
-answer pauses. The outcome table is now `decide1.rules@1` (below). A mapped receipt yields a
-`dispatch.decision@4` entry, and fresh site observations become Weft judgment
+answer pauses. The outcome table is now `decide1.rules@2` (below). A mapped receipt yields a
+`dispatch.decision@5` entry, and fresh site observations become Weft judgment
 records followed by one `dispatch.decided` after the final append. The
 composition never writes `routed_input@1`.
 
@@ -94,7 +94,8 @@ outside this contract. ScriptedDecisionLayer remains unchanged.
 ## WV-S1 P4a Decide-1 rule table
 
 `decideBand(inputs)` is pure deterministic policy over named judgments and code
-facts. The frozen `decide1.rules@1` table has 15 ids; its first matching row
+facts. The frozen table was `decide1.rules@1` with 15 ids; P5b's `decide1.rules@2` adds
+`spawn.preflight` (16 ids) and changes no other row. Its first matching row
 returns the rule id and coarse band. It imports no dispatch, site or gateway code. It asks
 no new question and changes no `SITE_POLICY` threshold, fallback or request.
 `decideDispatch` validates stored stages through P3a's live pure transitions,
@@ -102,23 +103,24 @@ then adapts them with `decide1Inputs` and builds the plan through an exhaustive
 rule-id switch. Invalid inputs and impossible stage sets throw before a claim;
 they never become an operator ask.
 
-| Rule                  | Condition, in precedence order                              | Band           | Outcome                                     |
-| --------------------- | ----------------------------------------------------------- | -------------- | ------------------------------------------- |
-| `hold.admission`      | First asked stage with `stale_answer` / `mismatched_answer` | withheld       | Terminal pause at that stage                |
-| `hold.outage`         | First asked stage with `decision_unavailable`               | withheld       | Resumable pause at that stage               |
-| `hold.paused`         | First remaining paused stage                                | withheld       | Pause with its reason                       |
-| `ask.intake`          | Intake needs human                                          | `ask_human`    | Intake ask, no intent                       |
-| `ask.irreversible`    | Intake stop                                                 | `ask_human`    | Rule ask / irreversible                     |
-| `ask.thread_target`   | Thread relation with no or ambiguous target                 | `ask_human`    | Rule ask / target reason                    |
-| `act.thread`          | Thread relation with resolved target                        | `tool_call`    | Intake thread intent                        |
-| `ask.triage`          | D1 needs human                                              | `ask_human`    | D1 ask, no intent                           |
-| `act.capability`      | D1 accepted capability                                      | `tool_call`    | Capability intent                           |
-| `act.done_check`      | D1 accepted done check                                      | `tool_call`    | Done-check intent                           |
-| `act.decline`         | D1 accepted out of scope                                    | `tool_call`    | Decline intent                              |
-| `gen.triage_fallback` | D1 transition, nonaccepted implement                        | `escalate_gen` | Implement strong/strong, triage fallback    |
-| `gen.route`           | D2 transition, accepted tier                                | `escalate_gen` | Implement at that tier                      |
-| `ask.route`           | D2 needs human                                              | `ask_human`    | D2 ask, no intent                           |
-| `gen.route_fallback`  | D2 transition, nonaccepted                                  | `escalate_gen` | Implement standard/standard, route fallback |
+| Rule                  | Condition, in precedence order                              | Band             | Outcome                                     |
+| --------------------- | ----------------------------------------------------------- | ---------------- | ------------------------------------------- |
+| `hold.admission`      | First asked stage with `stale_answer` / `mismatched_answer` | withheld         | Terminal pause at that stage                |
+| `hold.outage`         | First asked stage with `decision_unavailable`               | withheld         | Resumable pause at that stage               |
+| `hold.paused`         | First remaining paused stage                                | withheld         | Pause with its reason                       |
+| `ask.intake`          | Intake needs human                                          | `ask_human`      | Intake ask, no intent                       |
+| `ask.irreversible`    | Intake stop                                                 | `ask_human`      | Rule ask / irreversible                     |
+| `ask.thread_target`   | Thread relation with no or ambiguous target                 | `ask_human`      | Rule ask / target reason                    |
+| `act.thread`          | Thread relation with resolved target                        | `tool_call`      | Intake thread intent                        |
+| `ask.triage`          | D1 needs human                                              | `ask_human`      | D1 ask, no intent                           |
+| `act.capability`      | D1 accepted capability                                      | `tool_call`      | Capability intent                           |
+| `act.done_check`      | D1 accepted done check                                      | `tool_call`      | Done-check intent                           |
+| `act.decline`         | D1 accepted out of scope                                    | `tool_call`      | Decline intent                              |
+| `gen.triage_fallback` | D1 transition, nonaccepted implement                        | `escalate_gen`   | Implement strong/strong, triage fallback    |
+| `spawn.preflight`     | `gen.route` conditions, roles admitted, gain, plan, port    | `spawn_subtasks` | Spawn the validated preflight plan (P5b)    |
+| `gen.route`           | D2 transition, accepted tier                                | `escalate_gen`   | Implement at that tier                      |
+| `ask.route`           | D2 needs human                                              | `ask_human`      | D2 ask, no intent                           |
+| `gen.route_fallback`  | D2 transition, nonaccepted                                  | `escalate_gen`   | Implement standard/standard, route fallback |
 
 Origin failures (`invalid_extract`, `extract_missing`) at D1 or D2 retain
 `needs_human`, the stage choice and reason, and form no intent through
@@ -126,10 +128,10 @@ Origin failures (`invalid_extract`, `extract_missing`) at D1 or D2 retain
 stage status to be `transition`; reversible answer fallbacks still generate.
 
 `tool_call` is a deterministic act without generation; `escalate_gen` is a
-generative implementation step; `ask_human` asks. `spawn_subtasks` remains in
-the closed band vocabulary but no P4a row returns it. The plan builder rejects
-it with `spawn_subtasks needs a sealed parent frame (D-ENG-044, P5)`: P4a forms
-no child plan or spawn intent.
+generative implementation step; `ask_human` asks. No P4a row returns
+`spawn_subtasks`; since P5b only `spawn.preflight` does, and the plan builder
+rejects it from any other row, or without a validated preflight plan whose digest
+is the `spawn.plan` fact, with `spawn_subtasks needs a validated preflight plan (D-ENG-044)`.
 
 A hold row resolves its withheld band from its stage choice: intake ask/stop
 and D1 needs-human withhold `ask_human`; thread relations and D1 capability,
@@ -139,13 +141,14 @@ accepted intake new-thread choice then withholds `escalate_gen`. Count asks by
 `status = needs_human` and escalations by `band = escalate_gen` together with
 `status = dispatched`, never by band alone.
 
-`dispatch.decision@4` carries `rule_table` and `decide1` after `reason`, and
-`dispatch.checkpoint@3` stores the stages and shadow rounds described in P4b and P5a below.
+`dispatch.decision@5` carries `rule_table` and `decide1` after `reason`, and
+`dispatch.checkpoint@4` stores the stages and rounds described in P4b, P5a and P5b below.
 The read partition contains judgments in stage order
 (`intake.confidence`, `intake.top_p`, then D1 and D2), every available probability,
 and 14 code facts in fixed order: intake decided-by, choice, status, reason,
 accepted; thread target; D1 choice, status, reason, accepted; D2 equivalents.
-P4b appends five shadow facts and isolated shadow judgments to the trace below.
+P5b follows them with 15 preflight read facts and the role statistics; P4b's five
+shadow facts and isolated shadow judgments close the trace below.
 Unasked loop stages have null facts; extraction-only intake has no judgments.
 Names are unique bounded codes, probabilities are unit values, fact values are
 finite scalars or screened correlation ids, and each list has at most 64 items.
@@ -183,8 +186,8 @@ four isolated boolean judgments without changing dispatch gating. D-ENG-050
 accepts the questions below as provisional, requires no sampling and permits
 the single Weft contract clarification. `decide1.rules@1`, all 15 row ids,
 their precedence and bands stay unchanged. Its read set remains exactly the
-14 code facts and stage judgments listed in P4a above. No row returns
-`spawn_subtasks`; `planFor` still requires a sealed parent frame (D-ENG-044).
+14 code facts and stage judgments listed in P4a above. No P4b row returns
+`spawn_subtasks`; P5b's `spawn.preflight` (below) reads no P4b judgment.
 
 | Judgment            | Fixed question (`decide1-shadow@1`)                                                         |
 | ------------------- | ------------------------------------------------------------------------------------------- |
@@ -237,7 +240,8 @@ partition only. The trace concatenates read then shadow in input order.
 Without a shadow partition its trace equals P4a's. Even probabilities of one
 cannot ask, spawn, block a dispatch or change a rule, band or Dispatch intent.
 
-P4b supplies the first 19 of P5a's 32 fixed facts: the 14 read facts, then `residual_ambiguity`,
+P4b supplies five shadow facts, which since P5b close the 34 fixed facts after the 14
+read facts and P5b's 15 preflight read facts: `residual_ambiguity`,
 `clarify.reason`, `multi_deliverable.reason`, `reads_before_gen.reason`,
 `veto_bare_gen.reason`. Residual ambiguity is the final D1 extract's count,
 including the second attempt after re-extraction: zero for a grounded intent,
@@ -245,18 +249,20 @@ one for an ungrounded or empty intent, or null when D1 has no extract. It is
 also shadow. Each reason fact is null when unasked, `unrecorded` when the
 round was marked asked but no result was journaled, `untrusted` for an invalid
 stored observation, or that observation's reason. Non-null shadow statistics
-follow the stage judgments in judgment order as `<judgment>` probability,
-then `<judgment>.confidence`. P4b supplies at most 14 judgments; P5a adds at most 16 below.
+follow the read judgments (stage, then P5b's role statistics) in judgment order as
+`<judgment>` probability, then `<judgment>.confidence`. P4b supplies at most 14
+judgments with the stage judgments; P5a/P5b add at most 16 below.
 
-`dispatch.checkpoint@3` has ordered keys `schema`, `decision_id`,
+`dispatch.checkpoint@4` has ordered keys `schema`, `decision_id`,
 `state_revision`, `state_updated_at`, `asks`, `intake`, `triage`, `route`,
-`shadow`, `preflight`, `intent`. Its `asks` keys are `intake`, `triage`, `route`, `shadow`, `preflight`;
+`shadow`, `preflight`, `preflight_budget`, `spawn_port`, `intent`. Its `asks` keys are
+`intake`, `triage`, `route`, `shadow`, `preflight`;
 the last two are each zero or one. D1 and D2 store whole `loop.decision@1` records with
 their extracts and site transitions. `shadow` is null or four observations
-in judgment order. `dispatch.decision@4` has ordered keys `schema`,
+in judgment order. `dispatch.decision@5` has ordered keys `schema`,
 `decision_id`, `entry`, `state_revision`, `decided_by`, `choice`, `status`,
 `reason`, `rule_table`, `decide1`, `intent`, `receipt`, `intake`, `triage`,
-`route`, `shadow`, `preflight`. Its rule table remains `decide1.rules@1`. Foreign decision
+`route`, `shadow`, `preflight`. Its rule table is `decide1.rules@2`. Foreign decision
 or checkpoint schemas and foreign table versions throw without compatibility
 conversion.
 
@@ -270,7 +276,8 @@ paused/cancelled result and writes no shadow results, decision or Weft record.
 A moved state records stale shadow answers and the unchanged pre-claim stale
 gate withholds dispatch. The recomputed plan must retain the original rule,
 band and intent before claim, otherwise code throws
-`decide1: shadow input moved the plan`.
+`decide1: shadow input moved the plan`. P5b's one exception is this call's role
+round moving `gen.route` to `spawn.preflight`.
 
 Replay re-derives each consequential `loop.decision@1` through
 `transitionLoopDecision` using its stored extracts and requires a fixed point
@@ -370,33 +377,95 @@ to be no worse on any axis and strictly better on at least one. The preflight
 parent scores `{ E, E + R, a }`; reads score zero and generation `{ E, 0, a }`.
 For E >= 1 gain is true. Decreasing the score sum bounds recursion without a depth
 limit. The goal digest is `digest({ message: intake.message })`; root and parent
-are this decision id. Budget is `terms.cost_ceiling`, tier is D2's accepted choice,
+are this decision id. Budget is the ceiling bound in the checkpoint (P5b's
+`preflight_budget`), tier is D2's accepted choice,
 and ambiguity is the final D1 residual count, validated by merged-main extract
 replay (`validExtractObservation`). No replay validation is bypassed or duplicated.
-Shadow computation requires a safe non-negative integer ceiling; otherwise all
-three `spawn.*` facts are null. Any preflight plan validation exception likewise
-produces null facts, never a dispatch exception or copied error text. This applies
-to live resolution, replay, resume and cancellation/stale boundary traces. The
-plan validators and consequential stage replay remain strict.
+Plan computation requires a safe non-negative integer budget; otherwise all
+three plan facts are null. Since D-ENG-052, every input the plan builder would
+reject (roles not answered and trusted, an invalid ambiguity, decision id or
+target ref, a missing tier or budget) is screened to null facts up front, and the
+builder runs with no surrounding `try`: a builder/validator mismatch throws as a
+code defect, and no error text is copied. This applies to live resolution, replay,
+resume and cancellation/stale boundary traces. The plan validators and
+consequential stage replay remain strict.
 
-The plan is recomputed, never stored. After P4b's 19 facts, thirteen fixed shadow
-facts follow: `preflight.reason`, `preflight.targets`, `preflight.t0.role` through
+In P5a the plan was recomputed, never stored, and its thirteen facts were shadow:
+`preflight.reason`, `preflight.targets`, `preflight.t0.role` through
 `preflight.t7.role`, `spawn.gain`, `spawn.children`, `spawn.plan` (the plan digest).
 Unasked values are null except the target count; missing ambiguity or unavailable
-roles give null plan facts. Non-null `preflight.t<i>.top_p` then
-`preflight.t<i>.confidence` judgments follow P4b's, in target order. Totals are
-32 facts and at most 30 judgments, within Weft's bounds.
+roles give null plan facts. P5b moves them, the `preflight.t<i>.top_p` then
+`preflight.t<i>.confidence` judgments (in target order) and two new facts into the
+read partition (below). Totals are 34 facts and at most 30 judgments, within Weft's bounds.
 
-The current records are `dispatch.checkpoint@3` (`asks.preflight` and `preflight`
-after `shadow`) and `dispatch.decision@4` (`preflight` after `shadow`). Foreign
+The current records are P5b's `dispatch.checkpoint@4` and `dispatch.decision@5`. Foreign
 schemas throw without a shim. `dispatch.decided` cites the role request id after
 the shadow ids solely as `inference_request` evidence, with no role `judgment`
-or `caused_by` link. No Weft contract changes. The same 15 `decide1.rules@1` rows
-read none of this evidence; the shadow guard still rejects changes to rule, band
-or intent before claim. Every P4b dispatch outcome remains unchanged.
+or `caused_by` link. No Weft contract changes.
 
-Live spawn, child re-entry, cancellation propagation, general split, tier changes
-and threshold fitting belong to later increments. P5a presents no spawn intent.
+## WV-S1 P5b live preflight spawn
+
+`decide1.rules@2` inserts one row, `spawn.preflight`, immediately before
+`gen.route`; every other row, its order and band are unchanged. It matches the
+`gen.route` conditions plus four code facts: `preflight.admitted = true`,
+`spawn.gain = true`, a `spawn.plan` digest and `spawn.port = true`. It reads no
+judgment and no P4b shadow name. In every other case the outcome is exactly
+P5a's `gen.route` (monotone fallback): a role outage, any non-answered round, an
+unrecorded or untrusted round, a target below τ_role or without `top_p`, no
+`edit` role, no ambiguity, an invalid ceiling, or no `ports.spawn`.
+
+Role admission is `rolesAdmitted` with the frozen provisional
+`SPAWN_ROLES_POLICY = { confidence: 0.75 }` (D-ENG-051): an `answered` round with at
+least one target, each with a role, unit confidence ≥ .75 and a non-null `top_p`.
+It is not a `SITE_POLICY` entry; `SITE_POLICY` and the role request are unchanged.
+
+The read partition is P4a's 14 facts, then 15 always-present preflight facts in
+this order: `preflight.reason`, `preflight.targets`, `preflight.t0.role` through
+`preflight.t7.role`, `preflight.admitted` (null when roles were not asked, else
+`rolesAdmitted` of the trusted round, false when unrecorded or untrusted),
+`spawn.gain`, `spawn.children`, `spawn.plan`, `spawn.port` (the checkpoint's
+`spawn_port`). Read judgments are the stage judgments then the role statistics.
+The shadow partition holds only P4b's five facts and judgments.
+
+`dispatch.checkpoint@4` adds `preflight_budget` (the asking request's
+`terms.cost_ceiling` when a safe natural, written with `asks.preflight = 1`, else
+null) and `spawn_port` (whether this call's composition injected `ports.spawn`;
+re-read on every call until claim, then frozen by the claim) before `intent`.
+Loading a checkpoint that is not `@4`, a non-boolean `spawn_port` or a
+`preflight_budget` that is neither null nor a safe natural throws. The plan is a
+pure function of the checkpoint plus the disclosed message and target refs.
+
+A spawn decision is `decided_by: 'rule'`, `choice: 'spawn'`, reason `accepted`,
+band `spawn_subtasks`, with the intent `{ kind: 'spawn', dispatch_id, targets, plan }`:
+target refs in request order and the validated `spawn.plan@1`. `DispatchChoice` is
+`SiteChoice | 'spawn'`. The claim binds the intent, whole plan included, with the
+snapshot holding the roles, `preflight_budget` and `spawn_port`, in one
+compare-and-set. A single-use attempt presents it through the optional
+`ports.spawn` with a detached copy; `ports.dispatch` never receives a spawn intent.
+A claimed spawn without `ports.spawn` throws `a claimed spawn intent needs ports.spawn`
+before any attempt. A `dispatched` receipt confirms a spawn only when its `ref`
+equals the plan digest, for the port's return and for settlement reads; any other
+receipt is null (paused / `dispatch_unconfirmed`). Refusals map as for every intent,
+and the rule and band never change. A budget resume re-presents the claimed plan
+unchanged, whatever the resumed terms.
+
+A window may move the plan only from `gen.route` to `spawn.preflight`, and only
+by this call's role round; any other move throws before claim. Resume, recovery
+and replay re-derive the claimed plan and require it to equal the claimed intent
+before any port or settlement call, so a tampered plan, intent, role record,
+budget, port flag, message or target ref throws with no effect. Before claim an
+untrusted role round still falls back. `transitionDispatch` validates targets.
+No path re-plans a claimed decision. Child refs derive from the decision id, so
+every presentation names the same children and the port opens all or none,
+idempotently per `dispatch_id`.
+
+Weft is unchanged. A spawn `dispatch.decided` has no `tier` (an implement-only
+field), carries `dispatch_ref`, the 34-fact trace and the role request as
+`inference_request` evidence. A stale pause after claim reports `hold.admission`
+with D2's withheld `escalate_gen` while naming the spawn intent. No child runs in
+P5b: re-entry, per-child tier, `depends_on` scheduling, cancel propagation and
+per-child budgets are P5c. Until P5c merges, production compositions inject no
+`ports.spawn` (D-ENG-053), so their behaviour is exactly P5a's.
 
 ## WV-S1 P2a typed extraction before intake
 

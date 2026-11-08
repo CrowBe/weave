@@ -266,3 +266,53 @@ test('P5a-9 exact observation shape, ignored unknown keys and no authority or te
     assert.ok(!Object.hasOwn(record, k));
   assert.ok(!JSON.stringify(record).includes('CANARY'));
 });
+
+test('P5b-4 role admission at the provisional floor; every target needs a role, confidence and top_p', async () => {
+  const mod: any = await roles();
+  const { SITE_POLICY } = await import('../src/sites/index.js');
+  const { digest } = await import('../src/digest.js');
+  assert.ok(Object.isFrozen(mod.SPAWN_ROLES_POLICY));
+  assert.deepEqual(mod.SPAWN_ROLES_POLICY, { confidence: 0.75 });
+  const target = (i: number, patch: object = {}) => ({
+    ref: `t${i}`,
+    role: 'edit',
+    top_p: 0.9,
+    confidence: 0.9,
+    ...patch,
+  });
+  const observation = (targets: object[], reason = 'answered') => ({
+    schema: 'spawn-roles@1',
+    site: 'spawn.roles',
+    question: mod.SPAWN_ROLES_QUESTION,
+    request_id: 'd1:roles',
+    state_revision: 1,
+    targets,
+    reason,
+    provider_request_id: null,
+  });
+  const reasons = [
+    'no_answer',
+    'invalid_answer',
+    'stale_answer',
+    'mismatched_answer',
+    'decision_unavailable',
+    'cancelled',
+  ];
+  const table: [string, object, boolean][] = [
+    ['all above the floor with top_p', observation([target(0), target(1, { role: 'read' }), target(2)]), true],
+    ['exactly the floor', observation([target(0, { confidence: 0.75 }), target(1)]), true],
+    ['one target just below', observation([target(0), target(1, { confidence: 0.7499 })]), false],
+    ['one null top_p', observation([target(0), target(1, { top_p: null })]), false],
+    ['one null confidence', observation([target(0, { confidence: null }), target(1)]), false],
+    ['one null role', observation([target(0, { role: null }), target(1)]), false],
+    ['no targets', observation([]), false],
+    ...reasons.map((reason): [string, object, boolean] => [reason, observation([target(0), target(1)], reason), false]),
+  ];
+  for (const [name, value, expected] of table) {
+    const before = structuredClone(value);
+    assert.equal(mod.rolesAdmitted(value), expected, name);
+    assert.deepEqual(value, before, name);
+  }
+  // Pre-P5b snapshot (stableStringify sha256): the floor is not a SITE_POLICY entry.
+  assert.equal(digest(SITE_POLICY), 'd374d97156a6863ebfe998487bc4c341c89db9f67f0ecd35c18f1809e7e4cb49');
+});

@@ -269,3 +269,25 @@ test('P5a-6 pure module, immutable inputs, identical bytes, no disclosed text', 
   assert.equal(JSON.stringify(first), JSON.stringify(second));
   assert.ok(!JSON.stringify(first).includes('CANARY'));
 });
+
+test('P5b-5 preflight gain is equivalent to a plan over every role vector of 1-5 targets', async () => {
+  const { TARGET_ROLES, preflightPlan, validatePlan } = await spawn();
+  let vectors = 0;
+  for (let n = 1; n <= 5; n++)
+    for (let code = 0; code < 4 ** n; code++) {
+      const roles = Array.from({ length: n }, (_, i) => TARGET_ROLES[Math.floor(code / 4 ** i) % 4]!);
+      vectors++;
+      for (const ambiguity of [0, 1, 2]) {
+        const args = { ...input(roles), ambiguity };
+        const { gain, plan } = preflightPlan(args);
+        assert.equal(gain, plan !== null, roles.join(','));
+        assert.equal(gain, roles.includes('edit'), roles.join(','));
+        if (plan === null) continue;
+        assert.equal(plan.children.length, roles.filter((r) => r === 'edit' || r === 'read').length + 1);
+        assert.deepEqual(validatePlan(plan, args.targets), plan);
+        const copy = validatePlan(JSON.parse(JSON.stringify(plan)), args.targets);
+        assert.equal(JSON.stringify(copy), JSON.stringify(plan));
+      }
+    }
+  assert.equal(vectors, 1364);
+});

@@ -1,7 +1,7 @@
 /** Decide-1 is deterministic policy over bounded observations, never execution authority. */
 export const DECIDE1_BANDS = Object.freeze(['tool_call', 'spawn_subtasks', 'escalate_gen', 'ask_human'] as const);
 export type Band = (typeof DECIDE1_BANDS)[number];
-export const DECIDE1_RULE_TABLE = 'decide1.rules@1' as const;
+export const DECIDE1_RULE_TABLE = 'decide1.rules@2' as const;
 export interface Decide1Judgment {
   readonly name: string;
   readonly probability: number;
@@ -32,6 +32,7 @@ export type Decide1RuleId =
   | 'act.done_check'
   | 'act.decline'
   | 'gen.triage_fallback'
+  | 'spawn.preflight'
   | 'gen.route'
   | 'ask.route'
   | 'gen.route_fallback';
@@ -102,6 +103,19 @@ export const DECIDE1_RULES: readonly Decide1Rule[] = Object.freeze(
           f.get('triage.accepted') === false &&
           f.get('triage.choice') === 'implement',
         band: 'escalate_gen',
+      },
+      {
+        // D2 accepted a tier, every target cleared role admission, and a validated plan has split gain.
+        id: 'spawn.preflight',
+        when: (f) =>
+          f.get('route.status') === 'transition' &&
+          f.get('route.accepted') === true &&
+          TIERS.includes(f.get('route.choice') as string) &&
+          f.get('preflight.admitted') === true &&
+          f.get('spawn.gain') === true &&
+          id(f.get('spawn.plan')) &&
+          f.get('spawn.port') === true,
+        band: 'spawn_subtasks',
       },
       {
         id: 'gen.route',
