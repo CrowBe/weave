@@ -3841,6 +3841,77 @@ test('P5a-fix1 invalid ceilings cannot escape shadow computation at any dispatch
       });
 });
 
+test('P5a-fix2 invalid ambiguity on stale and cancellation boundaries is absent spawn evidence', async (t) => {
+  const source = harness({}, { request: roleRequest() });
+  await run(source);
+  const recorded = source.journal.load('d1').checkpoint!;
+  for (const ambiguity of [NaN, Infinity, -Infinity, -1, 0.5, Number.MAX_SAFE_INTEGER + 1, '1', null, undefined])
+    for (const path of ['stale', 'cancel'] as const)
+      await t.test(`${ambiguity}: ${path}`, async () => {
+        async function exercise(shadow: boolean) {
+          const cp = structuredClone(recorded);
+          Object.assign(cp, { intent: null, ...(shadow ? {} : { preflight: null, shadow: null }) });
+          Object.assign(cp.triage!.extracts.at(-1)!.residual_ambiguity, { count: ambiguity });
+          const storage = new MemoryDispatchJournal();
+          storage.checkpoint(cp);
+          let claims = 0;
+          const journal: DispatchJournal = {
+            ...delegate(storage),
+            claim() {
+              claims++;
+              throw new Error('boundary must not claim');
+            },
+          };
+          const clock = makeClock();
+          const controller = new AbortController();
+          if (path === 'stale') clock.advance();
+          else controller.abort();
+          const h = harness({}, { request: source.request, journal, clock });
+          const decision = await run(h, controller.signal);
+          assertNullSpawn(decision);
+          assert.equal(fact(decision, 'residual_ambiguity'), null);
+          assert.equal(decision.reason, path === 'stale' ? 'stale_answer' : 'cancelled');
+          assert.equal(h.generateCalls.length + h.evaluateCalls.length + h.dispatchCalls.length + claims, 0);
+          assert.equal(storage.load('d1').decisions.length, path === 'stale' ? 1 : 0);
+          return decision;
+        }
+        const baseline = await exercise(false);
+        const shadow = await exercise(true);
+        assert.equal(shadow.preflight?.reason, 'answered');
+        assert.deepEqual(dispatchProjection(shadow), dispatchProjection(baseline));
+      });
+});
+
+test('P5a-fix2 well-formed answered edit rounds always expose validated spawn facts', async (t) => {
+  // No edit means no plan by contract; P5a-12 separately covers those answered rounds.
+  const mixes = [
+    ['edit'],
+    ['edit', 'edit', 'edit', 'edit'],
+    ['edit', 'read', 'forbid', 'skip'],
+    ['skip', 'forbid', 'read', 'edit'],
+    ['forbid', 'edit', 'skip', 'edit'],
+    ['read', 'read', 'edit', 'read'],
+    ['edit', 'read', 'forbid', 'skip', 'edit', 'read', 'forbid', 'skip'],
+    Array(8).fill('edit') as string[],
+  ];
+  for (const tier of ['flash', 'standard', 'strong'])
+    for (const roles of mixes)
+      for (const cost_ceiling of [0, Number.MAX_SAFE_INTEGER])
+        await t.test(`${tier}: ${roles.join(',')}: ${cost_ceiling}`, async () => {
+          const request = roleRequest({
+            terms: { ...terms, cost_ceiling },
+            targets: roles.map((_, i) => ({ ref: `target${i}`, summary: '' })),
+          });
+          const h = harness({ roles, route: { choice: tier } }, { request });
+          const decision = await run(h);
+          assert.equal(decision.preflight?.reason, 'answered');
+          assert.equal(fact(decision, 'spawn.gain'), true);
+          assert.equal(fact(decision, 'spawn.children'), roles.filter((r) => r === 'edit' || r === 'read').length + 1);
+          assert.match(fact(decision, 'spawn.plan') as string, /^[a-f0-9]{64}$/);
+          assert.deepEqual(transitionDispatch(request, h.journal.load('d1').checkpoint!, decision.receipt), decision);
+        });
+});
+
 test('P5a-fix1 every untrusted preflight input fails to null facts without moving policy', async (t) => {
   const { preflightPlan } = await import('../src/spawn.js');
   const { digest } = await import('../src/digest.js');
