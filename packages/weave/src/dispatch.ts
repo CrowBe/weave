@@ -58,6 +58,7 @@ import { digest } from './digest.js';
 import { TARGET_ROLES, preflightPlan, type SpawnPlan } from './spawn.js';
 import {
   askRoles,
+  maximalTopP,
   rolesAdmitted,
   SPAWN_ROLES_QUESTION,
   type RoleAsk,
@@ -102,6 +103,8 @@ export type DispatchIntent =
       readonly targets: readonly string[];
       /** `validatePlan(plan, targets)` holds: refs, codes, numbers and digests only. */
       readonly plan: SpawnPlan;
+      /** Digest of the admitted role observation, so the claim binds every role field, not only the roles. */
+      readonly roles_digest: string;
     };
 export type SpawnIntent = Extract<DispatchIntent, { readonly kind: 'spawn' }>;
 export type DispatchChoice = SiteChoice | 'spawn';
@@ -901,7 +904,7 @@ function trustedRoles(checkpoint: DispatchCheckpoint, request: DispatchRequest):
     if (record['reason'] === 'answered') {
       if (
         !(TARGET_ROLES as readonly unknown[]).includes(item['role']) ||
-        (item['top_p'] !== null && !unit(item['top_p'])) ||
+        (item['top_p'] !== null && !maximalTopP(item['top_p'])) ||
         (item['confidence'] !== null && !unit(item['confidence']))
       )
         return null;
@@ -1128,13 +1131,22 @@ function planFor(trace: Decide1Trace, checkpoint: DispatchCheckpoint, request: D
       });
     case 'spawn.preflight': {
       const spawn = preflightFor(request, checkpoint);
-      if (spawn === null || spawn.gain !== true || spawn.plan === null || spawn.plan.digest !== facts.get('spawn.plan'))
+      const roles = trustedRoles(checkpoint, request);
+      if (
+        spawn === null ||
+        spawn.gain !== true ||
+        spawn.plan === null ||
+        spawn.plan.digest !== facts.get('spawn.plan') ||
+        roles === null
+      )
         throw unplanned();
       return dispatchPlan(trace, 'rule', 'spawn', 'accepted', {
         kind: 'spawn',
         dispatch_id,
         targets: (request.targets ?? []).map((target) => target.ref),
         plan: spawn.plan,
+        // The plan reads only the roles; the claim must also fix their confidence, top_p and provenance.
+        roles_digest: digest(roles),
       });
     }
     case 'gen.route': {
@@ -1658,6 +1670,18 @@ function settleReceipt(
   return settle(request, decision, ports, journal, fresh, attempt);
 }
 
+/** A claimed intent stands only while its recorded stages re-derive it exactly; otherwise nothing may act on it. */
+function claimedPlan(
+  request: DispatchRequest,
+  checkpoint: DispatchCheckpoint,
+  intent: DispatchIntent,
+): { readonly plan: Plan; readonly intent: DispatchIntent } {
+  const plan = resolveOutcome(request, checkpoint);
+  if (plan.kind !== 'dispatch') throw new Error('a recorded intent needs a dispatch plan');
+  if (!sameRecord(intent, plan.intent)) throw new Error('recorded intent does not match the recorded stages');
+  return { plan, intent };
+}
+
 export async function decideDispatch(
   request: DispatchRequest,
   ports: DispatchPorts,
@@ -1698,27 +1722,17 @@ export async function decideDispatch(
   }
 
   const resume = captured.resume === true;
+  // A claimed intent is re-derived before the abort check, so even a cancelled call never reports tampered evidence.
+  const claimed = checkpoint.intent === null ? null : claimedPlan(captured, checkpoint, checkpoint.intent);
   if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
 
-  if (checkpoint.intent !== null) {
-    const plan = resolveOutcome(captured, checkpoint);
-    if (plan.kind !== 'dispatch') throw new Error('a recorded intent needs a dispatch plan');
-    if (!sameRecord(checkpoint.intent, plan.intent))
-      throw new Error('recorded intent does not match the recorded stages');
+  if (claimed !== null) {
+    const { plan, intent } = claimed;
     if (!resume) {
-      const decision = makeDecision(
-        captured,
-        checkpoint,
-        entry,
-        plan,
-        checkpoint.intent,
-        null,
-        'paused',
-        'dispatch_unconfirmed',
-      );
+      const decision = makeDecision(captured, checkpoint, entry, plan, intent, null, 'paused', 'dispatch_unconfirmed');
       return settle(captured, decision, ports, journal, []);
     }
-    return attemptIntent(captured, checkpoint, entry, plan, checkpoint.intent, ports, journal, signal, []);
+    return attemptIntent(captured, checkpoint, entry, plan, intent, ports, journal, signal, []);
   }
 
   if (loaded.checkpoint !== null && !sameState(checkpoint, ports.now()))

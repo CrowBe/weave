@@ -417,6 +417,9 @@ unrecorded or untrusted round, a target below τ_role or without `top_p`, no
 Role admission is `rolesAdmitted` with the frozen provisional
 `SPAWN_ROLES_POLICY = { confidence: 0.75 }` (D-ENG-051): an `answered` round with at
 least one target, each with a role, unit confidence ≥ .75 and a non-null `top_p`.
+A recorded `top_p` is trusted only when `maximalTopP` holds: a unit value of at
+least a quarter (within the distribution's sum tolerance), the least maximum of a
+valid four-role distribution; `top_p = 0` makes the round untrusted, so it falls back.
 It is not a `SITE_POLICY` entry; `SITE_POLICY` and the role request are unchanged.
 
 The read partition is P4a's 14 facts, then 15 always-present preflight facts in
@@ -436,8 +439,11 @@ Loading a checkpoint that is not `@4`, a non-boolean `spawn_port` or a
 pure function of the checkpoint plus the disclosed message and target refs.
 
 A spawn decision is `decided_by: 'rule'`, `choice: 'spawn'`, reason `accepted`,
-band `spawn_subtasks`, with the intent `{ kind: 'spawn', dispatch_id, targets, plan }`:
-target refs in request order and the validated `spawn.plan@1`. `DispatchChoice` is
+band `spawn_subtasks`, with the intent
+`{ kind: 'spawn', dispatch_id, targets, plan, roles_digest }`: target refs in request
+order, the validated `spawn.plan@1` and the digest of the trusted role observation.
+The plan reads only the roles, so `roles_digest` is what binds each target's
+confidence and `top_p` and the round's provenance to the claim. `DispatchChoice` is
 `SiteChoice | 'spawn'`. The claim binds the intent, whole plan included, with the
 snapshot holding the roles, `preflight_budget` and `spawn_port`, in one
 compare-and-set. A single-use attempt presents it through the optional
@@ -452,8 +458,10 @@ unchanged, whatever the resumed terms.
 A window may move the plan only from `gen.route` to `spawn.preflight`, and only
 by this call's role round; any other move throws before claim. Resume, recovery
 and replay re-derive the claimed plan and require it to equal the claimed intent
-before any port or settlement call, so a tampered plan, intent, role record,
-budget, port flag, message or target ref throws with no effect. Before claim an
+before any port or settlement call, so a tampered plan, intent, role record (any
+field, including a confidence still above τ_role), budget, port flag, message or
+target ref throws with no effect. A claimed decision is re-derived before the abort
+check, so a cancelled or unconfirmed call on tampered evidence also throws. Before claim an
 untrusted role round still falls back. `transitionDispatch` validates targets.
 No path re-plans a claimed decision. Child refs derive from the decision id, so
 every presentation names the same children and the port opens all or none,

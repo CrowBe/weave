@@ -4068,8 +4068,7 @@ test('P5a-fix1 every untrusted preflight input fails to null facts without movin
       assert.deepEqual([actual.band, actual.rule], [expected.band, expected.rule]);
       // P5b: pure replay screens targets like live ingress (D-P5b-10), and a non-natural
       // journaled budget is a malformed dispatch.checkpoint@4.
-      if (name.startsWith('budget'))
-        assert.throws(() => transitionDispatch(request, cp, null), /preflight_budget/);
+      if (name.startsWith('budget')) assert.throws(() => transitionDispatch(request, cp, null), /preflight_budget/);
       else if (name.startsWith('target') || name.startsWith('duplicate'))
         assert.throws(() => transitionDispatch(request, cp, null), /Invalid dispatch targets/);
       else if (name.startsWith('role')) {
@@ -4802,12 +4801,13 @@ function expectedPlan(
   });
   return validatePlan(built.plan, targets);
 }
-function spawnIntentOf(request: DispatchRequest, plan: SpawnPlan): SpawnIntent {
+function spawnIntentOf(request: DispatchRequest, plan: SpawnPlan, roles: unknown): SpawnIntent {
   return {
     kind: 'spawn',
     dispatch_id: `${request.request_id}:dispatch`,
     targets: request.targets!.map((t) => t.ref),
     plan,
+    roles_digest: digest(roles),
   };
 }
 function recording(storage: DispatchJournal = new MemoryDispatchJournal()) {
@@ -4957,7 +4957,7 @@ test('P5b-7 live spawn: one claim binds the validated plan; one detached ports.s
       assert.equal(cp.preflight_budget, terms.cost_ceiling);
       assert.equal(cp.spawn_port, true);
       const plan = expectedPlan(request, roles, tier, fact(d, 'residual_ambiguity'), cp.preflight_budget!);
-      const intent = spawnIntentOf(request, plan);
+      const intent = spawnIntentOf(request, plan, cp.preflight);
       assert.deepEqual(
         [d.decided_by, d.choice, d.status, d.reason, d.decide1.rule, d.decide1.band],
         ['rule', 'spawn', 'dispatched', 'accepted', 'spawn.preflight', 'spawn_subtasks'],
@@ -4991,9 +4991,10 @@ test('P5b-7 live spawn: one claim binds the validated plan; one detached ports.s
   const d = await run(h);
   const plan = expectedPlan(roleRequest(), EDIT4, 'flash', fact(d, 'residual_ambiguity'));
   assert.equal(d.status, 'dispatched');
-  assert.deepEqual(d.intent, spawnIntentOf(roleRequest(), plan));
-  assert.deepEqual(h.journal.load('d1').checkpoint!.intent, spawnIntentOf(roleRequest(), plan));
-  assert.deepEqual(h.journal.load('d1').decisions[0]!.intent, spawnIntentOf(roleRequest(), plan));
+  const bound = spawnIntentOf(roleRequest(), plan, h.journal.load('d1').checkpoint!.preflight);
+  assert.deepEqual(d.intent, bound);
+  assert.deepEqual(h.journal.load('d1').checkpoint!.intent, bound);
+  assert.deepEqual(h.journal.load('d1').decisions[0]!.intent, bound);
 });
 
 test('P5b-8 monotone fallback: every doubt gives the gen.route outcome of the bare fixture', async () => {
@@ -5216,8 +5217,8 @@ test('P5b-11 crash at each boundary never loses or duplicates a child, on memory
       await waitUntil(() => ledger.calls.length === 1);
       const d = await run(resumeCall(store, ledger));
       assert.deepEqual(
-        [d.status, d.receipt?.ref, ledger.calls.length],
-        ['dispatched', ledger.calls[0]!.plan.digest, 1],
+        [d.status, d.receipt, ledger.calls.length],
+        ['dispatched', { status: 'dispatched', dispatch_id: 'd1:dispatch', ref: ledger.calls[0]!.plan.digest }, 1],
         label('live'),
       );
       assertCrashInvariants(store, ledger, label('live'));
@@ -5345,7 +5346,131 @@ test('P5b-12 tampered storage after claim throws before any effect; before claim
   }
 });
 
-test('P5b-13 dispatch.checkpoint@4 and dispatch.decision@5 records; foreign versions are refused', async () => {
+/** One mutation per claimed role field; the coverage assertion fails when a field is added unlisted. */
+const ROLE_RECORD_MUTATIONS: readonly (readonly [string, (r: any) => void])[] = [
+  ['schema', (r) => void (r.schema = 'spawn-roles@2')],
+  ['site', (r) => void (r.site = 'other.site')],
+  ['question', (r) => void (r.question = 'other')],
+  ['request_id', (r) => void (r.request_id = 'd1:other')],
+  ['state_revision', (r) => void (r.state_revision += 1)],
+  ['targets', (r) => void r.targets.reverse()],
+  ['reason', (r) => void (r.reason = 'no_answer')],
+  ['provider_request_id', (r) => void (r.provider_request_id = 'other-provider')],
+];
+/** Mutations of one claimed target; several stay valid and above τ_role, so only the binding catches them. */
+const ROLE_TARGET_MUTATIONS: readonly (readonly [string, (t: any) => void])[] = [
+  ['ref', (t) => void (t.ref = 'other')],
+  ['role', (t) => void (t.role = 'read')],
+  ['top_p 0', (t) => void (t.top_p = 0)],
+  ['top_p .9', (t) => void (t.top_p = 0.9)],
+  ['top_p .25', (t) => void (t.top_p = 0.25)],
+  ['confidence .9', (t) => void (t.confidence = 0.9)],
+  ['confidence .75', (t) => void (t.confidence = 0.75)],
+];
+
+test('P5b-fix1 every claimed role field is bound: a change throws before any effect on every path', async () => {
+  const pre = new MemoryDispatchJournal();
+  await crashRun(pre, 'claimed');
+  const claimed = pre.load('d1').checkpoint!;
+  assert.equal(claimed.intent?.kind, 'spawn');
+  const record = preflight(claimed);
+  assert.deepEqual(
+    [
+      ...ROLE_RECORD_MUTATIONS.map(([name]) => name),
+      ...new Set(ROLE_TARGET_MUTATIONS.map(([name]) => name.split(' ')[0])),
+    ],
+    [...Object.keys(record), ...Object.keys(record.targets[0])],
+  );
+  const last = record.targets.length - 1;
+  const cases: (readonly [string, (r: any) => void])[] = [
+    ...ROLE_RECORD_MUTATIONS,
+    ...[0, last].flatMap((i) =>
+      ROLE_TARGET_MUTATIONS.map(([name, mutate]): [string, (r: any) => void] => [
+        `t${i}.${name}`,
+        (r) => mutate(r.targets[i]),
+      ]),
+    ),
+  ];
+  const paths = ['resume', 'unconfirmed', 'cancelled', 'presented', 'replay', 'replay receipt'] as const;
+  const rejected =
+    /recorded intent does not match the recorded stages|is not the live outcome of its recorded observations/;
+  for (const [kind, make] of JOURNALS)
+    for (const [name, mutate] of cases)
+      for (const path of paths) {
+        const label = `${kind} ${name} ${path}`;
+        const bad = structuredClone(claimed) as any;
+        mutate(bad.preflight);
+        assert.notDeepEqual(bad.preflight, record, label);
+        const storage = make();
+        storage.checkpoint({ ...bad, intent: null });
+        assert.equal(storage.claim('d1', claimed.intent!, bad), true, label);
+        if (path === 'presented') assert.equal(storage.present('d1', storage.acquire('d1')!), true, label);
+        const r = recording(storage);
+        const ledger = spawnLedger();
+        const sink = collector();
+        const options = { journal: r.journal, spawn: ledger.port, settlement: ledger.settlement, weft: sink.port };
+        const request = roleRequest({ resume: path !== 'unconfirmed' });
+        const h = harness({}, { request, ...options });
+        if (path === 'replay' || path === 'replay receipt') {
+          const receipt = { status: 'dispatched', dispatch_id: 'd1:dispatch', ref: claimed.intent!.plan?.digest };
+          const loaded = storage.load('d1').checkpoint!;
+          assert.throws(
+            () => transitionDispatch(request, loaded, path === 'replay' ? null : (receipt as never)),
+            rejected,
+          );
+        } else {
+          const controller = new AbortController();
+          if (path === 'cancelled') controller.abort();
+          await assert.rejects(run(h, controller.signal), rejected, label);
+        }
+        assert.deepEqual(
+          [
+            ledger.calls.length,
+            ledger.settlements.length,
+            h.dispatchCalls.length,
+            h.evaluateCalls.length + h.generateCalls.length,
+            r.counts.acquire + r.counts.present + r.counts.append,
+            r.writes.length + r.claims.length,
+            storage.load('d1').decisions.length,
+            sink.records.length,
+          ],
+          [0, 0, 0, 0, 0, 0, 0, 0],
+          label,
+        );
+      }
+});
+
+test('P5b-fix1 before claim a top_p that cannot be maximal over four roles is untrusted and falls back', async () => {
+  const open = new MemoryDispatchJournal();
+  await crashRun(open, 'claim');
+  const unclaimed = open.load('d1').checkpoint!;
+  for (const [top_p, rule] of [
+    [0, 'gen.route'],
+    [0.2, 'gen.route'],
+    [0.2499, 'gen.route'],
+    [0.25, 'spawn.preflight'],
+    [0.9, 'spawn.preflight'],
+  ] as const)
+    for (const i of [0, 3]) {
+      const bad = structuredClone(unclaimed);
+      preflight(bad).targets[i].top_p = top_p;
+      const storage = new MemoryDispatchJournal();
+      storage.checkpoint(bad);
+      const ledger = spawnLedger();
+      const h = harness({}, { request: roleRequest(), journal: storage, spawn: ledger.port });
+      const d = await run(h);
+      const label = `t${i}.top_p ${top_p}`;
+      const fallback = rule === 'gen.route';
+      assert.deepEqual(
+        [fact(d, 'preflight.reason'), fact(d, 'preflight.admitted'), d.decide1.rule],
+        [fallback ? 'untrusted' : 'answered', !fallback, rule],
+        label,
+      );
+      assert.deepEqual([ledger.calls.length, h.dispatchCalls.length], fallback ? [0, 1] : [1, 0], label);
+    }
+});
+
+test('P5b-13dispatch.checkpoint@4 and dispatch.decision@5 records; foreign versions are refused', async () => {
   const ledger = spawnLedger();
   const h = harness({}, { request: roleRequest(), spawn: ledger.port });
   const d = await run(h);
@@ -5388,7 +5513,8 @@ test('P5b-13 dispatch.checkpoint@4 and dispatch.decision@5 records; foreign vers
     'shadow',
     'preflight',
   ]);
-  assert.deepEqual(Object.keys(d.intent!), ['kind', 'dispatch_id', 'targets', 'plan']);
+  assert.deepEqual(Object.keys(d.intent!), ['kind', 'dispatch_id', 'targets', 'plan', 'roles_digest']);
+  assert.equal((d.intent as SpawnIntent).roles_digest, digest(cp.preflight));
   assert.deepEqual(transitionDispatch(h.request, cp, d.receipt, d.entry), d);
   for (const [patch, error] of [
     [{ schema: 'dispatch.checkpoint@3' }, /schema/],

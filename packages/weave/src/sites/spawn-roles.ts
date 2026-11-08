@@ -53,15 +53,20 @@ export interface RecordedRoleAnswer {
 function role(value: unknown): value is TargetRole {
   return typeof value === 'string' && Object.hasOwn(SPAWN_ROLE_CRITERIA, value);
 }
+const SUM_TOLERANCE = 1e-6;
 function topProbability(probabilities: unknown, choice: TargetRole): number | null {
   if (typeof probabilities !== 'object' || probabilities === null || Array.isArray(probabilities)) return null;
   const entries = Object.entries(probabilities);
   const selected = (probabilities as Record<string, unknown>)[choice];
   return unit(selected) &&
     entries.every(([key, value]) => role(key) && unit(value) && value <= selected) &&
-    Math.abs(entries.reduce((sum, [, value]) => sum + (value as number), 0) - 1) <= 1e-6
+    Math.abs(entries.reduce((sum, [, value]) => sum + (value as number), 0) - 1) <= SUM_TOLERANCE
     ? selected
     : null;
+}
+/** A value `topProbability` can return: the maximum of a valid four-role distribution is at least a quarter. */
+export function maximalTopP(value: unknown): value is number {
+  return unit(value) && value * Object.keys(SPAWN_ROLE_CRITERIA).length >= 1 - SUM_TOLERANCE;
 }
 export function transitionRoles(ask: RoleAsk, recorded: RecordedRoleAnswer, current: SiteState): RoleObservation {
   const input = { ...ask, request_id: `${ask.request_id}:roles`, needs_dispatch: true };

@@ -243,8 +243,9 @@ edges. It grants nothing and carries no grant, scope or approval.
 `edit`, `read`, `forbid` or `skip` assigned to one member of a caller-disclosed,
 closed candidate set. A role is an observation; it grants no authority. A round's
 roles are admitted only when every target has a role, a published confidence at or
-above the provisional τ_role (.75) and a valid maximal `top_p`; any other round falls
-back to bare generation.
+above the provisional τ_role (.75) and a valid maximal `top_p` (at least a quarter,
+the least maximum of a four-role distribution); any other round falls back to bare
+generation.
 
 ### Spawn plan
 
@@ -264,7 +265,8 @@ it bounds recursion without a depth cap. An empty child set has no gain.
 A durable, keyed statement that one action will be presented exactly once: an
 implement tier, a capability or done-check dispatch, a decline, a thread
 relation, or the spawn of a validated preflight spawn plan. It carries the dispatch
-id and no operator text. A claimed intent
+id and no operator text; a spawn intent also carries the digest of its admitted role
+observation, so the claim binds every role field. A claimed intent
 prevents a second presentation; an unconfirmed intent is not re-presented
 without an explicit resume.
 
