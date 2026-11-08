@@ -24,7 +24,8 @@ import {
   type LoopDecisionAsk,
   type LoopDecisionSite,
 } from './sites/loop-decide.js';
-import { type ExtractObservation, type ExtractSchema } from './sites/extract.js';
+import { validExtractObservation, type ExtractObservation, type ExtractSchema } from './sites/extract.js';
+import { stableStringify } from './stable-json.js';
 import { modelExtractSchema } from './sites/model-extract.js';
 import {
   SITE_POLICY,
@@ -683,8 +684,7 @@ function replayLoop(request: DispatchRequest, checkpoint: DispatchCheckpoint, st
   // The residual count is consequential evidence too: bind it to the schema's required slots.
   for (const [index, extract] of extracts.entries()) {
     if (
-      !isRecord(extract) ||
-      !Array.isArray(extract.slots) ||
+      !validExtractObservation(extract, schema, stableStringify(ask.state)) ||
       extract.schema !== 'extract@1' ||
       extract.site !== site ||
       extract.extract_schema !== schema.id ||

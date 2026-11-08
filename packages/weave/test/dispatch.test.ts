@@ -3283,6 +3283,127 @@ test('P4b-12. shadow corruption drops evidence; consequential extract corruption
   }
 });
 
+test('P4b-12. tampered extracts reject replay before any effect or copied text', async (t) => {
+  const h = harness();
+  const live = await run(h);
+  const cp = h.journal.load('d1').checkpoint!;
+  const cases: readonly (readonly [string, 'intake' | 'triage' | 'route', (extract: any) => void])[] = [
+    ...(['triage', 'route'] as const).flatMap((stage) =>
+      (
+        [
+          [
+            'extra key',
+            (x: any) => {
+              x.extra = 'CANARY-msg';
+            },
+          ],
+          [
+            'span value',
+            (x: any) => {
+              x.slots[0].value = 'CANARY-msg';
+            },
+          ],
+          [
+            'choice outside options',
+            (x: any) => {
+              x.slots[0].kind = 'choice';
+              x.slots[0].value = 'outside';
+            },
+          ],
+          [
+            'extra slot before intent',
+            (x: any) => {
+              x.slots.unshift({ ...x.slots[0], slot: 'extra' });
+            },
+          ],
+          [
+            'extra slot key',
+            (x: any) => {
+              x.slots[0].extra = 'CANARY-msg';
+            },
+          ],
+          [
+            'invalid span',
+            (x: any) => {
+              x.slots[0].span = [-1, 2];
+            },
+          ],
+          [
+            'invalid verdict',
+            (x: any) => {
+              x.verdict = 'CANARY-msg';
+            },
+          ],
+          [
+            'invalid reason',
+            (x: any) => {
+              x.reason = 'CANARY-msg';
+            },
+          ],
+        ] as const
+      ).map(([name, mutate]) => [name, stage, mutate] as const),
+    ),
+    [
+      'choice outside options',
+      'intake',
+      (x) => {
+        x.slots[0].value = 'outside';
+      },
+    ],
+    [
+      'slot order swapped',
+      'intake',
+      (x) => {
+        x.slots.reverse();
+      },
+    ],
+  ];
+  for (const [name, stage, mutate] of cases) {
+    await t.test(`${stage}: ${name}`, async () => {
+      const forged = structuredClone(cp);
+      mutate(stage === 'intake' ? forged.intake!.extract[0] : forged[stage]!.extracts[0]);
+      assert.throws(
+        () => transitionDispatch(h.request, forged, live.receipt, live.entry),
+        new RegExp(`recorded ${stage}`),
+      );
+      const writes: unknown[] = [];
+      const journal: DispatchJournal = {
+        ...forgedJournal(forged),
+        checkpoint: (entry) => {
+          writes.push(entry);
+        },
+        claim: (...args) => {
+          writes.push(args);
+          return false;
+        },
+        acquire: (...args) => {
+          writes.push(args);
+          return null;
+        },
+        release: (...args) => {
+          writes.push(args);
+        },
+        present: (...args) => {
+          writes.push(args);
+          return false;
+        },
+        append: (...args) => {
+          writes.push(args);
+          return false;
+        },
+      };
+      const sink = collector();
+      const recovery = harness({}, { journal, weft: sink.port });
+      for (let replay = 0; replay < 2; replay++) await assert.rejects(run(recovery), new RegExp(`recorded ${stage}`));
+      assert.equal(recovery.generateCalls.length + recovery.evaluateCalls.length + recovery.dispatchCalls.length, 0);
+      assert.deepEqual(writes, []);
+      assert.deepEqual(sink.records, []);
+      assertNoCopiedText([writes, ...sink.records], CANARIES);
+      assert.deepEqual(journal.load('d1').checkpoint, forged);
+    });
+  }
+});
+
 test('P4b-13. residual ambiguity is the final D1 extract count, with fixed fact order', async () => {
   for (const [plan, residual] of [
     [{}, 0],

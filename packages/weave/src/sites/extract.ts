@@ -62,6 +62,106 @@ export interface ExtractObservation {
   readonly residual_ambiguity: { readonly count: number; readonly slots: readonly string[] };
   readonly provider_request_id: string | null;
 }
+
+/** Pure, content-free record validation shared by the live gate and journal replay. */
+export function validExtractObservation(
+  value: unknown,
+  schema: ExtractSchema,
+  original: string,
+): value is ExtractObservation {
+  if (
+    !exactKeys(value, [
+      'schema',
+      'site',
+      'extract_schema',
+      'request_id',
+      'attempt',
+      'state_revision',
+      'verdict',
+      'reason',
+      'slots',
+      'residual_ambiguity',
+      'provider_request_id',
+    ])
+  )
+    return false;
+  const observation = value as unknown as ExtractObservation;
+  if (
+    observation.schema !== 'extract@1' ||
+    observation.extract_schema !== schema.id ||
+    typeof observation.site !== 'string' ||
+    (observation.attempt !== 1 && observation.attempt !== 2) ||
+    !Number.isSafeInteger(observation.state_revision) ||
+    observation.state_revision < 0 ||
+    !(['use_hints', 'original_only', 're_extract'] as readonly unknown[]).includes(observation.verdict) ||
+    !(
+      [
+        'faithful',
+        'unfaithful',
+        'no_answer',
+        'mismatched_answer',
+        'decision_unavailable',
+        'stale_answer',
+        'cancelled',
+      ] as readonly unknown[]
+    ).includes(observation.reason)
+  )
+    return false;
+  for (const id of [observation.request_id, observation.provider_request_id])
+    if (id !== null && (typeof id !== 'string' || correlation(id) !== id)) return false;
+  const specs = Object.entries(schema.slots);
+  if (!Array.isArray(observation.slots) || observation.slots.length !== specs.length) return false;
+  for (const [index, [slot, spec]] of specs.entries()) {
+    const item = observation.slots[index];
+    if (
+      !exactKeys(item, ['slot', 'kind', 'status', 'value', 'span']) ||
+      item.slot !== slot ||
+      item.kind !== spec.kind ||
+      !(['grounded', 'empty', 'unresolved', 'ungrounded', 'out_of_set', 'unread'] as readonly unknown[]).includes(
+        item.status,
+      )
+    )
+      return false;
+    if (item.value !== null && typeof item.value !== 'string') return false;
+    if (
+      spec.kind === 'span'
+        ? item.value !== null
+        : item.value !== null && item.value !== spec.none && !spec.options.includes(item.value)
+    )
+      return false;
+    const bounds = item.span;
+    if (
+      bounds !== null &&
+      (!Array.isArray(bounds) ||
+        bounds.length !== 2 ||
+        !Number.isInteger(bounds[0]) ||
+        !Number.isInteger(bounds[1]) ||
+        bounds[0] < 0 ||
+        bounds[0] >= bounds[1] ||
+        bounds[1] > original.length)
+    )
+      return false;
+    if (item.status === 'grounded') {
+      if (spec.kind === 'span' ? bounds === null : item.value === null || (item.value !== spec.none && bounds === null))
+        return false;
+    } else {
+      if (item.value !== null) return false;
+      if (item.status === 'unresolved' ? spec.kind !== 'choice' || bounds === null : bounds !== null) return false;
+      if (item.status === 'out_of_set' && spec.kind !== 'choice') return false;
+    }
+  }
+  const residual = observation.residual_ambiguity;
+  if (!exactKeys(residual, ['count', 'slots']) || !Array.isArray(residual.slots)) return false;
+  const expected = specs
+    .filter(([, spec], index) => spec.required && observation.slots[index]!.status !== 'grounded')
+    .map(([slot]) => slot);
+  return (
+    residual.count === expected.length &&
+    residual.slots.length === expected.length &&
+    expected.every((slot, index) => residual.slots[index] === slot)
+  );
+}
+
 export interface ExtractCall {
   readonly site: string;
   readonly extract_site: string;
@@ -97,6 +197,12 @@ function plainObject(value: unknown): value is Record<string, unknown> {
     value !== null &&
     !Array.isArray(value) &&
     (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)
+  );
+}
+
+function exactKeys(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
+  return (
+    plainObject(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key))
   );
 }
 
@@ -275,7 +381,7 @@ export function gateExtract(
   const verdict =
     meta.verdict ?? (admitted === null || unfaithful ? (attempt === 1 ? 're_extract' : 'original_only') : 'use_hints');
   const reason = meta.reason ?? (admitted === null ? 'no_answer' : unfaithful ? 'unfaithful' : 'faithful');
-  return {
+  const observation: ExtractObservation = {
     schema: 'extract@1',
     site: meta.site ?? 'intake.classify',
     extract_schema: checked.id,
@@ -288,6 +394,8 @@ export function gateExtract(
     residual_ambiguity: { count: residual.length, slots: residual },
     provider_request_id: correlation(meta.provider_request_id),
   };
+  if (!validExtractObservation(observation, checked, original)) throw new Error('invalid extract observation');
+  return observation;
 }
 
 /** The generation prompt's fixed preface; it names slots and statuses, never provider text. */
