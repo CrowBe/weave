@@ -3753,6 +3753,278 @@ function dispatchProjection(d: DispatchDecision) {
   };
 }
 
+function assertNullSpawn(d: DispatchDecision) {
+  assert.deepEqual(
+    d.decide1.facts.filter((f) => f.name.startsWith('spawn.')),
+    ['spawn.gain', 'spawn.children', 'spawn.plan'].map((name) => ({ name, value: null })),
+  );
+}
+
+test('P5a-fix1 invalid ceilings cannot escape shadow computation at any dispatch boundary', async (t) => {
+  for (const cost_ceiling of [2.5, NaN, Infinity, -1, Number.MAX_SAFE_INTEGER + 1])
+    for (const path of ['live', 'receipt resume', 'crash resume', 'stale', 'cancel'] as const)
+      await t.test(`${cost_ceiling}: ${path}`, async () => {
+        async function exercise(targets: boolean) {
+          const request = makeRequest({
+            terms: { ...terms, cost_ceiling },
+            ...(targets ? { targets: structuredClone(ROLE_TARGETS) } : {}),
+          });
+          const storage = new MemoryDispatchJournal();
+          const clock = makeClock();
+          const controller = new AbortController();
+          const claims: DispatchIntent[] = [];
+          let interrupted = false;
+          const journal: DispatchJournal = {
+            ...delegate(storage),
+            checkpoint(cp) {
+              storage.checkpoint(cp);
+              // Results are durable and roles are answered before this boundary moves.
+              if (cp.shadow !== null && !interrupted) {
+                interrupted = true;
+                if (path === 'stale') clock.advance();
+                if (path === 'cancel') controller.abort();
+                if (path === 'crash resume') throw new Error('crash after shadow results');
+              }
+            },
+            claim(id, intent, cp) {
+              claims.push(structuredClone(intent));
+              return storage.claim(id, intent, cp);
+            },
+          };
+          const h = harness(
+            { roles: ['edit', 'read', 'forbid', 'skip'] },
+            {
+              request,
+              journal,
+              clock,
+              ...(path === 'receipt resume'
+                ? {
+                    receipt: (intent: DispatchIntent) =>
+                      ({ status: 'refused', dispatch_id: intent.dispatch_id, reason: 'budget' }) as const,
+                  }
+                : {}),
+            },
+          );
+          if (path === 'crash resume') await assert.rejects(run(h), /crash after shadow results/);
+          else {
+            const first = await run(h, controller.signal);
+            assertNullSpawn(first);
+            if (path !== 'receipt resume') {
+              if (targets) assert.equal(first.preflight?.reason, 'answered');
+              return { decision: first, claims, h, storage };
+            }
+          }
+          const resumed = harness({}, { request: { ...request, resume: true }, journal, clock });
+          const decision = await run(resumed);
+          assertNullSpawn(decision);
+          assert.equal(resumed.generateCalls.length + resumed.evaluateCalls.length, 0);
+          if (targets) assert.equal(decision.preflight?.reason, 'answered');
+          return { decision, claims, h: resumed, storage };
+        }
+        const baseline = await exercise(false);
+        const shadow = await exercise(true);
+        assert.deepEqual(dispatchProjection(shadow.decision), dispatchProjection(baseline.decision));
+        assert.deepEqual(shadow.claims, baseline.claims);
+        if (path === 'stale' || path === 'cancel') {
+          assert.equal(shadow.claims.length + shadow.h.dispatchCalls.length, 0);
+          assert.equal(shadow.decision.reason, path === 'stale' ? 'stale_answer' : 'cancelled');
+        } else {
+          const replay = transitionDispatch(
+            shadow.h.request,
+            shadow.storage.load('d1').checkpoint!,
+            shadow.decision.receipt,
+            shadow.decision.entry,
+          );
+          assert.deepEqual(replay, shadow.decision);
+          assertNullSpawn(replay);
+        }
+      });
+});
+
+test('P5a-fix1 every untrusted preflight input fails to null facts without moving policy', async (t) => {
+  const { preflightPlan } = await import('../src/spawn.js');
+  const { digest } = await import('../src/digest.js');
+  const h = harness({}, { request: roleRequest() });
+  await run(h);
+  const recorded = h.journal.load('d1').checkpoint!;
+  const cases: readonly (readonly [string, (request: any, cp: any) => void, RegExp])[] = [
+    ...[2.5, NaN, Infinity, -1, Number.MAX_SAFE_INTEGER + 1].map(
+      (budget) =>
+        [
+          `budget ${budget}`,
+          (r: any) => {
+            r.terms.cost_ceiling = budget;
+          },
+          /invalid plan fields/,
+        ] as const,
+    ),
+    [
+      'lineage',
+      (_r, cp) => {
+        cp.decision_id = 'invalid/id';
+        cp.preflight.request_id = 'invalid/id:roles';
+      },
+      /invalid plan fields/,
+    ],
+    [
+      'target reference',
+      (r, cp) => {
+        r.targets[0].ref = cp.preflight.targets[0].ref = 'invalid/ref';
+      },
+      /invalid targets/,
+    ],
+    [
+      'duplicate target',
+      (r, cp) => {
+        r.targets[0].ref = cp.preflight.targets[0].ref = r.targets[1].ref;
+      },
+      /invalid targets/,
+    ],
+    [
+      'target count',
+      (r, cp) => {
+        for (let i = 4; i < 9; i++) {
+          r.targets.push({ ref: `target${i}`, summary: '' });
+          cp.preflight.targets.push({ ref: `target${i}`, role: 'edit', top_p: 1, confidence: 1 });
+        }
+      },
+      /invalid targets/,
+    ],
+    [
+      'role value',
+      (_r, cp) => {
+        cp.preflight.targets[0].role = 'foreign';
+      },
+      /invalid roles/,
+    ],
+    [
+      'role count',
+      (_r, cp) => {
+        cp.preflight.targets.pop();
+      },
+      /invalid roles/,
+    ],
+    ...[-1, 0.5].map(
+      (ambiguity) =>
+        [
+          `ambiguity ${ambiguity}`,
+          (_r: any, cp: any) => {
+            cp.triage.extracts.at(-1).residual_ambiguity.count = ambiguity;
+          },
+          /invalid ambiguity/,
+        ] as const,
+    ),
+  ];
+  for (const [name, mutate, error] of cases)
+    await t.test(name, () => {
+      const request = structuredClone(h.request);
+      const cp = structuredClone(recorded);
+      mutate(request, cp);
+      // Prove each case reaches a real validator failure, rather than a no-edit plan.
+      assert.throws(
+        () =>
+          preflightPlan({
+            decision_id: cp.decision_id,
+            root_ref: cp.decision_id,
+            goal_digest: digest({ message: request.intake.message }),
+            budget: request.terms.cost_ceiling,
+            tier: 'flash',
+            targets: request.targets!.map((target) => target.ref),
+            roles: cp.preflight!.targets.map((target) => target.role!),
+            ambiguity: cp.triage!.extracts.at(-1)!.residual_ambiguity.count,
+          }),
+        error,
+      );
+      // This adapter is also used by cancellation and stale boundaries, before replay.
+      const inputs = decide1Inputs(request, cp);
+      const baseline = decide1Inputs(request, { ...cp, preflight: null, shadow: null });
+      assert.deepEqual(
+        inputs.shadow!.facts.filter((f) => f.name.startsWith('spawn.')).map((f) => f.value),
+        [null, null, null],
+      );
+      assert.deepEqual(inputs.facts, baseline.facts);
+      assert.deepEqual(inputs.judgments, baseline.judgments);
+      const actual = decideBand(inputs);
+      const expected = decideBand(baseline);
+      assert.deepEqual([actual.band, actual.rule], [expected.band, expected.rule]);
+      // Pure replay does not run live target ingress validation; it must still be isolated.
+      if (
+        name.startsWith('target') ||
+        name.startsWith('duplicate') ||
+        name.startsWith('role') ||
+        name.startsWith('budget')
+      ) {
+        const noShadow = { ...cp, preflight: null, shadow: null };
+        const replay = transitionDispatch(request, cp, null);
+        assertNullSpawn(replay);
+        assert.deepEqual(dispatchProjection(replay), dispatchProjection(transitionDispatch(request, noShadow, null)));
+      } else if (name.startsWith('ambiguity'))
+        assert.throws(() => transitionDispatch(request, cp, null), /recorded triage/);
+      else assert.throws(() => transitionDispatch(request, cp, null), /checkpoint belongs to another decision/);
+    });
+});
+
+test('P5a-fix1 every shadow answer path screens validator failures before policy and replay', async () => {
+  const h = harness(
+    {},
+    {
+      request: roleRequest({ targets: Array.from({ length: 8 }, (_, i) => ({ ref: `target${i}`, summary: '' })) }),
+    },
+  );
+  const live = await run(h);
+  const cp = h.journal.load('d1').checkpoint!;
+  const baseline = transitionDispatch(h.request, { ...cp, preflight: null, shadow: null }, live.receipt);
+  // Cover every P4b judgment and every P5a target, including all emitted statistics.
+  const paths: readonly (readonly [string, (cp: any, value: unknown) => void, string])[] = [
+    ...cp.shadow!.flatMap((observation, i) => {
+      const name = observation.site.slice('decide1.'.length);
+      return ['probability', 'confidence'].map(
+        (field) =>
+          [
+            `${name}.${field}`,
+            (cp: any, value: unknown) => {
+              cp.shadow[i][field] = value;
+            },
+            `${name}.reason`,
+          ] as const,
+      );
+    }),
+    ...cp.preflight!.targets.flatMap((_, i) =>
+      ['role', 'top_p', 'confidence'].map(
+        (field) =>
+          [
+            `preflight.t${i}.${field}`,
+            (cp: any, value: unknown) => {
+              cp.preflight.targets[i][field] = value;
+            },
+            'preflight.reason',
+          ] as const,
+      ),
+    ),
+  ];
+  for (const [path, mutate, reasonFact] of paths)
+    for (const value of [NaN, Infinity, -1, 2, 'foreign']) {
+      const bad = structuredClone(cp);
+      mutate(bad, value);
+      const replay = transitionDispatch(h.request, bad, live.receipt);
+      assert.deepEqual(dispatchProjection(replay), dispatchProjection(baseline), path);
+      assert.equal(fact(replay, reasonFact), 'untrusted', path);
+      const inputs = decide1Inputs(h.request, bad);
+      const name = path.startsWith('preflight.') ? 'preflight.' : path.split('.')[0]!;
+      assert.ok(
+        inputs.shadow!.judgments.every((judgment) => !judgment.name.startsWith(name)),
+        path,
+      );
+      if (path.startsWith('preflight.')) {
+        assertNullSpawn(replay);
+        assert.ok(
+          replay.decide1.facts.filter((f) => /^preflight\.t\d\.role$/.test(f.name)).every((f) => f.value === null),
+          path,
+        );
+      }
+    }
+});
+
 test('P5a-10 parity for every P4b stage shape without targets or with an empty set', async () => {
   const scenarios: Plan[] = [
     ...PARITY.map(([p]) => p),

@@ -974,19 +974,33 @@ export function decide1Inputs(request: DispatchRequest, checkpoint: DispatchChec
       shadowJudgments.push({ name: `preflight.t${i}.confidence`, probability: target.confidence });
   }
   const ambiguity = triage?.extracts.at(-1)?.residual_ambiguity.count;
-  const spawn =
-    roles?.reason === 'answered' && ambiguity != null && route !== null && isTier(route.site.choice)
-      ? preflightPlan({
-          decision_id: checkpoint.decision_id,
-          root_ref: checkpoint.decision_id,
-          goal_digest: digest({ message: request.intake.message }),
-          budget: request.terms.cost_ceiling,
-          tier: route.site.choice,
-          targets: (request.targets ?? []).map((t) => t.ref),
-          roles: roles.targets.map((t) => t.role!),
-          ambiguity,
-        })
-      : null;
+  const spawn = (() => {
+    if (
+      roles?.reason !== 'answered' ||
+      ambiguity == null ||
+      route === null ||
+      !isTier(route.site.choice) ||
+      !Number.isSafeInteger(request.terms.cost_ceiling) ||
+      request.terms.cost_ceiling < 0
+    )
+      return null;
+    try {
+      return preflightPlan({
+        decision_id: checkpoint.decision_id,
+        root_ref: checkpoint.decision_id,
+        goal_digest: digest({ message: request.intake.message }),
+        budget: request.terms.cost_ceiling,
+        tier: route.site.choice,
+        targets: (request.targets ?? []).map((t) => t.ref),
+        roles: roles.targets.map((t) => t.role!),
+        ambiguity,
+      });
+    } catch {
+      // A rejected shadow plan is absent evidence, including on replay and boundary traces.
+      // Keep plan validation strict; neither its failure nor exception text can affect dispatch.
+      return null;
+    }
+  })();
   shadowFacts.push(
     { name: 'spawn.gain', value: spawn?.gain ?? null },
     { name: 'spawn.children', value: spawn?.plan?.children.length ?? null },

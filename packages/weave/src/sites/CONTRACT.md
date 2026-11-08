@@ -373,6 +373,11 @@ limit. The goal digest is `digest({ message: intake.message })`; root and parent
 are this decision id. Budget is `terms.cost_ceiling`, tier is D2's accepted choice,
 and ambiguity is the final D1 residual count, validated by merged-main extract
 replay (`validExtractObservation`). No replay validation is bypassed or duplicated.
+Shadow computation requires a safe non-negative integer ceiling; otherwise all
+three `spawn.*` facts are null. Any preflight plan validation exception likewise
+produces null facts, never a dispatch exception or copied error text. This applies
+to live resolution, replay, resume and cancellation/stale boundary traces. The
+plan validators and consequential stage replay remain strict.
 
 The plan is recomputed, never stored. After P4b's 19 facts, thirteen fixed shadow
 facts follow: `preflight.reason`, `preflight.targets`, `preflight.t0.role` through
