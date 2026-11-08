@@ -49,6 +49,7 @@ const terms: InferenceTerms = {
 };
 const CANARIES = ['CANARY-msg', 'CANARY-summary', 'CANARY-ctx', 'CANARY-provider', 'CANARY-error'];
 
+type ShadowMode = 'true' | 'false' | 'throw' | 'budget' | 'malformed' | 'foreign' | 'no_answer';
 type Mode = 'ok' | 'stale' | 'mismatch' | 'outage' | 'no_answer' | 'paused';
 interface StagePlan {
   readonly choice?: string;
@@ -57,6 +58,7 @@ interface StagePlan {
   readonly probabilities?: Readonly<Record<string, number>>;
 }
 interface Plan {
+  readonly shadow?: ShadowMode;
   readonly intake?: StagePlan;
   readonly triage?: StagePlan;
   readonly route?: StagePlan;
@@ -187,6 +189,32 @@ function makeGateway(plan: Plan, clock: Clock) {
       events.push(`evaluate:${request.site}`);
       if (plan.gate?.match(request.request_id)) await plan.gate.promise;
       plan.onEvaluate?.(request, signal);
+      if (request.site.startsWith('decide1.')) {
+        if (plan.shadow === 'throw') throw new Error('CANARY-error');
+        const outcome = {
+          status: 'accepted',
+          kind: 'boolean',
+          request_id: request.request_id,
+          site: request.site,
+          answers: {
+            decision:
+              plan.shadow === 'malformed'
+                ? { type: 'boolean', probability: 2 }
+                : { type: 'boolean', probability: plan.shadow === 'false' ? 0 : 1 },
+          },
+          confidence: { decision: 1 },
+          routed_unit_id: 'shadow.fake',
+          provider_response_id: 'shadow-provider',
+          attempts: [],
+          spent: 0,
+          uncertainty: [],
+          ...(plan.shadow === 'budget' ? { paused: budgetPause(request.request_id, request.site) } : {}),
+        };
+        if (plan.shadow === 'foreign') outcome.request_id = 'foreign';
+        return (plan.shadow === 'no_answer'
+          ? blockedChoice(request)
+          : outcome) as unknown as EvaluationOutcome<'choice'>;
+      }
       switch (request.site) {
         case 'intake.classify':
           return choiceOutcome(request, plan.intake, 'new_thread', clock);
@@ -285,17 +313,20 @@ test('1. chain: intake -> D1 -> D2 -> one implement dispatch, in dependency orde
   assert.deepEqual(h.dispatchCalls, [
     { kind: 'implement', dispatch_id: 'd1:dispatch', tier: 'flash', ceiling: 'flash', tier_source: 'route' },
   ]);
-  assert.deepEqual(h.events, [
-    'generate:intake.extract',
-    'evaluate:intake.classify',
-    'generate:loop.triage.extract',
-    'evaluate:loop.triage',
-    'generate:loop.route.extract',
-    'evaluate:loop.route',
-    'dispatch:implement',
-  ]);
   assert.deepEqual(
-    h.evaluateCalls.map((request) => request.request_id),
+    h.events.filter((event) => !event.startsWith('evaluate:decide1.')),
+    [
+      'generate:intake.extract',
+      'evaluate:intake.classify',
+      'generate:loop.triage.extract',
+      'evaluate:loop.triage',
+      'generate:loop.route.extract',
+      'evaluate:loop.route',
+      'dispatch:implement',
+    ],
+  );
+  assert.deepEqual(
+    h.evaluateCalls.filter((request) => !request.site.startsWith('decide1.')).map((request) => request.request_id),
     ['d1:intake', 'd1:triage', 'd1:route'],
   );
   // needs_dispatch:true is what turns a stage outage into a pause rather than a fallback.
@@ -349,7 +380,7 @@ test('3. D1 and D2 fallbacks dispatch with their existing tiers', async () => {
     const h = harness({ triage });
     const decision = await run(h);
     assert.equal(decision.status, 'dispatched', reason);
-    assert.equal(decision.triage?.observation.reason, reason, reason);
+    assert.equal(decision.triage?.site.observation.reason, reason, reason);
     assert.deepEqual(
       h.dispatchCalls[0],
       {
@@ -370,7 +401,7 @@ test('3. D1 and D2 fallbacks dispatch with their existing tiers', async () => {
 
   const route = harness({ route: { choice: 'flash', confidence: 0.5 } });
   const decision = await run(route);
-  assert.equal(decision.route?.observation.reason, 'low_confidence');
+  assert.equal(decision.route?.site.observation.reason, 'low_confidence');
   assert.deepEqual(route.dispatchCalls[0], {
     kind: 'implement',
     dispatch_id: 'd1:dispatch',
@@ -401,7 +432,7 @@ test('4. no-dispatch table: stale, mismatch, outage and cancellation at every st
       if (stage === 'triage' && mode === 'stale') {
         // The trap: the pure transition is implement/strong/transition, yet it never dispatches.
         assert.deepEqual(
-          [decision.triage?.choice, decision.triage?.tier, decision.triage?.status],
+          [decision.triage?.site.choice, decision.triage?.site.tier, decision.triage?.site.status],
           ['implement', 'strong', 'transition'],
         );
       }
@@ -674,7 +705,7 @@ test('10. recovery reuses paid answers and never reuses a request id', async () 
   const decision = await run(reused);
   assert.equal(decision.status, 'dispatched');
   assert.deepEqual(
-    reused.evaluateCalls.map((request) => request.site),
+    reused.evaluateCalls.filter((request) => !request.site.startsWith('decide1.')).map((request) => request.site),
     ['loop.route'],
   );
   assert.deepEqual(
@@ -842,7 +873,9 @@ test('14. a stage outage pauses, and resume re-asks only that stage', async () =
   const recovered = await run(resume);
   assert.equal(recovered.status, 'dispatched');
   assert.deepEqual(
-    resume.evaluateCalls.map((request) => [request.site, request.request_id]),
+    resume.evaluateCalls
+      .filter((request) => !request.site.startsWith('decide1.'))
+      .map((request) => [request.site, request.request_id]),
     [['loop.route', 'd1:route:e2']],
   );
   assert.deepEqual(
@@ -871,14 +904,17 @@ test('15. transitionDispatch replays the live decision and refuses impossible st
     ...checkpoint,
     triage: {
       ...checkpoint.triage!,
-      choice: 'implement',
-      tier: 'strong',
-      status: 'transition',
-      observation: {
-        ...checkpoint.triage!.observation,
-        accepted: false,
-        fallback_used: true,
-        reason: 'low_confidence',
+      site: {
+        ...checkpoint.triage!.site,
+        choice: 'implement',
+        tier: 'strong',
+        status: 'transition',
+        observation: {
+          ...checkpoint.triage!.site.observation,
+          accepted: false,
+          fallback_used: true,
+          reason: 'low_confidence',
+        },
       },
     },
   };
@@ -911,6 +947,7 @@ test('16. records keep their exact key order and carry no authority or copied te
     'intake',
     'triage',
     'route',
+    'shadow',
   ]);
   assert.deepEqual(Object.keys(decision.intent!), ['kind', 'dispatch_id', 'relation', 'thread_ref']);
   assert.deepEqual(Object.keys(decision.receipt!), ['status', 'dispatch_id', 'ref']);
@@ -924,9 +961,10 @@ test('16. records keep their exact key order and carry no authority or copied te
     'intake',
     'triage',
     'route',
+    'shadow',
     'intent',
   ]);
-  assert.deepEqual(Object.keys(checkpoint.asks), ['intake', 'triage', 'route']);
+  assert.deepEqual(Object.keys(checkpoint.asks), ['intake', 'triage', 'route', 'shadow']);
   assertNoAuthorityKeys(decision);
   assertNoAuthorityKeys(checkpoint);
   assertRecordCopiesNoText(decision, CANARIES);
@@ -1111,10 +1149,13 @@ const REDERIVED = /is not the live outcome of its recorded observations/;
 
 function withRouteObservation(
   checkpoint: DispatchCheckpoint,
-  patch: Partial<NonNullable<DispatchCheckpoint['route']>['observation']>,
+  patch: Partial<NonNullable<DispatchCheckpoint['route']>['site']['observation']>,
 ): DispatchCheckpoint {
   const route = checkpoint.route!;
-  return { ...checkpoint, route: { ...route, observation: { ...route.observation, ...patch } } };
+  return {
+    ...checkpoint,
+    route: { ...route, site: { ...route.site, observation: { ...route.site.observation, ...patch } } },
+  };
 }
 
 test('20. a losing concurrent delivery cannot rewrite the winner stages', async () => {
@@ -1141,8 +1182,8 @@ test('20. a losing concurrent delivery cannot rewrite the winner stages', async 
   assert.equal(loser.dispatchCalls.length, 0);
 
   const checkpoint = journal.load('d1').checkpoint!;
-  assert.equal(checkpoint.route?.observation.request_id, 'd1:route:e2');
-  assert.equal(checkpoint.route?.choice, 'strong');
+  assert.equal(checkpoint.route?.site.observation.request_id, 'd1:route:e2');
+  assert.equal(checkpoint.route?.site.choice, 'strong');
   assert.deepEqual(checkpoint.intent, won.intent);
   assert.deepEqual(transitionDispatch(winner.request, checkpoint, won.receipt, won.entry), won);
 });
@@ -1615,7 +1656,7 @@ test('28. a claimed intent survives a terminal stale pause and append surfaces f
   const request = makeRequest();
   assert.equal(journal.claim('d1', claimed), true);
   const orphan: DispatchDecision = {
-    schema: 'dispatch.decision@2',
+    schema: 'dispatch.decision@3',
     rule_table: DECIDE1_RULE_TABLE,
     decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: 'd1',
@@ -1630,6 +1671,7 @@ test('28. a claimed intent survives a terminal stale pause and append surfaces f
     intake: null,
     triage: null,
     route: null,
+    shadow: null,
   };
   assert.equal(journal.append(orphan), false);
   assert.deepEqual(journal.load('d1').decisions, []);
@@ -1821,7 +1863,7 @@ test('31. property: every recorded checkpoint replays to the live decision on th
 test('32. the journal is a single-writer state machine per decision id', () => {
   const intent: DispatchIntent = { kind: 'capability', dispatch_id: 'd1:dispatch' };
   const decision = (patch: Partial<DispatchDecision>): DispatchDecision => ({
-    schema: 'dispatch.decision@2',
+    schema: 'dispatch.decision@3',
     rule_table: DECIDE1_RULE_TABLE,
     decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: 'd1',
@@ -1836,6 +1878,7 @@ test('32. the journal is a single-writer state machine per decision id', () => {
     intake: null,
     triage: null,
     route: null,
+    shadow: null,
     ...patch,
   });
 
@@ -1851,13 +1894,14 @@ test('32. the journal is a single-writer state machine per decision id', () => {
   assert.equal(terminal.claim('d1', intent), false);
   assert.equal(terminal.append(decision({ entry: 2, status: 'needs_human', reason: 'low_confidence' })), false);
   terminal.checkpoint({
-    schema: 'dispatch.checkpoint@1',
+    schema: 'dispatch.checkpoint@2',
     decision_id: 'd1',
     ...REVISION,
-    asks: { intake: 9, triage: 0, route: 0 },
+    asks: { intake: 9, triage: 0, route: 0, shadow: 0 },
     intake: null,
     triage: null,
     route: null,
+    shadow: null,
     intent: null,
   });
   assert.equal(terminal.load('d1').checkpoint, null);
@@ -2022,7 +2066,7 @@ test('34. a crashed attempt ends only on the port settlement, never by time, wit
   // The journal contract: one live attempt per claimed intent, single-use ids, no expiry.
   const intent: DispatchIntent = { kind: 'capability', dispatch_id: 'd1:dispatch' };
   const owned = (status: DispatchDecision['status'], reason: DispatchDecision['reason']): DispatchDecision => ({
-    schema: 'dispatch.decision@2',
+    schema: 'dispatch.decision@3',
     rule_table: DECIDE1_RULE_TABLE,
     decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: 'd1',
@@ -2037,6 +2081,7 @@ test('34. a crashed attempt ends only on the port settlement, never by time, wit
     intake: null,
     triage: null,
     route: null,
+    shadow: null,
   });
   const fenced = new MemoryDispatchJournal();
   assert.equal(fenced.acquire('d1'), null, 'an unclaimed decision has no attempt');
@@ -2528,6 +2573,11 @@ const FACT_NAMES = [
   'route.status',
   'route.reason',
   'route.accepted',
+  'residual_ambiguity',
+  'clarify.reason',
+  'multi_deliverable.reason',
+  'reads_before_gen.reason',
+  'veto_bare_gen.reason',
 ];
 const PARITY: readonly [Plan, string, string][] = [
   [{}, 'gen.route', 'escalate_gen'],
@@ -2613,7 +2663,9 @@ test('D-ENG-049 origin failures select their ask row; untrusted stages still fai
       const variant: DispatchCheckpoint = {
         ...checkpoint,
         intent: null,
-        ...(stage === 'triage' ? { triage: stopped, route: null } : { route: stopped }),
+        ...(stage === 'triage'
+          ? { triage: { ...checkpoint.triage!, site: stopped }, route: null }
+          : { route: { ...checkpoint.route!, site: stopped } }),
       };
       const trace = decideBand(decide1Inputs(base.request, variant));
       assert.deepEqual([trace.rule, trace.band], [`ask.${stage}`, 'ask_human']);
@@ -2627,11 +2679,11 @@ test('D-ENG-049 origin failures select their ask row; untrusted stages still fai
     }
 });
 
-test('P4a-8 @2 stores exactly the pure trace, fixed facts and bounded judgments without text', async () => {
+test('P4a-8 @3 stores exactly the pure trace, fixed facts and bounded judgments without text', async () => {
   const h = harness();
   const decision = await run(h);
   const checkpoint = h.journal.load('d1').checkpoint!;
-  assert.equal(decision.schema, 'dispatch.decision@2');
+  assert.equal(decision.schema, 'dispatch.decision@3');
   assert.equal(decision.rule_table, DECIDE1_RULE_TABLE);
   const { table, ...trace } = decideBand(decide1Inputs(h.request, checkpoint));
   assert.equal(table, decision.rule_table);
@@ -2641,7 +2693,9 @@ test('P4a-8 @2 stores exactly the pure trace, fixed facts and bounded judgments 
     FACT_NAMES,
   );
   assert.deepEqual(
-    decision.decide1.judgments.map((judgment) => judgment.name),
+    decision.decide1.judgments
+      .filter((judgment) => /^(intake|triage|route)\./.test(judgment.name))
+      .map((judgment) => judgment.name),
     ['intake.confidence', 'intake.top_p', 'triage.confidence', 'triage.top_p', 'route.confidence', 'route.top_p'],
   );
   assertNoAuthorityKeys(decision);
@@ -2731,7 +2785,14 @@ test('P4a-10 one valid dispatch.decided after append and judgments; reused stage
   assert.deepEqual(later[1]!.links, [{ rel: 'caused_by', record_id: later[0]!.record_id }]);
   assert.deepEqual(later[1]!.evidence, [
     { source: 'observation', ref: 'd1' },
-    ...['d1:intake', 'd1:triage', 'd1:route:e2'].map((ref) => ({ source: 'inference_request', ref })),
+    ...[
+      'd1:intake',
+      'd1:triage',
+      'd1:route:e2',
+      ...['clarify', 'multi_deliverable', 'reads_before_gen', 'veto_bare_gen'].map(
+        (judgment) => `d1:shadow.${judgment}`,
+      ),
+    ].map((ref) => ({ source: 'inference_request', ref })),
   ]);
   assert.deepEqual(validateRecord(later[1]), { ok: true });
   assert.equal(resumed.entry, 2);
@@ -2875,13 +2936,25 @@ test('P4a-13 concurrent decisions share monotonic Weft sequences; a losing write
   assert.equal(winner.dispatchCalls.length + loser.dispatchCalls.length, 1);
 });
 
-test('P4a-14 no new inference across parity cases and no policy mutation', async () => {
+test('P4a-14 consequential requests stay identical; only eligible decisions add four isolated shadow asks', async () => {
   const policy = JSON.stringify(SITE_POLICY);
   for (const [plan] of PARITY) {
     const h = harness(plan);
     const decision = await run(h);
     const stages = [decision.intake, decision.triage, decision.route].filter((stage) => stage !== null).length;
-    assert.equal(h.evaluateCalls.length, stages);
+    const consequential = h.evaluateCalls.filter((call) => !call.site.startsWith('decide1.'));
+    const shadow = h.evaluateCalls.filter((call) => call.site.startsWith('decide1.'));
+    const eligible = [
+      'act.capability',
+      'act.done_check',
+      'act.decline',
+      'gen.triage_fallback',
+      'gen.route',
+      'gen.route_fallback',
+    ].includes(decision.decide1.rule);
+    assert.equal(consequential.length, stages);
+    assert.equal(shadow.length, eligible ? 4 : 0);
+    assert.ok(shadow.every((call) => (call as EvaluationRequest).kind === 'boolean'));
     assert.equal(h.generateCalls.length, stages);
     // P3a's unchanged primitives provide an independent request oracle, including
     // failed admissions and fallbacks. Compare full requests, not just site names.
@@ -2933,7 +3006,7 @@ test('P4a-14 no new inference across parity cases and no policy mutation', async
     const generationRequests = (calls: readonly GenerationRequest[]) =>
       calls.map(({ accept, ...wire }) => ({ ...wire, accept: accept?.toString() }));
     assert.deepEqual(generationRequests(h.generateCalls), generationRequests(direct.generateCalls));
-    assert.deepEqual(h.evaluateCalls, direct.evaluateCalls);
+    assert.deepEqual(consequential, direct.evaluateCalls);
   }
   assert.equal(JSON.stringify(SITE_POLICY), policy);
 });
@@ -2969,4 +3042,622 @@ test('P4a admission between stages uses a hold row without changing stored obser
     );
     assert.equal(resumed.generateCalls.length + resumed.evaluateCalls.length + resumed.dispatchCalls.length, 0);
   }
+});
+
+const SHADOW_NAMES = ['clarify', 'multi_deliverable', 'reads_before_gen', 'veto_bare_gen'] as const;
+function shadowCalls(h: ReturnType<typeof harness>) {
+  return h.evaluateCalls.filter((call) => call.site.startsWith('decide1.'));
+}
+function p4aProjection(decision: DispatchDecision) {
+  const { shadow: _shadow, ...value } = structuredClone(decision);
+  return {
+    ...value,
+    schema: 'dispatch.decision@2',
+    triage: value.triage?.site ?? null,
+    route: value.route?.site ?? null,
+    decide1: {
+      ...value.decide1,
+      facts: value.decide1.facts.slice(0, 14),
+      judgments: value.decide1.judgments.filter((judgment) => /^(intake|triage|route)\./.test(judgment.name)),
+    },
+  };
+}
+
+function shadowReasons(decision: DispatchDecision) {
+  return decision.decide1.facts.slice(15).map((fact) => fact.value);
+}
+
+test('P4b-7/10. shadow modes preserve outcomes for every stage shape and receipt', async () => {
+  const scenarios: Plan[] = [
+    ...PARITY.map(([plan]) => plan),
+    ...SITE_POLICY['intake.classify'].options.map((choice) => ({ intake: { choice } })),
+    ...SITE_POLICY['loop.triage'].options.map((choice) => ({ triage: { choice } })),
+    ...SITE_POLICY['loop.route'].options.map((choice) => ({ route: { choice } })),
+    ...(['stale', 'mismatch', 'outage', 'paused', 'no_answer'] as const).flatMap((mode) => [
+      { intake: { mode } },
+      { triage: { mode } },
+      { route: { mode } },
+    ]),
+    { triage: { confidence: 0.1 } },
+    { route: { confidence: 0.1 } },
+  ];
+  for (const scenario of scenarios) {
+    const baseline = await run(harness(scenario));
+    for (const shadow of ['true', 'false', 'throw', 'budget', 'malformed', 'foreign', 'no_answer'] as const) {
+      const h = harness({ ...scenario, shadow });
+      const result = await run(h);
+      assert.deepEqual(p4aProjection(result), p4aProjection(baseline));
+      assert.equal(result.decide1.facts.length, 19);
+      const eligible = [
+        'act.capability',
+        'act.done_check',
+        'act.decline',
+        'gen.triage_fallback',
+        'gen.route',
+        'gen.route_fallback',
+      ].includes(result.decide1.rule);
+      assert.equal(shadowCalls(h).length, eligible ? 4 : 0);
+      if (eligible) {
+        const reason = {
+          true: 'answered',
+          false: 'answered',
+          throw: 'decision_unavailable',
+          budget: 'decision_unavailable',
+          malformed: 'invalid_answer',
+          foreign: 'mismatched_answer',
+          no_answer: 'no_answer',
+        }[shadow];
+        assert.deepEqual(shadowReasons(result), Array(4).fill(reason));
+      }
+    }
+  }
+  for (const reason of ['approval_required', 'budget', 'no_grant', 'unknown_target', 'conflict'] as const) {
+    const options = {
+      receipt: (intent: DispatchIntent): DispatchReceipt => ({
+        status: 'refused',
+        dispatch_id: intent.dispatch_id,
+        reason,
+      }),
+    };
+    assert.deepEqual(
+      p4aProjection(await run(harness({ shadow: 'budget' }, options))),
+      p4aProjection(await run(harness({}, options))),
+    );
+  }
+});
+
+test('P4b-8. stages and counter precede shadow, results precede claim', async () => {
+  const storage = new MemoryDispatchJournal();
+  const journal: DispatchJournal = {
+    load: (id) => storage.load(id),
+    checkpoint: (cp) => storage.checkpoint(cp),
+    claim: (id, intent, cp) => {
+      assert.equal(cp?.shadow?.length, 4);
+      assert.deepEqual(storage.load(id).checkpoint?.shadow, cp?.shadow);
+      return storage.claim(id, intent, cp);
+    },
+    acquire: (id, token) => storage.acquire(id, token),
+    release: (id, token) => storage.release(id, token),
+    present: (id, token) => storage.present(id, token),
+    append: (d, token) => storage.append(d, token),
+  };
+  const h = harness(
+    {
+      onEvaluate: (call) => {
+        if (!call.site.startsWith('decide1.')) return;
+        const cp = storage.load('d1').checkpoint!;
+        assert.equal(cp.asks.shadow, 1);
+        assert.equal(cp.route?.schema, 'loop.decision@1');
+        assert.equal(cp.triage?.schema, 'loop.decision@1');
+      },
+    },
+    { journal },
+  );
+  await run(h);
+  assert.deepEqual(
+    shadowCalls(h).map((call) => call.site),
+    SHADOW_NAMES.map((j) => `decide1.${j}`),
+  );
+});
+
+test('P4b-9. lost results are unrecorded and never re-asked; replay is pure', async () => {
+  const storage = new MemoryDispatchJournal();
+  let fail = true;
+  const journal: DispatchJournal = {
+    load: (id) => storage.load(id),
+    checkpoint: (cp) => {
+      if (fail && cp.shadow !== null) {
+        fail = false;
+        throw new Error('shadow write');
+      }
+      storage.checkpoint(cp);
+    },
+    claim: (id, intent, cp) => storage.claim(id, intent, cp),
+    acquire: (id, token) => storage.acquire(id, token),
+    release: (id, token) => storage.release(id, token),
+    present: (id, token) => storage.present(id, token),
+    append: (d, token) => storage.append(d, token),
+  };
+  const first = harness({}, { journal });
+  await assert.rejects(run(first), /shadow write/);
+  assert.equal(first.dispatchCalls.length, 0);
+  const next = harness({}, { journal });
+  const live = await run(next);
+  assert.equal(shadowCalls(next).length, 0);
+  assert.deepEqual(shadowReasons(live), Array(4).fill('unrecorded'));
+  assert.deepEqual(transitionDispatch(next.request, storage.load('d1').checkpoint!, live.receipt, live.entry), live);
+  const duplicate = harness({}, { journal, request: makeRequest({ resume: true }) });
+  assert.deepEqual(await run(duplicate), live);
+  assert.equal(duplicate.evaluateCalls.length, 0);
+});
+
+test('P4b-11. cancellation and stale shadow windows preserve admission gates', async () => {
+  for (const stale of [false, true]) {
+    const gate = deferred();
+    const controller = new AbortController();
+    const sink = collector();
+    const h = harness({ gate: { match: (id) => id.includes(':shadow.'), promise: gate.promise } }, { weft: sink.port });
+    const pending = run(h, controller.signal);
+    await waitUntil(() => shadowCalls(h).length === 4 || h.dispatchCalls.length > 0);
+    assert.equal(shadowCalls(h).length, 4);
+    if (stale) h.clock.advance();
+    else controller.abort();
+    gate.release();
+    const result = await pending;
+    assert.deepEqual([result.status, result.reason], ['paused', stale ? 'stale_answer' : 'cancelled']);
+    assert.equal(h.dispatchCalls.length, 0);
+    if (stale) {
+      assert.deepEqual(shadowReasons(result), Array(4).fill('stale_answer'));
+      assert.equal(result.decide1.rule, 'hold.admission');
+    } else {
+      assert.equal(sink.records.length, 0);
+      assert.equal(h.journal.load('d1').decisions.length, 0);
+      assert.equal(h.journal.load('d1').checkpoint?.shadow, null);
+      const resume = harness({}, { journal: h.journal, request: makeRequest({ resume: true }) });
+      const resumed = await run(resume);
+      assert.equal(shadowCalls(resume).length, 0);
+      assert.deepEqual(shadowReasons(resumed), Array(4).fill('unrecorded'));
+    }
+  }
+});
+
+test('P4b-12. shadow corruption drops evidence; consequential extract corruption throws', async () => {
+  const h = harness();
+  const live = await run(h);
+  const cp = h.journal.load('d1').checkpoint as any;
+  assert.equal(cp.shadow?.length, 4);
+  const mutations = [
+    (s: any[]) => {
+      s[0].request_id = 'foreign';
+    },
+    (s: any[]) => {
+      s[0].state_revision++;
+    },
+    (s: any[]) => {
+      s[0].reason = 'no_answer';
+    },
+    (s: any[]) => {
+      s[0].probability = 2;
+    },
+    (s: any[]) => {
+      s[0].extra = true;
+    },
+    (s: any[]) => {
+      s[0].question = 'different';
+    },
+    (s: any[]) => {
+      s.pop();
+    },
+    (s: any[]) => {
+      s.reverse();
+    },
+  ];
+  for (const mutate of mutations) {
+    const forged = structuredClone(cp);
+    mutate(forged.shadow);
+    const replay = transitionDispatch(h.request, forged, live.receipt, live.entry);
+    assert.deepEqual(p4aProjection(replay), p4aProjection(live));
+    assert.equal(shadowReasons(replay)[0], 'untrusted');
+  }
+  for (const mutate of [
+    (t: any) => {
+      t.extracts.at(-1).residual_ambiguity.count = 1;
+    },
+    (t: any) => {
+      t.extracts.at(-1).residual_ambiguity = { count: 1, slots: ['intent'] };
+    },
+    (t: any) => {
+      t.extracts[0].request_id = 'other:x1';
+    },
+    (t: any) => {
+      t.extracts.push(t.extracts[0], t.extracts[0]);
+    },
+  ]) {
+    const forged = structuredClone(cp);
+    mutate(forged.triage);
+    assert.throws(() => transitionDispatch(h.request, forged, live.receipt, live.entry), /recorded triage/);
+    const sink = collector();
+    const recovery = harness({}, { journal: forgedJournal(forged), weft: sink.port });
+    await assert.rejects(run(recovery), /recorded triage/);
+    assert.equal(recovery.dispatchCalls.length + sink.records.length, 0);
+  }
+});
+
+test('P4b-12. tampered extracts reject replay before any effect or copied text', async (t) => {
+  const h = harness();
+  const live = await run(h);
+  const cp = h.journal.load('d1').checkpoint!;
+  const cases: readonly (readonly [string, 'intake' | 'triage' | 'route', (extract: any) => void])[] = [
+    ...(['triage', 'route'] as const).flatMap((stage) =>
+      (
+        [
+          [
+            'extra key',
+            (x: any) => {
+              x.extra = 'CANARY-msg';
+            },
+          ],
+          [
+            'span value',
+            (x: any) => {
+              x.slots[0].value = 'CANARY-msg';
+            },
+          ],
+          [
+            'choice outside options',
+            (x: any) => {
+              x.slots[0].kind = 'choice';
+              x.slots[0].value = 'outside';
+            },
+          ],
+          [
+            'extra slot before intent',
+            (x: any) => {
+              x.slots.unshift({ ...x.slots[0], slot: 'extra' });
+            },
+          ],
+          [
+            'extra slot key',
+            (x: any) => {
+              x.slots[0].extra = 'CANARY-msg';
+            },
+          ],
+          [
+            'invalid span',
+            (x: any) => {
+              x.slots[0].span = [-1, 2];
+            },
+          ],
+          [
+            'invalid verdict',
+            (x: any) => {
+              x.verdict = 'CANARY-msg';
+            },
+          ],
+          [
+            'invalid reason',
+            (x: any) => {
+              x.reason = 'CANARY-msg';
+            },
+          ],
+        ] as const
+      ).map(([name, mutate]) => [name, stage, mutate] as const),
+    ),
+    [
+      'choice outside options',
+      'intake',
+      (x) => {
+        x.slots[0].value = 'outside';
+      },
+    ],
+    [
+      'slot order swapped',
+      'intake',
+      (x) => {
+        x.slots.reverse();
+      },
+    ],
+  ];
+  for (const [name, stage, mutate] of cases) {
+    await t.test(`${stage}: ${name}`, async () => {
+      const forged = structuredClone(cp);
+      mutate(stage === 'intake' ? forged.intake!.extract[0] : forged[stage]!.extracts[0]);
+      assert.throws(
+        () => transitionDispatch(h.request, forged, live.receipt, live.entry),
+        new RegExp(`recorded ${stage}`),
+      );
+      const writes: unknown[] = [];
+      const journal: DispatchJournal = {
+        ...forgedJournal(forged),
+        checkpoint: (entry) => {
+          writes.push(entry);
+        },
+        claim: (...args) => {
+          writes.push(args);
+          return false;
+        },
+        acquire: (...args) => {
+          writes.push(args);
+          return null;
+        },
+        release: (...args) => {
+          writes.push(args);
+        },
+        present: (...args) => {
+          writes.push(args);
+          return false;
+        },
+        append: (...args) => {
+          writes.push(args);
+          return false;
+        },
+      };
+      const sink = collector();
+      const recovery = harness({}, { journal, weft: sink.port });
+      for (let replay = 0; replay < 2; replay++) await assert.rejects(run(recovery), new RegExp(`recorded ${stage}`));
+      assert.equal(recovery.generateCalls.length + recovery.evaluateCalls.length + recovery.dispatchCalls.length, 0);
+      assert.deepEqual(writes, []);
+      assert.deepEqual(sink.records, []);
+      assertNoCopiedText([writes, ...sink.records], CANARIES);
+      assert.deepEqual(journal.load('d1').checkpoint, forged);
+    });
+  }
+});
+
+test('P4b-13. residual ambiguity is the final D1 extract count, with fixed fact order', async () => {
+  for (const [plan, residual] of [
+    [{}, 0],
+    [{ triageIntent: '' }, 1],
+    [{ triageIntent: 'absent' }, 1],
+    [{ intake: { choice: 'continue_thread' } }, null],
+    [{ intake: { choice: 'ask_user' } }, null],
+  ] as const) {
+    const h = harness(plan);
+    const live = await run(h);
+    assert.equal(live.decide1.facts.length, 19);
+    assert.deepEqual(
+      live.decide1.facts.slice(14).map((f) => f.name),
+      ['residual_ambiguity', ...SHADOW_NAMES.map((j) => `${j}.reason`)],
+    );
+    assert.equal(live.decide1.facts[14]?.value, residual);
+    assert.deepEqual(transitionDispatch(h.request, h.journal.load('d1').checkpoint!, live.receipt, live.entry), live);
+  }
+});
+
+test('P4b-14. schemas, Weft shadow evidence and text exclusion', async () => {
+  const sink = collector();
+  const h = harness({}, { weft: sink.port });
+  const live = await run(h);
+  assert.equal(live.schema, 'dispatch.decision@3');
+  assert.equal(h.journal.load('d1').checkpoint?.schema, 'dispatch.checkpoint@2');
+  const decided = sink.records.find((r) => r.kind === 'dispatch.decided')!;
+  assert.equal(decided.fields.facts && (decided.fields.facts as unknown[]).length, 19);
+  assert.ok((decided.fields.judgments as unknown[]).length <= 14);
+  for (const record of sink.records) assert.equal(validateRecord(record).ok, true);
+  for (const j of SHADOW_NAMES) {
+    assert.ok(decided.evidence.some((e) => e.source === 'inference_request' && e.ref === `d1:shadow.${j}`));
+    assert.ok(!decided.links.some((link) => link.record_id.includes(':shadow.')));
+  }
+  assert.equal(sink.records.filter((r) => r.kind === 'judgment').length, 3);
+  assertNoCopiedText([live, h.journal.load('d1'), ...sink.records], CANARIES);
+  const oldCp = {
+    ...h.journal.load('d1').checkpoint!,
+    schema: 'dispatch.checkpoint@1',
+  } as unknown as DispatchCheckpoint;
+  assert.throws(() => transitionDispatch(h.request, oldCp, live.receipt), /schema/);
+  await assert.rejects(run(harness({}, { journal: forgedJournal(oldCp) })), /schema/);
+  const oldDecision = { ...live, schema: 'dispatch.decision@2' } as unknown as DispatchDecision;
+  const journal = {
+    ...forgedJournal(h.journal.load('d1').checkpoint!),
+    load: () => ({ checkpoint: null, decisions: [oldDecision], attempt: null, presented: false }),
+  };
+  await assert.rejects(run(harness({}, { journal })), /schema/);
+});
+
+test('P4b-15. out-of-order shadow rounds bind their own snapshots and Weft sequences', async () => {
+  const sink = collector();
+  const gate = deferred();
+  const a = harness(
+    { shadow: 'false', gate: { match: (id) => id.includes(':shadow.'), promise: gate.promise } },
+    { weft: sink.port, request: makeRequest({ request_id: 'a' }) },
+  );
+  const pending = run(a);
+  await waitUntil(() => shadowCalls(a).length === 4 || a.dispatchCalls.length > 0);
+  assert.equal(shadowCalls(a).length, 4);
+  const b = harness({ shadow: 'true' }, { weft: sink.port, request: makeRequest({ request_id: 'b' }) });
+  const second = await run(b);
+  gate.release();
+  const first = await pending;
+  assert.equal(first.decide1.judgments.find((j) => j.name === 'clarify')?.probability, 0);
+  assert.equal(second.decide1.judgments.find((j) => j.name === 'clarify')?.probability, 1);
+  assert.deepEqual(
+    sink.records.map((r) => r.sequence),
+    sink.records.map((_, i) => i + 1),
+  );
+  const journal = new MemoryDispatchJournal();
+  const sameGate = deferred();
+  const intakeGate = deferred();
+  const y = harness(
+    { shadow: 'true', gate: { match: (id) => id === 'd1:intake', promise: intakeGate.promise } },
+    { journal },
+  );
+  const yp = run(y);
+  await waitUntil(() => y.evaluateCalls.length === 1);
+  const x = harness(
+    { shadow: 'false', gate: { match: (id) => id.includes(':shadow.'), promise: sameGate.promise } },
+    { journal },
+  );
+  const xp = run(x);
+  await waitUntil(() => shadowCalls(x).length === 4);
+  intakeGate.release();
+  const won = await yp;
+  sameGate.release();
+  const yielded = await xp;
+  assert.deepEqual(yielded, won);
+  assert.equal(x.dispatchCalls.length + y.dispatchCalls.length, 1);
+  assert.deepEqual(transitionDispatch(y.request, journal.load('d1').checkpoint!, won.receipt, won.entry), won);
+  assert.equal(shadowCalls(x).length, 4);
+  assert.equal(shadowCalls(y).length, 4);
+});
+
+test('P4b-12/13. two-attempt D1 replay binds every extract and uses the second residual', async () => {
+  const h = harness({ triageIntent: 'absent' });
+  const generate = h.ports.generate;
+  const ports: DispatchPorts = {
+    ...h.ports,
+    generate: async (request, signal) =>
+      request.request_id === 'd1:triage:x2'
+        ? acceptedGeneration(request, { intent: { value: MESSAGE } })
+        : generate(request, signal),
+  };
+  const live = await decideDispatch(h.request, ports, h.journal);
+  const cp = h.journal.load('d1').checkpoint!;
+  assert.equal(cp.triage?.extracts.length, 2);
+  assert.deepEqual(
+    cp.triage?.extracts.map((x) => x.residual_ambiguity.count),
+    [1, 0],
+  );
+  assert.equal(live.decide1.facts.find((f) => f.name === 'residual_ambiguity')?.value, 0);
+  for (const patch of [
+    { request_id: 'foreign:x1' },
+    { site: 'loop.route' },
+    { state_revision: 2 },
+    { extract_schema: 'loop.route@1' },
+  ]) {
+    const forged = structuredClone(cp);
+    Object.assign(forged.triage!.extracts[0]!, patch);
+    assert.throws(() => transitionDispatch(h.request, forged, live.receipt), /recorded triage/);
+  }
+});
+
+test('P4b-12/14. dropping untrusted shadows also screens returned evidence and copied text', async () => {
+  const h = harness();
+  const live = await run(h);
+  const cp = structuredClone(h.journal.load('d1').checkpoint!);
+  Object.assign(cp.shadow![0]!, { request_id: 'Bearer CANARY-error', extra: 'CANARY-provider' });
+  const replay = transitionDispatch(h.request, cp, live.receipt);
+  assert.equal(shadowReasons(replay)[0], 'untrusted');
+  assertNoCopiedText(replay, CANARIES);
+  const record = dispatchDecided(replay, [], { trace_id: 'trace-1', emitter_id: 'loom.dispatch' }, 1);
+  assert.notEqual(record, null);
+  assert.deepEqual(validateRecord(record), { ok: true });
+});
+
+test('P4b-9/11. counter-write failures and pre-shadow aborts make no shadow call or claim', async () => {
+  for (const abort of [false, true]) {
+    const storage = new MemoryDispatchJournal();
+    const controller = new AbortController();
+    let claims = 0;
+    const journal: DispatchJournal = {
+      ...forgedJournal(null as unknown as DispatchCheckpoint),
+      load: (id) => storage.load(id),
+      checkpoint: (cp) => {
+        if (cp.asks.shadow === 1) {
+          if (!abort) throw new Error('counter write');
+          storage.checkpoint(cp);
+          controller.abort();
+          return;
+        }
+        storage.checkpoint(cp);
+      },
+      claim: () => {
+        claims++;
+        return false;
+      },
+    };
+    const h = harness({}, { journal });
+    if (abort) assert.equal((await run(h, controller.signal)).reason, 'cancelled');
+    else await assert.rejects(run(h), /counter write/);
+    assert.equal(shadowCalls(h).length + h.dispatchCalls.length + claims, 0);
+    assert.equal(storage.load('d1').decisions.length, 0);
+  }
+});
+
+test('P4b-9. D2 resumes before one shadow round, then a budget resume reuses it', async () => {
+  const outage = harness({ route: { mode: 'outage' } });
+  assert.equal((await run(outage)).decide1.rule, 'hold.outage');
+  assert.equal(shadowCalls(outage).length, 0);
+  const budget = harness(
+    {},
+    {
+      journal: outage.journal,
+      request: makeRequest({ resume: true }),
+      receipt: (intent) => ({ status: 'refused', dispatch_id: intent.dispatch_id, reason: 'budget' }),
+    },
+  );
+  const paused = await run(budget);
+  assert.equal(paused.reason, 'budget');
+  assert.equal(shadowCalls(budget).length, 4);
+  const resumed = harness({}, { journal: outage.journal, request: makeRequest({ resume: true }) });
+  const dispatchedAgain = await run(resumed);
+  assert.equal(resumed.evaluateCalls.length + resumed.generateCalls.length, 0);
+  assert.deepEqual(dispatchedAgain.shadow, paused.shadow);
+  assert.deepEqual(dispatchedAgain.decide1, paused.decide1);
+});
+
+test('P4b-10. every shadow admission failure leaves the live dispatch projection unchanged', async () => {
+  const baseline = await run(harness());
+  const failures: readonly (readonly [string, (call: EvaluationRequest) => unknown])[] = [
+    ['decision_unavailable', () => null],
+    ...['provider_unavailable', 'no_route', 'no_budget', 'quota_unknown'].map(
+      (reason) =>
+        [
+          'decision_unavailable',
+          (call: EvaluationRequest) => ({ status: 'blocked', reason, request_id: call.request_id, site: call.site }),
+        ] as const,
+    ),
+    [
+      'invalid_answer',
+      (call) => ({
+        status: 'accepted',
+        request_id: call.request_id,
+        site: call.site,
+        kind: 'choice',
+        answers: { decision: { type: 'boolean', probability: 1 } },
+      }),
+    ],
+    [
+      'invalid_answer',
+      (call) => ({ status: 'accepted', request_id: call.request_id, site: call.site, kind: 'boolean', answers: {} }),
+    ],
+    [
+      'invalid_answer',
+      (call) => ({
+        status: 'accepted',
+        request_id: call.request_id,
+        site: call.site,
+        kind: 'boolean',
+        answers: { decision: { type: 'boolean', probability: -1 } },
+      }),
+    ],
+    [
+      'mismatched_answer',
+      (call) => ({
+        status: 'accepted',
+        request_id: call.request_id,
+        site: 'decide1.other',
+        kind: 'boolean',
+        answers: { decision: { type: 'boolean', probability: 1 } },
+      }),
+    ],
+  ];
+  for (const [reason, answer] of failures) {
+    const h = harness();
+    const evaluate = (async (call: EvaluationRequest, signal?: AbortSignal) =>
+      call.site.startsWith('decide1.') ? answer(call) : h.ports.evaluate(call, signal)) as InferenceGateway['evaluate'];
+    const decision = await decideDispatch(h.request, { ...h.ports, evaluate }, h.journal);
+    assert.deepEqual(p4aProjection(decision), p4aProjection(baseline));
+    assert.deepEqual(shadowReasons(decision), Array(4).fill(reason));
+  }
+  // A round lost before results is also a shadow-free runtime parity case.
+  const cp = baseline;
+  const source = harness();
+  await run(source);
+  const recorded = source.journal.load('d1').checkpoint!;
+  const journal = new MemoryDispatchJournal();
+  journal.checkpoint({ ...recorded, intent: null, shadow: null });
+  const neverAsked = harness({}, { journal });
+  const decision = await run(neverAsked);
+  assert.deepEqual(p4aProjection(decision), p4aProjection(cp));
+  assert.equal(shadowCalls(neverAsked).length, 0);
 });

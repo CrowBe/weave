@@ -198,7 +198,7 @@ dispatch, grant or approval may be derived from it.
   `ask_human`
 
 `judgments`, `facts`, `rule` and `band` are the Decide-1 trace (D-ENG-045):
-everything the rule table read and what it returned. A decision that asked no
+the rule table's inputs, including shadow judgments and facts that no row of that table version reads (D-ENG-047), and what it returned. A decision that asked no
 site, or computed no fact, records an empty list; it does not omit the field.
 A name appears at most once in `judgments` and at most once in `facts`. Each
 site answer the decision used is linked with `caused_by` to its `judgment`

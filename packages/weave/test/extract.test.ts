@@ -4,6 +4,7 @@ import {
   assertExtractSchema,
   gateExtract,
   parseExtract,
+  validExtractObservation,
   type ExtractSchema,
   type ExtractSlotSpec,
 } from '../src/sites/extract.js';
@@ -164,4 +165,69 @@ test('a list kind, empty options, or a credential-shaped option is rejected when
       attempt: 1,
     }),
   );
+});
+
+test('stored extract validation shares the live content-free slot contract', () => {
+  for (const thread_ref of [
+    { value: 'T2', cue: 'T2' },
+    { value: 'none', cue: null },
+    { value: null, cue: null },
+    { value: null, cue: 'thread T2' },
+    { value: 'T9', cue: 'T2' },
+    { value: 'T2', cue: 'absent' },
+  ]) {
+    for (const request of [{ value: null }, { value: 'invoice' }, { value: 'absent' }])
+      for (const attempt of [1, 2] as const)
+        assert.equal(validExtractObservation(gate({ thread_ref, request }, attempt), schema, MESSAGE), true);
+  }
+  assert.equal(validExtractObservation(gate(null), schema, MESSAGE), true);
+  const live = gate({ thread_ref: { value: 'T2', cue: 'T2' }, request: { value: 'invoice' } });
+  const mutations: readonly ((x: any) => void)[] = [
+    (x) => {
+      x.extra = 'CANARY-msg';
+    },
+    (x) => {
+      delete x.provider_request_id;
+    },
+    (x) => {
+      x.slots[1].value = 'CANARY-msg';
+    },
+    (x) => {
+      x.slots[0].value = 'outside';
+    },
+    (x) => {
+      x.slots.reverse();
+    },
+    (x) => {
+      x.slots[0].kind = 'span';
+    },
+    (x) => {
+      x.slots[0].status = 'CANARY-msg';
+    },
+    (x) => {
+      x.slots[0].extra = 'CANARY-msg';
+    },
+    (x) => {
+      x.verdict = 'CANARY-msg';
+    },
+    (x) => {
+      x.reason = 'CANARY-msg';
+    },
+    (x) => {
+      x.residual_ambiguity.extra = 'CANARY-msg';
+    },
+    (x) => {
+      x.residual_ambiguity = { count: 1, slots: ['thread_ref'] };
+    },
+  ];
+  for (const mutate of mutations) {
+    const forged = structuredClone(live);
+    mutate(forged);
+    assert.equal(validExtractObservation(forged, schema, MESSAGE), false);
+  }
+  for (const bounds of [[-1, 2], [0, MESSAGE.length + 1], [0.5, 2], [2, 1], [1, 1], [0, 1, 2], ['0', 1], null]) {
+    const forged = structuredClone(live);
+    Object.assign(forged.slots[1]!, { span: bounds });
+    assert.equal(validExtractObservation(forged, schema, MESSAGE), false);
+  }
 });

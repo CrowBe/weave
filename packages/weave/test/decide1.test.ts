@@ -544,3 +544,156 @@ test('P4a-2/3 transitionSite domain crosses choices, statistics, admission, outa
   assert.ok(reached.has('ask.triage'));
   assert.ok(reached.has('ask.route'));
 });
+
+const SHADOW_NAMES = ['clarify', 'multi_deliverable', 'reads_before_gen', 'veto_bare_gen'];
+const SHADOW_REASONS = [
+  'answered',
+  'no_answer',
+  'invalid_answer',
+  'stale_answer',
+  'mismatched_answer',
+  'decision_unavailable',
+  'cancelled',
+  'unrecorded',
+  'untrusted',
+];
+function shadowVariants() {
+  return [
+    undefined,
+    ...[0, 1].map((probability) => ({
+      judgments: SHADOW_NAMES.flatMap((name) => [
+        { name, probability },
+        { name: `${name}.confidence`, probability: 1 },
+      ]),
+      facts: [{ name: 'residual_ambiguity', value: 1 }],
+    })),
+    ...SHADOW_REASONS.flatMap((reason) =>
+      [0, 1, null].map((value) => ({
+        judgments: [],
+        facts: [
+          { name: 'residual_ambiguity', value },
+          ...SHADOW_NAMES.map((name) => ({ name: `${name}.reason`, value: reason })),
+        ],
+      })),
+    ),
+  ];
+}
+
+test('P4b-1 shadow inputs cannot move any reachable rule or band, or repair an impossible stage set', () => {
+  const reachable = [
+    ...domain().map(({ input }) => input),
+    ...(['triage', 'route'] as const).flatMap((stage) =>
+      ['invalid_extract', 'extract_missing'].map((reason) =>
+        inputs({
+          [`${stage}.status`]: 'needs_human',
+          [`${stage}.reason`]: reason,
+          [`${stage}.accepted`]: false,
+          ...(stage === 'triage' ? absent('route') : {}),
+        }),
+      ),
+    ),
+  ];
+  for (const input of reachable) {
+    const baseline = decideBand(input);
+    for (const shadow of shadowVariants()) {
+      const trace = decideBand({ ...input, shadow } as Decide1Inputs);
+      assert.deepEqual([trace.rule, trace.band], [baseline.rule, baseline.band]);
+    }
+  }
+  for (const patch of [
+    { ...absent('triage'), ...absent('route') },
+    { 'intake.choice': 'flash' },
+    { 'intake.choice': 'stop' },
+    { 'triage.choice': 'capability' },
+    { 'triage.accepted': false, 'triage.choice': 'capability' },
+    { 'route.choice': 'capability', 'route.accepted': false },
+  ])
+    for (const shadow of shadowVariants())
+      assert.throws(() => decideBand({ ...inputs(patch), shadow } as Decide1Inputs), /decide1: no rule matched/);
+  // Even policy-shaped names in the shadow partition cannot supply stageSet or a row.
+  assert.throws(
+    () => decideBand({ judgments: [], facts: [], shadow: inputs() } as Decide1Inputs),
+    /decide1: no rule matched/,
+  );
+  const source = readFileSync(new URL('../../src/decide1.ts', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /clarify|multi_deliverable|reads_before_gen|veto_bare_gen|residual_ambiguity/);
+});
+
+test('P4b-2 trace concatenates read then shadow and validates both partitions without mutation', () => {
+  const read = inputs();
+  const shadow = {
+    judgments: [
+      { name: 'clarify', probability: 1 },
+      { name: 'clarify.confidence', probability: 0.5 },
+    ],
+    facts: [
+      { name: 'residual_ambiguity', value: 1 },
+      { name: 'clarify.reason', value: 'answered' },
+    ],
+  };
+  const input = { ...read, shadow };
+  const before = structuredClone(input);
+  const trace = decideBand(input as Decide1Inputs);
+  assert.deepEqual(trace.judgments, [...read.judgments, ...shadow.judgments]);
+  assert.deepEqual(trace.facts, [...read.facts, ...shadow.facts]);
+  assert.deepEqual(input, before);
+  assert.deepEqual(decideBand({ ...read, shadow: { judgments: [], facts: [] } } as Decide1Inputs), decideBand(read));
+  assert.deepEqual(decideBand(read), {
+    table: 'decide1.rules@1',
+    judgments: read.judgments,
+    facts: read.facts,
+    rule: 'gen.route',
+    band: 'escalate_gen',
+  });
+  const invalid = [
+    { judgments: [read.judgments[0]!], facts: [] },
+    { judgments: [], facts: [read.facts[0]!] },
+    {
+      judgments: Array.from({ length: 64 }, (_, i) => ({ name: `j${i}`, probability: 1 })),
+      facts: [],
+    },
+    {
+      judgments: [],
+      facts: Array.from({ length: 51 }, (_, i) => ({ name: `f${i}`, value: null })),
+    },
+    { judgments: [{ name: 'bad name', probability: 1 }], facts: [] },
+    { judgments: [], facts: [{ name: 'bad name', value: null }] },
+    ...[-1, 2, NaN, Infinity, '1'].map((probability) => ({
+      judgments: [{ name: 'clarify', probability }],
+      facts: [],
+    })),
+    ...[{}, [], 'CANARY text', 'sk-secret', 'Bearer secret', Infinity, NaN].map((value) => ({
+      judgments: [],
+      facts: [{ name: 'residual_ambiguity', value }],
+    })),
+  ];
+  for (const value of invalid) assert.throws(() => decideBand({ ...read, shadow: value } as unknown as Decide1Inputs));
+  const copy = decideBand(input as Decide1Inputs);
+  assert.notEqual(copy.judgments.at(-1), shadow.judgments.at(-1));
+  assert.notEqual(copy.facts.at(-1), shadow.facts.at(-1));
+});
+
+test('P4b-3 decide1.rules@1 retains the exact P4a ids, order and bands', () => {
+  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@1');
+  assert.deepEqual(
+    DECIDE1_RULES.map(({ id, band }) => [id, band]),
+    [
+      ['hold.admission', 'withheld'],
+      ['hold.outage', 'withheld'],
+      ['hold.paused', 'withheld'],
+      ['ask.intake', 'ask_human'],
+      ['ask.irreversible', 'ask_human'],
+      ['ask.thread_target', 'ask_human'],
+      ['act.thread', 'tool_call'],
+      ['ask.triage', 'ask_human'],
+      ['act.capability', 'tool_call'],
+      ['act.done_check', 'tool_call'],
+      ['act.decline', 'tool_call'],
+      ['gen.triage_fallback', 'escalate_gen'],
+      ['gen.route', 'escalate_gen'],
+      ['ask.route', 'ask_human'],
+      ['gen.route_fallback', 'escalate_gen'],
+    ],
+  );
+  assert.ok(DECIDE1_RULES.every(({ band }) => band !== 'spawn_subtasks'));
+});

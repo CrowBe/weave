@@ -20,14 +20,17 @@ import {
   decideLoopRoute,
   decideTriage,
   transitionLoopDecision,
+  type LoopDecision,
   type LoopDecisionAsk,
   type LoopDecisionSite,
 } from './sites/loop-decide.js';
-import { gateExtract, type ExtractObservation, type ExtractSchema } from './sites/extract.js';
+import { validExtractObservation, type ExtractObservation, type ExtractSchema } from './sites/extract.js';
+import { stableStringify } from './stable-json.js';
 import { modelExtractSchema } from './sites/model-extract.js';
 import {
   SITE_POLICY,
   correlation,
+  unit,
   type IntakeSiteInput,
   type IntakeState,
   type RecordedSiteAnswer,
@@ -35,7 +38,6 @@ import {
   type SiteObservation,
   type SiteReason,
   type SiteState,
-  type SiteTransition,
 } from './sites/index.js';
 import {
   DECIDE1_RULE_TABLE,
@@ -45,6 +47,13 @@ import {
   type Decide1Fact,
   type Decide1Judgment,
 } from './decide1.js';
+import {
+  DECIDE1_SHADOW_JUDGMENTS,
+  DECIDE1_SHADOW_QUESTIONS,
+  askShadow,
+  type ShadowAsk,
+  type ShadowObservation,
+} from './sites/decide1-shadow.js';
 import type { ImplementTier } from './implement-step.js';
 import { deliver, type WeftPort, type WeftRecordShape } from './weft.js';
 
@@ -95,7 +104,7 @@ export type DispatchReason =
   | 'dispatch_unconfirmed';
 
 export interface DispatchCheckpoint {
-  readonly schema: 'dispatch.checkpoint@1';
+  readonly schema: 'dispatch.checkpoint@2';
   readonly decision_id: string;
   readonly state_revision: number;
   readonly state_updated_at: number;
@@ -103,15 +112,17 @@ export interface DispatchCheckpoint {
     readonly intake: number;
     readonly triage: number;
     readonly route: number;
+    readonly shadow: 0 | 1;
   };
   readonly intake: IntakeDecision | null;
-  readonly triage: SiteTransition | null;
-  readonly route: SiteTransition | null;
+  readonly triage: LoopDecision | null;
+  readonly route: LoopDecision | null;
+  readonly shadow: readonly ShadowObservation[] | null;
   readonly intent: DispatchIntent | null;
 }
 
 export interface DispatchDecision {
-  readonly schema: 'dispatch.decision@2';
+  readonly schema: 'dispatch.decision@3';
   readonly decision_id: string;
   readonly entry: number;
   readonly state_revision: number;
@@ -124,8 +135,9 @@ export interface DispatchDecision {
   readonly intent: DispatchIntent | null;
   readonly receipt: DispatchReceipt | null;
   readonly intake: IntakeDecision | null;
-  readonly triage: SiteTransition | null;
-  readonly route: SiteTransition | null;
+  readonly triage: LoopDecision | null;
+  readonly route: LoopDecision | null;
+  readonly shadow: readonly ShadowObservation[] | null;
 }
 
 /**
@@ -343,14 +355,15 @@ export function resolveThreadTarget(
 
 function initialCheckpoint(request: DispatchRequest): DispatchCheckpoint {
   return {
-    schema: 'dispatch.checkpoint@1',
+    schema: 'dispatch.checkpoint@2',
     decision_id: request.request_id,
     state_revision: request.state_revision,
     state_updated_at: request.state_updated_at,
-    asks: { intake: 0, triage: 0, route: 0 },
+    asks: { intake: 0, triage: 0, route: 0, shadow: 0 },
     intake: null,
     triage: null,
     route: null,
+    shadow: null,
     intent: null,
   };
 }
@@ -361,19 +374,21 @@ function makeCheckpoint(
   state_updated_at: number,
   asks: DispatchCheckpoint['asks'],
   intake: IntakeDecision | null,
-  triage: SiteTransition | null,
-  route: SiteTransition | null,
+  triage: LoopDecision | null,
+  route: LoopDecision | null,
+  shadow: readonly ShadowObservation[] | null,
   intent: DispatchIntent | null,
 ): DispatchCheckpoint {
   return {
-    schema: 'dispatch.checkpoint@1',
+    schema: 'dispatch.checkpoint@2',
     decision_id,
     state_revision,
     state_updated_at,
-    asks: { intake: asks.intake, triage: asks.triage, route: asks.route },
+    asks: { intake: asks.intake, triage: asks.triage, route: asks.route, shadow: asks.shadow },
     intake,
     triage,
     route,
+    shadow,
     intent,
   };
 }
@@ -389,7 +404,7 @@ function makeDecision(
   reason: DispatchReason,
 ): DispatchDecision {
   return {
-    schema: 'dispatch.decision@2',
+    schema: 'dispatch.decision@3',
     decision_id: checkpoint.decision_id,
     entry,
     state_revision: checkpoint.state_revision,
@@ -404,6 +419,7 @@ function makeDecision(
     intake: checkpoint.intake,
     triage: checkpoint.triage,
     route: checkpoint.route,
+    shadow: recordedShadow(checkpoint),
   };
 }
 
@@ -438,8 +454,8 @@ function dispatchPlan(
 }
 
 function lastDecider(checkpoint: DispatchCheckpoint): { readonly decided_by: Decider; readonly choice: SiteChoice } {
-  if (checkpoint.route !== null) return { decided_by: 'route', choice: checkpoint.route.choice };
-  if (checkpoint.triage !== null) return { decided_by: 'triage', choice: checkpoint.triage.choice };
+  if (checkpoint.route !== null) return { decided_by: 'route', choice: checkpoint.route.site.choice };
+  if (checkpoint.triage !== null) return { decided_by: 'triage', choice: checkpoint.triage.site.choice };
   if (checkpoint.intake !== null) return { decided_by: 'intake', choice: checkpoint.intake.choice };
   return { decided_by: 'rule', choice: 'ask_user' };
 }
@@ -656,30 +672,38 @@ function replayIntake(request: DispatchRequest, checkpoint: DispatchCheckpoint):
   throw notLive('intake');
 }
 
-/**
- * Loop extracts are not journaled; their only effect on the transition is an origin stop. So each
- * witness origin is a live attempt-1 extract that falls back to the original, fresh, stale or cancelled.
- */
-function loopOrigins(site: LoopDecisionSite, ask: LoopDecisionAsk): ExtractObservation[] {
-  const meta = { site, request_id: `${ask.request_id}:x1`, attempt: 1, state_revision: ask.state_revision } as const;
-  return (['decision_unavailable', 'stale_answer', 'cancelled'] as const).map((reason) =>
-    gateExtract(modelExtractSchema(site), '', null, { ...meta, verdict: 'original_only', reason }),
-  );
-}
-
-/** D1 and D2 through `transitionLoopDecision`, the replay half of the extract-composed live call. */
+/** D1 and D2 replay the complete stored extract-composed record, not a synthetic origin. */
 function replayLoop(request: DispatchRequest, checkpoint: DispatchCheckpoint, stage: 'triage' | 'route'): void {
   const site: LoopDecisionSite = stage === 'triage' ? 'loop.triage' : 'loop.route';
   const recorded: unknown = checkpoint[stage];
-  if (!isRecord(recorded)) throw notLive(stage);
+  if (!isRecord(recorded) || !Array.isArray(recorded['extracts']) || !isRecord(recorded['site'])) throw notLive(stage);
   const ask = loopAsk(askedRequest(request, checkpoint), stage, stageAsk(checkpoint, stage));
   const current = checkpointState(checkpoint);
-  const answers = siteWitnesses(site, ask.request_id, current, recorded['observation']);
-  for (const origin of loopOrigins(site, ask))
-    for (const answer of answers) {
-      const derived = derive(() => transitionLoopDecision(site, ask, { extracts: [origin], site: answer }, current));
-      if (derived !== null && sameRecord(derived.site, recorded)) return;
-    }
+  const extracts = recorded['extracts'] as ExtractObservation[];
+  const schema = modelExtractSchema(site, ask.state);
+  // The residual count is consequential evidence too: bind it to the schema's required slots.
+  for (const [index, extract] of extracts.entries()) {
+    if (
+      !validExtractObservation(extract, schema, stableStringify(ask.state)) ||
+      extract.schema !== 'extract@1' ||
+      extract.site !== site ||
+      extract.extract_schema !== schema.id ||
+      extract.request_id !== `${ask.request_id}:x${index + 1}` ||
+      extract.state_revision !== ask.state_revision
+    )
+      throw notLive(stage);
+    const residual = Object.entries(schema.slots)
+      .filter(
+        ([slot, spec]) => spec.required && extract.slots.find((item) => item?.slot === slot)?.status !== 'grounded',
+      )
+      .map(([slot]) => slot);
+    if (!sameRecord(extract.residual_ambiguity, { count: residual.length, slots: residual })) throw notLive(stage);
+  }
+  const answers = siteWitnesses(site, ask.request_id, current, recorded['site']['observation']);
+  for (const answer of answers) {
+    const derived = derive(() => transitionLoopDecision(site, ask, { extracts, site: answer }, current));
+    if (derived !== null && sameRecord(derived, recorded)) return;
+  }
   throw notLive(stage);
 }
 
@@ -701,13 +725,94 @@ function replayStages(request: DispatchRequest, checkpoint: DispatchCheckpoint):
   if (route !== null && triage === null) throw new Error('a recorded route needs a recorded triage');
   if (triage !== null && (intake === null || intake.status !== 'transition' || intake.choice !== 'new_thread'))
     throw new Error('a recorded triage needs intake new_thread');
-  if (route !== null && triage?.observation?.accepted !== true)
+  if (route !== null && triage?.site.observation?.accepted !== true)
     throw new Error('a recorded route cannot follow a triage fallback');
-  if (route !== null && (triage?.status !== 'transition' || triage.choice !== 'implement'))
+  if (route !== null && (triage?.site.status !== 'transition' || triage.site.choice !== 'implement'))
     throw new Error('a recorded route needs triage implement');
   if (intake !== null) replayStage(request, checkpoint, 'intake');
   if (triage !== null) replayStage(request, checkpoint, 'triage');
   if (route !== null) replayStage(request, checkpoint, 'route');
+}
+
+const SHADOW_REASONS = [
+  'answered',
+  'no_answer',
+  'invalid_answer',
+  'stale_answer',
+  'mismatched_answer',
+  'decision_unavailable',
+  'cancelled',
+] as const;
+const SHADOW_KEYS = [
+  'schema',
+  'site',
+  'question',
+  'request_id',
+  'state_revision',
+  'probability',
+  'confidence',
+  'reason',
+  'provider_request_id',
+] as const;
+const SHADOW_RULES: ReadonlySet<Decide1Trace['rule']> = new Set([
+  'act.capability',
+  'act.done_check',
+  'act.decline',
+  'gen.triage_fallback',
+  'gen.route',
+  'gen.route_fallback',
+]);
+
+/** Untrusted shadow data is absent evidence, never a reason to stop dispatch. */
+function trustedShadow(checkpoint: DispatchCheckpoint, index: number): ShadowObservation | null {
+  const records: unknown = checkpoint.shadow;
+  if (!Array.isArray(records) || records.length !== 4) return null;
+  const observation: unknown = records[index];
+  if (
+    !isRecord(observation) ||
+    Object.keys(observation).length !== SHADOW_KEYS.length ||
+    !SHADOW_KEYS.every((key) => Object.hasOwn(observation, key))
+  )
+    return null;
+  const judgment = DECIDE1_SHADOW_JUDGMENTS[index]!;
+  if (
+    observation['schema'] !== 'decide1-shadow@1' ||
+    observation['site'] !== `decide1.${judgment}` ||
+    observation['question'] !== DECIDE1_SHADOW_QUESTIONS[judgment] ||
+    observation['request_id'] !== `${checkpoint.decision_id}:shadow.${judgment}` ||
+    observation['state_revision'] !== checkpoint.state_revision ||
+    !(SHADOW_REASONS as readonly unknown[]).includes(observation['reason'])
+  )
+    return null;
+  if (observation['reason'] === 'answered') {
+    if (!unit(observation['probability']) || (observation['confidence'] !== null && !unit(observation['confidence'])))
+      return null;
+  } else if (observation['probability'] !== null || observation['confidence'] !== null) return null;
+  if (
+    observation['provider_request_id'] !== null &&
+    (typeof observation['provider_request_id'] !== 'string' ||
+      correlation(observation['provider_request_id']) !== observation['provider_request_id'])
+  )
+    return null;
+  return observation as unknown as ShadowObservation;
+}
+
+/** Copy only structurally trusted observations; the trace still records each dropped reason. */
+function recordedShadow(checkpoint: DispatchCheckpoint): readonly ShadowObservation[] | null {
+  if (checkpoint.shadow === null) return null;
+  return DECIDE1_SHADOW_JUDGMENTS.flatMap((_, index) => {
+    const observation = checkpoint.asks.shadow === 1 ? trustedShadow(checkpoint, index) : null;
+    return observation === null ? [] : [clone(observation)];
+  });
+}
+
+function shadowAsk(request: DispatchRequest, checkpoint: DispatchCheckpoint): ShadowAsk {
+  return {
+    request_id: checkpoint.decision_id,
+    ...checkpointState(checkpoint),
+    state: { request: request.intake.message, context: request.triage_context },
+    terms: { ...request.terms, destinations: [...request.terms.destinations] },
+  };
 }
 
 /** Fixed, bounded code facts and stage probabilities; no disclosed text is copied. */
@@ -726,8 +831,8 @@ export function decide1Inputs(request: DispatchRequest, checkpoint: DispatchChec
     { name: 'thread_target', value: target === null ? null : target.ok ? 'resolved' : target.reason },
   ];
   for (const [stage, transition] of [
-    ['triage', triage],
-    ['route', route],
+    ['triage', triage?.site],
+    ['route', route?.site],
   ] as const) {
     facts.push(
       { name: `${stage}.choice`, value: transition?.choice ?? null },
@@ -739,15 +844,33 @@ export function decide1Inputs(request: DispatchRequest, checkpoint: DispatchChec
   const judgments: Decide1Judgment[] = [];
   for (const [stage, observation] of [
     ['intake', intake?.site],
-    ['triage', triage?.observation],
-    ['route', route?.observation],
+    ['triage', triage?.site.observation],
+    ['route', route?.site.observation],
   ] as const) {
     if (observation == null) continue;
     if (observation.confidence !== null)
       judgments.push({ name: `${stage}.confidence`, probability: observation.confidence });
     if (observation.top_p !== null) judgments.push({ name: `${stage}.top_p`, probability: observation.top_p });
   }
-  return { judgments, facts };
+  const shadowFacts: Decide1Fact[] = [
+    { name: 'residual_ambiguity', value: triage?.extracts.at(-1)?.residual_ambiguity.count ?? null },
+  ];
+  const shadowJudgments: Decide1Judgment[] = [];
+  for (const [index, judgment] of DECIDE1_SHADOW_JUDGMENTS.entries()) {
+    const observation = checkpoint.asks.shadow === 1 ? trustedShadow(checkpoint, index) : null;
+    const reason =
+      checkpoint.asks.shadow !== 1
+        ? null
+        : checkpoint.shadow === null
+          ? 'unrecorded'
+          : (observation?.reason ?? 'untrusted');
+    shadowFacts.push({ name: `${judgment}.reason`, value: reason });
+    if (observation?.probability != null)
+      shadowJudgments.push({ name: judgment, probability: observation.probability });
+    if (observation?.confidence != null)
+      shadowJudgments.push({ name: `${judgment}.confidence`, probability: observation.confidence });
+  }
+  return { judgments, facts, shadow: { judgments: shadowJudgments, facts: shadowFacts } };
 }
 
 /** Rule ids fix the outcome. The request is needed only to bind the already-resolved thread id. */
@@ -838,7 +961,13 @@ function planFor(trace: Decide1Trace, checkpoint: DispatchCheckpoint, request: D
   }
 }
 
+function assertCheckpoint(checkpoint: DispatchCheckpoint): void {
+  if (checkpoint.schema !== 'dispatch.checkpoint@2')
+    throw new Error('recorded dispatch checkpoint schema differs from dispatch.checkpoint@2');
+}
+
 function resolveOutcome(request: DispatchRequest, checkpoint: DispatchCheckpoint): Plan {
+  assertCheckpoint(checkpoint);
   if (checkpoint.intake === null) throw new Error('a dispatch decision needs an intake record');
   replayStages(request, checkpoint);
   return planFor(decideBand(decide1Inputs(request, checkpoint)), checkpoint, request);
@@ -863,6 +992,7 @@ function boundaryTrace(
   };
   return decideBand({
     judgments: inputs.judgments,
+    ...(inputs.shadow === undefined ? {} : { shadow: inputs.shadow }),
     facts: inputs.facts.map((fact) => ({
       name: fact.name,
       value: Object.hasOwn(overrides, fact.name) ? overrides[fact.name]! : fact.value,
@@ -982,6 +1112,8 @@ function isResumable(decision: DispatchDecision): boolean {
 }
 
 function assertRuleTable(decision: DispatchDecision): void {
+  if (decision.schema !== 'dispatch.decision@3')
+    throw new Error('recorded dispatch decision schema differs from dispatch.decision@3');
   if (decision.rule_table !== DECIDE1_RULE_TABLE)
     throw new Error('recorded dispatch rule table differs from decide1.rules@1');
 }
@@ -1036,8 +1168,11 @@ export function dispatchDecided(
   const record_id = `${target.emitter_id}:dispatch:${decision.decision_id}:${decision.entry}`;
   const requests = [
     decision.intake?.request_id,
-    decision.triage?.observation.request_id,
-    decision.route?.observation.request_id,
+    decision.triage?.site.observation.request_id,
+    decision.route?.site.observation.request_id,
+    ...(Array.isArray(decision.shadow)
+      ? decision.shadow.flatMap((observation) => (observation?.request_id == null ? [] : [observation.request_id]))
+      : []),
   ].filter((id): id is string => id != null);
   const ids = [target.trace_id, target.emitter_id, record_id, decision.decision_id, ...judgmentIds, ...requests];
   if (decision.intent !== null) ids.push(decision.intent.dispatch_id);
@@ -1092,7 +1227,7 @@ function cancellation(
   decider: { readonly decided_by: Decider; readonly choice: SiteChoice },
 ): DispatchDecision {
   return {
-    schema: 'dispatch.decision@2',
+    schema: 'dispatch.decision@3',
     decision_id: checkpoint.decision_id,
     entry,
     state_revision: checkpoint.state_revision,
@@ -1107,6 +1242,7 @@ function cancellation(
     intake: checkpoint.intake,
     triage: checkpoint.triage,
     route: checkpoint.route,
+    shadow: recordedShadow(checkpoint),
   };
 }
 
@@ -1152,6 +1288,7 @@ function settle(
 function yielded(request: DispatchRequest, journal: DispatchJournal): DispatchDecision {
   const loaded = journal.load(request.request_id);
   for (const decision of loaded.decisions) assertRuleTable(decision);
+  if (loaded.checkpoint !== null) assertCheckpoint(loaded.checkpoint);
   const latest = loaded.decisions.at(-1);
   const claimed = loaded.checkpoint !== null && loaded.checkpoint.intent !== null;
   if (latest !== undefined && (!isResumable(latest) || !claimed)) return clone(latest);
@@ -1294,6 +1431,7 @@ export async function decideDispatch(
   const decision_id = captured.request_id;
   const loaded = journal.load(decision_id);
   for (const decision of loaded.decisions) assertRuleTable(decision);
+  if (loaded.checkpoint !== null) assertCheckpoint(loaded.checkpoint);
   let checkpoint = loaded.checkpoint ?? initialCheckpoint(captured);
   const latest = loaded.decisions.at(-1) ?? null;
   const entry = loaded.decisions.length + 1;
@@ -1338,10 +1476,11 @@ export async function decideDispatch(
       checkpoint.decision_id,
       checkpoint.state_revision,
       checkpoint.state_updated_at,
-      { intake: ask, triage: checkpoint.asks.triage, route: checkpoint.asks.route },
+      { intake: ask, triage: checkpoint.asks.triage, route: checkpoint.asks.route, shadow: checkpoint.asks.shadow },
       checkpoint.intake,
       checkpoint.triage,
       checkpoint.route,
+      checkpoint.shadow,
       checkpoint.intent,
     );
     journal.checkpoint(checkpoint);
@@ -1355,6 +1494,7 @@ export async function decideDispatch(
       intake,
       checkpoint.triage,
       checkpoint.route,
+      checkpoint.shadow,
       checkpoint.intent,
     );
     if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
@@ -1370,16 +1510,17 @@ export async function decideDispatch(
   const intake = checkpoint.intake;
   if (intake === null) throw new Error('intake was not recorded');
   if (intake.status === 'transition' && intake.choice === 'new_thread') {
-    if (shouldAsk(checkpoint.triage?.observation.reason ?? null, resume)) {
+    if (shouldAsk(checkpoint.triage?.site.observation.reason ?? null, resume)) {
       const ask = checkpoint.asks.triage + 1;
       checkpoint = makeCheckpoint(
         checkpoint.decision_id,
         checkpoint.state_revision,
         checkpoint.state_updated_at,
-        { intake: checkpoint.asks.intake, triage: ask, route: checkpoint.asks.route },
+        { intake: checkpoint.asks.intake, triage: ask, route: checkpoint.asks.route, shadow: checkpoint.asks.shadow },
         checkpoint.intake,
         checkpoint.triage,
         checkpoint.route,
+        checkpoint.shadow,
         checkpoint.intent,
       );
       journal.checkpoint(checkpoint);
@@ -1391,8 +1532,9 @@ export async function decideDispatch(
         checkpoint.state_updated_at,
         checkpoint.asks,
         checkpoint.intake,
-        decision.site,
+        decision,
         checkpoint.route,
+        checkpoint.shadow,
         checkpoint.intent,
       );
       if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
@@ -1406,17 +1548,23 @@ export async function decideDispatch(
 
     const triage = checkpoint.triage;
     if (triage === null) throw new Error('triage was not recorded');
-    if (triage.status === 'transition' && triage.observation.accepted && triage.choice === 'implement') {
-      if (shouldAsk(checkpoint.route?.observation.reason ?? null, resume)) {
+    if (triage.site.status === 'transition' && triage.site.observation.accepted && triage.site.choice === 'implement') {
+      if (shouldAsk(checkpoint.route?.site.observation.reason ?? null, resume)) {
         const ask = checkpoint.asks.route + 1;
         checkpoint = makeCheckpoint(
           checkpoint.decision_id,
           checkpoint.state_revision,
           checkpoint.state_updated_at,
-          { intake: checkpoint.asks.intake, triage: checkpoint.asks.triage, route: ask },
+          {
+            intake: checkpoint.asks.intake,
+            triage: checkpoint.asks.triage,
+            route: ask,
+            shadow: checkpoint.asks.shadow,
+          },
           checkpoint.intake,
           checkpoint.triage,
           checkpoint.route,
+          checkpoint.shadow,
           checkpoint.intent,
         );
         journal.checkpoint(checkpoint);
@@ -1429,7 +1577,8 @@ export async function decideDispatch(
           checkpoint.asks,
           checkpoint.intake,
           checkpoint.triage,
-          decision.site,
+          decision,
+          checkpoint.shadow,
           checkpoint.intent,
         );
         if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
@@ -1444,10 +1593,29 @@ export async function decideDispatch(
   }
 
   if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
-  const plan = resolveOutcome(captured, checkpoint);
+  let plan = resolveOutcome(captured, checkpoint);
   if (plan.kind === 'final') {
     if (plan.reason === 'cancelled') return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
     return finishFinal(captured, checkpoint, entry, plan, ports, journal, fresh);
+  }
+
+  if (checkpoint.asks.shadow === 0 && SHADOW_RULES.has(plan.trace.rule)) {
+    checkpoint = { ...checkpoint, asks: { ...checkpoint.asks, shadow: 1 } };
+    journal.checkpoint(checkpoint);
+    if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
+    const shadow = await askShadow(shadowAsk(captured, checkpoint), ports, ports.now, signal);
+    if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
+    checkpoint = { ...checkpoint, shadow };
+    journal.checkpoint(checkpoint);
+    const next = resolveOutcome(captured, checkpoint);
+    if (
+      next.trace.rule !== plan.trace.rule ||
+      next.trace.band !== plan.trace.band ||
+      next.kind !== 'dispatch' ||
+      !sameRecord(next.intent, plan.intent)
+    )
+      throw new Error('decide1: shadow input moved the plan');
+    plan = next;
   }
 
   if (!sameState(checkpoint, ports.now()))
@@ -1466,6 +1634,7 @@ export async function decideDispatch(
       checkpoint.intake,
       checkpoint.triage,
       checkpoint.route,
+      checkpoint.shadow,
       intent,
     );
   }
