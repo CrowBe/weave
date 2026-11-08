@@ -205,9 +205,11 @@ that settlement before any stale check and stays `dispatch_unconfirmed` until it
 is found. Cancellation appends no decision, a stale or mismatched answer pauses,
 and an unavailable provider pauses a dispatch-dependent step. Receipts map to a
 closed status/reason table; provider error text is never stored. Final
-decisions use `dispatch.decision@1` (checkpoint `dispatch.checkpoint@1`), and
-the fresh site observations are emitted as Weft judgment records only after the
-final append. The composition never writes `routed_input@1`.
+decisions use `dispatch.decision@4` (checkpoint `dispatch.checkpoint@3`), which
+carries the `decide1.rules@1` `rule_table` and the `decide1` trace. After each
+successful append, the fresh site observations are emitted as Weft judgment
+records followed by one `dispatch.decided` record. The composition never writes
+`routed_input@1`.
 
 ## 5. Tier configuration and availability
 
