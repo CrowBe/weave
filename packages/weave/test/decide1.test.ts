@@ -189,14 +189,15 @@ function domain(): Case[] {
 }
 
 test('P4a-1 table shape: frozen, closed, unique, no bare spawn', () => {
-  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@1');
+  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@2');
   assert.ok(Object.isFrozen(DECIDE1_RULES));
-  assert.equal(new Set(DECIDE1_RULES.map((row) => row.id)).size, 15);
+  assert.equal(new Set(DECIDE1_RULES.map((row) => row.id)).size, 16);
   for (const row of DECIDE1_RULES) {
     assert.ok(Object.isFrozen(row));
     assert.ok(isCode(row.id));
     assert.equal(row.band === 'withheld', row.id.startsWith('hold.'));
-    assert.notEqual(row.band, 'spawn_subtasks');
+    // P5b: only the preflight row spawns, and only over a validated plan (P5b-1/2).
+    assert.equal(row.band === 'spawn_subtasks', row.id === 'spawn.preflight');
     if (row.band !== 'withheld') assert.ok(DECIDE1_BANDS.includes(row.band));
   }
 });
@@ -208,7 +209,9 @@ test('P4a-2 totality and reachability over reachable stage tuples; impossible ch
     assert.equal(trace.band, band);
     reached.add(trace.rule);
   }
-  assert.deepEqual([...reached].sort(), DECIDE1_RULES.map((row) => row.id).sort());
+  // P4a's stage domain carries no preflight facts; P5b-2 reaches spawn.preflight.
+  const ids = DECIDE1_RULES.map((row) => row.id).filter((id) => id !== 'spawn.preflight');
+  assert.deepEqual([...reached].sort(), ids.sort());
   for (const patch of [
     { ...absent('triage'), ...absent('route') },
     { 'intake.choice': 'flash', ...absent('triage'), ...absent('route') },
@@ -639,7 +642,7 @@ test('P4b-2 trace concatenates read then shadow and validates both partitions wi
   assert.deepEqual(input, before);
   assert.deepEqual(decideBand({ ...read, shadow: { judgments: [], facts: [] } } as Decide1Inputs), decideBand(read));
   assert.deepEqual(decideBand(read), {
-    table: 'decide1.rules@1',
+    table: 'decide1.rules@2',
     judgments: read.judgments,
     facts: read.facts,
     rule: 'gen.route',
@@ -673,27 +676,143 @@ test('P4b-2 trace concatenates read then shadow and validates both partitions wi
   assert.notEqual(copy.facts.at(-1), shadow.facts.at(-1));
 });
 
-test('P4b-3 decide1.rules@1 retains the exact P4a ids, order and bands', () => {
-  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@1');
+const RULES_V1 = [
+  ['hold.admission', 'withheld'],
+  ['hold.outage', 'withheld'],
+  ['hold.paused', 'withheld'],
+  ['ask.intake', 'ask_human'],
+  ['ask.irreversible', 'ask_human'],
+  ['ask.thread_target', 'ask_human'],
+  ['act.thread', 'tool_call'],
+  ['ask.triage', 'ask_human'],
+  ['act.capability', 'tool_call'],
+  ['act.done_check', 'tool_call'],
+  ['act.decline', 'tool_call'],
+  ['gen.triage_fallback', 'escalate_gen'],
+  ['gen.route', 'escalate_gen'],
+  ['ask.route', 'ask_human'],
+  ['gen.route_fallback', 'escalate_gen'],
+];
+const RULES_V2 = [...RULES_V1.slice(0, 12), ['spawn.preflight', 'spawn_subtasks'], ...RULES_V1.slice(12)];
+
+test('P4b-3 decide1.rules@2 retains the exact P4a ids, order and bands, plus spawn.preflight', () => {
+  // Deliberate P5b move: the snapshot is @2 with 16 ids.
+  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@2');
   assert.deepEqual(
     DECIDE1_RULES.map(({ id, band }) => [id, band]),
-    [
-      ['hold.admission', 'withheld'],
-      ['hold.outage', 'withheld'],
-      ['hold.paused', 'withheld'],
-      ['ask.intake', 'ask_human'],
-      ['ask.irreversible', 'ask_human'],
-      ['ask.thread_target', 'ask_human'],
-      ['act.thread', 'tool_call'],
-      ['ask.triage', 'ask_human'],
-      ['act.capability', 'tool_call'],
-      ['act.done_check', 'tool_call'],
-      ['act.decline', 'tool_call'],
-      ['gen.triage_fallback', 'escalate_gen'],
-      ['gen.route', 'escalate_gen'],
-      ['ask.route', 'ask_human'],
-      ['gen.route_fallback', 'escalate_gen'],
-    ],
+    RULES_V2,
   );
-  assert.ok(DECIDE1_RULES.every(({ band }) => band !== 'spawn_subtasks'));
+  assert.deepEqual(
+    DECIDE1_RULES.filter(({ band }) => band === 'spawn_subtasks').map(({ id }) => id),
+    ['spawn.preflight'],
+  );
+});
+
+// P5b: the preflight block of read facts the spawn row may consult.
+const HEX = 'a'.repeat(64);
+const SPAWN_ROW_FACTS = [
+  'preflight.admitted',
+  'route.accepted',
+  'route.choice',
+  'route.status',
+  'spawn.gain',
+  'spawn.plan',
+  'spawn.port',
+];
+function withPreflight(
+  input: Decide1Inputs,
+  values: { admitted: unknown; gain: unknown; plan: unknown; port: unknown },
+): Decide1Inputs {
+  return {
+    ...input,
+    facts: [
+      ...input.facts,
+      { name: 'preflight.admitted', value: values.admitted as Decide1Fact['value'] },
+      { name: 'spawn.gain', value: values.gain as Decide1Fact['value'] },
+      { name: 'spawn.plan', value: values.plan as Decide1Fact['value'] },
+      { name: 'spawn.port', value: values.port as Decide1Fact['value'] },
+    ],
+  };
+}
+function preflightVariants() {
+  const out: { admitted: unknown; gain: unknown; plan: unknown; port: unknown }[] = [];
+  for (const admitted of [true, false, null])
+    for (const gain of [true, false, null])
+      for (const plan of [HEX, null]) for (const port of [true, false]) out.push({ admitted, gain, plan, port });
+  return out;
+}
+/** The @1 rows: every row except spawn.preflight, evaluated in order over the read partition. */
+function withoutSpawnRow(input: Decide1Inputs): string | undefined {
+  const facts = new Map(input.facts.map((fact) => [fact.name, fact.value]));
+  const judgments = new Map(input.judgments.map((judgment) => [judgment.name, judgment.probability]));
+  return DECIDE1_RULES.filter((row) => row.id !== 'spawn.preflight').find((row) => row.when(facts, judgments))?.id;
+}
+
+test('P5b-1 table @2 inserts spawn.preflight immediately before gen.route', () => {
+  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@2');
+  assert.deepEqual(
+    DECIDE1_RULES.map(({ id, band }) => [id, band]),
+    RULES_V2,
+  );
+  assert.equal(DECIDE1_RULES[12]?.id, 'spawn.preflight');
+  assert.equal(DECIDE1_RULES[13]?.id, 'gen.route');
+  assert.equal(DECIDE1_RULES.length, 16);
+});
+
+test('P5b-2 the spawn row diff is the only behaviour change over the reachable domain', () => {
+  let spawned = 0;
+  for (const { input } of domain()) {
+    const baseline = decideBand(input);
+    const facts = new Map(input.facts.map((fact) => [fact.name, fact.value]));
+    const genRoute =
+      facts.get('route.status') === 'transition' &&
+      facts.get('route.accepted') === true &&
+      TIERS.includes(facts.get('route.choice') as string);
+    for (const variant of preflightVariants()) {
+      const patched = withPreflight(input, variant);
+      const trace = decideBand(patched);
+      const legacy = withoutSpawnRow(patched);
+      assert.equal(legacy, baseline.rule);
+      const all =
+        genRoute && variant.admitted === true && variant.gain === true && variant.plan === HEX && variant.port === true;
+      if (all) {
+        spawned++;
+        assert.deepEqual([trace.rule, trace.band], ['spawn.preflight', 'spawn_subtasks'], JSON.stringify(variant));
+      } else assert.deepEqual([trace.rule, trace.band], [baseline.rule, baseline.band], JSON.stringify(variant));
+    }
+  }
+  assert.equal(spawned, TIERS.length);
+  for (const patch of [
+    { ...absent('triage'), ...absent('route') },
+    { 'intake.choice': 'flash' },
+    { 'triage.choice': 'capability' },
+    { 'triage.accepted': false, 'triage.choice': 'capability' },
+    { 'route.choice': 'capability', 'route.accepted': false },
+  ])
+    for (const variant of preflightVariants())
+      assert.throws(() => decideBand(withPreflight(inputs(patch), variant)), /decide1: no rule matched/);
+});
+
+test('P5b-3 no P4b shadow name reaches a row; the spawn row reads only its seven code facts', () => {
+  for (const { input } of domain())
+    for (const variant of preflightVariants()) {
+      const read = withPreflight(input, variant);
+      const baseline = decideBand(read);
+      for (const shadow of shadowVariants()) {
+        const trace = decideBand({ ...read, shadow } as Decide1Inputs);
+        assert.deepEqual([trace.rule, trace.band], [baseline.rule, baseline.band]);
+      }
+    }
+  // Policy-shaped preflight names in the shadow partition cannot supply the spawn row.
+  const spawnable = withPreflight(inputs(), { admitted: true, gain: true, plan: HEX, port: true });
+  assert.equal(decideBand(spawnable).rule, 'spawn.preflight');
+  const shadow = { judgments: [], facts: spawnable.facts.slice(14) };
+  assert.equal(decideBand({ judgments: spawnable.judgments, facts: inputs().facts, shadow }).rule, 'gen.route');
+  const P4B = /clarify|multi_deliverable|reads_before_gen|veto_bare_gen|residual_ambiguity/;
+  for (const row of DECIDE1_RULES) assert.doesNotMatch(row.when.toString(), P4B, row.id);
+  const body = DECIDE1_RULES.find((row) => row.id === 'spawn.preflight')!.when.toString();
+  const names = [...new Set([...body.matchAll(/\.get\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => m[1]))];
+  assert.deepEqual(names.sort(), SPAWN_ROW_FACTS);
+  // Every name is a fact read; the row consults no judgment map.
+  assert.doesNotMatch(body, /\(\s*f\s*,/);
 });

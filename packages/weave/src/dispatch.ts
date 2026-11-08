@@ -55,8 +55,15 @@ import {
   type ShadowObservation,
 } from './sites/decide1-shadow.js';
 import { digest } from './digest.js';
-import { TARGET_ROLES, preflightPlan } from './spawn.js';
-import { askRoles, SPAWN_ROLES_QUESTION, type RoleAsk, type RoleObservation } from './sites/spawn-roles.js';
+import { TARGET_ROLES, preflightPlan, type SpawnPlan } from './spawn.js';
+import {
+  askRoles,
+  maximalTopP,
+  rolesAdmitted,
+  SPAWN_ROLES_QUESTION,
+  type RoleAsk,
+  type RoleObservation,
+} from './sites/spawn-roles.js';
 import type { ImplementTier } from './implement-step.js';
 import { deliver, type WeftPort, type WeftRecordShape } from './weft.js';
 
@@ -88,7 +95,19 @@ export type DispatchIntent =
       readonly dispatch_id: string;
       readonly relation: 'continue_thread' | 'steer' | 'queue' | 'interrupt';
       readonly thread_ref: string;
+    }
+  | {
+      readonly kind: 'spawn';
+      readonly dispatch_id: string;
+      /** Disclosed refs in request order; summaries are never carried. */
+      readonly targets: readonly string[];
+      /** `validatePlan(plan, targets)` holds: refs, codes, numbers and digests only. */
+      readonly plan: SpawnPlan;
+      /** Digest of the admitted role observation, so the claim binds every role field, not only the roles. */
+      readonly roles_digest: string;
     };
+export type SpawnIntent = Extract<DispatchIntent, { readonly kind: 'spawn' }>;
+export type DispatchChoice = SiteChoice | 'spawn';
 
 export type DispatchReceipt =
   | { readonly status: 'dispatched'; readonly dispatch_id: string; readonly ref: string }
@@ -109,7 +128,7 @@ export type DispatchReason =
   | 'dispatch_unconfirmed';
 
 export interface DispatchCheckpoint {
-  readonly schema: 'dispatch.checkpoint@3';
+  readonly schema: 'dispatch.checkpoint@4';
   readonly decision_id: string;
   readonly state_revision: number;
   readonly state_updated_at: number;
@@ -125,16 +144,20 @@ export interface DispatchCheckpoint {
   readonly route: LoopDecision | null;
   readonly shadow: readonly ShadowObservation[] | null;
   readonly preflight: RoleObservation | null;
+  /** The asking request's `terms.cost_ceiling` when a safe natural, bound with `asks.preflight = 1`. */
+  readonly preflight_budget: number | null;
+  /** Whether this call's composition injected `ports.spawn`; frozen by claim. */
+  readonly spawn_port: boolean;
   readonly intent: DispatchIntent | null;
 }
 
 export interface DispatchDecision {
-  readonly schema: 'dispatch.decision@4';
+  readonly schema: 'dispatch.decision@5';
   readonly decision_id: string;
   readonly entry: number;
   readonly state_revision: number;
   readonly decided_by: 'intake' | 'triage' | 'route' | 'rule';
-  readonly choice: SiteChoice;
+  readonly choice: DispatchChoice;
   readonly status: 'dispatched' | 'needs_human' | 'paused' | 'refused';
   readonly reason: DispatchReason;
   readonly rule_table: typeof DECIDE1_RULE_TABLE;
@@ -196,7 +219,14 @@ export interface DispatchJournal {
   append(decision: DispatchDecision, attempt?: string): boolean;
 }
 
-export type DispatchPort = (intent: DispatchIntent, signal?: AbortSignal) => DispatchReceipt | Promise<DispatchReceipt>;
+/** Never receives a spawn intent. */
+export type DispatchPort = (
+  intent: Exclude<DispatchIntent, SpawnIntent>,
+  signal?: AbortSignal,
+) => DispatchReceipt | Promise<DispatchReceipt>;
+
+/** Opens every child of the plan or none, idempotently by dispatch_id; never runs a child in P5b. */
+export type SpawnPort = (intent: SpawnIntent, signal?: AbortSignal) => DispatchReceipt | Promise<DispatchReceipt>;
 
 /** The idempotent port's own record for a decision id: its receipt once settled, else null. */
 export type DispatchSettlementPort = (
@@ -212,6 +242,8 @@ export interface DispatchPorts {
   /** Without it, recovery of an attempt in flight stays paused / `dispatch_unconfirmed`. */
   readonly settlement?: DispatchSettlementPort;
   readonly weft?: WeftPort;
+  /** Absent: `spawn.port = false`, and `spawn.preflight` cannot match. `settlement` must also cover spawn decisions. */
+  readonly spawn?: SpawnPort;
 }
 
 export type ThreadTarget =
@@ -223,7 +255,7 @@ type Plan = { readonly trace: Decide1Trace } & (
   | {
       readonly kind: 'dispatch';
       readonly decided_by: Decider;
-      readonly choice: SiteChoice;
+      readonly choice: DispatchChoice;
       readonly reason: DispatchReason;
       readonly intent: DispatchIntent;
     }
@@ -361,9 +393,9 @@ export function resolveThreadTarget(
   return { ok: false, reason: 'ambiguous_reference' };
 }
 
-function initialCheckpoint(request: DispatchRequest): DispatchCheckpoint {
+function initialCheckpoint(request: DispatchRequest, ports: DispatchPorts): DispatchCheckpoint {
   return {
-    schema: 'dispatch.checkpoint@3',
+    schema: 'dispatch.checkpoint@4',
     decision_id: request.request_id,
     state_revision: request.state_revision,
     state_updated_at: request.state_updated_at,
@@ -373,6 +405,8 @@ function initialCheckpoint(request: DispatchRequest): DispatchCheckpoint {
     route: null,
     shadow: null,
     preflight: null,
+    preflight_budget: null,
+    spawn_port: ports.spawn !== undefined,
     intent: null,
   };
 }
@@ -387,10 +421,12 @@ function makeCheckpoint(
   route: LoopDecision | null,
   shadow: readonly ShadowObservation[] | null,
   preflight: RoleObservation | null,
+  preflight_budget: number | null,
+  spawn_port: boolean,
   intent: DispatchIntent | null,
 ): DispatchCheckpoint {
   return {
-    schema: 'dispatch.checkpoint@3',
+    schema: 'dispatch.checkpoint@4',
     decision_id,
     state_revision,
     state_updated_at,
@@ -406,6 +442,8 @@ function makeCheckpoint(
     route,
     shadow,
     preflight,
+    preflight_budget,
+    spawn_port,
     intent,
   };
 }
@@ -421,7 +459,7 @@ function makeDecision(
   reason: DispatchReason,
 ): DispatchDecision {
   return {
-    schema: 'dispatch.decision@4',
+    schema: 'dispatch.decision@5',
     decision_id: checkpoint.decision_id,
     entry,
     state_revision: checkpoint.state_revision,
@@ -464,7 +502,7 @@ function final(
 function dispatchPlan(
   trace: Decide1Trace,
   decided_by: Decider,
-  choice: SiteChoice,
+  choice: DispatchChoice,
   reason: DispatchReason,
   intent: DispatchIntent,
 ): Plan {
@@ -866,7 +904,7 @@ function trustedRoles(checkpoint: DispatchCheckpoint, request: DispatchRequest):
     if (record['reason'] === 'answered') {
       if (
         !(TARGET_ROLES as readonly unknown[]).includes(item['role']) ||
-        (item['top_p'] !== null && !unit(item['top_p'])) ||
+        (item['top_p'] !== null && !maximalTopP(item['top_p'])) ||
         (item['confidence'] !== null && !unit(item['confidence']))
       )
         return null;
@@ -938,8 +976,7 @@ export function decide1Inputs(request: DispatchRequest, checkpoint: DispatchChec
     if (observation.top_p !== null) judgments.push({ name: `${stage}.top_p`, probability: observation.top_p });
   }
   const ambiguity = triage?.extracts.at(-1)?.residual_ambiguity.count;
-  const validAmbiguity = ambiguity != null && Number.isSafeInteger(ambiguity) && ambiguity >= 0;
-  const shadowFacts: Decide1Fact[] = [{ name: 'residual_ambiguity', value: validAmbiguity ? ambiguity : null }];
+  const shadowFacts: Decide1Fact[] = [{ name: 'residual_ambiguity', value: natural(ambiguity) ? ambiguity : null }];
   const shadowJudgments: Decide1Judgment[] = [];
   for (const [index, judgment] of DECIDE1_SHADOW_JUDGMENTS.entries()) {
     const observation = checkpoint.asks.shadow === 1 ? trustedShadow(checkpoint, index) : null;
@@ -955,6 +992,7 @@ export function decide1Inputs(request: DispatchRequest, checkpoint: DispatchChec
     if (observation?.confidence != null)
       shadowJudgments.push({ name: `${judgment}.confidence`, probability: observation.confidence });
   }
+  // P5b: preflight roles, admission, plan and port are read inputs to the spawn row.
   const roles = trustedRoles(checkpoint, request);
   const reason =
     checkpoint.asks.preflight !== 1
@@ -962,54 +1000,78 @@ export function decide1Inputs(request: DispatchRequest, checkpoint: DispatchChec
       : checkpoint.preflight === null
         ? 'unrecorded'
         : (roles?.reason ?? 'untrusted');
-  shadowFacts.push(
+  facts.push(
     { name: 'preflight.reason', value: reason },
     { name: 'preflight.targets', value: request.targets?.length ?? 0 },
   );
   for (let i = 0; i < 8; i++) {
     const target = roles?.targets[i];
-    shadowFacts.push({ name: `preflight.t${i}.role`, value: target?.role ?? null });
-    if (target?.top_p != null) shadowJudgments.push({ name: `preflight.t${i}.top_p`, probability: target.top_p });
+    facts.push({ name: `preflight.t${i}.role`, value: target?.role ?? null });
+    if (target?.top_p != null) judgments.push({ name: `preflight.t${i}.top_p`, probability: target.top_p });
     if (target?.confidence != null)
-      shadowJudgments.push({ name: `preflight.t${i}.confidence`, probability: target.confidence });
+      judgments.push({ name: `preflight.t${i}.confidence`, probability: target.confidence });
   }
-  const targets = roles?.targets.map((target) => target.ref) ?? [];
-  const spawn = (() => {
-    if (
-      roles?.reason !== 'answered' ||
-      !validAmbiguity ||
-      correlation(checkpoint.decision_id) === null ||
-      targets.some((target) => correlation(target) === null) ||
-      new Set(targets).size !== targets.length ||
-      route === null ||
-      !isTier(route.site.choice) ||
-      !Number.isSafeInteger(request.terms.cost_ceiling) ||
-      request.terms.cost_ceiling < 0
-    )
-      return null;
-    // Invalid evidence is absent; a builder/validator mismatch must surface as a defect.
-    return preflightPlan({
-      decision_id: checkpoint.decision_id,
-      root_ref: checkpoint.decision_id,
-      goal_digest: digest({ message: request.intake.message }),
-      budget: request.terms.cost_ceiling,
-      tier: route.site.choice,
-      targets,
-      roles: roles.targets.map((t) => t.role!),
-      ambiguity,
-    });
-  })();
-  shadowFacts.push(
+  const spawn = preflightFor(request, checkpoint);
+  const admitted = checkpoint.asks.preflight !== 1 ? null : roles !== null && rolesAdmitted(roles);
+  facts.push(
+    { name: 'preflight.admitted', value: admitted },
     { name: 'spawn.gain', value: spawn?.gain ?? null },
     { name: 'spawn.children', value: spawn?.plan?.children.length ?? null },
     { name: 'spawn.plan', value: spawn?.plan?.digest ?? null },
+    { name: 'spawn.port', value: checkpoint.spawn_port },
   );
   return { judgments, facts, shadow: { judgments: shadowJudgments, facts: shadowFacts } };
 }
 
+function natural(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+/**
+ * The preflight plan as a pure function of the checkpoint and the disclosed request. Untrusted
+ * inputs are absent evidence (null); a builder/validator mismatch surfaces as a defect (D-ENG-052).
+ */
+function preflightFor(
+  request: DispatchRequest,
+  checkpoint: DispatchCheckpoint,
+): { readonly gain: boolean; readonly plan: SpawnPlan | null } | null {
+  const roles = trustedRoles(checkpoint, request);
+  const targets = roles?.targets.map((target) => target.ref) ?? [];
+  const route = checkpoint.route;
+  const ambiguity = checkpoint.triage?.extracts.at(-1)?.residual_ambiguity.count;
+  const budget = checkpoint.preflight_budget;
+  if (
+    roles?.reason !== 'answered' ||
+    !natural(ambiguity) ||
+    correlation(checkpoint.decision_id) === null ||
+    targets.some((target) => correlation(target) === null) ||
+    new Set(targets).size !== targets.length ||
+    route === null ||
+    !isTier(route.site.choice) ||
+    !natural(budget)
+  )
+    return null;
+  return preflightPlan({
+    decision_id: checkpoint.decision_id,
+    root_ref: checkpoint.decision_id,
+    goal_digest: digest({ message: request.intake.message }),
+    budget,
+    tier: route.site.choice,
+    targets,
+    roles: roles.targets.map((t) => t.role!),
+    ambiguity,
+  });
+}
+
+/** The asking request's ceiling, bound when roles are asked (D-P5b-5); anything else is no budget. */
+function preflightBudget(request: DispatchRequest): number | null {
+  return natural(request.terms.cost_ceiling) ? request.terms.cost_ceiling : null;
+}
+
 /** Rule ids fix the outcome. The request is needed only to bind the already-resolved thread id. */
 function planFor(trace: Decide1Trace, checkpoint: DispatchCheckpoint, request: DispatchRequest): Plan {
-  if (trace.band === 'spawn_subtasks') throw new Error('spawn_subtasks needs a sealed parent frame (D-ENG-044, P5)');
+  const unplanned = () => new Error('spawn_subtasks needs a validated preflight plan (D-ENG-044)');
+  if (trace.band === 'spawn_subtasks' && trace.rule !== 'spawn.preflight') throw unplanned();
   const dispatch_id = `${checkpoint.decision_id}:dispatch`;
   const facts = new Map(trace.facts.map((fact) => [fact.name, fact.value]));
   const choice = (stage: Stage) => facts.get(`${stage}.choice`) as SiteChoice;
@@ -1067,6 +1129,26 @@ function planFor(trace: Decide1Trace, checkpoint: DispatchCheckpoint, request: D
         ceiling: 'strong',
         tier_source: 'triage_fallback',
       });
+    case 'spawn.preflight': {
+      const spawn = preflightFor(request, checkpoint);
+      const roles = trustedRoles(checkpoint, request);
+      if (
+        spawn === null ||
+        spawn.gain !== true ||
+        spawn.plan === null ||
+        spawn.plan.digest !== facts.get('spawn.plan') ||
+        roles === null
+      )
+        throw unplanned();
+      return dispatchPlan(trace, 'rule', 'spawn', 'accepted', {
+        kind: 'spawn',
+        dispatch_id,
+        targets: (request.targets ?? []).map((target) => target.ref),
+        plan: spawn.plan,
+        // The plan reads only the roles; the claim must also fix their confidence, top_p and provenance.
+        roles_digest: digest(roles),
+      });
+    }
     case 'gen.route': {
       const tier = choice('route');
       if (!isTier(tier)) throw new Error('decide1: invalid route tier');
@@ -1096,8 +1178,11 @@ function planFor(trace: Decide1Trace, checkpoint: DispatchCheckpoint, request: D
 }
 
 function assertCheckpoint(checkpoint: DispatchCheckpoint): void {
-  if (checkpoint.schema !== 'dispatch.checkpoint@3')
-    throw new Error('recorded dispatch checkpoint schema differs from dispatch.checkpoint@3');
+  if (checkpoint.schema !== 'dispatch.checkpoint@4')
+    throw new Error('recorded dispatch checkpoint schema differs from dispatch.checkpoint@4');
+  if (typeof checkpoint.spawn_port !== 'boolean') throw new Error('recorded dispatch spawn_port is not a boolean');
+  if (checkpoint.preflight_budget !== null && !natural(checkpoint.preflight_budget))
+    throw new Error('recorded dispatch preflight_budget is not a safe natural');
 }
 
 function resolveOutcome(request: DispatchRequest, checkpoint: DispatchCheckpoint): Plan {
@@ -1153,7 +1238,9 @@ function receiptResult(
   }
 }
 
-function normalizeReceipt(value: unknown, dispatch_id: string): DispatchReceipt | null {
+/** A spawn is confirmed only by a receipt naming its plan digest: exactly this child set was opened. */
+function normalizeReceipt(value: unknown, intent: DispatchIntent): DispatchReceipt | null {
+  const dispatch_id = intent.dispatch_id;
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
   const raw = value as Record<string, unknown>;
   const keys = Object.keys(raw);
@@ -1162,6 +1249,7 @@ function normalizeReceipt(value: unknown, dispatch_id: string): DispatchReceipt 
     if (raw['dispatch_id'] !== dispatch_id) return null;
     const ref = correlation(raw['ref']);
     if (ref === null) return null;
+    if (intent.kind === 'spawn' && ref !== intent.plan.digest) return null;
     return { status: 'dispatched', dispatch_id, ref };
   }
   if (raw['status'] === 'refused') {
@@ -1269,10 +1357,10 @@ function isResumable(decision: DispatchDecision): boolean {
 }
 
 function assertRuleTable(decision: DispatchDecision): void {
-  if (decision.schema !== 'dispatch.decision@4')
-    throw new Error('recorded dispatch decision schema differs from dispatch.decision@4');
+  if (decision.schema !== 'dispatch.decision@5')
+    throw new Error('recorded dispatch decision schema differs from dispatch.decision@5');
   if (decision.rule_table !== DECIDE1_RULE_TABLE)
-    throw new Error('recorded dispatch rule table differs from decide1.rules@1');
+    throw new Error('recorded dispatch rule table differs from decide1.rules@2');
 }
 
 const sequences = new WeakMap<WeftPort, number>();
@@ -1385,7 +1473,7 @@ function cancellation(
   decider: { readonly decided_by: Decider; readonly choice: SiteChoice },
 ): DispatchDecision {
   return {
-    schema: 'dispatch.decision@4',
+    schema: 'dispatch.decision@5',
     decision_id: checkpoint.decision_id,
     entry,
     state_revision: checkpoint.state_revision,
@@ -1468,6 +1556,8 @@ async function attemptIntent(
   signal: AbortSignal | undefined,
   fresh: readonly SiteObservation[],
 ): Promise<DispatchDecision> {
+  // A claimed spawn is never re-planned: without its port it stops before any attempt (D-P5b-4).
+  if (intent.kind === 'spawn' && ports.spawn === undefined) throw new Error('a claimed spawn intent needs ports.spawn');
   const attempt = journal.acquire(request.request_id);
   if (attempt === null) return recoverAttempt(request, checkpoint, plan, intent, ports, journal, signal, fresh);
   try {
@@ -1534,12 +1624,14 @@ async function dispatchIntent(
   if (!journal.present(request.request_id, attempt)) return yielded(request, journal);
   let raw: unknown = null;
   try {
-    raw = await ports.dispatch(intent, signal);
+    // The spawn port gets a detached copy, so nothing it does can reach a record.
+    raw = intent.kind === 'spawn' ? await ports.spawn!(clone(intent), signal) : await ports.dispatch(intent, signal);
   } catch {
+    // Never put an injected exception in evidence; the receipt is null.
     raw = null;
   }
   if (signal?.aborted) return cancellation(request, checkpoint, entry, lastDecider(checkpoint));
-  const receipt = normalizeReceipt(raw, intent.dispatch_id);
+  const receipt = normalizeReceipt(raw, intent);
   return settleReceipt(request, checkpoint, entry, plan, intent, receipt, ports, journal, fresh, attempt);
 }
 
@@ -1557,7 +1649,7 @@ async function readSettlement(
   } catch {
     raw = null;
   }
-  return normalizeReceipt(raw, intent.dispatch_id);
+  return normalizeReceipt(raw, intent);
 }
 
 /** A null receipt leaves the presented intent paused / `dispatch_unconfirmed`, never terminal. */
@@ -1578,6 +1670,18 @@ function settleReceipt(
   return settle(request, decision, ports, journal, fresh, attempt);
 }
 
+/** A claimed intent stands only while its recorded stages re-derive it exactly; otherwise nothing may act on it. */
+function claimedPlan(
+  request: DispatchRequest,
+  checkpoint: DispatchCheckpoint,
+  intent: DispatchIntent,
+): { readonly plan: Plan; readonly intent: DispatchIntent } {
+  const plan = resolveOutcome(request, checkpoint);
+  if (plan.kind !== 'dispatch') throw new Error('a recorded intent needs a dispatch plan');
+  if (!sameRecord(intent, plan.intent)) throw new Error('recorded intent does not match the recorded stages');
+  return { plan, intent };
+}
+
 export async function decideDispatch(
   request: DispatchRequest,
   ports: DispatchPorts,
@@ -1592,7 +1696,23 @@ export async function decideDispatch(
   const loaded = journal.load(decision_id);
   for (const decision of loaded.decisions) assertRuleTable(decision);
   if (loaded.checkpoint !== null) assertCheckpoint(loaded.checkpoint);
-  let checkpoint = loaded.checkpoint ?? initialCheckpoint(captured);
+  let checkpoint = loaded.checkpoint ?? initialCheckpoint(captured, ports);
+  // Until claim the snapshot follows this call's composition; the claim freezes it.
+  if (checkpoint.intent === null)
+    checkpoint = makeCheckpoint(
+      checkpoint.decision_id,
+      checkpoint.state_revision,
+      checkpoint.state_updated_at,
+      checkpoint.asks,
+      checkpoint.intake,
+      checkpoint.triage,
+      checkpoint.route,
+      checkpoint.shadow,
+      checkpoint.preflight,
+      checkpoint.preflight_budget,
+      ports.spawn !== undefined,
+      checkpoint.intent,
+    );
   const latest = loaded.decisions.at(-1) ?? null;
   const entry = loaded.decisions.length + 1;
 
@@ -1602,27 +1722,17 @@ export async function decideDispatch(
   }
 
   const resume = captured.resume === true;
+  // A claimed intent is re-derived before the abort check, so even a cancelled call never reports tampered evidence.
+  const claimed = checkpoint.intent === null ? null : claimedPlan(captured, checkpoint, checkpoint.intent);
   if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
 
-  if (checkpoint.intent !== null) {
-    const plan = resolveOutcome(captured, checkpoint);
-    if (plan.kind !== 'dispatch') throw new Error('a recorded intent needs a dispatch plan');
-    if (!sameRecord(checkpoint.intent, plan.intent))
-      throw new Error('recorded intent does not match the recorded stages');
+  if (claimed !== null) {
+    const { plan, intent } = claimed;
     if (!resume) {
-      const decision = makeDecision(
-        captured,
-        checkpoint,
-        entry,
-        plan,
-        checkpoint.intent,
-        null,
-        'paused',
-        'dispatch_unconfirmed',
-      );
+      const decision = makeDecision(captured, checkpoint, entry, plan, intent, null, 'paused', 'dispatch_unconfirmed');
       return settle(captured, decision, ports, journal, []);
     }
-    return attemptIntent(captured, checkpoint, entry, plan, checkpoint.intent, ports, journal, signal, []);
+    return attemptIntent(captured, checkpoint, entry, plan, intent, ports, journal, signal, []);
   }
 
   if (loaded.checkpoint !== null && !sameState(checkpoint, ports.now()))
@@ -1648,6 +1758,8 @@ export async function decideDispatch(
       checkpoint.route,
       checkpoint.shadow,
       checkpoint.preflight,
+      checkpoint.preflight_budget,
+      checkpoint.spawn_port,
       checkpoint.intent,
     );
     journal.checkpoint(checkpoint);
@@ -1663,6 +1775,8 @@ export async function decideDispatch(
       checkpoint.route,
       checkpoint.shadow,
       checkpoint.preflight,
+      checkpoint.preflight_budget,
+      checkpoint.spawn_port,
       checkpoint.intent,
     );
     if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
@@ -1696,6 +1810,8 @@ export async function decideDispatch(
         checkpoint.route,
         checkpoint.shadow,
         checkpoint.preflight,
+        checkpoint.preflight_budget,
+        checkpoint.spawn_port,
         checkpoint.intent,
       );
       journal.checkpoint(checkpoint);
@@ -1711,6 +1827,8 @@ export async function decideDispatch(
         checkpoint.route,
         checkpoint.shadow,
         checkpoint.preflight,
+        checkpoint.preflight_budget,
+        checkpoint.spawn_port,
         checkpoint.intent,
       );
       if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
@@ -1743,6 +1861,8 @@ export async function decideDispatch(
           checkpoint.route,
           checkpoint.shadow,
           checkpoint.preflight,
+          checkpoint.preflight_budget,
+          checkpoint.spawn_port,
           checkpoint.intent,
         );
         journal.checkpoint(checkpoint);
@@ -1758,6 +1878,8 @@ export async function decideDispatch(
           decision,
           checkpoint.shadow,
           checkpoint.preflight,
+          checkpoint.preflight_budget,
+          checkpoint.spawn_port,
           checkpoint.intent,
         );
         if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
@@ -1789,6 +1911,8 @@ export async function decideDispatch(
         shadow: shadowDue ? 1 : checkpoint.asks.shadow,
         preflight: rolesDue ? 1 : checkpoint.asks.preflight,
       },
+      // The plan budget is bound with the ask, so a resume with other terms never re-carves it.
+      preflight_budget: rolesDue ? preflightBudget(captured) : checkpoint.preflight_budget,
     };
     journal.checkpoint(checkpoint);
     if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
@@ -1800,11 +1924,14 @@ export async function decideDispatch(
     checkpoint = { ...checkpoint, shadow, preflight };
     journal.checkpoint(checkpoint);
     const next = resolveOutcome(captured, checkpoint);
+    // The only move a window may make is this call's role round admitting gen.route into a spawn.
+    const spawned = rolesDue && plan.trace.rule === 'gen.route' && next.trace.rule === 'spawn.preflight';
     if (
-      next.trace.rule !== plan.trace.rule ||
-      next.trace.band !== plan.trace.band ||
       next.kind !== 'dispatch' ||
-      !sameRecord(next.intent, plan.intent)
+      (!spawned &&
+        (next.trace.rule !== plan.trace.rule ||
+          next.trace.band !== plan.trace.band ||
+          !sameRecord(next.intent, plan.intent)))
     )
       throw new Error('decide1: shadow input moved the plan');
     plan = next;
@@ -1828,6 +1955,8 @@ export async function decideDispatch(
       checkpoint.route,
       checkpoint.shadow,
       checkpoint.preflight,
+      checkpoint.preflight_budget,
+      checkpoint.spawn_port,
       intent,
     );
   }
@@ -1844,13 +1973,15 @@ export function transitionDispatch(
   receipt: DispatchReceipt | null,
   entry = 1,
 ): DispatchDecision {
+  // Targets steer a consequential outcome, so replay screens them as `decideDispatch` does.
+  validateTargets(request.targets);
   const plan = resolveOutcome(request, checkpoint);
   const intent = plan.kind === 'dispatch' ? (checkpoint.intent ?? plan.intent) : null;
   if (plan.kind === 'dispatch' && checkpoint.intent !== null && !sameRecord(checkpoint.intent, plan.intent))
     throw new Error('recorded intent does not match the recorded stages');
   if (plan.kind === 'final')
     return makeDecision(request, checkpoint, entry, plan, null, null, plan.status, plan.reason);
-  const normalized = receipt === null ? null : normalizeReceipt(receipt, plan.intent.dispatch_id);
+  const normalized = receipt === null ? null : normalizeReceipt(receipt, plan.intent);
   const outcome = receiptResult(plan, normalized);
   return makeDecision(request, checkpoint, entry, plan, intent, normalized, outcome.status, outcome.reason);
 }

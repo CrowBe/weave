@@ -397,6 +397,9 @@ export {
   type DispatchReceipt,
   type DispatchRequest,
   type DispatchSettlementPort,
+  type DispatchChoice,
+  type SpawnIntent,
+  type SpawnPort,
   type ThreadTarget,
 } from './dispatch.js';
 
@@ -418,7 +421,9 @@ export {
   SPAWN_ROLES_SITE,
   SPAWN_ROLES_QUESTION,
   SPAWN_ROLE_CRITERIA,
+  SPAWN_ROLES_POLICY,
   transitionRoles,
+  rolesAdmitted,
   askRoles,
   type RoleReason,
   type RoleAsk,

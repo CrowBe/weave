@@ -241,13 +241,18 @@ edges. It grants nothing and carries no grant, scope or approval.
 ### Target role
 
 `edit`, `read`, `forbid` or `skip` assigned to one member of a caller-disclosed,
-closed candidate set. A role is an observation; it grants no authority.
+closed candidate set. A role is an observation; it grants no authority. A round's
+roles are admitted only when every target has a role, a published confidence at or
+above the provisional τ_role (.75) and a valid maximal `top_p` (at least a quarter,
+the least maximum of a four-role distribution); any other round falls back to bare
+generation.
 
 ### Spawn plan
 
 `spawn.plan@1`: children with sealed parent frames, dependency edges and budget
-shares, validated before it can exist. In P5a the would-be plan is shadow evidence;
-only its digest is recorded, and no rule reads it.
+shares, validated before it can exist. In P5a the would-be plan was shadow evidence.
+In P5b it is consequential: a spawn dispatch intent carries it, the claim binds it with
+its evidence, and the spawn port opens all of its children or none.
 
 ### Split gain
 
@@ -258,8 +263,10 @@ it bounds recursion without a depth cap. An empty child set has no gain.
 ### Dispatch intent
 
 A durable, keyed statement that one action will be presented exactly once: an
-implement tier, a capability or done-check dispatch, a decline, or a thread
-relation. It carries the dispatch id and no operator text. A claimed intent
+implement tier, a capability or done-check dispatch, a decline, a thread
+relation, or the spawn of a validated preflight spawn plan. It carries the dispatch
+id and no operator text; a spawn intent also carries the digest of its admitted role
+observation, so the claim binds every role field. A claimed intent
 prevents a second presentation; an unconfirmed intent is not re-presented
 without an explicit resume.
 
@@ -715,15 +722,14 @@ One closed, versioned entry in a Weft trace: an envelope, a kind, links to other
 
 The deterministic rule table over isolated judgments and code-computed facts
 whose output is the coarse band: `tool_call`, `spawn_subtasks`, `escalate_gen`
-or `ask_human`. `decide1.rules@1` is the ordered, versioned table used by
+or `ask_human`. `decide1.rules@2` is the ordered, versioned table used by
 dispatch authority; its output grants no execution authority of its own.
 
 ### Decide-1 trace
 
-What a `dispatch.decided` Weft record carries about how a dispatch decision was reached (D-ENG-045): each isolated judgment's name and probability, each code-computed fact's name and scalar value, the rule-table row that decided, and the coarse band it returned (`tool_call`, `spawn_subtasks`, `escalate_gen` or `ask_human`). The trace also lists shadow inputs no row of the current table version reads (D-ENG-047). A decision no site answered carries empty judgments. A fact value is never text. Like every Weft record, the trace reports a decision and grants no authority to dispatch. The `dispatch.decision@4` journal record carries the same trace and its rule-table version; a paused decision’s band is the band of the choice it withheld.
+What a `dispatch.decided` Weft record carries about how a dispatch decision was reached (D-ENG-045): each isolated judgment's name and probability, each code-computed fact's name and scalar value, the rule-table row that decided, and the coarse band it returned (`tool_call`, `spawn_subtasks`, `escalate_gen` or `ask_human`). The trace also lists shadow inputs no row of the current table version reads (D-ENG-047). A decision no site answered carries empty judgments. A fact value is never text. Like every Weft record, the trace reports a decision and grants no authority to dispatch. The `dispatch.decision@5` journal record carries the same trace and its rule-table version (`decide1.rules@2`); a paused decision’s band is the band of the choice it withheld.
 
-The shadow partition also holds preflight target roles and the would-be spawn plan's
-digest; these inputs have no dispatch authority.
+Preflight target roles, role admission, split gain, the spawn plan's digest and whether a spawn port is present are read inputs; the shadow partition holds only the P4b judgments and their facts. None of these inputs carries dispatch authority.
 
 ### Shadow judgment
 
