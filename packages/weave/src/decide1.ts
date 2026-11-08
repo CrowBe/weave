@@ -13,6 +13,11 @@ export interface Decide1Fact {
 export interface Decide1Inputs {
   readonly judgments: readonly Decide1Judgment[];
   readonly facts: readonly Decide1Fact[];
+  /** Recorded in the trace, never given to a row (D-ENG-047). Promotion is a row diff plus a table bump. */
+  readonly shadow?: {
+    readonly judgments: readonly Decide1Judgment[];
+    readonly facts: readonly Decide1Fact[];
+  };
 }
 export type Decide1RuleId =
   | 'hold.admission'
@@ -30,7 +35,7 @@ export type Decide1RuleId =
   | 'gen.route'
   | 'ask.route'
   | 'gen.route_fallback';
-export interface Decide1Trace extends Decide1Inputs {
+export interface Decide1Trace extends Omit<Decide1Inputs, 'shadow'> {
   readonly table: typeof DECIDE1_RULE_TABLE;
   readonly rule: Decide1RuleId;
   readonly band: Band;
@@ -180,9 +185,11 @@ function stageSet(facts: ReadonlyMap<string, Decide1Fact['value']>): boolean {
 }
 
 export function decideBand(inputs: Decide1Inputs): Decide1Trace {
-  names(inputs.judgments);
-  names(inputs.facts);
-  for (const judgment of inputs.judgments)
+  const traceJudgments = [...inputs.judgments, ...(inputs.shadow?.judgments ?? [])];
+  const traceFacts = [...inputs.facts, ...(inputs.shadow?.facts ?? [])];
+  names(traceJudgments);
+  names(traceFacts);
+  for (const judgment of traceJudgments)
     if (
       typeof judgment.probability !== 'number' ||
       !Number.isFinite(judgment.probability) ||
@@ -190,7 +197,7 @@ export function decideBand(inputs: Decide1Inputs): Decide1Trace {
       judgment.probability > 1
     )
       throw new Error('decide1: invalid probability');
-  for (const fact of inputs.facts) {
+  for (const fact of traceFacts) {
     const value = fact.value;
     if (
       !(
@@ -221,8 +228,8 @@ export function decideBand(inputs: Decide1Inputs): Decide1Trace {
   } else band = row.band;
   return {
     table: DECIDE1_RULE_TABLE,
-    judgments: inputs.judgments.map(({ name, probability }) => ({ name, probability })),
-    facts: inputs.facts.map(({ name, value }) => ({ name, value })),
+    judgments: traceJudgments.map(({ name, probability }) => ({ name, probability })),
+    facts: traceFacts.map(({ name, value }) => ({ name, value })),
     rule: row.id,
     band,
   };

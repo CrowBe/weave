@@ -315,7 +315,7 @@ The required slots whose final gate status is not `grounded`, in schema order,
 recorded as `{ count, slots }` on `extract@1`. An `unresolved` thread reference
 with two or more running threads is ambiguity only the operator can resolve, so
 intake asks instead of guessing. The confidence half of residual ambiguity
-waits for the P2d answer shape.
+waits for the P2d answer shape. D1's final count is a Decide-1 shadow fact.
 
 ### Input routing
 
@@ -697,7 +697,11 @@ dispatch authority; its output grants no execution authority of its own.
 
 ### Decide-1 trace
 
-What a `dispatch.decided` Weft record carries about how a dispatch decision was reached (D-ENG-045): each isolated judgment's name and probability, each code-computed fact's name and scalar value, the rule-table row that decided, and the coarse band it returned (`tool_call`, `spawn_subtasks`, `escalate_gen` or `ask_human`). A decision no site answered carries empty judgments. A fact value is never text. Like every Weft record, the trace reports a decision and grants no authority to dispatch. The `dispatch.decision@2` journal record carries the same trace and its rule-table version; a paused decision’s band is the band of the choice it withheld.
+What a `dispatch.decided` Weft record carries about how a dispatch decision was reached (D-ENG-045): each isolated judgment's name and probability, each code-computed fact's name and scalar value, the rule-table row that decided, and the coarse band it returned (`tool_call`, `spawn_subtasks`, `escalate_gen` or `ask_human`). The trace also lists shadow inputs no row of the current table version reads (D-ENG-047). A decision no site answered carries empty judgments. A fact value is never text. Like every Weft record, the trace reports a decision and grants no authority to dispatch. The `dispatch.decision@3` journal record carries the same trace and its rule-table version; a paused decision’s band is the band of the choice it withheld.
+
+### Shadow judgment
+
+An isolated Decide-1 judgment that is asked and recorded in the trace but read by no row of the current table version; it cannot change a band, intent or ask (D-ENG-047). Promoting a shadow judgment requires a fitted threshold, a rule-row change and a table-version bump as separate reviewable steps.
 
 ### Disclosure class
 

@@ -45,7 +45,7 @@ the injected idempotent dispatch port. The intent is checkpointed before the
 call. An unconfirmed intent is returned as paused and is not re-presented
 without an explicit resume; cancellation appends nothing; a stale or mismatched
 answer pauses. The outcome table is now `decide1.rules@1` (below). A mapped receipt yields a
-`dispatch.decision@2` entry, and fresh site observations become Weft judgment
+`dispatch.decision@3` entry, and fresh site observations become Weft judgment
 records followed by one `dispatch.decided` after the final append. The
 composition never writes `routed_input@1`.
 
@@ -139,11 +139,13 @@ accepted intake new-thread choice then withholds `escalate_gen`. Count asks by
 `status = needs_human` and escalations by `band = escalate_gen` together with
 `status = dispatched`, never by band alone.
 
-`dispatch.decision@2` inserts `rule_table` and `decide1` after `reason`, leaving
-`dispatch.checkpoint@1` unchanged. The trace contains judgments in stage order
+`dispatch.decision@3` carries `rule_table` and `decide1` after `reason`, and
+`dispatch.checkpoint@2` stores the stages and shadow round described in P4b below.
+The read partition contains judgments in stage order
 (`intake.confidence`, `intake.top_p`, then D1 and D2), every available probability,
-and all 14 code facts in fixed order: intake decided-by, choice, status, reason,
+and 14 code facts in fixed order: intake decided-by, choice, status, reason,
 accepted; thread target; D1 choice, status, reason, accepted; D2 equivalents.
+P4b appends five shadow facts and isolated shadow judgments to the trace below.
 Unasked loop stages have null facts; extraction-only intake has no judgments.
 Names are unique bounded codes, probabilities are unit values, fact values are
 finite scalars or screened correlation ids, and each list has at most 64 items.
@@ -173,6 +175,134 @@ precedence are preserved: elapsed time cannot retire an attempt, unresolved
 settlements remain nonterminal `dispatch_unconfirmed`, and only an append
 winner emits. A same-id concurrent loser reports the journal's owner without
 appending a second entry. Durable-journal follow-up #397 remains separate.
+
+## WV-S1 P4b Decide-1 shadow judgments
+
+D-ENG-047 §1 supersedes the P4 split's proposed new rows: P4b asks and records
+four isolated boolean judgments without changing dispatch gating. D-ENG-050
+accepts the questions below as provisional, requires no sampling and permits
+the single Weft contract clarification. `decide1.rules@1`, all 15 row ids,
+their precedence and bands stay unchanged. Its read set remains exactly the
+14 code facts and stage judgments listed in P4a above. No row returns
+`spawn_subtasks`; `planFor` still requires a sealed parent frame (D-ENG-044).
+
+| Judgment            | Fixed question (`decide1-shadow@1`)                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------- |
+| `clarify`           | Does this request need clarification that only the requester can give before work starts?   |
+| `multi_deliverable` | Does this request ask for more than one separate deliverable?                               |
+| `reads_before_gen`  | Must existing files or artifacts be read before anything can be generated for this request? |
+| `veto_bare_gen`     | Would one generation call, without prior reads or decomposition, likely fail this request?  |
+
+`askShadow` captures D1's disclosed `{ request, context }` and terms before
+awaiting, then starts four concurrent `evaluate` calls through the injected
+port. Each request has its own `decide1.<judgment>` site and
+`<decision_id>:shadow.<judgment>` request id, role `working`, kind `boolean`,
+tier `decision`, and only one `decision` question containing that judgment's
+text. The state is byte-identical to D1's disclosed state. The shadow sites
+use the default decision provider and add no extraction or model-site policy.
+Changing a question requires a new observation schema version.
+
+Only `act.capability`, `act.done_check`, `act.decline`, `gen.triage_fallback`,
+`gen.route` and `gen.route_fallback` are eligible. The shadow round starts
+after all consequential intake/D1/D2 asks and pure plan resolution, before
+the existing stale gate and claim. A final hold or ask and `act.thread` ask
+no shadow judgment. An eligible decision pays four decision-tier calls and
+one concurrent round trip, with zero added generation calls. Each request
+retains the decision's deadline, cost ceiling and maximum attempts; no timer
+or elapsed-time retirement is added (D-ENG-048).
+
+`transitionShadow` first applies admission in the existing order: cancellation,
+staleness, mismatched identity, then decision unavailability. A thrown or null
+outcome, a gateway pause or budget outage is `decision_unavailable`. Other
+nonaccepted outcomes are `no_answer`. An accepted answer with the wrong kind,
+a missing `decision` or a non-unit probability is `invalid_answer`; otherwise
+it is `answered`. Unit confidence is retained when published, otherwise null.
+Each failure affects only its own observation. An already-aborted signal asks
+nothing and produces four cancelled observations.
+
+`decide1-shadow@1` has exactly these ordered keys: `schema`, `site`, `question`,
+`request_id`, `state_revision`, `probability`, `confidence`, `reason`,
+`provider_request_id`. Its closed reasons are `answered`, `no_answer`,
+`invalid_answer`, `stale_answer`, `mismatched_answer`, `decision_unavailable`
+and `cancelled`. Probability and confidence are null unless answered. The
+record contains fixed policy text and screened ids, never disclosed content,
+provider text or error text. It has no threshold, acceptance, status or
+fallback and grants no Dispatch authority.
+
+`Decide1Inputs.shadow` is a separate partition. `decideBand` validates read
+followed by shadow, with unique names across each combined list, at most 64
+judgments and 64 facts, and the same code, unit-probability and scalar/id
+screens. It constructs both row maps and the stage-set map from the read
+partition only. The trace concatenates read then shadow in input order.
+Without a shadow partition its trace equals P4a's. Even probabilities of one
+cannot ask, spawn, block a dispatch or change a rule, band or Dispatch intent.
+
+Every dispatch trace has 19 facts: the 14 read facts, then `residual_ambiguity`,
+`clarify.reason`, `multi_deliverable.reason`, `reads_before_gen.reason`,
+`veto_bare_gen.reason`. Residual ambiguity is the final D1 extract's count,
+including the second attempt after re-extraction: zero for a grounded intent,
+one for an ungrounded or empty intent, or null when D1 has no extract. It is
+also shadow. Each reason fact is null when unasked, `unrecorded` when the
+round was marked asked but no result was journaled, `untrusted` for an invalid
+stored observation, or that observation's reason. Non-null shadow statistics
+follow the stage judgments in judgment order as `<judgment>` probability,
+then `<judgment>.confidence`. At most 14 judgments are present.
+
+`dispatch.checkpoint@2` has ordered keys `schema`, `decision_id`,
+`state_revision`, `state_updated_at`, `asks`, `intake`, `triage`, `route`,
+`shadow`, `intent`. Its `asks` keys are `intake`, `triage`, `route`, `shadow`;
+the last is zero or one. D1 and D2 store whole `loop.decision@1` records with
+their extracts and site transitions. `shadow` is null or four observations
+in judgment order. `dispatch.decision@3` has ordered keys `schema`,
+`decision_id`, `entry`, `state_revision`, `decided_by`, `choice`, `status`,
+`reason`, `rule_table`, `decide1`, `intent`, `receipt`, `intake`, `triage`,
+`route`, `shadow`. Its rule table remains `decide1.rules@1`. Foreign decision
+or checkpoint schemas and foreign table versions throw without compatibility
+conversion.
+
+The journal checkpoints `asks.shadow = 1` before requesting anything and
+checkpoints all four results in one write after all settle. Neither resume,
+replay nor unconfirmed-intent recovery re-asks a marked round. A failed
+counter write propagates before any ask; a failed results write propagates
+before claim. A lost round remains `unrecorded` and dispatch can proceed.
+An abort during the asks passes the caller's signal, returns the existing
+paused/cancelled result and writes no shadow results, decision or Weft record.
+A moved state records stale shadow answers and the unchanged pre-claim stale
+gate withholds dispatch. The recomputed plan must retain the original rule,
+band and intent before claim, otherwise code throws
+`decide1: shadow input moved the plan`.
+
+Replay re-derives each consequential `loop.decision@1` through
+`transitionLoopDecision` using its stored extracts and requires a fixed point
+for the whole record. The final extract's residual count must equal its slot
+list length, and that list must equal required schema slots whose statuses
+are not grounded, in schema order. Invalid consequential evidence throws
+before claim. Shadow trust instead checks structure without throwing: exact
+keys, schema, indexed site and question, request id, revision, closed reason,
+unit answered probability and optional unit confidence, null statistics
+otherwise and screened provider id.
+An invalid observation is dropped as `untrusted`; a shadow value that is not
+an array of four makes all four untrusted. Returned decisions and Weft evidence
+copy only trusted shadow observations, so dropped data cannot copy text or
+suppress a valid trace. Shadow failures never gate dispatch.
+
+`dispatch.decided` mirrors the combined trace and cites shadow request ids as
+`inference_request` evidence after the stage requests. No shadow observation
+emits a `judgment` record or receives a `caused_by` link: it has no policy
+acceptance to report. The existing all-or-nothing correlation screen and
+per-port sequence counter still apply. Claim binds the winner's checkpoint,
+including its own shadow. Same-id callers may each ask one round under P3a's
+pre-claim journal semantics; only the claim winner dispatches and appends.
+P4b adds no journal method; #397 remains separate.
+
+The provisional simulation floors near .35 are hypotheses for Gauge in P6:
+`clarify` may later route requester-only ambiguity to `ask_human`, while
+`multi_deliverable`, `reads_before_gen` and `veto_bare_gen` may later prefer
+spawn to bare generation or premature capability dispatch. P4b fits no
+threshold and encodes none. Promotion requires a fitted threshold, a row
+change and a table bump as separate reviewable steps. D-ENG-030 still bounds
+asks to irreversible work below confidence or ambiguity only the operator
+can resolve; P5 still owns spawn and sealed parent frames.
 
 ## WV-S1 P2a typed extraction before intake
 

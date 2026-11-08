@@ -399,3 +399,15 @@ export {
   type DispatchSettlementPort,
   type ThreadTarget,
 } from './dispatch.js';
+
+export {
+  DECIDE1_SHADOW_JUDGMENTS,
+  DECIDE1_SHADOW_QUESTIONS,
+  transitionShadow,
+  askShadow,
+  type ShadowJudgment,
+  type ShadowAsk,
+  type ShadowReason,
+  type ShadowObservation,
+  type RecordedShadowAnswer,
+} from './sites/decide1-shadow.js';
