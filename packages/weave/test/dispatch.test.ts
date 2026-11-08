@@ -30,7 +30,7 @@ import { DECIDE1_RULE_TABLE, decideBand } from '../src/decide1.js';
 import { decideIntake } from '../src/intake.js';
 import { decideTriage, decideLoopRoute } from '../src/sites/loop-decide.js';
 import { gateExtract } from '../src/sites/extract.js';
-import { evaluateSite, modelOrigin, SITE_POLICY, type SiteState } from '../src/sites/index.js';
+import { evaluateSite, modelOrigin, SITE_POLICY, transitionSite, type SiteState } from '../src/sites/index.js';
 import { loopRouteExtractSchema, loopTriageExtractSchema } from '../src/sites/model-extract.js';
 import type { WeftPort, WeftRecordShape } from '../src/weft.js';
 import { assertRecordCopiesNoText, assertNoCopiedText } from './record-canary.js';
@@ -2572,6 +2572,59 @@ test('P4a-7 merged P3a parity cases use the named rule and band', async () => {
     const result = await run(h);
     assert.deepEqual([result.decide1.rule, result.decide1.band], ['ask.thread_target', 'ask_human']);
   }
+});
+
+test('D-ENG-049 origin failures select their ask row; untrusted stages still fail dispatch re-derivation', async () => {
+  const base = harness();
+  await run(base);
+  const checkpoint = base.journal.load('d1').checkpoint!;
+  for (const stage of ['triage', 'route'] as const)
+    for (const reason of ['invalid_extract', 'extract_missing'] as const) {
+      const site = stage === 'triage' ? 'loop.triage' : 'loop.route';
+      const request_id = `d1:${stage}`;
+      const state = { request: MESSAGE, context: stage === 'triage' ? TRIAGE_CONTEXT : ROUTE_CONTEXT };
+      // Non-final second extracts can be supplied to transitionSite, but the live
+      // gate finalizes attempt 2 and dispatch refuses stages it cannot re-derive.
+      const origin = modelOrigin(
+        gateExtract(
+          stage === 'triage' ? loopTriageExtractSchema() : loopRouteExtractSchema(),
+          JSON.stringify(state),
+          null,
+          { site, request_id: `${request_id}:x2`, state_revision: 1, attempt: 2, verdict: 're_extract' },
+        ),
+      );
+      const stopped = transitionSite(
+        site,
+        {
+          ...REVISION,
+          request_id,
+          state,
+          terms,
+          needs_dispatch: true,
+          ...(reason === 'invalid_extract' ? { origin } : {}),
+        },
+        { ...REVISION, observed_at: 10, outcome: null },
+        REVISION,
+      );
+      assert.deepEqual(
+        [stopped.choice, stopped.status, stopped.observation.reason, stopped.observation.accepted],
+        [stage === 'triage' ? 'implement' : 'standard', 'needs_human', reason, false],
+      );
+      const variant: DispatchCheckpoint = {
+        ...checkpoint,
+        intent: null,
+        ...(stage === 'triage' ? { triage: stopped, route: null } : { route: stopped }),
+      };
+      const trace = decideBand(decide1Inputs(base.request, variant));
+      assert.deepEqual([trace.rule, trace.band], [`ask.${stage}`, 'ask_human']);
+      const seen = collector();
+      const h = harness({}, { journal: forgedJournal(variant), weft: seen.port });
+      await assert.rejects(run(h), REDERIVED);
+      assert.equal(h.generateCalls.length, 0);
+      assert.equal(h.evaluateCalls.length, 0);
+      assert.equal(h.dispatchCalls.length, 0);
+      assert.deepEqual(seen.records, []);
+    }
 });
 
 test('P4a-8 @2 stores exactly the pure trace, fixed facts and bounded judgments without text', async () => {

@@ -821,6 +821,8 @@ function planFor(trace: Decide1Trace, checkpoint: DispatchCheckpoint, request: D
         tier_source: 'route',
       });
     }
+    case 'ask.route':
+      return final(trace, 'route', choice('route'), 'needs_human', reason('route'));
     case 'gen.route_fallback':
       return dispatchPlan(trace, 'route', 'standard', reason('route'), {
         kind: 'implement',

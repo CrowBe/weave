@@ -131,6 +131,19 @@ function domain(): Case[] {
       );
   }
   for (const stage of ['triage', 'route'] as const) {
+    for (const reason of ['invalid_extract', 'extract_missing'])
+      add(
+        {
+          [`${stage}.choice`]: stage === 'triage' ? 'implement' : 'standard',
+          [`${stage}.status`]: 'needs_human',
+          [`${stage}.reason`]: reason,
+          [`${stage}.accepted`]: false,
+          ...(stage === 'triage' ? absent('route') : {}),
+        },
+        `ask.${stage}`,
+        'ask_human',
+        stage,
+      );
     for (const reason of [...FALLBACKS, 'stale_answer', 'mismatched_answer', 'decision_unavailable', 'cancelled']) {
       const hold = ['stale_answer', 'mismatched_answer', 'decision_unavailable', 'cancelled'].includes(reason);
       add(
@@ -178,7 +191,7 @@ function domain(): Case[] {
 test('P4a-1 table shape: frozen, closed, unique, no bare spawn', () => {
   assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@1');
   assert.ok(Object.isFrozen(DECIDE1_RULES));
-  assert.equal(new Set(DECIDE1_RULES.map((row) => row.id)).size, 14);
+  assert.equal(new Set(DECIDE1_RULES.map((row) => row.id)).size, 15);
   for (const row of DECIDE1_RULES) {
     assert.ok(Object.isFrozen(row));
     assert.ok(isCode(row.id));
@@ -205,14 +218,30 @@ test('P4a-2 totality and reachability over reachable stage tuples; impossible ch
     assert.throws(() => decideBand(inputs(patch)), /decide1: no rule matched/);
 });
 test('P4a-3 D-ENG-030: loop fallbacks never ask; admission failures and outages always hold', () => {
+  const asks = ['ask.intake', 'ask.irreversible', 'ask.thread_target', 'ask.triage', 'ask.route'];
+  assert.deepEqual(
+    DECIDE1_RULES.filter((row) => row.band === 'ask_human').map((row) => row.id),
+    asks,
+  );
   for (const { input, stage } of domain()) {
     const trace = decideBand(input);
     const reason = input.facts.find((fact) => fact.name === `${stage}.reason`)!.value;
     if (stage !== 'intake' && FALLBACKS.includes(reason as string)) assert.notEqual(trace.band, 'ask_human');
     if (['stale_answer', 'mismatched_answer', 'decision_unavailable'].includes(reason as string))
       assert.ok(trace.rule.startsWith('hold.'));
-    if (trace.band === 'ask_human' && !trace.rule.startsWith('hold.'))
-      assert.ok(['ask.intake', 'ask.irreversible', 'ask.thread_target', 'ask.triage'].includes(trace.rule));
+    if (trace.band === 'ask_human' && !trace.rule.startsWith('hold.')) assert.ok(asks.includes(trace.rule));
+  }
+});
+test('D-ENG-049: generation rows require a transition status', () => {
+  for (const row of DECIDE1_RULES.filter((row) => row.id.startsWith('gen.'))) {
+    const stage = row.id === 'gen.triage_fallback' ? 'triage' : 'route';
+    const base = inputs({ [`${stage}.accepted`]: row.id === 'gen.route' });
+    const facts = new Map(base.facts.map((fact) => [fact.name, fact.value]));
+    assert.equal(row.when(facts, new Map()), true, row.id);
+    for (const status of ['needs_human', 'paused', null]) {
+      facts.set(`${stage}.status`, status);
+      assert.equal(row.when(facts, new Map()), false, `${row.id}: ${status}`);
+    }
   }
 });
 test('P4a-4 withheld band covers every stage choice, including stale D1 implement', () => {
@@ -280,7 +309,7 @@ test('P4a-2 impossible dependencies and guarded choices never fall through to a 
 
 // Cross every distinct reachable stage tuple rather than assuming accepted flags or statuses.
 // Raw answers here are authored; no benchmark or held-out rows are involved.
-test('P4a-2/3 transitionSite domain crosses choices, statistics, admission, outages and dependencies', () => {
+test('P4a-2/3 transitionSite domain crosses choices, statistics, admission, outages, origin failures and dependencies', () => {
   const state = { state_revision: 1, state_updated_at: 10 };
   const terms = {
     quality: 'baseline',
@@ -319,7 +348,15 @@ test('P4a-2/3 transitionSite domain crosses choices, statistics, admission, outa
     for (const choice of [...SITE_POLICY[site].options, 'unknown'])
       for (const confidence of [undefined, NaN, -1, 0, 0.5, 0.75, 0.8, 1, 2])
         for (const probability of [undefined, NaN, 0, 0.5, 0.6, 1, 2])
-          for (const mode of ['fresh', 'stale', 'foreign', 'cancelled', 'outage', 'no_answer'] as const) {
+          for (const mode of [
+            'fresh',
+            'stale',
+            'foreign',
+            'cancelled',
+            'outage',
+            'no_answer',
+            ...(site === 'intake.classify' ? [] : ['invalid_extract', 'extract_missing']),
+          ]) {
             const outcome =
               mode === 'no_answer'
                 ? {
@@ -368,6 +405,7 @@ test('P4a-2/3 transitionSite domain crosses choices, statistics, admission, outa
               cancelled: mode === 'cancelled',
             } as unknown as RecordedSiteAnswer;
             const current = mode === 'stale' ? { ...state, state_revision: 2 } : state;
+            const { origin: _origin, ...withoutOrigin } = ask;
             const transition =
               site === 'intake.classify'
                 ? transitionSite(
@@ -376,7 +414,35 @@ test('P4a-2/3 transitionSite domain crosses choices, statistics, admission, outa
                     recorded,
                     current,
                   )
-                : transitionSite(site, { ...ask, state: disclosed }, recorded, current);
+                : transitionSite(
+                    site,
+                    {
+                      ...withoutOrigin,
+                      state: disclosed,
+                      ...(mode === 'extract_missing'
+                        ? {}
+                        : {
+                            origin:
+                              mode === 'invalid_extract'
+                                ? modelOrigin({
+                                    ...origin.extract,
+                                    request_id: 'r:x2',
+                                    attempt: 2,
+                                    verdict: 're_extract',
+                                    reason: 'unfaithful',
+                                  })
+                                : origin,
+                          }),
+                    },
+                    recorded,
+                    current,
+                  );
+            if (mode === 'invalid_extract' || mode === 'extract_missing') {
+              assert.deepEqual(
+                [transition.status, transition.observation.reason, transition.observation.accepted],
+                ['needs_human', mode, false],
+              );
+            }
             const key = JSON.stringify([
               transition.choice,
               transition.status,
@@ -437,7 +503,7 @@ test('P4a-2/3 transitionSite domain crosses choices, statistics, admission, outa
               break;
             }
             if (value.status === 'needs_human') {
-              expected = [stage === 'intake' ? 'ask.intake' : 'ask.triage', 'ask_human'];
+              expected = [`ask.${stage}`, 'ask_human'];
               break;
             }
             if (stage === 'intake') {
@@ -471,8 +537,10 @@ test('P4a-2/3 transitionSite domain crosses choices, statistics, admission, outa
         }
     }
   }
-  assert.deepEqual([intakes.length, triages.length, routes.length, checked], [14, 14, 11, 45]);
+  assert.deepEqual([intakes.length, triages.length, routes.length, checked], [14, 16, 13, 49]);
   assert.ok(reached.has('hold.admission'));
   assert.ok(reached.has('gen.triage_fallback'));
   assert.ok(reached.has('gen.route_fallback'));
+  assert.ok(reached.has('ask.triage'));
+  assert.ok(reached.has('ask.route'));
 });

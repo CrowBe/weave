@@ -28,6 +28,7 @@ export type Decide1RuleId =
   | 'act.decline'
   | 'gen.triage_fallback'
   | 'gen.route'
+  | 'ask.route'
   | 'gen.route_fallback';
 export interface Decide1Trace extends Decide1Inputs {
   readonly table: typeof DECIDE1_RULE_TABLE;
@@ -91,18 +92,28 @@ export const DECIDE1_RULES: readonly Decide1Rule[] = Object.freeze(
       },
       {
         id: 'gen.triage_fallback',
-        when: (f) => f.get('triage.accepted') === false && f.get('triage.choice') === 'implement',
+        when: (f) =>
+          f.get('triage.status') === 'transition' &&
+          f.get('triage.accepted') === false &&
+          f.get('triage.choice') === 'implement',
         band: 'escalate_gen',
       },
       {
         id: 'gen.route',
-        when: (f) => f.get('route.accepted') === true && TIERS.includes(f.get('route.choice') as string),
+        when: (f) =>
+          f.get('route.status') === 'transition' &&
+          f.get('route.accepted') === true &&
+          TIERS.includes(f.get('route.choice') as string),
         band: 'escalate_gen',
       },
+      { id: 'ask.route', when: (f) => f.get('route.status') === 'needs_human', band: 'ask_human' },
       {
         id: 'gen.route_fallback',
         when: (f) =>
-          f.get('route.choice') !== null && f.get('route.choice') !== undefined && f.get('route.accepted') === false,
+          f.get('route.status') === 'transition' &&
+          f.get('route.choice') !== null &&
+          f.get('route.choice') !== undefined &&
+          f.get('route.accepted') === false,
         band: 'escalate_gen',
       },
     ] satisfies Decide1Rule[]

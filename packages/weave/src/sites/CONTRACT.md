@@ -94,8 +94,8 @@ outside this contract. ScriptedDecisionLayer remains unchanged.
 ## WV-S1 P4a Decide-1 rule table
 
 `decideBand(inputs)` is pure deterministic policy over named judgments and code
-facts. Its first matching row in the frozen `decide1.rules@1` table returns the
-rule id and coarse band. It imports no dispatch, site or gateway code. It asks
+facts. The frozen `decide1.rules@1` table has 15 ids; its first matching row
+returns the rule id and coarse band. It imports no dispatch, site or gateway code. It asks
 no new question and changes no `SITE_POLICY` threshold, fallback or request.
 `decideDispatch` validates stored stages through P3a's live pure transitions,
 then adapts them with `decide1Inputs` and builds the plan through an exhaustive
@@ -115,9 +115,15 @@ they never become an operator ask.
 | `act.capability`      | D1 accepted capability                                      | `tool_call`    | Capability intent                           |
 | `act.done_check`      | D1 accepted done check                                      | `tool_call`    | Done-check intent                           |
 | `act.decline`         | D1 accepted out of scope                                    | `tool_call`    | Decline intent                              |
-| `gen.triage_fallback` | D1 nonaccepted implement                                    | `escalate_gen` | Implement strong/strong, triage fallback    |
-| `gen.route`           | D2 accepted tier                                            | `escalate_gen` | Implement at that tier                      |
-| `gen.route_fallback`  | D2 asked, nonaccepted                                       | `escalate_gen` | Implement standard/standard, route fallback |
+| `gen.triage_fallback` | D1 transition, nonaccepted implement                        | `escalate_gen` | Implement strong/strong, triage fallback    |
+| `gen.route`           | D2 transition, accepted tier                                | `escalate_gen` | Implement at that tier                      |
+| `ask.route`           | D2 needs human                                              | `ask_human`    | D2 ask, no intent                           |
+| `gen.route_fallback`  | D2 transition, nonaccepted                                  | `escalate_gen` | Implement standard/standard, route fallback |
+
+Origin failures (`invalid_extract`, `extract_missing`) at D1 or D2 retain
+`needs_human`, the stage choice and reason, and form no intent through
+`ask.triage` or `ask.route` (D-ENG-049). Every `gen.*` row requires the
+stage status to be `transition`; reversible answer fallbacks still generate.
 
 `tool_call` is a deterministic act without generation; `escalate_gen` is a
 generative implementation step; `ask_human` asks. `spawn_subtasks` remains in
