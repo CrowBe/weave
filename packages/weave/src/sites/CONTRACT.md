@@ -45,7 +45,7 @@ the injected idempotent dispatch port. The intent is checkpointed before the
 call. An unconfirmed intent is returned as paused and is not re-presented
 without an explicit resume; cancellation appends nothing; a stale or mismatched
 answer pauses. The outcome table is now `decide1.rules@1` (below). A mapped receipt yields a
-`dispatch.decision@3` entry, and fresh site observations become Weft judgment
+`dispatch.decision@4` entry, and fresh site observations become Weft judgment
 records followed by one `dispatch.decided` after the final append. The
 composition never writes `routed_input@1`.
 
@@ -139,8 +139,8 @@ accepted intake new-thread choice then withholds `escalate_gen`. Count asks by
 `status = needs_human` and escalations by `band = escalate_gen` together with
 `status = dispatched`, never by band alone.
 
-`dispatch.decision@3` carries `rule_table` and `decide1` after `reason`, and
-`dispatch.checkpoint@2` stores the stages and shadow round described in P4b below.
+`dispatch.decision@4` carries `rule_table` and `decide1` after `reason`, and
+`dispatch.checkpoint@3` stores the stages and shadow rounds described in P4b and P5a below.
 The read partition contains judgments in stage order
 (`intake.confidence`, `intake.top_p`, then D1 and D2), every available probability,
 and 14 code facts in fixed order: intake decided-by, choice, status, reason,
@@ -237,7 +237,7 @@ partition only. The trace concatenates read then shadow in input order.
 Without a shadow partition its trace equals P4a's. Even probabilities of one
 cannot ask, spawn, block a dispatch or change a rule, band or Dispatch intent.
 
-Every dispatch trace has 19 facts: the 14 read facts, then `residual_ambiguity`,
+P4b supplies the first 19 of P5a's 32 fixed facts: the 14 read facts, then `residual_ambiguity`,
 `clarify.reason`, `multi_deliverable.reason`, `reads_before_gen.reason`,
 `veto_bare_gen.reason`. Residual ambiguity is the final D1 extract's count,
 including the second attempt after re-extraction: zero for a grounded intent,
@@ -246,17 +246,17 @@ also shadow. Each reason fact is null when unasked, `unrecorded` when the
 round was marked asked but no result was journaled, `untrusted` for an invalid
 stored observation, or that observation's reason. Non-null shadow statistics
 follow the stage judgments in judgment order as `<judgment>` probability,
-then `<judgment>.confidence`. At most 14 judgments are present.
+then `<judgment>.confidence`. P4b supplies at most 14 judgments; P5a adds at most 16 below.
 
-`dispatch.checkpoint@2` has ordered keys `schema`, `decision_id`,
+`dispatch.checkpoint@3` has ordered keys `schema`, `decision_id`,
 `state_revision`, `state_updated_at`, `asks`, `intake`, `triage`, `route`,
-`shadow`, `intent`. Its `asks` keys are `intake`, `triage`, `route`, `shadow`;
-the last is zero or one. D1 and D2 store whole `loop.decision@1` records with
+`shadow`, `preflight`, `intent`. Its `asks` keys are `intake`, `triage`, `route`, `shadow`, `preflight`;
+the last two are each zero or one. D1 and D2 store whole `loop.decision@1` records with
 their extracts and site transitions. `shadow` is null or four observations
-in judgment order. `dispatch.decision@3` has ordered keys `schema`,
+in judgment order. `dispatch.decision@4` has ordered keys `schema`,
 `decision_id`, `entry`, `state_revision`, `decided_by`, `choice`, `status`,
 `reason`, `rule_table`, `decide1`, `intent`, `receipt`, `intake`, `triage`,
-`route`, `shadow`. Its rule table remains `decide1.rules@1`. Foreign decision
+`route`, `shadow`, `preflight`. Its rule table remains `decide1.rules@1`. Foreign decision
 or checkpoint schemas and foreign table versions throw without compatibility
 conversion.
 
@@ -303,6 +303,95 @@ threshold and encodes none. Promotion requires a fitted threshold, a row
 change and a table bump as separate reviewable steps. D-ENG-030 still bounds
 asks to irreversible work below confidence or ambiguity only the operator
 can resolve; P5 still owns spawn and sealed parent frames.
+
+## WV-S1 P5a preflight target roles (shadow)
+
+Only a pre-shadow `gen.route` decision with caller-disclosed targets asks
+`spawn.roles`. Targets are an optional closed array of at most eight unique,
+correlation-safe refs with string summaries and exactly those two keys. Validation
+precedes journal access or any port call, and the request captures a detached copy.
+Absent or empty targets make no role request. There is no target discovery.
+
+`spawn-roles@1` freezes the question "For this request, what must happen to the
+named target before or during the work?" and the four criteria:
+
+| Role     | Criterion                                                                   |
+| -------- | --------------------------------------------------------------------------- |
+| `edit`   | The request requires changing this target.                                  |
+| `read`   | This target must be read before anything is generated, and must not change. |
+| `forbid` | This target must not change, and does not need to be read.                  |
+| `skip`   | This target is not relevant to the request.                                 |
+
+One `evaluate` request uses id `<decision_id>:roles`, site `spawn.roles`, role
+`working`, kind `choice` and tier `decision`. State is D1's original disclosed
+`{ request, context }` plus the targets. Each `target_<i>` question differs only
+in its target ref. The shared admission gate runs first (cancelled, stale,
+mismatched, unavailable); a non-accepted outcome is `no_answer`. A non-choice
+kind, missing answer or foreign role invalidates the whole round. An answered
+round records each role, a unit confidence if published, and p(role) only for a
+closed, unit distribution summing to one within 1e-6 with the role maximal.
+Unknown answer keys are ignored. No threshold, acceptance or fallback exists.
+
+The ordered observation keys are `schema`, `site`, `question`, `request_id`,
+`state_revision`, `targets`, `reason`, `provider_request_id`. Each target has
+`ref`, `role`, `top_p`, `confidence` in that order. Statistics and roles are null
+unless the reason is `answered`. Disclosed text and provider/error text never
+enter this record. `trustedRoles` checks the exact key order, question, ids,
+revision, closed reasons, refs in captured target order and unit-or-null
+statistics. Malformed rounds are dropped as `untrusted`, never a dispatch error.
+
+Roles join P4b's single shadow window. One checkpoint writes `asks.shadow` and
+`asks.preflight` before any requests. The four shadow asks and one role ask start
+concurrently; one checkpoint writes both results after they settle. Throws become
+`decision_unavailable` without exception text. Outages and budget pauses never
+pause dispatch. Cancellation passes the caller's signal and writes no results,
+decision or Weft record. A moved state records `stale_answer` and the existing
+pre-claim stale gate applies. There is no timer beyond gateway terms.
+Once the counter is durable, crash, resume and unconfirmed-intent recovery never
+re-ask roles. Missing results are `unrecorded`. Counter/results write failures
+propagate before claim. Same-id pre-claim callers may each ask one round; the
+claim winner binds its own complete checkpoint and alone emits dispatch evidence.
+No journal method or grant is added.
+
+`spawn.ts` imports only `digest`. `preflightPlan` constructs parallel read children
+for `edit` and `read` targets in target order and one generate child depending on
+all those reads. Its `edit`, `read` (including edits), `forbid` and accepted D2 tier
+are explicit. Forbid/skip targets are never read. No edit means no plan and false
+gain. Each child has a sealed `spawn.frame@1` with root/parent refs, goal digest,
+reason, sibling refs and dependency edges. Child refs are deterministic 33-character
+digests at any depth. The closed plan/child/frame shapes carry no authority or
+text. `validatePlan` checks seals, ids, target membership/order, exactly one generate
+child, at least one edit, all edges and conserved integer shares, and returns a
+detached deeply frozen plan. Reads receive zero; generation receives exactly the
+parent ceiling, including zero. Frames, briefs and plans are deeply frozen.
+
+`splitGain` requires every child's natural-valued coupling/unread/ambiguity score
+to be no worse on any axis and strictly better on at least one. The preflight
+parent scores `{ E, E + R, a }`; reads score zero and generation `{ E, 0, a }`.
+For E >= 1 gain is true. Decreasing the score sum bounds recursion without a depth
+limit. The goal digest is `digest({ message: intake.message })`; root and parent
+are this decision id. Budget is `terms.cost_ceiling`, tier is D2's accepted choice,
+and ambiguity is the final D1 residual count, validated by merged-main extract
+replay (`validExtractObservation`). No replay validation is bypassed or duplicated.
+
+The plan is recomputed, never stored. After P4b's 19 facts, thirteen fixed shadow
+facts follow: `preflight.reason`, `preflight.targets`, `preflight.t0.role` through
+`preflight.t7.role`, `spawn.gain`, `spawn.children`, `spawn.plan` (the plan digest).
+Unasked values are null except the target count; missing ambiguity or unavailable
+roles give null plan facts. Non-null `preflight.t<i>.top_p` then
+`preflight.t<i>.confidence` judgments follow P4b's, in target order. Totals are
+32 facts and at most 30 judgments, within Weft's bounds.
+
+The current records are `dispatch.checkpoint@3` (`asks.preflight` and `preflight`
+after `shadow`) and `dispatch.decision@4` (`preflight` after `shadow`). Foreign
+schemas throw without a shim. `dispatch.decided` cites the role request id after
+the shadow ids solely as `inference_request` evidence, with no role `judgment`
+or `caused_by` link. No Weft contract changes. The same 15 `decide1.rules@1` rows
+read none of this evidence; the shadow guard still rejects changes to rule, band
+or intent before claim. Every P4b dispatch outcome remains unchanged.
+
+Live spawn, child re-entry, cancellation propagation, general split, tier changes
+and threshold fitting belong to later increments. P5a presents no spawn intent.
 
 ## WV-S1 P2a typed extraction before intake
 

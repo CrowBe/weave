@@ -58,6 +58,7 @@ interface StagePlan {
   readonly probabilities?: Readonly<Record<string, number>>;
 }
 interface Plan {
+  readonly roles?: readonly string[] | 'invalid' | 'outage' | 'foreign' | 'stale' | 'budget';
   readonly shadow?: ShadowMode;
   readonly intake?: StagePlan;
   readonly triage?: StagePlan;
@@ -214,6 +215,34 @@ function makeGateway(plan: Plan, clock: Clock) {
         return (plan.shadow === 'no_answer'
           ? blockedChoice(request)
           : outcome) as unknown as EvaluationOutcome<'choice'>;
+      }
+      if (request.site === 'spawn.roles') {
+        if (plan.roles === 'outage') throw new Error('CANARY-error');
+        if (plan.roles === 'stale') clock.advance();
+        const vector = Array.isArray(plan.roles) ? plan.roles : Object.keys(request.questions).map(() => 'edit');
+        return {
+          status: 'accepted',
+          kind: 'choice',
+          request_id: plan.roles === 'foreign' ? 'foreign' : request.request_id,
+          site: request.site,
+          answers: Object.fromEntries(
+            Object.keys(request.questions).map((key, i) => [
+              key,
+              {
+                type: 'choice',
+                choice: plan.roles === 'invalid' ? 'unknown' : vector[i],
+                probabilities: { [vector[i]!]: 1 },
+              },
+            ]),
+          ),
+          confidence: Object.fromEntries(Object.keys(request.questions).map((key) => [key, 1])),
+          routed_unit_id: 'fixture',
+          provider_response_id: 'roles-provider',
+          attempts: [],
+          spent: 0,
+          uncertainty: [],
+          ...(plan.roles === 'budget' ? { paused: budgetPause(request.request_id, request.site) } : {}),
+        } as unknown as EvaluationOutcome<'choice'>;
       }
       switch (request.site) {
         case 'intake.classify':
@@ -948,6 +977,7 @@ test('16. records keep their exact key order and carry no authority or copied te
     'triage',
     'route',
     'shadow',
+    'preflight',
   ]);
   assert.deepEqual(Object.keys(decision.intent!), ['kind', 'dispatch_id', 'relation', 'thread_ref']);
   assert.deepEqual(Object.keys(decision.receipt!), ['status', 'dispatch_id', 'ref']);
@@ -962,9 +992,10 @@ test('16. records keep their exact key order and carry no authority or copied te
     'triage',
     'route',
     'shadow',
+    'preflight',
     'intent',
   ]);
-  assert.deepEqual(Object.keys(checkpoint.asks), ['intake', 'triage', 'route', 'shadow']);
+  assert.deepEqual(Object.keys(checkpoint.asks), ['intake', 'triage', 'route', 'shadow', 'preflight']);
   assertNoAuthorityKeys(decision);
   assertNoAuthorityKeys(checkpoint);
   assertRecordCopiesNoText(decision, CANARIES);
@@ -1656,7 +1687,7 @@ test('28. a claimed intent survives a terminal stale pause and append surfaces f
   const request = makeRequest();
   assert.equal(journal.claim('d1', claimed), true);
   const orphan: DispatchDecision = {
-    schema: 'dispatch.decision@3',
+    schema: 'dispatch.decision@4',
     rule_table: DECIDE1_RULE_TABLE,
     decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: 'd1',
@@ -1672,6 +1703,7 @@ test('28. a claimed intent survives a terminal stale pause and append surfaces f
     triage: null,
     route: null,
     shadow: null,
+    preflight: null,
   };
   assert.equal(journal.append(orphan), false);
   assert.deepEqual(journal.load('d1').decisions, []);
@@ -1863,7 +1895,7 @@ test('31. property: every recorded checkpoint replays to the live decision on th
 test('32. the journal is a single-writer state machine per decision id', () => {
   const intent: DispatchIntent = { kind: 'capability', dispatch_id: 'd1:dispatch' };
   const decision = (patch: Partial<DispatchDecision>): DispatchDecision => ({
-    schema: 'dispatch.decision@3',
+    schema: 'dispatch.decision@4',
     rule_table: DECIDE1_RULE_TABLE,
     decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: 'd1',
@@ -1879,6 +1911,7 @@ test('32. the journal is a single-writer state machine per decision id', () => {
     triage: null,
     route: null,
     shadow: null,
+    preflight: null,
     ...patch,
   });
 
@@ -1894,14 +1927,15 @@ test('32. the journal is a single-writer state machine per decision id', () => {
   assert.equal(terminal.claim('d1', intent), false);
   assert.equal(terminal.append(decision({ entry: 2, status: 'needs_human', reason: 'low_confidence' })), false);
   terminal.checkpoint({
-    schema: 'dispatch.checkpoint@2',
+    schema: 'dispatch.checkpoint@3',
     decision_id: 'd1',
     ...REVISION,
-    asks: { intake: 9, triage: 0, route: 0, shadow: 0 },
+    asks: { intake: 9, triage: 0, route: 0, shadow: 0, preflight: 0 },
     intake: null,
     triage: null,
     route: null,
     shadow: null,
+    preflight: null,
     intent: null,
   });
   assert.equal(terminal.load('d1').checkpoint, null);
@@ -2066,7 +2100,7 @@ test('34. a crashed attempt ends only on the port settlement, never by time, wit
   // The journal contract: one live attempt per claimed intent, single-use ids, no expiry.
   const intent: DispatchIntent = { kind: 'capability', dispatch_id: 'd1:dispatch' };
   const owned = (status: DispatchDecision['status'], reason: DispatchDecision['reason']): DispatchDecision => ({
-    schema: 'dispatch.decision@3',
+    schema: 'dispatch.decision@4',
     rule_table: DECIDE1_RULE_TABLE,
     decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: 'd1',
@@ -2082,6 +2116,7 @@ test('34. a crashed attempt ends only on the port settlement, never by time, wit
     triage: null,
     route: null,
     shadow: null,
+    preflight: null,
   });
   const fenced = new MemoryDispatchJournal();
   assert.equal(fenced.acquire('d1'), null, 'an unclaimed decision has no attempt');
@@ -2578,6 +2613,12 @@ const FACT_NAMES = [
   'multi_deliverable.reason',
   'reads_before_gen.reason',
   'veto_bare_gen.reason',
+  'preflight.reason',
+  'preflight.targets',
+  ...Array.from({ length: 8 }, (_, i) => `preflight.t${i}.role`),
+  'spawn.gain',
+  'spawn.children',
+  'spawn.plan',
 ];
 const PARITY: readonly [Plan, string, string][] = [
   [{}, 'gen.route', 'escalate_gen'],
@@ -2683,7 +2724,7 @@ test('P4a-8 @3 stores exactly the pure trace, fixed facts and bounded judgments 
   const h = harness();
   const decision = await run(h);
   const checkpoint = h.journal.load('d1').checkpoint!;
-  assert.equal(decision.schema, 'dispatch.decision@3');
+  assert.equal(decision.schema, 'dispatch.decision@4');
   assert.equal(decision.rule_table, DECIDE1_RULE_TABLE);
   const { table, ...trace } = decideBand(decide1Inputs(h.request, checkpoint));
   assert.equal(table, decision.rule_table);
@@ -3049,7 +3090,7 @@ function shadowCalls(h: ReturnType<typeof harness>) {
   return h.evaluateCalls.filter((call) => call.site.startsWith('decide1.'));
 }
 function p4aProjection(decision: DispatchDecision) {
-  const { shadow: _shadow, ...value } = structuredClone(decision);
+  const { shadow: _shadow, preflight: _preflight, ...value } = structuredClone(decision);
   return {
     ...value,
     schema: 'dispatch.decision@2',
@@ -3064,7 +3105,7 @@ function p4aProjection(decision: DispatchDecision) {
 }
 
 function shadowReasons(decision: DispatchDecision) {
-  return decision.decide1.facts.slice(15).map((fact) => fact.value);
+  return decision.decide1.facts.slice(15, 19).map((fact) => fact.value);
 }
 
 test('P4b-7/10. shadow modes preserve outcomes for every stage shape and receipt', async () => {
@@ -3087,7 +3128,7 @@ test('P4b-7/10. shadow modes preserve outcomes for every stage shape and receipt
       const h = harness({ ...scenario, shadow });
       const result = await run(h);
       assert.deepEqual(p4aProjection(result), p4aProjection(baseline));
-      assert.equal(result.decide1.facts.length, 19);
+      assert.equal(result.decide1.facts.length, 32);
       const eligible = [
         'act.capability',
         'act.done_check',
@@ -3414,9 +3455,9 @@ test('P4b-13. residual ambiguity is the final D1 extract count, with fixed fact 
   ] as const) {
     const h = harness(plan);
     const live = await run(h);
-    assert.equal(live.decide1.facts.length, 19);
+    assert.equal(live.decide1.facts.length, 32);
     assert.deepEqual(
-      live.decide1.facts.slice(14).map((f) => f.name),
+      live.decide1.facts.slice(14, 19).map((f) => f.name),
       ['residual_ambiguity', ...SHADOW_NAMES.map((j) => `${j}.reason`)],
     );
     assert.equal(live.decide1.facts[14]?.value, residual);
@@ -3428,10 +3469,10 @@ test('P4b-14. schemas, Weft shadow evidence and text exclusion', async () => {
   const sink = collector();
   const h = harness({}, { weft: sink.port });
   const live = await run(h);
-  assert.equal(live.schema, 'dispatch.decision@3');
-  assert.equal(h.journal.load('d1').checkpoint?.schema, 'dispatch.checkpoint@2');
+  assert.equal(live.schema, 'dispatch.decision@4');
+  assert.equal(h.journal.load('d1').checkpoint?.schema, 'dispatch.checkpoint@3');
   const decided = sink.records.find((r) => r.kind === 'dispatch.decided')!;
-  assert.equal(decided.fields.facts && (decided.fields.facts as unknown[]).length, 19);
+  assert.equal(decided.fields.facts && (decided.fields.facts as unknown[]).length, 32);
   assert.ok((decided.fields.judgments as unknown[]).length <= 14);
   for (const record of sink.records) assert.equal(validateRecord(record).ok, true);
   for (const j of SHADOW_NAMES) {
@@ -3660,4 +3701,581 @@ test('P4b-10. every shadow admission failure leaves the live dispatch projection
   const decision = await run(neverAsked);
   assert.deepEqual(p4aProjection(decision), p4aProjection(cp));
   assert.equal(shadowCalls(neverAsked).length, 0);
+});
+
+function delegate(journal: DispatchJournal): DispatchJournal {
+  return {
+    load: (id) => journal.load(id),
+    checkpoint: (cp) => journal.checkpoint(cp),
+    claim: (id, intent, cp) => journal.claim(id, intent, cp),
+    acquire: (id, token) => journal.acquire(id, token),
+    release: (id, token) => journal.release(id, token),
+    present: (id, token) => journal.present(id, token),
+    append: (decision, token) => journal.append(decision, token),
+  };
+}
+// P5a contracts: targets are caller-disclosed, and all derived evidence remains shadow.
+const ROLE_TARGETS = [
+  { ref: 'target0', summary: 'CANARY-target CANARY-summary' },
+  { ref: 'target1', summary: 'CANARY-target' },
+  { ref: 'target2', summary: 'CANARY-target' },
+  { ref: 'target3', summary: 'CANARY-target' },
+];
+function roleRequest(overrides: object = {}): DispatchRequest {
+  return makeRequest({ targets: structuredClone(ROLE_TARGETS), ...overrides } as Partial<DispatchRequest>);
+}
+function roleCalls(h: ReturnType<typeof harness>) {
+  return h.evaluateCalls.filter((c) => c.site === 'spawn.roles');
+}
+function preflight(value: DispatchDecision | DispatchCheckpoint): any {
+  return (value as any).preflight;
+}
+function fact(d: DispatchDecision, name: string) {
+  return d.decide1.facts.find((f) => f.name === name)?.value;
+}
+function p4bProjection(d: DispatchDecision) {
+  const { preflight: _p, ...copy } = structuredClone(d) as any;
+  copy.schema = 'dispatch.decision@3';
+  copy.decide1.facts = copy.decide1.facts.slice(0, 19);
+  copy.decide1.judgments = copy.decide1.judgments.filter((j: any) => !j.name.startsWith('preflight.'));
+  return copy;
+}
+function dispatchProjection(d: DispatchDecision) {
+  return {
+    intent: d.intent,
+    status: d.status,
+    reason: d.reason,
+    decided_by: d.decided_by,
+    choice: d.choice,
+    receipt: d.receipt,
+    rule: d.decide1.rule,
+    band: d.decide1.band,
+  };
+}
+
+test('P5a-10 parity for every P4b stage shape without targets or with an empty set', async () => {
+  const scenarios: Plan[] = [
+    ...PARITY.map(([p]) => p),
+    ...SITE_POLICY['intake.classify'].options.map((choice) => ({ intake: { choice } })),
+    ...SITE_POLICY['loop.triage'].options.map((choice) => ({ triage: { choice } })),
+    ...SITE_POLICY['loop.route'].options.map((choice) => ({ route: { choice } })),
+    ...(['stale', 'mismatch', 'outage', 'paused', 'no_answer'] as const).flatMap((mode) => [
+      { intake: { mode } },
+      { triage: { mode } },
+      { route: { mode } },
+    ]),
+  ];
+  for (const scenario of scenarios) {
+    const absent = harness(scenario);
+    const empty = harness(scenario, { request: roleRequest({ targets: [] }) });
+    const [a, b] = await Promise.all([run(absent), run(empty)]);
+    assert.equal(a.decide1.facts.length, 32);
+    assert.deepEqual(p4bProjection(a), p4bProjection(b));
+    assert.deepEqual(
+      a.decide1.facts.slice(19).map((f) => f.value),
+      [null, 0, ...Array(11).fill(null)],
+    );
+    assert.equal(roleCalls(absent).length + roleCalls(empty).length, 0);
+  }
+});
+
+test('P5a-11 eligibility, concurrent shadow window and atomic evidence writes', async () => {
+  for (const [p] of PARITY) {
+    const h = harness(p, { request: roleRequest() });
+    const d = await run(h);
+    assert.equal(roleCalls(h).length, d.decide1.rule === 'gen.route' ? 1 : 0);
+  }
+  const storage = new MemoryDispatchJournal();
+  const writes: DispatchCheckpoint[] = [];
+  let claims = 0;
+  const journal: DispatchJournal = {
+    ...delegate(storage),
+    checkpoint(cp) {
+      writes.push(structuredClone(cp));
+      storage.checkpoint(cp);
+    },
+    claim(id, intent, cp) {
+      claims++;
+      assert.ok(cp?.shadow);
+      assert.ok(preflight(cp!));
+      assert.deepEqual(storage.load(id).checkpoint, cp);
+      return storage.claim(id, intent, cp);
+    },
+  };
+  const gate = deferred();
+  const h = harness(
+    {
+      gate: { match: (id) => id.includes(':shadow.') || id.endsWith(':roles'), promise: gate.promise },
+      onEvaluate(r) {
+        if (r.site === 'spawn.roles') {
+          const cp = storage.load('d1').checkpoint!;
+          assert.equal(cp.asks.shadow, 1);
+          assert.equal((cp.asks as any).preflight, 1);
+        }
+      },
+    },
+    { request: roleRequest(), journal },
+  );
+  const pending = run(h);
+  await waitUntil(() => roleCalls(h).length === 1 || h.dispatchCalls.length > 0);
+  assert.equal(roleCalls(h).length, 1);
+  assert.equal(shadowCalls(h).length, 4);
+  assert.equal(claims, 0);
+  const cp = writes.at(-1)!;
+  assert.equal(cp.asks.shadow, 1);
+  assert.equal((cp.asks as any).preflight, 1);
+  assert.equal(preflight(cp), null);
+  assert.equal(cp.shadow, null);
+  gate.release();
+  await pending;
+  const window = writes.filter((cp) => cp.asks.shadow === 1);
+  assert.equal(window.length, 2);
+  assert.ok(window[1]!.shadow);
+  assert.ok(preflight(window[1]!));
+  assert.equal(claims, 1);
+  const bare = harness();
+  await run(bare);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.generateCalls)), JSON.parse(JSON.stringify(bare.generateCalls)));
+  assert.deepEqual(
+    h.evaluateCalls.filter((c) => c.site !== 'spawn.roles'),
+    bare.evaluateCalls,
+  );
+});
+
+test('P5a-12 roles never move dispatch; recomputed plan digest, gain and children', async () => {
+  const { preflightPlan, validatePlan } = await import('../src/' + 'spawn.js');
+  const { digest } = await import('../src/digest.js');
+  for (const tier of ['flash', 'standard', 'strong'])
+    for (const roles of [
+      ['edit', 'edit', 'edit', 'edit'],
+      ['edit', 'read', 'forbid', 'skip'],
+      ['read', 'read', 'read', 'read'],
+      ['skip', 'skip', 'skip', 'skip'],
+      'invalid',
+      'outage',
+      'foreign',
+      'budget',
+    ] as const) {
+      const baseline = await run(harness({ route: { choice: tier } }));
+      const h = harness({ route: { choice: tier }, roles }, { request: roleRequest() });
+      const d = await run(h);
+      assert.deepEqual(dispatchProjection(d), dispatchProjection(baseline));
+      if (Array.isArray(roles)) {
+        const expected = preflightPlan({
+          decision_id: 'd1',
+          root_ref: 'd1',
+          goal_digest: digest({ message: MESSAGE }),
+          budget: terms.cost_ceiling,
+          tier,
+          targets: ROLE_TARGETS.map((t) => t.ref),
+          roles,
+          ambiguity: fact(d, 'residual_ambiguity'),
+        });
+        assert.equal(fact(d, 'spawn.gain'), expected.gain);
+        assert.equal(fact(d, 'spawn.children'), expected.plan?.children.length ?? null);
+        assert.equal(
+          fact(d, 'spawn.plan'),
+          expected.plan
+            ? validatePlan(
+                expected.plan,
+                ROLE_TARGETS.map((t) => t.ref),
+              ).digest
+            : null,
+        );
+      } else assert.equal(fact(d, 'spawn.plan'), null);
+      assert.equal(h.generateCalls.length, 3);
+    }
+});
+
+test('P5a-13 crash, outage resume, receipt resume, unconfirmed recovery and pure replay', async () => {
+  for (const abort of [false, true]) {
+    const store = new MemoryDispatchJournal();
+    const controller = new AbortController();
+    let claimed = 0;
+    const failing: DispatchJournal = {
+      ...delegate(store),
+      checkpoint(cp) {
+        if (cp.asks.preflight === 1) {
+          if (!abort) throw new Error('roles counter');
+          controller.abort();
+        }
+        store.checkpoint(cp);
+      },
+      claim(id, intent, cp) {
+        claimed++;
+        return store.claim(id, intent, cp);
+      },
+    };
+    const h = harness({}, { request: roleRequest(), journal: failing });
+    if (abort) assert.equal((await run(h, controller.signal)).reason, 'cancelled');
+    else await assert.rejects(run(h), /roles counter/);
+    assert.equal(roleCalls(h).length + shadowCalls(h).length + h.dispatchCalls.length + claimed, 0);
+  }
+  const storage = new MemoryDispatchJournal();
+  let fail = true;
+  let claims = 0;
+  const journal: DispatchJournal = {
+    ...delegate(storage),
+    checkpoint(cp) {
+      if (preflight(cp) && fail) {
+        fail = false;
+        throw new Error('roles write');
+      }
+      storage.checkpoint(cp);
+    },
+    claim(id, intent, cp) {
+      claims++;
+      return storage.claim(id, intent, cp);
+    },
+  };
+  const first = harness({}, { request: roleRequest(), journal });
+  await assert.rejects(run(first), /roles write/);
+  assert.equal(claims + first.dispatchCalls.length, 0);
+  const next = harness({}, { request: roleRequest({ resume: true }), journal });
+  const live = await run(next);
+  assert.equal(roleCalls(next).length, 0);
+  assert.equal(fact(live, 'preflight.reason'), 'unrecorded');
+  assert.deepEqual(transitionDispatch(next.request, storage.load('d1').checkpoint!, live.receipt, live.entry), live);
+  const outageStore = new MemoryDispatchJournal();
+  const outage = harness({ route: { mode: 'outage' } }, { request: roleRequest(), journal: outageStore });
+  assert.equal((await run(outage)).decide1.rule, 'hold.outage');
+  assert.equal(roleCalls(outage).length, 0);
+  const budget = harness(
+    {},
+    {
+      request: roleRequest({ resume: true }),
+      journal: outageStore,
+      receipt: (intent) => ({ status: 'refused', dispatch_id: intent.dispatch_id, reason: 'budget' }),
+    },
+  );
+  const paused = await run(budget);
+  assert.equal(roleCalls(budget).length, 1);
+  const resume = harness({}, { request: roleRequest({ resume: true }), journal: outageStore });
+  const resumed = await run(resume);
+  assert.equal(roleCalls(resume).length, 0);
+  assert.deepEqual(preflight(resumed), preflight(paused));
+  const cp = structuredClone(outageStore.load('d1').checkpoint!);
+  const recovery = new MemoryDispatchJournal();
+  recovery.checkpoint({ ...cp, intent: null });
+  assert.equal(recovery.claim('d1', cp.intent!, cp), true);
+  const unconfirmed = harness({}, { request: roleRequest(), journal: recovery });
+  assert.equal((await run(unconfirmed)).reason, 'dispatch_unconfirmed');
+  assert.equal(roleCalls(unconfirmed).length, 0);
+});
+
+test('P5a-14 cancellation and staleness during roles preserve the existing gates', async () => {
+  for (const stale of [false, true]) {
+    const gate = deferred();
+    const controller = new AbortController();
+    const sink = collector();
+    let passedSignal: AbortSignal | undefined;
+    const h = harness(
+      {
+        gate: { match: (id) => id.endsWith(':roles'), promise: gate.promise },
+        onEvaluate(r, signal) {
+          if (r.site === 'spawn.roles') passedSignal = signal;
+        },
+      },
+      { request: roleRequest(), weft: sink.port },
+    );
+    const pending = run(h, controller.signal);
+    await waitUntil(() => roleCalls(h).length === 1 || h.dispatchCalls.length > 0);
+    assert.equal(roleCalls(h).length, 1);
+    if (stale) h.clock.advance();
+    else controller.abort();
+    gate.release();
+    const d = await pending;
+    assert.equal(passedSignal, controller.signal);
+    assert.equal(h.dispatchCalls.length, 0);
+    if (stale) {
+      assert.equal(preflight(d).reason, 'stale_answer');
+      assert.equal(d.reason, 'stale_answer');
+      assert.equal(d.decide1.rule, 'hold.admission');
+    } else {
+      assert.equal(d.reason, 'cancelled');
+      assert.equal(h.journal.load('d1').decisions.length, 0);
+      assert.deepEqual(sink.records, []);
+      assert.equal((h.journal.load('d1').checkpoint!.asks as any).preflight, 1);
+      assert.equal(preflight(h.journal.load('d1').checkpoint!), null);
+      const resume = harness({}, { request: roleRequest({ resume: true }), journal: h.journal });
+      assert.equal(fact(await run(resume), 'preflight.reason'), 'unrecorded');
+      assert.equal(roleCalls(resume).length, 0);
+    }
+  }
+});
+
+test('P5a-15 tampered role records are dropped without changing dispatch', async () => {
+  const h = harness({}, { request: roleRequest() });
+  const live = await run(h);
+  const cp = h.journal.load('d1').checkpoint!;
+  assert.ok(preflight(cp));
+  const mutations: ((r: any) => void)[] = [
+    (r) => {
+      r.schema = 'other';
+    },
+    (r) => {
+      r.site = 'other';
+    },
+    (r) => {
+      r.reason = 'other';
+    },
+    (r) => {
+      r.targets = null;
+    },
+    (r) => {
+      r.targets[0] = null;
+    },
+    (r) => {
+      r.targets[0].confidence = -1;
+    },
+    (r) => {
+      r.targets[0].role = 'other';
+    },
+    (r) => {
+      r.request_id = 'foreign';
+    },
+    (r) => {
+      r.state_revision++;
+    },
+    (r) => {
+      r.question = 'CANARY-msg';
+    },
+    (r) => {
+      r.reason = 'invalid_answer';
+    },
+    (r) => {
+      r.extra = 'CANARY-provider';
+    },
+    (r) => {
+      r.targets.reverse();
+    },
+    (r) => {
+      r.targets.pop();
+    },
+    (r) => {
+      r.targets[0].extra = 'CANARY-provider';
+    },
+    (r) => {
+      r.targets[0].top_p = 2;
+    },
+    (r) => {
+      r.provider_request_id = 'Bearer CANARY-provider';
+    },
+    (r) => {
+      const keys = Object.keys(r).reverse();
+      const copy = { ...r };
+      for (const k of keys) delete r[k];
+      for (const k of keys) r[k] = copy[k];
+    },
+  ];
+  for (const mutate of mutations) {
+    const bad = structuredClone(cp);
+    mutate(preflight(bad));
+    const d = transitionDispatch(h.request, bad, live.receipt);
+    assert.equal(fact(d, 'preflight.reason'), 'untrusted');
+    assert.equal(preflight(d), null);
+    assert.deepEqual(dispatchProjection(d), dispatchProjection(live));
+    assertNoCopiedText(d, [...CANARIES, 'CANARY-target']);
+  }
+  const changed = roleRequest({ targets: ROLE_TARGETS.map((t) => ({ ...t, ref: t.ref + 'changed' })) });
+  const d = transitionDispatch(changed, cp, live.receipt);
+  assert.equal(fact(d, 'preflight.reason'), 'untrusted');
+});
+
+test('P5a-16 versioned records, 32 facts, bounded judgments, Weft evidence, disclosure', async () => {
+  const sink = collector();
+  const request = roleRequest({
+    intake: { message: 'CANARY-msg', running_threads: [] },
+    triage_context: 'CANARY-ctx',
+    route_context: 'CANARY-ctx',
+  });
+  const h = harness({}, { request, weft: sink.port });
+  const d = await run(h);
+  const cp = h.journal.load('d1').checkpoint!;
+  assert.equal(d.schema, 'dispatch.decision@4');
+  assert.equal(cp.schema, 'dispatch.checkpoint@3');
+  assert.deepEqual(Object.keys(cp), [
+    'schema',
+    'decision_id',
+    'state_revision',
+    'state_updated_at',
+    'asks',
+    'intake',
+    'triage',
+    'route',
+    'shadow',
+    'preflight',
+    'intent',
+  ]);
+  assert.deepEqual(Object.keys(cp.asks), ['intake', 'triage', 'route', 'shadow', 'preflight']);
+  assert.deepEqual(Object.keys(d), [
+    'schema',
+    'decision_id',
+    'entry',
+    'state_revision',
+    'decided_by',
+    'choice',
+    'status',
+    'reason',
+    'rule_table',
+    'decide1',
+    'intent',
+    'receipt',
+    'intake',
+    'triage',
+    'route',
+    'shadow',
+    'preflight',
+  ]);
+  const decided = sink.records.find((r) => r.kind === 'dispatch.decided')!;
+  assert.equal((decided.fields.facts as any[]).length, 32);
+  assert.ok((decided.fields.judgments as any[]).length <= 30);
+  assert.ok(decided.evidence.some((e) => e.source === 'inference_request' && e.ref === 'd1:roles'));
+  assert.ok(decided.links.every((l) => !l.record_id.includes(':roles')));
+  assert.equal(sink.records.filter((r) => r.kind === 'judgment').length, 3);
+  for (const r of sink.records) assert.equal(validateRecord(r).ok, true);
+  assertNoCopiedText([d, h.journal.load('d1'), ...sink.records], [...CANARIES, 'CANARY-target']);
+  assert.throws(
+    () =>
+      transitionDispatch(
+        request,
+        { ...cp, schema: 'dispatch.checkpoint@2' } as unknown as DispatchCheckpoint,
+        d.receipt,
+      ),
+    /schema/,
+  );
+  const eightSink = collector();
+  const eight = await run(
+    harness(
+      {},
+      {
+        request: roleRequest({
+          targets: Array.from({ length: 8 }, (_, i) => ({ ref: `t${i}`, summary: 'CANARY-target' })),
+        }),
+        weft: eightSink.port,
+      },
+    ),
+  );
+  assert.equal(eight.decide1.judgments.length, 30);
+  assert.equal(fact(eight, 'spawn.children'), 9);
+  assert.deepEqual(
+    eight.decide1.facts.map((f) => f.name),
+    FACT_NAMES,
+  );
+  assert.deepEqual(
+    eight.decide1.judgments.slice(14).map((j) => j.name),
+    Array.from({ length: 8 }, (_, i) => [`preflight.t${i}.top_p`, `preflight.t${i}.confidence`]).flat(),
+  );
+  for (const record of eightSink.records) assert.equal(validateRecord(record).ok, true);
+  const badJournal: DispatchJournal = {
+    ...delegate(h.journal),
+    load: () => ({
+      checkpoint: cp,
+      decisions: [{ ...d, schema: 'dispatch.decision@3' } as unknown as DispatchDecision],
+      attempt: null,
+      presented: false,
+    }),
+  };
+  await assert.rejects(run(harness({}, { request, journal: badJournal })), /schema/);
+});
+
+test('P5a-17 validate closed targets before journal or ports; capture mutable caller', async () => {
+  for (const targets of [
+    Array(9).fill(ROLE_TARGETS[0]),
+    [ROLE_TARGETS[0], ROLE_TARGETS[0]],
+    [{ ref: 'Bearer secret', summary: '' }],
+    [{ ...ROLE_TARGETS[0], extra: true }],
+    [{ ref: 'a', summary: 3 }],
+    null,
+    {},
+    [null],
+    Array(1),
+  ]) {
+    let loads = 0;
+    const storage = new MemoryDispatchJournal();
+    const journal: DispatchJournal = {
+      ...delegate(storage),
+      load(id) {
+        loads++;
+        return storage.load(id);
+      },
+    };
+    const h = harness({}, { request: roleRequest({ targets }), journal });
+    await assert.rejects(run(h), /Invalid dispatch targets/);
+    assert.equal(loads + h.generateCalls.length + h.evaluateCalls.length + h.dispatchCalls.length, 0);
+  }
+  const gate = deferred();
+  const request = roleRequest();
+  const h = harness({ gate: { match: (id) => id === 'd1:intake', promise: gate.promise } }, { request });
+  const pending = run(h);
+  await waitUntil(() => h.generateCalls.length > 0);
+  (request as any).targets[0].ref = 'changed';
+  (request as any).targets[0].summary = 'changed';
+  (request as any).targets.push({ ref: 'extra', summary: '' });
+  gate.release();
+  const d = await pending;
+  assert.deepEqual(
+    preflight(d).targets.map((t: any) => t.ref),
+    ROLE_TARGETS.map((t) => t.ref),
+  );
+  assert.deepEqual((roleCalls(h)[0]!.state as any).targets, ROLE_TARGETS);
+});
+
+test('P5a-18 out-of-order roles bind snapshots and sequences; same id has one claim winner', async () => {
+  const sink = collector();
+  const gate = deferred();
+  const a = harness(
+    {
+      roles: ['edit', 'read', 'forbid', 'skip'],
+      gate: { match: (id) => id.endsWith(':roles'), promise: gate.promise },
+    },
+    { request: roleRequest(), weft: sink.port },
+  );
+  const pa = run(a);
+  await waitUntil(() => roleCalls(a).length === 1 || a.dispatchCalls.length > 0);
+  assert.equal(roleCalls(a).length, 1);
+  const b = harness(
+    { roles: ['skip', 'skip', 'skip', 'skip'] },
+    { request: roleRequest({ request_id: 'b' }), weft: sink.port },
+  );
+  const db = await run(b);
+  gate.release();
+  const da = await pa;
+  assert.equal(fact(da, 'spawn.gain'), true);
+  assert.equal(fact(db, 'spawn.gain'), false);
+  const sequences = sink.records.map((r) => r.sequence);
+  assert.deepEqual(
+    sequences,
+    [...new Set(sequences)].sort((x, y) => x - y),
+  );
+  const storage = new MemoryDispatchJournal();
+  const same = deferred();
+  const intake = deferred();
+  const sameSink = collector();
+  const y = harness(
+    { roles: ['skip', 'skip', 'skip', 'skip'], gate: { match: (id) => id === 'd1:intake', promise: intake.promise } },
+    { request: roleRequest(), journal: storage, weft: sameSink.port },
+  );
+  const py = run(y);
+  await waitUntil(() => y.evaluateCalls.length === 1);
+  const x = harness(
+    { gate: { match: (id) => id.endsWith(':roles'), promise: same.promise } },
+    { request: roleRequest(), journal: storage, weft: sameSink.port },
+  );
+  const px = run(x);
+  await waitUntil(() => roleCalls(x).length === 1);
+  intake.release();
+  const dy = await py;
+  same.release();
+  const dx = await px;
+  assert.equal(x.dispatchCalls.length + y.dispatchCalls.length, 1);
+  assert.equal(roleCalls(x).length, 1);
+  assert.equal(roleCalls(y).length, 1);
+  assert.equal(storage.load('d1').decisions.length, 1);
+  assert.deepEqual(dx, dy);
+  assert.equal(fact(dy, 'spawn.gain'), false);
+  const emitted = sameSink.records.filter((r) => r.kind === 'dispatch.decided');
+  assert.equal(emitted.length, 1);
+  assert.equal(emitted[0]!.fields['dispatch_ref'], 'd1:dispatch');
+  assert.equal((emitted[0]!.fields['facts'] as any[]).find((f) => f.name === 'spawn.gain').value, false);
 });

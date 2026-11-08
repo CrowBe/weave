@@ -401,6 +401,32 @@ export {
 } from './dispatch.js';
 
 export {
+  TARGET_ROLES,
+  childRef,
+  sealFrame,
+  validatePlan,
+  splitGain,
+  preflightPlan,
+  type TargetRole,
+  type SpawnFrame,
+  type ChildBrief,
+  type SpawnPlan,
+  type SplitScore,
+} from './spawn.js';
+
+export {
+  SPAWN_ROLES_SITE,
+  SPAWN_ROLES_QUESTION,
+  SPAWN_ROLE_CRITERIA,
+  transitionRoles,
+  askRoles,
+  type RoleReason,
+  type RoleAsk,
+  type RoleObservation,
+  type RecordedRoleAnswer,
+} from './sites/spawn-roles.js';
+
+export {
   DECIDE1_SHADOW_JUDGMENTS,
   DECIDE1_SHADOW_QUESTIONS,
   transitionShadow,
