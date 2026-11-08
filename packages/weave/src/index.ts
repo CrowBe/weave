@@ -364,10 +364,27 @@ export {
   type IntakeDecision,
   type RecordedIntake,
 } from './intake.js';
+
+export {
+  DECIDE1_BANDS,
+  DECIDE1_RULE_TABLE,
+  DECIDE1_RULES,
+  decideBand,
+  bandOfChoice,
+  type Band,
+  type Decide1Judgment,
+  type Decide1Fact,
+  type Decide1Inputs,
+  type Decide1Trace,
+  type Decide1RuleId,
+} from './decide1.js';
+
 export {
   MemoryDispatchJournal,
   decideDispatch,
   dispatchJudgments,
+  decide1Inputs,
+  dispatchDecided,
   resolveThreadTarget,
   transitionDispatch,
   type DispatchCheckpoint,
