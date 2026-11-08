@@ -54,6 +54,9 @@ import {
   type ShadowAsk,
   type ShadowObservation,
 } from './sites/decide1-shadow.js';
+import { digest } from './digest.js';
+import { TARGET_ROLES, preflightPlan } from './spawn.js';
+import { askRoles, SPAWN_ROLES_QUESTION, type RoleAsk, type RoleObservation } from './sites/spawn-roles.js';
 import type { ImplementTier } from './implement-step.js';
 import { deliver, type WeftPort, type WeftRecordShape } from './weft.js';
 
@@ -65,6 +68,8 @@ export interface DispatchRequest extends SiteState {
   readonly triage_context: string;
   readonly route_context: string;
   readonly resume?: boolean;
+  /** Closed, already disclosed candidate set. Summaries are never recorded. */
+  readonly targets?: readonly { readonly ref: string; readonly summary: string }[];
 }
 
 export type DispatchIntent =
@@ -104,7 +109,7 @@ export type DispatchReason =
   | 'dispatch_unconfirmed';
 
 export interface DispatchCheckpoint {
-  readonly schema: 'dispatch.checkpoint@2';
+  readonly schema: 'dispatch.checkpoint@3';
   readonly decision_id: string;
   readonly state_revision: number;
   readonly state_updated_at: number;
@@ -113,16 +118,18 @@ export interface DispatchCheckpoint {
     readonly triage: number;
     readonly route: number;
     readonly shadow: 0 | 1;
+    readonly preflight: 0 | 1;
   };
   readonly intake: IntakeDecision | null;
   readonly triage: LoopDecision | null;
   readonly route: LoopDecision | null;
   readonly shadow: readonly ShadowObservation[] | null;
+  readonly preflight: RoleObservation | null;
   readonly intent: DispatchIntent | null;
 }
 
 export interface DispatchDecision {
-  readonly schema: 'dispatch.decision@3';
+  readonly schema: 'dispatch.decision@4';
   readonly decision_id: string;
   readonly entry: number;
   readonly state_revision: number;
@@ -138,6 +145,7 @@ export interface DispatchDecision {
   readonly triage: LoopDecision | null;
   readonly route: LoopDecision | null;
   readonly shadow: readonly ShadowObservation[] | null;
+  readonly preflight: RoleObservation | null;
 }
 
 /**
@@ -355,15 +363,16 @@ export function resolveThreadTarget(
 
 function initialCheckpoint(request: DispatchRequest): DispatchCheckpoint {
   return {
-    schema: 'dispatch.checkpoint@2',
+    schema: 'dispatch.checkpoint@3',
     decision_id: request.request_id,
     state_revision: request.state_revision,
     state_updated_at: request.state_updated_at,
-    asks: { intake: 0, triage: 0, route: 0, shadow: 0 },
+    asks: { intake: 0, triage: 0, route: 0, shadow: 0, preflight: 0 },
     intake: null,
     triage: null,
     route: null,
     shadow: null,
+    preflight: null,
     intent: null,
   };
 }
@@ -377,18 +386,26 @@ function makeCheckpoint(
   triage: LoopDecision | null,
   route: LoopDecision | null,
   shadow: readonly ShadowObservation[] | null,
+  preflight: RoleObservation | null,
   intent: DispatchIntent | null,
 ): DispatchCheckpoint {
   return {
-    schema: 'dispatch.checkpoint@2',
+    schema: 'dispatch.checkpoint@3',
     decision_id,
     state_revision,
     state_updated_at,
-    asks: { intake: asks.intake, triage: asks.triage, route: asks.route, shadow: asks.shadow },
+    asks: {
+      intake: asks.intake,
+      triage: asks.triage,
+      route: asks.route,
+      shadow: asks.shadow,
+      preflight: asks.preflight,
+    },
     intake,
     triage,
     route,
     shadow,
+    preflight,
     intent,
   };
 }
@@ -404,7 +421,7 @@ function makeDecision(
   reason: DispatchReason,
 ): DispatchDecision {
   return {
-    schema: 'dispatch.decision@3',
+    schema: 'dispatch.decision@4',
     decision_id: checkpoint.decision_id,
     entry,
     state_revision: checkpoint.state_revision,
@@ -420,6 +437,7 @@ function makeDecision(
     triage: checkpoint.triage,
     route: checkpoint.route,
     shadow: recordedShadow(checkpoint),
+    preflight: trustedRoles(checkpoint, request),
   };
 }
 
@@ -806,6 +824,73 @@ function recordedShadow(checkpoint: DispatchCheckpoint): readonly ShadowObservat
   });
 }
 
+const PREFLIGHT_RULES: ReadonlySet<Decide1Trace['rule']> = new Set(['gen.route']);
+const ROLE_KEYS = [
+  'schema',
+  'site',
+  'question',
+  'request_id',
+  'state_revision',
+  'targets',
+  'reason',
+  'provider_request_id',
+];
+const ROLE_TARGET_KEYS = ['ref', 'role', 'top_p', 'confidence'];
+function orderedKeys(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === keys.length &&
+    Object.keys(value).every((key, i) => key === keys[i])
+  );
+}
+/** A role round is optional shadow evidence. Drop a malformed round in its entirety. */
+function trustedRoles(checkpoint: DispatchCheckpoint, request: DispatchRequest): RoleObservation | null {
+  const record: unknown = checkpoint.preflight;
+  if (
+    checkpoint.asks.preflight !== 1 ||
+    !orderedKeys(record, ROLE_KEYS) ||
+    record['schema'] !== 'spawn-roles@1' ||
+    record['site'] !== 'spawn.roles' ||
+    record['question'] !== SPAWN_ROLES_QUESTION ||
+    record['request_id'] !== `${checkpoint.decision_id}:roles` ||
+    record['state_revision'] !== checkpoint.state_revision ||
+    !(SHADOW_REASONS as readonly unknown[]).includes(record['reason'])
+  )
+    return null;
+  const targets = request.targets ?? [];
+  const observed = record['targets'];
+  if (!Array.isArray(observed) || observed.length !== targets.length || observed.length < 1 || observed.length > 8)
+    return null;
+  for (const [i, item] of observed.entries()) {
+    if (!orderedKeys(item, ROLE_TARGET_KEYS) || item['ref'] !== targets[i]!.ref) return null;
+    if (record['reason'] === 'answered') {
+      if (
+        !(TARGET_ROLES as readonly unknown[]).includes(item['role']) ||
+        (item['top_p'] !== null && !unit(item['top_p'])) ||
+        (item['confidence'] !== null && !unit(item['confidence']))
+      )
+        return null;
+    } else if (item['role'] !== null || item['top_p'] !== null || item['confidence'] !== null) return null;
+  }
+  if (
+    record['provider_request_id'] !== null &&
+    (typeof record['provider_request_id'] !== 'string' ||
+      correlation(record['provider_request_id']) !== record['provider_request_id'])
+  )
+    return null;
+  return clone(record) as unknown as RoleObservation;
+}
+function roleAsk(request: DispatchRequest, checkpoint: DispatchCheckpoint): RoleAsk {
+  return {
+    ...shadowAsk(request, checkpoint),
+    state: {
+      request: request.intake.message,
+      context: request.triage_context,
+      targets: (request.targets ?? []).map((target) => ({ ref: target.ref, summary: target.summary })),
+    },
+  };
+}
+
 function shadowAsk(request: DispatchRequest, checkpoint: DispatchCheckpoint): ShadowAsk {
   return {
     request_id: checkpoint.decision_id,
@@ -852,9 +937,9 @@ export function decide1Inputs(request: DispatchRequest, checkpoint: DispatchChec
       judgments.push({ name: `${stage}.confidence`, probability: observation.confidence });
     if (observation.top_p !== null) judgments.push({ name: `${stage}.top_p`, probability: observation.top_p });
   }
-  const shadowFacts: Decide1Fact[] = [
-    { name: 'residual_ambiguity', value: triage?.extracts.at(-1)?.residual_ambiguity.count ?? null },
-  ];
+  const ambiguity = triage?.extracts.at(-1)?.residual_ambiguity.count;
+  const validAmbiguity = ambiguity != null && Number.isSafeInteger(ambiguity) && ambiguity >= 0;
+  const shadowFacts: Decide1Fact[] = [{ name: 'residual_ambiguity', value: validAmbiguity ? ambiguity : null }];
   const shadowJudgments: Decide1Judgment[] = [];
   for (const [index, judgment] of DECIDE1_SHADOW_JUDGMENTS.entries()) {
     const observation = checkpoint.asks.shadow === 1 ? trustedShadow(checkpoint, index) : null;
@@ -870,6 +955,55 @@ export function decide1Inputs(request: DispatchRequest, checkpoint: DispatchChec
     if (observation?.confidence != null)
       shadowJudgments.push({ name: `${judgment}.confidence`, probability: observation.confidence });
   }
+  const roles = trustedRoles(checkpoint, request);
+  const reason =
+    checkpoint.asks.preflight !== 1
+      ? null
+      : checkpoint.preflight === null
+        ? 'unrecorded'
+        : (roles?.reason ?? 'untrusted');
+  shadowFacts.push(
+    { name: 'preflight.reason', value: reason },
+    { name: 'preflight.targets', value: request.targets?.length ?? 0 },
+  );
+  for (let i = 0; i < 8; i++) {
+    const target = roles?.targets[i];
+    shadowFacts.push({ name: `preflight.t${i}.role`, value: target?.role ?? null });
+    if (target?.top_p != null) shadowJudgments.push({ name: `preflight.t${i}.top_p`, probability: target.top_p });
+    if (target?.confidence != null)
+      shadowJudgments.push({ name: `preflight.t${i}.confidence`, probability: target.confidence });
+  }
+  const targets = roles?.targets.map((target) => target.ref) ?? [];
+  const spawn = (() => {
+    if (
+      roles?.reason !== 'answered' ||
+      !validAmbiguity ||
+      correlation(checkpoint.decision_id) === null ||
+      targets.some((target) => correlation(target) === null) ||
+      new Set(targets).size !== targets.length ||
+      route === null ||
+      !isTier(route.site.choice) ||
+      !Number.isSafeInteger(request.terms.cost_ceiling) ||
+      request.terms.cost_ceiling < 0
+    )
+      return null;
+    // Invalid evidence is absent; a builder/validator mismatch must surface as a defect.
+    return preflightPlan({
+      decision_id: checkpoint.decision_id,
+      root_ref: checkpoint.decision_id,
+      goal_digest: digest({ message: request.intake.message }),
+      budget: request.terms.cost_ceiling,
+      tier: route.site.choice,
+      targets,
+      roles: roles.targets.map((t) => t.role!),
+      ambiguity,
+    });
+  })();
+  shadowFacts.push(
+    { name: 'spawn.gain', value: spawn?.gain ?? null },
+    { name: 'spawn.children', value: spawn?.plan?.children.length ?? null },
+    { name: 'spawn.plan', value: spawn?.plan?.digest ?? null },
+  );
   return { judgments, facts, shadow: { judgments: shadowJudgments, facts: shadowFacts } };
 }
 
@@ -962,8 +1096,8 @@ function planFor(trace: Decide1Trace, checkpoint: DispatchCheckpoint, request: D
 }
 
 function assertCheckpoint(checkpoint: DispatchCheckpoint): void {
-  if (checkpoint.schema !== 'dispatch.checkpoint@2')
-    throw new Error('recorded dispatch checkpoint schema differs from dispatch.checkpoint@2');
+  if (checkpoint.schema !== 'dispatch.checkpoint@3')
+    throw new Error('recorded dispatch checkpoint schema differs from dispatch.checkpoint@3');
 }
 
 function resolveOutcome(request: DispatchRequest, checkpoint: DispatchCheckpoint): Plan {
@@ -1047,6 +1181,26 @@ function normalizeReceipt(value: unknown, dispatch_id: string): DispatchReceipt 
   return null;
 }
 
+function validateTargets(targets: DispatchRequest['targets']): void {
+  if (targets === undefined) return;
+  if (
+    !Array.isArray(targets) ||
+    targets.length > 8 ||
+    Array.from(targets).some(
+      (target) =>
+        !isRecord(target) ||
+        Object.keys(target).length !== 2 ||
+        !Object.hasOwn(target, 'ref') ||
+        !Object.hasOwn(target, 'summary') ||
+        typeof target['ref'] !== 'string' ||
+        correlation(target['ref']) !== target['ref'] ||
+        typeof target['summary'] !== 'string',
+    ) ||
+    new Set(targets.map((target) => target.ref)).size !== targets.length
+  )
+    throw new Error('Invalid dispatch targets');
+}
+
 function captureRequest(request: DispatchRequest): DispatchRequest {
   return {
     request_id: request.request_id,
@@ -1063,6 +1217,9 @@ function captureRequest(request: DispatchRequest): DispatchRequest {
     triage_context: request.triage_context,
     route_context: request.route_context,
     ...(request.resume === true ? { resume: true } : {}),
+    ...(request.targets === undefined
+      ? {}
+      : { targets: request.targets.map((target) => ({ ref: target.ref, summary: target.summary })) }),
   };
 }
 
@@ -1112,8 +1269,8 @@ function isResumable(decision: DispatchDecision): boolean {
 }
 
 function assertRuleTable(decision: DispatchDecision): void {
-  if (decision.schema !== 'dispatch.decision@3')
-    throw new Error('recorded dispatch decision schema differs from dispatch.decision@3');
+  if (decision.schema !== 'dispatch.decision@4')
+    throw new Error('recorded dispatch decision schema differs from dispatch.decision@4');
   if (decision.rule_table !== DECIDE1_RULE_TABLE)
     throw new Error('recorded dispatch rule table differs from decide1.rules@1');
 }
@@ -1173,6 +1330,7 @@ export function dispatchDecided(
     ...(Array.isArray(decision.shadow)
       ? decision.shadow.flatMap((observation) => (observation?.request_id == null ? [] : [observation.request_id]))
       : []),
+    decision.preflight?.request_id,
   ].filter((id): id is string => id != null);
   const ids = [target.trace_id, target.emitter_id, record_id, decision.decision_id, ...judgmentIds, ...requests];
   if (decision.intent !== null) ids.push(decision.intent.dispatch_id);
@@ -1227,7 +1385,7 @@ function cancellation(
   decider: { readonly decided_by: Decider; readonly choice: SiteChoice },
 ): DispatchDecision {
   return {
-    schema: 'dispatch.decision@3',
+    schema: 'dispatch.decision@4',
     decision_id: checkpoint.decision_id,
     entry,
     state_revision: checkpoint.state_revision,
@@ -1243,6 +1401,7 @@ function cancellation(
     triage: checkpoint.triage,
     route: checkpoint.route,
     shadow: recordedShadow(checkpoint),
+    preflight: trustedRoles(checkpoint, request),
   };
 }
 
@@ -1427,6 +1586,7 @@ export async function decideDispatch(
 ): Promise<DispatchDecision> {
   if (correlation(request.request_id) === null || request.request_id.length > 96)
     throw new Error('Invalid dispatch request id');
+  validateTargets(request.targets);
   const captured = captureRequest(request);
   const decision_id = captured.request_id;
   const loaded = journal.load(decision_id);
@@ -1476,11 +1636,18 @@ export async function decideDispatch(
       checkpoint.decision_id,
       checkpoint.state_revision,
       checkpoint.state_updated_at,
-      { intake: ask, triage: checkpoint.asks.triage, route: checkpoint.asks.route, shadow: checkpoint.asks.shadow },
+      {
+        intake: ask,
+        triage: checkpoint.asks.triage,
+        route: checkpoint.asks.route,
+        shadow: checkpoint.asks.shadow,
+        preflight: checkpoint.asks.preflight,
+      },
       checkpoint.intake,
       checkpoint.triage,
       checkpoint.route,
       checkpoint.shadow,
+      checkpoint.preflight,
       checkpoint.intent,
     );
     journal.checkpoint(checkpoint);
@@ -1495,6 +1662,7 @@ export async function decideDispatch(
       checkpoint.triage,
       checkpoint.route,
       checkpoint.shadow,
+      checkpoint.preflight,
       checkpoint.intent,
     );
     if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
@@ -1516,11 +1684,18 @@ export async function decideDispatch(
         checkpoint.decision_id,
         checkpoint.state_revision,
         checkpoint.state_updated_at,
-        { intake: checkpoint.asks.intake, triage: ask, route: checkpoint.asks.route, shadow: checkpoint.asks.shadow },
+        {
+          intake: checkpoint.asks.intake,
+          triage: ask,
+          route: checkpoint.asks.route,
+          shadow: checkpoint.asks.shadow,
+          preflight: checkpoint.asks.preflight,
+        },
         checkpoint.intake,
         checkpoint.triage,
         checkpoint.route,
         checkpoint.shadow,
+        checkpoint.preflight,
         checkpoint.intent,
       );
       journal.checkpoint(checkpoint);
@@ -1535,6 +1710,7 @@ export async function decideDispatch(
         decision,
         checkpoint.route,
         checkpoint.shadow,
+        checkpoint.preflight,
         checkpoint.intent,
       );
       if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
@@ -1560,11 +1736,13 @@ export async function decideDispatch(
             triage: checkpoint.asks.triage,
             route: ask,
             shadow: checkpoint.asks.shadow,
+            preflight: checkpoint.asks.preflight,
           },
           checkpoint.intake,
           checkpoint.triage,
           checkpoint.route,
           checkpoint.shadow,
+          checkpoint.preflight,
           checkpoint.intent,
         );
         journal.checkpoint(checkpoint);
@@ -1579,6 +1757,7 @@ export async function decideDispatch(
           checkpoint.triage,
           decision,
           checkpoint.shadow,
+          checkpoint.preflight,
           checkpoint.intent,
         );
         if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
@@ -1599,13 +1778,26 @@ export async function decideDispatch(
     return finishFinal(captured, checkpoint, entry, plan, ports, journal, fresh);
   }
 
-  if (checkpoint.asks.shadow === 0 && SHADOW_RULES.has(plan.trace.rule)) {
-    checkpoint = { ...checkpoint, asks: { ...checkpoint.asks, shadow: 1 } };
+  const shadowDue = checkpoint.asks.shadow === 0 && SHADOW_RULES.has(plan.trace.rule);
+  const rolesDue =
+    checkpoint.asks.preflight === 0 && PREFLIGHT_RULES.has(plan.trace.rule) && (captured.targets?.length ?? 0) > 0;
+  if (shadowDue || rolesDue) {
+    checkpoint = {
+      ...checkpoint,
+      asks: {
+        ...checkpoint.asks,
+        shadow: shadowDue ? 1 : checkpoint.asks.shadow,
+        preflight: rolesDue ? 1 : checkpoint.asks.preflight,
+      },
+    };
     journal.checkpoint(checkpoint);
     if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
-    const shadow = await askShadow(shadowAsk(captured, checkpoint), ports, ports.now, signal);
+    const [shadow, preflight] = await Promise.all([
+      shadowDue ? askShadow(shadowAsk(captured, checkpoint), ports, ports.now, signal) : checkpoint.shadow,
+      rolesDue ? askRoles(roleAsk(captured, checkpoint), ports, ports.now, signal) : checkpoint.preflight,
+    ]);
     if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
-    checkpoint = { ...checkpoint, shadow };
+    checkpoint = { ...checkpoint, shadow, preflight };
     journal.checkpoint(checkpoint);
     const next = resolveOutcome(captured, checkpoint);
     if (
@@ -1635,6 +1827,7 @@ export async function decideDispatch(
       checkpoint.triage,
       checkpoint.route,
       checkpoint.shadow,
+      checkpoint.preflight,
       intent,
     );
   }

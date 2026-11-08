@@ -232,6 +232,29 @@ idempotent dispatch port is called, then maps the receipt to a terminal or
 resumable decision. It never writes `routed_input@1` and never treats an
 observation as permission by itself.
 
+### Parent frame
+
+The sealed `spawn.frame@1` every child brief carries: root and parent decision refs,
+the parent goal's digest, why the child was spawned, siblings and `depends_on`
+edges. It grants nothing and carries no grant, scope or approval.
+
+### Target role
+
+`edit`, `read`, `forbid` or `skip` assigned to one member of a caller-disclosed,
+closed candidate set. A role is an observation; it grants no authority.
+
+### Spawn plan
+
+`spawn.plan@1`: children with sealed parent frames, dependency edges and budget
+shares, validated before it can exist. In P5a the would-be plan is shadow evidence;
+only its digest is recorded, and no rule reads it.
+
+### Split gain
+
+Strict Pareto improvement of every child's score over its parent's: no axis
+increases and at least one decreases for each child. Required for any split,
+it bounds recursion without a depth cap. An empty child set has no gain.
+
 ### Dispatch intent
 
 A durable, keyed statement that one action will be presented exactly once: an
@@ -697,7 +720,10 @@ dispatch authority; its output grants no execution authority of its own.
 
 ### Decide-1 trace
 
-What a `dispatch.decided` Weft record carries about how a dispatch decision was reached (D-ENG-045): each isolated judgment's name and probability, each code-computed fact's name and scalar value, the rule-table row that decided, and the coarse band it returned (`tool_call`, `spawn_subtasks`, `escalate_gen` or `ask_human`). The trace also lists shadow inputs no row of the current table version reads (D-ENG-047). A decision no site answered carries empty judgments. A fact value is never text. Like every Weft record, the trace reports a decision and grants no authority to dispatch. The `dispatch.decision@3` journal record carries the same trace and its rule-table version; a paused decision’s band is the band of the choice it withheld.
+What a `dispatch.decided` Weft record carries about how a dispatch decision was reached (D-ENG-045): each isolated judgment's name and probability, each code-computed fact's name and scalar value, the rule-table row that decided, and the coarse band it returned (`tool_call`, `spawn_subtasks`, `escalate_gen` or `ask_human`). The trace also lists shadow inputs no row of the current table version reads (D-ENG-047). A decision no site answered carries empty judgments. A fact value is never text. Like every Weft record, the trace reports a decision and grants no authority to dispatch. The `dispatch.decision@4` journal record carries the same trace and its rule-table version; a paused decision’s band is the band of the choice it withheld.
+
+The shadow partition also holds preflight target roles and the would-be spawn plan's
+digest; these inputs have no dispatch authority.
 
 ### Shadow judgment
 
