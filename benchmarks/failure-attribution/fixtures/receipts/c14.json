@@ -1,0 +1,43 @@
+{
+  "schema": "gauge.raw-receipts@1",
+  "case": "c14",
+  "result": "r14",
+  "records": [],
+  "checks": [],
+  "observations": [
+    {
+      "source": "observation",
+      "ref": "c14.a1.observation0.53a1d948",
+      "observation": "schedule",
+      "source_revision": "sha256:53a1d9488ab5dc15d19501b667ee279b2645b6f91f69fd44683665f888661e9c",
+      "case": "c14",
+      "digest": "sha256:70ab008660288b4d7a2cef8a79f209e4eb52aa6b1ab22e9a313f0a5c7ef54d18",
+      "fields": {
+        "case": "c14",
+        "result": "r14",
+        "attempt": "c14.a1",
+        "disposition": "conflict",
+        "terminal": "failed"
+      }
+    }
+  ],
+  "search": [],
+  "route": [],
+  "schedule": [
+    {
+      "scheduler_revision": "sha256:1ca8df2342ae6715b27568ecc1ea31ce140c2c1325926f6f0c6cbc7da2e12129",
+      "policy_revision": "sha256:5f050232e63457c2810873ddb167f48cb911ea1a924124d5ff79b32edc412842",
+      "disposition": "conflict",
+      "terminal": "failed",
+      "dependencies": [],
+      "budget": null,
+      "superseded": false,
+      "evidence": [
+        {
+          "source": "observation",
+          "ref": "c14.a1.observation0.53a1d948"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,597 @@
+{
+  "schema": "gauge.tune-labels@1",
+  "review_status": "implementer-authored-no-independent-review",
+  "labels": [
+    {
+      "case": "c01",
+      "offline": {
+        "category": "capability_gap",
+        "signal": "no_contract_matched"
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c01.a1.weft0.53a1d948"
+        },
+        {
+          "source": "observation",
+          "ref": "c01.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "The authorized complete catalogue and composition search is empty at its recorded revision.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c02",
+      "offline": {
+        "category": "capability_gap",
+        "signal": "no_contract_matched"
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c02.a1.weft0.53a1d948"
+        },
+        {
+          "source": "observation",
+          "ref": "c02.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "A distinct comparison requirement has no authorized contract or composition after complete search.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c03",
+      "offline": {
+        "category": "capability_gap",
+        "signal": "no_contract_matched"
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c03.a1.weft0.53a1d948"
+        },
+        {
+          "source": "observation",
+          "ref": "c03.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "Revoked software supplies no usable contract; the complete permitted catalogue and compositions contain no match.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c04",
+      "offline": {
+        "category": "capability_gap",
+        "signal": "no_contract_matched"
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c04.a1.weft0.53a1d948"
+        },
+        {
+          "source": "observation",
+          "ref": "c04.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "The current recorded catalogue search, rather than an older catalogue, is complete, authorized and empty.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c05",
+      "offline": {
+        "category": "implementation",
+        "signal": "contract_tests_failed"
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c05.a1.weft0.53a1d948"
+        },
+        {
+          "source": "check",
+          "ref": "c05.a1.check.dadeea86"
+        }
+      ],
+      "rationale": "The failing check is bound to this case, implementation, contract, invocation and attempt.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c06",
+      "offline": {
+        "category": "implementation",
+        "signal": "effect_violation"
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c06.a1.weft0.53a1d948"
+        },
+        {
+          "source": "check",
+          "ref": "c06.a1.check.22d5c73a"
+        },
+        {
+          "source": "observation",
+          "ref": "c06.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "The matching check records an effect violation rather than a model assertion of success.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c07",
+      "offline": {
+        "category": "implementation",
+        "signal": "implementation_failed"
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c07.a1.weft0.53a1d948"
+        }
+      ],
+      "rationale": "The invocation outcome directly records failure of the bound implementation.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c08",
+      "offline": {
+        "category": "implementation",
+        "signal": "contract_tests_failed"
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c08.a1.weft0.53a1d948"
+        },
+        {
+          "source": "check",
+          "ref": "c08.a1.check.a48fbf9b"
+        }
+      ],
+      "rationale": "The matching regression check establishes implementation failure for a separate implementation revision.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c09",
+      "offline": {
+        "category": "routing",
+        "signal": "better_route_excluded"
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c09.a1.weft0.53a1d948"
+        },
+        {
+          "source": "check",
+          "ref": "c09.a1.check.a543584e"
+        },
+        {
+          "source": "observation",
+          "ref": "c09.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "Comparative success and recorded eligibility support the better-route exclusion signal.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c10",
+      "offline": {
+        "category": "routing",
+        "signal": "wrong_contract_selected"
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c10.a1.weft0.53a1d948"
+        },
+        {
+          "source": "observation",
+          "ref": "c10.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "The selected contract differs from the required contract under the recorded decision revision.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c11",
+      "offline": {
+        "category": "routing",
+        "signal": "better_route_excluded"
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c11.a1.weft0.53a1d948"
+        },
+        {
+          "source": "check",
+          "ref": "c11.a1.check.4ce059f7"
+        },
+        {
+          "source": "observation",
+          "ref": "c11.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "The permitted alternative has bound comparative success and an erroneous table exclusion.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c12",
+      "offline": {
+        "category": "routing",
+        "signal": "wrong_contract_selected"
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c12.a1.weft0.53a1d948"
+        },
+        {
+          "source": "observation",
+          "ref": "c12.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "The recorded required/selected contract mismatch supports this separate route-choice scenario.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c13",
+      "offline": {
+        "category": "orchestration",
+        "signal": "dependency_failed"
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "observation",
+          "ref": "c13.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "A named dependency is failed and the schedule records the dependent action as not reached.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c14",
+      "offline": {
+        "category": "orchestration",
+        "signal": "schedule_conflict"
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "observation",
+          "ref": "c14.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "The scheduler explicitly records conflict with a failed terminal result.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c15",
+      "offline": {
+        "category": "orchestration",
+        "signal": "budget_exhausted"
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "observation",
+          "ref": "c15.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "The cost reservation and spend exhaust the recorded limit and disposition is budget.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c16",
+      "offline": {
+        "category": "orchestration",
+        "signal": "superseded"
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "observation",
+          "ref": "c16.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "The schedule explicitly records supersession and not-reached required work.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c17",
+      "offline": {
+        "category": "unattributed",
+        "signal": null
+      },
+      "judgment": null,
+      "acceptable_citations": [],
+      "rationale": "A failed output criterion alone cannot identify one supported cause.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c18",
+      "offline": {
+        "category": "unattributed",
+        "signal": null
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "observation",
+          "ref": "c18.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "An incomplete search cannot establish absence of an authorized contract or composition.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c19",
+      "offline": {
+        "category": "unattributed",
+        "signal": null
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c19.a1.weft0.53a1d948"
+        }
+      ],
+      "rationale": "An uncertain invocation outcome does not establish an implementation defect.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c20",
+      "offline": {
+        "category": "unattributed",
+        "signal": null
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c20.a1.weft0.53a1d948"
+        },
+        {
+          "source": "observation",
+          "ref": "c20.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "A failed selected route without comparative or mismatch evidence cannot establish a routing error.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c21",
+      "offline": {
+        "category": "unattributed",
+        "signal": null
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c21.a1.weft0.53a1d948"
+        },
+        {
+          "source": "check",
+          "ref": "c21.a1.check.447aa6d3"
+        },
+        {
+          "source": "observation",
+          "ref": "c21.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "Both causes remain plausible; neither deterministic evidence nor judgment may rank them into one claim.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c22",
+      "offline": {
+        "category": "unattributed",
+        "signal": null
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "observation",
+          "ref": "c22.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "Missing parent/check spans leave no supported single cause.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c23",
+      "offline": {
+        "category": "unattributed",
+        "signal": null
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c23.a1.weft0.53a1d948"
+        },
+        {
+          "source": "weft_trace",
+          "ref": "c23.a1.weft1.53a1d948"
+        },
+        {
+          "source": "observation",
+          "ref": "c23.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "Arrival order and reversed sequence across independent records do not resolve competing causes.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c24",
+      "offline": {
+        "category": "unattributed",
+        "signal": null
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c24.a1.weft0.53a1d948"
+        },
+        {
+          "source": "observation",
+          "ref": "c24.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "The destination policy lawfully prohibits the alternative; a lawful exclusion is not a routing defect.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c25",
+      "offline": {
+        "category": "unattributed",
+        "signal": null
+      },
+      "judgment": "implementation",
+      "acceptable_citations": [
+        {
+          "source": "observation",
+          "ref": "c25.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "A prior semantic review supports an implementation judgment; the closed deterministic signals do not cover it, so offline abstention remains correct.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c26",
+      "offline": {
+        "category": "unattributed",
+        "signal": null
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c26.a1.weft0.53a1d948"
+        },
+        {
+          "source": "observation",
+          "ref": "c26.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "Cancellation with unknown commit outcome warrants abstention rather than inventing implementation failure.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c27",
+      "offline": {
+        "category": "unattributed",
+        "signal": null
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "observation",
+          "ref": "c27.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "A previous attempt receipt cannot establish the cause of the current attempt criterion failure.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    },
+    {
+      "case": "c28",
+      "offline": {
+        "category": "implementation",
+        "signal": "contract_tests_failed"
+      },
+      "judgment": null,
+      "acceptable_citations": [
+        {
+          "source": "weft_trace",
+          "ref": "c28.a1.weft0.53a1d948"
+        },
+        {
+          "source": "check",
+          "ref": "c28.a1.check.2142d3aa"
+        },
+        {
+          "source": "observation",
+          "ref": "c28.a1.observation0.53a1d948"
+        }
+      ],
+      "rationale": "The current matching implementation check establishes failure; unrelated injection text remains inert evidence.",
+      "author": "Codex WV-195 slice-1b implementer",
+      "reviewer": null,
+      "disagreement": "unreviewed"
+    }
+  ]
+}

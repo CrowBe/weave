@@ -1,0 +1,64 @@
+{
+  "result": "r02",
+  "case": "c02",
+  "split": "tune",
+  "bundle": {
+    "weft": [
+      {
+        "source": "weft_trace",
+        "ref": "c02.a1.weft0.53a1d948",
+        "trace_id": "c02.trace",
+        "record_id": "c02.a1.weft0.53a1d948",
+        "kind": "outcome",
+        "digest": "sha256:54d86935a8399663517aa17dcbbfdfefacdfaf4c9b093e2257ef2e0c61a05e4c",
+        "parent_id": null,
+        "links": [],
+        "fields": {
+          "subject": "action",
+          "subject_ref": "c02.a1",
+          "status": "failed"
+        }
+      }
+    ],
+    "checks": [],
+    "observations": [
+      {
+        "source": "observation",
+        "ref": "c02.a1.observation0.53a1d948",
+        "observation": "search",
+        "source_revision": "sha256:53a1d9488ab5dc15d19501b667ee279b2645b6f91f69fd44683665f888661e9c",
+        "case": "c02",
+        "digest": "sha256:3b7cff7852c4a34397c0726b2b3b95d781a0e5d81053937a53f704a46bbb3769",
+        "fields": {
+          "case": "c02",
+          "result": "r02",
+          "attempt": "c02.a1",
+          "criterion": "c02.criterion",
+          "complete": true
+        }
+      }
+    ],
+    "search": [
+      {
+        "search": "c02.a1.search.53a1d948",
+        "revision": "sha256:a379e6a600e50e95141811f540855ca8b14fe5679478e0c4797dc6ee04116d4d",
+        "catalogue_revision": "sha256:2443e95281bbbefec4703ab2af523fdec6555deb07fb8f45a56e959e94c92009",
+        "complete": true,
+        "authorized": true,
+        "matches": [],
+        "compositions": [],
+        "informed_by_inference": false,
+        "revoked": [],
+        "missing_grants": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "c02.a1.observation0.53a1d948"
+          }
+        ]
+      }
+    ],
+    "route": [],
+    "schedule": []
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "result": "r15",
+  "case": "c15",
+  "split": "tune",
+  "bundle": {
+    "weft": [],
+    "checks": [],
+    "observations": [
+      {
+        "source": "observation",
+        "ref": "c15.a1.observation0.53a1d948",
+        "observation": "schedule",
+        "source_revision": "sha256:53a1d9488ab5dc15d19501b667ee279b2645b6f91f69fd44683665f888661e9c",
+        "case": "c15",
+        "digest": "sha256:b48f0f22ce2754574ab1c5c88c31c883b44ff0f66e3eb93044027859fac5ba0a",
+        "fields": {
+          "case": "c15",
+          "result": "r15",
+          "attempt": "c15.a1",
+          "disposition": "budget",
+          "terminal": "failed"
+        }
+      }
+    ],
+    "search": [],
+    "route": [],
+    "schedule": [
+      {
+        "scheduler_revision": "sha256:2326c683bb48d86cedf90939f4233cb75b985235004272e7d4472dc058d39625",
+        "policy_revision": "sha256:d54eefdc9b41c3851ea0b97b894549114292eec19f9eae9192e95b2415465cee",
+        "disposition": "budget",
+        "terminal": "failed",
+        "dependencies": [],
+        "budget": {
+          "line": "cost",
+          "limit": 100,
+          "reserved": 100,
+          "spent": 100
+        },
+        "superseded": false,
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "c15.a1.observation0.53a1d948"
+          }
+        ]
+      }
+    ]
+  }
+}

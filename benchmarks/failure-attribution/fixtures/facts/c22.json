@@ -1,0 +1,32 @@
+{
+  "result": "r22",
+  "case": "c22",
+  "split": "tune",
+  "bundle": {
+    "weft": [],
+    "checks": [],
+    "observations": [
+      {
+        "source": "observation",
+        "ref": "c22.a1.observation0.53a1d948",
+        "observation": "route",
+        "source_revision": "sha256:53a1d9488ab5dc15d19501b667ee279b2645b6f91f69fd44683665f888661e9c",
+        "case": "c22",
+        "digest": "sha256:f3b3b816d668cb8c57332e7a8d54233e896ecde57f2518295719c61354cdde5e",
+        "fields": {
+          "case": "c22",
+          "result": "r22",
+          "attempt": "c22.a1",
+          "missing_spans": [
+            "parent",
+            "check"
+          ],
+          "criterion_met": false
+        }
+      }
+    ],
+    "search": [],
+    "route": [],
+    "schedule": []
+  }
+}

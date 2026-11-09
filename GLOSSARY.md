@@ -1027,6 +1027,18 @@ thresholds. It supplies no runtime authority and cannot read holdout labels.
 The frozen portion reserved for reporting after thresholds are selected on the
 tune split. Scenarios cannot cross between those portions.
 
+### Independent evaluator-held digest
+
+A digest retained from the signed-off freeze outside the mutable manifest/anchor and supplied by the evaluator at run time.
+
+### Custodian
+
+The D-ENG-040-designated principal who signs off holdout artifact, manifest and anchor changes.
+
+### Sealed label
+
+An expected category/rationale retained outside the implementer-readable repo or encrypted under evaluator-held custody.
+
 ### Competitor harness
 
 A generic inference application, or a text-generation model prompted for strict

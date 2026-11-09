@@ -1,0 +1,13 @@
+{
+  "result": "r17",
+  "case": "c17",
+  "split": "tune",
+  "bundle": {
+    "weft": [],
+    "checks": [],
+    "observations": [],
+    "search": [],
+    "route": [],
+    "schedule": []
+  }
+}

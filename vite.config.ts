@@ -5,6 +5,15 @@ import { defineConfig } from 'vite-plus';
 export default defineConfig({
   lint: {
     ignorePatterns: ['dist/', 'node_modules/', 'benchmarks/**/*.py'],
+    overrides: [
+      {
+        files: ['benchmarks/failure-attribution/**/*.ts'],
+        rules: {
+          'eslint/no-eval': 'error',
+          'eslint/no-new-func': 'error',
+        },
+      },
+    ],
   },
   fmt: {
     singleQuote: true,

@@ -1,0 +1,294 @@
+{
+  "entries": [
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c01.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:c92dc4e8afb09742d83d0025bdef5bfae86e4c7f4f313efa336fd302c7855606"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c02.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:fa790efba980ba9902089dd6f26cd421e667343e8369c4e0edec6f343da02d81"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c03.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:0cfd4bc2e371e3b2b30ebfc784cc7a067e607ea71b7919cd65631260cbcf3537"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c04.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:aadbe0bc103d32f6c87238ca1abf1cd0e6ff43c10fa9e1d8c18d2a3913f95714"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c05.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:ac560f754673514a0f414a4a5fbbb7520fbffdd784b10de0c7bbc3f1df1b1689"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c06.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:262baa7af9061e478108201c28f5ea4d962f21f101b25b5251fc96db5d532645"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c07.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:17b76ba1d3135eba5172e975a92397bba6ca2163643be78fe51c6c46183708cc"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c08.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:96f86776a29ac4506ff7b5c9b2da92e10d21bb6dba63a6d014ae72e3d04db072"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c09.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:435a4af6a35579fb3a4b164918bfeca2fd9081c16f2b2ed7ce1477946c3f4204"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c10.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:32fcb4cc7c2c8ea5bfc63312941b0b0d436e9ea14c0be7032560375ddcc0d069"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c11.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:0eb7dd9e41c90370882e8b3f428548c16d9c5614166d973cf7f71f99ba8f2ea3"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c12.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:6ebd6eab748f55c428cb3c0025183f94858d2b5887f7524920f3bfede7a0d4c1"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c13.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:818c68ae8ae44535083def819ff1f2e56705f5d0b8d734c402c86352d0e244ee"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c14.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:900b4083e44c44eda422e81e0ced18bdea5a0f3fd04dc3f7095407ffc998eb94"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c15.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:89baacd0ca4df62ea85cf5c1c8994fd5c4e9d288685c687e837f0632ff57c621"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c16.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:3aae3d475de3678ad50582d8fd320f74b90f1722bac3bd037b970cf5a362d7b3"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c17.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:0fe4e2289203fd0fa3ca68824eb99bad73fcfb70ba5a003d089ff582d42ad70c"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c18.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:edc4cfb7ef2343b8c9d10d485e469707ee6c0f2d0ad32bb61585640eba2fadc6"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c19.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:41d99b6b4a94cc6e42aa87d1db4b28dab00050856d057f2f420c9e4fc8b2c523"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c20.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:e8d8134393796708c49fe0cfa9f677befd392438d03eb567230db694d48fd8c8"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c21.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:a132f910bdeb8995554cf0a8702ba8cb7b77e811f637d4cb4c77a1211bd3bd82"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c22.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:eae51c9767569d00b3120d8a20ff75a26bdade340699bffe14d7994e90f58a48"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c23.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:543cc553d1571794dfc929a08ed4a0748deefc546c2b18d108724dd2ca7f2cb9"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c24.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:2effe98e8407293ae119429256f8470603ef6e3cfaade5faf5de5c444480d9c5"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c25.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:bb6123e754f8d55c0d015c49deca540c057a6a6d6e5bbdce3d30f7fd9d3f48c0"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c26.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:c8f2c965067ed58c775517ac5a95b7ebdc8c8d6c66e466bd6939b4b6063c7784"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c27.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:7fadc45bc3940c8020102fe2e45f45705f7ad0a79d667cce0184612d2c42a271"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/facts/c28.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:a714ede74cf22958f3723942a3675afe4b8b014bdbda9a2fba49b7d83e8b8f61"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c01.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:473a24bbcb4faf0164f914ccee106208013fb4c354d94c9945406ef0ae5f3e4a"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c02.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:b8412ad5551694526f3906b5cce02e20b36da1c5ae044d180be21543cf4ed6b0"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c03.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:b392316237235baba66260a1268172783a991ea13b4923665b8b7b5e582fabf4"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c04.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:14521b7b51bdf028b48162a9bf2238ba039dff6f40901bf1f54224bcbf402da5"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c05.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:3e1d9f965a50a6a279ba8601f2bb33f54e8a3c0debce619bde17f26e1fca9002"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c06.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:598e3203433ba421c8e8f431a134c9926090ace67823559a3b4fb64656f85f78"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c07.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:25810e4608cd8e86ab29992a5ac4434ebb42ac1df7c29b52380fd5a562868d66"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c08.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:730cebdd6e9ad6007913d152d11b07234b58f9fe818d88363efbebbc3e05ffdb"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c09.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:3b70a6959248ee61488e1b6d7c8656cb43add289b483920ec756c51228448397"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c10.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:b57b2fa2014026b6a4c82a34bd3d9aa5b5468a0fdb376444d641ddf380a7d143"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c11.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:55a8afa5f82b75853ee1be9540873bdadf60f481da7183dc470dbe1ec7a82e76"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c12.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:a0b0884d2fb83d611d94e075c2dda3183a9f9bae3ee4893398b7e2f3b5944a01"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c13.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:c9a894d78321f9247512e0b948f65894587019e740395dd0a76463368cac589d"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c14.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:78734f5cd1a7fc8a24e0f154b7849c40392e5aa776568af126cee7a5f0082a14"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c15.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:8fffa6a6d5202e1e8388366fd7f80dd718902eb828ec211b28dfdb27efabe84f"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c16.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:ca6497237bcc965544bc7b576666682497cfedaab9b156278ff4958dfbd0305b"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c17.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:4d21aaef8cb5e743b56ad73347cbb6c62c74cb05ed9c4fc2a70c853515cad4a8"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c18.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:c455ba3b7114aadd945186c2a5beba73ce94e47f299fde422726f74c3f7e6177"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c19.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:21a52e0008bcff5abbac56e043ba7e37911d708dd9c268ad98897d2c6efd9795"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c20.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:9f9b0390744bc57e47e72af479aee6757352411161276ad7f7f5900778416398"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c21.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:afe49307e356f046c8c2e0e3759e9819364044025187090d23fd9e1a14f83696"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c22.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:4f4fadec95615dcde4b37bcd9b9001bad325488379607be936ff192dd84432f9"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c23.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:b3ca713a3612c8b8133ff7f6dcde703d23b3a83384f200bb181255f18ac0068a"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c24.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:54183fa43e1eb368f94a7f41645a47f15b12e306991638955f268de5379eb5a6"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c25.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:797f3106f220171f4090ac79d8374fe81626d32ae90139d3a9212c8dfe37a2b5"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c26.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:55b3bfca67ecd1afc0501d787e2c754772d43005fd4d1a20bac19714c357e814"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c27.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:4a51ff556b6a59d83374695221ab503f1e7f038db581afb3f9f9622feee382d0"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/receipts/c28.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:fe5d81b91f0502531a2d76987088b2b78d54c3503a4b826a09806c79abd8d10b"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/tune-labels.json",
+      "role": "tune",
+      "storedByteDigest": "sha256:578fe324da07b95bca72310d1d21941806abbb37c75e682dbc8e5b8b6558387e"
+    },
+    {
+      "path": "benchmarks/failure-attribution/fixtures/tune.jsonl",
+      "role": "tune",
+      "storedByteDigest": "sha256:3c8f4ebd813d3be3d47aabebcdad6286d097953ba7917439e5e55324d68d0a55"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "result": "r27",
+  "case": "c27",
+  "split": "tune",
+  "bundle": {
+    "weft": [],
+    "checks": [
+      {
+        "source": "check",
+        "ref": "c27.a0.check.29266ae9",
+        "case": "c27",
+        "contract_revision": "sha256:b0de9107c23dc394ff30e7f4a837049dc1c7bf09c58cb7c63e17b72666b4751c",
+        "implementation_revision": "sha256:72374af60cbe4774cf913637af30d781db10bf1e628f96446212754a9e474ed3",
+        "invocation": "c27.a0.invocation",
+        "check_revision": "sha256:29266ae98be09197c956d2cca0a4e0fd79b0df5953149338c2ced6fbf0dec7a5",
+        "attempt": "c27.a0",
+        "passed": false,
+        "exit_code": 1,
+        "digest": "sha256:a49b86343169103d2d1aa05e42d756f0b16fd76680376ed7f2c02f86cddf6805"
+      }
+    ],
+    "observations": [
+      {
+        "source": "observation",
+        "ref": "c27.a1.observation0.53a1d948",
+        "observation": "schedule",
+        "source_revision": "sha256:53a1d9488ab5dc15d19501b667ee279b2645b6f91f69fd44683665f888661e9c",
+        "case": "c27",
+        "digest": "sha256:87db34fdbb01cb68f245e668e605899e30490e7bcc6270b6b3a56db80de9e0ec",
+        "fields": {
+          "case": "c27",
+          "result": "r27",
+          "attempt": "c27.a1",
+          "criterion_met": false,
+          "current_check_missing": true
+        }
+      }
+    ],
+    "search": [],
+    "route": [],
+    "schedule": []
+  }
+}

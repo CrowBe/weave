@@ -1,0 +1,75 @@
+{
+  "schema": "gauge.raw-receipts@1",
+  "case": "c01",
+  "result": "r01",
+  "records": [
+    {
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "c01.trace",
+        "record_id": "c01.a1.weft0.53a1d948",
+        "emitter": {
+          "kind": "loom",
+          "id": "c01.loom"
+        },
+        "sequence": 1,
+        "kind": "outcome",
+        "thread_id": "c01.a1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "c01.a1.synthetic-origin"
+          }
+        ],
+        "fields": {
+          "subject": "action",
+          "subject_ref": "c01.a1",
+          "status": "failed"
+        }
+      },
+      "digest": "sha256:95536d95fc2306d5b4c43b7786c864aacd869693c3481475c94db9e16ca97ab2"
+    }
+  ],
+  "checks": [],
+  "observations": [
+    {
+      "source": "observation",
+      "ref": "c01.a1.observation0.53a1d948",
+      "observation": "search",
+      "source_revision": "sha256:53a1d9488ab5dc15d19501b667ee279b2645b6f91f69fd44683665f888661e9c",
+      "case": "c01",
+      "digest": "sha256:5d48e08281cb7a559738c3e56fdc3690acaccfbe4e59c29492b1db5be342b86c",
+      "fields": {
+        "case": "c01",
+        "result": "r01",
+        "attempt": "c01.a1",
+        "criterion": "c01.criterion",
+        "complete": true
+      }
+    }
+  ],
+  "search": [
+    {
+      "search": "c01.a1.search.53a1d948",
+      "revision": "sha256:deb441194be4bd47415127a793ab366a5869af853427db4a004d19edd3b64587",
+      "catalogue_revision": "sha256:afd4e5911697bb6f6b1b136b28f86221e97b8b822deaa30266e054fa4b4bcc30",
+      "complete": true,
+      "authorized": true,
+      "matches": [],
+      "compositions": [],
+      "informed_by_inference": false,
+      "revoked": [],
+      "missing_grants": [],
+      "evidence": [
+        {
+          "source": "observation",
+          "ref": "c01.a1.observation0.53a1d948"
+        }
+      ]
+    }
+  ],
+  "route": [],
+  "schedule": []
+}

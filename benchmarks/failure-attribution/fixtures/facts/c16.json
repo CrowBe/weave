@@ -1,0 +1,45 @@
+{
+  "result": "r16",
+  "case": "c16",
+  "split": "tune",
+  "bundle": {
+    "weft": [],
+    "checks": [],
+    "observations": [
+      {
+        "source": "observation",
+        "ref": "c16.a1.observation0.53a1d948",
+        "observation": "schedule",
+        "source_revision": "sha256:53a1d9488ab5dc15d19501b667ee279b2645b6f91f69fd44683665f888661e9c",
+        "case": "c16",
+        "digest": "sha256:a69301b9c8ec3a0097ddb82369ab8149167c9c127c6056bfcf58d731705be8c8",
+        "fields": {
+          "case": "c16",
+          "result": "r16",
+          "attempt": "c16.a1",
+          "disposition": "not_reached",
+          "terminal": "failed"
+        }
+      }
+    ],
+    "search": [],
+    "route": [],
+    "schedule": [
+      {
+        "scheduler_revision": "sha256:e93df02f03e10c6b673559d34f62a70538d266b8244272a7df4779a61c3c535f",
+        "policy_revision": "sha256:9dedb022c519b4e76baa5cf4964ac527165c5cb5a397a6c9a65c97df7adfbefd",
+        "disposition": "not_reached",
+        "terminal": "failed",
+        "dependencies": [],
+        "budget": null,
+        "superseded": true,
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "c16.a1.observation0.53a1d948"
+          }
+        ]
+      }
+    ]
+  }
+}
