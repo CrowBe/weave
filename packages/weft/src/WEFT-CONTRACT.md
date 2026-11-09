@@ -173,7 +173,7 @@ The answer a judgment site received. It is an observation, not authority.
 
 ### `dispatch.decided`
 
-One dispatch decision as Loom recorded it (`dispatch.decision@1`), including
+One dispatch decision as Loom recorded it (currently `dispatch.decision@6`), including
 those no site answered: an extract-decided ask, a rule's ask, a pause before
 any ask. It reports the decision; it is not authority to dispatch, and no
 dispatch, grant or approval may be derived from it.

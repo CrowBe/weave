@@ -387,8 +387,12 @@ export {
   dispatchDecided,
   resolveThreadTarget,
   transitionDispatch,
+  verifyChild,
+  type ChildEvidence,
   type DispatchCheckpoint,
+  type DispatchChild,
   type DispatchDecision,
+  type DispatchDependency,
   type DispatchIntent,
   type DispatchJournal,
   type DispatchPort,
@@ -398,9 +402,11 @@ export {
   type DispatchRequest,
   type DispatchSettlementPort,
   type DispatchChoice,
+  type ReadResult,
   type SpawnIntent,
   type SpawnPort,
   type ThreadTarget,
+  type VerifiedChild,
 } from './dispatch.js';
 
 export {
