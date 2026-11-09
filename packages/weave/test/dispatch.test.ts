@@ -1004,6 +1004,7 @@ test('16. records keep their exact key order and carry no authority or copied te
     'reason',
     'rule_table',
     'decide1',
+    'child',
     'intent',
     'receipt',
     'intake',
@@ -1028,6 +1029,9 @@ test('16. records keep their exact key order and carry no authority or copied te
     'preflight',
     'preflight_budget',
     'spawn_port',
+    'preflight_terms',
+    'child_terms',
+    'child',
     'intent',
   ]);
   assert.deepEqual(Object.keys(checkpoint.asks), ['intake', 'triage', 'route', 'shadow', 'preflight']);
@@ -1722,7 +1726,7 @@ test('28. a claimed intent survives a terminal stale pause and append surfaces f
   const request = makeRequest();
   assert.equal(journal.claim('d1', claimed), true);
   const orphan: DispatchDecision = {
-    schema: 'dispatch.decision@5',
+    schema: 'dispatch.decision@6',
     rule_table: DECIDE1_RULE_TABLE,
     decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: 'd1',
@@ -1732,6 +1736,7 @@ test('28. a claimed intent survives a terminal stale pause and append surfaces f
     choice: 'ask_user',
     status: 'paused',
     reason: 'stale_answer',
+    child: null,
     intent: null,
     receipt: null,
     intake: null,
@@ -1930,7 +1935,7 @@ test('31. property: every recorded checkpoint replays to the live decision on th
 test('32. the journal is a single-writer state machine per decision id', () => {
   const intent: DispatchIntent = { kind: 'capability', dispatch_id: 'd1:dispatch' };
   const decision = (patch: Partial<DispatchDecision>): DispatchDecision => ({
-    schema: 'dispatch.decision@5',
+    schema: 'dispatch.decision@6',
     rule_table: DECIDE1_RULE_TABLE,
     decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: 'd1',
@@ -1940,6 +1945,7 @@ test('32. the journal is a single-writer state machine per decision id', () => {
     choice: 'capability',
     status: 'paused',
     reason: 'decision_unavailable',
+    child: null,
     intent: null,
     receipt: null,
     intake: null,
@@ -1962,7 +1968,7 @@ test('32. the journal is a single-writer state machine per decision id', () => {
   assert.equal(terminal.claim('d1', intent), false);
   assert.equal(terminal.append(decision({ entry: 2, status: 'needs_human', reason: 'low_confidence' })), false);
   terminal.checkpoint({
-    schema: 'dispatch.checkpoint@4',
+    schema: 'dispatch.checkpoint@5',
     decision_id: 'd1',
     ...REVISION,
     asks: { intake: 9, triage: 0, route: 0, shadow: 0, preflight: 0 },
@@ -1973,6 +1979,9 @@ test('32. the journal is a single-writer state machine per decision id', () => {
     preflight: null,
     preflight_budget: null,
     spawn_port: false,
+    preflight_terms: null,
+    child_terms: null,
+    child: null,
     intent: null,
   });
   assert.equal(terminal.load('d1').checkpoint, null);
@@ -2137,7 +2146,7 @@ test('34. a crashed attempt ends only on the port settlement, never by time, wit
   // The journal contract: one live attempt per claimed intent, single-use ids, no expiry.
   const intent: DispatchIntent = { kind: 'capability', dispatch_id: 'd1:dispatch' };
   const owned = (status: DispatchDecision['status'], reason: DispatchDecision['reason']): DispatchDecision => ({
-    schema: 'dispatch.decision@5',
+    schema: 'dispatch.decision@6',
     rule_table: DECIDE1_RULE_TABLE,
     decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: 'd1',
@@ -2147,6 +2156,7 @@ test('34. a crashed attempt ends only on the port settlement, never by time, wit
     choice: 'capability',
     status,
     reason,
+    child: null,
     intent,
     receipt: null,
     intake: null,
@@ -2654,6 +2664,15 @@ const FACT_NAMES = [
   'spawn.children',
   'spawn.plan',
   'spawn.port',
+  // P5c1: entry and child read facts, before P4b's five shadow facts.
+  'entry.kind',
+  'child.kind',
+  'child.parent',
+  'child.plan',
+  'child.dependencies',
+  'child.read_bytes',
+  'child.share',
+  'child.boundary',
   'residual_ambiguity',
   'clarify.reason',
   'multi_deliverable.reason',
@@ -2661,7 +2680,7 @@ const FACT_NAMES = [
   'veto_bare_gen.reason',
 ];
 /** P4a's 14 facts plus P4b's five shadow facts, selected by name. */
-const P4B_FACT_NAMES = new Set([...FACT_NAMES.slice(0, 14), ...FACT_NAMES.slice(29)]);
+const P4B_FACT_NAMES = new Set([...FACT_NAMES.slice(0, 14), ...FACT_NAMES.slice(37)]);
 const PARITY: readonly [Plan, string, string][] = [
   [{}, 'gen.route', 'escalate_gen'],
   [{ triage: { choice: 'capability' } }, 'act.capability', 'tool_call'],
@@ -2766,7 +2785,7 @@ test('P4a-8 @3 stores exactly the pure trace, fixed facts and bounded judgments 
   const h = harness();
   const decision = await run(h);
   const checkpoint = h.journal.load('d1').checkpoint!;
-  assert.equal(decision.schema, 'dispatch.decision@5');
+  assert.equal(decision.schema, 'dispatch.decision@6');
   assert.equal(decision.rule_table, DECIDE1_RULE_TABLE);
   const { table, ...trace } = decideBand(decide1Inputs(h.request, checkpoint));
   assert.equal(table, decision.rule_table);
@@ -3147,7 +3166,7 @@ function p4aProjection(decision: DispatchDecision) {
 }
 
 function shadowReasons(decision: DispatchDecision) {
-  return decision.decide1.facts.slice(30, 34).map((fact) => fact.value);
+  return decision.decide1.facts.slice(38, 42).map((fact) => fact.value);
 }
 
 test('P4b-7/10. shadow modes preserve outcomes for every stage shape and receipt', async () => {
@@ -3170,7 +3189,7 @@ test('P4b-7/10. shadow modes preserve outcomes for every stage shape and receipt
       const h = harness({ ...scenario, shadow });
       const result = await run(h);
       assert.deepEqual(p4aProjection(result), p4aProjection(baseline));
-      assert.equal(result.decide1.facts.length, 34);
+      assert.equal(result.decide1.facts.length, 42);
       const eligible = [
         'act.capability',
         'act.done_check',
@@ -3497,12 +3516,12 @@ test('P4b-13. residual ambiguity is the final D1 extract count, with fixed fact 
   ] as const) {
     const h = harness(plan);
     const live = await run(h);
-    assert.equal(live.decide1.facts.length, 34);
+    assert.equal(live.decide1.facts.length, 42);
     assert.deepEqual(
-      live.decide1.facts.slice(29, 34).map((f) => f.name),
+      live.decide1.facts.slice(37, 42).map((f) => f.name),
       ['residual_ambiguity', ...SHADOW_NAMES.map((j) => `${j}.reason`)],
     );
-    assert.equal(live.decide1.facts[29]?.value, residual);
+    assert.equal(live.decide1.facts[37]?.value, residual);
     assert.deepEqual(transitionDispatch(h.request, h.journal.load('d1').checkpoint!, live.receipt, live.entry), live);
   }
 });
@@ -3511,10 +3530,10 @@ test('P4b-14. schemas, Weft shadow evidence and text exclusion', async () => {
   const sink = collector();
   const h = harness({}, { weft: sink.port });
   const live = await run(h);
-  assert.equal(live.schema, 'dispatch.decision@5');
-  assert.equal(h.journal.load('d1').checkpoint?.schema, 'dispatch.checkpoint@4');
+  assert.equal(live.schema, 'dispatch.decision@6');
+  assert.equal(h.journal.load('d1').checkpoint?.schema, 'dispatch.checkpoint@5');
   const decided = sink.records.find((r) => r.kind === 'dispatch.decided')!;
-  assert.equal(decided.fields.facts && (decided.fields.facts as unknown[]).length, 34);
+  assert.equal(decided.fields.facts && (decided.fields.facts as unknown[]).length, 42);
   assert.ok((decided.fields.judgments as unknown[]).length <= 14);
   for (const record of sink.records) assert.equal(validateRecord(record).ok, true);
   for (const j of SHADOW_NAMES) {
@@ -4067,7 +4086,7 @@ test('P5a-fix1 every untrusted preflight input fails to null facts without movin
       const expected = decideBand(baseline);
       assert.deepEqual([actual.band, actual.rule], [expected.band, expected.rule]);
       // P5b: pure replay screens targets like live ingress (D-P5b-10), and a non-natural
-      // journaled budget is a malformed dispatch.checkpoint@4.
+      // journaled budget is a malformed dispatch.checkpoint@5.
       if (name.startsWith('budget')) assert.throws(() => transitionDispatch(request, cp, null), /preflight_budget/);
       else if (name.startsWith('target') || name.startsWith('duplicate'))
         assert.throws(() => transitionDispatch(request, cp, null), /Invalid dispatch targets/);
@@ -4160,7 +4179,7 @@ test('P5a-10 parity for every P4b stage shape without targets or with an empty s
     const absent = harness(scenario);
     const empty = harness(scenario, { request: roleRequest({ targets: [] }) });
     const [a, b] = await Promise.all([run(absent), run(empty)]);
-    assert.equal(a.decide1.facts.length, 34);
+    assert.equal(a.decide1.facts.length, 42);
     assert.deepEqual(p4bProjection(a), p4bProjection(b));
     assert.deepEqual(
       a.decide1.facts.slice(14, 29).map((f) => f.value),
@@ -4483,8 +4502,8 @@ test('P5a-16 versioned records, 32 facts, bounded judgments, Weft evidence, disc
   const h = harness({}, { request, weft: sink.port });
   const d = await run(h);
   const cp = h.journal.load('d1').checkpoint!;
-  assert.equal(d.schema, 'dispatch.decision@5');
-  assert.equal(cp.schema, 'dispatch.checkpoint@4');
+  assert.equal(d.schema, 'dispatch.decision@6');
+  assert.equal(cp.schema, 'dispatch.checkpoint@5');
   assert.deepEqual(Object.keys(cp), [
     'schema',
     'decision_id',
@@ -4498,6 +4517,9 @@ test('P5a-16 versioned records, 32 facts, bounded judgments, Weft evidence, disc
     'preflight',
     'preflight_budget',
     'spawn_port',
+    'preflight_terms',
+    'child_terms',
+    'child',
     'intent',
   ]);
   assert.deepEqual(Object.keys(cp.asks), ['intake', 'triage', 'route', 'shadow', 'preflight']);
@@ -4512,6 +4534,7 @@ test('P5a-16 versioned records, 32 facts, bounded judgments, Weft evidence, disc
     'reason',
     'rule_table',
     'decide1',
+    'child',
     'intent',
     'receipt',
     'intake',
@@ -4521,7 +4544,7 @@ test('P5a-16 versioned records, 32 facts, bounded judgments, Weft evidence, disc
     'preflight',
   ]);
   const decided = sink.records.find((r) => r.kind === 'dispatch.decided')!;
-  assert.equal((decided.fields.facts as any[]).length, 34);
+  assert.equal((decided.fields.facts as any[]).length, 42);
   assert.ok((decided.fields.judgments as any[]).length <= 30);
   assert.ok(decided.evidence.some((e) => e.source === 'inference_request' && e.ref === 'd1:roles'));
   assert.ok(decided.links.every((l) => !l.record_id.includes(':roles')));
@@ -5288,7 +5311,15 @@ test('P5b-12 tampered storage after claim throws before any effect; before claim
     ['intent targets', (cp) => void cp.intent.targets.reverse()],
     ['role record', (cp) => void (cp.preflight.targets[0].role = 'read')],
     ['role confidence', (cp) => void (cp.preflight.targets[0].confidence = 0.5)],
+    // P5c1 binds the budget to preflight_terms, so a lone drift throws on that binding first.
     ['preflight_budget', (cp) => void (cp.preflight_budget = 11)],
+    [
+      'preflight_budget with its terms',
+      (cp) => {
+        cp.preflight_budget = 11;
+        cp.preflight_terms.cost_ceiling = 11;
+      },
+    ],
     ['spawn_port', (cp) => void (cp.spawn_port = false)],
     ['message', () => {}, roleRequest({ intake: { message: 'other', running_threads: threads } })],
     ['target refs', () => {}, roleRequest({ targets: ROLE_TARGETS.map((t, i) => ({ ...t, ref: `other${i}` })) })],
@@ -5307,7 +5338,9 @@ test('P5b-12 tampered storage after claim throws before any effect; before claim
       const h = harness({}, { request: { ...(request ?? roleRequest()), resume }, ...options });
       await assert.rejects(
         run(h),
-        /recorded intent does not match the recorded stages|is not the live outcome of its recorded observations/,
+        name === 'preflight_budget'
+          ? /preflight_budget differs from its preflight_terms/
+          : /recorded intent does not match the recorded stages|is not the live outcome of its recorded observations/,
         name,
       );
       const decisions = storage.load('d1').decisions.length;
@@ -5470,14 +5503,14 @@ test('P5b-fix1 before claim a top_p that cannot be maximal over four roles is un
     }
 });
 
-test('P5b-13dispatch.checkpoint@4 and dispatch.decision@5 records; foreign versions are refused', async () => {
+test('P5b-13 dispatch.checkpoint@5 and dispatch.decision@6 records; foreign versions are refused', async () => {
   const ledger = spawnLedger();
   const h = harness({}, { request: roleRequest(), spawn: ledger.port });
   const d = await run(h);
   const cp = h.journal.load('d1').checkpoint!;
   assert.deepEqual(
     [cp.schema, d.schema, d.rule_table],
-    ['dispatch.checkpoint@4', 'dispatch.decision@5', 'decide1.rules@2'],
+    ['dispatch.checkpoint@5', 'dispatch.decision@6', 'decide1.rules@3'],
   );
   assert.deepEqual(Object.keys(cp), [
     'schema',
@@ -5492,6 +5525,9 @@ test('P5b-13dispatch.checkpoint@4 and dispatch.decision@5 records; foreign versi
     'preflight',
     'preflight_budget',
     'spawn_port',
+    'preflight_terms',
+    'child_terms',
+    'child',
     'intent',
   ]);
   assert.deepEqual(Object.keys(d), [
@@ -5505,6 +5541,7 @@ test('P5b-13dispatch.checkpoint@4 and dispatch.decision@5 records; foreign versi
     'reason',
     'rule_table',
     'decide1',
+    'child',
     'intent',
     'receipt',
     'intake',
@@ -5518,6 +5555,7 @@ test('P5b-13dispatch.checkpoint@4 and dispatch.decision@5 records; foreign versi
   assert.deepEqual(transitionDispatch(h.request, cp, d.receipt, d.entry), d);
   for (const [patch, error] of [
     [{ schema: 'dispatch.checkpoint@3' }, /schema/],
+    [{ schema: 'dispatch.checkpoint@4' }, /schema/],
     [{ spawn_port: 'yes' }, /spawn_port/],
     [{ spawn_port: undefined }, /spawn_port/],
     [{ preflight_budget: 2.5 }, /preflight_budget/],
@@ -5532,7 +5570,9 @@ test('P5b-13dispatch.checkpoint@4 and dispatch.decision@5 records; foreign versi
   }
   for (const [patch, error] of [
     [{ schema: 'dispatch.decision@4' }, /schema/],
+    [{ schema: 'dispatch.decision@5' }, /schema/],
     [{ rule_table: 'decide1.rules@1' }, /rule table/],
+    [{ rule_table: 'decide1.rules@2' }, /rule table/],
   ] as const) {
     const journal: DispatchJournal = {
       ...delegate(h.journal),
@@ -5574,7 +5614,7 @@ test('P5b-14 a spawn dispatch.decided is a valid Weft record with no tier and ro
       ['d1', 'rule', 'spawn', status, 'd1:dispatch', 'spawn.preflight', 'spawn_subtasks'],
     );
     assert.ok(!Object.hasOwn(fields, 'tier'));
-    assert.equal(fields['facts'].length, 34);
+    assert.equal(fields['facts'].length, 42);
     assert.ok(fields['judgments'].length <= 30);
     const judgments = sink.records.filter((r) => r.kind === 'judgment');
     assert.deepEqual(

@@ -7,7 +7,14 @@
  * `judgment` kind for every fresh site observation, followed by `dispatch.decided`
  * carrying the versioned Decide-1 trace for each decision it appended.
  */
-import type { EvaluationOutcome, GenerationOutcome, InferenceGateway, InferenceTerms } from '@weave/gateway';
+import {
+  QUALITY_BARS,
+  qualityClears,
+  type EvaluationOutcome,
+  type GenerationOutcome,
+  type InferenceGateway,
+  type InferenceTerms,
+} from '@weave/gateway';
 import {
   INTAKE_EXTRACT_SITE,
   decideIntake,
@@ -55,7 +62,7 @@ import {
   type ShadowObservation,
 } from './sites/decide1-shadow.js';
 import { digest } from './digest.js';
-import { TARGET_ROLES, preflightPlan, type SpawnPlan } from './spawn.js';
+import { TARGET_ROLES, preflightPlan, validatePlan, type ChildBrief, type SpawnPlan } from './spawn.js';
 import {
   askRoles,
   maximalTopP,
@@ -77,6 +84,48 @@ export interface DispatchRequest extends SiteState {
   readonly resume?: boolean;
   /** Closed, already disclosed candidate set. Summaries are never recorded. */
   readonly targets?: readonly { readonly ref: string; readonly summary: string }[];
+  /**
+   * P5c1 re-entry: one exact sealed brief of a journaled root spawn. Then `request_id` is its
+   * `child_ref`, `intake.message` is the only goal input, and threads, contexts and targets are empty.
+   */
+  readonly child?: { readonly brief: ChildBrief };
+}
+
+/** One sealed `depends_on` edge as the journal held it when the join froze; nulls where absent. */
+export interface DispatchDependency {
+  readonly decision_ref: string;
+  readonly entry: number | null;
+  readonly decision_digest: string | null;
+  readonly dispatch_ref: string | null;
+  readonly receipt: DispatchReceipt | null;
+}
+
+/** `dispatch.child@1`: the verified lineage, terms binding and joined evidence of one child decision. */
+export interface DispatchChild {
+  readonly schema: 'dispatch.child@1';
+  readonly parent_ref: string;
+  readonly parent_entry: number;
+  readonly plan_digest: string;
+  readonly brief: ChildBrief;
+  readonly terms_digest: string;
+  /** Reads: `[]`. A generator: null until its join is satisfied or terminally unmet. */
+  readonly dependencies: readonly DispatchDependency[] | null;
+  readonly dependencies_digest: string | null;
+}
+
+/** Explicit historical evidence for a child: its root parent's journal and each frozen read snapshot. */
+export interface ChildEvidence {
+  readonly parent: { readonly checkpoint: DispatchCheckpoint | null; readonly decisions: readonly DispatchDecision[] };
+  /** In sealed `depends_on` order, the decision each frozen edge names; null for a null edge. */
+  readonly reads: readonly (DispatchDecision | null)[];
+}
+
+/** A completed, immutable read: `revision` is opaque, `digest` hashes the bytes, `bytes` is port-measured. */
+export interface ReadResult {
+  readonly target_ref: string;
+  readonly revision: string;
+  readonly digest: string;
+  readonly bytes: number;
 }
 
 export type DispatchIntent =
@@ -86,6 +135,21 @@ export type DispatchIntent =
       readonly tier: ImplementTier;
       readonly ceiling: ImplementTier;
       readonly tier_source: 'route' | 'route_fallback' | 'triage_fallback';
+    }
+  | {
+      readonly kind: 'implement';
+      readonly dispatch_id: string;
+      readonly tier: ImplementTier;
+      readonly ceiling: ImplementTier;
+      readonly tier_source: 'child_route' | 'child_route_fallback';
+      /** Equal to the claimed `checkpoint.child`: the adapter resolves only its joined reads. */
+      readonly child: DispatchChild;
+    }
+  | {
+      readonly kind: 'read';
+      readonly dispatch_id: string;
+      readonly target_ref: string;
+      readonly child: DispatchChild;
     }
   | { readonly kind: 'capability'; readonly dispatch_id: string }
   | { readonly kind: 'done_check'; readonly dispatch_id: string }
@@ -107,10 +171,12 @@ export type DispatchIntent =
       readonly roles_digest: string;
     };
 export type SpawnIntent = Extract<DispatchIntent, { readonly kind: 'spawn' }>;
-export type DispatchChoice = SiteChoice | 'spawn';
+export type DispatchChoice = SiteChoice | 'spawn' | 'read';
 
 export type DispatchReceipt =
   | { readonly status: 'dispatched'; readonly dispatch_id: string; readonly ref: string }
+  /** The only confirmation of a read intent; queue admission is not completion. */
+  | { readonly status: 'dispatched'; readonly dispatch_id: string; readonly ref: string; readonly read: ReadResult }
   | {
       readonly status: 'refused';
       readonly dispatch_id: string;
@@ -125,10 +191,13 @@ export type DispatchReason =
   | 'approval_required'
   | 'budget'
   | 'refused'
-  | 'dispatch_unconfirmed';
+  | 'dispatch_unconfirmed'
+  /** Transient: never journaled or emitted. */
+  | 'dependency_pending'
+  | 'unmet_dependency';
 
 export interface DispatchCheckpoint {
-  readonly schema: 'dispatch.checkpoint@4';
+  readonly schema: 'dispatch.checkpoint@5';
   readonly decision_id: string;
   readonly state_revision: number;
   readonly state_updated_at: number;
@@ -148,11 +217,16 @@ export interface DispatchCheckpoint {
   readonly preflight_budget: number | null;
   /** Whether this call's composition injected `ports.spawn`; frozen by claim. */
   readonly spawn_port: boolean;
+  /** A root's detached request terms, fixed with `asks.preflight = 1`; null otherwise. */
+  readonly preflight_terms: InferenceTerms | null;
+  /** A child's admitted narrowed terms; frozen by its claim. Null on a root. */
+  readonly child_terms: InferenceTerms | null;
+  readonly child: DispatchChild | null;
   readonly intent: DispatchIntent | null;
 }
 
 export interface DispatchDecision {
-  readonly schema: 'dispatch.decision@5';
+  readonly schema: 'dispatch.decision@6';
   readonly decision_id: string;
   readonly entry: number;
   readonly state_revision: number;
@@ -162,6 +236,7 @@ export interface DispatchDecision {
   readonly reason: DispatchReason;
   readonly rule_table: typeof DECIDE1_RULE_TABLE;
   readonly decide1: Omit<Decide1Trace, 'table'>;
+  readonly child: DispatchChild | null;
   readonly intent: DispatchIntent | null;
   readonly receipt: DispatchReceipt | null;
   readonly intake: IntakeDecision | null;
@@ -262,7 +337,7 @@ type Plan = { readonly trace: Decide1Trace } & (
   | {
       readonly kind: 'final';
       readonly decided_by: Decider;
-      readonly choice: SiteChoice;
+      readonly choice: DispatchChoice;
       readonly status: 'needs_human' | 'paused' | 'refused';
       readonly reason: DispatchReason;
     }
@@ -393,9 +468,13 @@ export function resolveThreadTarget(
   return { ok: false, reason: 'ambiguous_reference' };
 }
 
-function initialCheckpoint(request: DispatchRequest, ports: DispatchPorts): DispatchCheckpoint {
+function initialCheckpoint(
+  request: DispatchRequest,
+  ports: DispatchPorts,
+  child: DispatchChild | null = null,
+): DispatchCheckpoint {
   return {
-    schema: 'dispatch.checkpoint@4',
+    schema: 'dispatch.checkpoint@5',
     decision_id: request.request_id,
     state_revision: request.state_revision,
     state_updated_at: request.state_updated_at,
@@ -407,45 +486,47 @@ function initialCheckpoint(request: DispatchRequest, ports: DispatchPorts): Disp
     preflight: null,
     preflight_budget: null,
     spawn_port: ports.spawn !== undefined,
+    preflight_terms: null,
+    child_terms: child === null ? null : detachTerms(request.terms),
+    child,
     intent: null,
   };
 }
 
-function makeCheckpoint(
-  decision_id: string,
-  state_revision: number,
-  state_updated_at: number,
-  asks: DispatchCheckpoint['asks'],
-  intake: IntakeDecision | null,
-  triage: LoopDecision | null,
-  route: LoopDecision | null,
-  shadow: readonly ShadowObservation[] | null,
-  preflight: RoleObservation | null,
-  preflight_budget: number | null,
-  spawn_port: boolean,
-  intent: DispatchIntent | null,
-): DispatchCheckpoint {
+/** The checkpoint with `patch` applied, rebuilt in the closed key order. */
+function makeCheckpoint(checkpoint: DispatchCheckpoint, patch: Partial<DispatchCheckpoint> = {}): DispatchCheckpoint {
+  const next = { ...checkpoint, ...patch };
   return {
-    schema: 'dispatch.checkpoint@4',
-    decision_id,
-    state_revision,
-    state_updated_at,
+    schema: 'dispatch.checkpoint@5',
+    decision_id: next.decision_id,
+    state_revision: next.state_revision,
+    state_updated_at: next.state_updated_at,
     asks: {
-      intake: asks.intake,
-      triage: asks.triage,
-      route: asks.route,
-      shadow: asks.shadow,
-      preflight: asks.preflight,
+      intake: next.asks.intake,
+      triage: next.asks.triage,
+      route: next.asks.route,
+      shadow: next.asks.shadow,
+      preflight: next.asks.preflight,
     },
-    intake,
-    triage,
-    route,
-    shadow,
-    preflight,
-    preflight_budget,
-    spawn_port,
-    intent,
+    intake: next.intake,
+    triage: next.triage,
+    route: next.route,
+    shadow: next.shadow,
+    preflight: next.preflight,
+    preflight_budget: next.preflight_budget,
+    spawn_port: next.spawn_port,
+    preflight_terms: next.preflight_terms,
+    child_terms: next.child_terms,
+    child: next.child,
+    intent: next.intent,
   };
+}
+
+/** A detached copy without undefined-valued keys, so it survives any JSON journal unchanged. */
+function detachTerms(terms: InferenceTerms): InferenceTerms {
+  return Object.fromEntries(
+    Object.entries(clone(terms)).filter(([, value]) => value !== undefined),
+  ) as unknown as InferenceTerms;
 }
 
 function makeDecision(
@@ -459,7 +540,7 @@ function makeDecision(
   reason: DispatchReason,
 ): DispatchDecision {
   return {
-    schema: 'dispatch.decision@5',
+    schema: 'dispatch.decision@6',
     decision_id: checkpoint.decision_id,
     entry,
     state_revision: checkpoint.state_revision,
@@ -469,6 +550,7 @@ function makeDecision(
     reason,
     rule_table: plan.trace.table,
     decide1: traceFields(plan.trace),
+    child: checkpoint.child,
     intent,
     receipt,
     intake: checkpoint.intake,
@@ -492,7 +574,7 @@ function traceFields({ judgments, facts, rule, band }: Decide1Trace): DispatchDe
 function final(
   trace: Decide1Trace,
   decided_by: Decider,
-  choice: SiteChoice,
+  choice: DispatchChoice,
   status: 'needs_human' | 'paused',
   reason: DispatchReason,
 ): Plan {
@@ -733,7 +815,7 @@ function replayLoop(request: DispatchRequest, checkpoint: DispatchCheckpoint, st
   const site: LoopDecisionSite = stage === 'triage' ? 'loop.triage' : 'loop.route';
   const recorded: unknown = checkpoint[stage];
   if (!isRecord(recorded) || !Array.isArray(recorded['extracts']) || !isRecord(recorded['site'])) throw notLive(stage);
-  const ask = loopAsk(askedRequest(request, checkpoint), stage, stageAsk(checkpoint, stage));
+  const ask = loopAsk(askedRequest(request, checkpoint), stage, stageAsk(checkpoint, stage), checkpoint.child);
   const current = checkpointState(checkpoint);
   const extracts = recorded['extracts'] as ExtractObservation[];
   const schema = modelExtractSchema(site, ask.state);
@@ -1020,6 +1102,18 @@ export function decide1Inputs(request: DispatchRequest, checkpoint: DispatchChec
     { name: 'spawn.plan', value: spawn?.plan?.digest ?? null },
     { name: 'spawn.port', value: checkpoint.spawn_port },
   );
+  // P5c1: entry and child facts are read inputs; a boundary is set only at its gate (`childBoundaryTrace`).
+  const child = checkpoint.child ?? null;
+  facts.push(
+    { name: 'entry.kind', value: child === null ? 'root' : 'child' },
+    { name: 'child.kind', value: child?.brief.kind ?? null },
+    { name: 'child.parent', value: child?.parent_ref ?? null },
+    { name: 'child.plan', value: child?.plan_digest ?? null },
+    { name: 'child.dependencies', value: child === null ? null : witnessJoin(child) },
+    { name: 'child.read_bytes', value: child === null ? null : readBytes(child) },
+    { name: 'child.share', value: child?.brief.share ?? null },
+    { name: 'child.boundary', value: null },
+  );
   return { judgments, facts, shadow: { judgments: shadowJudgments, facts: shadowFacts } };
 }
 
@@ -1087,8 +1181,58 @@ function planFor(trace: Decide1Trace, checkpoint: DispatchCheckpoint, request: D
             ? reason(stage) === 'decision_unavailable'
             : facts.get(`${stage}.status`) === 'paused',
       );
-      if (stage === undefined) throw new Error('decide1: no withheld stage');
-      return final(trace, checkpoint.intake === null ? 'rule' : stage, choice(stage), 'paused', reason(stage));
+      if (stage === undefined) {
+        // A child boundary is a gate code fact over the child's real stages, never a projected stage.
+        const boundary = facts.get('child.boundary');
+        if (
+          checkpoint.child === null ||
+          !(
+            (trace.rule === 'hold.admission' && boundary === 'stale_answer') ||
+            (trace.rule === 'hold.paused' && boundary === 'cancelled')
+          )
+        )
+          throw new Error('decide1: no withheld stage');
+        const decider = childDecider(checkpoint);
+        return final(trace, decider.decided_by, decider.choice, 'paused', boundary as DispatchReason);
+      }
+      const decided_by = checkpoint.child !== null ? 'route' : checkpoint.intake === null ? 'rule' : stage;
+      return final(trace, decided_by, choice(stage), 'paused', reason(stage));
+    }
+    case 'hold.dependency_pending':
+    case 'hold.unmet_dependency': {
+      const tier = checkpoint.child?.brief.tier;
+      if (tier == null) throw new Error('decide1: a dependency gate needs a generate child');
+      const pending = trace.rule === 'hold.dependency_pending';
+      return final(trace, 'rule', tier, 'paused', pending ? 'dependency_pending' : 'unmet_dependency');
+    }
+    case 'act.read': {
+      const child = checkpoint.child;
+      if (child === null || child.brief.kind !== 'read' || child.brief.target_ref === null)
+        throw new Error('decide1: act.read needs a verified read child');
+      return dispatchPlan(trace, 'rule', 'read', 'accepted', {
+        kind: 'read',
+        dispatch_id,
+        target_ref: child.brief.target_ref,
+        child,
+      });
+    }
+    case 'gen.child':
+    case 'gen.child_fallback': {
+      const child = checkpoint.child;
+      const routed = choice('route');
+      const inherited = child?.brief.tier;
+      if (child === null || inherited == null || !isTier(routed)) throw new Error('decide1: invalid child route');
+      // An accepted tier may rise above the parent's; a fallback can never raise the inherited tier.
+      const accepted = trace.rule === 'gen.child';
+      const tier = accepted ? routed : lowerTier('standard', inherited);
+      return dispatchPlan(trace, 'route', tier, accepted ? 'accepted' : reason('route'), {
+        kind: 'implement',
+        dispatch_id,
+        tier,
+        ceiling: tier,
+        tier_source: accepted ? 'child_route' : 'child_route_fallback',
+        child,
+      });
     }
     case 'ask.intake':
       return final(trace, 'intake', choice('intake'), 'needs_human', reason('intake'));
@@ -1178,18 +1322,398 @@ function planFor(trace: Decide1Trace, checkpoint: DispatchCheckpoint, request: D
 }
 
 function assertCheckpoint(checkpoint: DispatchCheckpoint): void {
-  if (checkpoint.schema !== 'dispatch.checkpoint@4')
-    throw new Error('recorded dispatch checkpoint schema differs from dispatch.checkpoint@4');
+  if (checkpoint.schema !== 'dispatch.checkpoint@5')
+    throw new Error('recorded dispatch checkpoint schema differs from dispatch.checkpoint@5');
   if (typeof checkpoint.spawn_port !== 'boolean') throw new Error('recorded dispatch spawn_port is not a boolean');
   if (checkpoint.preflight_budget !== null && !natural(checkpoint.preflight_budget))
     throw new Error('recorded dispatch preflight_budget is not a safe natural');
+  for (const key of ['preflight_terms', 'child_terms', 'child'] as const)
+    if (checkpoint[key] === undefined) throw new Error(`recorded dispatch checkpoint has no ${key}`);
+  const terms: unknown = checkpoint.preflight_terms;
+  if (terms !== null) {
+    if (!isRecord(terms)) throw new Error('recorded dispatch preflight_terms are not a record');
+    // The budget is the asking request's ceiling bound with the ask; drift either way is tampering.
+    const ceiling = terms['cost_ceiling'];
+    if (checkpoint.preflight_budget !== (natural(ceiling) ? ceiling : null))
+      throw new Error('recorded dispatch preflight_budget differs from its preflight_terms');
+  }
+  if (checkpoint.child === null && (checkpoint.asks?.preflight === 1) !== (terms !== null))
+    throw new Error('recorded dispatch preflight_terms are bound only with the role ask');
 }
 
-function resolveOutcome(request: DispatchRequest, checkpoint: DispatchCheckpoint): Plan {
+function assertDecision(decision: DispatchDecision): void {
+  assertRuleTable(decision);
+  if (decision.child === undefined) throw new Error('recorded dispatch decision has no child');
+  if (decision.reason === 'dependency_pending')
+    throw new Error('a transient dependency_pending decision is never journaled');
+}
+
+/** A root and a child never share an id: neither can be re-entered as the other. */
+function assertEntry(request: DispatchRequest, loaded: ReturnType<DispatchJournal['load']>): void {
+  const child = request.child !== undefined;
+  for (const decision of loaded.decisions) {
+    assertDecision(decision);
+    if ((decision.child !== null) !== child) throw new Error(entrySwap(child));
+  }
+  if (loaded.checkpoint !== null) {
+    assertCheckpoint(loaded.checkpoint);
+    if ((loaded.checkpoint.child !== null) !== child) throw new Error(entrySwap(child));
+  }
+}
+function entrySwap(child: boolean): string {
+  return child
+    ? 'a root decision cannot be re-entered as a child'
+    : 'a stored child decision cannot be resumed as a root';
+}
+
+function resolveOutcome(request: DispatchRequest, checkpoint: DispatchCheckpoint, evidence?: ChildEvidence): Plan {
   assertCheckpoint(checkpoint);
+  if (request.child !== undefined || checkpoint.child !== null) return resolveChild(request, checkpoint, evidence);
   if (checkpoint.intake === null) throw new Error('a dispatch decision needs an intake record');
   replayStages(request, checkpoint);
   return planFor(decideBand(decide1Inputs(request, checkpoint)), checkpoint, request);
+}
+
+const CHILD_KEYS = [
+  'schema',
+  'parent_ref',
+  'parent_entry',
+  'plan_digest',
+  'brief',
+  'terms_digest',
+  'dependencies',
+  'dependencies_digest',
+];
+const EDGE_KEYS = ['decision_ref', 'entry', 'decision_digest', 'dispatch_ref', 'receipt'];
+const TERM_KEYS: readonly string[] = [
+  'audit',
+  'tier',
+  'quality',
+  'destinations',
+  'content_class',
+  'max_context_tokens',
+  'deadline',
+  'cost_ceiling',
+  'max_attempts',
+  'prefix_digest',
+  'prefix_cache',
+  'max_attempts_per_route',
+];
+const TIER_ORDER: readonly ImplementTier[] = ['flash', 'standard', 'strong'];
+function lowerTier(left: ImplementTier, right: ImplementTier): ImplementTier {
+  return TIER_ORDER.indexOf(left) <= TIER_ORDER.indexOf(right) ? left : right;
+}
+
+/** What exact membership in a successful root spawn authenticates (D-P5c1-1). */
+export interface VerifiedChild {
+  readonly brief: ChildBrief;
+  readonly parent_entry: number;
+  readonly plan: SpawnPlan;
+  /** The parent's captured `preflight_terms`: the superset a child's terms must narrow. */
+  readonly terms: InferenceTerms;
+}
+
+/**
+ * Pure: the brief must be an exact member of the plan its root parent appended as a successful spawn.
+ * The plan is recomputed from the parent's claimed evidence, so a self-consistent reseal authenticates
+ * nothing. Live entry passes `journal.load(parent_ref)`; replay passes the historical snapshot.
+ */
+export function verifyChild(request: DispatchRequest, parent: ChildEvidence['parent']): VerifiedChild {
+  const brief: unknown = request.child?.brief;
+  if (!isRecord(brief) || !isRecord(brief['frame'])) throw new Error('a child request needs a sealed brief');
+  const frame = brief['frame'];
+  if (request.request_id !== brief['child_ref']) throw new Error('a child request id must be its child_ref');
+  if (digest({ message: request.intake.message }) !== frame['goal_digest'])
+    throw new Error('child goal differs from its sealed goal digest');
+  const parent_ref = frame['parent_ref'];
+  const { checkpoint, decisions } = parent;
+  if (checkpoint === null || checkpoint.decision_id !== parent_ref || frame['root_ref'] !== parent_ref)
+    throw new Error('child parent has no journaled root spawn');
+  assertCheckpoint(checkpoint);
+  for (const decision of decisions) assertDecision(decision);
+  // Depth 1 without a depth constant: a child never spawns, and chained lineage waits for P5d.
+  if (checkpoint.child !== null) throw new Error('a child parent must be a root');
+  const spawned = decisions.at(-1);
+  const intent = spawned?.intent;
+  const receipt: unknown = spawned?.receipt;
+  if (
+    spawned === undefined ||
+    spawned.decision_id !== parent_ref ||
+    spawned.entry !== decisions.length ||
+    spawned.child !== null ||
+    spawned.status !== 'dispatched' ||
+    spawned.decide1.rule !== 'spawn.preflight' ||
+    intent?.kind !== 'spawn' ||
+    intent.dispatch_id !== `${parent_ref}:dispatch` ||
+    !orderedKeys(receipt, ['status', 'dispatch_id', 'ref']) ||
+    receipt['dispatch_id'] !== intent.dispatch_id ||
+    receipt['ref'] !== intent.plan.digest
+  )
+    throw new Error('child parent has no successful spawn decision');
+  if (!sameRecord(checkpoint.intent, intent)) throw new Error('child parent decision differs from its claimed intent');
+  const asked: DispatchRequest = {
+    request_id: parent_ref,
+    ...checkpointState(checkpoint),
+    terms: checkpoint.preflight_terms ?? request.terms,
+    intake: { message: request.intake.message, running_threads: [] },
+    triage_context: '',
+    route_context: '',
+    targets: intent.targets.map((ref) => ({ ref, summary: '' })),
+  };
+  const roles = trustedRoles(checkpoint, asked);
+  const recomputed = preflightFor(asked, checkpoint);
+  if (
+    checkpoint.preflight_terms === null ||
+    roles === null ||
+    digest(roles) !== intent.roles_digest ||
+    recomputed?.gain !== true ||
+    recomputed.plan === null ||
+    !sameRecord(recomputed.plan, intent.plan)
+  )
+    throw new Error('child parent plan does not re-derive from its claimed evidence');
+  const plan = validatePlan(intent.plan, intent.targets);
+  const member = plan.children.find((candidate) => candidate.child_ref === brief['child_ref']);
+  if (member === undefined || !sameRecord(member, brief))
+    throw new Error('child brief is not an exact member of its parent plan');
+  return { brief: clone(member), parent_entry: spawned.entry, plan, terms: clone(checkpoint.preflight_terms) };
+}
+
+/**
+ * Child terms narrow the root's captured terms (D-P5c1-4): ceiling within the sealed share, no wider
+ * destinations, no later deadline, no larger limits, no weaker quality, audit only strengthens and
+ * every other setting is retained exactly. Prefix fields price a view; never the parent's.
+ */
+function admitChildTerms(value: unknown, root: InferenceTerms, share: number): void {
+  const refuse = (why: string) => new Error(`child terms ${why}`);
+  if (!isRecord(value) || Object.keys(value).some((key) => !TERM_KEYS.includes(key)))
+    throw refuse('carry an unknown field');
+  const terms = value as Record<string, unknown>;
+  const parent = root as unknown as Record<string, unknown>;
+  if (!natural(terms['cost_ceiling']) || terms['cost_ceiling'] > share) throw refuse('exceed the sealed share');
+  const destinations = terms['destinations'];
+  if (
+    !Array.isArray(destinations) ||
+    !destinations.every((d) => typeof d === 'string' && root.destinations.includes(d))
+  )
+    throw refuse('widen destinations');
+  for (const key of ['deadline', 'max_context_tokens', 'max_attempts'] as const) {
+    const limit = terms[key];
+    if (typeof limit !== 'number' || Number.isNaN(limit) || limit > root[key]) throw refuse(`raise ${key}`);
+  }
+  if (
+    !(QUALITY_BARS as readonly unknown[]).includes(terms['quality']) ||
+    !qualityClears(terms['quality'] as InferenceTerms['quality'], root.quality)
+  )
+    throw refuse('weaken quality');
+  if (terms['audit'] !== undefined && typeof terms['audit'] !== 'boolean') throw refuse('carry a malformed audit');
+  if (root.audit === true && terms['audit'] !== true) throw refuse('drop audit');
+  for (const key of ['content_class', 'tier', 'max_attempts_per_route'])
+    if (!sameRecord(terms[key], parent[key])) throw refuse(`change ${key}`);
+  const prefix = terms['prefix_digest'];
+  if (prefix !== undefined && (typeof prefix !== 'string' || prefix === root.prefix_digest))
+    throw refuse("copy the parent's prefix");
+  const cache = terms['prefix_cache'];
+  if (
+    cache !== undefined &&
+    (!isRecord(cache) ||
+      (root.prefix_cache !== undefined && sameRecord(cache, root.prefix_cache)) ||
+      (root.prefix_digest !== undefined && cache['prefix_digest'] === root.prefix_digest))
+  )
+    throw refuse("copy the parent's prefix");
+}
+
+function completedRead(receipt: unknown): receipt is Extract<DispatchReceipt, { readonly read: ReadResult }> {
+  return isRecord(receipt) && receipt['status'] === 'dispatched' && isRecord(receipt['read']);
+}
+
+/** The join a frozen witness records; a generator without one is still pending. */
+function witnessJoin(child: DispatchChild): 'pending' | 'satisfied' | 'unmet' {
+  const dependencies = child.dependencies;
+  if (dependencies === null) return 'pending';
+  return dependencies.every((edge) => completedRead(edge.receipt)) ? 'satisfied' : 'unmet';
+}
+
+/** The safe sum of a satisfied generator's measured reads; otherwise null. */
+function readBytes(child: DispatchChild): number | null {
+  if (child.brief.kind !== 'generate' || witnessJoin(child) !== 'satisfied') return null;
+  let sum = 0;
+  for (const edge of child.dependencies!) sum += (edge.receipt as { readonly read: ReadResult }).read.bytes;
+  return Number.isSafeInteger(sum) ? sum : null;
+}
+
+/** The same resumability that governs dispatch terminality governs an edge (D-P5c1-3). */
+function edgeStatus(decision: DispatchDecision | null): 'pending' | 'satisfied' | 'unmet' {
+  if (decision === null || isResumable(decision)) return 'pending';
+  return decision.status === 'dispatched' ? 'satisfied' : 'unmet';
+}
+function joinOf(statuses: readonly ('pending' | 'satisfied' | 'unmet')[]): 'pending' | 'satisfied' | 'unmet' {
+  if (statuses.includes('unmet')) return 'unmet';
+  return statuses.includes('pending') ? 'pending' : 'satisfied';
+}
+
+function edgeOf(decision_ref: string, decision: DispatchDecision | null): DispatchDependency {
+  return {
+    decision_ref,
+    entry: decision?.entry ?? null,
+    decision_digest: decision === null ? null : digest(decision),
+    dispatch_ref: decision?.intent?.dispatch_id ?? null,
+    receipt: decision === null ? null : clone(decision.receipt),
+  };
+}
+
+/** A sibling read's decision must be a same-plan member whose success is a normalized completed read. */
+function verifyRead(decision: DispatchDecision, verified: VerifiedChild, sibling: ChildBrief): void {
+  assertDecision(decision);
+  const witness: unknown = decision.child;
+  const intent = decision.intent;
+  if (
+    decision.decision_id !== sibling.child_ref ||
+    !natural(decision.entry) ||
+    decision.entry < 1 ||
+    !orderedKeys(witness, CHILD_KEYS) ||
+    witness['parent_ref'] !== sibling.frame.parent_ref ||
+    witness['parent_entry'] !== verified.parent_entry ||
+    witness['plan_digest'] !== verified.plan.digest ||
+    !sameRecord(witness['brief'], sibling) ||
+    !sameRecord(witness['dependencies'], []) ||
+    witness['dependencies_digest'] !== digest([]) ||
+    (intent !== null &&
+      (intent.kind !== 'read' ||
+        intent.dispatch_id !== `${sibling.child_ref}:dispatch` ||
+        intent.target_ref !== sibling.target_ref ||
+        !sameRecord(intent.child, witness)))
+  )
+    throw new Error('dependency evidence is not a read of the same parent plan');
+  if (
+    decision.status === 'dispatched' &&
+    (intent === null ||
+      !completedRead(decision.receipt) ||
+      !sameRecord(normalizeReceipt(decision.receipt, intent), decision.receipt))
+  )
+    throw new Error('a dispatched dependency has no completed read');
+}
+
+function siblingOf(verified: VerifiedChild, ref: string): ChildBrief {
+  const sibling = verified.plan.children.find((candidate) => candidate.child_ref === ref);
+  if (sibling === undefined || sibling.kind !== 'read') throw new Error('a dependency is not a sibling read');
+  return sibling;
+}
+
+/** The witness must restate verified lineage, its own terms and exactly the supplied read snapshots. */
+function verifyWitness(
+  value: unknown,
+  verified: VerifiedChild,
+  terms: InferenceTerms,
+  reads: readonly (DispatchDecision | null)[],
+): void {
+  const refuse = (why: string) => new Error(`recorded child witness ${why}`);
+  if (!orderedKeys(value, CHILD_KEYS) || value['schema'] !== 'dispatch.child@1') throw refuse('is malformed');
+  const witness = value as unknown as DispatchChild;
+  if (
+    witness.parent_ref !== verified.brief.frame.parent_ref ||
+    witness.parent_entry !== verified.parent_entry ||
+    witness.plan_digest !== verified.plan.digest ||
+    !sameRecord(witness.brief, verified.brief)
+  )
+    throw refuse('differs from its verified parent plan');
+  if (witness.terms_digest !== digest(terms)) throw refuse('binds other terms');
+  const dependencies: unknown = witness.dependencies;
+  if (verified.brief.kind === 'read') {
+    if (!sameRecord(dependencies, []) || witness.dependencies_digest !== digest([]) || reads.length !== 0)
+      throw refuse('gives a read dependencies');
+    return;
+  }
+  if (dependencies === null) {
+    if (witness.dependencies_digest !== null || reads.length !== 0) throw refuse('has unfrozen evidence');
+    return;
+  }
+  const edges = verified.brief.frame.depends_on;
+  if (
+    !Array.isArray(dependencies) ||
+    dependencies.length !== edges.length ||
+    reads.length !== edges.length ||
+    witness.dependencies_digest !== digest(dependencies)
+  )
+    throw refuse('does not freeze the sealed edges');
+  const statuses = edges.map((ref, index) => {
+    const edge: unknown = dependencies[index];
+    const decision = reads[index] ?? null;
+    if (!orderedKeys(edge, EDGE_KEYS) || edge['decision_ref'] !== ref) throw refuse('reorders its edges');
+    if (decision !== null) verifyRead(decision, verified, siblingOf(verified, ref));
+    if (!sameRecord(edge, edgeOf(ref, decision))) throw refuse('differs from its read snapshot');
+    return edgeStatus(decision);
+  });
+  const join = joinOf(statuses);
+  if (join === 'pending' || join !== witnessJoin(witness)) throw refuse('freezes a join that is not settled');
+}
+
+/**
+ * A child replays only with explicit evidence: verified membership, admitted retained terms, its
+ * witness against the supplied snapshots, and only the stages its kind may record.
+ */
+function resolveChild(request: DispatchRequest, checkpoint: DispatchCheckpoint, evidence?: ChildEvidence): Plan {
+  replayChild(request, checkpoint, evidence);
+  return planFor(decideBand(decide1Inputs(request, checkpoint)), checkpoint, request);
+}
+
+/** Validation and stage replay only: a reused child checkpoint may still be waiting for its D2 answer. */
+function replayChild(request: DispatchRequest, checkpoint: DispatchCheckpoint, evidence?: ChildEvidence): void {
+  if (evidence === undefined) throw new Error('a child decision replays only with explicit parent and read evidence');
+  if (request.child === undefined || checkpoint.child === null) throw new Error(entrySwap(request.child !== undefined));
+  if (request.request_id !== checkpoint.decision_id) throw new Error('checkpoint belongs to another decision');
+  const verified = verifyChild(request, evidence.parent);
+  if (!sameRecord(request.terms, checkpoint.child_terms))
+    throw new Error('child terms differ from the retained child evidence');
+  admitChildTerms(checkpoint.child_terms, verified.terms, verified.brief.share);
+  verifyWitness(checkpoint.child, verified, checkpoint.child_terms!, evidence.reads);
+  const { asks } = checkpoint;
+  if (
+    checkpoint.intake !== null ||
+    checkpoint.triage !== null ||
+    checkpoint.shadow !== null ||
+    checkpoint.preflight !== null ||
+    checkpoint.preflight_terms !== null ||
+    checkpoint.preflight_budget !== null ||
+    asks.intake !== 0 ||
+    asks.triage !== 0 ||
+    asks.shadow !== 0 ||
+    asks.preflight !== 0
+  )
+    throw new Error('a child records no intake, triage, shadow or preflight stage');
+  if (verified.brief.kind === 'read' && (checkpoint.route !== null || asks.route !== 0))
+    throw new Error('a read child records no D2');
+  if (checkpoint.route !== null) {
+    if (witnessJoin(checkpoint.child) !== 'satisfied') throw new Error('only a satisfied join records D2');
+    replayStage(request, checkpoint, 'route');
+  }
+}
+
+/** The child's decider: D2 once it ran, else the rule with the sealed kind's withheld choice. */
+function childDecider(checkpoint: DispatchCheckpoint): {
+  readonly decided_by: Decider;
+  readonly choice: DispatchChoice;
+} {
+  const child = checkpoint.child!;
+  if (checkpoint.route !== null) return { decided_by: 'route', choice: checkpoint.route.site.choice };
+  return { decided_by: 'rule', choice: child.brief.kind === 'read' ? 'read' : child.brief.tier! };
+}
+
+/** D2's canonical child context: sealed scope, coupling, measured sizes and digests; never a body. */
+function childRouteContext(child: DispatchChild): string {
+  const reads = (child.dependencies ?? []).map((edge) => {
+    const read = completedRead(edge.receipt) ? edge.receipt.read : null;
+    return { target_ref: read?.target_ref ?? null, bytes: read?.bytes ?? null, digest: read?.digest ?? null };
+  });
+  return stableStringify({
+    child_ref: child.brief.child_ref,
+    edit: child.brief.edit,
+    read: child.brief.read,
+    coupling: child.brief.edit.length,
+    forbid: child.brief.forbid.length,
+    reads,
+    read_bytes: readBytes(child),
+    dependencies_digest: child.dependencies_digest,
+  });
 }
 
 /**
@@ -1219,6 +1743,29 @@ function boundaryTrace(
   });
 }
 
+/** A child's gate sets only `child.boundary` over its real facts; no stage is projected or forged. */
+function childBoundaryTrace(
+  request: DispatchRequest,
+  checkpoint: DispatchCheckpoint,
+  reason: 'stale_answer' | 'cancelled',
+): Decide1Trace {
+  const inputs = decide1Inputs(request, checkpoint);
+  return decideBand({
+    ...inputs,
+    facts: inputs.facts.map((fact) => (fact.name === 'child.boundary' ? { name: fact.name, value: reason } : fact)),
+  });
+}
+
+function gateTrace(
+  request: DispatchRequest,
+  checkpoint: DispatchCheckpoint,
+  reason: 'stale_answer' | 'cancelled',
+): Decide1Trace {
+  return checkpoint.child === null
+    ? boundaryTrace(request, checkpoint, reason)
+    : childBoundaryTrace(request, checkpoint, reason);
+}
+
 function receiptResult(
   plan: Plan,
   receipt: DispatchReceipt | null,
@@ -1245,12 +1792,28 @@ function normalizeReceipt(value: unknown, intent: DispatchIntent): DispatchRecei
   const raw = value as Record<string, unknown>;
   const keys = Object.keys(raw);
   if (raw['status'] === 'dispatched') {
-    if (keys.length !== 3 || !keys.includes('dispatch_id') || !keys.includes('ref')) return null;
+    const read = intent.kind === 'read';
+    if (keys.length !== (read ? 4 : 3) || !keys.includes('dispatch_id') || !keys.includes('ref')) return null;
     if (raw['dispatch_id'] !== dispatch_id) return null;
     const ref = correlation(raw['ref']);
     if (ref === null) return null;
     if (intent.kind === 'spawn' && ref !== intent.plan.digest) return null;
-    return { status: 'dispatched', dispatch_id, ref };
+    if (intent.kind !== 'read') return { status: 'dispatched', dispatch_id, ref };
+    // A read is confirmed only as a completed immutable read of its own target.
+    const result = raw['read'];
+    if (
+      !isRecord(result) ||
+      Object.keys(result).length !== 4 ||
+      result['target_ref'] !== intent.target_ref ||
+      typeof result['revision'] !== 'string' ||
+      correlation(result['revision']) !== result['revision'] ||
+      typeof result['digest'] !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(result['digest']) ||
+      !natural(result['bytes'])
+    )
+      return null;
+    const { target_ref, revision, digest: hash, bytes } = result as unknown as ReadResult;
+    return { status: 'dispatched', dispatch_id, ref, read: { target_ref, revision, digest: hash, bytes } };
   }
   if (raw['status'] === 'refused') {
     if (keys.length !== 3 || !keys.includes('dispatch_id') || !keys.includes('reason')) return null;
@@ -1289,7 +1852,48 @@ function validateTargets(targets: DispatchRequest['targets']): void {
     throw new Error('Invalid dispatch targets');
 }
 
+/** The closed child request shape (R5), checked before anything is loaded or asked. */
+function validateChild(request: DispatchRequest): void {
+  if (request.child === undefined) return;
+  const child: unknown = request.child;
+  if (!isRecord(child) || Object.keys(child).length !== 1 || !isRecord(child['brief']))
+    throw new Error('Invalid dispatch child: only { brief } is accepted');
+  const frame = child['brief']['frame'];
+  if (
+    !isRecord(frame) ||
+    typeof frame['parent_ref'] !== 'string' ||
+    correlation(frame['parent_ref']) === null ||
+    request.request_id !== child['brief']['child_ref']
+  )
+    throw new Error('Invalid dispatch child: the request id must be its sealed child_ref');
+  if (
+    !Array.isArray(request.intake.running_threads) ||
+    request.intake.running_threads.length !== 0 ||
+    request.triage_context !== '' ||
+    request.route_context !== '' ||
+    request.targets !== undefined
+  )
+    throw new Error('Invalid dispatch child: threads, contexts and targets must be empty');
+  if (
+    typeof request.intake.message !== 'string' ||
+    digest({ message: request.intake.message }) !== frame['goal_digest']
+  )
+    throw new Error('Invalid dispatch child: intake.message differs from the sealed goal digest');
+}
+
 function captureRequest(request: DispatchRequest): DispatchRequest {
+  if (request.child !== undefined)
+    return {
+      request_id: request.request_id,
+      state_revision: request.state_revision,
+      state_updated_at: request.state_updated_at,
+      terms: detachTerms(request.terms),
+      intake: { message: request.intake.message, running_threads: [] },
+      triage_context: '',
+      route_context: '',
+      ...(request.resume === true ? { resume: true } : {}),
+      child: { brief: clone(request.child.brief) },
+    };
   return {
     request_id: request.request_id,
     state_revision: request.state_revision,
@@ -1332,8 +1936,16 @@ function askIntake(request: DispatchRequest, ask: number): IntakeSiteInput {
   };
 }
 
-/** D1 discloses `{request, context}` and D2 `{unit_of_work, context}`: the benchmark row shapes. */
-function loopAsk(request: DispatchRequest, stage: 'triage' | 'route', ask: number): LoopDecisionAsk {
+/**
+ * D1 discloses `{request, context}` and D2 `{unit_of_work, context}`: the benchmark row shapes. A
+ * child's D2 context is canonical data from its witness, never caller route context.
+ */
+function loopAsk(
+  request: DispatchRequest,
+  stage: 'triage' | 'route',
+  ask: number,
+  child: DispatchChild | null = null,
+): LoopDecisionAsk {
   return {
     request_id: stageId(request.request_id, stage, ask),
     state_revision: request.state_revision,
@@ -1341,7 +1953,10 @@ function loopAsk(request: DispatchRequest, stage: 'triage' | 'route', ask: numbe
     state:
       stage === 'triage'
         ? { request: request.intake.message, context: request.triage_context }
-        : { unit_of_work: request.intake.message, context: request.route_context },
+        : {
+            unit_of_work: request.intake.message,
+            context: child === null ? request.route_context : childRouteContext(child),
+          },
     terms: { ...request.terms, destinations: [...request.terms.destinations] },
     needs_dispatch: true,
   };
@@ -1357,10 +1972,10 @@ function isResumable(decision: DispatchDecision): boolean {
 }
 
 function assertRuleTable(decision: DispatchDecision): void {
-  if (decision.schema !== 'dispatch.decision@5')
-    throw new Error('recorded dispatch decision schema differs from dispatch.decision@5');
+  if (decision.schema !== 'dispatch.decision@6')
+    throw new Error('recorded dispatch decision schema differs from dispatch.decision@6');
   if (decision.rule_table !== DECIDE1_RULE_TABLE)
-    throw new Error('recorded dispatch rule table differs from decide1.rules@2');
+    throw new Error(`recorded dispatch rule table differs from ${DECIDE1_RULE_TABLE}`);
 }
 
 const sequences = new WeakMap<WeftPort, number>();
@@ -1466,14 +2081,11 @@ function emit(port: WeftPort | undefined, observations: readonly SiteObservation
   for (const record of records) deliver(port, record);
 }
 
-function cancellation(
-  request: DispatchRequest,
-  checkpoint: DispatchCheckpoint,
-  entry: number,
-  decider: { readonly decided_by: Decider; readonly choice: SiteChoice },
-): DispatchDecision {
+/** A local abort: unappended `paused / cancelled`; it never proves a presented effect did not happen. */
+function cancellation(request: DispatchRequest, checkpoint: DispatchCheckpoint, entry: number): DispatchDecision {
+  const decider = checkpoint.child === null ? lastDecider(checkpoint) : childDecider(checkpoint);
   return {
-    schema: 'dispatch.decision@5',
+    schema: 'dispatch.decision@6',
     decision_id: checkpoint.decision_id,
     entry,
     state_revision: checkpoint.state_revision,
@@ -1482,7 +2094,8 @@ function cancellation(
     status: 'paused',
     reason: 'cancelled',
     rule_table: DECIDE1_RULE_TABLE,
-    decide1: traceFields(boundaryTrace(request, checkpoint, 'cancelled')),
+    decide1: traceFields(gateTrace(request, checkpoint, 'cancelled')),
+    child: checkpoint.child,
     intent: checkpoint.intent,
     receipt: null,
     intake: checkpoint.intake,
@@ -1494,7 +2107,7 @@ function cancellation(
 }
 
 function stalePlan(request: DispatchRequest, checkpoint: DispatchCheckpoint): Plan {
-  return planFor(boundaryTrace(request, checkpoint, 'stale_answer'), checkpoint, request);
+  return planFor(gateTrace(request, checkpoint, 'stale_answer'), checkpoint, request);
 }
 
 function finishFinal(
@@ -1534,14 +2147,49 @@ function settle(
  */
 function yielded(request: DispatchRequest, journal: DispatchJournal): DispatchDecision {
   const loaded = journal.load(request.request_id);
-  for (const decision of loaded.decisions) assertRuleTable(decision);
-  if (loaded.checkpoint !== null) assertCheckpoint(loaded.checkpoint);
+  assertEntry(request, loaded);
+  // A losing child validates the winner under the winner's frozen terms, not its own snapshot.
+  const owner =
+    request.child === undefined || loaded.checkpoint?.child_terms == null
+      ? request
+      : { ...request, terms: loaded.checkpoint.child_terms };
+  if (request.child !== undefined) verifySaved(owner, loaded.decisions, journal);
   const latest = loaded.decisions.at(-1);
   const claimed = loaded.checkpoint !== null && loaded.checkpoint.intent !== null;
   if (latest !== undefined && (!isResumable(latest) || !claimed)) return clone(latest);
   if (loaded.checkpoint === null || !claimed)
     throw new Error('the journal refused this decision without recording its owner');
-  return transitionDispatch(request, loaded.checkpoint, null, loaded.decisions.length + 1);
+  const evidence = request.child === undefined ? undefined : liveEvidence(journal, owner, loaded.checkpoint.child);
+  return transitionDispatch(owner, loaded.checkpoint, null, loaded.decisions.length + 1, evidence);
+}
+
+/** Live evidence: the parent's journal and, for frozen edges, the exact entries they name. */
+function liveEvidence(journal: DispatchJournal, request: DispatchRequest, child: DispatchChild | null): ChildEvidence {
+  const parent = journal.load(request.child!.brief.frame.parent_ref);
+  const dependencies: unknown = child?.dependencies;
+  const edges = Array.isArray(dependencies) ? (dependencies as unknown[]) : [];
+  return {
+    parent: { checkpoint: parent.checkpoint, decisions: parent.decisions },
+    reads: edges.map((edge) => {
+      if (!isRecord(edge) || typeof edge['decision_ref'] !== 'string')
+        throw new Error('recorded child witness is malformed');
+      const entry = edge['entry'];
+      return entry === null ? null : (journal.load(edge['decision_ref']).decisions[(entry as number) - 1] ?? null);
+    }),
+  };
+}
+
+/** Saved child decisions are verified before any is returned, so a terminal return never skips evidence. */
+function verifySaved(request: DispatchRequest, decisions: readonly DispatchDecision[], journal: DispatchJournal): void {
+  if (decisions.length === 0) return;
+  const parent = journal.load(request.child!.brief.frame.parent_ref);
+  const verified = verifyChild(request, { checkpoint: parent.checkpoint, decisions: parent.decisions });
+  admitChildTerms(request.terms, verified.terms, verified.brief.share);
+  for (const decision of decisions) {
+    const digested = isRecord(decision.child) ? decision.child['terms_digest'] : undefined;
+    if (digested !== digest(request.terms)) throw new Error('child terms differ from the retained child evidence');
+    verifyWitness(decision.child, verified, request.terms, liveEvidence(journal, request, decision.child).reads);
+  }
 }
 
 /** Present the intent under the attempt this call holds; every exit ends that attempt. */
@@ -1586,9 +2234,9 @@ async function recoverAttempt(
   const live = loaded.attempt;
   const entry = loaded.decisions.length + 1;
   if (live === null || ports.settlement === undefined) return yielded(request, journal);
-  if (signal?.aborted) return cancellation(request, checkpoint, entry, lastDecider(checkpoint));
+  if (signal?.aborted) return cancellation(request, checkpoint, entry);
   const receipt = await readSettlement(request, intent, ports, signal);
-  if (signal?.aborted) return cancellation(request, checkpoint, entry, lastDecider(checkpoint));
+  if (signal?.aborted) return cancellation(request, checkpoint, entry);
   if (receipt === null) return yielded(request, journal);
   const attempt = journal.acquire(request.request_id, live);
   if (attempt === null) return yielded(request, journal);
@@ -1611,26 +2259,29 @@ async function dispatchIntent(
   fresh: readonly SiteObservation[],
   attempt: string,
 ): Promise<DispatchDecision> {
-  if (signal?.aborted) return cancellation(request, checkpoint, entry, lastDecider(checkpoint));
+  if (signal?.aborted) return cancellation(request, checkpoint, entry);
   if (journal.load(request.request_id).presented) {
     // An earlier attempt may have carried the intent out, so its settlement decides before any stale gate.
     const settled = await readSettlement(request, intent, ports, signal);
-    if (signal?.aborted) return cancellation(request, checkpoint, entry, lastDecider(checkpoint));
+    if (signal?.aborted) return cancellation(request, checkpoint, entry);
     if (settled !== null || !sameState(checkpoint, ports.now()))
       return settleReceipt(request, checkpoint, entry, plan, intent, settled, ports, journal, fresh, attempt);
   } else if (!sameState(checkpoint, ports.now()))
     return finishFinal(request, checkpoint, entry, stalePlan(request, checkpoint), ports, journal, fresh, attempt);
-  if (signal?.aborted) return cancellation(request, checkpoint, entry, lastDecider(checkpoint));
+  if (signal?.aborted) return cancellation(request, checkpoint, entry);
   if (!journal.present(request.request_id, attempt)) return yielded(request, journal);
   let raw: unknown = null;
   try {
-    // The spawn port gets a detached copy, so nothing it does can reach a record.
-    raw = intent.kind === 'spawn' ? await ports.spawn!(clone(intent), signal) : await ports.dispatch(intent, signal);
+    // The spawn port and child intents get a detached copy, so nothing a port does can reach a record.
+    raw =
+      intent.kind === 'spawn'
+        ? await ports.spawn!(clone(intent), signal)
+        : await ports.dispatch('child' in intent ? clone(intent) : intent, signal);
   } catch {
     // Never put an injected exception in evidence; the receipt is null.
     raw = null;
   }
-  if (signal?.aborted) return cancellation(request, checkpoint, entry, lastDecider(checkpoint));
+  if (signal?.aborted) return cancellation(request, checkpoint, entry);
   const receipt = normalizeReceipt(raw, intent);
   return settleReceipt(request, checkpoint, entry, plan, intent, receipt, ports, journal, fresh, attempt);
 }
@@ -1675,11 +2326,148 @@ function claimedPlan(
   request: DispatchRequest,
   checkpoint: DispatchCheckpoint,
   intent: DispatchIntent,
+  evidence?: ChildEvidence,
 ): { readonly plan: Plan; readonly intent: DispatchIntent } {
-  const plan = resolveOutcome(request, checkpoint);
+  const plan = resolveOutcome(request, checkpoint, evidence);
   if (plan.kind !== 'dispatch') throw new Error('a recorded intent needs a dispatch plan');
   if (!sameRecord(intent, plan.intent)) throw new Error('recorded intent does not match the recorded stages');
   return { plan, intent };
+}
+
+/** Each sealed edge's latest journal decision, verified as a same-plan read, then joined. */
+function joinReads(
+  journal: DispatchJournal,
+  verified: VerifiedChild,
+): {
+  readonly status: 'pending' | 'satisfied' | 'unmet';
+  readonly edges: DispatchDependency[];
+  readonly reads: (DispatchDecision | null)[];
+} {
+  const edges: DispatchDependency[] = [];
+  const reads: (DispatchDecision | null)[] = [];
+  const statuses: ('pending' | 'satisfied' | 'unmet')[] = [];
+  for (const ref of verified.brief.frame.depends_on) {
+    const sibling = siblingOf(verified, ref);
+    const decisions = journal.load(ref).decisions;
+    const latest = decisions.at(-1) ?? null;
+    if (latest !== null) {
+      verifyRead(latest, verified, sibling);
+      if (latest.entry !== decisions.length) throw new Error('dependency evidence is out of journal order');
+    }
+    reads.push(latest === null ? null : clone(latest));
+    edges.push(edgeOf(ref, latest));
+    statuses.push(edgeStatus(latest));
+  }
+  return { status: joinOf(statuses), edges, reads };
+}
+
+/**
+ * Re-entry of one verified child (P5c1). A read dispatches directly; a generator joins its sealed
+ * reads, then uses D2 for its tier. Both share the claim, attempt, settlement and append path.
+ */
+async function decideChild(
+  captured: DispatchRequest,
+  ports: DispatchPorts,
+  journal: DispatchJournal,
+  signal: AbortSignal | undefined,
+): Promise<DispatchDecision> {
+  const decision_id = captured.request_id;
+  const loaded = journal.load(decision_id);
+  assertEntry(captured, loaded);
+  const parent = journal.load(captured.child!.brief.frame.parent_ref);
+  const verified = verifyChild(captured, { checkpoint: parent.checkpoint, decisions: parent.decisions });
+  admitChildTerms(captured.terms, verified.terms, verified.brief.share);
+  if (loaded.checkpoint !== null && !sameRecord(captured.terms, loaded.checkpoint.child_terms))
+    throw new Error('child terms differ from the retained child evidence');
+  verifySaved(captured, loaded.decisions, journal);
+  const latest = loaded.decisions.at(-1) ?? null;
+  const entry = loaded.decisions.length + 1;
+  if (latest !== null && (!isResumable(latest) || captured.resume !== true)) return clone(latest);
+
+  const resume = captured.resume === true;
+  let checkpoint =
+    loaded.checkpoint ??
+    initialCheckpoint(captured, ports, {
+      schema: 'dispatch.child@1',
+      parent_ref: verified.brief.frame.parent_ref,
+      parent_entry: verified.parent_entry,
+      plan_digest: verified.plan.digest,
+      brief: verified.brief,
+      terms_digest: digest(captured.terms),
+      dependencies: verified.brief.kind === 'read' ? [] : null,
+      dependencies_digest: verified.brief.kind === 'read' ? digest([]) : null,
+    });
+  if (checkpoint.intent === null) checkpoint = makeCheckpoint(checkpoint, { spawn_port: ports.spawn !== undefined });
+  let evidence = liveEvidence(journal, captured, checkpoint.child);
+  // A claimed or reused child is re-derived before the abort check and before any reuse.
+  const claimed = checkpoint.intent === null ? null : claimedPlan(captured, checkpoint, checkpoint.intent, evidence);
+  if (claimed === null && loaded.checkpoint !== null) replayChild(captured, checkpoint, evidence);
+  if (signal?.aborted) return cancellation(captured, checkpoint, entry);
+
+  if (claimed !== null) {
+    // Never rejoined, re-routed or re-planned: the identical intent goes through recovery.
+    const { plan, intent } = claimed;
+    if (!resume) {
+      const decision = makeDecision(captured, checkpoint, entry, plan, intent, null, 'paused', 'dispatch_unconfirmed');
+      return settle(captured, decision, ports, journal, []);
+    }
+    return attemptIntent(captured, checkpoint, entry, plan, intent, ports, journal, signal, []);
+  }
+
+  if (loaded.checkpoint !== null && !sameState(checkpoint, ports.now()))
+    return finishFinal(captured, checkpoint, entry, stalePlan(captured, checkpoint), ports, journal, []);
+
+  const fresh: SiteObservation[] = [];
+  if (verified.brief.kind === 'generate') {
+    if (checkpoint.child!.dependencies === null) {
+      const join = joinReads(journal, verified);
+      // Pending is an unappended transient: no checkpoint, D2, effect, append or emission.
+      if (join.status === 'pending') {
+        const plan = resolveChild(captured, checkpoint, evidence);
+        if (plan.kind !== 'final' || plan.reason !== 'dependency_pending')
+          throw new Error('decide1: pending join moved');
+        return makeDecision(captured, checkpoint, entry, plan, null, null, plan.status, plan.reason);
+      }
+      const child = { ...checkpoint.child!, dependencies: join.edges, dependencies_digest: digest(join.edges) };
+      checkpoint = makeCheckpoint(checkpoint, { child });
+      evidence = { parent: evidence.parent, reads: join.reads };
+      if (join.status === 'unmet') {
+        // Frozen once: the terminal decision names this evidence, and later polls return it.
+        journal.checkpoint(checkpoint);
+        const plan = resolveChild(captured, checkpoint, evidence);
+        return finishFinal(captured, checkpoint, entry, plan, ports, journal, fresh);
+      }
+    }
+    if (shouldAsk(checkpoint.route?.site.observation.reason ?? null, resume)) {
+      const ask = checkpoint.asks.route + 1;
+      checkpoint = makeCheckpoint(checkpoint, { asks: { ...checkpoint.asks, route: ask } });
+      journal.checkpoint(checkpoint);
+      if (signal?.aborted) return cancellation(captured, checkpoint, entry);
+      const decision = await decideLoopRoute(
+        loopAsk(captured, 'route', ask, checkpoint.child),
+        ports,
+        ports.now,
+        signal,
+      );
+      checkpoint = makeCheckpoint(checkpoint, { route: decision });
+      if (signal?.aborted) return cancellation(captured, checkpoint, entry);
+      journal.checkpoint(checkpoint);
+      fresh.push(decision.site.observation);
+    }
+  }
+
+  if (signal?.aborted) return cancellation(captured, checkpoint, entry);
+  const plan = resolveChild(captured, checkpoint, evidence);
+  if (plan.kind === 'final') {
+    if (plan.reason === 'cancelled') return cancellation(captured, checkpoint, entry);
+    return finishFinal(captured, checkpoint, entry, plan, ports, journal, fresh);
+  }
+  if (!sameState(checkpoint, ports.now()))
+    return finishFinal(captured, checkpoint, entry, stalePlan(captured, checkpoint), ports, journal, fresh);
+  if (signal?.aborted) return cancellation(captured, checkpoint, entry);
+  if (!journal.claim(decision_id, plan.intent, checkpoint)) return yielded(captured, journal);
+  checkpoint = makeCheckpoint(checkpoint, { intent: plan.intent });
+  return attemptIntent(captured, checkpoint, entry, plan, plan.intent, ports, journal, signal, fresh);
 }
 
 export async function decideDispatch(
@@ -1691,28 +2479,16 @@ export async function decideDispatch(
   if (correlation(request.request_id) === null || request.request_id.length > 96)
     throw new Error('Invalid dispatch request id');
   validateTargets(request.targets);
+  validateChild(request);
+  // Captured before the first await: deferred caller mutation cannot reach admitted evidence.
   const captured = captureRequest(request);
+  if (captured.child !== undefined) return decideChild(captured, ports, journal, signal);
   const decision_id = captured.request_id;
   const loaded = journal.load(decision_id);
-  for (const decision of loaded.decisions) assertRuleTable(decision);
-  if (loaded.checkpoint !== null) assertCheckpoint(loaded.checkpoint);
+  assertEntry(captured, loaded);
   let checkpoint = loaded.checkpoint ?? initialCheckpoint(captured, ports);
   // Until claim the snapshot follows this call's composition; the claim freezes it.
-  if (checkpoint.intent === null)
-    checkpoint = makeCheckpoint(
-      checkpoint.decision_id,
-      checkpoint.state_revision,
-      checkpoint.state_updated_at,
-      checkpoint.asks,
-      checkpoint.intake,
-      checkpoint.triage,
-      checkpoint.route,
-      checkpoint.shadow,
-      checkpoint.preflight,
-      checkpoint.preflight_budget,
-      ports.spawn !== undefined,
-      checkpoint.intent,
-    );
+  if (checkpoint.intent === null) checkpoint = makeCheckpoint(checkpoint, { spawn_port: ports.spawn !== undefined });
   const latest = loaded.decisions.at(-1) ?? null;
   const entry = loaded.decisions.length + 1;
 
@@ -1724,7 +2500,7 @@ export async function decideDispatch(
   const resume = captured.resume === true;
   // A claimed intent is re-derived before the abort check, so even a cancelled call never reports tampered evidence.
   const claimed = checkpoint.intent === null ? null : claimedPlan(captured, checkpoint, checkpoint.intent);
-  if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
+  if (signal?.aborted) return cancellation(captured, checkpoint, entry);
 
   if (claimed !== null) {
     const { plan, intent } = claimed;
@@ -1742,44 +2518,12 @@ export async function decideDispatch(
 
   if (shouldAsk(checkpoint.intake?.reason ?? null, resume)) {
     const ask = checkpoint.asks.intake + 1;
-    checkpoint = makeCheckpoint(
-      checkpoint.decision_id,
-      checkpoint.state_revision,
-      checkpoint.state_updated_at,
-      {
-        intake: ask,
-        triage: checkpoint.asks.triage,
-        route: checkpoint.asks.route,
-        shadow: checkpoint.asks.shadow,
-        preflight: checkpoint.asks.preflight,
-      },
-      checkpoint.intake,
-      checkpoint.triage,
-      checkpoint.route,
-      checkpoint.shadow,
-      checkpoint.preflight,
-      checkpoint.preflight_budget,
-      checkpoint.spawn_port,
-      checkpoint.intent,
-    );
+    checkpoint = makeCheckpoint(checkpoint, { asks: { ...checkpoint.asks, intake: ask } });
     journal.checkpoint(checkpoint);
-    if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
+    if (signal?.aborted) return cancellation(captured, checkpoint, entry);
     const intake = await decideIntake(askIntake(captured, ask), ports, ports.now, signal);
-    checkpoint = makeCheckpoint(
-      checkpoint.decision_id,
-      checkpoint.state_revision,
-      checkpoint.state_updated_at,
-      checkpoint.asks,
-      intake,
-      checkpoint.triage,
-      checkpoint.route,
-      checkpoint.shadow,
-      checkpoint.preflight,
-      checkpoint.preflight_budget,
-      checkpoint.spawn_port,
-      checkpoint.intent,
-    );
-    if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
+    checkpoint = makeCheckpoint(checkpoint, { intake });
+    if (signal?.aborted) return cancellation(captured, checkpoint, entry);
     journal.checkpoint(checkpoint);
     if (intake.site !== null) fresh.push(intake.site);
   } else {
@@ -1794,44 +2538,12 @@ export async function decideDispatch(
   if (intake.status === 'transition' && intake.choice === 'new_thread') {
     if (shouldAsk(checkpoint.triage?.site.observation.reason ?? null, resume)) {
       const ask = checkpoint.asks.triage + 1;
-      checkpoint = makeCheckpoint(
-        checkpoint.decision_id,
-        checkpoint.state_revision,
-        checkpoint.state_updated_at,
-        {
-          intake: checkpoint.asks.intake,
-          triage: ask,
-          route: checkpoint.asks.route,
-          shadow: checkpoint.asks.shadow,
-          preflight: checkpoint.asks.preflight,
-        },
-        checkpoint.intake,
-        checkpoint.triage,
-        checkpoint.route,
-        checkpoint.shadow,
-        checkpoint.preflight,
-        checkpoint.preflight_budget,
-        checkpoint.spawn_port,
-        checkpoint.intent,
-      );
+      checkpoint = makeCheckpoint(checkpoint, { asks: { ...checkpoint.asks, triage: ask } });
       journal.checkpoint(checkpoint);
-      if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
+      if (signal?.aborted) return cancellation(captured, checkpoint, entry);
       const decision = await decideTriage(loopAsk(captured, 'triage', ask), ports, ports.now, signal);
-      checkpoint = makeCheckpoint(
-        checkpoint.decision_id,
-        checkpoint.state_revision,
-        checkpoint.state_updated_at,
-        checkpoint.asks,
-        checkpoint.intake,
-        decision,
-        checkpoint.route,
-        checkpoint.shadow,
-        checkpoint.preflight,
-        checkpoint.preflight_budget,
-        checkpoint.spawn_port,
-        checkpoint.intent,
-      );
-      if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
+      checkpoint = makeCheckpoint(checkpoint, { triage: decision });
+      if (signal?.aborted) return cancellation(captured, checkpoint, entry);
       journal.checkpoint(checkpoint);
       fresh.push(decision.site.observation);
     } else {
@@ -1845,44 +2557,12 @@ export async function decideDispatch(
     if (triage.site.status === 'transition' && triage.site.observation.accepted && triage.site.choice === 'implement') {
       if (shouldAsk(checkpoint.route?.site.observation.reason ?? null, resume)) {
         const ask = checkpoint.asks.route + 1;
-        checkpoint = makeCheckpoint(
-          checkpoint.decision_id,
-          checkpoint.state_revision,
-          checkpoint.state_updated_at,
-          {
-            intake: checkpoint.asks.intake,
-            triage: checkpoint.asks.triage,
-            route: ask,
-            shadow: checkpoint.asks.shadow,
-            preflight: checkpoint.asks.preflight,
-          },
-          checkpoint.intake,
-          checkpoint.triage,
-          checkpoint.route,
-          checkpoint.shadow,
-          checkpoint.preflight,
-          checkpoint.preflight_budget,
-          checkpoint.spawn_port,
-          checkpoint.intent,
-        );
+        checkpoint = makeCheckpoint(checkpoint, { asks: { ...checkpoint.asks, route: ask } });
         journal.checkpoint(checkpoint);
-        if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
+        if (signal?.aborted) return cancellation(captured, checkpoint, entry);
         const decision = await decideLoopRoute(loopAsk(captured, 'route', ask), ports, ports.now, signal);
-        checkpoint = makeCheckpoint(
-          checkpoint.decision_id,
-          checkpoint.state_revision,
-          checkpoint.state_updated_at,
-          checkpoint.asks,
-          checkpoint.intake,
-          checkpoint.triage,
-          decision,
-          checkpoint.shadow,
-          checkpoint.preflight,
-          checkpoint.preflight_budget,
-          checkpoint.spawn_port,
-          checkpoint.intent,
-        );
-        if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
+        checkpoint = makeCheckpoint(checkpoint, { route: decision });
+        if (signal?.aborted) return cancellation(captured, checkpoint, entry);
         journal.checkpoint(checkpoint);
         fresh.push(decision.site.observation);
       } else {
@@ -1893,10 +2573,10 @@ export async function decideDispatch(
     }
   }
 
-  if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
+  if (signal?.aborted) return cancellation(captured, checkpoint, entry);
   let plan = resolveOutcome(captured, checkpoint);
   if (plan.kind === 'final') {
-    if (plan.reason === 'cancelled') return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
+    if (plan.reason === 'cancelled') return cancellation(captured, checkpoint, entry);
     return finishFinal(captured, checkpoint, entry, plan, ports, journal, fresh);
   }
 
@@ -1911,16 +2591,17 @@ export async function decideDispatch(
         shadow: shadowDue ? 1 : checkpoint.asks.shadow,
         preflight: rolesDue ? 1 : checkpoint.asks.preflight,
       },
-      // The plan budget is bound with the ask, so a resume with other terms never re-carves it.
+      // The plan budget and the terms children narrow are bound with the ask; a resume never re-carves them.
       preflight_budget: rolesDue ? preflightBudget(captured) : checkpoint.preflight_budget,
+      preflight_terms: rolesDue ? detachTerms(captured.terms) : checkpoint.preflight_terms,
     };
     journal.checkpoint(checkpoint);
-    if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
+    if (signal?.aborted) return cancellation(captured, checkpoint, entry);
     const [shadow, preflight] = await Promise.all([
       shadowDue ? askShadow(shadowAsk(captured, checkpoint), ports, ports.now, signal) : checkpoint.shadow,
       rolesDue ? askRoles(roleAsk(captured, checkpoint), ports, ports.now, signal) : checkpoint.preflight,
     ]);
-    if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
+    if (signal?.aborted) return cancellation(captured, checkpoint, entry);
     checkpoint = { ...checkpoint, shadow, preflight };
     journal.checkpoint(checkpoint);
     const next = resolveOutcome(captured, checkpoint);
@@ -1939,43 +2620,33 @@ export async function decideDispatch(
 
   if (!sameState(checkpoint, ports.now()))
     return finishFinal(captured, checkpoint, entry, stalePlan(captured, checkpoint), ports, journal, fresh);
-  if (signal?.aborted) return cancellation(captured, checkpoint, entry, lastDecider(checkpoint));
+  if (signal?.aborted) return cancellation(captured, checkpoint, entry);
 
   let intent = checkpoint.intent;
   if (intent === null) {
     if (!journal.claim(decision_id, plan.intent, checkpoint)) return yielded(captured, journal);
     intent = plan.intent;
-    checkpoint = makeCheckpoint(
-      checkpoint.decision_id,
-      checkpoint.state_revision,
-      checkpoint.state_updated_at,
-      checkpoint.asks,
-      checkpoint.intake,
-      checkpoint.triage,
-      checkpoint.route,
-      checkpoint.shadow,
-      checkpoint.preflight,
-      checkpoint.preflight_budget,
-      checkpoint.spawn_port,
-      intent,
-    );
+    checkpoint = makeCheckpoint(checkpoint, { intent });
   }
   return attemptIntent(captured, checkpoint, entry, plan, intent, ports, journal, signal, fresh);
 }
 
 /**
  * Pure replay: re-derive every recorded stage through the live pure functions (see `replayStages`),
- * then rebuild the decision from the outcome table and the receipt.
+ * then rebuild the decision from the outcome table and the receipt. A child replays only from the
+ * explicit historical `evidence` (its root parent and frozen read snapshots), never a journal lookup.
  */
 export function transitionDispatch(
   request: DispatchRequest,
   checkpoint: DispatchCheckpoint,
   receipt: DispatchReceipt | null,
   entry = 1,
+  evidence?: ChildEvidence,
 ): DispatchDecision {
   // Targets steer a consequential outcome, so replay screens them as `decideDispatch` does.
   validateTargets(request.targets);
-  const plan = resolveOutcome(request, checkpoint);
+  validateChild(request);
+  const plan = resolveOutcome(request, checkpoint, evidence);
   const intent = plan.kind === 'dispatch' ? (checkpoint.intent ?? plan.intent) : null;
   if (plan.kind === 'dispatch' && checkpoint.intent !== null && !sameRecord(checkpoint.intent, plan.intent))
     throw new Error('recorded intent does not match the recorded stages');
