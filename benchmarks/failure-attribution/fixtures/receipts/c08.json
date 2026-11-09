@@ -1,0 +1,55 @@
+{
+  "schema": "gauge.raw-receipts@1",
+  "case": "c08",
+  "result": "r08",
+  "records": [
+    {
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "c08.trace",
+        "record_id": "c08.a1.weft0.53a1d948",
+        "emitter": {
+          "kind": "fabric",
+          "id": "c08.fabric"
+        },
+        "sequence": 1,
+        "kind": "capability.invoked",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "invocation",
+            "ref": "c08.a1.invocation"
+          }
+        ],
+        "fields": {
+          "contract_rev": "sha256:654705659759888e3b01ccbe3b210598ec08212cf2354f760fc61a1a9269559d",
+          "implementation": "c08.implementation",
+          "status": "failed",
+          "invocation_ref": "c08.a1.invocation"
+        }
+      },
+      "digest": "sha256:3a77a5ef8555156f01138bd9d6b1dad22a921b253aa88aad631991afd1c97f4b"
+    }
+  ],
+  "checks": [
+    {
+      "source": "check",
+      "ref": "c08.a1.check.a48fbf9b",
+      "case": "c08",
+      "contract_revision": "sha256:654705659759888e3b01ccbe3b210598ec08212cf2354f760fc61a1a9269559d",
+      "implementation_revision": "sha256:045edc5cab8c5ad125f601cc6eb4facdbb16de4dd83967549a792c2c5461f7a9",
+      "invocation": "c08.a1.invocation",
+      "check_revision": "sha256:a48fbf9b05494ce9662989388b61cc682e71842e4dcb1b3ade9a3869d15ea6d3",
+      "attempt": "c08.a1",
+      "passed": false,
+      "exit_code": 1,
+      "digest": "sha256:3c5cc7bfce19d3db5a45b6856265500202450353e2b1d5f43044c444ace00365"
+    }
+  ],
+  "observations": [],
+  "search": [],
+  "route": [],
+  "schedule": []
+}

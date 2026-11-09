@@ -1,0 +1,72 @@
+{
+  "schema": "gauge.raw-receipts@1",
+  "case": "c06",
+  "result": "r06",
+  "records": [
+    {
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "c06.trace",
+        "record_id": "c06.a1.weft0.53a1d948",
+        "emitter": {
+          "kind": "fabric",
+          "id": "c06.fabric"
+        },
+        "sequence": 1,
+        "kind": "capability.invoked",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "invocation",
+            "ref": "c06.a1.invocation"
+          }
+        ],
+        "fields": {
+          "contract_rev": "sha256:06584b214efd895d759f378e401d04ed59a9dfb0fdf5a71310c619fa221a4565",
+          "implementation": "c06.implementation",
+          "status": "failed",
+          "invocation_ref": "c06.a1.invocation"
+        }
+      },
+      "digest": "sha256:40f6a2ec1c4b0fbe743cd2affa8f514777fd41bef2323d3e78ea836158778e15"
+    }
+  ],
+  "checks": [
+    {
+      "source": "check",
+      "ref": "c06.a1.check.22d5c73a",
+      "case": "c06",
+      "contract_revision": "sha256:06584b214efd895d759f378e401d04ed59a9dfb0fdf5a71310c619fa221a4565",
+      "implementation_revision": "sha256:5b609a0baad63f7ce2cdd7cefd462956ba886ea73dc07c7f17c865275f80cc07",
+      "invocation": "c06.a1.invocation",
+      "check_revision": "sha256:22d5c73a7f9719d866b6705e00d98a11044c8709426d028827f0b4d8e4490f79",
+      "attempt": "c06.a1",
+      "passed": false,
+      "exit_code": 1,
+      "digest": "sha256:f51e781b206df89fbb3810e17e60f6e8b1d55ad3a6561534079f533c8aec5a4a"
+    }
+  ],
+  "observations": [
+    {
+      "source": "observation",
+      "ref": "c06.a1.observation0.53a1d948",
+      "observation": "policy",
+      "source_revision": "sha256:53a1d9488ab5dc15d19501b667ee279b2645b6f91f69fd44683665f888661e9c",
+      "case": "c06",
+      "digest": "sha256:16a84ec7592375d531a88c836dce6fa0414a7cec4b96b81b8ebea3573f0ecded",
+      "fields": {
+        "case": "c06",
+        "result": "r06",
+        "attempt": "c06.a1",
+        "effect_violation": true,
+        "permitted_effect": "read",
+        "observed_effect": "write"
+      }
+    }
+  ],
+  "search": [],
+  "route": [],
+  "schedule": []
+}

@@ -1,0 +1,106 @@
+{
+  "schema": "gauge.raw-receipts@1",
+  "case": "c23",
+  "result": "r23",
+  "records": [
+    {
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "c23.trace",
+        "record_id": "c23.a1.weft0.53a1d948",
+        "emitter": {
+          "kind": "loom",
+          "id": "c23.loom"
+        },
+        "sequence": 1,
+        "kind": "action.transition",
+        "thread_id": "c23.a1",
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "c23.a1.synthetic-origin"
+          }
+        ],
+        "fields": {
+          "action_ref": "c23.a1.independent-b",
+          "operation": "op-b",
+          "state": "failed"
+        }
+      },
+      "digest": "sha256:cea7596f65e53954ceccba47b5f1dc8bba2f28d72bceeb457fa822331b89c889"
+    },
+    {
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "c23.trace",
+        "record_id": "c23.a1.weft1.53a1d948",
+        "emitter": {
+          "kind": "fabric",
+          "id": "c23.fabric"
+        },
+        "sequence": 2,
+        "kind": "capability.invoked",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "invocation",
+            "ref": "c23.a1.invocation"
+          }
+        ],
+        "fields": {
+          "contract_rev": "sha256:88c8e25056c1b3ed74780f9abdd408e9c493fabe18a7c6c7e2860574edf31d2a",
+          "implementation": "c23.implementation",
+          "status": "failed",
+          "invocation_ref": "c23.a1.invocation"
+        }
+      },
+      "digest": "sha256:96af96a25f649b2eab5c6460741fd7f1183dfeeb0d271b62fd919ae2aeeb8616"
+    }
+  ],
+  "checks": [],
+  "observations": [
+    {
+      "source": "observation",
+      "ref": "c23.a1.observation0.53a1d948",
+      "observation": "schedule",
+      "source_revision": "sha256:53a1d9488ab5dc15d19501b667ee279b2645b6f91f69fd44683665f888661e9c",
+      "case": "c23",
+      "digest": "sha256:03a39ad29c30ac04f06e4d9fdc27cd0eca0969a91012c158c6d53c2679ed0d7e",
+      "fields": {
+        "case": "c23",
+        "result": "r23",
+        "attempt": "c23.a1",
+        "disposition": "not_reached",
+        "terminal": "failed"
+      }
+    }
+  ],
+  "search": [],
+  "route": [],
+  "schedule": [
+    {
+      "scheduler_revision": "sha256:15c60bc68687d983904f8d3217a05c9adac3b9a776ee84aa5af95d7e55251c91",
+      "policy_revision": "sha256:74e85ad5ea6220bdf439205062b3700be83dbba3d901a37c13b552b4be5dd3aa",
+      "disposition": "not_reached",
+      "terminal": "failed",
+      "dependencies": [
+        {
+          "result": "c23.dependency",
+          "status": "failed"
+        }
+      ],
+      "budget": null,
+      "superseded": false,
+      "evidence": [
+        {
+          "source": "observation",
+          "ref": "c23.a1.observation0.53a1d948"
+        }
+      ]
+    }
+  ]
+}

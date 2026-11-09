@@ -1,0 +1,28 @@
+{
+  "schema": "gauge.raw-receipts@1",
+  "case": "c25",
+  "result": "r25",
+  "records": [],
+  "checks": [],
+  "observations": [
+    {
+      "source": "observation",
+      "ref": "c25.a1.observation0.53a1d948",
+      "observation": "judgment",
+      "source_revision": "sha256:53a1d9488ab5dc15d19501b667ee279b2645b6f91f69fd44683665f888661e9c",
+      "case": "c25",
+      "digest": "sha256:fc1597cd147eb9b3085e58329ffd1dc88438570501ad1a2b606aae7650e069f5",
+      "fields": {
+        "case": "c25",
+        "result": "r25",
+        "attempt": "c25.a1",
+        "review_ref": "c25.a1.prior-review",
+        "criterion_met": false,
+        "semantic_mismatch": true
+      }
+    }
+  ],
+  "search": [],
+  "route": [],
+  "schedule": []
+}

@@ -1,0 +1,79 @@
+{
+  "schema": "gauge.raw-receipts@1",
+  "case": "c12",
+  "result": "r12",
+  "records": [
+    {
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "c12.trace",
+        "record_id": "c12.a1.weft0.53a1d948",
+        "emitter": {
+          "kind": "gateway",
+          "id": "c12.gateway"
+        },
+        "sequence": 1,
+        "kind": "route.selected",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "inference_request",
+            "ref": "c12.a1.synthetic-origin"
+          }
+        ],
+        "fields": {
+          "request_ref": "c12.a1.request",
+          "routed_unit": "c12.selected"
+        }
+      },
+      "digest": "sha256:95892ee6142a84d0c621819e7e63b3f6a7fbf2f68c5cbd881108d1a1650c38b9"
+    }
+  ],
+  "checks": [],
+  "observations": [
+    {
+      "source": "observation",
+      "ref": "c12.a1.observation0.53a1d948",
+      "observation": "route",
+      "source_revision": "sha256:53a1d9488ab5dc15d19501b667ee279b2645b6f91f69fd44683665f888661e9c",
+      "case": "c12",
+      "digest": "sha256:82716e254b97e7133bd04c2cc9b162ea3e606e03ed77875003c9fe1d362cde26",
+      "fields": {
+        "case": "c12",
+        "result": "r12",
+        "attempt": "c12.a1",
+        "selected_contract": "c12.selected-contract",
+        "required_contract": "c12.required-contract",
+        "criterion_met": false
+      }
+    }
+  ],
+  "search": [],
+  "route": [
+    {
+      "decision": "c12.a1.route.53a1d948",
+      "policy_revision": "sha256:46530eda4e390c29581535347e9e3ddf594d081cd16759fd8ae03af068af902d",
+      "route_table_revision": "sha256:797a89a4cfa398b29582cdf0d2602546957d517c09fe833e8d8ad5d04a80f30c",
+      "preference_revision": null,
+      "selected": "c12.selected",
+      "candidates": [
+        {
+          "routed_unit": "c12.selected",
+          "disposition": "selected",
+          "exclusion": null,
+          "terms_revision": "sha256:f4af91e2947ba5bae535f8836b4d10708bd27fde9f5f618b0c1f5561aba784fa"
+        }
+      ],
+      "comparative_evidence": [],
+      "evidence": [
+        {
+          "source": "observation",
+          "ref": "c12.a1.observation0.53a1d948"
+        }
+      ]
+    }
+  ],
+  "schedule": []
+}

@@ -1,0 +1,41 @@
+{
+  "schema": "gauge.raw-receipts@1",
+  "case": "c07",
+  "result": "r07",
+  "records": [
+    {
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "c07.trace",
+        "record_id": "c07.a1.weft0.53a1d948",
+        "emitter": {
+          "kind": "fabric",
+          "id": "c07.fabric"
+        },
+        "sequence": 1,
+        "kind": "capability.invoked",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "invocation",
+            "ref": "c07.a1.invocation"
+          }
+        ],
+        "fields": {
+          "contract_rev": "sha256:5621862900561683aa28fdb6adc2ea8e422b1d1e31ed65815ea701ef747eaa08",
+          "implementation": "c07.implementation",
+          "status": "failed",
+          "invocation_ref": "c07.a1.invocation"
+        }
+      },
+      "digest": "sha256:8f2980f74222408f3c107bbe893386ee0350892c45549fbc9467a31f232527a1"
+    }
+  ],
+  "checks": [],
+  "observations": [],
+  "search": [],
+  "route": [],
+  "schedule": []
+}

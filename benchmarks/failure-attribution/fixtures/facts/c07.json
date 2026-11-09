@@ -1,0 +1,30 @@
+{
+  "result": "r07",
+  "case": "c07",
+  "split": "tune",
+  "bundle": {
+    "weft": [
+      {
+        "source": "weft_trace",
+        "ref": "c07.a1.weft0.53a1d948",
+        "trace_id": "c07.trace",
+        "record_id": "c07.a1.weft0.53a1d948",
+        "kind": "capability.invoked",
+        "digest": "sha256:8f2980f74222408f3c107bbe893386ee0350892c45549fbc9467a31f232527a1",
+        "parent_id": null,
+        "links": [],
+        "fields": {
+          "contract_rev": "sha256:5621862900561683aa28fdb6adc2ea8e422b1d1e31ed65815ea701ef747eaa08",
+          "implementation": "c07.implementation",
+          "status": "failed",
+          "invocation_ref": "c07.a1.invocation"
+        }
+      }
+    ],
+    "checks": [],
+    "observations": [],
+    "search": [],
+    "route": [],
+    "schedule": []
+  }
+}

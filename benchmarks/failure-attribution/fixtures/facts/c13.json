@@ -1,0 +1,50 @@
+{
+  "result": "r13",
+  "case": "c13",
+  "split": "tune",
+  "bundle": {
+    "weft": [],
+    "checks": [],
+    "observations": [
+      {
+        "source": "observation",
+        "ref": "c13.a1.observation0.53a1d948",
+        "observation": "schedule",
+        "source_revision": "sha256:53a1d9488ab5dc15d19501b667ee279b2645b6f91f69fd44683665f888661e9c",
+        "case": "c13",
+        "digest": "sha256:04fa1419f901cd3b54cad4cc18fb97980158e12e404f954ee9841ccc59589bf6",
+        "fields": {
+          "case": "c13",
+          "result": "r13",
+          "attempt": "c13.a1",
+          "disposition": "not_reached",
+          "terminal": "failed"
+        }
+      }
+    ],
+    "search": [],
+    "route": [],
+    "schedule": [
+      {
+        "scheduler_revision": "sha256:2da3b74da611028379f5260237a446c48422ba1ccab2570dd79361547b2eda3d",
+        "policy_revision": "sha256:4307060f2006f938509f80afd521f715392aa39acac6b4fc30c5db2b75bc59cc",
+        "disposition": "not_reached",
+        "terminal": "failed",
+        "dependencies": [
+          {
+            "result": "c13.dependency",
+            "status": "failed"
+          }
+        ],
+        "budget": null,
+        "superseded": false,
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "c13.a1.observation0.53a1d948"
+          }
+        ]
+      }
+    ]
+  }
+}

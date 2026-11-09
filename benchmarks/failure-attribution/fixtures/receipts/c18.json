@@ -1,0 +1,46 @@
+{
+  "schema": "gauge.raw-receipts@1",
+  "case": "c18",
+  "result": "r18",
+  "records": [],
+  "checks": [],
+  "observations": [
+    {
+      "source": "observation",
+      "ref": "c18.a1.observation0.53a1d948",
+      "observation": "search",
+      "source_revision": "sha256:53a1d9488ab5dc15d19501b667ee279b2645b6f91f69fd44683665f888661e9c",
+      "case": "c18",
+      "digest": "sha256:76dd8c26dc3e90ea499505ff5f0ae57f6bf150bac3b4546544275f7baafbabe1",
+      "fields": {
+        "case": "c18",
+        "result": "r18",
+        "attempt": "c18.a1",
+        "criterion": "c18.criterion",
+        "complete": false
+      }
+    }
+  ],
+  "search": [
+    {
+      "search": "c18.a1.search.53a1d948",
+      "revision": "sha256:e47075f50a823e205fa5f8e582ad17ba8bddaa040eea61c9a71a0b7df1e3845d",
+      "catalogue_revision": "sha256:3c4f82fdc8cf0b2983fa30e7e09dbc2a286e6392599359f83871bdcb2de1fa29",
+      "complete": false,
+      "authorized": true,
+      "matches": [],
+      "compositions": [],
+      "informed_by_inference": false,
+      "revoked": [],
+      "missing_grants": [],
+      "evidence": [
+        {
+          "source": "observation",
+          "ref": "c18.a1.observation0.53a1d948"
+        }
+      ]
+    }
+  ],
+  "route": [],
+  "schedule": []
+}

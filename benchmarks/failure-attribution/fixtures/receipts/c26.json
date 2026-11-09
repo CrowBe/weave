@@ -1,0 +1,57 @@
+{
+  "schema": "gauge.raw-receipts@1",
+  "case": "c26",
+  "result": "r26",
+  "records": [
+    {
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "c26.trace",
+        "record_id": "c26.a1.weft0.53a1d948",
+        "emitter": {
+          "kind": "fabric",
+          "id": "c26.fabric"
+        },
+        "sequence": 1,
+        "kind": "capability.invoked",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "invocation",
+            "ref": "c26.a1.invocation"
+          }
+        ],
+        "fields": {
+          "contract_rev": "sha256:0089b40567ba1e1ef3447bc93e2c398238f79434d9046eeab9a25037b5cd1085",
+          "implementation": "c26.implementation",
+          "status": "cancelled",
+          "invocation_ref": "c26.a1.invocation"
+        }
+      },
+      "digest": "sha256:57d8dc87ccb885fb4b2f4846d4e12e3881e23cb5d346f298638762743e13f17f"
+    }
+  ],
+  "checks": [],
+  "observations": [
+    {
+      "source": "observation",
+      "ref": "c26.a1.observation0.53a1d948",
+      "observation": "schedule",
+      "source_revision": "sha256:53a1d9488ab5dc15d19501b667ee279b2645b6f91f69fd44683665f888661e9c",
+      "case": "c26",
+      "digest": "sha256:277eab558946469fd69de1fc087b7446f16cea596eb9a020c5fd29ef47272284",
+      "fields": {
+        "case": "c26",
+        "result": "r26",
+        "attempt": "c26.a1",
+        "cancellation_requested": true,
+        "commit_outcome": "unknown"
+      }
+    }
+  ],
+  "search": [],
+  "route": [],
+  "schedule": []
+}

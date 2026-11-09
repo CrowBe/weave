@@ -1,0 +1,11 @@
+{
+  "schema": "gauge.raw-receipts@1",
+  "case": "c17",
+  "result": "r17",
+  "records": [],
+  "checks": [],
+  "observations": [],
+  "search": [],
+  "route": [],
+  "schedule": []
+}

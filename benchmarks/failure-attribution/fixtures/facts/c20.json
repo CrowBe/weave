@@ -1,0 +1,68 @@
+{
+  "result": "r20",
+  "case": "c20",
+  "split": "tune",
+  "bundle": {
+    "weft": [
+      {
+        "source": "weft_trace",
+        "ref": "c20.a1.weft0.53a1d948",
+        "trace_id": "c20.trace",
+        "record_id": "c20.a1.weft0.53a1d948",
+        "kind": "route.selected",
+        "digest": "sha256:1b666d2b76e84696b9693c08b7760acf281203ed9b570a02d78c1004d8e00199",
+        "parent_id": null,
+        "links": [],
+        "fields": {
+          "request_ref": "c20.a1.request",
+          "routed_unit": "c20.selected"
+        }
+      }
+    ],
+    "checks": [],
+    "observations": [
+      {
+        "source": "observation",
+        "ref": "c20.a1.observation0.53a1d948",
+        "observation": "route",
+        "source_revision": "sha256:53a1d9488ab5dc15d19501b667ee279b2645b6f91f69fd44683665f888661e9c",
+        "case": "c20",
+        "digest": "sha256:4a99346f9441416effe15f51bba84673b6c27b3338b05e7fde162d1b438d7171",
+        "fields": {
+          "case": "c20",
+          "result": "r20",
+          "attempt": "c20.a1",
+          "selected_contract": "c20.selected-contract",
+          "required_contract": "c20.selected-contract",
+          "criterion_met": false
+        }
+      }
+    ],
+    "search": [],
+    "route": [
+      {
+        "decision": "c20.a1.route.53a1d948",
+        "policy_revision": "sha256:25f6c549b4492541d8dcfacb16870657304069a2ed670c4d02dbf5924c614f60",
+        "route_table_revision": "sha256:141d547fbb7a85bd1f97a8dd33147e07f5bf944c1651f4e35f3e03e14dff28cd",
+        "preference_revision": null,
+        "selected": "c20.selected",
+        "candidates": [
+          {
+            "routed_unit": "c20.selected",
+            "disposition": "selected",
+            "exclusion": null,
+            "terms_revision": "sha256:b54eb37ffd1e35d996c2f690b8a7c8d7caf626e77af63a6dc295ae12bf993b44"
+          }
+        ],
+        "comparative_evidence": [],
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "c20.a1.observation0.53a1d948"
+          }
+        ]
+      }
+    ],
+    "schedule": []
+  }
+}

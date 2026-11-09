@@ -1,0 +1,110 @@
+{
+  "schema": "gauge.raw-receipts@1",
+  "case": "c09",
+  "result": "r09",
+  "records": [
+    {
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "c09.trace",
+        "record_id": "c09.a1.weft0.53a1d948",
+        "emitter": {
+          "kind": "gateway",
+          "id": "c09.gateway"
+        },
+        "sequence": 1,
+        "kind": "route.selected",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "inference_request",
+            "ref": "c09.a1.synthetic-origin"
+          }
+        ],
+        "fields": {
+          "request_ref": "c09.a1.request",
+          "routed_unit": "c09.selected",
+          "excluded": [
+            {
+              "routed_unit": "c09.alternative",
+              "reason": "table_omission"
+            }
+          ]
+        }
+      },
+      "digest": "sha256:0eeb49e0f098ac5816b9428cc79c908dcd8f06e55e90522e4b64c8c8126471d8"
+    }
+  ],
+  "checks": [
+    {
+      "source": "check",
+      "ref": "c09.a1.check.a543584e",
+      "case": "c09",
+      "contract_revision": "sha256:26a9021453f71b79cba974969383f61958fdb1b8689f10a537f8ddd0ec49a1f7",
+      "implementation_revision": "sha256:1df59e613fb89e46c78afb3b498056f9aea13b27e43fc46a97acda91df522909",
+      "invocation": "c09.a1.invocation",
+      "check_revision": "sha256:a543584ea68067f9ff85dac27bf95596e7aaf0e1740148a815a6b6bc40876277",
+      "attempt": "c09.a1",
+      "passed": true,
+      "exit_code": 0,
+      "digest": "sha256:5bc121d102fbd25bb4584fa5aa8fe347ccdee2d8c97c63c11849ac63abf5dad9"
+    }
+  ],
+  "observations": [
+    {
+      "source": "observation",
+      "ref": "c09.a1.observation0.53a1d948",
+      "observation": "route",
+      "source_revision": "sha256:53a1d9488ab5dc15d19501b667ee279b2645b6f91f69fd44683665f888661e9c",
+      "case": "c09",
+      "digest": "sha256:5df55142e909259e77076b0f8b0190060055f5881dd6d9961609f422800cbd46",
+      "fields": {
+        "case": "c09",
+        "result": "r09",
+        "attempt": "c09.a1",
+        "selected_contract": "c09.selected-contract",
+        "required_contract": "c09.selected-contract",
+        "criterion_met": false
+      }
+    }
+  ],
+  "search": [],
+  "route": [
+    {
+      "decision": "c09.a1.route.53a1d948",
+      "policy_revision": "sha256:40ab3cfb91373647684b7303cc05192307fe003f9456954439bfb4f9ecd4744d",
+      "route_table_revision": "sha256:6cf1f5befecd33c7abf3582bfcae5c316294751855888f78aeb73a5b9e0380fd",
+      "preference_revision": null,
+      "selected": "c09.selected",
+      "candidates": [
+        {
+          "routed_unit": "c09.selected",
+          "disposition": "selected",
+          "exclusion": null,
+          "terms_revision": "sha256:a0dbeb2b9f83c47341cd3d137df6d5d3156b085ce722b59d42f23aa91d37996c"
+        },
+        {
+          "routed_unit": "c09.alternative",
+          "disposition": "excluded",
+          "exclusion": "table_omission",
+          "terms_revision": "sha256:e76e291d909ae16579f847b9101dbf5a8283d07946ae5a2b5de540758b02f2ed"
+        }
+      ],
+      "comparative_evidence": [
+        {
+          "source": "check",
+          "ref": "c09.a1.check.a543584e"
+        }
+      ],
+      "evidence": [
+        {
+          "source": "observation",
+          "ref": "c09.a1.observation0.53a1d948"
+        }
+      ]
+    }
+  ],
+  "schedule": []
+}

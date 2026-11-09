@@ -1,0 +1,81 @@
+{
+  "result": "r21",
+  "case": "c21",
+  "split": "tune",
+  "bundle": {
+    "weft": [
+      {
+        "source": "weft_trace",
+        "ref": "c21.a1.weft0.53a1d948",
+        "trace_id": "c21.trace",
+        "record_id": "c21.a1.weft0.53a1d948",
+        "kind": "capability.invoked",
+        "digest": "sha256:8bccc1f980dcce9d6c0f6e5d1ba0821ed6c7d37cbb55a8fa46b9ab5219d23f25",
+        "parent_id": null,
+        "links": [],
+        "fields": {
+          "contract_rev": "sha256:64fa3a0184c163145f308848989b5409df7879081a59cc6a44db8b7a06604fc1",
+          "implementation": "c21.implementation",
+          "status": "failed",
+          "invocation_ref": "c21.a1.invocation"
+        }
+      }
+    ],
+    "checks": [
+      {
+        "source": "check",
+        "ref": "c21.a1.check.447aa6d3",
+        "case": "c21",
+        "contract_revision": "sha256:64fa3a0184c163145f308848989b5409df7879081a59cc6a44db8b7a06604fc1",
+        "implementation_revision": "sha256:ce5167e1b9c9646d4d826114147f3fe7c00f9cc98c747d9a8173c041a4b666c8",
+        "invocation": "c21.a1.invocation",
+        "check_revision": "sha256:447aa6d3651074d14444fdb9146d9030bfb8bae0651226da8c05e8df84123ce7",
+        "attempt": "c21.a1",
+        "passed": false,
+        "exit_code": 1,
+        "digest": "sha256:4a268a98c3c834edae13e297d85d29c738a8076248a98a4199c81a369b74e9e5"
+      }
+    ],
+    "observations": [
+      {
+        "source": "observation",
+        "ref": "c21.a1.observation0.53a1d948",
+        "observation": "schedule",
+        "source_revision": "sha256:53a1d9488ab5dc15d19501b667ee279b2645b6f91f69fd44683665f888661e9c",
+        "case": "c21",
+        "digest": "sha256:486bb413504e4275b422b27eb582ab562b326876c9da4eb3317d4dedca348b63",
+        "fields": {
+          "case": "c21",
+          "result": "r21",
+          "attempt": "c21.a1",
+          "disposition": "not_reached",
+          "terminal": "failed"
+        }
+      }
+    ],
+    "search": [],
+    "route": [],
+    "schedule": [
+      {
+        "scheduler_revision": "sha256:9c395759e2353f4ea6e04d502e3a9d5d26e6aa463a7cfdfa15e94ad10eefb361",
+        "policy_revision": "sha256:0594344c2ac340df9ec7386fe7c10887901256801be0610a94f1b646d313af66",
+        "disposition": "not_reached",
+        "terminal": "failed",
+        "dependencies": [
+          {
+            "result": "c21.dependency",
+            "status": "failed"
+          }
+        ],
+        "budget": null,
+        "superseded": false,
+        "evidence": [
+          {
+            "source": "observation",
+            "ref": "c21.a1.observation0.53a1d948"
+          }
+        ]
+      }
+    ]
+  }
+}

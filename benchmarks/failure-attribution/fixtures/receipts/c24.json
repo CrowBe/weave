@@ -1,0 +1,91 @@
+{
+  "schema": "gauge.raw-receipts@1",
+  "case": "c24",
+  "result": "r24",
+  "records": [
+    {
+      "record": {
+        "schema": "weft.record@1",
+        "trace_id": "c24.trace",
+        "record_id": "c24.a1.weft0.53a1d948",
+        "emitter": {
+          "kind": "gateway",
+          "id": "c24.gateway"
+        },
+        "sequence": 1,
+        "kind": "route.selected",
+        "thread_id": null,
+        "parent_id": null,
+        "links": [],
+        "evidence": [
+          {
+            "source": "inference_request",
+            "ref": "c24.a1.synthetic-origin"
+          }
+        ],
+        "fields": {
+          "request_ref": "c24.a1.request",
+          "routed_unit": "c24.selected",
+          "excluded": [
+            {
+              "routed_unit": "c24.alternative",
+              "reason": "destination_not_permitted"
+            }
+          ]
+        }
+      },
+      "digest": "sha256:d6ad06ea76f5ffcca259d902b67fe2d151662e6131c260b2988b2a10750e3e7b"
+    }
+  ],
+  "checks": [],
+  "observations": [
+    {
+      "source": "observation",
+      "ref": "c24.a1.observation0.53a1d948",
+      "observation": "route",
+      "source_revision": "sha256:53a1d9488ab5dc15d19501b667ee279b2645b6f91f69fd44683665f888661e9c",
+      "case": "c24",
+      "digest": "sha256:2ea596cf78964037c7aff0f491a8c8d209a8ddff33b913081ec97c0ea7f2adec",
+      "fields": {
+        "case": "c24",
+        "result": "r24",
+        "attempt": "c24.a1",
+        "selected_contract": "c24.selected-contract",
+        "required_contract": "c24.selected-contract",
+        "criterion_met": false
+      }
+    }
+  ],
+  "search": [],
+  "route": [
+    {
+      "decision": "c24.a1.route.53a1d948",
+      "policy_revision": "sha256:b1315720f682a122994001a726e7e8c2e6b158290769a543a83b76f688a1ccee",
+      "route_table_revision": "sha256:7e8f7f293699f5b73dc62c6373d40cf77534265597284f72943a4b32a765f4f4",
+      "preference_revision": null,
+      "selected": "c24.selected",
+      "candidates": [
+        {
+          "routed_unit": "c24.selected",
+          "disposition": "selected",
+          "exclusion": null,
+          "terms_revision": "sha256:16210f7d6e3d60f3f8cd14ed948ac7fa5c59892e42b68583efc50cb59c3fd695"
+        },
+        {
+          "routed_unit": "c24.alternative",
+          "disposition": "prohibited",
+          "exclusion": "destination_not_permitted",
+          "terms_revision": "sha256:3e81f2c5d8eae53c2a82b44e24e328e0b59e0f5c665c74eec173196d94b1372d"
+        }
+      ],
+      "comparative_evidence": [],
+      "evidence": [
+        {
+          "source": "observation",
+          "ref": "c24.a1.observation0.53a1d948"
+        }
+      ]
+    }
+  ],
+  "schedule": []
+}

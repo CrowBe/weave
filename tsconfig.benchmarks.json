@@ -11,6 +11,7 @@
     "benchmarks/inference/bev-sample/**/*.ts",
     "benchmarks/task-acceptance/**/*.ts",
     "benchmarks/decision-sites/**/*.ts",
-    "benchmarks/frontier-weigh/**/*.ts"
+    "benchmarks/frontier-weigh/**/*.ts",
+    "benchmarks/failure-attribution/**/*.ts"
   ]
 }
