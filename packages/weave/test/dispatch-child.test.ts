@@ -1075,7 +1075,10 @@ test('P5c1-5 resumable reasons stay pending at any revision; terminal outcomes w
       receipt: null,
     });
     // A later read success cannot silently satisfy a frozen unmet join.
-    await run(harness({}, { journal: storage, clock }), childRequest(s.reads[1]!));
+    const read = await run(harness({}, { journal: storage, clock }), childRequest(s.reads[1]!));
+    assert.deepEqual(read.status, 'dispatched');
+    // The null edge froze a pending read, not this decision: the read stays readable once it settles.
+    assert.deepEqual(await run(harness({}, { journal: storage, clock }), childRequest(s.reads[1]!)), read);
     assert.deepEqual(await run(harness({}, { journal: storage, clock }), childRequest(s.gen)), g);
   }
 });
@@ -1684,6 +1687,13 @@ test('P5c1-9 a cached terminal child validates its checkpoint and decision befor
   const cases: [string, (loaded: any) => void][] = [
     ['checkpoint stage', (l) => (l.checkpoint.asks.triage = 1)],
     ['checkpoint intent', (l) => (l.checkpoint.intent.child.brief.tier = 'strong')],
+    [
+      'checkpoint and decision intent together',
+      (l) => {
+        l.checkpoint.intent.tier = 'strong';
+        l.decisions[0].intent.tier = 'strong';
+      },
+    ],
     ['decision status', (l) => (l.decisions[0].status = 'paused')],
     ['decision intent', (l) => (l.decisions[0].intent.tier = 'strong')],
     ['decision receipt', (l) => (l.decisions[0].receipt.status = 'refused')],

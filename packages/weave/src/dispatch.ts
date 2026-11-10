@@ -2202,6 +2202,8 @@ function expectedChildDecision(
 ): DispatchDecision {
   const plan = resolveChild(request, checkpoint, evidence);
   const expected = decision.reason === 'stale_answer' ? stalePlan(request, checkpoint) : plan;
+  if (expected.kind === 'dispatch' && checkpoint.intent !== null && !sameRecord(checkpoint.intent, expected.intent))
+    throw new Error('recorded intent does not match the recorded stages');
   const intent =
     expected.kind === 'dispatch'
       ? (checkpoint.intent ?? expected.intent)
@@ -2222,15 +2224,20 @@ function verifyFrozenReference(
   verified: VerifiedChild,
   journal: DispatchJournal,
 ): void {
+  const decisionDigest = digest(decision);
   for (const sibling of verified.plan.children) {
     if (sibling.child_ref === request.request_id) continue;
     const dependencies = journal.load(sibling.child_ref).checkpoint?.child?.dependencies;
     if (!Array.isArray(dependencies)) continue;
     const edge = dependencies.find((candidate) => candidate.decision_ref === request.request_id);
     if (edge === undefined) continue;
+    // A null or older edge froze a pending read, not this decision; only a naming edge is compared.
+    const names =
+      (edge.entry !== null && edge.entry === decision.entry) || edge.decision_digest === decisionDigest;
+    if (!names) continue;
     if (
       edge.entry !== decision.entry ||
-      edge.decision_digest !== digest(decision) ||
+      edge.decision_digest !== decisionDigest ||
       edge.dispatch_ref !== (decision.intent?.dispatch_id ?? null) ||
       !sameRecord(edge.receipt, decision.receipt)
     )
