@@ -2192,6 +2192,73 @@ function verifySaved(request: DispatchRequest, decisions: readonly DispatchDecis
   }
 }
 
+/** A retained checkpoint and saved receipt re-derive the decision; staleness is the one gate fact. */
+function expectedChildDecision(
+  request: DispatchRequest,
+  checkpoint: DispatchCheckpoint,
+  decision: DispatchDecision,
+  evidence: ChildEvidence,
+  entry: number,
+): DispatchDecision {
+  const plan = resolveChild(request, checkpoint, evidence);
+  const expected = decision.reason === 'stale_answer' ? stalePlan(request, checkpoint) : plan;
+  const intent =
+    expected.kind === 'dispatch'
+      ? (checkpoint.intent ?? expected.intent)
+      : expected.reason === 'stale_answer'
+        ? checkpoint.intent
+        : null;
+  if (expected.kind === 'final')
+    return makeDecision(request, checkpoint, entry, expected, intent, null, expected.status, expected.reason);
+  const receipt = decision.receipt === null ? null : normalizeReceipt(decision.receipt, expected.intent);
+  const outcome = receiptResult(expected, receipt);
+  return makeDecision(request, checkpoint, entry, expected, intent, receipt, outcome.status, outcome.reason);
+}
+
+/** A dependent generator's frozen edge is the second copy that binds a read decision and its receipt. */
+function verifyFrozenReference(
+  request: DispatchRequest,
+  decision: DispatchDecision,
+  verified: VerifiedChild,
+  journal: DispatchJournal,
+): void {
+  for (const sibling of verified.plan.children) {
+    if (sibling.child_ref === request.request_id) continue;
+    const dependencies = journal.load(sibling.child_ref).checkpoint?.child?.dependencies;
+    if (!Array.isArray(dependencies)) continue;
+    const edge = dependencies.find((candidate) => candidate.decision_ref === request.request_id);
+    if (edge === undefined) continue;
+    if (
+      edge.entry !== decision.entry ||
+      edge.decision_digest !== digest(decision) ||
+      edge.dispatch_ref !== (decision.intent?.dispatch_id ?? null) ||
+      !sameRecord(edge.receipt, decision.receipt)
+    )
+      throw new Error('a frozen dependency edge differs from the saved child decision');
+  }
+}
+
+/** A cached child decision is returned only after its checkpoint, trace and receipt re-derive. */
+function verifyTerminal(
+  request: DispatchRequest,
+  checkpoint: DispatchCheckpoint,
+  decision: DispatchDecision,
+  entry: number,
+  verified: VerifiedChild,
+  journal: DispatchJournal,
+): void {
+  const expected = expectedChildDecision(
+    request,
+    checkpoint,
+    decision,
+    liveEvidence(journal, request, checkpoint.child),
+    entry,
+  );
+  if (!sameRecord(expected, decision))
+    throw new Error('a saved child decision does not match its retained checkpoint');
+  verifyFrozenReference(request, decision, verified, journal);
+}
+
 /** Present the intent under the attempt this call holds; every exit ends that attempt. */
 async function attemptIntent(
   request: DispatchRequest,
@@ -2382,7 +2449,11 @@ async function decideChild(
   verifySaved(captured, loaded.decisions, journal);
   const latest = loaded.decisions.at(-1) ?? null;
   const entry = loaded.decisions.length + 1;
-  if (latest !== null && (!isResumable(latest) || captured.resume !== true)) return clone(latest);
+  if (latest !== null && (!isResumable(latest) || captured.resume !== true)) {
+    if (loaded.checkpoint === null) throw new Error('a saved child decision needs its retained checkpoint');
+    verifyTerminal(captured, loaded.checkpoint, latest, loaded.decisions.length, verified, journal);
+    return clone(latest);
+  }
 
   const resume = captured.resume === true;
   let checkpoint =

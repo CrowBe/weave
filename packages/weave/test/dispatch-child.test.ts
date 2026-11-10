@@ -1671,6 +1671,42 @@ test('P5c1-9 each evidence class is challenged independently, on live and pure p
   await assert.rejects(run(harness({}, { journal: parentGone }), childRequest(s.gen)), Error);
 });
 
+test('P5c1-9 a cached terminal child validates its checkpoint and decision before returning', async () => {
+  const s = await parentSpawn();
+  await runReads(s);
+  const gen = await run(harness({}, { journal: s.journal }), childRequest(s.gen));
+  const id = s.gen.child_ref;
+  const cached = (edit: (loaded: any) => void) =>
+    forged(s.journal, id, (loaded) => {
+      edit(loaded);
+      return loaded;
+    });
+  const cases: [string, (loaded: any) => void][] = [
+    ['checkpoint stage', (l) => (l.checkpoint.asks.triage = 1)],
+    ['checkpoint intent', (l) => (l.checkpoint.intent.child.brief.tier = 'strong')],
+    ['decision status', (l) => (l.decisions[0].status = 'paused')],
+    ['decision intent', (l) => (l.decisions[0].intent.tier = 'strong')],
+    ['decision receipt', (l) => (l.decisions[0].receipt.status = 'refused')],
+    ['decision receipt ref', (l) => (l.decisions[0].receipt.ref = 'not a ref')],
+    ['decision trace', (l) => (l.decisions[0].decide1.facts[0].value = 'tampered')],
+  ];
+  for (const [name, edit] of cases) {
+    const h = harness({}, { journal: cached(edit) });
+    await assert.rejects(run(h, childRequest(s.gen)), Error, name);
+    assert.equal(h.effects(), 0, name);
+  }
+  assert.deepEqual(s.journal.load(id).decisions, [gen]);
+  // A read's receipt is also frozen in its dependent generator's edge: a valid-looking ref change fails.
+  const readId = s.reads[0]!.child_ref;
+  const changedRef = forged(s.journal, readId, (loaded) => {
+    loaded.decisions[0].receipt.ref = digest('other');
+    return loaded;
+  });
+  const h = harness({}, { journal: changedRef });
+  await assert.rejects(run(h, childRequest(s.reads[0]!)), Error, 'read receipt ref');
+  assert.equal(h.effects(), 0);
+});
+
 test('P5c1-9 preflight_budget is bound to preflight_terms on validation and replay', async () => {
   const s = await parentSpawn();
   const loaded = s.journal.load('d1');
