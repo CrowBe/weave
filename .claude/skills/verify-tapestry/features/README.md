@@ -4,8 +4,8 @@ This directory is the maintained source for verifying the user-facing behavior o
 
 ## Baseline preconditions
 
-- `H=.claude/skills/verify-weave/bin/weave-verify.mjs` from the repo root.
-- `$H launch` printed `READY …`, and `WEAVE_VERIFY_RUN` is set to its `RUN=` value.
+- `H=.claude/skills/verify-tapestry/bin/tapestry-verify.mjs` from the repo root.
+- `$H launch` printed `READY …`, and `TAPESTRY_VERIFY_RUN` is set to its `RUN=` value.
 - `$H doctor` exits 0. Never drive an instance this run did not launch, and in particular not a user's server on port 5173.
 - `$H browser goto` gives the baseline state:
   - Theme `Default` (`theme.weave-default`).
@@ -23,7 +23,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 
 ## Proof and skip reporting
 
-- Capture the user action and the resulting state. Every `browser` call is logged with its result in `.local/verify-weave/$WEAVE_VERIFY_RUN/actions.jsonl`. Also take `state` before and after, plus an end-state `snapshot` and `screenshot` under `<feature-id>/`.
+- Capture the user action and the resulting state. Every `browser` call is logged with its result in `.local/verify-tapestry/$TAPESTRY_VERIFY_RUN/actions.jsonl`. Also take `state` before and after, plus an end-state `snapshot` and `screenshot` under `<feature-id>/`.
 - UI proof includes an AX snapshot and a screenshot with the header visible (`Field notes`, the session, revision, and theme).
 - "No effect" proof: `$H browser network` shows `foreign: []`, and disabled controls stay `disabled` after a click.
 - Record the feature file and entry point (mouse or keyboard) used with every artifact.
@@ -35,7 +35,7 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 
 1. `Sub-features`: short IDs, one line per behavior.
 2. `How to get to it (user POV)`: every user entry point.
-3. `Driving it with weave-verify`: starts with `Preconditions:`, then labeled bullets pairing each action with an exact command and an observable result.
+3. `Driving it with tapestry-verify`: starts with `Preconditions:`, then labeled bullets pairing each action with an exact command and an observable result.
 4. `Gotchas`: traps that can waste or invalidate a run.
 
 ## Features

@@ -15,7 +15,7 @@ The workspace shell is the single page a user lands on. It names the project, se
 - Choose the `Pending authority requests` link in Navigation.
 - Narrow the browser window below 1024 px.
 
-## Driving it with weave-verify
+## Driving it with tapestry-verify
 
 Preconditions:
 

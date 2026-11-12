@@ -15,7 +15,7 @@ Cut-through shows each pending authority request as a card. The card shows the o
 - Choose `Pending authority requests` in Navigation.
 - Keyboard: from a fresh page, press Tab eight times to focus the `Binding digest` summary (nine times for `Report digest`), then press Enter to toggle it.
 
-## Driving it with weave-verify
+## Driving it with tapestry-verify
 
 Preconditions:
 

@@ -14,7 +14,7 @@ Navigation lists the project's attachments with their kind. Choosing one marks i
 - Click an attachment row under `Attachments` in Navigation.
 - From a fresh page, press Tab five times to focus `Field repository` (six times for `Brief`), then press Enter.
 
-## Driving it with weave-verify
+## Driving it with tapestry-verify
 
 Preconditions:
 

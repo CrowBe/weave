@@ -1,18 +1,18 @@
 #!/usr/bin/env node
-// Verification scaffolding for the verify-weave skill. Not product code.
+// Verification scaffolding for the verify-tapestry skill. Not product code.
 //
 // Launches the Tapestry web workspace (Vite dev server) and a headless Chrome
 // on free loopback ports, drives the page over the Chrome DevTools Protocol
 // with real input events, records evidence, and tears down only what it
 // started. No npm dependencies: Node >= 22 (global WebSocket and fetch).
 //
-//   weave-verify.mjs launch                      -> prints RUN id, URL, paths
-//   weave-verify.mjs doctor   --run <id>
-//   weave-verify.mjs browser  --run <id> <action> [options]
-//   weave-verify.mjs cleanup  --run <id>
-//   weave-verify.mjs runs
+//   tapestry-verify.mjs launch                      -> prints RUN id, URL, paths
+//   tapestry-verify.mjs doctor   --run <id>
+//   tapestry-verify.mjs browser  --run <id> <action> [options]
+//   tapestry-verify.mjs cleanup  --run <id>
+//   tapestry-verify.mjs runs
 //
-// --run may be replaced by the WEAVE_VERIFY_RUN environment variable.
+// --run may be replaced by the TAPESTRY_VERIFY_RUN environment variable.
 
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
@@ -35,13 +35,13 @@ import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
-const SCRATCH_ROOT = join(tmpdir(), 'weave-verify');
-const EVIDENCE_ROOT = join(REPO, '.local', 'verify-weave');
+const SCRATCH_ROOT = join(tmpdir(), 'tapestry-verify');
+const EVIDENCE_ROOT = join(REPO, '.local', 'verify-tapestry');
 const APP_TITLE = 'Weave Tapestry';
 const CHROME_CANDIDATES = ['google-chrome-stable', 'google-chrome', 'chromium', 'chromium-browser'];
 
 function fail(message, code = 1) {
-  process.stderr.write(`weave-verify: ${message}\n`);
+  process.stderr.write(`tapestry-verify: ${message}\n`);
   process.exit(code);
 }
 
@@ -71,8 +71,8 @@ function paths(run) {
 }
 
 function runId(flags) {
-  const run = flags.run ?? process.env.WEAVE_VERIFY_RUN;
-  if (!run || run === true) fail('missing --run <id> (or WEAVE_VERIFY_RUN); `launch` prints it');
+  const run = flags.run ?? process.env.TAPESTRY_VERIFY_RUN;
+  if (!run || run === true) fail('missing --run <id> (or TAPESTRY_VERIFY_RUN); `launch` prints it');
   return run;
 }
 
@@ -182,7 +182,7 @@ function listeners(port) {
 }
 
 function findChrome() {
-  if (process.env.WEAVE_VERIFY_CHROME) return process.env.WEAVE_VERIFY_CHROME;
+  if (process.env.TAPESTRY_VERIFY_CHROME) return process.env.TAPESTRY_VERIFY_CHROME;
   for (const name of CHROME_CANDIDATES) {
     const out = spawnSync('sh', ['-c', `command -v ${name}`], { encoding: 'utf8' });
     if (out.status === 0 && out.stdout.trim()) return out.stdout.trim();
@@ -468,7 +468,7 @@ async function launch(flags) {
   mkdirSync(p.scratch, { recursive: true });
   mkdirSync(p.evidence, { recursive: true });
   const chrome = findChrome();
-  if (!chrome) fail('no Chrome/Chromium on PATH; set WEAVE_VERIFY_CHROME=/path/to/chrome');
+  if (!chrome) fail('no Chrome/Chromium on PATH; set TAPESTRY_VERIFY_CHROME=/path/to/chrome');
 
   const state = {
     run,
@@ -528,7 +528,7 @@ async function launch(flags) {
       return html.includes(`<title>${APP_TITLE}</title>`) && entry.ok;
     });
   } catch (error) {
-    fail(`${error.message}\nrun: weave-verify.mjs cleanup --run ${run}`);
+    fail(`${error.message}\nrun: tapestry-verify.mjs cleanup --run ${run}`);
   }
 
   // 3. Headless Chrome with a disposable profile, own process group.
@@ -565,7 +565,7 @@ async function launch(flags) {
       await navigate(cdp, state.url);
     });
   } catch (error) {
-    fail(`${error.message}\nrun: weave-verify.mjs cleanup --run ${run}`);
+    fail(`${error.message}\nrun: tapestry-verify.mjs cleanup --run ${run}`);
   }
   state.readyAt = new Date().toISOString();
   saveState(state);
@@ -839,5 +839,5 @@ const commands = {
   cleanup: () => cleanup(flags),
   runs,
 };
-if (!commands[command]) fail('usage: weave-verify.mjs launch|doctor|browser|cleanup|runs [--run <id>] ...', 2);
+if (!commands[command]) fail('usage: tapestry-verify.mjs launch|doctor|browser|cleanup|runs [--run <id>] ...', 2);
 await commands[command]();

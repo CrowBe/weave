@@ -15,7 +15,7 @@ The Conversational surface shows the recorded observations of the workspace view
 - Click `Omitted slice` or `Recorded observations` in the header group labelled `Fixture`.
 - From a fresh page, press Tab four times to focus `Recorded observations`, then press Enter.
 
-## Driving it with weave-verify
+## Driving it with tapestry-verify
 
 Preconditions:
 

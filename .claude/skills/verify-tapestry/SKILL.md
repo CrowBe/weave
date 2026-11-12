@@ -1,5 +1,5 @@
 ---
-name: verify-weave
+name: verify-tapestry
 description: Launch and drive Weave's Tapestry web workspace (the read-only browser UI served by `npm run host:workspace`, packages/tapestry-web) in an isolated Vite dev server and headless Chrome, then capture screenshots, accessibility snapshots, and DOM state as proof. Use this to prove a change to packages/tapestry, packages/tapestry-web, or the workspace view works in the real UI. Do not use it for runtime, gateway, or benchmark behavior, which have no UI.
 ---
 
@@ -12,16 +12,30 @@ Other surfaces are not covered here. They are the `npm run example:*` CLIs (most
 Everything goes through one helper, a dependency-free Node script that speaks the Chrome DevTools Protocol:
 
 ```bash
-H=.claude/skills/verify-weave/bin/weave-verify.mjs   # run from the repo root
+H=.claude/skills/verify-tapestry/bin/tapestry-verify.mjs   # run from the repo root
 ```
 
-Requirements: Node >= 22.18 (it uses the global `WebSocket` and `fetch`), `npm ci` already done, Linux `/proc` (for port and process ownership), and Chrome or Chromium on `PATH` (`google-chrome-stable`, `google-chrome`, `chromium`, or `chromium-browser`; override with `WEAVE_VERIFY_CHROME=/path`).
+Requirements: Node >= 22.18 (it uses the global `WebSocket` and `fetch`), `npm ci` already done, Linux `/proc` (for port and process ownership), and Chrome or Chromium on `PATH` (`google-chrome-stable`, `google-chrome`, `chromium`, or `chromium-browser`; override with `TAPESTRY_VERIFY_CHROME=/path`).
+
+
+## Monorepo baseline (required before calling a change "done")
+
+This skill proves Tapestry UI behaviour. It does not replace the monorepo gate. Before calling a change done or approving a PR, also follow the existing verify-weave workflow (the Fleet skill at `/home/box/agent-data/workflows/verify-weave/SKILL.md`):
+
+1. Check out the exact head SHA under review in a clean clone. Use Node 22 (`node -v` must print v22.x; switch with nvm/fnm if needed). The package engines allow `>=22.18`; this skill still records the Node 22 requirement. Run `npm ci`.
+2. Run `npm run verify` from the repo root first, and record the result per package. This is always first, before package-specific UI proof.
+3. Run every script under the repo's `checks/` directory (list it first; don't assume names). Each must exit 0.
+4. Then run this skill's Launch / Doctor / Drive / Evidence / Cleanup for the Tapestry features the change touches.
+5. Confirm CI on the PR is green for the same SHA. A new commit voids this verification.
+6. Report: SHA, Node version, verify result, each checks/ script result, and the UI-proof evidence. Any gap is a failure.
+
+To choose which package skills to run for a change, follow `.claude/skills/verify-weave-index/SKILL.md`.
 
 ## Launch
 
 ```bash
 $H launch                 # or: $H launch --run my-run-id
-export WEAVE_VERIFY_RUN=<RUN printed on the first line>
+export TAPESTRY_VERIFY_RUN=<RUN printed on the first line>
 ```
 
 `launch`:
@@ -85,7 +99,7 @@ Never use coordinates. The feature map has the exact handles per journey: [featu
 
 ## Evidence
 
-Evidence lives in `.local/verify-weave/<RUN>/` at the repo root. `.local/` is git-ignored, and cleanup never deletes this directory. Each run produces:
+Evidence lives in `.local/verify-tapestry/<RUN>/` at the repo root. `.local/` is git-ignored, and cleanup never deletes this directory. Each run produces:
 
 - `launch.json`: HEAD, dirty flag, ports, PIDs, Chrome version, ready time.
 - `build.log`: `npm run build` output and exit code.
@@ -104,11 +118,11 @@ Proof standards:
 ## Cleanup
 
 ```bash
-$H cleanup       # uses WEAVE_VERIFY_RUN or --run
-ls .local/verify-weave/$WEAVE_VERIFY_RUN   # evidence must still be there
+$H cleanup       # uses TAPESTRY_VERIFY_RUN or --run
+ls .local/verify-tapestry/$TAPESTRY_VERIFY_RUN   # evidence must still be there
 ```
 
-Cleanup works only from the run's `state.json`. It sends SIGTERM (then SIGKILL after 8 s) to the vite and Chrome process groups that this run started. It refuses any PID that is not a group leader or whose command line lacks this run's marker. It never kills by name. It then copies the logs into the evidence dir, deletes the scratch dir (`$TMPDIR/weave-verify/<RUN>/`, which holds the Chrome profile, state, and logs), and verifies that no listener from those groups remains. It exits non-zero if anything was refused or still listening. A listener that belongs to someone else on a reused port is reported under `foreignListeners` and left alone.
+Cleanup works only from the run's `state.json`. It sends SIGTERM (then SIGKILL after 8 s) to the vite and Chrome process groups that this run started. It refuses any PID that is not a group leader or whose command line lacks this run's marker. It never kills by name. It then copies the logs into the evidence dir, deletes the scratch dir (`$TMPDIR/tapestry-verify/<RUN>/`, which holds the Chrome profile, state, and logs), and verifies that no listener from those groups remains. It exits non-zero if anything was refused or still listening. A listener that belongs to someone else on a reused port is reported under `foreignListeners` and left alone.
 
 Run cleanup after every failed attempt too. Use `$H runs` to list leftover scratch runs and whether their processes are alive.
 
@@ -119,4 +133,4 @@ Run cleanup after every failed attempt too. Use `$H runs` to list leftover scrat
 
 ## Helpers
 
-- `bin/weave-verify.mjs` (executable). Usage: `weave-verify.mjs launch|doctor|browser <action>|cleanup|runs [--run <id>]`, with flags as shown above. It has no dependencies. Its header comment repeats the usage.
+- `bin/tapestry-verify.mjs` (executable). Usage: `tapestry-verify.mjs launch|doctor|browser <action>|cleanup|runs [--run <id>]`, with flags as shown above. It has no dependencies. Its header comment repeats the usage.

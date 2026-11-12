@@ -14,7 +14,7 @@ The Theme segment control in the header lets a user repaint the workspace in `De
 - Click `Default` or `Daylight` in the header group labelled `Theme`.
 - From a fresh page, press Tab twice to focus `Daylight`, then press Enter.
 
-## Driving it with weave-verify
+## Driving it with tapestry-verify
 
 Preconditions:
 
