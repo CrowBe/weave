@@ -28,6 +28,41 @@ type Inbound = ProbeMessage | BatchMessage | SilentExitMessage;
 
 const GLOBALS = ['Object', 'Array', 'String', 'Number', 'Boolean', 'Math', 'JSON', 'Error'] as const;
 
+/** The CPU budget advertised in the isolation report (`limits.cpu_ms`). */
+const CPU_LIMIT_MS = 100;
+/**
+ * vm's `timeout` is a wall-clock watchdog, so on its own it cannot enforce a
+ * CPU budget: a busy machine can deschedule a trivial script past 100ms. It is
+ * kept only as a backstop that interrupts runaway code; the budget itself is
+ * checked against the CPU time this thread actually spent.
+ */
+const WALL_BACKSTOP_MS = 2_000;
+
+function cpuMicros(): number {
+  // threadCpuUsage (Node >= 23.9) excludes GC and other helper threads.
+  const usage = typeof process.threadCpuUsage === 'function' ? process.threadCpuUsage() : process.cpuUsage();
+  return usage.user + usage.system;
+}
+
+/** Run a script under the CPU budget. A spent budget throws, as a vm timeout does. */
+function runBudgeted(script: vm.Script, context: vm.Context): unknown {
+  const before = cpuMicros();
+  let output: unknown;
+  let failure: { error: unknown } | null = null;
+  try {
+    output = script.runInContext(context, { timeout: WALL_BACKSTOP_MS });
+  } catch (error) {
+    failure = { error };
+  }
+  if ((cpuMicros() - before) / 1000 > CPU_LIMIT_MS) {
+    throw new Error(`Script execution exceeded the ${CPU_LIMIT_MS}ms CPU budget`);
+  }
+  if (failure) {
+    throw failure.error;
+  }
+  return output;
+}
+
 function send(message: unknown, done: () => void): void {
   if (!process.send) {
     throw new Error('isolate worker requires ipc');
@@ -68,9 +103,10 @@ function probe(): Record<string, unknown> {
   }
   const permission = process.permission;
   const network: 'none' | 'open' | 'error' = permission ? (permission.has('net') ? 'open' : 'none') : 'error';
-  const evaluated = new vm.Script(
-    '({ process: typeof process, require: typeof require, fetch: typeof fetch })',
-  ).runInContext(sandbox(), { timeout: 100 }) as { process: string; require: string; fetch: string };
+  const evaluated = runBudgeted(
+    new vm.Script('({ process: typeof process, require: typeof require, fetch: typeof fetch })'),
+    sandbox(),
+  ) as { process: string; require: string; fetch: string };
   return {
     filesystem,
     network,
@@ -91,7 +127,7 @@ function runBatch(
       const script = new vm.Script(
         `"use strict"; (function () {\nconst input = JSON.parse(${literal});\n${source}\n})()`,
       );
-      const output = script.runInContext(sandbox(), { timeout: 100 });
+      const output = runBudgeted(script, sandbox());
       results.push({ id: testCase.id, output });
     } catch (error) {
       results.push({ id: testCase.id, error: error instanceof Error ? error.name : 'Error' });
