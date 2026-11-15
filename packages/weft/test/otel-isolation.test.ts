@@ -52,6 +52,8 @@ test('core builds, passes its tests and imports with the OTel and SQLite adapter
       process.execPath,
       [
         '--test',
+        // Pin TAP: the default reporter for piped output differs across Node majors.
+        '--test-reporter=tap',
         ...readdirSync(join(directory, 'dist/test'))
           .filter((name) => name.endsWith('.test.js'))
           .map((name) => join(directory, 'dist/test', name)),
