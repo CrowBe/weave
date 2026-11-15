@@ -982,7 +982,8 @@ async function drive() {
 
 function summary(text) {
   const pick = (k) => {
-    const m = new RegExp(`^ℹ ${k} (\\d+)`, 'm').exec(text);
+    // TAP (`# fail 0`, Node 22 when piped) or spec (`ℹ fail 0`, Node >= 23).
+    const m = new RegExp(`^(?:ℹ|#) ${k} (\\d+)`, 'm').exec(text);
     return m ? Number(m[1]) : null;
   };
   return {
