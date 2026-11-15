@@ -17,7 +17,6 @@ H=.claude/skills/verify-tapestry/bin/tapestry-verify.mjs   # run from the repo r
 
 Requirements: Node >= 22.18 (it uses the global `WebSocket` and `fetch`), `npm ci` already done, Linux `/proc` (for port and process ownership), and Chrome or Chromium on `PATH` (`google-chrome-stable`, `google-chrome`, `chromium`, or `chromium-browser`; override with `TAPESTRY_VERIFY_CHROME=/path`).
 
-
 ## Monorepo baseline (required before calling a change "done")
 
 This skill proves Tapestry UI behaviour. It does not replace the monorepo gate. Before calling a change done or approving a PR, also follow the existing verify-weave workflow (the Fleet skill at `/home/box/agent-data/workflows/verify-weave/SKILL.md`):
