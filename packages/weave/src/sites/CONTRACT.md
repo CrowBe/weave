@@ -44,8 +44,8 @@ present a dispatch intent only after an accepted observation, and only through
 the injected idempotent dispatch port. The intent is checkpointed before the
 call. An unconfirmed intent is returned as paused and is not re-presented
 without an explicit resume; cancellation appends nothing; a stale or mismatched
-answer pauses. The outcome table is now `decide1.rules@2` (below). A mapped receipt yields a
-`dispatch.decision@5` entry, and fresh site observations become Weft judgment
+answer pauses. The outcome table is now `decide1.rules@3` (below). A mapped receipt yields a
+`dispatch.decision@6` entry, and fresh site observations become Weft judgment
 records followed by one `dispatch.decided` after the final append. The
 composition never writes `routed_input@1`.
 
@@ -95,7 +95,8 @@ outside this contract. ScriptedDecisionLayer remains unchanged.
 
 `decideBand(inputs)` is pure deterministic policy over named judgments and code
 facts. The frozen table was `decide1.rules@1` with 15 ids; P5b's `decide1.rules@2` adds
-`spawn.preflight` (16 ids) and changes no other row. Its first matching row
+`spawn.preflight` (16 ids) and changes no other row; P5c1's `decide1.rules@3` adds five
+child rows (21 ids, below). Its first matching row
 returns the rule id and coarse band. It imports no dispatch, site or gateway code. It asks
 no new question and changes no `SITE_POLICY` threshold, fallback or request.
 `decideDispatch` validates stored stages through P3a's live pure transitions,
@@ -141,8 +142,8 @@ accepted intake new-thread choice then withholds `escalate_gen`. Count asks by
 `status = needs_human` and escalations by `band = escalate_gen` together with
 `status = dispatched`, never by band alone.
 
-`dispatch.decision@5` carries `rule_table` and `decide1` after `reason`, and
-`dispatch.checkpoint@4` stores the stages and rounds described in P4b, P5a and P5b below.
+`dispatch.decision@6` carries `rule_table` and `decide1` after `reason`, and
+`dispatch.checkpoint@5` stores the stages and rounds described in P4b, P5a, P5b and P5c1 below.
 The read partition contains judgments in stage order
 (`intake.confidence`, `intake.top_p`, then D1 and D2), every available probability,
 and 14 code facts in fixed order: intake decided-by, choice, status, reason,
@@ -253,16 +254,17 @@ follow the read judgments (stage, then P5b's role statistics) in judgment order 
 `<judgment>` probability, then `<judgment>.confidence`. P4b supplies at most 14
 judgments with the stage judgments; P5a/P5b add at most 16 below.
 
-`dispatch.checkpoint@4` has ordered keys `schema`, `decision_id`,
+`dispatch.checkpoint@5` has ordered keys `schema`, `decision_id`,
 `state_revision`, `state_updated_at`, `asks`, `intake`, `triage`, `route`,
-`shadow`, `preflight`, `preflight_budget`, `spawn_port`, `intent`. Its `asks` keys are
+`shadow`, `preflight`, `preflight_budget`, `spawn_port`, `preflight_terms`,
+`child_terms`, `child`, `intent`. Its `asks` keys are
 `intake`, `triage`, `route`, `shadow`, `preflight`;
 the last two are each zero or one. D1 and D2 store whole `loop.decision@1` records with
 their extracts and site transitions. `shadow` is null or four observations
-in judgment order. `dispatch.decision@5` has ordered keys `schema`,
+in judgment order. `dispatch.decision@6` has ordered keys `schema`,
 `decision_id`, `entry`, `state_revision`, `decided_by`, `choice`, `status`,
-`reason`, `rule_table`, `decide1`, `intent`, `receipt`, `intake`, `triage`,
-`route`, `shadow`, `preflight`. Its rule table is `decide1.rules@2`. Foreign decision
+`reason`, `rule_table`, `decide1`, `child`, `intent`, `receipt`, `intake`, `triage`,
+`route`, `shadow`, `preflight`. Its rule table is `decide1.rules@3`. Foreign decision
 or checkpoint schemas and foreign table versions throw without compatibility
 conversion.
 
@@ -398,7 +400,8 @@ roles give null plan facts. P5b moves them, the `preflight.t<i>.top_p` then
 `preflight.t<i>.confidence` judgments (in target order) and two new facts into the
 read partition (below). Totals are 34 facts and at most 30 judgments, within Weft's bounds.
 
-The current records are P5b's `dispatch.checkpoint@4` and `dispatch.decision@5`. Foreign
+P5b's records were `dispatch.checkpoint@4` and `dispatch.decision@5`; the current ones are
+P5c1's `dispatch.checkpoint@5` and `dispatch.decision@6` (below). Foreign
 schemas throw without a shim. `dispatch.decided` cites the role request id after
 the shadow ids solely as `inference_request` evidence, with no role `judgment`
 or `caused_by` link. No Weft contract changes.
@@ -474,6 +477,75 @@ with D2's withheld `escalate_gen` while naming the spawn intent. No child runs i
 P5b: re-entry, per-child tier, `depends_on` scheduling, cancel propagation and
 per-child budgets are P5c. Until P5c merges, production compositions inject no
 `ports.spawn` (D-ENG-053), so their behaviour is exactly P5a's.
+
+## WV-S1 P5c1 verified child re-entry, read join and D2 tier
+
+`DispatchRequest.child = { brief }` (no other key) re-enters `decideDispatch` with one
+exact sealed `spawn.child@1` brief. `request_id` must be its `child_ref`, `intake.message`
+(the only goal input) must digest to `frame.goal_digest`, and `running_threads`,
+`triage_context`, `route_context` and `targets` must be empty; anything else throws before
+any load or ask. The request is captured before the first await. A root id is never
+re-entered as a child and a child id never resumed as a root.
+
+`verifyChild(request, { checkpoint, decisions })` is pure. The parent must be a root
+(`checkpoint.child === null`; a child parent throws, chained lineage is P5d) whose last
+appended decision is a `spawn.preflight` dispatch with receipt `ref === plan.digest`, the
+identical intent claimed in its checkpoint. The plan is recomputed from the parent's claimed
+evidence (roles, ambiguity, D2 tier, `preflight_budget`, the child's goal) and must equal the
+intent's; after `validatePlan(plan, intent.targets)` the brief must deep-equal one member, so
+a self-consistent reseal authenticates nothing. Live entry passes `journal.load(parent_ref)`;
+replay passes the historical snapshot. Saved child decisions and checkpoints are verified
+before every terminal return, abort and settlement lookup. Invalid evidence throws before
+inference, claim, effect or emission. Depth 1 has no constant: a child has no preflight stage
+and its only intents are `read` or `implement`.
+
+Child terms (`child_terms`) narrow the root's `preflight_terms`: a safe-natural
+`cost_ceiling <= brief.share` (reads: `0`), destinations a subset, deadline/context/attempt
+limits not raised, quality not weakened (`qualityClears`), `audit` only kept or strengthened,
+`content_class`, `tier` and `max_attempts_per_route` retained exactly (absence included),
+no unknown field. `prefix_digest`/`prefix_cache` are excluded but may never copy the parent's.
+Re-entry with other terms than the retained child evidence throws; concurrent first callers
+keep open-checkpoint semantics and the winning claim freezes its own terms. Allocation is
+unchanged and nothing accounts spending (custody is P5c3; there is no budget port).
+
+`dispatch.checkpoint@5` adds `preflight_terms` (a root's detached request terms, set with
+`asks.preflight = 1`), `child_terms` and `child` before `intent`; whenever `preflight_terms`
+is non-null, `preflight_budget` must equal its `cost_ceiling` when a safe natural, else null.
+`dispatch.decision@6` adds `child` before `intent`. `child` is `dispatch.child@1`:
+`{ schema, parent_ref, parent_entry, plan_digest, brief, terms_digest, dependencies,
+dependencies_digest }`. A read's `dependencies` are `[]`; a generator's are null until its join
+is satisfied or terminally unmet, then sealed-order edges
+`{ decision_ref, entry, decision_digest, dispatch_ref, receipt }` (nulls for a missing
+decision). `transitionDispatch(request, checkpoint, receipt, entry, evidence)` takes the
+parent snapshot and the exact historical read decisions those edges name; a child without it
+throws, and replay never consults the journal.
+
+A read child asks no model: `act.read` presents
+`{ kind: 'read', dispatch_id, target_ref, child }` through `ports.dispatch` (a detached copy).
+It is confirmed only by `{ status: 'dispatched', dispatch_id, ref, read: { target_ref,
+revision, digest, bytes } }` naming its own target, a screened revision, a sha-256 digest and
+safe-natural bytes; any other success, including queue admission, normalizes to unconfirmed
+on the direct and settlement paths. A generator joins its sealed reads with the shared
+`isResumable` terminality: a completed read satisfies an edge, a missing or resumable decision
+is pending, any other terminal (including today's terminal `stale_answer`) is unmet; unmet wins.
+Pending returns an unappended paused / `dependency_pending` with no write, D2, effect or
+emission; unmet appends paused / `unmet_dependency` once (terminal). Satisfied freezes the edges
+and asks the existing `loop.route` site over `{ unit_of_work: intake.message, context }`, where
+context is canonical brief data, coupling, measured read sizes and digests, and the forbid
+count. An accepted tier dispatches as tier and ceiling (`child_route`), even above the
+parent's; a fallback dispatches at `min(standard, brief.tier)` (`child_route_fallback`).
+Both implement intents carry `child`; neither receipt claims result completion.
+
+`decide1.rules@3` adds eight read facts before the shadow facts (`entry.kind`, `child.kind`,
+`child.parent`, `child.plan`, `child.dependencies`, `child.read_bytes`, `child.share`,
+`child.boundary`; 42 facts) and five rows after the holds: `hold.dependency_pending`,
+`hold.unmet_dependency`, `act.read`, `gen.child`, `gen.child_fallback`. Root-specific rows
+require `entry.kind = root`; `ask.route` and the holds serve child D2 too. A child gate sets
+only `child.boundary` (`stale_answer` → `hold.admission`, `cancelled` → `hold.paused`) over the
+child's real facts with its sealed kind's band, never projecting a stage. Children record no
+intake, triage, shadow or preflight stage; only a satisfied generator records D2. Weft is
+unchanged: `decided_by` is `rule` or `route`, `tier` stays implement-only. Production still
+injects no `ports.spawn`, enforced by a source scan (`spawn-default-off.test.ts`).
 
 ## WV-S1 P2a typed extraction before intake
 

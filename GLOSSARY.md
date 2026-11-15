@@ -252,7 +252,27 @@ generation.
 `spawn.plan@1`: children with sealed parent frames, dependency edges and budget
 shares, validated before it can exist. In P5a the would-be plan was shadow evidence.
 In P5b it is consequential: a spawn dispatch intent carries it, the claim binds it with
-its evidence, and the spawn port opens all of its children or none.
+its evidence, and the spawn port opens all of its children or none. A successful spawn
+receipt confirms that the children were opened, not that they or the goal completed.
+
+### Child re-entry
+
+A dispatch decision for one exact child brief of a root's appended, successful spawn
+(P5c1), keyed by the brief's `child_ref`. Entry is authenticated only by membership in
+the plan recomputed from the parent's claimed evidence, never by the brief's own seal;
+a child's parent must be a root. A child has no intake, triage or preflight stage: a
+read child dispatches its read directly, and a generate child joins its sealed reads,
+then uses D2 for its tier. Its terms narrow the root's captured terms within its sealed
+share. The `dispatch.child@1` witness binds the lineage, terms digest and frozen join
+evidence, identically in the checkpoint and the intent. It grants no authority beyond
+the intent it accompanies.
+
+### Read join
+
+A generate child's dependency gate over its sealed read edges. An edge is satisfied by
+a completed read, pending while its decision is missing or resumable, and unmet when it
+is terminal without one; any unmet edge makes the join unmet for that plan. Pending is
+an unappended transient; unmet is journaled once and terminal.
 
 ### Split gain
 
@@ -264,11 +284,19 @@ it bounds recursion without a depth cap. An empty child set has no gain.
 
 A durable, keyed statement that one action will be presented exactly once: an
 implement tier, a capability or done-check dispatch, a decline, a thread
-relation, or the spawn of a validated preflight spawn plan. It carries the dispatch
-id and no operator text; a spawn intent also carries the digest of its admitted role
-observation, so the claim binds every role field. A claimed intent
-prevents a second presentation; an unconfirmed intent is not re-presented
-without an explicit resume.
+relation, the spawn of a validated preflight spawn plan, or a child's read of one
+sealed target. It carries the dispatch id and no operator text; a spawn intent also
+carries the digest of its admitted role observation, so the claim binds every role
+field, and a child's read or implement intent carries its `dispatch.child@1` witness.
+A claimed intent prevents a second presentation; an unconfirmed intent is not
+re-presented without an explicit resume.
+
+### Completed-read receipt
+
+The only receipt that confirms a child's read intent: `dispatched` with
+`read: { target_ref, revision, digest, bytes }` for its own target, an opaque screened
+revision of an immutable result, the digest of its bytes and a port-measured byte count.
+Queue admission or any other success shape is unconfirmed. Bodies never enter a record.
 
 ### Unconfirmed dispatch
 
@@ -722,14 +750,14 @@ One closed, versioned entry in a Weft trace: an envelope, a kind, links to other
 
 The deterministic rule table over isolated judgments and code-computed facts
 whose output is the coarse band: `tool_call`, `spawn_subtasks`, `escalate_gen`
-or `ask_human`. `decide1.rules@2` is the ordered, versioned table used by
+or `ask_human`. `decide1.rules@3` is the ordered, versioned table used by
 dispatch authority; its output grants no execution authority of its own.
 
 ### Decide-1 trace
 
-What a `dispatch.decided` Weft record carries about how a dispatch decision was reached (D-ENG-045): each isolated judgment's name and probability, each code-computed fact's name and scalar value, the rule-table row that decided, and the coarse band it returned (`tool_call`, `spawn_subtasks`, `escalate_gen` or `ask_human`). The trace also lists shadow inputs no row of the current table version reads (D-ENG-047). A decision no site answered carries empty judgments. A fact value is never text. Like every Weft record, the trace reports a decision and grants no authority to dispatch. The `dispatch.decision@5` journal record carries the same trace and its rule-table version (`decide1.rules@2`); a paused decision’s band is the band of the choice it withheld.
+What a `dispatch.decided` Weft record carries about how a dispatch decision was reached (D-ENG-045): each isolated judgment's name and probability, each code-computed fact's name and scalar value, the rule-table row that decided, and the coarse band it returned (`tool_call`, `spawn_subtasks`, `escalate_gen` or `ask_human`). The trace also lists shadow inputs no row of the current table version reads (D-ENG-047). A decision no site answered carries empty judgments. A fact value is never text. Like every Weft record, the trace reports a decision and grants no authority to dispatch. The `dispatch.decision@6` journal record carries the same trace and its rule-table version (`decide1.rules@3`); a paused decision’s band is the band of the choice it withheld.
 
-Preflight target roles, role admission, split gain, the spawn plan's digest and whether a spawn port is present are read inputs; the shadow partition holds only the P4b judgments and their facts. None of these inputs carries dispatch authority.
+Preflight target roles, role admission, split gain, the spawn plan's digest and whether a spawn port is present are read inputs; the shadow partition holds only the P4b judgments and their facts. None of these inputs carries dispatch authority. The entry kind (`root` or `child`) and, for a child, its sealed kind, parent, plan digest, join state, measured read bytes, share and gate boundary are read facts too; a child boundary is a code fact over the child's own stages, never a projected stage.
 
 ### Shadow judgment
 

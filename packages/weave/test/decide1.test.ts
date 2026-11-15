@@ -22,6 +22,13 @@ import {
   type Decide1Fact,
 } from '../src/decide1.js';
 
+const CHILD_ROWS: readonly string[] = [
+  'hold.dependency_pending',
+  'hold.unmet_dependency',
+  'act.read',
+  'gen.child',
+  'gen.child_fallback',
+];
 const FALLBACKS = ['low_confidence', 'missing_confidence', 'low_top_p', 'invalid_answer', 'no_answer'];
 const THREADS = ['continue_thread', 'steer', 'queue', 'interrupt'];
 const TIERS = ['flash', 'standard', 'strong'];
@@ -40,6 +47,8 @@ const FACT_NAMES = [
   'route.status',
   'route.reason',
   'route.accepted',
+  // P5c1: every trace names its entry; root rows require a root.
+  'entry.kind',
 ];
 function inputs(patch: Record<string, Decide1Fact['value']> = {}): Decide1Inputs {
   const values: Record<string, Decide1Fact['value']> = {
@@ -57,6 +66,7 @@ function inputs(patch: Record<string, Decide1Fact['value']> = {}): Decide1Inputs
     'route.status': 'transition',
     'route.reason': 'accepted',
     'route.accepted': true,
+    'entry.kind': 'root',
     ...patch,
   };
   return {
@@ -189,9 +199,9 @@ function domain(): Case[] {
 }
 
 test('P4a-1 table shape: frozen, closed, unique, no bare spawn', () => {
-  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@2');
+  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@3');
   assert.ok(Object.isFrozen(DECIDE1_RULES));
-  assert.equal(new Set(DECIDE1_RULES.map((row) => row.id)).size, 16);
+  assert.equal(new Set(DECIDE1_RULES.map((row) => row.id)).size, 21);
   for (const row of DECIDE1_RULES) {
     assert.ok(Object.isFrozen(row));
     assert.ok(isCode(row.id));
@@ -209,8 +219,9 @@ test('P4a-2 totality and reachability over reachable stage tuples; impossible ch
     assert.equal(trace.band, band);
     reached.add(trace.rule);
   }
-  // P4a's stage domain carries no preflight facts; P5b-2 reaches spawn.preflight.
-  const ids = DECIDE1_RULES.map((row) => row.id).filter((id) => id !== 'spawn.preflight');
+  // P4a's stage domain carries no preflight or child facts; P5b-2 reaches spawn.preflight and
+  // dispatch-child P5c1-7 reaches the five child rows.
+  const ids = DECIDE1_RULES.map((row) => row.id).filter((id) => id !== 'spawn.preflight' && !CHILD_ROWS.includes(id));
   assert.deepEqual([...reached].sort(), ids.sort());
   for (const patch of [
     { ...absent('triage'), ...absent('route') },
@@ -238,8 +249,16 @@ test('P4a-3 D-ENG-030: loop fallbacks never ask; admission failures and outages 
 test('D-ENG-049: generation rows require a transition status', () => {
   for (const row of DECIDE1_RULES.filter((row) => row.id.startsWith('gen.'))) {
     const stage = row.id === 'gen.triage_fallback' ? 'triage' : 'route';
-    const base = inputs({ [`${stage}.accepted`]: row.id === 'gen.route' });
-    const facts = new Map(base.facts.map((fact) => [fact.name, fact.value]));
+    const base = inputs({ [`${stage}.accepted`]: row.id === 'gen.route' || row.id === 'gen.child' });
+    const facts = new Map<string, Decide1Fact['value']>(base.facts.map((fact) => [fact.name, fact.value]));
+    // P5c1 child generation rows read a satisfied generate child's D2 stage.
+    if (CHILD_ROWS.includes(row.id))
+      for (const [name, value] of [
+        ['entry.kind', 'child'],
+        ['child.kind', 'generate'],
+        ['child.dependencies', 'satisfied'],
+      ] as const)
+        facts.set(name, value);
     assert.equal(row.when(facts, new Map()), true, row.id);
     for (const status of ['needs_human', 'paused', null]) {
       facts.set(`${stage}.status`, status);
@@ -642,7 +661,7 @@ test('P4b-2 trace concatenates read then shadow and validates both partitions wi
   assert.deepEqual(input, before);
   assert.deepEqual(decideBand({ ...read, shadow: { judgments: [], facts: [] } } as Decide1Inputs), decideBand(read));
   assert.deepEqual(decideBand(read), {
-    table: 'decide1.rules@2',
+    table: 'decide1.rules@3',
     judgments: read.judgments,
     facts: read.facts,
     rule: 'gen.route',
@@ -694,12 +713,26 @@ const RULES_V1 = [
   ['gen.route_fallback', 'escalate_gen'],
 ];
 const RULES_V2 = [...RULES_V1.slice(0, 12), ['spawn.preflight', 'spawn_subtasks'], ...RULES_V1.slice(12)];
+// P5c1: five child rows after the holds; the 16 @2 rows keep their relative order.
+const RULES_V3 = [
+  ...RULES_V2.slice(0, 3),
+  ['hold.dependency_pending', 'withheld'],
+  ['hold.unmet_dependency', 'withheld'],
+  ['act.read', 'tool_call'],
+  ['gen.child', 'escalate_gen'],
+  ['gen.child_fallback', 'escalate_gen'],
+  ...RULES_V2.slice(3),
+];
 
-test('P4b-3 decide1.rules@2 retains the exact P4a ids, order and bands, plus spawn.preflight', () => {
-  // Deliberate P5b move: the snapshot is @2 with 16 ids.
-  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@2');
+test('P4b-3 decide1.rules@3 retains the exact P4a ids, order and bands, plus spawn.preflight', () => {
+  // Deliberate P5c1 move: the snapshot is @3 with 21 ids.
+  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@3');
   assert.deepEqual(
     DECIDE1_RULES.map(({ id, band }) => [id, band]),
+    RULES_V3,
+  );
+  assert.deepEqual(
+    DECIDE1_RULES.filter(({ id }) => !CHILD_ROWS.includes(id)).map(({ id, band }) => [id, band]),
     RULES_V2,
   );
   assert.deepEqual(
@@ -748,15 +781,15 @@ function withoutSpawnRow(input: Decide1Inputs): string | undefined {
   return DECIDE1_RULES.filter((row) => row.id !== 'spawn.preflight').find((row) => row.when(facts, judgments))?.id;
 }
 
-test('P5b-1 table @2 inserts spawn.preflight immediately before gen.route', () => {
-  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@2');
+test('P5b-1 table @3 keeps spawn.preflight immediately before gen.route', () => {
+  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@3');
   assert.deepEqual(
     DECIDE1_RULES.map(({ id, band }) => [id, band]),
-    RULES_V2,
+    RULES_V3,
   );
-  assert.equal(DECIDE1_RULES[12]?.id, 'spawn.preflight');
-  assert.equal(DECIDE1_RULES[13]?.id, 'gen.route');
-  assert.equal(DECIDE1_RULES.length, 16);
+  assert.equal(DECIDE1_RULES[17]?.id, 'spawn.preflight');
+  assert.equal(DECIDE1_RULES[18]?.id, 'gen.route');
+  assert.equal(DECIDE1_RULES.length, 21);
 });
 
 test('P5b-2 the spawn row diff is the only behaviour change over the reachable domain', () => {
@@ -793,7 +826,7 @@ test('P5b-2 the spawn row diff is the only behaviour change over the reachable d
       assert.throws(() => decideBand(withPreflight(inputs(patch), variant)), /decide1: no rule matched/);
 });
 
-test('P5b-3 no P4b shadow name reaches a row; the spawn row reads only its seven code facts', () => {
+test('P5b-3 no P4b shadow name reaches a row; the spawn row reads only its seven code facts and a root entry', () => {
   for (const { input } of domain())
     for (const variant of preflightVariants()) {
       const read = withPreflight(input, variant);
@@ -806,13 +839,15 @@ test('P5b-3 no P4b shadow name reaches a row; the spawn row reads only its seven
   // Policy-shaped preflight names in the shadow partition cannot supply the spawn row.
   const spawnable = withPreflight(inputs(), { admitted: true, gain: true, plan: HEX, port: true });
   assert.equal(decideBand(spawnable).rule, 'spawn.preflight');
-  const shadow = { judgments: [], facts: spawnable.facts.slice(14) };
+  const shadow = { judgments: [], facts: spawnable.facts.slice(FACT_NAMES.length) };
   assert.equal(decideBand({ judgments: spawnable.judgments, facts: inputs().facts, shadow }).rule, 'gen.route');
   const P4B = /clarify|multi_deliverable|reads_before_gen|veto_bare_gen|residual_ambiguity/;
   for (const row of DECIDE1_RULES) assert.doesNotMatch(row.when.toString(), P4B, row.id);
   const body = DECIDE1_RULES.find((row) => row.id === 'spawn.preflight')!.when.toString();
   const names = [...new Set([...body.matchAll(/\.get\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => m[1]))];
   assert.deepEqual(names.sort(), SPAWN_ROW_FACTS);
+  // P5c1: root-specific rows read `entry.kind` through `root(f)`; no row reads a child fact here.
+  assert.match(body, /\broot\(f\)/);
   // Every name is a fact read; the row consults no judgment map.
   assert.doesNotMatch(body, /\(\s*f\s*,/);
 });

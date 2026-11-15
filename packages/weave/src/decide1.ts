@@ -1,7 +1,7 @@
 /** Decide-1 is deterministic policy over bounded observations, never execution authority. */
 export const DECIDE1_BANDS = Object.freeze(['tool_call', 'spawn_subtasks', 'escalate_gen', 'ask_human'] as const);
 export type Band = (typeof DECIDE1_BANDS)[number];
-export const DECIDE1_RULE_TABLE = 'decide1.rules@2' as const;
+export const DECIDE1_RULE_TABLE = 'decide1.rules@3' as const;
 export interface Decide1Judgment {
   readonly name: string;
   readonly probability: number;
@@ -23,6 +23,11 @@ export type Decide1RuleId =
   | 'hold.admission'
   | 'hold.outage'
   | 'hold.paused'
+  | 'hold.dependency_pending'
+  | 'hold.unmet_dependency'
+  | 'act.read'
+  | 'gen.child'
+  | 'gen.child_fallback'
   | 'ask.intake'
   | 'ask.irreversible'
   | 'ask.thread_target'
@@ -52,14 +57,48 @@ const TIERS = ['flash', 'standard', 'strong'];
 const admission = (reason: unknown) => reason === 'stale_answer' || reason === 'mismatched_answer';
 const thread = (facts: ReadonlyMap<string, Decide1Fact['value']>) =>
   THREADS.includes(facts.get('intake.choice') as string);
+type Facts = ReadonlyMap<string, Decide1Fact['value']>;
+/** P5c1: root-specific rows require a root entry; child rows a child of the given sealed kind. */
+const root = (f: Facts) => f.get('entry.kind') === 'root';
+const child = (f: Facts, kind: 'read' | 'generate') => f.get('entry.kind') === 'child' && f.get('child.kind') === kind;
+const joined = (f: Facts) => child(f, 'generate') && f.get('child.dependencies') === 'satisfied';
+const routed = (f: Facts) => f.get('route.status') === 'transition' && TIERS.includes(f.get('route.choice') as string);
+const CHILD_FACTS = [
+  'child.kind',
+  'child.parent',
+  'child.plan',
+  'child.dependencies',
+  'child.read_bytes',
+  'child.share',
+  'child.boundary',
+];
+/** Facts a child never records: it has no intake, triage, roles or plan of its own. */
+const ROOT_FACTS = [
+  'intake.decided_by',
+  'intake.choice',
+  'intake.status',
+  'intake.reason',
+  'thread_target',
+  'triage.choice',
+  'triage.status',
+  'triage.reason',
+  'triage.accepted',
+  'preflight.reason',
+  'preflight.admitted',
+  'spawn.gain',
+  'spawn.children',
+  'spawn.plan',
+];
 
 /** Ordered first-match policy. Later slices add inputs and rows here, never a second dispatch path. */
 export const DECIDE1_RULES: readonly Decide1Rule[] = Object.freeze(
   (
     [
       {
+        // A child's gate code fact (P5c1) extends the stage predicate; it is null on every root.
         id: 'hold.admission',
-        when: (f) => STAGES.some((stage) => admission(f.get(`${stage}.reason`))),
+        when: (f) =>
+          STAGES.some((stage) => admission(f.get(`${stage}.reason`))) || f.get('child.boundary') === 'stale_answer',
         band: 'withheld',
       },
       {
@@ -69,36 +108,64 @@ export const DECIDE1_RULES: readonly Decide1Rule[] = Object.freeze(
       },
       {
         id: 'hold.paused',
-        when: (f) => STAGES.some((stage) => f.get(`${stage}.status`) === 'paused'),
+        when: (f) =>
+          STAGES.some((stage) => f.get(`${stage}.status`) === 'paused') || f.get('child.boundary') === 'cancelled',
         band: 'withheld',
       },
-      { id: 'ask.intake', when: (f) => f.get('intake.status') === 'needs_human', band: 'ask_human' },
-      { id: 'ask.irreversible', when: (f) => f.get('intake.choice') === 'stop', band: 'ask_human' },
+      {
+        id: 'hold.dependency_pending',
+        when: (f) => child(f, 'generate') && f.get('child.dependencies') === 'pending',
+        band: 'withheld',
+      },
+      {
+        id: 'hold.unmet_dependency',
+        when: (f) => child(f, 'generate') && f.get('child.dependencies') === 'unmet',
+        band: 'withheld',
+      },
+      { id: 'act.read', when: (f) => child(f, 'read'), band: 'tool_call' },
+      {
+        id: 'gen.child',
+        when: (f) => joined(f) && routed(f) && f.get('route.accepted') === true,
+        band: 'escalate_gen',
+      },
+      {
+        id: 'gen.child_fallback',
+        when: (f) => joined(f) && routed(f) && f.get('route.accepted') === false,
+        band: 'escalate_gen',
+      },
+      { id: 'ask.intake', when: (f) => root(f) && f.get('intake.status') === 'needs_human', band: 'ask_human' },
+      { id: 'ask.irreversible', when: (f) => root(f) && f.get('intake.choice') === 'stop', band: 'ask_human' },
       {
         id: 'ask.thread_target',
-        when: (f) => thread(f) && ['no_target', 'ambiguous_reference'].includes(f.get('thread_target') as string),
+        when: (f) =>
+          root(f) && thread(f) && ['no_target', 'ambiguous_reference'].includes(f.get('thread_target') as string),
         band: 'ask_human',
       },
-      { id: 'act.thread', when: (f) => thread(f) && f.get('thread_target') === 'resolved', band: 'tool_call' },
-      { id: 'ask.triage', when: (f) => f.get('triage.status') === 'needs_human', band: 'ask_human' },
+      {
+        id: 'act.thread',
+        when: (f) => root(f) && thread(f) && f.get('thread_target') === 'resolved',
+        band: 'tool_call',
+      },
+      { id: 'ask.triage', when: (f) => root(f) && f.get('triage.status') === 'needs_human', band: 'ask_human' },
       {
         id: 'act.capability',
-        when: (f) => f.get('triage.accepted') === true && f.get('triage.choice') === 'capability',
+        when: (f) => root(f) && f.get('triage.accepted') === true && f.get('triage.choice') === 'capability',
         band: 'tool_call',
       },
       {
         id: 'act.done_check',
-        when: (f) => f.get('triage.accepted') === true && f.get('triage.choice') === 'done_check',
+        when: (f) => root(f) && f.get('triage.accepted') === true && f.get('triage.choice') === 'done_check',
         band: 'tool_call',
       },
       {
         id: 'act.decline',
-        when: (f) => f.get('triage.accepted') === true && f.get('triage.choice') === 'out_of_scope',
+        when: (f) => root(f) && f.get('triage.accepted') === true && f.get('triage.choice') === 'out_of_scope',
         band: 'tool_call',
       },
       {
         id: 'gen.triage_fallback',
         when: (f) =>
+          root(f) &&
           f.get('triage.status') === 'transition' &&
           f.get('triage.accepted') === false &&
           f.get('triage.choice') === 'implement',
@@ -108,6 +175,7 @@ export const DECIDE1_RULES: readonly Decide1Rule[] = Object.freeze(
         // D2 accepted a tier, every target cleared role admission, and a validated plan has split gain.
         id: 'spawn.preflight',
         when: (f) =>
+          root(f) &&
           f.get('route.status') === 'transition' &&
           f.get('route.accepted') === true &&
           TIERS.includes(f.get('route.choice') as string) &&
@@ -120,6 +188,7 @@ export const DECIDE1_RULES: readonly Decide1Rule[] = Object.freeze(
       {
         id: 'gen.route',
         when: (f) =>
+          root(f) &&
           f.get('route.status') === 'transition' &&
           f.get('route.accepted') === true &&
           TIERS.includes(f.get('route.choice') as string),
@@ -129,6 +198,7 @@ export const DECIDE1_RULES: readonly Decide1Rule[] = Object.freeze(
       {
         id: 'gen.route_fallback',
         when: (f) =>
+          root(f) &&
           f.get('route.status') === 'transition' &&
           f.get('route.choice') !== null &&
           f.get('route.choice') !== undefined &&
@@ -175,8 +245,31 @@ export function bandOfChoice(stage: string, choice: unknown): Band {
   throw new Error('decide1: no band for choice');
 }
 
+/** A child records no intake, triage or roles; only a satisfied generator records D2 (P5c1). */
+function childSet(facts: Facts): boolean {
+  if (ROOT_FACTS.some((name) => facts.get(name) != null) || facts.get('intake.accepted') === true) return false;
+  if (!id(facts.get('child.parent')) || !id(facts.get('child.plan'))) return false;
+  const boundary = facts.get('child.boundary');
+  if (boundary != null && boundary !== 'stale_answer' && boundary !== 'cancelled') return false;
+  const dependencies = facts.get('child.dependencies');
+  const route = facts.get('route.choice');
+  const recorded = route != null || facts.get('route.status') != null;
+  switch (facts.get('child.kind')) {
+    case 'read':
+      return dependencies === 'satisfied' && !recorded;
+    case 'generate':
+      if (!['pending', 'satisfied', 'unmet'].includes(dependencies as string)) return false;
+      return !recorded || (dependencies === 'satisfied' && TIERS.includes(route as string));
+    default:
+      return false;
+  }
+}
+
 /** Impossible stage sets are code defects, not operator ambiguity. */
 function stageSet(facts: ReadonlyMap<string, Decide1Fact['value']>): boolean {
+  const entry = facts.get('entry.kind');
+  if (entry === 'child') return childSet(facts);
+  if (entry !== 'root' || CHILD_FACTS.some((name) => facts.get(name) != null)) return false;
   const intake = facts.get('intake.choice');
   const triage = facts.get('triage.choice');
   const route = facts.get('route.choice');
@@ -235,10 +328,13 @@ export function decideBand(inputs: Decide1Inputs): Decide1Trace {
         ? admission(facts.get(`${stage}.reason`))
         : row.id === 'hold.outage'
           ? facts.get(`${stage}.reason`) === 'decision_unavailable'
-          : facts.get(`${stage}.status`) === 'paused',
+          : row.id === 'hold.paused' && facts.get(`${stage}.status`) === 'paused',
     );
-    if (stage === undefined) throw new Error('decide1: no withheld stage');
-    band = bandOfChoice(stage, facts.get(`${stage}.choice`));
+    if (stage !== undefined) band = bandOfChoice(stage, facts.get(`${stage}.choice`));
+    // A child gate or dependency hold withholds its sealed kind's action.
+    else if (child(facts, 'read')) band = 'tool_call';
+    else if (child(facts, 'generate')) band = 'escalate_gen';
+    else throw new Error('decide1: no withheld stage');
   } else band = row.band;
   return {
     table: DECIDE1_RULE_TABLE,
