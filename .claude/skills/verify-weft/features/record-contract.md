@@ -34,5 +34,5 @@ Preconditions:
 - `validateRecord` returns the **first** applicable reason in the contract's order. A fixture that breaks two rules is expected to report the earlier one; do not "fix" an expectation to the later reason.
 - Inline content text is only valid under an `InlinePolicy`. The fixtures are validated with no policy, exactly as `contract.test.ts` does; a case that needs a policy belongs in `disclosure.test.ts`, not here.
 - `$H test` runs `npm run build` (whole repo, `tsc -b`) before the tests, so it is slower than the drive and writes every package's `dist`.
-- `$H test` fails 1 of 155 on Node >= 23: `otel-isolation.test.ts` expects the nested run's TAP `# fail 0`, but newer Node prints spec output (`ℹ fail 0`). Run it on Node 22, as CI does. On any other Node, report the result as unverified (see SKILL.md, Drive).
+- `otel-isolation.test.ts` pins `--test-reporter=tap` for its nested run, so `$H test` expects 155/155 on Node 22 and Node 24 alike. A reporter-format failure there is a real failure.
 - A green `$H test` does not replace this drive or the others: it proves the compiled tests, not a consumer import through `@weave/weft`.
