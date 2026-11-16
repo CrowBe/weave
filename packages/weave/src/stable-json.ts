@@ -12,7 +12,8 @@ function canonicalize(value: unknown): unknown {
   }
   if (value !== null && typeof value === 'object') {
     const record = value as Record<string, unknown>;
-    const out: Record<string, unknown> = {};
+    // A normal object's "__proto__" assignment hits Object.prototype's setter and drops the key.
+    const out: Record<string, unknown> = Object.create(null);
     for (const key of Object.keys(record).sort()) {
       const v = record[key];
       if (v !== undefined) {
