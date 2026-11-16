@@ -3,6 +3,8 @@
  * pattern use it, so a comment marker inside a string or a template is read
  * the same way by each of them.
  */
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
  * Blanks comments and template-literal text with spaces, keeping every newline
@@ -66,4 +68,20 @@ export function blankComments(source) {
     }
   }
   return out.join('');
+}
+
+/**
+ * TypeScript files under `dir`, in readdir order, with each directory entered
+ * where it stands. A missing directory is an empty list. A file is included
+ * when its path ends in `.ts`.
+ */
+export function walkTs(dir) {
+  if (!existsSync(dir)) return [];
+  const out = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) out.push(...walkTs(full));
+    else if (full.endsWith('.ts')) out.push(full);
+  }
+  return out;
 }

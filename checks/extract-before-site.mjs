@@ -10,9 +10,9 @@
  * Usage: node checks/extract-before-site.mjs [root]. The root defaults to the
  * repository; checks/test passes a fixture tree.
  */
-import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
-import { blankComments } from './source-scan.mjs';
+import { blankComments, walkTs } from './source-scan.mjs';
 
 const root = resolve(process.argv[2] ?? new URL('..', import.meta.url).pathname);
 const SCANNED = 'packages/weave/src';
@@ -21,17 +21,6 @@ const STRUCTURAL_SITES = new Set(['loop.continue', 'audit.dispose', 'eval.output
 const ENTRY_POINTS = /\b(?:evaluateSite|transitionSite)\s*\(/g;
 const MODEL_MARKER = /\bmodelOrigin\s*\(|\borigin\s*:\s*\{[^}]*\bkind\s*:\s*['"]model['"]/s;
 const STRUCTURAL_MARKER = /\bstructuralOrigin\s*\(|\borigin\s*:\s*\{[^}]*\bkind\s*:\s*['"]structural['"]/s;
-
-function walk(dir) {
-  if (!existsSync(dir)) return [];
-  const out = [];
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) out.push(...walk(full));
-    else if (full.endsWith('.ts')) out.push(full);
-  }
-  return out;
-}
 
 function callEnd(source, open) {
   let depth = 0;
@@ -63,7 +52,7 @@ const violations = [];
 let filesChecked = 0;
 let callsChecked = 0;
 
-for (const file of walk(join(root, SCANNED))) {
+for (const file of walkTs(join(root, SCANNED))) {
   filesChecked += 1;
   const source = blankComments(readFileSync(file, 'utf8'));
   const lines = source.split('\n');

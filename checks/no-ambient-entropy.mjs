@@ -15,9 +15,9 @@
  * Usage: node checks/no-ambient-entropy.mjs [root]. The root defaults to the
  * repository; checks/test passes a fixture tree.
  */
-import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
-import { blankComments } from './source-scan.mjs';
+import { blankComments, walkTs } from './source-scan.mjs';
 
 const root = resolve(process.argv[2] ?? new URL('..', import.meta.url).pathname);
 const SCANNED = ['packages/weave/src', 'packages/weft/src'];
@@ -31,22 +31,11 @@ const FORBIDDEN = [
   [/\bMath\.random\b/, 'Math.random'],
 ];
 
-function walk(dir) {
-  if (!existsSync(dir)) return [];
-  const out = [];
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) out.push(...walk(full));
-    else if (full.endsWith('.ts')) out.push(full);
-  }
-  return out;
-}
-
 const violations = [];
 let filesChecked = 0;
 
 for (const dir of SCANNED) {
-  for (const file of walk(join(root, dir))) {
+  for (const file of walkTs(join(root, dir))) {
     filesChecked += 1;
     const lines = blankComments(readFileSync(file, 'utf8')).split('\n');
     lines.forEach((code, index) => {
