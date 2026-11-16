@@ -2312,10 +2312,11 @@ test('37. a superseded or retired attempt token never regains append authority',
   assert.deepEqual([budget.status, budget.reason], ['paused', 'budget']);
   assert.equal(journal.load('d1').attempt, null);
 
-  // A returns with no other attempt live: its superseded token still cannot terminalize B's state.
+  // A returns with no other attempt live: its superseded token still cannot terminalize B's state,
+  // and it reports B's stored pause as stored, never a synthesized dispatch_unconfirmed (#410).
   gate.release();
   const late = await pending;
-  assert.deepEqual([late.status, late.reason], ['paused', 'dispatch_unconfirmed']);
+  assert.deepEqual(late, budget);
   assert.deepEqual(journal.load('d1').decisions, [budget]);
   assert.equal(journal.append({ ...budget, entry: 2, status: 'refused', reason: 'refused' }, superseded), false);
   assert.equal(journal.acquire('d1', superseded), null);
@@ -2339,6 +2340,131 @@ test('37. a superseded or retired attempt token never regains append authority',
   plain.release('d1', first);
   assert.equal(plain.load('d1').attempt, next);
   assert.deepEqual(plain.load('d1').decisions, [base]);
+});
+
+test('37b. a loser reports a stored post-claim pause as stored; only a pre-receipt claim is unconfirmed', async () => {
+  const refuse = (intent: DispatchIntent): DispatchReceipt => ({
+    status: 'refused',
+    dispatch_id: intent.dispatch_id,
+    reason: 'budget',
+  });
+  const journal = new MemoryDispatchJournal();
+  const first = harness({}, { journal, receipt: refuse });
+  const paused = await run(first);
+  assert.deepEqual([paused.status, paused.reason, paused.entry], ['paused', 'budget', 1]);
+
+  // A resumes and hangs in its port; B reads a null settlement that is still pending when A appends.
+  const gate = deferred();
+  const settling = deferred();
+  let entered = 0;
+  let reading = 0;
+  const resumed = { journal, clock: first.clock, request: makeRequest({ resume: true }) };
+  const a = harness(
+    {},
+    {
+      ...resumed,
+      dispatch: async (intent) => {
+        entered += 1;
+        await gate.promise;
+        return refuse(intent);
+      },
+    },
+  );
+  const b = harness(
+    {},
+    {
+      ...resumed,
+      settlement: async () => {
+        reading += 1;
+        await settling.promise;
+        return null;
+      },
+    },
+  );
+  const won = run(a);
+  await waitUntil(() => entered === 1);
+
+  // While A's attempt is live, a loser reports the stored pause: A writes entry 2 itself.
+  const c = harness({}, { ...resumed, settlement: () => null });
+  assert.deepEqual(await run(c), paused);
+
+  const lost = run(b);
+  await waitUntil(() => reading === 1);
+  gate.release();
+  const winner = await won;
+  assert.deepEqual([winner.status, winner.reason, winner.entry], ['paused', 'budget', 2]);
+  settling.release();
+  const observed = await lost;
+  assert.deepEqual(observed, winner);
+  assert.ok(observed.entry <= journal.load('d1').decisions.length);
+  assert.deepEqual(journal.load('d1').decisions, [paused, winner]);
+  assert.equal(entered + b.dispatchCalls.length + c.dispatchCalls.length, 1);
+
+  // A stored dispatch_unconfirmed is returned as stored, not re-synthesized at a new entry.
+  const lostPort = new MemoryDispatchJournal();
+  const crashed = harness(
+    {},
+    {
+      journal: lostPort,
+      dispatch: () => {
+        throw new Error('lost');
+      },
+    },
+  );
+  const unconfirmed = await run(crashed);
+  assert.deepEqual([unconfirmed.reason, unconfirmed.entry], ['dispatch_unconfirmed', 1]);
+  const hung = deferred();
+  let presenting = 0;
+  const holder = harness(
+    {},
+    {
+      journal: lostPort,
+      clock: crashed.clock,
+      request: makeRequest({ resume: true }),
+      settlement: () => null,
+      dispatch: async (intent) => {
+        presenting += 1;
+        await hung.promise;
+        return dispatched(intent);
+      },
+    },
+  );
+  const held = run(holder);
+  await waitUntil(() => presenting === 1);
+  const racer = harness(
+    {},
+    { journal: lostPort, clock: crashed.clock, request: makeRequest({ resume: true }), settlement: () => null },
+  );
+  assert.deepEqual(await run(racer), unconfirmed);
+  hung.release();
+  assert.equal((await held).status, 'dispatched');
+
+  // A pause stored before the claim predates the intent: the loser of the claimed resume is unconfirmed.
+  const outage = harness({ route: { mode: 'outage' } });
+  const before = await run(outage);
+  assert.deepEqual([before.reason, before.intent], ['decision_unavailable', null]);
+  const waiting = deferred();
+  let sent = 0;
+  const claimer = harness(
+    {},
+    {
+      journal: outage.journal,
+      clock: outage.clock,
+      request: makeRequest({ resume: true }),
+      dispatch: async (intent) => {
+        sent += 1;
+        await waiting.promise;
+        return dispatched(intent);
+      },
+    },
+  );
+  const claiming = run(claimer);
+  await waitUntil(() => sent === 1);
+  const late = harness({}, { journal: outage.journal, clock: outage.clock, request: makeRequest({ resume: true }) });
+  const pending = await run(late);
+  assert.deepEqual([pending.status, pending.reason, pending.entry], ['paused', 'dispatch_unconfirmed', 2]);
+  waiting.release();
+  assert.equal((await claiming).status, 'dispatched');
 });
 
 test('38. cancelling recovery during its settlement read writes nothing and leaves the attempt live', async () => {
