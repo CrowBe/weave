@@ -9,8 +9,9 @@
  * clock. An entry that no longer matches fails the check, so the list cannot
  * outlive the code it excuses.
  */
-import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
+import { walkTs } from './source-scan.mjs';
 
 const root = resolve(new URL('..', import.meta.url).pathname);
 const SCANNED = [
@@ -42,22 +43,11 @@ const ALLOWED = [
 ];
 const allowanceUses = new Map(ALLOWED.map((entry) => [entry, 0]));
 
-function walk(dir) {
-  if (!existsSync(dir)) return [];
-  const out = [];
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) out.push(...walk(full));
-    else if (full.endsWith('.ts')) out.push(full);
-  }
-  return out;
-}
-
 const violations = [];
 let filesChecked = 0;
 
 for (const dir of SCANNED) {
-  for (const file of walk(join(root, dir))) {
+  for (const file of walkTs(join(root, dir))) {
     filesChecked += 1;
     const path = relative(root, file);
     const allowed = ALLOWED.filter((entry) => entry.file === path);
