@@ -1557,6 +1557,49 @@ test('P5c1-8 same-child races have one winner; distinct reads overlap; retired t
   assert.equal(s.journal.load(s.gen.child_ref).decisions.length, 1);
 });
 
+test('P5c1-8 a child loser reports a stored post-claim pause as stored (#410)', async () => {
+  const s = await parentSpawn();
+  const brief = s.reads[0]!;
+  const budget = (intent: DispatchIntent) => ({ status: 'refused', dispatch_id: intent.dispatch_id, reason: 'budget' });
+  const gate = deferred();
+  const settling = deferred();
+  let entered = 0;
+  let reading = 0;
+  const a = harness(
+    {},
+    {
+      journal: s.journal,
+      dispatch: async (intent) => {
+        entered++;
+        await gate.promise;
+        return budget(intent);
+      },
+    },
+  );
+  const b = harness(
+    {},
+    {
+      journal: s.journal,
+      settlement: async () => {
+        reading++;
+        await settling.promise;
+        return null;
+      },
+    },
+  );
+  const won = run(a, childRequest(brief));
+  await waitUntil(() => entered === 1);
+  const lost = run(b, childRequest(brief, { resume: true }));
+  await waitUntil(() => reading === 1);
+  gate.release();
+  const winner = await won;
+  assert.deepEqual([winner.status, winner.reason, winner.entry], ['paused', 'budget', 1]);
+  settling.release();
+  assert.deepEqual(await lost, winner);
+  assert.deepEqual(s.journal.load(brief.child_ref).decisions, [winner]);
+  assert.equal(a.dispatchCalls.length + b.dispatchCalls.length, 1);
+});
+
 test('P5c1-8 end to end: parent append, parallel reads, one generate dispatch; no child before append', async () => {
   const journal = new MemoryDispatchJournal();
   let early: unknown = null;

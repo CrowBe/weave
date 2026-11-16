@@ -2141,9 +2141,31 @@ function settle(
 }
 
 /**
+ * What a compare-and-set loser can observe of one decision id, from a single `load`. Every stored
+ * decision is observed as stored. Only a claimed intent with no decision appended since its claim
+ * has nothing stored to report; an intent-less pause predates the claim. P5c2's `Slot` owns this.
+ */
+type Observed =
+  | { readonly phase: 'stored'; readonly decision: DispatchDecision }
+  | { readonly phase: 'claimed'; readonly checkpoint: DispatchCheckpoint }
+  | { readonly phase: 'open' };
+
+function observe(loaded: ReturnType<DispatchJournal['load']>): Observed {
+  const latest = loaded.decisions.at(-1);
+  const checkpoint = loaded.checkpoint;
+  const claimed = checkpoint !== null && checkpoint.intent !== null;
+  if (latest !== undefined && (!claimed || !isResumable(latest) || latest.intent !== null))
+    return { phase: 'stored', decision: latest };
+  if (claimed) return { phase: 'claimed', checkpoint };
+  return { phase: 'open' };
+}
+
+/**
  * Another writer won the decision's compare-and-set, or holds its claimed intent's live attempt.
  * Fail closed on our own plan and report what the journal holds: a terminal decision, else the
- * unconfirmed replay of a claimed intent, else the latest resumable pause. Nothing is written.
+ * stored post-claim pause, else the unconfirmed replay of an intent claimed after any stored pause,
+ * else the latest pre-claim pause. Nothing is written. Once a post-claim decision is stored, the
+ * returned entry never runs ahead of the journal: a live attempt appends its own next entry.
  */
 function yielded(request: DispatchRequest, journal: DispatchJournal): DispatchDecision {
   const loaded = journal.load(request.request_id);
@@ -2154,13 +2176,22 @@ function yielded(request: DispatchRequest, journal: DispatchJournal): DispatchDe
       ? request
       : { ...request, terms: loaded.checkpoint.child_terms };
   if (request.child !== undefined) verifySaved(owner, loaded.decisions, journal);
-  const latest = loaded.decisions.at(-1);
-  const claimed = loaded.checkpoint !== null && loaded.checkpoint.intent !== null;
-  if (latest !== undefined && (!isResumable(latest) || !claimed)) return clone(latest);
-  if (loaded.checkpoint === null || !claimed)
-    throw new Error('the journal refused this decision without recording its owner');
-  const evidence = request.child === undefined ? undefined : liveEvidence(journal, owner, loaded.checkpoint.child);
-  return transitionDispatch(owner, loaded.checkpoint, null, loaded.decisions.length + 1, evidence);
+  const observed = observe(loaded);
+  switch (observed.phase) {
+    case 'stored':
+      return clone(observed.decision);
+    case 'claimed': {
+      const { checkpoint } = observed;
+      const evidence = request.child === undefined ? undefined : liveEvidence(journal, owner, checkpoint.child);
+      return transitionDispatch(owner, checkpoint, null, loaded.decisions.length + 1, evidence);
+    }
+    case 'open':
+      throw new Error('the journal refused this decision without recording its owner');
+    default: {
+      const never: never = observed;
+      return never;
+    }
+  }
 }
 
 /** Live evidence: the parent's journal and, for frozen edges, the exact entries they name. */
