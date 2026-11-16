@@ -430,7 +430,12 @@ stateDiagram-v2
 type InvocationPhase =
   | { readonly phase: 'running'; readonly outcome: null; readonly cancel: boolean }
   | { readonly phase: 'committed'; readonly outcome: Succeeded; readonly cancel: boolean }
-  | { readonly phase: 'stopped'; readonly outcome: Failed; readonly cancel: boolean; readonly reconciliation?: NotCommitted }
+  | {
+      readonly phase: 'stopped';
+      readonly outcome: Failed;
+      readonly cancel: boolean;
+      readonly reconciliation?: NotCommitted;
+    }
   | { readonly phase: 'uncertain'; readonly outcome: Uncertain; readonly reconciliation?: never };
 
 type OpenPhase =
@@ -548,7 +553,12 @@ The same ask-then-await pattern is at `dispatch.ts:2519-2524` (intake), `2539-25
 ```ts
 type Slot =
   | { readonly phase: 'open'; readonly checkpoint: Checkpoint }
-  | { readonly phase: 'awaiting'; readonly stage: 'intake' | 'triage' | 'route'; readonly ask: number; readonly checkpoint: Checkpoint }
+  | {
+      readonly phase: 'awaiting';
+      readonly stage: 'intake' | 'triage' | 'route';
+      readonly ask: number;
+      readonly checkpoint: Checkpoint;
+    }
   | { readonly phase: 'claimed'; readonly intent: DispatchIntent; readonly attempt: null }
   | { readonly phase: 'presented'; readonly intent: DispatchIntent; readonly attempt: string }
   | { readonly phase: 'resumable'; readonly decision: DispatchDecision }
@@ -1074,18 +1084,18 @@ Do not edit `GLOSSARY.md` in this change. Candidates, using words the findings n
 
 ## Ranked summary
 
-| Rank | Finding | Value | Size | depends_on |
-| --- | --- | --- | --- | --- |
-| 1 | Unjournaled dispatch cancellation | High | M | #397, finding 5 |
-| 2 | `yielded` rewrites a claimed resumable receipt | High | S | none |
-| 3 | Action `state` / `reconciled` / `cancel_requested` | High | M | none |
-| 4 | Host invocation `result` / `start` unguarded | High | M | none |
-| 5 | Dispatch slot collections and non-CAS stage ask | High | M | #397 for the durable adapter |
-| 6 | Read join `null` / pending edge inside unmet | Medium | M | none (code is #405) |
-| 7 | CLI preparation sets and `undefined` placeholder | Medium | M | none (#297 is the pin) |
-| 8 | Construction flags; `admitted` and `revoked` | Medium | S | none |
-| 9 | Grant authority as three weak sets | Medium | S | finding 7 for the cancel consume call |
-| 10 | Child share with no custody phase | Medium | L | P5c3, findings 1, 2, 5 |
+| Rank | Finding                                            | Value  | Size | depends_on                            |
+| ---- | -------------------------------------------------- | ------ | ---- | ------------------------------------- |
+| 1    | Unjournaled dispatch cancellation                  | High   | M    | #397, finding 5                       |
+| 2    | `yielded` rewrites a claimed resumable receipt     | High   | S    | none                                  |
+| 3    | Action `state` / `reconciled` / `cancel_requested` | High   | M    | none                                  |
+| 4    | Host invocation `result` / `start` unguarded       | High   | M    | none                                  |
+| 5    | Dispatch slot collections and non-CAS stage ask    | High   | M    | #397 for the durable adapter          |
+| 6    | Read join `null` / pending edge inside unmet       | Medium | M    | none (code is #405)                   |
+| 7    | CLI preparation sets and `undefined` placeholder   | Medium | M    | none (#297 is the pin)                |
+| 8    | Construction flags; `admitted` and `revoked`       | Medium | S    | none                                  |
+| 9    | Grant authority as three weak sets                 | Medium | S    | finding 7 for the cancel consume call |
+| 10   | Child share with no custody phase                  | Medium | L    | P5c3, findings 1, 2, 5                |
 
 ## Brief these first
 
