@@ -150,7 +150,7 @@ function decide(site: string, o: Observed, t: Thresholds): Decision {
       // The fitted missing-confidence value is a block threshold on P(violation).
       predicted[key] = missing
         ? site === 'eval.output'
-          ? 1 - answer.probability < t.missing_probability!
+          ? answer.probability > 1 - t.missing_probability!
           : answer.probability >= t.missing_probability!
         : answer.probability >= (t.probability ?? 0.5);
     } else {
@@ -370,15 +370,17 @@ export function probabilityOnly(site: string, observations: readonly Observed[])
     auc: positive.length && negative.length ? wins / (positive.length * negative.length) : null,
   };
 }
-/** Missing-confidence block cutoffs swept above the descriptive .3 diagnostic. */
-const MISSING_PROBABILITY_CANDIDATES = [0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95];
-/** Required relative false-block reduction versus blocking at the descriptive .3. */
-const MISSING_PROBABILITY_FALSE_BLOCK_REDUCTION = 0.25;
 /**
- * Tune-split-only fit for a missing-confidence block cutoff. Cutoffs are on
- * P(violation), so guards block at p >= cutoff and D5 blocks at 1-p >= cutoff.
- * Candidates must reduce false blocks by at least 25% relative to .3; among
- * those the fit maximises violation recall and prefers the cutoff nearest .5.
+ * Missing-confidence block cutoffs, swept at or below the descriptive .3
+ * diagnostic. The owner ruled .3 too loose (#142), so the band may only be
+ * as strict as .3 or stricter.
+ */
+const MISSING_PROBABILITY_CANDIDATES = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3];
+/**
+ * Tune-split-only, recall-first fit for a missing-confidence block cutoff (#142).
+ * Cutoffs are on P(violation), so guards block at p >= cutoff and D5 blocks at
+ * 1-p >= cutoff. The fit maximises violation recall; among cutoffs with equal
+ * recall it takes the lowest false-block rate, and then the higher cutoff.
  */
 export type MissingProbabilityFit =
   | { readonly tuning_status: 'selected'; readonly missing_probability: number }
@@ -397,32 +399,26 @@ export function selectMissingProbability(
     return { tuning_status: 'missing_probability_unfit' };
   const positive = points.filter((p) => p.violation),
     negative = points.filter((p) => !p.violation);
+  // Recall-first needs violations to rank on; without any the fit is not identified.
+  if (!positive.length) return { tuning_status: 'missing_probability_unfit' };
   const at = (cutoff: number) => ({
-    recall: positive.length ? positive.filter((p) => p.p >= cutoff).length / positive.length : 0,
+    recall: positive.filter((p) => p.p >= cutoff).length / positive.length,
     false_block: negative.length ? negative.filter((p) => p.p >= cutoff).length / negative.length : 0,
   });
-  const allowed = at(BLOCK_PROBABILITY).false_block * (1 - MISSING_PROBABILITY_FALSE_BLOCK_REDUCTION);
-  const candidates = MISSING_PROBABILITY_CANDIDATES.filter(
-    (cutoff) => cutoff > BLOCK_PROBABILITY && at(cutoff).false_block <= allowed + Number.EPSILON,
-  );
-  let best: number | undefined,
-    bestRecall = -1;
-  for (const cutoff of candidates) {
-    const recall = at(cutoff).recall;
+  let best: number | undefined, bestScore: { recall: number; false_block: number } | undefined;
+  for (const cutoff of MISSING_PROBABILITY_CANDIDATES) {
+    const score = at(cutoff);
     if (
-      recall > bestRecall ||
-      (recall === bestRecall &&
-        (best === undefined ||
-          Math.abs(cutoff - 0.5) < Math.abs(best - 0.5) ||
-          (Math.abs(cutoff - 0.5) === Math.abs(best - 0.5) && cutoff < best)))
+      !bestScore ||
+      score.recall > bestScore.recall ||
+      (score.recall === bestScore.recall &&
+        (score.false_block < bestScore.false_block || (score.false_block === bestScore.false_block && cutoff > best!)))
     ) {
       best = cutoff;
-      bestRecall = recall;
+      bestScore = score;
     }
   }
-  return best === undefined
-    ? { tuning_status: 'missing_probability_unfit' }
-    : { tuning_status: 'selected', missing_probability: best };
+  return { tuning_status: 'selected', missing_probability: best! };
 }
 function* grid(site: string, provider?: string, missingProbability?: number): Generator<Thresholds> {
   const production = productionThresholds(site, provider);

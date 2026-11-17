@@ -22,7 +22,7 @@ export const OUTPUT_EVAL_QUESTION = 'Does the artifact satisfy this success crit
 export const OUTPUT_EVAL_POLICY = Object.freeze({
   probability: 0.8,
   confidence: 0.9,
-  missing_confidence_probability: 0.5,
+  missing_confidence_probability: 0.1,
 });
 
 export interface OutputCriterion {
@@ -177,7 +177,8 @@ export function transitionOutputEval(
     else if (confidenceInvalid) reason = 'missing_confidence';
     else if (confidenceMissing) {
       // The fitted cutoff is a block threshold on P(violation) = 1 - P(satisfied).
-      if (1 - probability >= OUTPUT_EVAL_POLICY.missing_confidence_probability) {
+      // Compare against 1 - cutoff so P(satisfied) = .9 blocks exactly (1 - .9 is not .1 in floating point).
+      if (probability <= 1 - OUTPUT_EVAL_POLICY.missing_confidence_probability) {
         reason = 'below_probability';
         answer = 'fail';
         accepted = true;

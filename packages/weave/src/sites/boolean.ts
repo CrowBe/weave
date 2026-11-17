@@ -21,8 +21,8 @@ export const OUTPUT_RULE = 'out_of_grant_effect' as const;
 export type GuardRule = (typeof INPUT_RULES)[number] | typeof OUTPUT_RULE;
 export const BOOLEAN_SITE_POLICY = Object.freeze({
   'loop.preselect': Object.freeze({ confidence: 0.75, k: 3, floor: 0, cap: 8, max_excluded: 0.4, min_margin: 0.3 }),
-  'guard.input': Object.freeze({ confidence: 0.9, threshold: 0.3, missing_confidence_threshold: 0.5 }),
-  'guard.output': Object.freeze({ confidence: 0.9, threshold: 0.3, missing_confidence_threshold: 0.4 }),
+  'guard.input': Object.freeze({ confidence: 0.9, threshold: 0.3, missing_confidence_threshold: 0.1 }),
+  'guard.output': Object.freeze({ confidence: 0.9, threshold: 0.3, missing_confidence_threshold: 0.3 }),
 });
 export type BooleanSite = 'loop.preselect' | 'guard.input' | 'guard.output';
 export interface CatalogueIndexEntry {

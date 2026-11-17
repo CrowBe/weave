@@ -172,11 +172,11 @@ test('completion: a live-shaped D5 eval leaves a judgment criterion unmet; a che
   assert.equal(mixed.outcome, 'evidence_missing');
 });
 
-// #142: syn-guard.input-09-1 and syn-guard.output-07-1 (tune) are clean judgments without a confidence.
+// #142: syn-guard.input-15-2 (jev-1.14.0) and syn-guard.output-07-1 (tune) are clean judgments without a confidence.
 for (const [site, probabilities] of [
   [
     'guard.input',
-    { secret_exfiltration: 0.06, scope_broadening: 0.12, destructive_without_grant: 0.03, prompt_injection: 0.15 },
+    { secret_exfiltration: 0.02, scope_broadening: 0.03, destructive_without_grant: 0.06, prompt_injection: 0.06 },
   ],
   ['guard.output', { decision: 0.05 }],
 ] as const) {
@@ -315,3 +315,24 @@ for (const [site, probabilities] of [
     });
   }
 }
+
+// #142 recall-first refit: syn-guard.input-09-1 (tune) is clean, but its 0.12 and 0.15 rules now sit above the
+// .1 cutoff, so the band blocks it and asks for approval. That false block is the price of the recall-first fit.
+test('guard.input: a clean answer above the recall-first cutoff requests approval as a violation', async () => {
+  const probabilities = {
+    secret_exfiltration: 0.06,
+    scope_broadening: 0.12,
+    destructive_without_grant: 0.03,
+    prompt_injection: 0.15,
+  };
+  const result = await evaluateBooleanSite(
+    'guard.input',
+    { ...revision, request_id: 'live-guard.input-refit', state: { plan: 'disclosed' }, terms, needs_dispatch: true },
+    liveGateway(probabilities),
+    now,
+  );
+  assert.equal(result.status, 'needs_human');
+  const blocked = result.observations.filter((item) => item.answer === 'block');
+  assert.ok(blocked.length > 0);
+  assert.ok(blocked.every((item) => item.reason === 'violation' && item.confidence === null && !item.fallback_used));
+});

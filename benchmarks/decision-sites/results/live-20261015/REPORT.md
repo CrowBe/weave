@@ -12,15 +12,15 @@ D3 headline accuracy is all-needed recall among covered steps: every needed entr
 | audit.dispose | amos-small | conf≥0.75; selected | 12 | 100.0% | 8.3% | 100.0% | 8.3% | — | — |
 | audit.dispose | openai-decisions | conf≥0.75; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
 | audit.dispose | typesafe-jev | conf≥0.95; selected | 12 | 100.0% | 50.0% | 88.9% | 75.0% | — | — |
-| eval.output | amos-small | conf≥0.9; p≥0.8; missing-conf p≥0.5; selected | 12 | 91.7% | 100.0% | 91.7% | 100.0% | — | — |
+| eval.output | amos-small | conf≥0.9; p≥0.8; missing-conf p≥0.1; selected | 12 | 91.7% | 100.0% | 91.7% | 100.0% | — | — |
 | eval.output | openai-decisions | conf≥0.9; p≥0.85; fail-p≤0.15; openai-provisional-probability-band; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
-| eval.output | typesafe-jev | conf≥0.9; p≥0.8; missing-conf p≥0.5; selected | 12 | 91.7% | 100.0% | 91.7% | 100.0% | — | — |
-| guard.input | amos-small | conf≥0.9; p≥0.3; missing-conf p≥0.5; selected | 16 | 43.8% | 100.0% | 43.8% | 100.0% | — | — |
-| guard.input | openai-decisions | conf≥0.9; p≥0.3; missing-conf p≥0.5; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
-| guard.input | typesafe-jev | conf≥0.9; p≥0.3; missing-conf p≥0.5; selected | 16 | 37.5% | 100.0% | 37.5% | 100.0% | — | — |
-| guard.output | amos-small | conf≥0.9; p≥0.3; missing-conf p≥0.4; selected | 18 | 88.9% | 100.0% | 88.9% | 100.0% | — | — |
-| guard.output | openai-decisions | conf≥0.9; p≥0.3; missing-conf p≥0.4; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
-| guard.output | typesafe-jev | conf≥0.9; p≥0.3; missing-conf p≥0.4; selected | 18 | 100.0% | 100.0% | 100.0% | 100.0% | — | — |
+| eval.output | typesafe-jev | conf≥0.9; p≥0.8; missing-conf p≥0.1; selected | 12 | 91.7% | 100.0% | 91.7% | 100.0% | — | — |
+| guard.input | amos-small | conf≥0.9; p≥0.3; missing-conf p≥0.1; selected | 16 | 25.0% | 100.0% | 25.0% | 100.0% | — | — |
+| guard.input | openai-decisions | conf≥0.9; p≥0.3; missing-conf p≥0.1; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
+| guard.input | typesafe-jev | conf≥0.9; p≥0.3; missing-conf p≥0.1; selected | 16 | 6.3% | 100.0% | 6.3% | 100.0% | — | — |
+| guard.output | amos-small | conf≥0.9; p≥0.3; missing-conf p≥0.3; selected | 18 | 72.2% | 100.0% | 72.2% | 100.0% | — | — |
+| guard.output | openai-decisions | conf≥0.9; p≥0.3; missing-conf p≥0.3; no_tune_data | 0 | — | 0.0% | — | 0.0% | — | — |
+| guard.output | typesafe-jev | conf≥0.9; p≥0.3; missing-conf p≥0.3; selected | 18 | 100.0% | 100.0% | 100.0% | 100.0% | — | — |
 | intake.classify | amos-small | conf≥0.5; selected; not_applied: looser than production (report only) | 60 | 87.9% | 55.0% | 100.0% | 26.7% | — | — |
 | intake.classify | openai-decisions | conf≥0.8; minimum_coverage_unmet | 0 | — | 0.0% | — | 0.0% | — | — |
 | intake.classify | typesafe-jev | conf≥0.75; selected; not_applied: looser than production (report only) | 60 | 94.9% | 65.0% | 97.1% | 56.7% | — | — |
@@ -47,7 +47,7 @@ Production thresholds are imported from the site policies (D1 top-p .6 and D6 co
 | eval.output | amos-small | 0.083 | 0.096 | — | 12 | — | — / — | 0 | — / — | 367.000 / 435.000 | 1657 / 0 | 0.000000 |
 | eval.output | openai-decisions | — | — | — | 0 | — | — / — | 0 | — / — | — / — | 0 / 0 | 0.000000 |
 | eval.output | typesafe-jev | 0.070 | 0.075 | — | 12 | — | — / — | 0 | — / — | 42.000 / 48.000 | 4374 / 288 | 0.000184 |
-| guard.input | amos-small | 0.182 | 0.183 | — | 64 | 66.7% | — / — | 0 | — / — | 482.000 / 553.000 | 3328 / 0 | 0.000000 |
+| guard.input | amos-small | 0.182 | 0.183 | — | 64 | 91.7% | — / — | 0 | — / — | 482.000 / 553.000 | 3328 / 0 | 0.000000 |
 | guard.input | openai-decisions | — | — | — | 0 | — | — / — | 0 | — / — | — / — | 0 / 0 | 0.000000 |
 | guard.input | typesafe-jev | 0.148 | 0.231 | — | 64 | 100.0% | — / — | 0 | — / — | 43.000 / 67.000 | 6117 / 1344 | 0.000257 |
 | guard.output | amos-small | 0.070 | 0.233 | — | 18 | 100.0% | — / — | 0 | — / — | 353.000 / 389.000 | 1975 / 0 | 0.000000 |

@@ -285,14 +285,14 @@
       "tuned_thresholds": {
         "confidence": 0.9,
         "probability": 0.8,
-        "missing_probability": 0.5,
+        "missing_probability": 0.1,
         "allow_missing_confidence": true,
         "tuning_status": "selected"
       },
       "production_thresholds": {
         "confidence": 0.9,
         "probability": 0.8,
-        "missing_probability": 0.5,
+        "missing_probability": 0.1,
         "allow_missing_confidence": true
       },
       "holdout": {
@@ -455,14 +455,14 @@
       "tuned_thresholds": {
         "confidence": 0.9,
         "probability": 0.8,
-        "missing_probability": 0.5,
+        "missing_probability": 0.1,
         "allow_missing_confidence": true,
         "tuning_status": "selected"
       },
       "production_thresholds": {
         "confidence": 0.9,
         "probability": 0.8,
-        "missing_probability": 0.5,
+        "missing_probability": 0.1,
         "allow_missing_confidence": true
       },
       "holdout": {
@@ -539,22 +539,22 @@
       "tuned_thresholds": {
         "confidence": 0.9,
         "probability": 0.3,
-        "missing_probability": 0.5,
+        "missing_probability": 0.1,
         "allow_missing_confidence": true,
         "tuning_status": "selected"
       },
       "production_thresholds": {
         "confidence": 0.9,
         "probability": 0.3,
-        "missing_probability": 0.5,
+        "missing_probability": 0.1,
         "allow_missing_confidence": true
       },
       "holdout": {
         "attempted": 16,
         "covered": 16,
         "coverage": 1,
-        "accuracy": 0.4375,
-        "exact_set_accuracy": 0.4375,
+        "accuracy": 0.25,
+        "exact_set_accuracy": 0.25,
         "failures": 0,
         "missing_confidence": 64,
         "confidence_coverage": 0,
@@ -562,7 +562,7 @@
         "brier": 0.18183187118627792,
         "ece": 0.18273935478646308,
         "calibration_n": 64,
-        "violation_recall": 0.6666666666666666,
+        "violation_recall": 0.9166666666666666,
         "needed_recall": null,
         "all_needed_recall": null,
         "multi_entry_steps": 0,
@@ -581,8 +581,8 @@
         "attempted": 16,
         "covered": 16,
         "coverage": 1,
-        "accuracy": 0.4375,
-        "exact_set_accuracy": 0.4375,
+        "accuracy": 0.25,
+        "exact_set_accuracy": 0.25,
         "failures": 0,
         "missing_confidence": 64,
         "confidence_coverage": 0,
@@ -590,7 +590,7 @@
         "brier": 0.18183187118627792,
         "ece": 0.18273935478646308,
         "calibration_n": 64,
-        "violation_recall": 0.6666666666666666,
+        "violation_recall": 0.9166666666666666,
         "needed_recall": null,
         "all_needed_recall": null,
         "multi_entry_steps": 0,
@@ -623,14 +623,14 @@
       "tuned_thresholds": {
         "confidence": 0.9,
         "probability": 0.3,
-        "missing_probability": 0.5,
+        "missing_probability": 0.1,
         "allow_missing_confidence": true,
         "tuning_status": "no_tune_data"
       },
       "production_thresholds": {
         "confidence": 0.9,
         "probability": 0.3,
-        "missing_probability": 0.5,
+        "missing_probability": 0.1,
         "allow_missing_confidence": true
       },
       "holdout": {
@@ -707,22 +707,22 @@
       "tuned_thresholds": {
         "confidence": 0.9,
         "probability": 0.3,
-        "missing_probability": 0.5,
+        "missing_probability": 0.1,
         "allow_missing_confidence": true,
         "tuning_status": "selected"
       },
       "production_thresholds": {
         "confidence": 0.9,
         "probability": 0.3,
-        "missing_probability": 0.5,
+        "missing_probability": 0.1,
         "allow_missing_confidence": true
       },
       "holdout": {
         "attempted": 16,
         "covered": 16,
         "coverage": 1,
-        "accuracy": 0.375,
-        "exact_set_accuracy": 0.375,
+        "accuracy": 0.0625,
+        "exact_set_accuracy": 0.0625,
         "failures": 0,
         "missing_confidence": 64,
         "confidence_coverage": 0,
@@ -749,8 +749,8 @@
         "attempted": 16,
         "covered": 16,
         "coverage": 1,
-        "accuracy": 0.375,
-        "exact_set_accuracy": 0.375,
+        "accuracy": 0.0625,
+        "exact_set_accuracy": 0.0625,
         "failures": 0,
         "missing_confidence": 64,
         "confidence_coverage": 0,
@@ -791,22 +791,22 @@
       "tuned_thresholds": {
         "confidence": 0.9,
         "probability": 0.3,
-        "missing_probability": 0.4,
+        "missing_probability": 0.3,
         "allow_missing_confidence": true,
         "tuning_status": "selected"
       },
       "production_thresholds": {
         "confidence": 0.9,
         "probability": 0.3,
-        "missing_probability": 0.4,
+        "missing_probability": 0.3,
         "allow_missing_confidence": true
       },
       "holdout": {
         "attempted": 18,
         "covered": 18,
         "coverage": 1,
-        "accuracy": 0.8888888888888888,
-        "exact_set_accuracy": 0.8888888888888888,
+        "accuracy": 0.7222222222222222,
+        "exact_set_accuracy": 0.7222222222222222,
         "failures": 0,
         "missing_confidence": 18,
         "confidence_coverage": 0,
@@ -833,8 +833,8 @@
         "attempted": 18,
         "covered": 18,
         "coverage": 1,
-        "accuracy": 0.8888888888888888,
-        "exact_set_accuracy": 0.8888888888888888,
+        "accuracy": 0.7222222222222222,
+        "exact_set_accuracy": 0.7222222222222222,
         "failures": 0,
         "missing_confidence": 18,
         "confidence_coverage": 0,
@@ -875,14 +875,14 @@
       "tuned_thresholds": {
         "confidence": 0.9,
         "probability": 0.3,
-        "missing_probability": 0.4,
+        "missing_probability": 0.3,
         "allow_missing_confidence": true,
         "tuning_status": "no_tune_data"
       },
       "production_thresholds": {
         "confidence": 0.9,
         "probability": 0.3,
-        "missing_probability": 0.4,
+        "missing_probability": 0.3,
         "allow_missing_confidence": true
       },
       "holdout": {
@@ -959,14 +959,14 @@
       "tuned_thresholds": {
         "confidence": 0.9,
         "probability": 0.3,
-        "missing_probability": 0.4,
+        "missing_probability": 0.3,
         "allow_missing_confidence": true,
         "tuning_status": "selected"
       },
       "production_thresholds": {
         "confidence": 0.9,
         "probability": 0.3,
-        "missing_probability": 0.4,
+        "missing_probability": 0.3,
         "allow_missing_confidence": true
       },
       "holdout": {
