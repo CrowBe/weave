@@ -83,11 +83,15 @@ Python 3.
 ```bash
 npm install
 npm run verify           # structural checks, build, suites, the web host, examples, and contract tests
-npm run host:workspace   # read-only web workspace at http://127.0.0.1:5173
+npm run host:workspace   # local Loom experiment at http://127.0.0.1:5180
 npm run lint:report      # vp lint; exits non-zero on lint errors, changes no files
 npm run fmt:report       # vp fmt --check; exits non-zero on unformatted files, changes no files
 npm run verify:cached    # same checks as verify, replayed by Vite Task when inputs match
 ```
+
+On `rethink/loom-local`, the workspace starts empty and runs the bounded local
+Loom experiment. See [local setup and scope](docs/loom-local.md) for model
+configuration, execution limits, and what the first run can test.
 
 `npm run check` also runs repository checks for findings that reviews kept repeating (#203): `checks/no-ambient-env.mjs` keeps environment reads out of package source, and `checks/no-swallowed-failures.mjs` keeps scripts and CI steps from swallowing a failure. `npm run test:checks` shows each one red on a fixture that has the pattern and green on one without it.
 

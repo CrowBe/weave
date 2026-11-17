@@ -1,269 +1,295 @@
-import {
-  THEME_DAYLIGHT,
-  THEME_DEFAULT,
-  changeTheme,
-  freshSession,
-  present,
-  resolveTree,
-  selectAttachment,
-  themeById,
-  type RegionNode,
-  type SessionRecord,
-  type ThemeRecord,
-  type WorkspaceView,
-} from '@weave/tapestry';
-import { useState } from 'react';
-import { themeProperties } from './bindings';
-import { Button } from '@/components/ui/button';
-import { FIXTURES, type FixtureId } from './fixtures';
-import { ApprovalPending } from './paint/approval';
-import { ConversationThread } from './paint/conversation';
-import { Condition } from './paint/mark';
-import { ProjectIndex } from './paint/project-index';
+import { useEffect, useState } from 'react';
+import './local-workspace.css';
 
-function themeOf(session: SessionRecord): ThemeRecord {
-  const theme = themeById(session.theme_id);
-  if (!theme) throw new Error(`unknown theme ${session.theme_id}`);
-  return theme;
+interface Status {
+  ready: boolean;
+  messages: string[];
+  generation_available: boolean;
+  routes: { id: string; model: string; tier: string; destination: string }[];
+  scope: string;
 }
-
-function Occupant({
-  node,
-  view,
-  session,
-  theme,
-  onSelect,
-}: {
-  readonly node: RegionNode;
-  readonly view: WorkspaceView;
-  readonly session: SessionRecord;
-  readonly theme: ThemeRecord;
-  readonly onSelect: (label: string) => void;
-}) {
-  const presentation = present(view, session, node);
-  if (presentation.kind === 'collapsed') {
-    return (
-      <span data-testid="drawer-collapsed" className="text-[12px] leading-4" style={{ color: 'var(--text-muted)' }}>
-        collapsed
-      </span>
-    );
+interface Run {
+  id: string;
+  input: string;
+  status: 'running' | 'stopping' | 'settled';
+  events: { sequence: number; task_id: string; parent: string | null; stage: string; detail: unknown }[];
+  result: { status: string; output: unknown; reason: string | null; nodes: number; requires_review: boolean } | null;
+  stats: { calls: number; spent: number; reserved: number };
+}
+async function api<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(path, {
+    ...(body === undefined
+      ? {}
+      : {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-loom-local': '1' },
+          body: JSON.stringify(body),
+        }),
+    ...(signal ? { signal } : {}),
+  });
+  if (!response.ok) {
+    const failure = (await response.json().catch(() => ({ error: `Local server returned ${response.status}.` }))) as {
+      error?: string;
+    };
+    throw new Error(failure.error ?? 'Local request failed.');
   }
-  if (presentation.kind === 'empty') {
-    return <Condition kind="empty" mark={theme.mark['condition-empty']} text={presentation.text} />;
-  }
-  if (node.component === 'project.index@1' && (presentation.kind === 'index' || presentation.kind === 'omitted')) {
-    return <ProjectIndex presentation={presentation} theme={theme} onSelect={onSelect} />;
-  }
+  return response.json() as Promise<T>;
+}
+function format(value: unknown): string {
+  if (typeof value === 'string') return value;
   if (
-    node.component === 'conversation.thread@1' &&
-    (presentation.kind === 'observations' || presentation.kind === 'omitted')
-  ) {
-    return <ConversationThread presentation={presentation} theme={theme} />;
-  }
-  if (
-    node.component === 'approval.pending@1' &&
-    (presentation.kind === 'approval' || presentation.kind === 'omitted')
-  ) {
-    return <ApprovalPending presentation={presentation} theme={theme} />;
-  }
-  return null;
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    typeof (value as { text?: unknown }).text === 'string'
+  )
+    return (value as { text: string }).text;
+  return JSON.stringify(value, null, 2);
 }
-
-function Segment({
-  pressed,
-  testId,
-  onClick,
-  children,
-}: {
-  readonly pressed: boolean;
-  readonly testId: string;
-  readonly onClick: () => void;
-  readonly children: string;
-}) {
-  return (
-    <Button
-      type="button"
-      variant="segment"
-      size="segment"
-      aria-pressed={pressed}
-      data-testid={testId}
-      onClick={onClick}
-    >
-      {children}
-    </Button>
-  );
+function download(run: Run) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(run, null, 2)], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `loom-${run.id}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
-
-const column = 'max-lg:order-3 lg:col-start-1 lg:row-start-2';
 
 export function Host() {
-  const [fixture, setFixture] = useState<FixtureId>('omitted');
-  const [session, setSession] = useState(() => freshSession('session-field', THEME_DEFAULT.id));
-  const view = FIXTURES[fixture];
-  const theme = themeOf(session);
-  const tree = resolveTree(view, session);
-  const project = view.project_name.status === 'disclosed' ? view.project_name.name : 'Project withheld';
-  const pending = tree.regions['cut-through'].length;
-  const observationCount = view.observations.status === 'disclosed' ? view.observations.items.length : null;
-  const select = (label: string) => setSession((current) => selectAttachment(current, label));
-
+  const [status, setStatus] = useState<Status | null>(null);
+  const [run, setRun] = useState<Run | null>(null);
+  const [input, setInput] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const active = run !== null && run.status !== 'settled';
+  useEffect(() => {
+    const controller = new AbortController();
+    void Promise.all([
+      api<Status>('/api/status', undefined, controller.signal),
+      api<Run | null>('/api/run', undefined, controller.signal),
+    ])
+      .then(([configuration, current]) => {
+        setStatus(configuration);
+        setRun(current);
+      })
+      .catch((failure: unknown) => {
+        if (!controller.signal.aborted)
+          setError(failure instanceof Error ? failure.message : 'Cannot reach the local server.');
+      });
+    return () => controller.abort();
+  }, []);
+  useEffect(() => {
+    if (!active) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const current = await api<Run | null>('/api/run', undefined, controller.signal);
+        setRun(current);
+        if (current && current.status !== 'settled')
+          timer = setTimeout(() => {
+            void poll();
+          }, 400);
+      } catch (failure) {
+        if (!controller.signal.aborted) {
+          setError(failure instanceof Error ? failure.message : 'Connection interrupted.');
+          timer = setTimeout(() => {
+            void poll();
+          }, 1500);
+        }
+      }
+    };
+    void poll();
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [active]);
+  async function submit() {
+    if (!input.trim() || active || pending) return;
+    setPending(true);
+    setError(null);
+    try {
+      setRun(await api<Run>('/api/runs', { input }));
+      setInput('');
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not start the run.');
+    } finally {
+      setPending(false);
+    }
+  }
+  async function stop() {
+    if (!run) return;
+    setPending(true);
+    try {
+      setRun(await api<Run>('/api/run/stop', { run_id: run.id }));
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not stop the run.');
+    } finally {
+      setPending(false);
+    }
+  }
+  async function reset() {
+    setPending(true);
+    try {
+      await api('/api/run/reset', {});
+      setRun(null);
+      setError(null);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not clear the run.');
+    } finally {
+      setPending(false);
+    }
+  }
+  const last = run?.events.at(-1);
   return (
-    <div
-      data-testid="shell"
-      data-theme={theme.id}
-      data-density={theme.density.comfort}
-      data-tree={JSON.stringify(tree)}
-      data-session-ended={session.ended === false ? 'false' : 'true'}
-      data-selection={session.selection ?? ''}
-      className="grid h-dvh grid-rows-[auto_minmax(0,1fr)] bg-[var(--canvas)] text-[var(--text)] lg:grid-cols-[14rem_minmax(0,1fr)_20rem] xl:grid-cols-[15rem_minmax(0,1fr)_24rem]"
-      style={themeProperties(theme)}
-    >
-      <header className="col-span-full flex min-h-[var(--bar)] items-center gap-4 border-b border-[var(--hairline)] px-4 max-lg:order-1 xl:h-[var(--bar)]">
-        <span className="flex min-w-0 flex-col justify-center leading-tight xl:flex-row xl:items-center xl:gap-4">
-          <span
-            data-testid="project-name"
-            className="text-[15px] leading-5 font-semibold tracking-[-0.01em] whitespace-nowrap"
-          >
-            {project}
-          </span>
-          <span className="flex gap-3 text-[11px] leading-4 xl:text-xs">
-            <span className="shrink-0 whitespace-nowrap">
-              <span style={{ color: 'var(--text-muted)' }}>session </span>
-              <span data-testid="session-id" className="font-mono font-normal text-[var(--text)]">
-                {session.session_id}
-              </span>
-            </span>
-            <span data-testid="revision" className="shrink-0 whitespace-nowrap">
-              <span className="font-sans" style={{ color: 'var(--text-muted)' }}>
-                revision{' '}
-              </span>
-              <span className="font-mono font-normal text-[var(--text)] tabular-nums">{view.revision}</span>
-            </span>
-            <span className="shrink-0 whitespace-nowrap">
-              <span style={{ color: 'var(--text-muted)' }}>theme </span>
-              <span data-testid="theme-id" className="font-mono font-normal text-[var(--text)]">
-                {theme.id}
-              </span>
-            </span>
-          </span>
+    <div className="local-workspace">
+      <header className="local-header">
+        <span>
+          <strong>Weave Loom</strong>
+          <span className="local-label">local experiment</span>
         </span>
-        <span data-testid="tree-key" className="sr-only">
-          {JSON.stringify(tree.regions)}
-        </span>
-        <span className="ml-auto flex items-center gap-3">
-          <span
-            className="flex min-h-7 items-center rounded-md border border-[var(--hairline)] bg-[var(--canvas)] p-[3px]"
-            role="group"
-            aria-label="Theme"
-          >
-            <Segment
-              pressed={theme.id === THEME_DEFAULT.id}
-              testId="theme-default"
-              onClick={() => setSession((current) => changeTheme(current, THEME_DEFAULT.id))}
-            >
-              Default
-            </Segment>
-            <Segment
-              pressed={theme.id === THEME_DAYLIGHT.id}
-              testId="theme-daylight"
-              onClick={() => setSession((current) => changeTheme(current, THEME_DAYLIGHT.id))}
-            >
-              Daylight
-            </Segment>
-          </span>
-          <span className="h-4 w-px bg-[var(--hairline)]" aria-hidden="true" />
-          <span
-            className="flex min-h-7 items-center gap-1.5 rounded-md border border-dashed border-[var(--hairline)] bg-[var(--canvas)] px-1.5 py-[3px]"
-            role="group"
-            aria-label="Fixture"
-          >
-            <span className="text-[11px] leading-4" style={{ color: 'var(--text-muted)' }}>
-              Fixture
-            </span>
-            <Segment pressed={fixture === 'omitted'} testId="fixture-omitted" onClick={() => setFixture('omitted')}>
-              Omitted slice
-            </Segment>
-            <Segment pressed={fixture === 'recorded'} testId="fixture-recorded" onClick={() => setFixture('recorded')}>
-              Recorded observations
-            </Segment>
-          </span>
-        </span>
+        <button
+          type="button"
+          onClick={() => {
+            void reset();
+          }}
+          disabled={active || pending || !run}
+        >
+          New run
+        </button>
       </header>
-      <nav data-testid="region-nav" className={`${column} min-h-0 overflow-auto`}>
-        <div className="flex h-[var(--bar)] items-center border-b border-[var(--hairline)] px-[var(--pad)] text-[12px] leading-4 font-medium">
-          Navigation
-        </div>
-        <div className="px-[var(--pad)] py-[var(--gap)]">
-          <Occupant node={tree.regions.nav} view={view} session={session} theme={theme} onSelect={select} />
-          <a
-            href="#cut-through"
-            className="mt-3 flex h-[var(--row)] items-center justify-between rounded-md px-2 text-[13px] leading-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
-            style={{ color: 'var(--text-muted)' }}
-          >
-            <span>Pending authority requests</span>
-            <span className="font-mono text-[11px] tabular-nums">{pending}</span>
-          </a>
-        </div>
-      </nav>
-      <div className="flex min-h-0 flex-col border-x border-[var(--hairline)] bg-[var(--surface)] max-lg:order-4 lg:col-start-2 lg:row-start-2">
-        <div className="flex h-[var(--bar)] items-center justify-between border-b border-[var(--hairline)] px-[var(--pad)]">
-          <h2 className="text-[12px] leading-4 font-medium">Conversational surface</h2>
-          {observationCount === null ? null : (
-            <span className="text-[12px] leading-4 tabular-nums" style={{ color: 'var(--text-muted)' }}>
-              {observationCount} {observationCount === 1 ? 'observation' : 'observations'}
-            </span>
-          )}
-        </div>
-        <main data-testid="region-main" className="flex min-h-0 flex-1 flex-col">
-          <Occupant node={tree.regions['main.primary']} view={view} session={session} theme={theme} onSelect={select} />
-        </main>
-        <section
-          data-testid="region-bottom"
-          className="flex h-[var(--bar)] items-center gap-3 border-t border-[var(--hairline)] px-[var(--pad)]"
-        >
-          <span className="text-[12px] leading-4 font-medium" style={{ color: 'var(--text-muted)' }}>
-            Secondary strip
-          </span>
-          <Occupant node={tree.regions['main.bottom']} view={view} session={session} theme={theme} onSelect={select} />
-        </section>
-      </div>
-      <aside className="flex min-h-0 flex-col max-lg:order-2 max-lg:max-h-[45vh] lg:col-start-3 lg:row-start-2">
-        <section
-          data-testid="region-drawer"
-          className="flex h-[var(--bar)] shrink-0 items-center justify-between border-b border-[var(--hairline)] px-[var(--pad)]"
-        >
-          <span className="text-[12px] leading-4 font-medium">Drawer</span>
-          <Occupant node={tree.regions['right.drawer']} view={view} session={session} theme={theme} onSelect={select} />
-        </section>
-        <section
-          id="cut-through"
-          data-testid="region-cut-through"
-          className="flex min-h-0 flex-1 flex-col overflow-auto px-[var(--pad)] py-[var(--gap)]"
-        >
-          <div className="mb-2 flex items-baseline justify-between">
-            <h2 className="text-[12px] leading-4 font-medium">Cut-through</h2>
-            <span className="text-[12px] leading-4 tabular-nums" style={{ color: 'var(--text-muted)' }}>
-              {pending} pending
-            </span>
-          </div>
-          {tree.regions['cut-through'].length === 0 ? (
-            <Condition kind="empty" mark={theme.mark['condition-empty']} text="No pending authority request" />
-          ) : (
-            <div className="flex flex-col gap-3">
-              {tree.regions['cut-through'].map((node) => (
-                <Occupant
-                  key={node.component === 'approval.pending@1' && 'request_id' in node ? node.request_id : 'withheld'}
-                  node={node}
-                  view={view}
-                  session={session}
-                  theme={theme}
-                  onSelect={select}
-                />
+      <main className="local-main">
+        <details className="local-configuration" open={status !== null && !status.ready}>
+          <summary>
+            {status === null ? 'Connecting…' : status.ready ? 'Model configuration' : 'Model configuration needed'}
+          </summary>
+          {status ? (
+            <div>
+              {status.messages.map((message) => (
+                <p key={message}>{message}</p>
               ))}
+              <p>{status.scope}</p>
+              {!status.generation_available ? (
+                <p>No strong generation route is configured. An escalation will stop explicitly.</p>
+              ) : null}
+              <ul>
+                {status.routes.map((route) => (
+                  <li key={route.id}>
+                    {route.model} · {route.tier} · {route.destination}
+                  </li>
+                ))}
+              </ul>
+              <p>Restart the local server after changing configuration. Runs are held in memory.</p>
             </div>
-          )}
-        </section>
-      </aside>
+          ) : null}
+        </details>
+        {error ? (
+          <p className="local-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {run ? (
+          <section className="local-run" aria-label="Current run">
+            <p className="local-request">{run.input}</p>
+            <div className="local-run-status" role="status" aria-live="polite">
+              {active
+                ? run.status === 'stopping'
+                  ? 'Stopping…'
+                  : `Working${last ? ` · ${last.task_id} · ${last.stage}` : '…'}`
+                : run.result?.status === 'completed'
+                  ? 'Run completed'
+                  : run.result?.status.replaceAll('_', ' ')}
+            </div>
+            {run.result?.reason ? <p>{run.result.reason}</p> : null}
+            {run.result?.status === 'completed' ? (
+              <div>
+                {run.result.requires_review ? (
+                  <p className="local-review">Includes generated text. Review the result.</p>
+                ) : null}
+                <pre className="local-result" data-testid="run-result">
+                  {format(run.result.output)}
+                </pre>
+              </div>
+            ) : null}
+            <details className="local-evidence">
+              <summary>
+                Execution evidence{' '}
+                <span>
+                  {run.events.length} events · {run.stats.calls} calls · ${(run.stats.spent / 1_000_000).toFixed(4)}
+                </span>
+              </summary>
+              <div className="local-evidence-actions">
+                <button type="button" onClick={() => download(run)}>
+                  Download evidence
+                </button>
+              </div>
+              <ol>
+                {run.events.map((event) => (
+                  <li key={event.sequence}>
+                    <details>
+                      <summary>
+                        <span>{event.task_id}</span> {event.stage}
+                        {event.parent ? ` ← ${event.parent}` : ''}
+                      </summary>
+                      <pre>{JSON.stringify(event.detail, null, 2)}</pre>
+                    </details>
+                  </li>
+                ))}
+              </ol>
+            </details>
+          </section>
+        ) : (
+          <div className="local-empty">
+            <h1>What would you like to test?</h1>
+          </div>
+        )}
+        <form
+          className="local-input"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
+          <label className="sr-only" htmlFor="task-input">
+            Task for Loom
+          </label>
+          <textarea
+            id="task-input"
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            maxLength={16_000}
+            rows={3}
+            placeholder="Describe a task…"
+            disabled={active || pending}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                event.preventDefault();
+                void submit();
+              }
+            }}
+          />
+          <div className="local-input-actions">
+            <span>Submitted text only</span>
+            {active ? (
+              <button
+                className="local-primary"
+                type="button"
+                onClick={() => {
+                  void stop();
+                }}
+                disabled={pending || run.status === 'stopping'}
+              >
+                Stop
+              </button>
+            ) : (
+              <button className="local-primary" type="submit" disabled={!input.trim() || !status?.ready || pending}>
+                {pending ? 'Starting…' : 'Run'}
+              </button>
+            )}
+          </div>
+        </form>
+      </main>
     </div>
   );
 }

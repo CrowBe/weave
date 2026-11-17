@@ -448,3 +448,13 @@ export {
   type ShadowObservation,
   type RecordedShadowAnswer,
 } from './sites/decide1-shadow.js';
+export {
+  runLocalTask,
+  LocalTaskStop,
+  type LocalTask,
+  type LocalChild,
+  type LocalTaskPorts,
+  type LocalTaskEvent,
+  type LocalTaskLimits,
+  type LocalTaskResult,
+} from './local-task.js';
