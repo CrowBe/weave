@@ -510,6 +510,25 @@ for (const status of ['ok', 'failed'] as const)
         await run();
         assert.equal(n, 1);
       }));
+test('a receipt within the reservation headroom (1.5x the byte count) does not stop the run', () =>
+  fixture(async (journal) => {
+    let n = 0;
+    const p = provider(async (request) => {
+      n++;
+      return {
+        status: 'ok',
+        input_tokens: Math.ceil(1.5 * Buffer.byteLength(p.serialize(request), 'utf8')),
+        answers: {},
+      };
+    });
+    const rows = [entry, { ...entry, item: { ...item, id: 'next' } }];
+    await execute({ entries: rows, providers: [p], journal, maxSpend: 2, ...clock });
+    assert.equal(n, 2);
+    assert.equal(
+      journal.read().find((r) => r.type === 'budget_stop'),
+      undefined,
+    );
+  }));
 test('every subsequent admission uses actual spend and resume re-reads the ledger', () =>
   fixture(async (journal) => {
     let n = 0;
