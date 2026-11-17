@@ -29,16 +29,17 @@ max excluded=.2,.4,.6; margin=0,.1,.2,.3,.4; and both
 `best_kept` (production #145) and `kth_kept` minus best-excluded margins.
 Published confidence below its floor is uncovered. Missing confidence uses the
 production probability-only block band for D4 `guard.input`, `guard.output` and D5
-`eval.output`, with tune-fitted cutoffs `.5`, `.4` and `.5` on P(violation). For
+`eval.output`, with tune-fitted cutoffs `.1`, `.3` and `.1` on P(violation). For
 guards P(violation)=p, so p >= cutoff blocks; for D5 P(violation)=1-P(satisfied),
-so P(satisfied) <= .5 blocks. The band was fitted on the `live-20261015` tune
+so P(satisfied) <= .9 blocks. The band was fitted on the `live-20261015` tune
 split only (pooled `typesafe-jev`/`amos-small`, one terminal call per binding).
-The selection swept block cutoffs above the descriptive `.3` and required at
-least a 25% relative reduction in false-block rate versus `.3`; among the
-remaining cutoffs it maximised violation recall and preferred the cutoff nearest
-`.5`. That selects `guard.input` `.5` (violation recall/false block
-`.9167`/`.2115`, n=128), `guard.output` `.4` (`1.0`/`.1111`, n=36), and
-`eval.output` `.5` (violation recall `.9167`, false block `0`, n=24). All clear
+The selection is recall-first (#142, owner decision 17 Nov 2026): it sweeps
+`.05`–`.3` in steps of `.05`, never looser than the descriptive `.3`, maximises
+violation recall, then takes the lowest false-block rate, then the higher
+cutoff. That selects `guard.input` `.1` (violation recall/false block
+`1.0`/`.4519`, n=128), `guard.output` `.3` (`1.0`/`.1667`, n=36), and
+`eval.output` `.1` (`1.0`/`.4167`, n=24). It is unfit only without tune
+coverage or without a tune violation. All clear
 the `.5` tune coverage floor. Holdout was not read for this fit; the committed
 holdout report is re-rendered only under the resulting production thresholds.
 Missing probability or invalid confidence still fails closed. Production D3 uniquely allows absent confidence at its

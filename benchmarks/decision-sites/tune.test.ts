@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isLooser, metrics, productionThresholds, tune, type Observed, type Thresholds } from './tune.ts';
+import {
+  isLooser,
+  metrics,
+  productionThresholds,
+  selectMissingProbability,
+  tune,
+  type Observed,
+  type Thresholds,
+} from './tune.ts';
 import { makeReport } from './report.ts';
 import { transitionBooleanSite } from '@weave/weave';
 
@@ -43,13 +51,14 @@ test('failures remain in coverage denominator and missing confidence is below a 
 });
 test('production guards and D5 cover missing confidence through their fitted probability band', () => {
   for (const [site, probability, passes] of [
-    ['guard.input', 0.5, true],
-    ['guard.input', 0.49, false],
-    ['guard.output', 0.4, true],
-    ['guard.output', 0.39, false],
-    ['eval.output', 0.51, true],
+    ['guard.input', 0.1, true],
+    ['guard.input', 0.09, false],
+    ['guard.output', 0.3, true],
+    ['guard.output', 0.29, false],
+    ['eval.output', 0.91, true],
+    ['eval.output', 0.9, false],
+    ['eval.output', 0.89, false],
     ['eval.output', 0.5, false],
-    ['eval.output', 0.49, false],
   ] as const) {
     const observed = row(site, 'holdout', {
       result: { status: 'ok', answers: { decision: { probability } } },
@@ -160,7 +169,12 @@ test('D5 lower confidence and probability floors require captain', () => {
   const observed = row('eval.output', 'tune', {
     result: { status: 'ok', answers: { decision: { probability: 0.7, confidence: 0.8 } } },
   });
-  const thresholds = tune('eval.output', [observed]);
+  // The recall-first missing-confidence fit needs one tune violation to be identified (#142).
+  const violation = row('eval.output', 'tune', {
+    item: { id: 'v', scenario_id: 'v', site: 'eval.output', state: {}, gold: { decision: false } },
+    result: { status: 'ok', answers: { decision: { probability: 0.1, confidence: 0.95 } } },
+  });
+  const thresholds = tune('eval.output', [observed, violation]);
   assert.equal(thresholds.not_applied, 'needs captain (#142)');
 });
 test('report uses the live ledger including retry spend and pending reservations', () => {
@@ -471,19 +485,43 @@ test('tune independently fits the missing-confidence cutoff from tune rows', () 
     item: { id: 'n', scenario_id: 'n', site: 'guard.output', state: {}, gold: { decision: false } },
     result: { status: 'ok', answers: { decision: { probability: 0.1 } } },
   });
-  assert.equal(tune('guard.output', [positive, negative]).missing_probability, 0.5);
+  // Every candidate catches the violation; .15 and above stop blocking the clean answer, and the higher cutoff wins the tie.
+  assert.equal(tune('guard.output', [positive, negative]).missing_probability, 0.3);
+});
+
+test('the missing-confidence fit ranks violation recall before false blocks and never exceeds .3 (#142)', () => {
+  const answer = (id: string, violation: boolean, probability: number) =>
+    row('guard.input', 'tune', {
+      item: { id, scenario_id: id, site: 'guard.input', state: {}, gold: { decision: violation } },
+      result: { status: 'ok', answers: { decision: { probability } } },
+    });
+  // A low-p violation forces .1 even though it blocks most clean answers.
+  const rows = [
+    answer('v1', true, 0.12),
+    answer('v2', true, 0.9),
+    answer('n1', false, 0.11),
+    answer('n2', false, 0.2),
+    answer('n3', false, 0.05),
+  ];
+  assert.deepEqual(selectMissingProbability('guard.input', rows), {
+    tuning_status: 'selected',
+    missing_probability: 0.1,
+  });
+  // Violations far above .3 still cap the cutoff at .3.
+  assert.deepEqual(selectMissingProbability('guard.input', [answer('v', true, 0.95), answer('n', false, 0.6)]), {
+    tuning_status: 'selected',
+    missing_probability: 0.3,
+  });
 });
 
 test('failed missing-confidence fit is not presented as a selected threshold', () => {
-  const positive = row('guard.output', 'tune', {
-    item: { id: 'p', scenario_id: 'p', site: 'guard.output', state: {}, gold: { decision: true } },
-    result: { status: 'ok', answers: { decision: { probability: 1 } } },
-  });
-  const negative = row('guard.output', 'tune', {
-    item: { id: 'n', scenario_id: 'n', site: 'guard.output', state: {}, gold: { decision: false } },
-    result: { status: 'ok', answers: { decision: { probability: 1 } } },
-  });
-  const tuned = tune('guard.output', [positive, negative]);
+  // With no violation in the tune rows, a recall-first fit has nothing to rank.
+  const negative = (id: string) =>
+    row('guard.output', 'tune', {
+      item: { id, scenario_id: id, site: 'guard.output', state: {}, gold: { decision: false } },
+      result: { status: 'ok', answers: { decision: { probability: 1 } } },
+    });
+  const tuned = tune('guard.output', [negative('n1'), negative('n2')]);
   assert.notEqual(tuned.tuning_status, 'selected');
   assert.equal(tuned.tuning_status, 'missing_probability_unfit');
   assert.equal(tuned.missing_probability, productionThresholds('guard.output').missing_probability);

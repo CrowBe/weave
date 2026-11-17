@@ -658,9 +658,9 @@ and one holdout scoring; the descriptive holdout diagnostic alone did not
 support one: `guard.input` false-block rates are 34.6% / 28.8% (jev / amos),
 and amos misses one violation in four. The tune fit now landed (see the sites
 contract, "Fitted probability-only band"): absent-confidence guard answers
-decide from p, with cutoffs .5 (`guard.input`) and .4 (`guard.output`), so a
-clean live rule passes on the transition and a violation still requests
-approval.
+decide from p, with recall-first cutoffs .1 (`guard.input`) and .3
+(`guard.output`) after the #142 refit, so a clean live rule below the cutoff
+passes on the transition and anything at or above it requests approval.
 
 Why k = 3. The D3 fine-tune experiment used 24 entries per step, synthetic items, and labels from jev-1.13.0. Recall of needed entries on the Claude test set (72 steps) and the Codex test set (84 steps) for the old rule p ≥ .5, cap 8 was .82 / .73 for the fine-tuned Amos mini and .97 / .98 for TypeSafe 1.13. Top-1 was .87 / .88 and .94 / .93. Top-2 was .94 / .96 and .99 / .98. Top-3 was .98 / .98 for the fine-tuned mini, .92 / .97 for the base mini, and 1.00 / 1.00 for TypeSafe. Top-4 was .98 / .99 for the fine-tuned mini, top-5 was .99 / 1.00, and top-8 was 1.00 / 1.00. A floor of 0.02 changes nothing. A floor of 0.05 costs about one point at k ≥ 5. A floor of 0.10 drops recall to about .95 at every k, because the mini scored some needed entries from .04 to .10. The floor therefore defaults to 0 (off). Most steps have one needed entry (mean 1.04–1.12, maximum 3), so k = 3 is the smallest k where TypeSafe hits 100% and the fine-tuned mini hits 98%. k = 5 is the next jump for the mini, at the cost of a five-entry slice.
 

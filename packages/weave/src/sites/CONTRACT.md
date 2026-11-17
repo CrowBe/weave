@@ -1009,7 +1009,7 @@ confidence check. An invalid published confidence is decided with admission,
 before that margin gate. D4/D7 keep the .90 floor on a published confidence; a
 published non-unit (out of [0, 1]) confidence there remains
 `missing_confidence`. An absent confidence on D4/D7 now decides through the
-fitted probability-only band: p >= .5 for `guard.input` and p >= .4 for
+fitted probability-only band: p >= .1 for `guard.input` and p >= .3 for
 `guard.output` is a `violation` (`block`), otherwise `accepted` (`pass`); a
 clean rule still passes on the site transition and a violation still asks for
 approval before the effect runs. An absent confidence with a missing or
@@ -1243,12 +1243,13 @@ Recorded 5 Nov 2026 from the `live-20261015` tune split (the tune evidence of
 > still fails closed. Only the absent-confidence path changes, and only when the
 > answer carries a valid probability:
 
-- D4 `guard.input` and D7 `guard.output`: P(violation) = p. p >= .5
-  (`guard.input`) or p >= .4 (`guard.output`) is a `violation` — the
+- D4 `guard.input` and D7 `guard.output`: P(violation) = p. p >= .1
+  (`guard.input`) or p >= .3 (`guard.output`) is a `violation` — the
   observation says `block` and the transition still requests approval. Below
   the cutoff the observation is a clean `pass` and the transition proceeds
   without an approval request.
-- D5 `eval.output`: P(violation) = 1 - P(satisfied). P(violation) >= .5 blocks:
+- D5 `eval.output`: P(violation) = 1 - P(satisfied). P(violation) >= .1 blocks,
+  so a criterion needs P(satisfied) > .9 to pass without a confidence:
   the criterion fails as `below_probability` (not `missing_confidence`) with
   verdict_probability. Below it the criterion passes at any p; published
   confidence floors are untouched.
@@ -1257,13 +1258,23 @@ Recorded 5 Nov 2026 from the `live-20261015` tune split (the tune evidence of
   `missing_confidence` fail-safe on D4/D7/D5.
 
 Fit, on the pooled tune-split rows of `typesafe-jev` and `amos-small` (one
-terminal call per binding; P(violation) as above): the candidate cutoffs swept
-block thresholds above the descriptive .3 and required at least a 25% relative
-reduction in false-block rate versus .3, then maximised violation recall and
-preferred the cutoff nearest .5 among ties. That selects `guard.input` .5
-(violation recall .9167, false-block rate .2115, n = 128 questions),
-`guard.output` .4 (recall 1.0, false-block .1111, n = 36), and `eval.output`
-.5 (recall .9167, false-block 0, n = 24). All clear the .5 tune coverage floor.
+terminal call per binding; P(violation) as above). **Recall-first refit (owner
+decision, 17 Nov 2026, #142).** The first fit (#386) swept cutoffs above .3 and
+ranked false-block reduction before recall, selecting .5 / .4 / .5; the owner
+had ruled .3 too loose, so that direction was not ratified. The refit sweeps
+.05–.3 in steps of .05 (never looser than .3), maximises violation recall, then
+takes the lowest false-block rate, then the higher cutoff. That selects
+`guard.input` .1 (violation recall 1.0, false-block rate .4519, n = 128
+questions), `guard.output` .3 (recall 1.0, false-block .1667, n = 36), and
+`eval.output` .1 (recall 1.0, false-block .4167, n = 24). All clear the .5 tune
+coverage floor. The `guard.input` and `eval.output` cutoffs are each set by a
+single low-p violation (p ≈ .12 and P(violation) ≈ .11). The false-block rates
+are per question; `guard.input` blocks if any of its four rules does, so on the
+holdout nearly every confidence-less `guard.input` evaluation now asks for
+approval (jev accuracy 37.5% → 6.3%, amos 43.8% → 25%, while amos violation
+recall rises 66.7% → 91.7%). That is the accepted cost of recall-first. With so few tune rows, refit when #327
+supplies more; the fit is unidentified (`missing_probability_unfit`) only
+without tune coverage or without any tune violation.
 The holdout was not read for the fit; the committed holdout report is
 evaluation-only evidence re-rendered under the resulting thresholds.
 `packages/weave/test/live-confidence.test.ts` pins the new D5, completion and
