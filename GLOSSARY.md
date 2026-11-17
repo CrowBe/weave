@@ -520,7 +520,7 @@ An evaluation adapter serving judgment sites in the decision-model loop, selecte
 
 ### Preselect policy
 
-The deterministic rule for D3 `loop.preselect`. It keeps the top k disclosed catalogue entries by p(true), applies an optional probability floor, and always keeps entries the guardrails require. It narrows only when that kept slice clears a margin: the best excluded p(true) is at most `max_excluded` (default .4) and the gap below the highest kept non-required p(true) is at least `min_margin` (default .3). Nothing excluded means there is nothing to gate for the margin or for a low confidence. A missing confidence is unknown. A published confidence below .75 blocks only on the boundary of that slice. A published confidence that is not a finite number from 0 to 1 fails safe and returns the full index. A floor that keeps no non-required entry returns the full index with reason `no_candidate`. k is an integer from 1 to 8 and defaults to 3. The floor defaults to 0, which leaves it off. The cap of 8 bounds k and does not drop required entries. The selection record (`preselect-selection@2`) is evidence of that rule, including the caller-supplied policy provider and the routed unit that answered. A model answer does not choose k, and the record confers no grant.
+The deterministic rule for D3 `loop.preselect`. It keeps the top k disclosed catalogue entries by p(true), applies an optional probability floor, and always keeps entries the guardrails require. It narrows only when that kept slice clears a margin: the best excluded p(true) is at most `max_excluded` (default .4) and the gap below the highest kept non-required p(true) is at least `min_margin` (default .3). Nothing excluded means there is nothing to gate for the margin or for a low confidence. A missing confidence is unknown. A published confidence below .75 blocks only on the boundary of that slice. A published confidence that is not a finite number from 0 to 1 fails safe and returns the full index. A floor that keeps no non-required entry returns the full index with reason `no_candidate`. k is an integer from 1 to 8 and defaults to 3. The floor defaults to 0, which leaves it off. The cap of 8 bounds k and does not drop required entries. The selection record (`preselect-selection@2`) is evidence of that rule, including the caller-supplied policy provider and the routed unit that answered. A model answer does not choose k, and the record confers no grant. Since WV-S1 P4c, D3 is a frozen benchmark and Gauge site: **Decide-2** replaced it in the loop, and no runtime composition may feed its slice into a generation prompt; a repository check pins that.
 
 ### Wire profile
 
@@ -759,14 +759,25 @@ One closed, versioned entry in a Weft trace: an envelope, a kind, links to other
 
 The deterministic rule table over isolated judgments and code-computed facts
 whose output is the coarse band: `tool_call`, `spawn_subtasks`, `escalate_gen`
-or `ask_human`. `decide1.rules@3` is the ordered, versioned table used by
+or `ask_human`. `decide1.rules@4` is the ordered, versioned table used by
 dispatch authority; its output grants no execution authority of its own.
+
+### Decide-2
+
+The step after D1 accepts `capability` that picks exactly one entry from the
+disclosed M6 catalogue index, then extracts only that entry's args. Each entry is
+an isolated relevance judgment; a pure margin rule over those probabilities
+decides whether there is a pick, and Decide-1 rows decide what follows: the
+picked entry's capability intent, an ask for a missing required arg, an ask for a
+plausible irreversible top without margin, or, with no clear margin,
+generation over the full disclosed index under `gen.no_tool_margin`. Neither
+the pick nor the args extract grants authority.
 
 ### Decide-1 trace
 
-What a `dispatch.decided` Weft record carries about how a dispatch decision was reached (D-ENG-045): each isolated judgment's name and probability, each code-computed fact's name and scalar value, the rule-table row that decided, and the coarse band it returned (`tool_call`, `spawn_subtasks`, `escalate_gen` or `ask_human`). The trace also lists shadow inputs no row of the current table version reads (D-ENG-047). A decision no site answered carries empty judgments. A fact value is never text. Like every Weft record, the trace reports a decision and grants no authority to dispatch. The `dispatch.decision@6` journal record carries the same trace and its rule-table version (`decide1.rules@3`); a paused decision’s band is the band of the choice it withheld.
+What a `dispatch.decided` Weft record carries about how a dispatch decision was reached (D-ENG-045): each isolated judgment's name and probability, each code-computed fact's name and scalar value, the rule-table row that decided, and the coarse band it returned (`tool_call`, `spawn_subtasks`, `escalate_gen` or `ask_human`). The trace also lists shadow inputs no row of the current table version reads (D-ENG-047). A decision no site answered carries empty judgments. A fact value is never text. Like every Weft record, the trace reports a decision and grants no authority to dispatch. The `dispatch.decision@7` journal record carries the same trace and its rule-table version (`decide1.rules@4`); a paused decision’s band is the band of the choice it withheld.
 
-Preflight target roles, role admission, split gain, the spawn plan's digest and whether a spawn port is present are read inputs; the shadow partition holds only the P4b judgments and their facts. None of these inputs carries dispatch authority. The entry kind (`root` or `child`) and, for a child, its sealed kind, parent, plan digest, join state, measured read bytes, share and gate boundary are read facts too; a child boundary is a code fact over the child's own stages, never a projected stage.
+Preflight target roles, role admission, split gain, the spawn plan's digest and whether a spawn port is present are read inputs; the shadow partition holds only the P4b judgments and their facts. None of these inputs carries dispatch authority. The entry kind (`root` or `child`) and, for a child, its sealed kind, parent, plan digest, join state, measured read bytes, share and gate boundary are read facts too; a child boundary is a code fact over the child's own stages, never a projected stage. Decide-2's tool stage status and reason, catalogue size, top and picked refs, margin, the top's reversibility and plausibility, and the count of missing required args are read facts, and each entry's relevance probability and confidence is a judgment.
 
 ### Shadow judgment
 

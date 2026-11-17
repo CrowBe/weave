@@ -44,8 +44,8 @@ present a dispatch intent only after an accepted observation, and only through
 the injected idempotent dispatch port. The intent is checkpointed before the
 call. An unconfirmed intent is returned as paused and is not re-presented
 without an explicit resume; cancellation is a journaled slot transition (P5c2
-below); a stale or mismatched answer pauses. The outcome table is now `decide1.rules@3` (below). A mapped receipt yields a
-`dispatch.decision@6` entry, and fresh site observations become Weft judgment
+below); a stale or mismatched answer pauses. The outcome table is now `decide1.rules@4` (below). A mapped receipt yields a
+`dispatch.decision@7` entry, and fresh site observations become Weft judgment
 records followed by one `dispatch.decided` after the final append. The
 composition never writes `routed_input@1`.
 
@@ -96,7 +96,8 @@ outside this contract. ScriptedDecisionLayer remains unchanged.
 `decideBand(inputs)` is pure deterministic policy over named judgments and code
 facts. The frozen table was `decide1.rules@1` with 15 ids; P5b's `decide1.rules@2` adds
 `spawn.preflight` (16 ids) and changes no other row; P5c1's `decide1.rules@3` adds five
-child rows (21 ids, below). Its first matching row
+child rows (21 ids, below); P4c's `decide1.rules@4` replaces `act.capability` with the four
+Decide-2 rows (24 ids, below). Its first matching row
 returns the rule id and coarse band. It imports no dispatch, site or gateway code. It asks
 no new question and changes no `SITE_POLICY` threshold, fallback or request.
 `decideDispatch` validates stored stages through P3a's live pure transitions,
@@ -104,24 +105,27 @@ then adapts them with `decide1Inputs` and builds the plan through an exhaustive
 rule-id switch. Invalid inputs and impossible stage sets throw before a claim;
 they never become an operator ask.
 
-| Rule                  | Condition, in precedence order                              | Band             | Outcome                                     |
-| --------------------- | ----------------------------------------------------------- | ---------------- | ------------------------------------------- |
-| `hold.admission`      | First asked stage with `stale_answer` / `mismatched_answer` | withheld         | Terminal pause at that stage                |
-| `hold.outage`         | First asked stage with `decision_unavailable`               | withheld         | Resumable pause at that stage               |
-| `hold.paused`         | First remaining paused stage                                | withheld         | Pause with its reason                       |
-| `ask.intake`          | Intake needs human                                          | `ask_human`      | Intake ask, no intent                       |
-| `ask.irreversible`    | Intake stop                                                 | `ask_human`      | Rule ask / irreversible                     |
-| `ask.thread_target`   | Thread relation with no or ambiguous target                 | `ask_human`      | Rule ask / target reason                    |
-| `act.thread`          | Thread relation with resolved target                        | `tool_call`      | Intake thread intent                        |
-| `ask.triage`          | D1 needs human                                              | `ask_human`      | D1 ask, no intent                           |
-| `act.capability`      | D1 accepted capability                                      | `tool_call`      | Capability intent                           |
-| `act.done_check`      | D1 accepted done check                                      | `tool_call`      | Done-check intent                           |
-| `act.decline`         | D1 accepted out of scope                                    | `tool_call`      | Decline intent                              |
-| `gen.triage_fallback` | D1 transition, nonaccepted implement                        | `escalate_gen`   | Implement strong/strong, triage fallback    |
-| `spawn.preflight`     | `gen.route` conditions, roles admitted, gain, plan, port    | `spawn_subtasks` | Spawn the validated preflight plan (P5b)    |
-| `gen.route`           | D2 transition, accepted tier                                | `escalate_gen`   | Implement at that tier                      |
-| `ask.route`           | D2 needs human                                              | `ask_human`      | D2 ask, no intent                           |
-| `gen.route_fallback`  | D2 transition, nonaccepted                                  | `escalate_gen`   | Implement standard/standard, route fallback |
+| Rule                    | Condition, in precedence order                                | Band             | Outcome                                      |
+| ----------------------- | ------------------------------------------------------------- | ---------------- | -------------------------------------------- |
+| `hold.admission`        | First asked stage with `stale_answer` / `mismatched_answer`   | withheld         | Terminal pause at that stage                 |
+| `hold.outage`           | First asked stage with `decision_unavailable`                 | withheld         | Resumable pause at that stage                |
+| `hold.paused`           | First remaining paused stage                                  | withheld         | Pause with its reason                        |
+| `ask.intake`            | Intake needs human                                            | `ask_human`      | Intake ask, no intent                        |
+| `ask.irreversible`      | Intake stop                                                   | `ask_human`      | Rule ask / irreversible                      |
+| `ask.thread_target`     | Thread relation with no or ambiguous target                   | `ask_human`      | Rule ask / target reason                     |
+| `act.thread`            | Thread relation with resolved target                          | `tool_call`      | Intake thread intent                         |
+| `ask.triage`            | D1 needs human                                                | `ask_human`      | D1 ask, no intent                            |
+| `ask.tool_irreversible` | D1 capability, no Decide-2 margin, plausible irreversible top | `ask_human`      | Rule ask / irreversible (P4c)                |
+| `gen.no_tool_margin`    | D1 capability, no Decide-2 margin (or no catalogue)           | `escalate_gen`   | Implement standard over the full index (P4c) |
+| `ask.tool_args`         | Decide-2 pick, a required arg not grounded                    | `ask_human`      | Rule ask / missing_args (P4c)                |
+| `act.tool`              | Decide-2 pick, every required arg grounded                    | `tool_call`      | Capability intent for that entry (P4c)       |
+| `act.done_check`        | D1 accepted done check                                        | `tool_call`      | Done-check intent                            |
+| `act.decline`           | D1 accepted out of scope                                      | `tool_call`      | Decline intent                               |
+| `gen.triage_fallback`   | D1 transition, nonaccepted implement                          | `escalate_gen`   | Implement strong/strong, triage fallback     |
+| `spawn.preflight`       | `gen.route` conditions, roles admitted, gain, plan, port      | `spawn_subtasks` | Spawn the validated preflight plan (P5b)     |
+| `gen.route`             | D2 transition, accepted tier                                  | `escalate_gen`   | Implement at that tier                       |
+| `ask.route`             | D2 needs human                                                | `ask_human`      | D2 ask, no intent                            |
+| `gen.route_fallback`    | D2 transition, nonaccepted                                    | `escalate_gen`   | Implement standard/standard, route fallback  |
 
 Origin failures (`invalid_extract`, `extract_missing`) at D1 or D2 retain
 `needs_human`, the stage choice and reason, and form no intent through
@@ -142,8 +146,8 @@ accepted intake new-thread choice then withholds `escalate_gen`. Count asks by
 `status = needs_human` and escalations by `band = escalate_gen` together with
 `status = dispatched`, never by band alone.
 
-`dispatch.decision@6` carries `rule_table` and `decide1` after `reason`, and
-`dispatch.checkpoint@5` stores the stages and rounds described in P4b, P5a, P5b and P5c1 below.
+`dispatch.decision@7` carries `rule_table` and `decide1` after `reason`, and
+`dispatch.checkpoint@6` stores the stages and rounds described in P4b, P5a, P5b, P5c1 and P4c below.
 The read partition contains judgments in stage order
 (`intake.confidence`, `intake.top_p`, then D1 and D2), every available probability,
 and 14 code facts in fixed order: intake decided-by, choice, status, reason,
@@ -208,7 +212,7 @@ text. The state is byte-identical to D1's disclosed state. The shadow sites
 use the default decision provider and add no extraction or model-site policy.
 Changing a question requires a new observation schema version.
 
-Only `act.capability`, `act.done_check`, `act.decline`, `gen.triage_fallback`,
+Only `act.tool`, `gen.no_tool_margin` (P4c, in place of `act.capability`), `act.done_check`, `act.decline`, `gen.triage_fallback`,
 `gen.route` and `gen.route_fallback` are eligible. The shadow round starts
 after all consequential intake/D1/D2 asks and pure plan resolution, before
 the existing stale gate and claim. A final hold or ask and `act.thread` ask
@@ -256,17 +260,17 @@ follow the read judgments (stage, then P5b's role statistics) in judgment order 
 `<judgment>` probability, then `<judgment>.confidence`. P4b supplies at most 14
 judgments with the stage judgments; P5a/P5b add at most 16 below.
 
-`dispatch.checkpoint@5` has ordered keys `schema`, `decision_id`,
+`dispatch.checkpoint@6` has ordered keys `schema`, `decision_id`,
 `state_revision`, `state_updated_at`, `asks`, `intake`, `triage`, `route`,
-`shadow`, `preflight`, `preflight_budget`, `spawn_port`, `preflight_terms`,
+`tool`, `catalogue_digest`, `shadow`, `preflight`, `preflight_budget`, `spawn_port`, `preflight_terms`,
 `child_terms`, `child`, `intent`. Its `asks` keys are
-`intake`, `triage`, `route`, `shadow`, `preflight`;
+`intake`, `triage`, `route`, `tool`, `shadow`, `preflight`;
 the last two are each zero or one. D1 and D2 store whole `loop.decision@1` records with
 their extracts and site transitions. `shadow` is null or four observations
-in judgment order. `dispatch.decision@6` has ordered keys `schema`,
+in judgment order. `dispatch.decision@7` has ordered keys `schema`,
 `decision_id`, `entry`, `state_revision`, `decided_by`, `choice`, `status`,
 `reason`, `rule_table`, `decide1`, `child`, `intent`, `receipt`, `intake`, `triage`,
-`route`, `shadow`, `preflight`. Its rule table is `decide1.rules@3`. Foreign decision
+`route`, `tool`, `shadow`, `preflight`. Its rule table is `decide1.rules@4`. Foreign decision
 or checkpoint schemas and foreign table versions throw without compatibility
 conversion.
 
@@ -599,6 +603,90 @@ child keeps its generator pending). A presented intent whose settlement is unset
 and whose state is unmoved is presented again; the port's idempotence by
 `dispatch_id` is then its settlement (#397).
 
+## WV-S1 P4c Decide-2 tool pick and D3 retirement
+
+After D1 accepts `capability` over a disclosed catalogue, dispatch asks one more root
+stage, `tool`, before any row reads it. The request carries `catalogue`: the disclosed
+M6 index, at most 8 entries of `{ ref, purpose, reversible, args }`, each `args` at most
+8 `{ name, required }`. `ref` and arg names pass the bounded-id screen; `reversible` and
+`required` are host contract facts, never model output. A child request carries no
+catalogue. The shape is closed and validated before anything is loaded or asked.
+
+**Pick.** `decide2.pick` (schema `decide2-pick@1`) is one decision-tier `evaluate` call
+of kind `boolean`, request id `<decision>:tool:decide2`, with one isolated relevance
+question per entry (`entry_<i>`, D3's per-entry shape). Its state is D1's
+`{ request, context }` plus each entry's `{ ref, purpose }`. The observation records,
+per entry, `ref`, `p` and `confidence`, and a reason from the roles set. Any missing or
+malformed entry answer makes the whole observation `invalid_answer`; no top is computed
+from a partial answer. The pick is derived, never stored: `decide2Pick` takes the
+highest `p` (ties: the lowest ordinal) and clears only when `p(top) >= .7`, the
+runner-up is at most `.4` (0 for one entry), the margin is at least `.3`, and the
+top's confidence is at least `.75`. A missing confidence is no margin. Values compare
+in 1e-10 units, so `.7` over `.4` clears. `DECIDE2_POLICY` holds these provisional
+floors outside `SITE_POLICY` and `BOOLEAN_SITE_POLICY`, which stay frozen.
+
+**Args.** Only a clear pick on an entry with args runs a targeted `extract@1`
+(`decide2.args@1`, site `decide2.args`, request ids `<decision>:tool:args:x<n>`, at
+most two attempts as the loop sites). Its slots are exactly that entry's args, each a
+verbatim span grounded against D1's own disclosed state; the prompt adds the entry's
+ref, purpose and arg names and D1's grounded intent span. A zero-arg entry asks no
+extract.
+
+**Stage record.** The checkpoint (`dispatch.checkpoint@6`) adds `asks.tool`, `tool`
+(`decide2.decision@1`: `schema`, `request_id`, `pick`, `extracts`) and
+`catalogue_digest`, the digest of the ordered catalogue bound with the ask. Replay
+refuses a request whose catalogue differs from that digest (reorder, a flipped flag, a
+dropped entry), re-derives the pick through `transitionDecide2` from witnesses, and
+requires extracts exactly when the derived pick has args, each gated against that
+entry's schema. A malformed record is a defect and throws. `dispatch.decision@7` adds
+`tool` after `route`.
+
+**Facts and judgments.** Nine read facts follow the child facts, before the shadow
+facts: `tool.status`, `tool.reason`, `decide2.entries`, `decide2.top`,
+`decide2.pick`, `decide2.margin`, `decide2.top_reversible`, `decide2.top_plausible`
+(top above the runner-up ceiling) and `args.missing` (required args the final extract
+did not ground). Judgments add `decide2.e<i>.p` and `decide2.e<i>.confidence` for each
+non-null value. The tool stage's reason is the pick's, else a held args extract's
+(`cancelled`, `stale_answer`, `decision_unavailable`), else `answered`; it is
+`paused` for a cancel or outage. `tool` joins the hold stages, so a stale or
+mismatched pick is a terminal `hold.admission`, an outage a resumable `hold.outage`,
+and a cancel `hold.paused`, each withholding `tool_call` with choice `capability`
+and `decided_by: rule`.
+
+**Rows** (`decide1.rules@4`, in place of `act.capability`):
+
+| Rule                    | Condition                                                       | Band           | Outcome                                       |
+| ----------------------- | --------------------------------------------------------------- | -------------- | --------------------------------------------- |
+| `ask.tool_irreversible` | no pick, plausible top, top irreversible                        | `ask_human`    | Rule ask / `irreversible`, no intent          |
+| `gen.no_tool_margin`    | no pick (including no catalogue, `no_answer`, `invalid_answer`) | `escalate_gen` | Implement standard/standard, `no_tool_margin` |
+| `ask.tool_args`         | pick, `args.missing > 0`                                        | `ask_human`    | Rule ask / `missing_args`, no intent          |
+| `act.tool`              | pick, `args.missing = 0`                                        | `tool_call`    | Capability intent for the picked entry        |
+
+`gen.no_tool_margin` is the owner's Open question 2 decision: no clear margin on
+reversible work escalates to generation over the full disclosed index, with no
+narrowing; the intent carries `tier_source: 'no_tool_margin'` and the catalogue's
+digest, never a ref list, so Gauge can count how often it fires. Its tier is
+provisional (the route-fallback precedent); D2 is not asked. Asking only for low
+confidence on reversible work is ruled out (D-ENG-030), so the one low-confidence ask
+is a plausible irreversible top. A clear pick on an irreversible entry dispatches: its
+grant's `approval_required` receipt is the approval path, and `reversible` is routing
+only, never a grant or a waiver. An args extract outage or cancel holds and never asks.
+A capability with no catalogue now escalates under `gen.no_tool_margin` where it used
+to dispatch a bare capability intent; that is the one deliberate parity move.
+
+The `act.tool` intent is `{ kind: 'capability', dispatch_id, entry_ref,
+catalogue_digest, args_ref }`. `args_ref` is the digest of the args record (the
+original's digest and the final extract observation, spans only); the adapter slices
+the original with those spans. It is null for a zero-arg entry. A claimed intent is
+re-derived from the recorded stages like every other intent.
+
+**D3 retirement.** `loop.preselect` leaves the loop. It is a frozen benchmark and Gauge
+site: no runtime composition may ask it or feed its slice into a generation prompt.
+`checks/no-preselect-in-runtime.mjs` pins that runtime package source names D3 only at
+`sites/boolean.ts`, the package re-exports and the gateway's provider selection for it.
+`boolean.ts`, `examples/preselect.ts` and its benchmark sets stay unchanged (frozen
+digests); Decide-2 reuses only D3's per-entry relevance question shape.
+
 ## WV-S1 P2a typed extraction before intake
 
 `decideIntake(ask, port, now, signal?)` first asks the gateway for an
@@ -756,6 +844,10 @@ both use only the injected `generate` and `evaluate` ports and the injected
 `now`.
 
 ## P6 boolean sites
+
+Since WV-S1 P4c, D3 (`loop.preselect`) is a frozen benchmark and Gauge site:
+Decide-2 replaced it in the loop, and no runtime composition may feed its slice
+into a generation prompt (see P4c above and `checks/no-preselect-in-runtime.mjs`).
 
 D3 receives only the already-disclosed M6 index (id/purpose), an explicitly
 disclosed `preselect_step` string, optional `required_entry_ids`, and an

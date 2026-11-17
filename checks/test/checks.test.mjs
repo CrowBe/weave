@@ -99,6 +99,23 @@ test('extract-before-site is red when a free-text or structural site lacks its o
   ]);
 });
 
+test('no-preselect-in-runtime is red when runtime source names the frozen D3 site', () => {
+  const { status, findings } = run('no-preselect-in-runtime', 'red');
+  assert.equal(status, 1);
+  assert.deepEqual(findings, [
+    'packages/weave/src/implement.ts:2: D3 loop.preselect is frozen; use Decide-2',
+    'packages/weave/src/implement.ts:3: D3 loop.preselect is frozen; use Decide-2',
+    'packages/weave/src/implement.ts:4: D3 loop.preselect is frozen; use Decide-2',
+  ]);
+});
+
+test('no-preselect-in-runtime is green when D3 is named only at its frozen site or in comments', () => {
+  const { status, findings, stdout } = run('no-preselect-in-runtime', 'green');
+  assert.deepEqual(findings, []);
+  assert.equal(status, 0);
+  assert.match(stdout, /in 2 package source files/);
+});
+
 test('extract-before-site is green when every site call declares its origin', () => {
   const { status, findings, stdout } = run('extract-before-site', 'green');
   assert.deepEqual(findings, []);

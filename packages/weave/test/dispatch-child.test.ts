@@ -462,6 +462,16 @@ const FACT_NAMES = [
   'child.read_bytes',
   'child.share',
   'child.boundary',
+  // P4c: the Decide-2 tool stage and its derived pick, after the child facts.
+  'tool.status',
+  'tool.reason',
+  'decide2.entries',
+  'decide2.top',
+  'decide2.pick',
+  'decide2.margin',
+  'decide2.top_reversible',
+  'decide2.top_plausible',
+  'args.missing',
   'residual_ambiguity',
   'clarify.reason',
   'multi_deliverable.reason',
@@ -1136,7 +1146,7 @@ test('P5c1-6 child D2 is the existing loop.route site over intake.message and se
   const cp = s.journal.load(s.gen.child_ref).checkpoint!;
   assert.deepEqual(
     [cp.asks, cp.intake, cp.triage, cp.shadow, cp.preflight],
-    [{ intake: 0, triage: 0, route: 1, shadow: 0, preflight: 0 }, null, null, null, null],
+    [{ intake: 0, triage: 0, route: 1, tool: 0, shadow: 0, preflight: 0 }, null, null, null, null],
   );
   // The ask is byte-identical to a direct decideLoopRoute over the recorded state.
   const state = JSON.parse(h.generateCalls[0]!.input.prompt) as { unit_of_work: string; context: string };
@@ -1273,8 +1283,8 @@ test('P5c1-6 D2 tier table: accepted tiers, bounded fallback, holds and ask.rout
 // 7. Rules/root parity (R1, R2).
 // ---------------------------------------------------------------------------------------------
 
-test('P5c1-7 decide1.rules@3: 21 rows in order, 42 facts and bounded judgments', async () => {
-  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@3');
+test('P5c1-7 decide1.rules@4: 24 rows in order, 51 facts and bounded judgments', async () => {
+  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@4');
   assert.deepEqual(
     DECIDE1_RULES.map((row) => [row.id, row.band]),
     [
@@ -1291,7 +1301,10 @@ test('P5c1-7 decide1.rules@3: 21 rows in order, 42 facts and bounded judgments',
       ['ask.thread_target', 'ask_human'],
       ['act.thread', 'tool_call'],
       ['ask.triage', 'ask_human'],
-      ['act.capability', 'tool_call'],
+      ['ask.tool_irreversible', 'ask_human'],
+      ['gen.no_tool_margin', 'escalate_gen'],
+      ['ask.tool_args', 'ask_human'],
+      ['act.tool', 'tool_call'],
       ['act.done_check', 'tool_call'],
       ['act.decline', 'tool_call'],
       ['gen.triage_fallback', 'escalate_gen'],
@@ -1309,7 +1322,7 @@ test('P5c1-7 decide1.rules@3: 21 rows in order, 42 facts and bounded judgments',
       d.decide1.facts.map((f) => f.name),
       FACT_NAMES,
     );
-    assert.equal(d.decide1.facts.length, 42);
+    assert.equal(d.decide1.facts.length, 51);
     assert.ok(!FACT_NAMES.includes('child.root'));
   }
   assert.ok(s.parent.decide1.judgments.length <= 30);
@@ -1803,6 +1816,8 @@ test('P5c1-9 record versions, key order, Weft validity, append-only emission and
     'intake',
     'triage',
     'route',
+    'tool',
+    'catalogue_digest',
     'shadow',
     'preflight',
     'preflight_budget',
@@ -1829,12 +1844,13 @@ test('P5c1-9 record versions, key order, Weft validity, append-only emission and
     'intake',
     'triage',
     'route',
+    'tool',
     'shadow',
     'preflight',
   ];
   assert.deepEqual(
     [root.schema, s.parent.schema, s.parent.rule_table],
-    ['dispatch.checkpoint@5', 'dispatch.decision@6', 'decide1.rules@3'],
+    ['dispatch.checkpoint@6', 'dispatch.decision@7', 'decide1.rules@4'],
   );
   assert.deepEqual(Object.keys(root), CHECKPOINT_KEYS);
   assert.deepEqual(Object.keys(s.parent), DECISION_KEYS);
@@ -1871,7 +1887,7 @@ test('P5c1-9 record versions, key order, Weft validity, append-only emission and
     ['decided_by', 'choice', 'tier', 'rule'].map((k) => genFields[k]),
     ['route', 'flash', 'flash', 'gen.child'],
   );
-  assert.equal(genFields['facts'].length, 42);
+  assert.equal(genFields['facts'].length, 51);
   assert.ok(genFields['judgments'].every((j: any) => j.name.startsWith('route.')));
   const judgments = sink.records.filter((r) => r.kind === 'judgment');
   assert.deepEqual(

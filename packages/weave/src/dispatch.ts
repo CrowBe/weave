@@ -72,6 +72,23 @@ import {
   type RoleObservation,
 } from './sites/spawn-roles.js';
 import type { ImplementTier } from './implement-step.js';
+import {
+  DECIDE2_ARGS_SCHEMA,
+  DECIDE2_ARGS_SITE,
+  DECIDE2_SITE,
+  decide2ArgsCall,
+  decide2ArgsOriginal,
+  decide2ArgsSchema,
+  decide2Pick,
+  decideTool,
+  needsSecondExtract,
+  plausibleTop,
+  transitionDecide2,
+  type CatalogueEntry,
+  type Decide2Ask,
+  type ToolDecision,
+} from './sites/decide2.js';
+import { modelHints } from './sites/model-extract.js';
 import { deliver, type WeftPort, type WeftRecordShape } from './weft.js';
 
 export interface DispatchRequest extends SiteState {
@@ -84,6 +101,8 @@ export interface DispatchRequest extends SiteState {
   readonly resume?: boolean;
   /** Closed, already disclosed candidate set. Summaries are never recorded. */
   readonly targets?: readonly { readonly ref: string; readonly summary: string }[];
+  /** P4c: the disclosed M6 catalogue index Decide-2 picks from (at most 8 entries). Purposes are never recorded. */
+  readonly catalogue?: readonly CatalogueEntry[];
   /**
    * P5c1 re-entry: one exact sealed brief of a journaled root spawn. Then `request_id` is its
    * `child_ref`, `intake.message` is the only goal input, and threads, contexts and targets are empty.
@@ -146,12 +165,29 @@ export type DispatchIntent =
       readonly child: DispatchChild;
     }
   | {
+      /** P4c `gen.no_tool_margin`: generation over the full disclosed index named by `catalogue_digest`. */
+      readonly kind: 'implement';
+      readonly dispatch_id: string;
+      readonly tier: ImplementTier;
+      readonly ceiling: ImplementTier;
+      readonly tier_source: 'no_tool_margin';
+      readonly catalogue_digest: string;
+    }
+  | {
       readonly kind: 'read';
       readonly dispatch_id: string;
       readonly target_ref: string;
       readonly child: DispatchChild;
     }
-  | { readonly kind: 'capability'; readonly dispatch_id: string }
+  | {
+      /** P4c `act.tool`: the one entry Decide-2 picked, from the catalogue bound at its ask. */
+      readonly kind: 'capability';
+      readonly dispatch_id: string;
+      readonly entry_ref: string;
+      readonly catalogue_digest: string;
+      /** Digest of the args record (the original's digest and the final extract@1); null for a zero-arg entry. */
+      readonly args_ref: string | null;
+    }
   | { readonly kind: 'done_check'; readonly dispatch_id: string }
   | { readonly kind: 'decline'; readonly dispatch_id: string }
   | {
@@ -192,12 +228,16 @@ export type DispatchReason =
   | 'budget'
   | 'refused'
   | 'dispatch_unconfirmed'
+  /** P4c: Decide-2 had no clear margin; generation runs over the full disclosed index. */
+  | 'no_tool_margin'
+  /** P4c: the picked entry has a required arg the targeted extract did not ground. */
+  | 'missing_args'
   /** Transient: never journaled or emitted. */
   | 'dependency_pending'
   | 'unmet_dependency';
 
 export interface DispatchCheckpoint {
-  readonly schema: 'dispatch.checkpoint@5';
+  readonly schema: 'dispatch.checkpoint@6';
   readonly decision_id: string;
   readonly state_revision: number;
   readonly state_updated_at: number;
@@ -205,12 +245,17 @@ export interface DispatchCheckpoint {
     readonly intake: number;
     readonly triage: number;
     readonly route: number;
+    readonly tool: number;
     readonly shadow: 0 | 1;
     readonly preflight: 0 | 1;
   };
   readonly intake: IntakeDecision | null;
   readonly triage: LoopDecision | null;
   readonly route: LoopDecision | null;
+  /** P4c Decide-2 pick and targeted args extract; null until the tool stage is asked. */
+  readonly tool: ToolDecision | null;
+  /** Digest of the catalogue the tool ask disclosed, bound with `asks.tool`; drift on replay is refused. */
+  readonly catalogue_digest: string | null;
   readonly shadow: readonly ShadowObservation[] | null;
   readonly preflight: RoleObservation | null;
   /** The asking request's `terms.cost_ceiling` when a safe natural, bound with `asks.preflight = 1`. */
@@ -226,7 +271,7 @@ export interface DispatchCheckpoint {
 }
 
 export interface DispatchDecision {
-  readonly schema: 'dispatch.decision@6';
+  readonly schema: 'dispatch.decision@7';
   readonly decision_id: string;
   readonly entry: number;
   readonly state_revision: number;
@@ -242,12 +287,13 @@ export interface DispatchDecision {
   readonly intake: IntakeDecision | null;
   readonly triage: LoopDecision | null;
   readonly route: LoopDecision | null;
+  readonly tool: ToolDecision | null;
   readonly shadow: readonly ShadowObservation[] | null;
   readonly preflight: RoleObservation | null;
 }
 
 /** The stage an in-flight ask belongs to; `window` is the shadow and preflight round. */
-export type DispatchAskStage = 'intake' | 'triage' | 'route' | 'window';
+export type DispatchAskStage = 'intake' | 'triage' | 'route' | 'tool' | 'window';
 export interface DispatchAsk {
   readonly stage: DispatchAskStage;
   /** The checkpoint's ask counter for the stage once taken; the window counts its shadow and preflight asks together. */
@@ -590,14 +636,16 @@ function initialCheckpoint(
   child: DispatchChild | null = null,
 ): DispatchCheckpoint {
   return {
-    schema: 'dispatch.checkpoint@5',
+    schema: 'dispatch.checkpoint@6',
     decision_id: request.request_id,
     state_revision: request.state_revision,
     state_updated_at: request.state_updated_at,
-    asks: { intake: 0, triage: 0, route: 0, shadow: 0, preflight: 0 },
+    asks: { intake: 0, triage: 0, route: 0, tool: 0, shadow: 0, preflight: 0 },
     intake: null,
     triage: null,
     route: null,
+    tool: null,
+    catalogue_digest: null,
     shadow: null,
     preflight: null,
     preflight_budget: null,
@@ -613,7 +661,7 @@ function initialCheckpoint(
 function makeCheckpoint(checkpoint: DispatchCheckpoint, patch: Partial<DispatchCheckpoint> = {}): DispatchCheckpoint {
   const next = { ...checkpoint, ...patch };
   return {
-    schema: 'dispatch.checkpoint@5',
+    schema: 'dispatch.checkpoint@6',
     decision_id: next.decision_id,
     state_revision: next.state_revision,
     state_updated_at: next.state_updated_at,
@@ -621,12 +669,15 @@ function makeCheckpoint(checkpoint: DispatchCheckpoint, patch: Partial<DispatchC
       intake: next.asks.intake,
       triage: next.asks.triage,
       route: next.asks.route,
+      tool: next.asks.tool,
       shadow: next.asks.shadow,
       preflight: next.asks.preflight,
     },
     intake: next.intake,
     triage: next.triage,
     route: next.route,
+    tool: next.tool,
+    catalogue_digest: next.catalogue_digest,
     shadow: next.shadow,
     preflight: next.preflight,
     preflight_budget: next.preflight_budget,
@@ -656,7 +707,7 @@ function makeDecision(
   reason: DispatchReason,
 ): DispatchDecision {
   return {
-    schema: 'dispatch.decision@6',
+    schema: 'dispatch.decision@7',
     decision_id: checkpoint.decision_id,
     entry,
     state_revision: checkpoint.state_revision,
@@ -672,6 +723,7 @@ function makeDecision(
     intake: checkpoint.intake,
     triage: checkpoint.triage,
     route: checkpoint.route,
+    tool: checkpoint.tool,
     shadow: recordedShadow(checkpoint),
     preflight: trustedRoles(checkpoint, request),
   };
@@ -708,6 +760,8 @@ function dispatchPlan(
 }
 
 function lastDecider(checkpoint: DispatchCheckpoint): { readonly decided_by: Decider; readonly choice: SiteChoice } {
+  // Decide-2 is not a decided_by of its own: its rows are rule outcomes over the tool stage (P4c).
+  if (checkpoint.tool !== null) return { decided_by: 'rule', choice: 'capability' };
   if (checkpoint.route !== null) return { decided_by: 'route', choice: checkpoint.route.site.choice };
   if (checkpoint.triage !== null) return { decided_by: 'triage', choice: checkpoint.triage.site.choice };
   if (checkpoint.intake !== null) return { decided_by: 'intake', choice: checkpoint.intake.choice };
@@ -736,7 +790,7 @@ function sameRecord(left: unknown, right: unknown): boolean {
   );
 }
 
-type Stage = 'intake' | 'triage' | 'route';
+type Stage = 'intake' | 'triage' | 'route' | 'tool';
 
 function stageAsk(checkpoint: DispatchCheckpoint, stage: Stage): number {
   const ask = isRecord(checkpoint.asks) ? checkpoint.asks[stage] : undefined;
@@ -961,9 +1015,133 @@ function replayLoop(request: DispatchRequest, checkpoint: DispatchCheckpoint, st
   throw notLive(stage);
 }
 
+/** The catalogue a tool ask disclosed, in order; every field steers the pick or the row. */
+function catalogueDigest(request: DispatchRequest): string {
+  return digest(request.catalogue ?? []);
+}
+
+/** The Decide-2 ask for the tool stage; D1's grounded intent is the prior slot the args extract may read. */
+function toolAsk(request: DispatchRequest, checkpoint: DispatchCheckpoint, ask: number): Decide2Ask {
+  const state = { request: request.intake.message, context: request.triage_context };
+  const final = checkpoint.triage?.extracts.at(-1);
+  return {
+    request_id: stageId(request.request_id, 'tool', ask),
+    state_revision: request.state_revision,
+    state_updated_at: request.state_updated_at,
+    state,
+    catalogue: clone(request.catalogue ?? []),
+    intent: final === undefined ? null : modelHints(final, stableStringify(state)).intent,
+    terms: { ...request.terms, destinations: [...request.terms.destinations] },
+  };
+}
+
+/** Raw boolean answers the live pick could have received, with content fixed by the recorded observation. */
+function pickWitnesses(request_id: string, state: SiteState, observation: unknown) {
+  const recorded = isRecord(observation) ? observation : {};
+  const entries = Array.isArray(recorded['entries']) ? (recorded['entries'] as unknown[]) : [];
+  const provider = typeof recorded['provider_request_id'] === 'string' ? recorded['provider_request_id'] : undefined;
+  const answers: Record<string, { type: 'boolean'; probability: number }> = {};
+  const confidence: Record<string, number> = {};
+  for (const [i, entry] of entries.entries()) {
+    if (!isRecord(entry)) continue;
+    if (typeof entry['p'] === 'number') answers[`entry_${i}`] = { type: 'boolean', probability: entry['p'] };
+    if (typeof entry['confidence'] === 'number') confidence[`entry_${i}`] = entry['confidence'];
+  }
+  const base = { site: DECIDE2_SITE, attempts: [], spent: 0, uncertainty: [] };
+  const accepted = (id: string) =>
+    ({
+      ...base,
+      request_id: id,
+      status: 'accepted',
+      kind: 'boolean',
+      answers,
+      confidence,
+      routed_unit_id: REPLAY_UNIT,
+      provider_response_id: provider,
+    }) satisfies EvaluationOutcome<'boolean'>;
+  const outcomes: (EvaluationOutcome<'boolean'> | null)[] = [
+    accepted(request_id),
+    accepted(`${request_id}:foreign`),
+    { ...accepted(request_id), paused: budgetPause(request_id, DECIDE2_SITE) },
+    { ...base, request_id, status: 'blocked', reason: 'invalid_request' },
+    null,
+  ];
+  return outcomes.flatMap((outcome) => [
+    { state_revision: state.state_revision, observed_at: state.state_updated_at, outcome },
+    { state_revision: state.state_revision + 1, observed_at: state.state_updated_at, outcome },
+    { state_revision: state.state_revision, observed_at: state.state_updated_at, outcome, cancelled: true },
+  ]);
+}
+
+/**
+ * The tool stage replays as a fixed point too: the catalogue must be the one bound at the ask, the
+ * pick must re-derive through `transitionDecide2`, and args extracts exist exactly when the pure
+ * margin rule picks an entry with args, each gated against that entry's own schema.
+ */
+function replayTool(request: DispatchRequest, checkpoint: DispatchCheckpoint): void {
+  const recorded: unknown = checkpoint.tool;
+  if (!orderedKeys(recorded, ['schema', 'request_id', 'pick', 'extracts']) || !Array.isArray(recorded['extracts']))
+    throw notLive('tool');
+  if (checkpoint.catalogue_digest !== catalogueDigest(request))
+    throw new Error('the disclosed catalogue differs from the one bound at the tool ask');
+  const ask = toolAsk(askedRequest(request, checkpoint), checkpoint, stageAsk(checkpoint, 'tool'));
+  if (recorded['schema'] !== 'decide2.decision@1' || recorded['request_id'] !== ask.request_id) throw notLive('tool');
+  const current = checkpointState(checkpoint);
+  const pick = pickWitnesses(`${ask.request_id}:decide2`, current, recorded['pick'])
+    .map((answer) => derive(() => transitionDecide2(ask, answer, current)))
+    .find((derived) => derived !== null && sameRecord(derived, recorded['pick']));
+  if (pick === undefined || pick === null) throw notLive('tool');
+  const picked = decide2Pick(pick).pick;
+  const entry = picked === null ? undefined : ask.catalogue[picked];
+  const extracts = recorded['extracts'] as unknown[];
+  if (entry === undefined || entry.args.length === 0) {
+    if (extracts.length !== 0) throw notLive('tool');
+    return;
+  }
+  const schema = decide2ArgsSchema(entry);
+  const original = decide2ArgsOriginal(ask);
+  if (extracts.length < 1 || extracts.length > 2) throw notLive('tool');
+  for (const [index, extract] of extracts.entries()) {
+    const call = decide2ArgsCall(ask, entry, index === 0 ? 1 : 2);
+    if (
+      !validExtractObservation(extract, schema, original) ||
+      extract.site !== DECIDE2_ARGS_SITE ||
+      extract.extract_schema !== DECIDE2_ARGS_SCHEMA ||
+      extract.request_id !== call.request_id ||
+      extract.attempt !== index + 1 ||
+      extract.state_revision !== ask.state_revision
+    )
+      throw notLive('tool');
+  }
+  if (extracts.length === 2 && !needsSecondExtract(extracts[0] as ExtractObservation)) throw notLive('tool');
+}
+
+/** The tool stage's own status and reason: the pick's, else a held args extract's, else answered. */
+function toolStage(tool: ToolDecision): { readonly status: 'transition' | 'paused'; readonly reason: string } {
+  const held = ['cancelled', 'stale_answer', 'decision_unavailable'];
+  const final = tool.extracts.at(-1);
+  const reason =
+    tool.pick.reason !== 'answered'
+      ? tool.pick.reason
+      : final !== undefined && held.includes(final.reason)
+        ? final.reason
+        : 'answered';
+  return { status: reason === 'cancelled' || reason === 'decision_unavailable' ? 'paused' : 'transition', reason };
+}
+
+/** Required args of the picked entry the final extract did not ground; null without a pick. */
+function missingArgs(entry: CatalogueEntry | undefined, tool: ToolDecision): number | null {
+  if (entry === undefined) return null;
+  const final = tool.extracts.at(-1);
+  return entry.args.filter(
+    (arg) => arg.required && final?.slots.find((slot) => slot.slot === arg.name)?.status !== 'grounded',
+  ).length;
+}
+
 function replayStage(request: DispatchRequest, checkpoint: DispatchCheckpoint, stage: Stage): void {
   if (request.request_id !== checkpoint.decision_id) throw new Error('checkpoint belongs to another decision');
   if (stage === 'intake') replayIntake(request, checkpoint);
+  else if (stage === 'tool') replayTool(request, checkpoint);
   else replayLoop(request, checkpoint, stage);
 }
 
@@ -983,9 +1161,19 @@ function replayStages(request: DispatchRequest, checkpoint: DispatchCheckpoint):
     throw new Error('a recorded route cannot follow a triage fallback');
   if (route !== null && (triage?.site.status !== 'transition' || triage.site.choice !== 'implement'))
     throw new Error('a recorded route needs triage implement');
+  const tool = checkpoint.tool;
+  if (
+    tool !== null &&
+    (triage?.site.status !== 'transition' ||
+      triage.site.observation?.accepted !== true ||
+      triage.site.choice !== 'capability' ||
+      (request.catalogue?.length ?? 0) === 0)
+  )
+    throw new Error('a recorded tool stage needs triage capability over a disclosed catalogue');
   if (intake !== null) replayStage(request, checkpoint, 'intake');
   if (triage !== null) replayStage(request, checkpoint, 'triage');
   if (route !== null) replayStage(request, checkpoint, 'route');
+  if (tool !== null) replayStage(request, checkpoint, 'tool');
 }
 
 const SHADOW_REASONS = [
@@ -1009,7 +1197,8 @@ const SHADOW_KEYS = [
   'provider_request_id',
 ] as const;
 const SHADOW_RULES: ReadonlySet<Decide1Trace['rule']> = new Set([
-  'act.capability',
+  'act.tool',
+  'gen.no_tool_margin',
   'act.done_check',
   'act.decline',
   'gen.triage_fallback',
@@ -1230,6 +1419,30 @@ export function decide1Inputs(request: DispatchRequest, checkpoint: DispatchChec
     { name: 'child.share', value: child?.brief.share ?? null },
     { name: 'child.boundary', value: null },
   );
+  // P4c: the tool stage and its derived pick; never trusted from storage, recomputed from the observation.
+  const tool = checkpoint.tool;
+  if (tool !== null && checkpoint.catalogue_digest !== catalogueDigest(request))
+    throw new Error('the disclosed catalogue differs from the one bound at the tool ask');
+  const catalogue = request.catalogue ?? [];
+  const derived = tool === null ? null : decide2Pick(tool.pick);
+  const top = derived?.top == null ? undefined : catalogue[derived.top];
+  const pickEntry = derived?.pick == null ? undefined : catalogue[derived.pick];
+  const stageOf = tool === null ? null : toolStage(tool);
+  facts.push(
+    { name: 'tool.status', value: stageOf?.status ?? null },
+    { name: 'tool.reason', value: stageOf?.reason ?? null },
+    { name: 'decide2.entries', value: catalogue.length },
+    { name: 'decide2.top', value: top?.ref ?? null },
+    { name: 'decide2.pick', value: pickEntry?.ref ?? null },
+    { name: 'decide2.margin', value: derived?.margin ?? null },
+    { name: 'decide2.top_reversible', value: top?.reversible ?? null },
+    { name: 'decide2.top_plausible', value: tool === null ? null : plausibleTop(tool.pick, derived?.top ?? null) },
+    { name: 'args.missing', value: tool === null ? null : missingArgs(pickEntry, tool) },
+  );
+  for (const [i, entry] of (tool?.pick.entries ?? []).entries()) {
+    if (entry.p !== null) judgments.push({ name: `decide2.e${i}.p`, probability: entry.p });
+    if (entry.confidence !== null) judgments.push({ name: `decide2.e${i}.confidence`, probability: entry.confidence });
+  }
   return { judgments, facts, shadow: { judgments: shadowJudgments, facts: shadowFacts } };
 }
 
@@ -1290,7 +1503,7 @@ function planFor(trace: Decide1Trace, checkpoint: DispatchCheckpoint, request: D
     case 'hold.admission':
     case 'hold.outage':
     case 'hold.paused': {
-      const stage = (['intake', 'triage', 'route'] as const).find((stage) =>
+      const stage = (['intake', 'triage', 'route', 'tool'] as const).find((stage) =>
         trace.rule === 'hold.admission'
           ? reason(stage) === 'stale_answer' || reason(stage) === 'mismatched_answer'
           : trace.rule === 'hold.outage'
@@ -1311,6 +1524,8 @@ function planFor(trace: Decide1Trace, checkpoint: DispatchCheckpoint, request: D
         const decider = childDecider(checkpoint);
         return final(trace, decider.decided_by, decider.choice, 'paused', boundary as DispatchReason);
       }
+      // The tool stage holds the capability call it would have made; its rows are rule outcomes.
+      if (stage === 'tool') return final(trace, 'rule', 'capability', 'paused', reason(stage));
       const decided_by = checkpoint.child !== null ? 'route' : checkpoint.intake === null ? 'rule' : stage;
       return final(trace, decided_by, choice(stage), 'paused', reason(stage));
     }
@@ -1375,8 +1590,44 @@ function planFor(trace: Decide1Trace, checkpoint: DispatchCheckpoint, request: D
     }
     case 'ask.triage':
       return final(trace, 'triage', choice('triage'), 'needs_human', reason('triage'));
-    case 'act.capability':
-      return dispatchPlan(trace, 'triage', 'capability', 'accepted', { kind: 'capability', dispatch_id });
+    case 'ask.tool_irreversible':
+      return final(trace, 'rule', 'capability', 'needs_human', 'irreversible');
+    case 'gen.no_tool_margin':
+      // Provisional tier (route-fallback precedent); Gauge measures how often this row fires.
+      return dispatchPlan(trace, 'rule', 'standard', 'no_tool_margin', {
+        kind: 'implement',
+        dispatch_id,
+        tier: 'standard',
+        ceiling: 'standard',
+        tier_source: 'no_tool_margin',
+        catalogue_digest: catalogueDigest(request),
+      });
+    case 'ask.tool_args':
+      return final(trace, 'rule', 'capability', 'needs_human', 'missing_args');
+    case 'act.tool': {
+      const tool = checkpoint.tool;
+      const entry = (request.catalogue ?? []).find((candidate) => candidate.ref === facts.get('decide2.pick'));
+      if (tool === null || entry === undefined || checkpoint.catalogue_digest === null)
+        throw new Error('decide1: act.tool needs a recorded Decide-2 pick');
+      const final = tool.extracts.at(-1);
+      const args_ref =
+        entry.args.length === 0 || final === undefined
+          ? null
+          : digest({
+              original: digest(
+                decide2ArgsOriginal({ state: { request: request.intake.message, context: request.triage_context } }),
+              ),
+              extract: final,
+            });
+      if (entry.args.length > 0 && args_ref === null) throw new Error('decide1: act.tool needs its args record');
+      return dispatchPlan(trace, 'rule', 'capability', 'accepted', {
+        kind: 'capability',
+        dispatch_id,
+        entry_ref: entry.ref,
+        catalogue_digest: checkpoint.catalogue_digest,
+        args_ref,
+      });
+    }
     case 'act.done_check':
       return dispatchPlan(trace, 'triage', 'done_check', 'accepted', { kind: 'done_check', dispatch_id });
     case 'act.decline':
@@ -1438,8 +1689,8 @@ function planFor(trace: Decide1Trace, checkpoint: DispatchCheckpoint, request: D
 }
 
 function assertCheckpoint(checkpoint: DispatchCheckpoint): void {
-  if (checkpoint.schema !== 'dispatch.checkpoint@5')
-    throw new Error('recorded dispatch checkpoint schema differs from dispatch.checkpoint@5');
+  if (checkpoint.schema !== 'dispatch.checkpoint@6')
+    throw new Error('recorded dispatch checkpoint schema differs from dispatch.checkpoint@6');
   if (typeof checkpoint.spawn_port !== 'boolean') throw new Error('recorded dispatch spawn_port is not a boolean');
   if (checkpoint.preflight_budget !== null && !natural(checkpoint.preflight_budget))
     throw new Error('recorded dispatch preflight_budget is not a safe natural');
@@ -1453,6 +1704,10 @@ function assertCheckpoint(checkpoint: DispatchCheckpoint): void {
     if (checkpoint.preflight_budget !== (natural(ceiling) ? ceiling : null))
       throw new Error('recorded dispatch preflight_budget differs from its preflight_terms');
   }
+  if (checkpoint.tool === undefined || checkpoint.catalogue_digest === undefined)
+    throw new Error('recorded dispatch checkpoint has no tool stage');
+  if ((natural(checkpoint.asks?.tool) && checkpoint.asks.tool > 0) !== (checkpoint.catalogue_digest !== null))
+    throw new Error('recorded dispatch catalogue_digest is bound only with the tool ask');
   if (checkpoint.child === null && (checkpoint.asks?.preflight === 1) !== (terms !== null))
     throw new Error('recorded dispatch preflight_terms are bound only with the role ask');
 }
@@ -1843,9 +2098,10 @@ function boundaryTrace(
 ): Decide1Trace {
   const inputs = decide1Inputs(request, checkpoint);
   const decider = lastDecider(checkpoint);
-  const stage = decider.decided_by === 'rule' ? 'intake' : decider.decided_by;
+  // A recorded tool stage is the last stage asked, so the gate withholds it (P4c).
+  const stage = checkpoint.tool !== null ? 'tool' : decider.decided_by === 'rule' ? 'intake' : decider.decided_by;
   const overrides: Record<string, Decide1Fact['value']> = {
-    [`${stage}.choice`]: decider.choice,
+    ...(stage === 'tool' ? {} : { [`${stage}.choice`]: decider.choice }),
     [`${stage}.status`]: 'paused',
     [`${stage}.reason`]: reason,
   };
@@ -1968,6 +2224,38 @@ function validateTargets(targets: DispatchRequest['targets']): void {
     throw new Error('Invalid dispatch targets');
 }
 
+/** The disclosed catalogue's closed shape: refs and arg names pass the id screen; flags are booleans. */
+function validateCatalogue(catalogue: DispatchRequest['catalogue']): void {
+  if (catalogue === undefined) return;
+  const entryOk = (entry: unknown): boolean => {
+    if (!orderedKeys(entry, ['ref', 'purpose', 'reversible', 'args'])) return false;
+    const args = entry['args'];
+    return (
+      typeof entry['ref'] === 'string' &&
+      correlation(entry['ref']) === entry['ref'] &&
+      typeof entry['purpose'] === 'string' &&
+      typeof entry['reversible'] === 'boolean' &&
+      Array.isArray(args) &&
+      args.length <= 8 &&
+      args.every(
+        (arg) =>
+          orderedKeys(arg, ['name', 'required']) &&
+          typeof arg['name'] === 'string' &&
+          correlation(arg['name']) === arg['name'] &&
+          typeof arg['required'] === 'boolean',
+      ) &&
+      new Set(args.map((arg) => (arg as { name: string }).name)).size === args.length
+    );
+  };
+  if (
+    !Array.isArray(catalogue) ||
+    catalogue.length > 8 ||
+    !Array.from(catalogue).every(entryOk) ||
+    new Set(catalogue.map((entry) => entry.ref)).size !== catalogue.length
+  )
+    throw new Error('Invalid dispatch catalogue');
+}
+
 /** The closed child request shape (R5), checked before anything is loaded or asked. */
 function validateChild(request: DispatchRequest): void {
   if (request.child === undefined) return;
@@ -1987,9 +2275,10 @@ function validateChild(request: DispatchRequest): void {
     request.intake.running_threads.length !== 0 ||
     request.triage_context !== '' ||
     request.route_context !== '' ||
-    request.targets !== undefined
+    request.targets !== undefined ||
+    request.catalogue !== undefined
   )
-    throw new Error('Invalid dispatch child: threads, contexts and targets must be empty');
+    throw new Error('Invalid dispatch child: threads, contexts, targets and catalogue must be empty');
   if (
     typeof request.intake.message !== 'string' ||
     digest({ message: request.intake.message }) !== frame['goal_digest']
@@ -2028,10 +2317,20 @@ function captureRequest(request: DispatchRequest): DispatchRequest {
     ...(request.targets === undefined
       ? {}
       : { targets: request.targets.map((target) => ({ ref: target.ref, summary: target.summary })) }),
+    ...(request.catalogue === undefined
+      ? {}
+      : {
+          catalogue: request.catalogue.map((entry) => ({
+            ref: entry.ref,
+            purpose: entry.purpose,
+            reversible: entry.reversible,
+            args: entry.args.map((arg) => ({ name: arg.name, required: arg.required })),
+          })),
+        }),
   };
 }
 
-function stageId(request_id: string, stage: 'intake' | 'triage' | 'route', ask: number): string {
+function stageId(request_id: string, stage: Stage, ask: number): string {
   return ask === 1 ? `${request_id}:${stage}` : `${request_id}:${stage}:e${ask}`;
 }
 
@@ -2103,6 +2402,8 @@ function resumeOf(reason: DispatchReason): Resume {
     case 'low_confidence':
     case 'low_top_p':
     case 'no_answer':
+    case 'no_tool_margin':
+    case 'missing_args':
     case 'extract_missing':
     case 'invalid_extract':
     case 'structural_origin_missing':
@@ -2131,20 +2432,15 @@ function resumable(decision: DispatchDecision): boolean {
  * Unrecorded, it is asked; recorded, only an explicit resume re-asks a stage whose own
  * observation paused (an outage, or a site that saw the cancellation).
  */
-function asksStage(
-  slot: DispatchSlot,
-  stage: DispatchAskStage,
-  reason: SiteReason | 'ambiguous_reference' | null,
-  resume: boolean,
-): boolean {
+function asksStage(slot: DispatchSlot, stage: DispatchAskStage, reason: string | null, resume: boolean): boolean {
   if (slot.phase === 'open' && slot.ask?.stage === stage) return true;
   if (reason === null) return true;
   return resume && (reason === 'decision_unavailable' || reason === 'cancelled');
 }
 
 function assertRuleTable(decision: DispatchDecision): void {
-  if (decision.schema !== 'dispatch.decision@6')
-    throw new Error('recorded dispatch decision schema differs from dispatch.decision@6');
+  if (decision.schema !== 'dispatch.decision@7')
+    throw new Error('recorded dispatch decision schema differs from dispatch.decision@7');
   if (decision.rule_table !== DECIDE1_RULE_TABLE)
     throw new Error(`recorded dispatch rule table differs from ${DECIDE1_RULE_TABLE}`);
 }
@@ -2205,6 +2501,8 @@ export function dispatchDecided(
       ? decision.shadow.flatMap((observation) => (observation?.request_id == null ? [] : [observation.request_id]))
       : []),
     decision.preflight?.request_id,
+    decision.tool?.pick.request_id,
+    ...(decision.tool?.extracts.map((extract) => extract.request_id) ?? []),
   ].filter((id): id is string => id != null);
   const ids = [target.trace_id, target.emitter_id, record_id, decision.decision_id, ...judgmentIds, ...requests];
   if (decision.intent !== null) ids.push(decision.intent.dispatch_id);
@@ -2256,7 +2554,7 @@ function emit(port: WeftPort | undefined, observations: readonly SiteObservation
 function cancellation(request: DispatchRequest, checkpoint: DispatchCheckpoint, entry: number): DispatchDecision {
   const decider = checkpoint.child === null ? lastDecider(checkpoint) : childDecider(checkpoint);
   return {
-    schema: 'dispatch.decision@6',
+    schema: 'dispatch.decision@7',
     decision_id: checkpoint.decision_id,
     entry,
     state_revision: checkpoint.state_revision,
@@ -2272,6 +2570,7 @@ function cancellation(request: DispatchRequest, checkpoint: DispatchCheckpoint, 
     intake: checkpoint.intake,
     triage: checkpoint.triage,
     route: checkpoint.route,
+    tool: checkpoint.tool,
     shadow: recordedShadow(checkpoint),
     preflight: trustedRoles(checkpoint, request),
   };
@@ -2838,7 +3137,13 @@ async function rootStage(
 ): Promise<DispatchDecision | null> {
   const { checkpoint } = state;
   const reason =
-    stage === 'intake' ? (checkpoint.intake?.reason ?? null) : (checkpoint[stage]?.site.observation.reason ?? null);
+    stage === 'intake'
+      ? (checkpoint.intake?.reason ?? null)
+      : stage === 'tool'
+        ? checkpoint.tool === null
+          ? null
+          : toolStage(checkpoint.tool).reason
+        : (checkpoint[stage]?.site.observation.reason ?? null);
   if (asksStage(journal.load(captured.request_id).slot, stage, reason, resume)) {
     const round = await askRound(
       captured,
@@ -2848,9 +3153,18 @@ async function rootStage(
       journal,
       signal,
       fresh,
-      (base) => makeCheckpoint(base, { asks: { ...base.asks, [stage]: base.asks[stage] + 1 } }),
+      (base) =>
+        makeCheckpoint(base, {
+          asks: { ...base.asks, [stage]: base.asks[stage] + 1 },
+          // The catalogue the ask discloses is bound with it; a resume never re-carves it.
+          ...(stage === 'tool' ? { catalogue_digest: catalogueDigest(captured) } : {}),
+        }),
       async (asked) => {
         const ask = asked.asks[stage];
+        if (stage === 'tool') {
+          const tool = await decideTool(toolAsk(captured, asked, ask), ports, ports.now, signal);
+          return { checkpoint: makeCheckpoint(asked, { tool }), observations: [] };
+        }
         if (stage === 'intake') {
           const intake = await decideIntake(askIntake(captured, ask), ports, ports.now, signal);
           return {
@@ -2884,6 +3198,7 @@ export async function decideDispatch(
   if (correlation(request.request_id) === null || request.request_id.length > 96)
     throw new Error('Invalid dispatch request id');
   validateTargets(request.targets);
+  validateCatalogue(request.catalogue);
   validateChild(request);
   // Captured before the first await: deferred caller mutation cannot reach admitted evidence.
   const captured = captureRequest(request);
@@ -2930,6 +3245,16 @@ export async function decideDispatch(
     if (triage.site.status === 'transition' && triage.site.observation.accepted && triage.site.choice === 'implement') {
       const stoppedRoute = await rootStage(captured, state, 'route', resume, entry, ports, journal, signal, fresh);
       if (stoppedRoute !== null) return stoppedRoute;
+    }
+    // P4c: an accepted capability asks Decide-2 over the disclosed catalogue before any row reads it.
+    if (
+      triage.site.status === 'transition' &&
+      triage.site.observation.accepted &&
+      triage.site.choice === 'capability' &&
+      (captured.catalogue?.length ?? 0) > 0
+    ) {
+      const stoppedTool = await rootStage(captured, state, 'tool', resume, entry, ports, journal, signal, fresh);
+      if (stoppedTool !== null) return stoppedTool;
     }
   }
   checkpoint = state.checkpoint;
@@ -3040,6 +3365,7 @@ export function transitionDispatch(
 ): DispatchDecision {
   // Targets steer a consequential outcome, so replay screens them as `decideDispatch` does.
   validateTargets(request.targets);
+  validateCatalogue(request.catalogue);
   validateChild(request);
   if (receipt === 'cancelled') {
     // The journaled pre-present cancel: a claimed intent is re-derived first, as decide does.
