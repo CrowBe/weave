@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { attemptOf, isPresented } from './dispatch-journal-contract.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import type {
@@ -18,6 +19,7 @@ import {
   dispatchDecided,
   resolveThreadTarget,
   transitionDispatch,
+  type DispatchAsk,
   type DispatchCheckpoint,
   type DispatchDecision,
   type DispatchIntent,
@@ -511,7 +513,11 @@ test('4. no-dispatch table: stale, mismatch, outage and cancellation at every st
     const decision = await run(h, controller.signal);
     assert.equal(h.dispatchCalls.length, 0, `${stage} cancelled`);
     assert.deepEqual([decision.status, decision.reason], ['paused', 'cancelled'], `${stage} cancelled`);
-    assert.equal(h.journal.load('d1').decisions.length, 0, `${stage} cancelled`);
+    // The cancel is journaled; the unanswered ask stays in flight for a resume to join.
+    const loaded = h.journal.load('d1');
+    assert.deepEqual(loaded.decisions, [decision], `${stage} cancelled`);
+    assert.deepEqual(loaded.slot, { phase: 'open', ask: { stage, ask: 1 } }, `${stage} cancelled`);
+    assert.equal(loaded.checkpoint?.[stage], null, `${stage} cancelled`);
   }
 });
 
@@ -673,7 +679,8 @@ test('9. the intent is durable before dispatch and recovery never implicitly re-
   let crash = true;
   const crashing: DispatchJournal = {
     load: (id) => storage.load(id),
-    checkpoint: (entry) => storage.checkpoint(entry),
+    ask: (id, a, cp) => storage.ask(id, a, cp),
+    record: (id, a, cp) => storage.record(id, a, cp),
     claim: (id, intent, entry) => storage.claim(id, intent, entry),
     acquire: (id) => storage.acquire(id),
     release: (id, attempt) => storage.release(id, attempt),
@@ -743,13 +750,13 @@ test('10. recovery reuses paid answers and never reuses a request id', async () 
   let crash = true;
   const crashing: DispatchJournal = {
     load: (id) => storage.load(id),
-    checkpoint: (entry) => {
-      storage.checkpoint(entry);
+    ...onStageWrite(storage, (entry, write) => {
+      write();
       if (crash && entry.triage !== null && entry.route === null) {
         crash = false;
         throw new Error('crash-after-d1');
       }
-    },
+    }),
     claim: (id, intent, entry) => storage.claim(id, intent, entry),
     acquire: (id) => storage.acquire(id),
     release: (id, attempt) => storage.release(id, attempt),
@@ -775,12 +782,22 @@ test('10. recovery reuses paid answers and never reuses a request id', async () 
     ['loop.route.extract'],
   );
 
-  // A crash after recording the ask count, but before the answer, re-asks with :e2.
+  // A crash after taking the re-ask, but before the answer, leaves ask 2 in flight: the next resume joins :e2.
   const outage = harness({ route: { mode: 'outage' } });
   await run(outage);
-  const checkpoint = outage.journal.load('d1').checkpoint!;
-  assert.equal(checkpoint.asks.route, 1);
-  outage.journal.checkpoint({ ...checkpoint, route: null });
+  assert.equal(outage.journal.load('d1').checkpoint!.asks.route, 1);
+  const crashAfterAsk: DispatchJournal = {
+    ...delegate(outage.journal),
+    ask: (id, a, cp) => {
+      const taken = outage.journal.ask(id, a, cp);
+      throw new Error(`crash after ask ${taken}`);
+    },
+  };
+  await assert.rejects(
+    run(harness({}, { journal: crashAfterAsk, request: makeRequest({ resume: true }) })),
+    /crash after ask taken/,
+  );
+  assert.deepEqual(outage.journal.load('d1').slot, { phase: 'open', ask: { stage: 'route', ask: 2 } });
   const retry = harness({}, { journal: outage.journal, request: makeRequest({ resume: true }) });
   const retried = await run(retry);
   assert.equal(retried.status, 'dispatched');
@@ -874,16 +891,27 @@ test('12. concurrent decisions bind their own ids; one claim wins per id; the re
   assert.equal(JSON.stringify(decision).includes('CANARY-mutated'), false);
 });
 
-test('13. cancellation writes nothing and leaves the intent observable', async () => {
+test('13. cancellation is a journaled slot transition that load, replay and resume all agree on', async () => {
+  // Before any ask: the cancel is appended with the initial checkpoint, and no site is called.
   const before = harness();
   const controller = new AbortController();
   controller.abort();
   const early = await run(before, controller.signal);
-  assert.deepEqual([early.status, early.reason], ['paused', 'cancelled']);
-  assert.equal(before.generateCalls.length, 0);
-  assert.equal(before.evaluateCalls.length, 0);
-  assert.equal(before.journal.load('d1').decisions.length, 0);
+  assert.deepEqual([early.status, early.reason, early.decide1.rule], ['paused', 'cancelled', 'hold.paused']);
+  assert.equal(before.generateCalls.length + before.evaluateCalls.length, 0);
+  const earlyLoaded = before.journal.load('d1');
+  assert.deepEqual(earlyLoaded.decisions, [early]);
+  assert.deepEqual(earlyLoaded.slot, { phase: 'open', ask: null });
+  assert.deepEqual(transitionDispatch(before.request, earlyLoaded.checkpoint!, 'cancelled', 1), early);
+  // A second observer of the same abort sees the same decision, and a repeated abort appends nothing.
+  assert.deepEqual(await run(harness({}, { journal: before.journal })), early);
+  assert.deepEqual(
+    await run(harness({}, { journal: before.journal, request: makeRequest({ resume: true }) }), controller.signal),
+    early,
+  );
+  assert.equal(before.journal.load('d1').decisions.length, 1);
 
+  // During an ask: the cancel keeps the unanswered ask in flight, and a resume joins that same ask id.
   const during = new AbortController();
   const mid = harness({
     onEvaluate: (incoming) => incoming.site === 'loop.triage' && during.abort(),
@@ -895,9 +923,44 @@ test('13. cancellation writes nothing and leaves the intent observable', async (
     false,
   );
   assert.equal(mid.dispatchCalls.length, 0);
-  assert.equal(mid.journal.load('d1').decisions.length, 0);
-  assert.equal(mid.journal.load('d1').checkpoint?.intent, null);
+  const midLoaded = mid.journal.load('d1');
+  assert.deepEqual(midLoaded.decisions, [midDecision]);
+  assert.deepEqual(midLoaded.slot, { phase: 'open', ask: { stage: 'triage', ask: 1 } });
+  assert.equal(midLoaded.checkpoint?.intent, null);
+  assert.deepEqual(transitionDispatch(mid.request, midLoaded.checkpoint!, 'cancelled', 1), midDecision);
+  const rejoin = harness({}, { journal: mid.journal, request: makeRequest({ resume: true }) });
+  const rejoined = await run(rejoin);
+  assert.equal(rejoined.status, 'dispatched');
+  assert.equal(rejoin.evaluateCalls.find((incoming) => incoming.site === 'loop.triage')?.request_id, 'd1:triage');
+  assert.deepEqual(
+    mid.journal.load('d1').decisions.map((decision) => decision.reason),
+    ['cancelled', rejoined.reason],
+  );
 
+  // Claimed, before present: the intent is cancelled with no effect, and a resume presents it once.
+  const claimedController = new AbortController();
+  const claimed = harness({}, { journal: new MemoryDispatchJournal() });
+  const claimedJournal: DispatchJournal = {
+    ...delegate(claimed.journal),
+    acquire: (id, supersedes) => {
+      claimedController.abort();
+      return claimed.journal.acquire(id, supersedes);
+    },
+  };
+  const beforePresent = await run(harness({}, { journal: claimedJournal }), claimedController.signal);
+  assert.deepEqual([beforePresent.status, beforePresent.reason], ['paused', 'cancelled']);
+  assert.equal(beforePresent.intent?.dispatch_id, 'd1:dispatch');
+  const claimedLoaded = claimed.journal.load('d1');
+  assert.deepEqual(claimedLoaded.decisions, [beforePresent]);
+  assert.equal(claimedLoaded.slot.phase, 'claimed');
+  assert.equal(attemptOf(claimedLoaded), null);
+  assert.deepEqual(transitionDispatch(claimed.request, claimedLoaded.checkpoint!, 'cancelled', 1), beforePresent);
+  const represent = harness({}, { journal: claimed.journal, request: makeRequest({ resume: true }) });
+  const represented = await run(represent);
+  assert.equal(represented.status, 'dispatched');
+  assert.equal(represent.dispatchCalls.length, 1);
+
+  // Presented: the abort is journaled unconfirmed, never `cancelled`, and resolves only by settlement.
   const dispatchController = new AbortController();
   const crash = harness(
     {},
@@ -908,15 +971,41 @@ test('13. cancellation writes nothing and leaves the intent observable', async (
       },
     },
   );
-  const dispatchedThenCancelled = await run(crash, dispatchController.signal);
-  assert.deepEqual([dispatchedThenCancelled.status, dispatchedThenCancelled.reason], ['paused', 'cancelled']);
-  assert.equal(crash.journal.load('d1').decisions.length, 0);
-  assert.equal(crash.journal.load('d1').checkpoint?.intent?.dispatch_id, 'd1:dispatch');
+  const afterPresent = await run(crash, dispatchController.signal);
+  assert.deepEqual([afterPresent.status, afterPresent.reason], ['paused', 'dispatch_unconfirmed']);
+  assert.equal(afterPresent.receipt, null);
+  assert.equal(afterPresent.intent?.dispatch_id, 'd1:dispatch');
+  const presentedLoaded = crash.journal.load('d1');
+  assert.deepEqual(presentedLoaded.decisions, [afterPresent]);
+  assert.equal(presentedLoaded.slot.phase, 'presented');
+  assert.deepEqual(transitionDispatch(crash.request, presentedLoaded.checkpoint!, null, 1), afterPresent);
 
+  // Without resume it is reported as stored; nothing is re-asked or re-presented.
   const next = harness({}, { journal: crash.journal });
-  const unconfirmed = await run(next);
-  assert.deepEqual([unconfirmed.status, unconfirmed.reason], ['paused', 'dispatch_unconfirmed']);
-  assert.equal(next.dispatchCalls.length, 0);
+  assert.deepEqual(await run(next), afterPresent);
+  assert.equal(next.dispatchCalls.length + next.evaluateCalls.length + next.generateCalls.length, 0);
+  // An aborted resume does not move the phase, so it appends nothing.
+  const aborted = new AbortController();
+  aborted.abort();
+  assert.deepEqual(
+    await run(harness({}, { journal: crash.journal, request: makeRequest({ resume: true }) }), aborted.signal),
+    afterPresent,
+  );
+  assert.equal(crash.journal.load('d1').decisions.length, 1);
+  // A resume settles it through the port's own settlement, without a second dispatch.
+  const settle = harness(
+    {},
+    {
+      journal: crash.journal,
+      request: makeRequest({ resume: true }),
+      settlement: (id) => (id === 'd1' ? dispatched(afterPresent.intent!) : null),
+    },
+  );
+  const settled = await run(settle);
+  assert.deepEqual([settled.status, settled.receipt], ['dispatched', dispatched(afterPresent.intent!)]);
+  assert.equal(settle.dispatchCalls.length + settle.evaluateCalls.length, 0);
+  assert.equal(crash.dispatchCalls.length, 1);
+  assert.deepEqual(crash.journal.load('d1').decisions, [afterPresent, settled]);
 });
 
 test('14. a stage outage pauses, and resume re-asks only that stage', async () => {
@@ -1251,8 +1340,10 @@ test('20. a losing concurrent delivery cannot rewrite the winner stages', async 
   assert.deepEqual(lost, won);
   assert.equal(loser.dispatchCalls.length, 0);
 
+  // The winner joined the loser's in-flight ask 1 rather than minting ask 2, and recorded it first.
   const checkpoint = journal.load('d1').checkpoint!;
-  assert.equal(checkpoint.route?.site.observation.request_id, 'd1:route:e2');
+  assert.equal(checkpoint.asks.route, 1);
+  assert.equal(checkpoint.route?.site.observation.request_id, 'd1:route');
   assert.equal(checkpoint.route?.site.choice, 'strong');
   assert.deepEqual(checkpoint.intent, won.intent);
   assert.deepEqual(transitionDispatch(winner.request, checkpoint, won.receipt, won.entry), won);
@@ -1328,8 +1419,16 @@ test('23. live recovery rejects foreign and below-threshold loaded stages before
 
 function forgedJournal(checkpoint: DispatchCheckpoint): DispatchJournal {
   return {
-    load: () => ({ checkpoint, decisions: [], attempt: null, presented: false }),
-    checkpoint: () => {},
+    load: () => ({
+      checkpoint,
+      decisions: [],
+      slot:
+        checkpoint?.intent == null
+          ? { phase: 'open' as const, ask: null }
+          : { phase: 'claimed' as const, intent: checkpoint.intent, attempt: null },
+    }),
+    ask: () => null,
+    record: () => false,
     claim: () => false,
     acquire: () => null,
     release: () => {},
@@ -1694,7 +1793,8 @@ test('28. a claimed intent survives a terminal stale pause and append surfaces f
   let crash = true;
   const crashing: DispatchJournal = {
     load: (id) => storage.load(id),
-    checkpoint: (entry) => storage.checkpoint(entry),
+    ask: (id, a, cp) => storage.ask(id, a, cp),
+    record: (id, a, cp) => storage.record(id, a, cp),
     claim: (id, intent, entry) => storage.claim(id, intent, entry),
     acquire: (id) => storage.acquire(id),
     release: (id, attempt) => storage.release(id, attempt),
@@ -1767,7 +1867,8 @@ test('29. a human-stop winner closes the decision to a delayed dispatch candidat
   const stopper = harness({ intake: { choice: 'new_thread', confidence: 0.5 } }, { journal });
   const stopped = await run(stopper);
   assert.deepEqual([stopped.status, stopped.reason], ['needs_human', 'low_confidence']);
-  assert.equal(stopper.evaluateCalls[0]?.request_id, 'd1:intake:e2');
+  // The stopper joins the candidate's in-flight intake ask; no second ask number is minted.
+  assert.equal(stopper.evaluateCalls[0]?.request_id, 'd1:intake');
 
   gate.release();
   const late = await pending;
@@ -2080,7 +2181,7 @@ test('34. a crashed attempt ends only on the port settlement, never by time, wit
   void run(a);
   await waitUntil(() => entered === 1);
   const claimed = journal.load('d1').checkpoint!.intent!;
-  const crashed = journal.load('d1').attempt!;
+  const crashed = attemptOf(journal.load('d1'))!;
   a.clock.advance();
 
   // No settlement port, or a port that has not settled, cannot read, or answers for another
@@ -2118,7 +2219,7 @@ test('34. a crashed attempt ends only on the port settlement, never by time, wit
   }
   assert.deepEqual(reads, ['d1', 'd1', 'd1']);
   assert.deepEqual(journal.load('d1').decisions, []);
-  assert.equal(journal.load('d1').attempt, crashed);
+  assert.equal(attemptOf(journal.load('d1')), crashed);
 
   // The port's own settlement for the decision id ends the attempt: its receipt is journaled.
   const recovery = harness(
@@ -2135,13 +2236,13 @@ test('34. a crashed attempt ends only on the port settlement, never by time, wit
   assert.deepEqual(settled.intent, claimed);
   assert.deepEqual(settled.receipt, dispatched(claimed));
   assert.deepEqual(journal.load('d1').decisions, [settled]);
-  assert.equal(journal.load('d1').attempt, null);
+  assert.equal(attemptOf(journal.load('d1')), null);
   const repeated = harness({}, { journal, clock: a.clock, request: makeRequest({ resume: true }) });
   assert.deepEqual(await run(repeated), settled);
   assert.equal(entered, 1);
   assert.equal(a.dispatchCalls.length + recovery.dispatchCalls.length + repeated.dispatchCalls.length, 1);
   // The crashed holder's token is retired.
-  assert.equal(journal.append({ ...settled, entry: 2 }, crashed), false);
+  assert.equal(journal.append({ ...settled, entry: 2 }, { attempt: crashed }), false);
 
   // The journal contract: one live attempt per claimed intent, single-use ids, no expiry.
   const intent: DispatchIntent = { kind: 'capability', dispatch_id: 'd1:dispatch' };
@@ -2169,7 +2270,7 @@ test('34. a crashed attempt ends only on the port settlement, never by time, wit
   assert.equal(fenced.acquire('d1'), null, 'an unclaimed decision has no attempt');
   assert.equal(fenced.claim('d1', intent), true);
   const first = fenced.acquire('d1')!;
-  assert.equal(fenced.load('d1').attempt, first);
+  assert.equal(attemptOf(fenced.load('d1')), first);
   assert.equal(fenced.acquire('d1'), null);
   assert.equal(fenced.append(owned('paused', 'dispatch_unconfirmed')), false, 'no tokenless append while live');
   fenced.release('d1', 'd1:attempt:other');
@@ -2177,18 +2278,30 @@ test('34. a crashed attempt ends only on the port settlement, never by time, wit
   assert.equal(fenced.acquire('d1', 'd1:attempt:other'), null, 'only the live attempt is superseded');
   const second = fenced.acquire('d1', first)!;
   assert.notEqual(second, first);
-  assert.equal(fenced.append(owned('paused', 'stale_answer'), first), false, 'a superseded attempt is fenced');
+  assert.equal(
+    fenced.append(owned('paused', 'stale_answer'), { attempt: first }),
+    false,
+    'a superseded attempt is fenced',
+  );
   fenced.release('d1', first);
-  assert.equal(fenced.load('d1').attempt, second, 'a superseded attempt releases nothing');
-  assert.equal(fenced.append(owned('paused', 'budget'), second), true);
-  assert.equal(fenced.load('d1').attempt, null);
-  assert.equal(fenced.append(owned('paused', 'budget'), second), false, 'an appended attempt is retired');
+  assert.equal(attemptOf(fenced.load('d1')), second, 'a superseded attempt releases nothing');
+  assert.equal(fenced.append(owned('paused', 'budget'), { attempt: second }), true);
+  assert.equal(attemptOf(fenced.load('d1')), null);
+  assert.equal(
+    fenced.append({ ...owned('paused', 'budget'), entry: 2 }, { attempt: second }),
+    false,
+    'an appended attempt is retired',
+  );
   const third = fenced.acquire('d1')!;
   assert.ok(![first, second].includes(third), 'attempt ids are never reissued');
   assert.equal(fenced.acquire('d1', second), null, 'a retired attempt supersedes nothing');
   fenced.release('d1', third);
-  assert.equal(fenced.append(owned('refused', 'refused'), third), false, 'a released attempt is retired');
-  assert.equal(fenced.append(owned('paused', 'stale_answer')), true);
+  assert.equal(
+    fenced.append({ ...owned('refused', 'refused'), entry: 2 }, { attempt: third }),
+    false,
+    'a released attempt is retired',
+  );
+  assert.equal(fenced.append({ ...owned('paused', 'stale_answer'), entry: 2 }), true);
   assert.equal(fenced.acquire('d1'), null, 'a terminal decision has no attempt');
 });
 
@@ -2216,24 +2329,26 @@ test('35. cancelling an attempt in flight hands it to recovery without a second 
   const recovering = run(b);
   controller.abort();
   const [cancelled, inFlight] = await Promise.all([pending, recovering]);
-  assert.deepEqual([cancelled.status, cancelled.reason], ['paused', 'cancelled']);
+  // A presented the intent, so its abort is journaled unconfirmed, never `cancelled`.
+  assert.deepEqual([cancelled.status, cancelled.reason], ['paused', 'dispatch_unconfirmed']);
   assert.deepEqual([inFlight.status, inFlight.reason], ['paused', 'dispatch_unconfirmed']);
   assert.deepEqual(inFlight.intent, claimed);
-  assert.deepEqual(journal.load('d1').decisions, []);
+  assert.deepEqual(journal.load('d1').decisions, [cancelled]);
+  assert.equal(journal.load('d1').slot.phase, 'presented');
 
   // The cancelled attempt has ended, but it presented the intent: without a settlement it is never stale.
   const c = harness({}, { journal, clock: a.clock, request: makeRequest({ resume: true }) });
   const unconfirmed = await run(c);
   assert.deepEqual([unconfirmed.status, unconfirmed.reason], ['paused', 'dispatch_unconfirmed']);
   assert.deepEqual(unconfirmed.intent, claimed);
-  assert.deepEqual(journal.load('d1').decisions, [unconfirmed]);
+  assert.deepEqual(journal.load('d1').decisions, [cancelled, unconfirmed]);
   const d = harness(
     {},
     { journal, clock: a.clock, request: makeRequest({ resume: true }), settlement: () => dispatched(claimed) },
   );
   const settled = await run(d);
   assert.deepEqual([settled.status, settled.receipt], ['dispatched', dispatched(claimed)]);
-  assert.deepEqual(journal.load('d1').decisions, [unconfirmed, settled]);
+  assert.deepEqual(journal.load('d1').decisions, [cancelled, unconfirmed, settled]);
   assert.equal(entered, 1);
   assert.equal(a.dispatchCalls.length + b.dispatchCalls.length + c.dispatchCalls.length + d.dispatchCalls.length, 1);
 });
@@ -2246,7 +2361,7 @@ test('36. no amount of state change or recovery terminalizes an attempt in fligh
   const pending = run(a);
   await waitUntil(() => held.state.entered === 1);
   const claimed = journal.load('d1').checkpoint!.intent!;
-  const holder = journal.load('d1').attempt!;
+  const holder = attemptOf(journal.load('d1'))!;
 
   // The state moves on repeatedly and every recovery shape returns: none of them ends A's attempt.
   const recoveries: ReturnType<typeof harness>[] = [];
@@ -2264,7 +2379,7 @@ test('36. no amount of state change or recovery terminalizes an attempt in fligh
     }
   }
   assert.deepEqual(journal.load('d1').decisions, []);
-  assert.equal(journal.load('d1').attempt, holder);
+  assert.equal(attemptOf(journal.load('d1')), holder);
 
   gate.release();
   const won = await pending;
@@ -2296,7 +2411,7 @@ test('37. a superseded or retired attempt token never regains append authority',
   );
   const pending = run(a);
   await waitUntil(() => entered === 1);
-  const superseded = journal.load('d1').attempt!;
+  const superseded = attemptOf(journal.load('d1'))!;
 
   // B supersedes A on the port's settlement and appends a resumable budget pause, ending every attempt.
   const b = harness(
@@ -2310,7 +2425,7 @@ test('37. a superseded or retired attempt token never regains append authority',
   );
   const budget = await run(b);
   assert.deepEqual([budget.status, budget.reason], ['paused', 'budget']);
-  assert.equal(journal.load('d1').attempt, null);
+  assert.equal(attemptOf(journal.load('d1')), null);
 
   // A returns with no other attempt live: its superseded token still cannot terminalize B's state,
   // and it reports B's stored pause as stored, never a synthesized dispatch_unconfirmed (#410).
@@ -2318,7 +2433,10 @@ test('37. a superseded or retired attempt token never regains append authority',
   const late = await pending;
   assert.deepEqual(late, budget);
   assert.deepEqual(journal.load('d1').decisions, [budget]);
-  assert.equal(journal.append({ ...budget, entry: 2, status: 'refused', reason: 'refused' }, superseded), false);
+  assert.equal(
+    journal.append({ ...budget, entry: 2, status: 'refused', reason: 'refused' }, { attempt: superseded }),
+    false,
+  );
   assert.equal(journal.acquire('d1', superseded), null);
 
   // A later resume presents under a fresh attempt, which A's release cannot end.
@@ -2334,11 +2452,11 @@ test('37. a superseded or retired attempt token never regains append authority',
   assert.equal(plain.claim('d1', intent), true);
   const first = plain.acquire('d1')!;
   const base = { ...budget, intent, decided_by: 'triage', choice: 'capability' } as DispatchDecision;
-  assert.equal(plain.append(base, first), true);
-  assert.equal(plain.append({ ...base, entry: 2, status: 'refused', reason: 'refused' }, first), false);
+  assert.equal(plain.append(base, { attempt: first }), true);
+  assert.equal(plain.append({ ...base, entry: 2, status: 'refused', reason: 'refused' }, { attempt: first }), false);
   const next = plain.acquire('d1')!;
   plain.release('d1', first);
-  assert.equal(plain.load('d1').attempt, next);
+  assert.equal(attemptOf(plain.load('d1')), next);
   assert.deepEqual(plain.load('d1').decisions, [base]);
 });
 
@@ -2467,7 +2585,7 @@ test('37b. a loser reports a stored post-claim pause as stored; only a pre-recei
   assert.equal((await claiming).status, 'dispatched');
 });
 
-test('38. cancelling recovery during its settlement read writes nothing and leaves the attempt live', async () => {
+test('38. cancelling recovery during its settlement read writes nothing, reports the journal and leaves the attempt live', async () => {
   const gate = deferred();
   const held = heldDispatch(gate.promise);
   const journal = new MemoryDispatchJournal();
@@ -2475,7 +2593,7 @@ test('38. cancelling recovery during its settlement read writes nothing and leav
   const pending = run(a);
   await waitUntil(() => held.state.entered === 1);
   const claimed = journal.load('d1').checkpoint!.intent!;
-  const holder = journal.load('d1').attempt!;
+  const holder = attemptOf(journal.load('d1'))!;
   a.clock.advance();
 
   // The port has settled, but recovery is cancelled before it can supersede A.
@@ -2494,11 +2612,14 @@ test('38. cancelling recovery during its settlement read writes nothing and leav
       },
     },
   );
+  // B holds no attempt, so it cannot journal its abort: it reports the journal's projection of A's
+  // presented claim, never an unstored `cancelled`.
   const cancelled = await run(b, controller.signal);
-  assert.deepEqual([cancelled.status, cancelled.reason], ['paused', 'cancelled']);
+  assert.deepEqual([cancelled.status, cancelled.reason], ['paused', 'dispatch_unconfirmed']);
+  assert.deepEqual(cancelled, transitionDispatch(b.request, journal.load('d1').checkpoint!, null, 1));
   assert.equal(read, controller.signal);
   assert.deepEqual(journal.load('d1').decisions, []);
-  assert.equal(journal.load('d1').attempt, holder);
+  assert.equal(attemptOf(journal.load('d1')), holder);
 
   // Cancelled before the read, recovery reads nothing.
   let reads = 0;
@@ -2517,7 +2638,7 @@ test('38. cancelling recovery during its settlement read writes nothing and leav
   const stopped = new AbortController();
   stopped.abort();
   const none = await run(early, stopped.signal);
-  assert.deepEqual([none.status, none.reason], ['paused', 'cancelled']);
+  assert.deepEqual(none, cancelled);
   assert.equal(reads, 0);
 
   gate.release();
@@ -2548,7 +2669,7 @@ test('39. a presented intent is reconciled through its settlement before any sta
     assert.equal(first.status, 'paused', confirm);
     const claimed = a.journal.load('d1').checkpoint!.intent!;
     const before = a.journal.load('d1').decisions;
-    assert.equal(a.journal.load('d1').attempt, null, confirm);
+    assert.equal(attemptOf(a.journal.load('d1')), null, confirm);
     a.clock.advance();
 
     // The state moved on, but the intent was presented: its settlement decides, never the stale gate.
@@ -2629,7 +2750,8 @@ test('41. a crash after presenting replays without a second dispatch or a duplic
   let crash = true;
   const crashing: DispatchJournal = {
     load: (id) => storage.load(id),
-    checkpoint: (entry) => storage.checkpoint(entry),
+    ask: (id, a, cp) => storage.ask(id, a, cp),
+    record: (id, a, cp) => storage.record(id, a, cp),
     claim: (id, intent, entry) => storage.claim(id, intent, entry),
     acquire: (id, supersedes) => storage.acquire(id, supersedes),
     release: (id, attempt) => storage.release(id, attempt),
@@ -2654,7 +2776,7 @@ test('41. a crash after presenting replays without a second dispatch or a duplic
   );
   await assert.rejects(run(a), /crash/);
   assert.deepEqual(storage.load('d1').decisions, []);
-  assert.equal(storage.load('d1').presented, true);
+  assert.equal(isPresented(storage.load('d1')), true);
   const claimed = storage.load('d1').checkpoint!.intent!;
 
   // Same state or not, a resume reads the settlement before it would present again.
@@ -2673,7 +2795,7 @@ test('41. a crash after presenting replays without a second dispatch or a duplic
   const settled = await run(resumed);
   assert.equal(settled.status, 'dispatched');
   assert.deepEqual(storage.load('d1').decisions, [...before, settled]);
-  assert.equal(storage.load('d1').presented, false);
+  assert.equal(isPresented(storage.load('d1')), false);
   const again = harness({}, { journal: storage, clock: a.clock, request: makeRequest({ resume: true }) });
   assert.deepEqual(await run(again), settled);
   assert.deepEqual(storage.load('d1').decisions, [...before, settled]);
@@ -2696,7 +2818,8 @@ test('41. a crash after presenting replays without a second dispatch or a duplic
   let crashAcquire = true;
   const claimOnly: DispatchJournal = {
     load: (id) => unpresented.load(id),
-    checkpoint: (entry) => unpresented.checkpoint(entry),
+    ask: (id, a, cp) => unpresented.ask(id, a, cp),
+    record: (id, a, cp) => unpresented.record(id, a, cp),
     claim: (id, intent, entry) => unpresented.claim(id, intent, entry),
     acquire: (id, supersedes) => {
       if (crashAcquire) {
@@ -2711,7 +2834,7 @@ test('41. a crash after presenting replays without a second dispatch or a duplic
   };
   const never = harness({}, { journal: claimOnly });
   await assert.rejects(run(never), /crash/);
-  assert.equal(unpresented.load('d1').presented, false);
+  assert.equal(isPresented(unpresented.load('d1')), false);
   never.clock.advance();
   let neverReads = 0;
   const stale = harness(
@@ -3044,8 +3167,14 @@ test('P4a-10 one valid dispatch.decided after append and judgments; reused stage
   aborted.abort();
   const cancelledSeen = collector();
   const cancelled = harness({}, { weft: cancelledSeen.port });
-  await run(cancelled, aborted.signal);
-  assert.deepEqual(cancelledSeen.records, []);
+  const cancelledDecision = await run(cancelled, aborted.signal);
+  // A journaled cancel is an append winner: it emits one dispatch.decided and no judgment.
+  assert.deepEqual(cancelledSeen.records, [dispatchDecided(cancelledDecision, [], cancelledSeen.port, 1)]);
+  assert.equal(cancelledSeen.records[0]!.fields['status'], 'paused');
+  for (const record of cancelledSeen.records) assert.equal(validateRecord(record).ok, true);
+  // A repeated abort appends nothing, so it emits nothing.
+  await run(harness({}, { journal: cancelled.journal, weft: cancelledSeen.port }), aborted.signal);
+  assert.equal(cancelledSeen.records.length, 1);
 });
 
 test('P4a-11 asks and pauses emit, including extraction-only ambiguity with empty judgments', async () => {
@@ -3358,7 +3487,8 @@ test('P4b-8. stages and counter precede shadow, results precede claim', async ()
   const storage = new MemoryDispatchJournal();
   const journal: DispatchJournal = {
     load: (id) => storage.load(id),
-    checkpoint: (cp) => storage.checkpoint(cp),
+    ask: (id, a, cp) => storage.ask(id, a, cp),
+    record: (id, a, cp) => storage.record(id, a, cp),
     claim: (id, intent, cp) => {
       assert.equal(cp?.shadow?.length, 4);
       assert.deepEqual(storage.load(id).checkpoint?.shadow, cp?.shadow);
@@ -3393,13 +3523,13 @@ test('P4b-9. lost results are unrecorded and never re-asked; replay is pure', as
   let fail = true;
   const journal: DispatchJournal = {
     load: (id) => storage.load(id),
-    checkpoint: (cp) => {
+    ...onStageWrite(storage, (cp, write) => {
       if (fail && cp.shadow !== null) {
         fail = false;
         throw new Error('shadow write');
       }
-      storage.checkpoint(cp);
-    },
+      write();
+    }),
     claim: (id, intent, cp) => storage.claim(id, intent, cp),
     acquire: (id, token) => storage.acquire(id, token),
     release: (id, token) => storage.release(id, token),
@@ -3438,9 +3568,14 @@ test('P4b-11. cancellation and stale shadow windows preserve admission gates', a
       assert.deepEqual(shadowReasons(result), Array(4).fill('stale_answer'));
       assert.equal(result.decide1.rule, 'hold.admission');
     } else {
-      assert.equal(sink.records.length, 0);
-      assert.equal(h.journal.load('d1').decisions.length, 0);
+      // The cancel is journaled and emitted once; the shadow round stays unrecorded and in flight.
+      assert.deepEqual(
+        sink.records.filter((record) => record.kind === 'dispatch.decided').map((record) => record.fields['status']),
+        ['paused'],
+      );
+      assert.deepEqual(h.journal.load('d1').decisions, [result]);
       assert.equal(h.journal.load('d1').checkpoint?.shadow, null);
+      assert.deepEqual(h.journal.load('d1').slot, { phase: 'open', ask: { stage: 'window', ask: 1 } });
       const resume = harness({}, { journal: h.journal, request: makeRequest({ resume: true }) });
       const resumed = await run(resume);
       assert.equal(shadowCalls(resume).length, 0);
@@ -3597,9 +3732,9 @@ test('P4b-12. tampered extracts reject replay before any effect or copied text',
       const writes: unknown[] = [];
       const journal: DispatchJournal = {
         ...forgedJournal(forged),
-        checkpoint: (entry) => {
+        ...onStageWrite(null, (entry, _write) => {
           writes.push(entry);
-        },
+        }),
         claim: (...args) => {
           writes.push(args);
           return false;
@@ -3677,7 +3812,7 @@ test('P4b-14. schemas, Weft shadow evidence and text exclusion', async () => {
   const oldDecision = { ...live, schema: 'dispatch.decision@2' } as unknown as DispatchDecision;
   const journal = {
     ...forgedJournal(h.journal.load('d1').checkpoint!),
-    load: () => ({ checkpoint: null, decisions: [oldDecision], attempt: null, presented: false }),
+    load: () => ({ checkpoint: null, decisions: [oldDecision], slot: { phase: 'open' as const, ask: null } }),
   };
   await assert.rejects(run(harness({}, { journal })), /schema/);
 });
@@ -3779,25 +3914,30 @@ test('P4b-9/11. counter-write failures and pre-shadow aborts make no shadow call
     const journal: DispatchJournal = {
       ...forgedJournal(null as unknown as DispatchCheckpoint),
       load: (id) => storage.load(id),
-      checkpoint: (cp) => {
+      ...onStageWrite(storage, (cp, write) => {
         if (cp.asks.shadow === 1) {
           if (!abort) throw new Error('counter write');
-          storage.checkpoint(cp);
+          write();
           controller.abort();
           return;
         }
-        storage.checkpoint(cp);
-      },
+        write();
+      }),
       claim: () => {
         claims++;
         return false;
       },
+      append: (decision, options) => storage.append(decision, options),
     };
     const h = harness({}, { journal });
     if (abort) assert.equal((await run(h, controller.signal)).reason, 'cancelled');
     else await assert.rejects(run(h), /counter write/);
     assert.equal(shadowCalls(h).length + h.dispatchCalls.length + claims, 0);
-    assert.equal(storage.load('d1').decisions.length, 0);
+    // Only the abort journals a decision: its cancel.
+    assert.deepEqual(
+      storage.load('d1').decisions.map((decision) => decision.reason),
+      abort ? ['cancelled'] : [],
+    );
   }
 });
 
@@ -3893,7 +4033,8 @@ test('P4b-10. every shadow admission failure leaves the live dispatch projection
 function delegate(journal: DispatchJournal): DispatchJournal {
   return {
     load: (id) => journal.load(id),
-    checkpoint: (cp) => journal.checkpoint(cp),
+    ask: (id, a, cp) => journal.ask(id, a, cp),
+    record: (id, a, cp) => journal.record(id, a, cp),
     claim: (id, intent, cp) => journal.claim(id, intent, cp),
     acquire: (id, token) => journal.acquire(id, token),
     release: (id, token) => journal.release(id, token),
@@ -3964,8 +4105,8 @@ test('P5a-fix1 invalid ceilings cannot escape shadow computation at any dispatch
           let interrupted = false;
           const journal: DispatchJournal = {
             ...delegate(storage),
-            checkpoint(cp) {
-              storage.checkpoint(cp);
+            ...onStageWrite(storage, (cp, write) => {
+              write();
               // Results are durable and roles are answered before this boundary moves.
               if (cp.shadow !== null && !interrupted) {
                 interrupted = true;
@@ -3973,7 +4114,7 @@ test('P5a-fix1 invalid ceilings cannot escape shadow computation at any dispatch
                 if (path === 'cancel') controller.abort();
                 if (path === 'crash resume') throw new Error('crash after shadow results');
               }
-            },
+            }),
             claim(id, intent, cp) {
               claims.push(structuredClone(intent));
               return storage.claim(id, intent, cp);
@@ -4060,7 +4201,8 @@ test('P5a-fix2 invalid ambiguity on stale and cancellation boundaries is absent 
           assert.equal(fact(decision, 'residual_ambiguity'), null);
           assert.equal(decision.reason, path === 'stale' ? 'stale_answer' : 'cancelled');
           assert.equal(h.generateCalls.length + h.evaluateCalls.length + h.dispatchCalls.length + claims, 0);
-          assert.equal(storage.load('d1').decisions.length, path === 'stale' ? 1 : 0);
+          // Both boundaries now journal their decision.
+          assert.deepEqual(storage.load('d1').decisions, [decision]);
           return decision;
         }
         const baseline = await exercise(false);
@@ -4326,10 +4468,10 @@ test('P5a-11 eligibility, concurrent shadow window and atomic evidence writes', 
   let claims = 0;
   const journal: DispatchJournal = {
     ...delegate(storage),
-    checkpoint(cp) {
+    ...onStageWrite(storage, (cp, write) => {
       writes.push(structuredClone(cp));
-      storage.checkpoint(cp);
-    },
+      write();
+    }),
     claim(id, intent, cp) {
       claims++;
       assert.ok(cp?.shadow);
@@ -4430,13 +4572,13 @@ test('P5a-13 crash, outage resume, receipt resume, unconfirmed recovery and pure
     let claimed = 0;
     const failing: DispatchJournal = {
       ...delegate(store),
-      checkpoint(cp) {
+      ...onStageWrite(store, (cp, write) => {
         if (cp.asks.preflight === 1) {
           if (!abort) throw new Error('roles counter');
           controller.abort();
         }
-        store.checkpoint(cp);
-      },
+        write();
+      }),
       claim(id, intent, cp) {
         claimed++;
         return store.claim(id, intent, cp);
@@ -4452,13 +4594,13 @@ test('P5a-13 crash, outage resume, receipt resume, unconfirmed recovery and pure
   let claims = 0;
   const journal: DispatchJournal = {
     ...delegate(storage),
-    checkpoint(cp) {
+    ...onStageWrite(storage, (cp, write) => {
       if (preflight(cp) && fail) {
         fail = false;
         throw new Error('roles write');
       }
-      storage.checkpoint(cp);
-    },
+      write();
+    }),
     claim(id, intent, cp) {
       claims++;
       return storage.claim(id, intent, cp);
@@ -4529,8 +4671,11 @@ test('P5a-14 cancellation and staleness during roles preserve the existing gates
       assert.equal(d.decide1.rule, 'hold.admission');
     } else {
       assert.equal(d.reason, 'cancelled');
-      assert.equal(h.journal.load('d1').decisions.length, 0);
-      assert.deepEqual(sink.records, []);
+      assert.deepEqual(h.journal.load('d1').decisions, [d]);
+      assert.deepEqual(
+        sink.records.filter((record) => record.kind === 'dispatch.decided').map((record) => record.fields['status']),
+        ['paused'],
+      );
       assert.equal((h.journal.load('d1').checkpoint!.asks as any).preflight, 1);
       assert.equal(preflight(h.journal.load('d1').checkpoint!), null);
       const resume = harness({}, { request: roleRequest({ resume: true }), journal: h.journal });
@@ -4714,8 +4859,7 @@ test('P5a-16 versioned records, 32 facts, bounded judgments, Weft evidence, disc
     load: () => ({
       checkpoint: cp,
       decisions: [{ ...d, schema: 'dispatch.decision@3' } as unknown as DispatchDecision],
-      attempt: null,
-      presented: false,
+      slot: { phase: 'open' as const, ask: null },
     }),
   };
   await assert.rejects(run(harness({}, { request, journal: badJournal })), /schema/);
@@ -4868,6 +5012,12 @@ class JsonJournal implements DispatchJournal {
   checkpoint(cp: DispatchCheckpoint) {
     this.inner.checkpoint(json(cp));
   }
+  ask(id: string, ask: DispatchAsk, cp: DispatchCheckpoint) {
+    return this.inner.ask(json(id), json(ask), json(cp));
+  }
+  record(id: string, ask: DispatchAsk, cp: DispatchCheckpoint) {
+    return this.inner.record(json(id), json(ask), json(cp));
+  }
   claim(id: string, intent: DispatchIntent, cp?: DispatchCheckpoint) {
     return this.inner.claim(json(id), json(intent), json(cp));
   }
@@ -4880,11 +5030,11 @@ class JsonJournal implements DispatchJournal {
   present(id: string, attempt: string) {
     return this.inner.present(json(id), json(attempt));
   }
-  append(decision: DispatchDecision, attempt?: string) {
-    return this.inner.append(json(decision), json(attempt));
+  append(decision: DispatchDecision, options?: Parameters<DispatchJournal['append']>[1]) {
+    return this.inner.append(json(decision), json(options));
   }
 }
-const JOURNALS: readonly (readonly [string, () => DispatchJournal])[] = [
+const JOURNALS: readonly (readonly [string, () => DispatchJournal & Pick<MemoryDispatchJournal, 'checkpoint'>])[] = [
   ['memory', () => new MemoryDispatchJournal()],
   ['json', () => new JsonJournal()],
 ];
@@ -4965,10 +5115,10 @@ function recording(storage: DispatchJournal = new MemoryDispatchJournal()) {
   const counts = { acquire: 0, present: 0, append: 0 };
   const journal: DispatchJournal = {
     ...delegate(storage),
-    checkpoint(cp) {
+    ...onStageWrite(storage, (cp, write) => {
       writes.push(structuredClone(cp));
-      storage.checkpoint(cp);
-    },
+      write();
+    }),
     claim(id, intent, cp) {
       claims.push(structuredClone({ intent, checkpoint: cp }));
       return storage.claim(id, intent, cp);
@@ -5000,11 +5150,11 @@ function crashOnce(
   };
   return {
     ...delegate(storage),
-    checkpoint(cp) {
+    ...onStageWrite(storage, (cp, write) => {
       if (armed && at === 'counter' && cp.asks.preflight === 1 && cp.preflight === null) fire();
       if (armed && at === 'results' && cp.preflight !== null) fire();
-      storage.checkpoint(cp);
-    },
+      write();
+    }),
     claim(id, intent, cp) {
       if (armed && at === 'claim') fire();
       const won = storage.claim(id, intent, cp);
@@ -5036,10 +5186,10 @@ function assertCrashInvariants(storage: DispatchJournal, ledger: ReturnType<type
   const terminal = loaded.decisions.filter((d) => !(d.status === 'paused' && RESUMABLE_REASONS.includes(d.reason)));
   assert.ok(terminal.length <= 1, `${label}: at most one terminal decision`);
   const retired = 'd1:attempt:1';
-  if (loaded.attempt !== retired) {
+  if (attemptOf(loaded) !== retired) {
     assert.equal(storage.present('d1', retired), false, `${label}: retired present`);
     const last = loaded.decisions.at(-1);
-    if (last !== undefined) assert.equal(storage.append(last, retired), false, `${label}: retired append`);
+    if (last !== undefined) assert.equal(storage.append(last, { attempt: retired }), false, `${label}: retired append`);
   }
 }
 /** Projection of every consequential effect, for byte comparison with P5a. */
@@ -5349,7 +5499,7 @@ test('P5b-11 crash at each boundary never loses or duplicates a child, on memory
       };
       const a = harness({}, { request: roleRequest(), journal: holder, spawn: ledger.port });
       await assert.rejects(run(a), /crash after present true/);
-      assert.equal(store.load('d1').attempt, 'd1:attempt:1');
+      assert.equal(attemptOf(store.load('d1')), 'd1:attempt:1');
       const d = await run(resumeCall(store, ledger));
       assert.deepEqual(
         [d.reason, ledger.calls.length, store.load('d1').decisions.length],
@@ -5705,8 +5855,7 @@ test('P5b-13 dispatch.checkpoint@5 and dispatch.decision@6 records; foreign vers
       load: () => ({
         checkpoint: cp,
         decisions: [{ ...d, ...patch } as unknown as DispatchDecision],
-        attempt: null,
-        presented: false,
+        slot: { phase: 'open' as const, ask: null },
       }),
     };
     await assert.rejects(run(harness({}, { request: roleRequest(), journal, spawn: neverSpawn })), error);
@@ -5790,11 +5939,13 @@ test('P5b-15 cancellation and staleness around claim and ports.spawn', async () 
       },
     };
     const d = await run(harness({}, { request: roleRequest(), journal, spawn: ledger.port }), controller.signal);
-    assert.deepEqual([d.reason, ledger.calls.length, storage.load('d1').decisions.length], ['cancelled', 0, 0]);
+    assert.deepEqual([d.reason, ledger.calls.length], ['cancelled', 0]);
+    assert.deepEqual(storage.load('d1').decisions, [d]);
+    assert.equal(storage.load('d1').slot.phase, 'claimed');
     const resumed = await run(resumeCall(storage, ledger));
     assert.deepEqual([resumed.status, ledger.calls.length], ['dispatched', 1]);
   }
-  // Abort during ports.spawn: the caller's signal is passed; unappended; resume goes settlement first.
+  // Abort during ports.spawn: the caller's signal is passed; journaled unconfirmed; resume goes settlement first.
   {
     const controller = new AbortController();
     const ledger = spawnLedger();
@@ -5810,9 +5961,10 @@ test('P5b-15 cancellation and staleness around claim and ports.spawn', async () 
     assert.equal(passed, controller.signal);
     const loaded = h.journal.load('d1');
     assert.deepEqual(
-      [d.reason, loaded.decisions.length, loaded.attempt, loaded.presented],
-      ['cancelled', 0, null, true],
+      [d.reason, loaded.decisions.length, attemptOf(loaded), isPresented(loaded)],
+      ['dispatch_unconfirmed', 1, null, true],
     );
+    assert.deepEqual(loaded.decisions, [d]);
     const resumed = await run(resumeCall(h.journal, ledger));
     assert.deepEqual([resumed.status, ledger.calls.length, ledger.settlements.length], ['dispatched', 1, 1]);
   }
@@ -5949,4 +6101,50 @@ test('P5b-18 no catch-all encloses a plan builder; preflightFor is the only call
   const builder = /\nfunction preflightFor\([\s\S]*?\n\}\n/.exec(source);
   assert.ok(builder, 'preflightFor is a named function');
   assert.match(builder[0], /\bpreflightPlan\(/);
+});
+
+/** A test hook on stage writes: `write` lands the ask or record where the hook calls it; null storage refuses both. */
+function onStageWrite(
+  storage: DispatchJournal | null,
+  hook: (cp: DispatchCheckpoint, write: () => void) => void,
+): Pick<DispatchJournal, 'ask' | 'record'> {
+  return {
+    ask: (id, a, cp) => {
+      let result: ReturnType<DispatchJournal['ask']> = null;
+      hook(cp, () => (result = storage === null ? null : storage.ask(id, a, cp)));
+      return result;
+    },
+    record: (id, a, cp) => {
+      let result = false;
+      hook(cp, () => (result = storage !== null && storage.record(id, a, cp)));
+      return result;
+    },
+  };
+}
+
+test('P5c2 concurrent resumes join one re-ask; the record loser adopts it and never mints another', async () => {
+  const first = harness({ route: { mode: 'outage' } });
+  const outage = await run(first);
+  assert.equal(outage.reason, 'decision_unavailable');
+  const gate = deferred();
+  const resume = makeRequest({ resume: true });
+  const a = harness(
+    { gate: { match: (id) => id === 'd1:route:e2', promise: gate.promise } },
+    { journal: first.journal, request: resume },
+  );
+  const pending = run(a);
+  await waitUntil(() => a.evaluateCalls.some((request) => request.site === 'loop.route'));
+  assert.deepEqual(first.journal.load('d1').slot, { phase: 'open', ask: { stage: 'route', ask: 2 } });
+  const b = harness({}, { journal: first.journal, request: resume });
+  const won = await run(b);
+  gate.release();
+  const lost = await pending;
+  assert.equal(won.status, 'dispatched');
+  assert.deepEqual(lost, won);
+  const routeIds = [...a.evaluateCalls, ...b.evaluateCalls]
+    .filter((request) => request.site === 'loop.route')
+    .map((request) => request.request_id);
+  assert.deepEqual(routeIds, ['d1:route:e2', 'd1:route:e2']);
+  assert.deepEqual(first.journal.load('d1').decisions, [outage, won]);
+  assert.equal(a.dispatchCalls.length + b.dispatchCalls.length, 1);
 });

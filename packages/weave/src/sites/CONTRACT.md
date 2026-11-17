@@ -43,8 +43,8 @@ for the existing P4 gate. `decideDispatch` composes intake, D1 and D2; it may
 present a dispatch intent only after an accepted observation, and only through
 the injected idempotent dispatch port. The intent is checkpointed before the
 call. An unconfirmed intent is returned as paused and is not re-presented
-without an explicit resume; cancellation appends nothing; a stale or mismatched
-answer pauses. The outcome table is now `decide1.rules@3` (below). A mapped receipt yields a
+without an explicit resume; cancellation is a journaled slot transition (P5c2
+below); a stale or mismatched answer pauses. The outcome table is now `decide1.rules@3` (below). A mapped receipt yields a
 `dispatch.decision@6` entry, and fresh site observations become Weft judgment
 records followed by one `dispatch.decided` after the final append. The
 composition never writes `routed_input@1`.
@@ -160,8 +160,8 @@ status and reason, never the rule or band.
 A composition freshness gate may stop before the next site has a record. Its
 trace projects `stale_answer` / paused onto the last recorded stage's code
 facts, preserving all underlying stage observations. Pre-ask cancellation has
-an unjournaled ask-user / paused / cancelled trace with no judgments; intake's
-unasked decided-by fact remains null. Cancellation appends and emits nothing.
+a journaled ask-user / paused / cancelled trace with no judgments; intake's
+unasked decided-by fact remains null. A journaled cancel emits like any append (P5c2).
 These boundary traces are pure projections of the checkpoint and the explicit
 code-gate reason, rather than a reinterpretation of a site answer.
 
@@ -171,14 +171,16 @@ and dispatch reference only for an intent, links only this call's judgments,
 and cites every used stage request as inference-request evidence. Reused
 stages are evidence without invented judgment links. Invalid derived ids omit
 the projection without truncation or changing the decision. Sequences advance
-synchronously per port before delivery. Replay, a losing compare-and-set, and
-cancellation emit nothing; a failing sink cannot change the decision.
+synchronously per port before delivery. Replay and a losing compare-and-set
+emit nothing; a failing sink cannot change the decision.
 
 Merged P3a's single-use attempts, `present()` compare-and-set and settlement
 precedence are preserved: elapsed time cannot retire an attempt, unresolved
 settlements remain nonterminal `dispatch_unconfirmed`, and only an append
 winner emits. A same-id concurrent loser reports the journal's owner without
-appending a second entry. Durable-journal follow-up #397 remains separate.
+appending a second entry. Durable-journal follow-up #397 remains separate; a
+durable journal stores the P5c2 slot below in the same record as its checkpoint
+and decisions.
 
 ## WV-S1 P4b Decide-1 shadow judgments
 
@@ -546,6 +548,56 @@ child's real facts with its sealed kind's band, never projecting a stage. Childr
 intake, triage, shadow or preflight stage; only a satisfied generator records D2. Weft is
 unchanged: `decided_by` is `rule` or `route`, `tier` stays implement-only. Production still
 injects no `ports.spawn`, enforced by a source scan (`spawn-default-off.test.ts`).
+
+## WV-S1 P5c2 dispatch slot and journaled cancellation
+
+Each decision id is one `DispatchSlot`, stored in the same record as its checkpoint
+and decisions (#411, audit findings 1 and 5). Phases: `open` (no intent; at most
+one stage `ask` in flight), `claimed` (intent bound, nothing presented since its
+last receipt), `presented` (presented, no receipt journaled since) and `terminal`
+(a non-resumable decision; it keeps the intent it closed). `load` returns
+`{ checkpoint, decisions, slot }`; the separate `attempt` and `presented` load
+fields are gone. Every write is a compare-and-set on the slot: `ask`, `record`,
+`claim`, `acquire`, `present` and `append`. `append` also requires
+`decision.entry` to be one past the stored count, and writes the checkpoint it is
+given in the same record while the slot is open with no ask in flight. Dispatch
+writes no checkpoint any other way; `MemoryDispatchJournal.checkpoint` only seeds
+fixtures.
+
+Stage asks (`intake`, `triage`, `route`, child D2's `route`, and the shadow and
+preflight `window`) are taken by `ask` and ended by `record`. A crashed, cancelled
+or concurrent asker cannot be told apart without leases, so a caller that would
+ask a stage whose ask is in flight joins that ask id instead of minting the next
+one; the first `record` wins, and a loser adopts the recorded stage without
+re-asking it, even under `resume`. Joining stops a second ask number, not a
+second site call under the same stage request id. The window keeps P4b's rule
+that lost results are never re-asked: a round already in flight when a call
+loads is recorded as lost (unrecorded results), while a round taken during a
+call is joined as its stored ask bound it, never re-carving the plan budget or
+terms.
+
+A local abort is a transition on the stored slot, appended and emitted like any
+other decision. Open or claimed, it appends `paused / cancelled` (`hold.paused`),
+which is resumable: an open slot keeps its in-flight ask for a resume to join,
+and a claimed one presents the identical intent again. Presented, it appends
+`paused / dispatch_unconfirmed` with a null receipt and the claimed plan's rule,
+so it is never read as "the effect did not happen", is never re-asked, and
+resolves only through the settlement; a presented slot never journals
+`cancelled`. When the record an abort would append equals the latest stored
+decision apart from `entry`, nothing is appended and the stored decision is
+returned. A caller that does not hold the live attempt, or whose append another
+writer beat, appends nothing and reports what the journal holds.
+
+So a caller observes a stored decision, or the pure projection of the stored
+slot: `yielded`'s unconfirmed replay of a claim with nothing appended since, and
+a child's transient `dependency_pending`. `cancelled` is never a projection.
+`transitionDispatch(request, checkpoint, 'cancelled', entry, evidence)` rebuilds a
+journaled pre-present cancel (a claimed intent is re-derived first); a presented
+cancel replays from a null receipt. One exhaustive `resumeOf(reason)` decides
+resumability for the journal, `yielded` and the child join (a cancelled read
+child keeps its generator pending). A presented intent whose settlement is unset
+and whose state is unmoved is presented again; the port's idempotence by
+`dispatch_id` is then its settlement (#397).
 
 ## WV-S1 P2a typed extraction before intake
 

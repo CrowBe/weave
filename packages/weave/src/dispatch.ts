@@ -246,11 +246,42 @@ export interface DispatchDecision {
   readonly preflight: RoleObservation | null;
 }
 
+/** The stage an in-flight ask belongs to; `window` is the shadow and preflight round. */
+export type DispatchAskStage = 'intake' | 'triage' | 'route' | 'window';
+export interface DispatchAsk {
+  readonly stage: DispatchAskStage;
+  /** The checkpoint's ask counter for the stage once taken; the window counts its shadow and preflight asks together. */
+  readonly ask: number;
+}
+
 /**
- * Each decision id is a single-writer state machine: open → claimed(intent) | terminal(decision),
- * then claimed(intent) → terminal(a decision owning that intent). A resumable pause keeps the state.
- * `claim`, `acquire` and `append` are each one atomic compare-and-set on that state: they return
- * false or null and write nothing when another writer already moved it, and the loser fails closed.
+ * The single phase of one decision id, stored in the same record as its checkpoint and decisions:
+ * - `open`: no intent claimed. `ask` is the one stage ask in flight, if any; only `record` ends it.
+ * - `claimed`: the intent is bound and nothing is presented since its last receipt.
+ * - `presented`: an attempt presented the intent and no receipt has been journaled since.
+ * - `terminal`: a non-resumable decision is journaled; `intent` is the claimed intent it closed, if any.
+ * `attempt` is the live attempt on a claimed or presented intent.
+ */
+export type DispatchSlot =
+  | { readonly phase: 'open'; readonly ask: DispatchAsk | null }
+  | { readonly phase: 'claimed'; readonly intent: DispatchIntent; readonly attempt: string | null }
+  | { readonly phase: 'presented'; readonly intent: DispatchIntent; readonly attempt: string | null }
+  | { readonly phase: 'terminal'; readonly intent: DispatchIntent | null };
+
+/** What one `ask` did: took the next ask, joined the one already in flight, or was refused. */
+export type DispatchAskResult = 'taken' | 'joined' | null;
+
+/**
+ * Each decision id is one single-writer slot (see `DispatchSlot`): open → claimed(intent) | terminal,
+ * claimed → presented → claimed (a receipt) | terminal (a decision owning that intent). A resumable
+ * pause keeps the phase. `ask`, `record`, `claim`, `acquire`, `present` and `append` are each one
+ * atomic compare-and-set on that slot: they return false or null and write nothing when another
+ * writer already moved it, and the loser fails closed.
+ *
+ * At most one stage ask is in flight per decision id. Elapsed time cannot tell a crashed or
+ * cancelled asker from a live one, so any caller that would ask that stage joins the in-flight ask
+ * id instead of minting the next one, and the first `record` of it wins. Joining does not stop a
+ * second site call under the same stage request id; it stops a second ask number.
  *
  * Intent identity is not writer ownership. A claimed intent is presented and settled only by the
  * dispatch attempt that holds it: `acquire` issues that attempt, and while it is live no other
@@ -261,37 +292,48 @@ export interface DispatchDecision {
  * retired: it never appends, releases or supersedes again, and is never reissued.
  *
  * A holder records `present` before it calls the port. Until a decision with a receipt is appended
- * the intent stays presented, so recovery reconciles it through the settlement and never pauses it stale.
+ * the slot stays presented, so recovery reconciles it through the settlement and never pauses it
+ * stale, and a presented intent is never journaled as `cancelled`.
  */
 export interface DispatchJournal {
+  /** The slot, its checkpoint (carrying a claimed intent) and its decisions, read from one record. */
   load(decision_id: string): {
     readonly checkpoint: DispatchCheckpoint | null;
     readonly decisions: readonly DispatchDecision[];
-    /** The live attempt on the claimed intent, if any. */
-    readonly attempt: string | null;
-    /** An attempt presented the claimed intent and no receipt has been appended since. */
-    readonly presented: boolean;
+    readonly slot: DispatchSlot;
   };
-  /** Ignored once the decision is claimed or terminal: its owner's stage evidence stands. */
-  checkpoint(entry: DispatchCheckpoint): void;
-  /** open → claimed: bind the intent to the exact stage snapshot the plan was derived from. */
+  /**
+   * open → open(ask): `taken` writes `entry`, whose counter for the stage is `ask.ask`, only when no
+   * ask is in flight and the stored counter is one below it. `joined`, writing nothing, when that
+   * exact ask is already in flight. Otherwise null.
+   */
+  ask(decision_id: string, ask: DispatchAsk, entry: DispatchCheckpoint): DispatchAskResult;
+  /** open(ask) → open: records the asked stage in `entry`, only while that exact ask is in flight. */
+  record(decision_id: string, ask: DispatchAsk, entry: DispatchCheckpoint): boolean;
+  /** open → claimed, with no ask in flight: bind the intent to the exact stage snapshot the plan was derived from. */
   claim(decision_id: string, intent: DispatchIntent, checkpoint?: DispatchCheckpoint): boolean;
   /**
-   * A fresh attempt on a claimed, non-terminal intent; null while another attempt is live. With
+   * A fresh attempt on a claimed or presented intent; null while another attempt is live. With
    * `supersedes`, only while that attempt is still the live one: it is retired and replaced. Only
    * recovery holding the port's settlement of the decision supersedes.
    */
   acquire(decision_id: string, supersedes?: string): string | null;
   /** Retires the attempt if it is still the live one; any other attempt is left alone. */
   release(decision_id: string, attempt: string): void;
-  /** Marks the claimed intent presented, only while `attempt` is the live one; false writes nothing. */
+  /** claimed | presented → presented, only while `attempt` is the live one; false writes nothing. */
   present(decision_id: string, attempt: string): boolean;
   /**
-   * open → open | terminal for an intent-less decision; claimed → claimed | terminal for its owner:
-   * the live attempt's own id, or a tokenless caller when none is live. A successful append retires
-   * the live attempt.
+   * Appends `decision` as the next entry (`decision.entry` must be one past the stored count).
+   * open → open | terminal for an intent-less decision, writing `checkpoint` with it when no ask is
+   * in flight and leaving an in-flight ask in place; claimed | presented → claimed (a receipt) |
+   * presented (none) | terminal for its owner: the live attempt's own id, or a tokenless caller when
+   * none is live. A successful append retires the live attempt. Appending `cancelled` to a presented
+   * slot is a defect and throws.
    */
-  append(decision: DispatchDecision, attempt?: string): boolean;
+  append(
+    decision: DispatchDecision,
+    options?: { readonly attempt?: string; readonly checkpoint?: DispatchCheckpoint },
+  ): boolean;
 }
 
 /** Never receives a spawn intent. */
@@ -343,7 +385,6 @@ type Plan = { readonly trace: Decide1Trace } & (
     }
 );
 
-const RESUMABLE = new Set<DispatchReason>(['decision_unavailable', 'budget', 'dispatch_unconfirmed']);
 const THREAD_RELATIONS = ['continue_thread', 'steer', 'queue', 'interrupt'] as const;
 
 function isThreadRelation(choice: SiteChoice): choice is (typeof THREAD_RELATIONS)[number] {
@@ -356,92 +397,167 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
-export class MemoryDispatchJournal implements DispatchJournal {
-  private readonly checkpoints = new Map<string, DispatchCheckpoint>();
-  /** Claimed intents are monotonic: a later stage checkpoint never erases one. */
-  private readonly intents = new Map<string, DispatchIntent>();
-  /** The live attempt per decision. */
-  private readonly attempts = new Map<string, string>();
-  private readonly retired = new Set<string>();
-  private readonly issued = new Map<string, number>();
-  /** Presented intents awaiting a journaled receipt. */
-  private readonly presented = new Set<string>();
-  private entries: DispatchDecision[] = [];
+/** The stage counter an ask advances; the window counts its shadow and preflight asks together. */
+function askCount(checkpoint: DispatchCheckpoint | null, stage: DispatchAskStage): number {
+  if (checkpoint === null) return 0;
+  return stage === 'window' ? checkpoint.asks.shadow + checkpoint.asks.preflight : checkpoint.asks[stage];
+}
 
+function sameAsk(left: DispatchAsk | null, right: DispatchAsk): boolean {
+  return left !== null && left.stage === right.stage && left.ask === right.ask;
+}
+
+const OPEN: DispatchSlot = { phase: 'open', ask: null };
+
+interface SlotRecord {
+  slot: DispatchSlot;
+  checkpoint: DispatchCheckpoint | null;
+  decisions: DispatchDecision[];
+  /** Attempts issued so far; ids are `${decision_id}:attempt:${n}`, so an ended id is never live again. */
+  issued: number;
+}
+
+/** The slot after `decision` appends: a receipt ends presentation, and any append retires the attempt. */
+function nextSlot(slot: DispatchSlot, decision: DispatchDecision): DispatchSlot {
+  if (!resumable(decision)) return { phase: 'terminal', intent: intentOf(slot) };
+  switch (slot.phase) {
+    case 'open':
+    case 'terminal':
+      return slot;
+    case 'claimed':
+    case 'presented':
+      return { phase: decision.receipt === null ? slot.phase : 'claimed', intent: slot.intent, attempt: null };
+    default: {
+      const never: never = slot;
+      return never;
+    }
+  }
+}
+
+function intentOf(slot: DispatchSlot): DispatchIntent | null {
+  return slot.phase === 'open' ? null : slot.intent;
+}
+
+function attemptOf(slot: DispatchSlot): string | null {
+  return slot.phase === 'claimed' || slot.phase === 'presented' ? slot.attempt : null;
+}
+
+export class MemoryDispatchJournal implements DispatchJournal {
+  private readonly records = new Map<string, SlotRecord>();
+
+  private open(decision_id: string): SlotRecord {
+    let record = this.records.get(decision_id);
+    if (record === undefined) {
+      record = { slot: OPEN, checkpoint: null, decisions: [], issued: 0 };
+      this.records.set(decision_id, record);
+    }
+    return record;
+  }
   load(decision_id: string) {
-    const checkpoint = this.checkpoints.get(decision_id);
-    const intent = this.intents.get(decision_id);
+    const record = this.records.get(decision_id);
+    if (record === undefined) return { checkpoint: null, decisions: [], slot: OPEN };
+    const { checkpoint, slot } = record;
+    const intent = intentOf(slot);
     return {
-      checkpoint:
-        checkpoint === undefined ? null : clone(intent === undefined ? checkpoint : { ...checkpoint, intent }),
-      decisions: clone(this.entries.filter((entry) => entry.decision_id === decision_id)),
-      attempt: this.attempts.get(decision_id) ?? null,
-      presented: this.presented.has(decision_id),
+      checkpoint: checkpoint === null ? null : clone(intent === null ? checkpoint : { ...checkpoint, intent }),
+      decisions: clone(record.decisions),
+      slot: clone(slot),
     };
   }
-  private terminal(decision_id: string): boolean {
-    const latest = this.entries.filter((entry) => entry.decision_id === decision_id).at(-1);
-    return latest !== undefined && !isResumable(latest);
-  }
+  /**
+   * Seeds the stage evidence of an open slot with no ask in flight, e.g. a fixture or an import.
+   * Not part of `DispatchJournal`: dispatch writes a checkpoint only through `ask`, `record`,
+   * `claim` and `append`.
+   */
   checkpoint(entry: DispatchCheckpoint): void {
-    if (this.intents.has(entry.decision_id) || this.terminal(entry.decision_id)) return;
-    this.checkpoints.set(entry.decision_id, clone(entry));
+    const record = this.open(entry.decision_id);
+    if (record.slot.phase === 'open' && record.slot.ask === null) record.checkpoint = clone({ ...entry, intent: null });
   }
-  claim(decision_id: string, intent: DispatchIntent, snapshot?: DispatchCheckpoint): boolean {
-    if (this.intents.has(decision_id) || this.terminal(decision_id)) return false;
-    const current = this.checkpoints.get(decision_id);
-    if (current !== undefined && current.intent !== null) return false;
-    const bound = snapshot ?? current;
-    if (bound !== undefined && bound.decision_id !== decision_id)
-      throw new Error('claimed intent belongs to another decision');
-    this.intents.set(decision_id, clone(intent));
-    if (bound !== undefined) this.checkpoints.set(decision_id, clone({ ...bound, intent }));
+  ask(decision_id: string, ask: DispatchAsk, entry: DispatchCheckpoint): DispatchAskResult {
+    if (entry.decision_id !== decision_id) throw new Error('checkpoint belongs to another decision');
+    const record = this.open(decision_id);
+    const { slot } = record;
+    if (slot.phase !== 'open') return null;
+    if (slot.ask !== null) return sameAsk(slot.ask, ask) ? 'joined' : null;
+    if (askCount(entry, ask.stage) !== ask.ask || askCount(record.checkpoint, ask.stage) >= ask.ask) return null;
+    record.checkpoint = clone({ ...entry, intent: null });
+    record.slot = { phase: 'open', ask: { stage: ask.stage, ask: ask.ask } };
+    return 'taken';
+  }
+  record(decision_id: string, ask: DispatchAsk, entry: DispatchCheckpoint): boolean {
+    if (entry.decision_id !== decision_id) throw new Error('checkpoint belongs to another decision');
+    const record = this.records.get(decision_id);
+    if (record === undefined || record.slot.phase !== 'open' || !sameAsk(record.slot.ask, ask)) return false;
+    if (askCount(entry, ask.stage) !== ask.ask) return false;
+    record.checkpoint = clone({ ...entry, intent: null });
+    record.slot = OPEN;
     return true;
   }
-  /** True only for the live attempt itself; a retired id never matches again. */
-  private live(decision_id: string, attempt: string | undefined): boolean {
-    return attempt !== undefined && !this.retired.has(attempt) && this.attempts.get(decision_id) === attempt;
+  claim(decision_id: string, intent: DispatchIntent, snapshot?: DispatchCheckpoint): boolean {
+    const record = this.open(decision_id);
+    if (record.slot.phase !== 'open' || record.slot.ask !== null) return false;
+    const bound = snapshot ?? record.checkpoint;
+    if (bound !== null && bound.decision_id !== decision_id)
+      throw new Error('claimed intent belongs to another decision');
+    if (bound !== null) record.checkpoint = clone({ ...bound, intent: null });
+    record.slot = { phase: 'claimed', intent: clone(intent), attempt: null };
+    return true;
   }
-  private retire(decision_id: string): void {
-    const live = this.attempts.get(decision_id);
-    if (live === undefined) return;
-    this.retired.add(live);
-    this.attempts.delete(decision_id);
+  /** True only for the live attempt itself; an ended id never matches again. */
+  private live(record: SlotRecord | undefined, attempt: string | undefined): boolean {
+    return record !== undefined && attempt !== undefined && attemptOf(record.slot) === attempt;
+  }
+  private holding(record: SlotRecord, attempt: string | null): void {
+    const { slot } = record;
+    if (slot.phase === 'claimed' || slot.phase === 'presented')
+      record.slot = { phase: slot.phase, intent: slot.intent, attempt };
   }
   acquire(decision_id: string, supersedes?: string): string | null {
-    if (!this.intents.has(decision_id) || this.terminal(decision_id)) return null;
-    if (supersedes === undefined ? this.attempts.has(decision_id) : !this.live(decision_id, supersedes)) return null;
-    this.retire(decision_id);
-    const count = (this.issued.get(decision_id) ?? 0) + 1;
-    this.issued.set(decision_id, count);
-    const attempt = `${decision_id}:attempt:${count}`;
-    if (this.retired.has(attempt)) throw new Error('an attempt id was reissued');
-    this.attempts.set(decision_id, attempt);
+    const record = this.records.get(decision_id);
+    if (record === undefined) return null;
+    const { slot } = record;
+    if (slot.phase !== 'claimed' && slot.phase !== 'presented') return null;
+    if (supersedes === undefined ? slot.attempt !== null : !this.live(record, supersedes)) return null;
+    record.issued += 1;
+    const attempt = `${decision_id}:attempt:${record.issued}`;
+    this.holding(record, attempt);
     return attempt;
   }
   release(decision_id: string, attempt: string): void {
-    if (this.live(decision_id, attempt)) this.retire(decision_id);
+    const record = this.records.get(decision_id);
+    if (this.live(record, attempt)) this.holding(record!, null);
   }
   present(decision_id: string, attempt: string): boolean {
-    if (!this.live(decision_id, attempt)) return false;
-    this.presented.add(decision_id);
+    const record = this.records.get(decision_id);
+    if (record === undefined || !this.live(record, attempt)) return false;
+    const slot = record.slot as Extract<DispatchSlot, { readonly phase: 'claimed' | 'presented' }>;
+    record.slot = { phase: 'presented', intent: slot.intent, attempt };
     return true;
   }
-  append(decision: DispatchDecision, attempt?: string): boolean {
+  append(
+    decision: DispatchDecision,
+    options: { readonly attempt?: string; readonly checkpoint?: DispatchCheckpoint } = {},
+  ): boolean {
+    const { attempt, checkpoint } = options;
     const id = decision.decision_id;
-    if (this.terminal(id)) return false;
-    if (attempt !== undefined && !this.live(id, attempt)) return false;
-    const claimed = this.intents.get(id);
-    if (claimed === undefined) {
+    if (checkpoint !== undefined && checkpoint.decision_id !== id)
+      throw new Error('checkpoint belongs to another decision');
+    const record = this.open(id);
+    const { slot } = record;
+    if (slot.phase === 'terminal') return false;
+    if (decision.entry !== record.decisions.length + 1) return false;
+    if (attempt !== undefined && !this.live(record, attempt)) return false;
+    if (slot.phase === 'open') {
       if (decision.intent !== null) throw new Error('appended decision names an intent that was never claimed');
-    } else if (decision.intent === null || !sameRecord(decision.intent, claimed)) {
-      return false;
-    } else if (attempt === undefined && this.attempts.has(id)) {
-      return false;
+      if (checkpoint !== undefined && slot.ask === null) record.checkpoint = clone({ ...checkpoint, intent: null });
+    } else {
+      if (decision.intent === null || !sameRecord(decision.intent, slot.intent)) return false;
+      if (attempt === undefined && slot.attempt !== null) return false;
+      if (slot.phase === 'presented' && decision.reason === 'cancelled')
+        throw new Error('a presented intent is never journaled as cancelled');
     }
-    this.entries.push(clone(decision));
-    if (decision.receipt !== null) this.presented.delete(id);
-    this.retire(id);
+    record.decisions.push(clone(decision));
+    record.slot = nextSlot(slot, decision);
     return true;
   }
 }
@@ -1543,7 +1659,7 @@ function readBytes(child: DispatchChild): number | null {
 
 /** The same resumability that governs dispatch terminality governs an edge (D-P5c1-3). */
 function edgeStatus(decision: DispatchDecision | null): 'pending' | 'satisfied' | 'unmet' {
-  if (decision === null || isResumable(decision)) return 'pending';
+  if (decision === null || resumable(decision)) return 'pending';
   return decision.status === 'dispatched' ? 'satisfied' : 'unmet';
 }
 function joinOf(statuses: readonly ('pending' | 'satisfied' | 'unmet')[]): 'pending' | 'satisfied' | 'unmet' {
@@ -1962,13 +2078,68 @@ function loopAsk(
   };
 }
 
-function shouldAsk(reason: SiteReason | 'ambiguous_reference' | null, resume: boolean): boolean {
-  if (reason === null) return true;
-  return resume && (reason === 'decision_unavailable' || reason === 'cancelled');
+/**
+ * How an explicit resume moves a paused decision with this reason. `reask`: the stage that
+ * paused is asked again. `represent`: the claimed intent is presented again (a pre-present cancel,
+ * or a budget refusal receipt). `settle`: the presented intent resolves only through its
+ * settlement. `closed`: the decision is terminal.
+ */
+type Resume = 'reask' | 'represent' | 'settle' | 'closed';
+
+function resumeOf(reason: DispatchReason): Resume {
+  switch (reason) {
+    case 'decision_unavailable':
+      return 'reask';
+    case 'cancelled':
+    case 'budget':
+      return 'represent';
+    case 'dispatch_unconfirmed':
+      return 'settle';
+    case 'accepted':
+    case 'stale_answer':
+    case 'mismatched_answer':
+    case 'invalid_answer':
+    case 'missing_confidence':
+    case 'low_confidence':
+    case 'low_top_p':
+    case 'no_answer':
+    case 'extract_missing':
+    case 'invalid_extract':
+    case 'structural_origin_missing':
+    case 'ambiguous_reference':
+    case 'no_target':
+    case 'irreversible':
+    case 'approval_required':
+    case 'refused':
+    case 'dependency_pending':
+    case 'unmet_dependency':
+      return 'closed';
+    default: {
+      const never: never = reason;
+      return never;
+    }
+  }
 }
 
-function isResumable(decision: DispatchDecision): boolean {
-  return decision.status === 'paused' && RESUMABLE.has(decision.reason);
+/** A paused decision whose reason an explicit resume can move; every other decision is terminal. */
+function resumable(decision: DispatchDecision): boolean {
+  return decision.status === 'paused' && resumeOf(decision.reason) !== 'closed';
+}
+
+/**
+ * Whether this call asks a stage. An in-flight ask for it is always joined, whatever `resume` says.
+ * Unrecorded, it is asked; recorded, only an explicit resume re-asks a stage whose own
+ * observation paused (an outage, or a site that saw the cancellation).
+ */
+function asksStage(
+  slot: DispatchSlot,
+  stage: DispatchAskStage,
+  reason: SiteReason | 'ambiguous_reference' | null,
+  resume: boolean,
+): boolean {
+  if (slot.phase === 'open' && slot.ask?.stage === stage) return true;
+  if (reason === null) return true;
+  return resume && (reason === 'decision_unavailable' || reason === 'cancelled');
 }
 
 function assertRuleTable(decision: DispatchDecision): void {
@@ -2081,7 +2252,7 @@ function emit(port: WeftPort | undefined, observations: readonly SiteObservation
   for (const record of records) deliver(port, record);
 }
 
-/** A local abort: unappended `paused / cancelled`; it never proves a presented effect did not happen. */
+/** The pre-present cancel record: `paused / cancelled`, no receipt; pure in the checkpoint. */
 function cancellation(request: DispatchRequest, checkpoint: DispatchCheckpoint, entry: number): DispatchDecision {
   const decider = checkpoint.child === null ? lastDecider(checkpoint) : childDecider(checkpoint);
   return {
@@ -2106,6 +2277,57 @@ function cancellation(request: DispatchRequest, checkpoint: DispatchCheckpoint, 
   };
 }
 
+/**
+ * A local abort is a transition on the stored slot, journaled like any other decision. Before
+ * present (open or claimed) it appends `paused / cancelled`; an open slot keeps its in-flight ask,
+ * which a resume joins. Once presented it appends `paused / dispatch_unconfirmed`, so the abort
+ * never reads as "the effect did not happen" and resolves only through the settlement. When the
+ * record the abort would append equals the latest stored one, nothing is appended and the stored
+ * decision is returned. A caller that cannot append (another attempt is live, or another writer
+ * moved the slot) reports what the journal holds instead.
+ */
+function cancel(
+  request: DispatchRequest,
+  checkpoint: DispatchCheckpoint,
+  ports: DispatchPorts,
+  journal: DispatchJournal,
+  fresh: readonly SiteObservation[],
+  claimed: Plan | null,
+  attempt?: string,
+): DispatchDecision {
+  const loaded = journal.load(request.request_id);
+  const entry = loaded.decisions.length + 1;
+  const latest = loaded.decisions.at(-1) ?? null;
+  let decision: DispatchDecision;
+  switch (loaded.slot.phase) {
+    case 'terminal':
+      return yielded(request, journal);
+    case 'open':
+    case 'claimed':
+      decision = cancellation(request, checkpoint, entry);
+      break;
+    case 'presented':
+      if (claimed === null || checkpoint.intent === null) return yielded(request, journal);
+      decision = makeDecision(
+        request,
+        checkpoint,
+        entry,
+        claimed,
+        checkpoint.intent,
+        null,
+        'paused',
+        'dispatch_unconfirmed',
+      );
+      break;
+    default: {
+      const never: never = loaded.slot;
+      return never;
+    }
+  }
+  if (latest !== null && sameRecord({ ...decision, entry: latest.entry }, latest)) return clone(latest);
+  return settle(request, decision, ports, journal, fresh, attempt, checkpoint);
+}
+
 function stalePlan(request: DispatchRequest, checkpoint: DispatchCheckpoint): Plan {
   return planFor(gateTrace(request, checkpoint, 'stale_answer'), checkpoint, request);
 }
@@ -2123,10 +2345,13 @@ function finishFinal(
   if (plan.kind !== 'final') throw new Error('finishFinal needs a final plan');
   const intent = plan.reason === 'stale_answer' ? checkpoint.intent : null;
   const decision = makeDecision(request, checkpoint, entry, plan, intent, null, plan.status, plan.reason);
-  return settle(request, decision, ports, journal, fresh, attempt);
+  return settle(request, decision, ports, journal, fresh, attempt, checkpoint);
 }
 
-/** Append is the compare-and-set that ends this call; only its winner emits. */
+/**
+ * Append is the compare-and-set that ends this call; only its winner emits. Before claim the
+ * checkpoint the decision was built from is written in the same record.
+ */
 function settle(
   request: DispatchRequest,
   decision: DispatchDecision,
@@ -2134,38 +2359,64 @@ function settle(
   journal: DispatchJournal,
   fresh: readonly SiteObservation[],
   attempt?: string,
+  checkpoint?: DispatchCheckpoint,
 ): DispatchDecision {
-  if (!journal.append(decision, attempt)) return yielded(request, journal);
+  const options = {
+    ...(attempt === undefined ? {} : { attempt }),
+    ...(checkpoint === undefined ? {} : { checkpoint }),
+  };
+  if (!journal.append(decision, options)) return yielded(request, journal);
   emit(ports.weft, fresh, decision);
   return clone(decision);
 }
 
 /**
- * What a compare-and-set loser can observe of one decision id, from a single `load`. Every stored
- * decision is observed as stored. Only a claimed intent with no decision appended since its claim
- * has nothing stored to report; an intent-less pause predates the claim. P5c2's `Slot` owns this.
+ * What a reader observes of one decision id, from a single `load`, by an exhaustive switch on the
+ * slot. Every stored decision is observed as stored. A claimed or presented slot with no decision
+ * appended since its claim has nothing stored to report; an intent-less pause predates the claim.
+ * An open slot with nothing stored is open, or awaiting the ask in flight. Impossible slot and
+ * decision pairs throw.
  */
 type Observed =
   | { readonly phase: 'stored'; readonly decision: DispatchDecision }
   | { readonly phase: 'claimed'; readonly checkpoint: DispatchCheckpoint }
+  | { readonly phase: 'awaiting'; readonly ask: DispatchAsk }
   | { readonly phase: 'open' };
 
 function observe(loaded: ReturnType<DispatchJournal['load']>): Observed {
   const latest = loaded.decisions.at(-1);
-  const checkpoint = loaded.checkpoint;
-  const claimed = checkpoint !== null && checkpoint.intent !== null;
-  if (latest !== undefined && (!claimed || !isResumable(latest) || latest.intent !== null))
-    return { phase: 'stored', decision: latest };
-  if (claimed) return { phase: 'claimed', checkpoint };
-  return { phase: 'open' };
+  const { slot, checkpoint } = loaded;
+  switch (slot.phase) {
+    case 'terminal':
+      if (latest === undefined || resumable(latest))
+        throw new Error('a terminal dispatch slot needs a terminal decision');
+      return { phase: 'stored', decision: latest };
+    case 'open':
+      if (latest !== undefined && (latest.intent !== null || !resumable(latest)))
+        throw new Error('an open dispatch slot holds only resumable intent-less decisions');
+      if (latest !== undefined) return { phase: 'stored', decision: latest };
+      return slot.ask === null ? { phase: 'open' } : { phase: 'awaiting', ask: slot.ask };
+    case 'claimed':
+    case 'presented':
+      if (checkpoint === null || checkpoint.intent === null)
+        throw new Error('a claimed dispatch slot needs its checkpoint');
+      if (latest !== undefined && !resumable(latest))
+        throw new Error('a claimed dispatch slot holds a terminal decision');
+      if (latest !== undefined && latest.intent !== null) return { phase: 'stored', decision: latest };
+      return { phase: 'claimed', checkpoint };
+    default: {
+      const never: never = slot;
+      return never;
+    }
+  }
 }
 
 /**
  * Another writer won the decision's compare-and-set, or holds its claimed intent's live attempt.
- * Fail closed on our own plan and report what the journal holds: a terminal decision, else the
- * stored post-claim pause, else the unconfirmed replay of an intent claimed after any stored pause,
- * else the latest pre-claim pause. Nothing is written. Once a post-claim decision is stored, the
- * returned entry never runs ahead of the journal: a live attempt appends its own next entry.
+ * Fail closed on our own plan and report what the journal holds: a stored decision, else the pure
+ * unconfirmed projection of an intent claimed after any stored pause. `cancelled` is never a
+ * projection. Nothing is written. Once a post-claim decision is stored, the returned entry never
+ * runs ahead of the journal: a live attempt appends its own next entry.
  */
 function yielded(request: DispatchRequest, journal: DispatchJournal): DispatchDecision {
   const loaded = journal.load(request.request_id);
@@ -2185,6 +2436,7 @@ function yielded(request: DispatchRequest, journal: DispatchJournal): DispatchDe
       const evidence = request.child === undefined ? undefined : liveEvidence(journal, owner, checkpoint.child);
       return transitionDispatch(owner, checkpoint, null, loaded.decisions.length + 1, evidence);
     }
+    case 'awaiting':
     case 'open':
       throw new Error('the journal refused this decision without recording its owner');
     default: {
@@ -2262,12 +2514,12 @@ async function recoverAttempt(
   fresh: readonly SiteObservation[],
 ): Promise<DispatchDecision> {
   const loaded = journal.load(request.request_id);
-  const live = loaded.attempt;
+  const live = attemptOf(loaded.slot);
   const entry = loaded.decisions.length + 1;
   if (live === null || ports.settlement === undefined) return yielded(request, journal);
-  if (signal?.aborted) return cancellation(request, checkpoint, entry);
+  if (signal?.aborted) return cancel(request, checkpoint, ports, journal, fresh, plan);
   const receipt = await readSettlement(request, intent, ports, signal);
-  if (signal?.aborted) return cancellation(request, checkpoint, entry);
+  if (signal?.aborted) return cancel(request, checkpoint, ports, journal, fresh, plan);
   if (receipt === null) return yielded(request, journal);
   const attempt = journal.acquire(request.request_id, live);
   if (attempt === null) return yielded(request, journal);
@@ -2290,16 +2542,18 @@ async function dispatchIntent(
   fresh: readonly SiteObservation[],
   attempt: string,
 ): Promise<DispatchDecision> {
-  if (signal?.aborted) return cancellation(request, checkpoint, entry);
-  if (journal.load(request.request_id).presented) {
+  if (signal?.aborted) return cancel(request, checkpoint, ports, journal, fresh, plan, attempt);
+  if (journal.load(request.request_id).slot.phase === 'presented') {
     // An earlier attempt may have carried the intent out, so its settlement decides before any stale gate.
+    // Unsettled with the state unmoved, it is presented again: the port's idempotence by dispatch_id
+    // is then the settlement (#397).
     const settled = await readSettlement(request, intent, ports, signal);
-    if (signal?.aborted) return cancellation(request, checkpoint, entry);
+    if (signal?.aborted) return cancel(request, checkpoint, ports, journal, fresh, plan, attempt);
     if (settled !== null || !sameState(checkpoint, ports.now()))
       return settleReceipt(request, checkpoint, entry, plan, intent, settled, ports, journal, fresh, attempt);
   } else if (!sameState(checkpoint, ports.now()))
     return finishFinal(request, checkpoint, entry, stalePlan(request, checkpoint), ports, journal, fresh, attempt);
-  if (signal?.aborted) return cancellation(request, checkpoint, entry);
+  if (signal?.aborted) return cancel(request, checkpoint, ports, journal, fresh, plan, attempt);
   if (!journal.present(request.request_id, attempt)) return yielded(request, journal);
   let raw: unknown = null;
   try {
@@ -2312,7 +2566,8 @@ async function dispatchIntent(
     // Never put an injected exception in evidence; the receipt is null.
     raw = null;
   }
-  if (signal?.aborted) return cancellation(request, checkpoint, entry);
+  // Presented: an abort now journals the unconfirmed record and the port's answer is not trusted.
+  if (signal?.aborted) return cancel(request, checkpoint, ports, journal, fresh, plan, attempt);
   const receipt = normalizeReceipt(raw, intent);
   return settleReceipt(request, checkpoint, entry, plan, intent, receipt, ports, journal, fresh, attempt);
 }
@@ -2392,6 +2647,63 @@ function joinReads(
   return { status: joinOf(statuses), edges, reads };
 }
 
+type Round =
+  | { readonly kind: 'asked' | 'adopted'; readonly checkpoint: DispatchCheckpoint }
+  | { readonly kind: 'stopped'; readonly decision: DispatchDecision };
+
+/**
+ * One stage ask under the slot's compare-and-set: join the ask in flight for `stage`, else take
+ * the next one (`bump` advances the counter), ask it, then record the answer. A caller that loses
+ * either compare-and-set adopts the stage another caller recorded and contributes no fresh
+ * observation; it never mints another ask for it. An abort journals the pre-answer checkpoint's
+ * cancel, keeping the ask in flight for a resume to join.
+ */
+async function askRound(
+  request: DispatchRequest,
+  checkpoint: DispatchCheckpoint,
+  stage: DispatchAskStage,
+  ports: DispatchPorts,
+  journal: DispatchJournal,
+  signal: AbortSignal | undefined,
+  fresh: SiteObservation[],
+  bump: (checkpoint: DispatchCheckpoint) => DispatchCheckpoint,
+  run: (asked: DispatchCheckpoint) => Promise<{
+    readonly checkpoint: DispatchCheckpoint;
+    readonly observations: readonly SiteObservation[];
+  }>,
+  recorded: (checkpoint: DispatchCheckpoint) => boolean,
+): Promise<Round> {
+  const decision_id = request.request_id;
+  const loaded = journal.load(decision_id);
+  const flight = loaded.slot.phase === 'open' ? loaded.slot.ask : null;
+  // A joiner asks exactly what the stored ask bound: its counter, budget and terms are never re-carved.
+  const asked =
+    flight?.stage === stage && loaded.checkpoint !== null
+      ? makeCheckpoint(loaded.checkpoint, { spawn_port: checkpoint.spawn_port })
+      : bump(checkpoint);
+  const ask: DispatchAsk = { stage, ask: askCount(asked, stage) };
+  const adopt = (): Round => {
+    const now = journal.load(decision_id);
+    if (
+      now.slot.phase === 'open' &&
+      !sameAsk(now.slot.ask, ask) &&
+      now.decisions.length === loaded.decisions.length &&
+      now.checkpoint !== null &&
+      askCount(now.checkpoint, stage) >= ask.ask &&
+      recorded(now.checkpoint)
+    )
+      return { kind: 'adopted', checkpoint: makeCheckpoint(now.checkpoint, { spawn_port: checkpoint.spawn_port }) };
+    return { kind: 'stopped', decision: yielded(request, journal) };
+  };
+  if (journal.ask(decision_id, ask, asked) === null) return adopt();
+  if (signal?.aborted) return { kind: 'stopped', decision: cancel(request, asked, ports, journal, fresh, null) };
+  const answer = await run(asked);
+  if (signal?.aborted) return { kind: 'stopped', decision: cancel(request, asked, ports, journal, fresh, null) };
+  if (!journal.record(decision_id, ask, answer.checkpoint)) return adopt();
+  fresh.push(...answer.observations);
+  return { kind: 'asked', checkpoint: answer.checkpoint };
+}
+
 /**
  * Re-entry of one verified child (P5c1). A read dispatches directly; a generator joins its sealed
  * reads, then uses D2 for its tier. Both share the claim, attempt, settlement and append path.
@@ -2411,11 +2723,11 @@ async function decideChild(
   if (loaded.checkpoint !== null && !sameRecord(captured.terms, loaded.checkpoint.child_terms))
     throw new Error('child terms differ from the retained child evidence');
   verifySaved(captured, loaded.decisions, journal);
-  const latest = loaded.decisions.at(-1) ?? null;
-  const entry = loaded.decisions.length + 1;
-  if (latest !== null && (!isResumable(latest) || captured.resume !== true)) return clone(latest);
-
   const resume = captured.resume === true;
+  const observed = observe(loaded);
+  if (observed.phase === 'stored' && (!resumable(observed.decision) || !resume)) return clone(observed.decision);
+  const entry = loaded.decisions.length + 1;
+
   let checkpoint =
     loaded.checkpoint ??
     initialCheckpoint(captured, ports, {
@@ -2433,7 +2745,7 @@ async function decideChild(
   // A claimed or reused child is re-derived before the abort check and before any reuse.
   const claimed = checkpoint.intent === null ? null : claimedPlan(captured, checkpoint, checkpoint.intent, evidence);
   if (claimed === null && loaded.checkpoint !== null) replayChild(captured, checkpoint, evidence);
-  if (signal?.aborted) return cancellation(captured, checkpoint, entry);
+  if (signal?.aborted) return cancel(captured, checkpoint, ports, journal, [], claimed?.plan ?? null);
 
   if (claimed !== null) {
     // Never rejoined, re-routed or re-planned: the identical intent goes through recovery.
@@ -2463,42 +2775,104 @@ async function decideChild(
       checkpoint = makeCheckpoint(checkpoint, { child });
       evidence = { parent: evidence.parent, reads: join.reads };
       if (join.status === 'unmet') {
-        // Frozen once: the terminal decision names this evidence, and later polls return it.
-        journal.checkpoint(checkpoint);
+        // Frozen once, in the record its terminal decision appends to; later polls return it.
         const plan = resolveChild(captured, checkpoint, evidence);
         return finishFinal(captured, checkpoint, entry, plan, ports, journal, fresh);
       }
     }
-    if (shouldAsk(checkpoint.route?.site.observation.reason ?? null, resume)) {
-      const ask = checkpoint.asks.route + 1;
-      checkpoint = makeCheckpoint(checkpoint, { asks: { ...checkpoint.asks, route: ask } });
-      journal.checkpoint(checkpoint);
-      if (signal?.aborted) return cancellation(captured, checkpoint, entry);
-      const decision = await decideLoopRoute(
-        loopAsk(captured, 'route', ask, checkpoint.child),
+    if (asksStage(journal.load(decision_id).slot, 'route', checkpoint.route?.site.observation.reason ?? null, resume)) {
+      const round = await askRound(
+        captured,
+        checkpoint,
+        'route',
         ports,
-        ports.now,
+        journal,
         signal,
+        fresh,
+        (base) => makeCheckpoint(base, { asks: { ...base.asks, route: base.asks.route + 1 } }),
+        async (asked) => {
+          const decision = await decideLoopRoute(
+            loopAsk(captured, 'route', asked.asks.route, asked.child),
+            ports,
+            ports.now,
+            signal,
+          );
+          return { checkpoint: makeCheckpoint(asked, { route: decision }), observations: [decision.site.observation] };
+        },
+        (stored) => stored.route !== null,
       );
-      checkpoint = makeCheckpoint(checkpoint, { route: decision });
-      if (signal?.aborted) return cancellation(captured, checkpoint, entry);
-      journal.checkpoint(checkpoint);
-      fresh.push(decision.site.observation);
+      if (round.kind === 'stopped') return round.decision;
+      checkpoint = round.checkpoint;
+      if (round.kind === 'adopted') {
+        evidence = liveEvidence(journal, captured, checkpoint.child);
+        replayChild(captured, checkpoint, evidence);
+      }
     }
   }
 
-  if (signal?.aborted) return cancellation(captured, checkpoint, entry);
+  if (signal?.aborted) return cancel(captured, checkpoint, ports, journal, fresh, null);
   const plan = resolveChild(captured, checkpoint, evidence);
   if (plan.kind === 'final') {
-    if (plan.reason === 'cancelled') return cancellation(captured, checkpoint, entry);
+    if (plan.reason === 'cancelled') return cancel(captured, checkpoint, ports, journal, fresh, null);
     return finishFinal(captured, checkpoint, entry, plan, ports, journal, fresh);
   }
   if (!sameState(checkpoint, ports.now()))
     return finishFinal(captured, checkpoint, entry, stalePlan(captured, checkpoint), ports, journal, fresh);
-  if (signal?.aborted) return cancellation(captured, checkpoint, entry);
+  if (signal?.aborted) return cancel(captured, checkpoint, ports, journal, fresh, null);
   if (!journal.claim(decision_id, plan.intent, checkpoint)) return yielded(captured, journal);
   checkpoint = makeCheckpoint(checkpoint, { intent: plan.intent });
   return attemptIntent(captured, checkpoint, entry, plan, plan.intent, ports, journal, signal, fresh);
+}
+
+/** Asks one root loop stage, or reuses and replays its recorded answer; null continues, a decision stops. */
+async function rootStage(
+  captured: DispatchRequest,
+  state: { checkpoint: DispatchCheckpoint },
+  stage: Stage,
+  resume: boolean,
+  entry: number,
+  ports: DispatchPorts,
+  journal: DispatchJournal,
+  signal: AbortSignal | undefined,
+  fresh: SiteObservation[],
+): Promise<DispatchDecision | null> {
+  const { checkpoint } = state;
+  const reason =
+    stage === 'intake' ? (checkpoint.intake?.reason ?? null) : (checkpoint[stage]?.site.observation.reason ?? null);
+  if (asksStage(journal.load(captured.request_id).slot, stage, reason, resume)) {
+    const round = await askRound(
+      captured,
+      checkpoint,
+      stage,
+      ports,
+      journal,
+      signal,
+      fresh,
+      (base) => makeCheckpoint(base, { asks: { ...base.asks, [stage]: base.asks[stage] + 1 } }),
+      async (asked) => {
+        const ask = asked.asks[stage];
+        if (stage === 'intake') {
+          const intake = await decideIntake(askIntake(captured, ask), ports, ports.now, signal);
+          return {
+            checkpoint: makeCheckpoint(asked, { intake }),
+            observations: intake.site === null ? [] : [intake.site],
+          };
+        }
+        const decide = stage === 'triage' ? decideTriage : decideLoopRoute;
+        const decision = await decide(loopAsk(captured, stage, ask), ports, ports.now, signal);
+        return { checkpoint: makeCheckpoint(asked, { [stage]: decision }), observations: [decision.site.observation] };
+      },
+      (stored) => stored[stage] !== null,
+    );
+    if (round.kind === 'stopped') return round.decision;
+    state.checkpoint = round.checkpoint;
+    if (round.kind === 'asked') return null;
+  }
+  // A reused or adopted stage steers which stage is asked next, so it must replay before it is trusted.
+  replayStage(captured, state.checkpoint, stage);
+  if (!sameState(state.checkpoint, ports.now()))
+    return finishFinal(captured, state.checkpoint, entry, stalePlan(captured, state.checkpoint), ports, journal, fresh);
+  return null;
 }
 
 export async function decideDispatch(
@@ -2520,18 +2894,14 @@ export async function decideDispatch(
   let checkpoint = loaded.checkpoint ?? initialCheckpoint(captured, ports);
   // Until claim the snapshot follows this call's composition; the claim freezes it.
   if (checkpoint.intent === null) checkpoint = makeCheckpoint(checkpoint, { spawn_port: ports.spawn !== undefined });
-  const latest = loaded.decisions.at(-1) ?? null;
   const entry = loaded.decisions.length + 1;
-
-  if (latest !== null) {
-    if (!isResumable(latest)) return clone(latest);
-    if (captured.resume !== true) return clone(latest);
-  }
-
   const resume = captured.resume === true;
+  const observed = observe(loaded);
+  if (observed.phase === 'stored' && (!resumable(observed.decision) || !resume)) return clone(observed.decision);
+
   // A claimed intent is re-derived before the abort check, so even a cancelled call never reports tampered evidence.
   const claimed = checkpoint.intent === null ? null : claimedPlan(captured, checkpoint, checkpoint.intent);
-  if (signal?.aborted) return cancellation(captured, checkpoint, entry);
+  if (signal?.aborted) return cancel(captured, checkpoint, ports, journal, [], claimed?.plan ?? null);
 
   if (claimed !== null) {
     const { plan, intent } = claimed;
@@ -2546,97 +2916,89 @@ export async function decideDispatch(
     return finishFinal(captured, checkpoint, entry, stalePlan(captured, checkpoint), ports, journal, []);
 
   const fresh: SiteObservation[] = [];
+  const state = { checkpoint };
+  const stopped = await rootStage(captured, state, 'intake', resume, entry, ports, journal, signal, fresh);
+  if (stopped !== null) return stopped;
 
-  if (shouldAsk(checkpoint.intake?.reason ?? null, resume)) {
-    const ask = checkpoint.asks.intake + 1;
-    checkpoint = makeCheckpoint(checkpoint, { asks: { ...checkpoint.asks, intake: ask } });
-    journal.checkpoint(checkpoint);
-    if (signal?.aborted) return cancellation(captured, checkpoint, entry);
-    const intake = await decideIntake(askIntake(captured, ask), ports, ports.now, signal);
-    checkpoint = makeCheckpoint(checkpoint, { intake });
-    if (signal?.aborted) return cancellation(captured, checkpoint, entry);
-    journal.checkpoint(checkpoint);
-    if (intake.site !== null) fresh.push(intake.site);
-  } else {
-    // A reused stage steers which stage is asked next, so it must replay before it is trusted.
-    replayStage(captured, checkpoint, 'intake');
-    if (!sameState(checkpoint, ports.now()))
-      return finishFinal(captured, checkpoint, entry, stalePlan(captured, checkpoint), ports, journal, fresh);
-  }
-
-  const intake = checkpoint.intake;
+  const intake = state.checkpoint.intake;
   if (intake === null) throw new Error('intake was not recorded');
   if (intake.status === 'transition' && intake.choice === 'new_thread') {
-    if (shouldAsk(checkpoint.triage?.site.observation.reason ?? null, resume)) {
-      const ask = checkpoint.asks.triage + 1;
-      checkpoint = makeCheckpoint(checkpoint, { asks: { ...checkpoint.asks, triage: ask } });
-      journal.checkpoint(checkpoint);
-      if (signal?.aborted) return cancellation(captured, checkpoint, entry);
-      const decision = await decideTriage(loopAsk(captured, 'triage', ask), ports, ports.now, signal);
-      checkpoint = makeCheckpoint(checkpoint, { triage: decision });
-      if (signal?.aborted) return cancellation(captured, checkpoint, entry);
-      journal.checkpoint(checkpoint);
-      fresh.push(decision.site.observation);
-    } else {
-      replayStage(captured, checkpoint, 'triage');
-      if (!sameState(checkpoint, ports.now()))
-        return finishFinal(captured, checkpoint, entry, stalePlan(captured, checkpoint), ports, journal, fresh);
-    }
-
-    const triage = checkpoint.triage;
+    const stoppedTriage = await rootStage(captured, state, 'triage', resume, entry, ports, journal, signal, fresh);
+    if (stoppedTriage !== null) return stoppedTriage;
+    const triage = state.checkpoint.triage;
     if (triage === null) throw new Error('triage was not recorded');
     if (triage.site.status === 'transition' && triage.site.observation.accepted && triage.site.choice === 'implement') {
-      if (shouldAsk(checkpoint.route?.site.observation.reason ?? null, resume)) {
-        const ask = checkpoint.asks.route + 1;
-        checkpoint = makeCheckpoint(checkpoint, { asks: { ...checkpoint.asks, route: ask } });
-        journal.checkpoint(checkpoint);
-        if (signal?.aborted) return cancellation(captured, checkpoint, entry);
-        const decision = await decideLoopRoute(loopAsk(captured, 'route', ask), ports, ports.now, signal);
-        checkpoint = makeCheckpoint(checkpoint, { route: decision });
-        if (signal?.aborted) return cancellation(captured, checkpoint, entry);
-        journal.checkpoint(checkpoint);
-        fresh.push(decision.site.observation);
-      } else {
-        replayStage(captured, checkpoint, 'route');
-        if (!sameState(checkpoint, ports.now()))
-          return finishFinal(captured, checkpoint, entry, stalePlan(captured, checkpoint), ports, journal, fresh);
-      }
+      const stoppedRoute = await rootStage(captured, state, 'route', resume, entry, ports, journal, signal, fresh);
+      if (stoppedRoute !== null) return stoppedRoute;
     }
   }
+  checkpoint = state.checkpoint;
 
-  if (signal?.aborted) return cancellation(captured, checkpoint, entry);
+  if (signal?.aborted) return cancel(captured, checkpoint, ports, journal, fresh, null);
   let plan = resolveOutcome(captured, checkpoint);
   if (plan.kind === 'final') {
-    if (plan.reason === 'cancelled') return cancellation(captured, checkpoint, entry);
+    if (plan.reason === 'cancelled') return cancel(captured, checkpoint, ports, journal, fresh, null);
     return finishFinal(captured, checkpoint, entry, plan, ports, journal, fresh);
   }
 
-  const shadowDue = checkpoint.asks.shadow === 0 && SHADOW_RULES.has(plan.trace.rule);
+  // A window round is asked at most once, and lost results are never re-asked (P4b). A round already
+  // in flight when this call loaded belongs to a crashed, cancelled or concurrent caller, which look
+  // the same, so it is recorded as lost and that caller's own record then adopts it. A round taken
+  // while this call ran is joined exactly as its stored ask bound it, never re-carved.
+  const flight = journal.load(decision_id);
+  const windowAsk = flight.slot.phase === 'open' && flight.slot.ask?.stage === 'window' ? flight.slot.ask : null;
+  const inherited = windowAsk !== null && sameAsk(loaded.slot.phase === 'open' ? loaded.slot.ask : null, windowAsk);
+  if (inherited && flight.checkpoint !== null) {
+    const lost = makeCheckpoint(flight.checkpoint, { spawn_port: checkpoint.spawn_port });
+    if (!journal.record(decision_id, windowAsk, lost)) return yielded(captured, journal);
+    checkpoint = lost;
+    const unasked = resolveOutcome(captured, checkpoint);
+    if (unasked.kind === 'final') return finishFinal(captured, checkpoint, entry, unasked, ports, journal, fresh);
+    plan = unasked;
+  }
+  const bound = windowAsk !== null && !inherited ? flight.checkpoint : null;
+  const shadowDue =
+    bound !== null
+      ? bound.asks.shadow === 1 && bound.shadow === null
+      : checkpoint.asks.shadow === 0 && SHADOW_RULES.has(plan.trace.rule);
   const rolesDue =
-    checkpoint.asks.preflight === 0 && PREFLIGHT_RULES.has(plan.trace.rule) && (captured.targets?.length ?? 0) > 0;
+    bound !== null
+      ? bound.asks.preflight === 1 && bound.preflight === null
+      : checkpoint.asks.preflight === 0 && PREFLIGHT_RULES.has(plan.trace.rule) && (captured.targets?.length ?? 0) > 0;
   if (shadowDue || rolesDue) {
-    checkpoint = {
-      ...checkpoint,
-      asks: {
-        ...checkpoint.asks,
-        shadow: shadowDue ? 1 : checkpoint.asks.shadow,
-        preflight: rolesDue ? 1 : checkpoint.asks.preflight,
+    const round = await askRound(
+      captured,
+      checkpoint,
+      'window',
+      ports,
+      journal,
+      signal,
+      fresh,
+      (base) => ({
+        ...base,
+        asks: {
+          ...base.asks,
+          shadow: shadowDue ? 1 : base.asks.shadow,
+          preflight: rolesDue ? 1 : base.asks.preflight,
+        },
+        // The plan budget and the terms children narrow are bound with the ask; a resume never re-carves them.
+        preflight_budget: rolesDue ? preflightBudget(captured) : base.preflight_budget,
+        preflight_terms: rolesDue ? detachTerms(captured.terms) : base.preflight_terms,
+      }),
+      async (asked) => {
+        const [shadow, preflight] = await Promise.all([
+          shadowDue ? askShadow(shadowAsk(captured, asked), ports, ports.now, signal) : asked.shadow,
+          rolesDue ? askRoles(roleAsk(captured, asked), ports, ports.now, signal) : asked.preflight,
+        ]);
+        return { checkpoint: { ...asked, shadow, preflight }, observations: [] };
       },
-      // The plan budget and the terms children narrow are bound with the ask; a resume never re-carves them.
-      preflight_budget: rolesDue ? preflightBudget(captured) : checkpoint.preflight_budget,
-      preflight_terms: rolesDue ? detachTerms(captured.terms) : checkpoint.preflight_terms,
-    };
-    journal.checkpoint(checkpoint);
-    if (signal?.aborted) return cancellation(captured, checkpoint, entry);
-    const [shadow, preflight] = await Promise.all([
-      shadowDue ? askShadow(shadowAsk(captured, checkpoint), ports, ports.now, signal) : checkpoint.shadow,
-      rolesDue ? askRoles(roleAsk(captured, checkpoint), ports, ports.now, signal) : checkpoint.preflight,
-    ]);
-    if (signal?.aborted) return cancellation(captured, checkpoint, entry);
-    checkpoint = { ...checkpoint, shadow, preflight };
-    journal.checkpoint(checkpoint);
+      // The record that won spent the round; its results are adopted, even lost ones.
+      () => true,
+    );
+    if (round.kind === 'stopped') return round.decision;
+    checkpoint = round.checkpoint;
     const next = resolveOutcome(captured, checkpoint);
-    // The only move a window may make is this call's role round admitting gen.route into a spawn.
+    // The only move a window may make is a role round admitting gen.route into a spawn.
     const spawned = rolesDue && plan.trace.rule === 'gen.route' && next.trace.rule === 'spawn.preflight';
     if (
       next.kind !== 'dispatch' ||
@@ -2651,7 +3013,7 @@ export async function decideDispatch(
 
   if (!sameState(checkpoint, ports.now()))
     return finishFinal(captured, checkpoint, entry, stalePlan(captured, checkpoint), ports, journal, fresh);
-  if (signal?.aborted) return cancellation(captured, checkpoint, entry);
+  if (signal?.aborted) return cancel(captured, checkpoint, ports, journal, fresh, null);
 
   let intent = checkpoint.intent;
   if (intent === null) {
@@ -2664,19 +3026,27 @@ export async function decideDispatch(
 
 /**
  * Pure replay: re-derive every recorded stage through the live pure functions (see `replayStages`),
- * then rebuild the decision from the outcome table and the receipt. A child replays only from the
+ * then rebuild the decision from the outcome table and the receipt. `'cancelled'` in place of a
+ * receipt rebuilds a journaled pre-present cancel; a post-present cancel is journaled unconfirmed
+ * and replays from a null receipt. A child replays only from the
  * explicit historical `evidence` (its root parent and frozen read snapshots), never a journal lookup.
  */
 export function transitionDispatch(
   request: DispatchRequest,
   checkpoint: DispatchCheckpoint,
-  receipt: DispatchReceipt | null,
+  receipt: DispatchReceipt | null | 'cancelled',
   entry = 1,
   evidence?: ChildEvidence,
 ): DispatchDecision {
   // Targets steer a consequential outcome, so replay screens them as `decideDispatch` does.
   validateTargets(request.targets);
   validateChild(request);
+  if (receipt === 'cancelled') {
+    // The journaled pre-present cancel: a claimed intent is re-derived first, as decide does.
+    assertCheckpoint(checkpoint);
+    if (checkpoint.intent !== null) claimedPlan(request, checkpoint, checkpoint.intent, evidence);
+    return cancellation(request, checkpoint, entry);
+  }
   const plan = resolveOutcome(request, checkpoint, evidence);
   const intent = plan.kind === 'dispatch' ? (checkpoint.intent ?? plan.intent) : null;
   if (plan.kind === 'dispatch' && checkpoint.intent !== null && !sameRecord(checkpoint.intent, plan.intent))
