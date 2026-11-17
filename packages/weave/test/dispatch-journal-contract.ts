@@ -15,6 +15,19 @@ import type {
 
 const DECISION = 'd1';
 
+type Loaded = ReturnType<DispatchJournal['load']>;
+
+/** The live attempt on a claimed or presented slot, else null. */
+export function attemptOf(loaded: Loaded): string | null {
+  const { slot } = loaded;
+  return slot.phase === 'claimed' || slot.phase === 'presented' ? slot.attempt : null;
+}
+
+/** An attempt presented the claimed intent and no receipt has been appended since. */
+export function isPresented(loaded: Loaded): boolean {
+  return loaded.slot.phase === 'presented';
+}
+
 const intent: DispatchIntent = { kind: 'capability', dispatch_id: 'd1:dispatch' };
 
 function checkpoint(decision_id: string): DispatchCheckpoint {
@@ -89,8 +102,8 @@ export function dispatchJournalContract(name: string, make: () => DispatchJourna
       assert.equal(journal.claim(DECISION, intent, checkpoint(DECISION)), true);
       const claimed = picture(journal);
       assert.deepEqual(claimed.checkpoint?.intent, intent);
-      assert.equal(claimed.attempt, null);
-      assert.equal(claimed.presented, false);
+      assert.equal(attemptOf(claimed), null);
+      assert.equal(isPresented(claimed), false);
 
       assert.equal(journal.claim(DECISION, intent, checkpoint(DECISION)), false);
       assert.equal(journal.claim(DECISION, rival, { ...checkpoint(DECISION), state_revision: 99 }), false);
@@ -121,19 +134,19 @@ export function dispatchJournalContract(name: string, make: () => DispatchJourna
       assert.equal(journal.acquire(DECISION), null);
       assert.equal(journal.acquire(DECISION, 'pending'), null);
       assert.deepEqual(picture(journal), empty);
-      assert.equal(empty.attempt, null);
+      assert.equal(attemptOf(empty), null);
       assert.deepEqual(empty.decisions, []);
 
       assert.equal(journal.claim(DECISION, intent), true);
       const live = issued(journal.acquire(DECISION));
       const held = picture(journal);
-      assert.equal(held.attempt, live);
+      assert.equal(attemptOf(held), live);
       assert.equal(journal.acquire(DECISION), null);
       assert.deepEqual(picture(journal), held);
 
       assert.equal(journal.acquire('d2'), null);
-      assert.equal(picture(journal, 'd2').attempt, null);
-      assert.equal(journal.load(DECISION).attempt, live);
+      assert.equal(attemptOf(picture(journal, 'd2')), null);
+      assert.equal(attemptOf(journal.load(DECISION)), live);
     });
 
     test('attempt ids are never reissued', () => {
@@ -153,14 +166,14 @@ export function dispatchJournalContract(name: string, make: () => DispatchJourna
       const superseded = take(journal.acquire(DECISION));
       const replacement = take(journal.acquire(DECISION, superseded));
       assert.notEqual(replacement, superseded);
-      assert.equal(journal.append(pause(1), replacement), true);
+      assert.equal(journal.append(pause(1), { attempt: replacement }), true);
       const appended = take(journal.acquire(DECISION));
-      assert.equal(journal.append(pause(2), appended), true);
+      assert.equal(journal.append(pause(2), { attempt: appended }), true);
       const again = take(journal.acquire(DECISION));
       journal.release(DECISION, again);
       const latest = take(journal.acquire(DECISION));
       assert.equal(seen.size, 6);
-      assert.equal(journal.load(DECISION).attempt, latest);
+      assert.equal(attemptOf(journal.load(DECISION)), latest);
       for (const retired of [released, superseded, replacement, appended, again]) {
         assert.equal(seen.has(retired), true);
         assert.notEqual(latest, retired);
@@ -181,13 +194,13 @@ export function dispatchJournalContract(name: string, make: () => DispatchJourna
       assert.notEqual(other, live);
       journal.release(DECISION, other);
       journal.release('d2', live);
-      assert.equal(journal.load(DECISION).attempt, live);
-      assert.equal(journal.load('d2').attempt, other);
+      assert.equal(attemptOf(journal.load(DECISION)), live);
+      assert.equal(attemptOf(journal.load('d2')), other);
 
       journal.release(DECISION, live);
-      assert.equal(journal.load(DECISION).attempt, null);
-      assert.equal(journal.load('d2').attempt, other);
-      assert.equal(journal.append(pause(1), live), false);
+      assert.equal(attemptOf(journal.load(DECISION)), null);
+      assert.equal(attemptOf(journal.load('d2')), other);
+      assert.equal(journal.append(pause(1), { attempt: live }), false);
       assert.deepEqual(journal.load(DECISION).decisions, []);
 
       const next = issued(journal.acquire(DECISION));
@@ -195,12 +208,12 @@ export function dispatchJournalContract(name: string, make: () => DispatchJourna
       journal.release(DECISION, live);
       journal.release('d2', next);
       journal.release(DECISION, other);
-      assert.equal(journal.load(DECISION).attempt, next, 'a retired attempt releases nothing');
-      assert.equal(journal.load('d2').attempt, other, 'an attempt live on another decision is left alone');
+      assert.equal(attemptOf(journal.load(DECISION)), next, 'a retired attempt releases nothing');
+      assert.equal(attemptOf(journal.load('d2')), other, 'an attempt live on another decision is left alone');
 
-      assert.equal(journal.append(pause(1, 'd2'), other), true);
-      assert.equal(journal.load('d2').attempt, null);
-      assert.equal(journal.load(DECISION).attempt, next);
+      assert.equal(journal.append(pause(1, 'd2'), { attempt: other }), true);
+      assert.equal(attemptOf(journal.load('d2')), null);
+      assert.equal(attemptOf(journal.load(DECISION)), next);
     });
 
     test('present returns false and writes nothing for a non-live or retired attempt', () => {
@@ -212,17 +225,17 @@ export function dispatchJournalContract(name: string, make: () => DispatchJourna
       assert.equal(journal.claim(DECISION, intent), true);
       const live = issued(journal.acquire(DECISION));
       const held = picture(journal);
-      assert.equal(held.presented, false);
+      assert.equal(isPresented(held), false);
       assert.equal(journal.present(DECISION, `${live}:other`), false);
       assert.equal(journal.present('d2', live), false);
       assert.deepEqual(picture(journal), held);
-      assert.equal(picture(journal, 'd2').presented, false);
+      assert.equal(isPresented(picture(journal, 'd2')), false);
       assert.deepEqual(picture(journal, 'd2').decisions, []);
 
       journal.release(DECISION, live);
       const retired = picture(journal);
-      assert.equal(retired.attempt, null);
-      assert.equal(retired.presented, false);
+      assert.equal(attemptOf(retired), null);
+      assert.equal(isPresented(retired), false);
       assert.equal(journal.present(DECISION, live), false);
       assert.deepEqual(picture(journal), retired);
 
@@ -230,10 +243,10 @@ export function dispatchJournalContract(name: string, make: () => DispatchJourna
       const again = picture(journal);
       assert.equal(journal.present(DECISION, live), false);
       assert.deepEqual(picture(journal), again);
-      assert.equal(again.attempt, next);
+      assert.equal(attemptOf(again), next);
       assert.equal(journal.present(DECISION, next), true);
-      assert.equal(journal.load(DECISION).presented, true);
-      assert.equal(journal.load(DECISION).attempt, next);
+      assert.equal(isPresented(journal.load(DECISION)), true);
+      assert.equal(attemptOf(journal.load(DECISION)), next);
       assert.deepEqual(journal.load(DECISION).decisions, []);
     });
 
@@ -241,40 +254,40 @@ export function dispatchJournalContract(name: string, make: () => DispatchJourna
       const journal = make();
       assert.equal(journal.claim(DECISION, intent), true);
       const holder = issued(journal.acquire(DECISION));
-      assert.equal(journal.load(DECISION).presented, false);
+      assert.equal(isPresented(journal.load(DECISION)), false);
       assert.equal(journal.present(DECISION, holder), true);
-      assert.equal(journal.load(DECISION).presented, true);
+      assert.equal(isPresented(journal.load(DECISION)), true);
 
       assert.equal(journal.present(DECISION, `${holder}:other`), false);
-      assert.equal(journal.append(settled(1), `${holder}:other`), false);
+      assert.equal(journal.append(settled(1), { attempt: `${holder}:other` }), false);
       assert.equal(journal.append(settled(1)), false);
       journal.release(DECISION, `${holder}:other`);
-      assert.equal(journal.load(DECISION).presented, true);
-      assert.equal(journal.load(DECISION).attempt, holder);
+      assert.equal(isPresented(journal.load(DECISION)), true);
+      assert.equal(attemptOf(journal.load(DECISION)), holder);
       assert.deepEqual(journal.load(DECISION).decisions, []);
 
       // Ending the attempt is not an append: the intent stays presented.
       journal.release(DECISION, holder);
-      assert.equal(journal.load(DECISION).presented, true);
-      assert.equal(journal.load(DECISION).attempt, null);
-      assert.equal(journal.append(settled(1), holder), false);
-      assert.equal(journal.load(DECISION).presented, true);
+      assert.equal(isPresented(journal.load(DECISION)), true);
+      assert.equal(attemptOf(journal.load(DECISION)), null);
+      assert.equal(journal.append(settled(1), { attempt: holder }), false);
+      assert.equal(isPresented(journal.load(DECISION)), true);
       assert.deepEqual(journal.load(DECISION).decisions, []);
 
       // A receipt-less decision leaves it presented. The load field clears only once a receipt is appended.
       const pausing = issued(journal.acquire(DECISION));
-      assert.equal(journal.append(pause(1), pausing), true);
-      assert.equal(journal.load(DECISION).presented, true);
-      assert.equal(journal.load(DECISION).attempt, null);
+      assert.equal(journal.append(pause(1), { attempt: pausing }), true);
+      assert.equal(isPresented(journal.load(DECISION)), true);
+      assert.equal(attemptOf(journal.load(DECISION)), null);
       assert.equal(journal.load(DECISION).decisions.length, 1);
 
       const settling = issued(journal.acquire(DECISION));
-      assert.equal(journal.append(settled(2), `${settling}:other`), false);
-      assert.equal(journal.load(DECISION).presented, true);
+      assert.equal(journal.append(settled(2), { attempt: `${settling}:other` }), false);
+      assert.equal(isPresented(journal.load(DECISION)), true);
       assert.equal(journal.load(DECISION).decisions.length, 1);
-      assert.equal(journal.append(settled(2), settling), true);
-      assert.equal(journal.load(DECISION).presented, false);
-      assert.equal(journal.load(DECISION).attempt, null);
+      assert.equal(journal.append(settled(2), { attempt: settling }), true);
+      assert.equal(isPresented(journal.load(DECISION)), false);
+      assert.equal(attemptOf(journal.load(DECISION)), null);
       assert.equal(journal.load(DECISION).decisions.length, 2);
     });
 
@@ -285,24 +298,24 @@ export function dispatchJournalContract(name: string, make: () => DispatchJourna
       const held = picture(journal);
       const wrong: DispatchIntent = { kind: 'decline', dispatch_id: 'd1:decline' };
 
-      assert.equal(journal.append(decision({ intent: wrong }), live), false);
-      assert.equal(journal.append(pause(1), `${live}:other`), false);
+      assert.equal(journal.append(decision({ intent: wrong }), { attempt: live }), false);
+      assert.equal(journal.append(pause(1), { attempt: `${live}:other` }), false);
       assert.equal(journal.append(pause(1)), false);
       assert.deepEqual(picture(journal), held);
 
-      assert.equal(journal.append(pause(1), live), true);
-      assert.equal(journal.load(DECISION).attempt, null);
+      assert.equal(journal.append(pause(1), { attempt: live }), true);
+      assert.equal(attemptOf(journal.load(DECISION)), null);
       assert.equal(journal.load(DECISION).decisions.length, 1);
-      assert.equal(journal.append(pause(2), live), false);
+      assert.equal(journal.append(pause(2), { attempt: live }), false);
       assert.equal(journal.present(DECISION, live), false);
       assert.equal(journal.acquire(DECISION, live), null);
       assert.equal(journal.load(DECISION).decisions.length, 1);
 
       const next = issued(journal.acquire(DECISION));
       assert.notEqual(next, live);
-      assert.equal(journal.append(settled(2), next), true);
-      assert.equal(journal.load(DECISION).attempt, null);
-      assert.equal(journal.append(settled(3), next), false);
+      assert.equal(journal.append(settled(2), { attempt: next }), true);
+      assert.equal(attemptOf(journal.load(DECISION)), null);
+      assert.equal(journal.append(settled(3), { attempt: next }), false);
       assert.equal(journal.present(DECISION, next), false);
       assert.equal(journal.acquire(DECISION), null);
       assert.equal(journal.load(DECISION).decisions.length, 2);
@@ -334,26 +347,108 @@ export function dispatchJournalContract(name: string, make: () => DispatchJourna
 
       const replacement = issued(journal.acquire(DECISION, live));
       assert.notEqual(replacement, live);
-      assert.equal(journal.load(DECISION).attempt, replacement);
+      assert.equal(attemptOf(journal.load(DECISION)), replacement);
       assert.deepEqual(journal.load(DECISION).decisions, []);
-      assert.equal(journal.load('d2').attempt, other);
+      assert.equal(attemptOf(journal.load('d2')), other);
 
       assert.equal(journal.acquire(DECISION, live), null);
-      assert.equal(journal.append(pause(1), live), false);
+      assert.equal(journal.append(pause(1), { attempt: live }), false);
       assert.equal(journal.present(DECISION, live), false);
       journal.release(DECISION, live);
-      assert.equal(journal.load(DECISION).attempt, replacement);
-      assert.equal(journal.load(DECISION).presented, false);
+      assert.equal(attemptOf(journal.load(DECISION)), replacement);
+      assert.equal(isPresented(journal.load(DECISION)), false);
       assert.deepEqual(journal.load(DECISION).decisions, []);
 
       journal.release(DECISION, replacement);
-      assert.equal(journal.load(DECISION).attempt, null);
+      assert.equal(attemptOf(journal.load(DECISION)), null);
       assert.equal(journal.acquire(DECISION, replacement), null);
       assert.equal(journal.acquire(DECISION, live), null);
       const fresh = issued(journal.acquire(DECISION));
-      assert.equal(journal.load(DECISION).attempt, fresh);
+      assert.equal(attemptOf(journal.load(DECISION)), fresh);
       assert.notEqual(fresh, live);
       assert.notEqual(fresh, replacement);
+    });
+
+    test('one stage ask is in flight at a time: the first ask takes it, the same ask joins, others are refused', () => {
+      const journal = make();
+      const base = checkpoint(DECISION);
+      const asked = { ...base, asks: { ...base.asks, route: 1 } };
+      const route = { stage: 'route', ask: 1 } as const;
+      assert.equal(journal.ask(DECISION, route, asked), 'taken');
+      const held = picture(journal);
+      assert.deepEqual(held.slot, { phase: 'open', ask: route });
+      assert.deepEqual(held.checkpoint, asked);
+
+      // A concurrent or recovering caller joins the same ask id; nothing is written.
+      assert.equal(journal.ask(DECISION, route, asked), 'joined');
+      // No second ask number, and no other stage, while one is in flight.
+      const second = { ...base, asks: { ...base.asks, route: 2 } };
+      assert.equal(journal.ask(DECISION, { stage: 'route', ask: 2 }, second), null);
+      const triage = { ...base, asks: { ...base.asks, triage: 1 } };
+      assert.equal(journal.ask(DECISION, { stage: 'triage', ask: 1 }, triage), null);
+      // Nothing claims while an ask is in flight.
+      assert.equal(journal.claim(DECISION, intent, asked), false);
+      assert.deepEqual(picture(journal), held);
+
+      // The first record of the ask wins; a joiner's later record is refused and writes nothing.
+      const answered = { ...asked, state_updated_at: 11 };
+      assert.equal(journal.record(DECISION, { stage: 'route', ask: 2 }, answered), false);
+      assert.equal(journal.record(DECISION, route, answered), true);
+      const recorded = picture(journal);
+      assert.deepEqual(recorded.slot, { phase: 'open', ask: null });
+      assert.deepEqual(recorded.checkpoint, answered);
+      assert.equal(journal.record(DECISION, route, { ...asked, state_updated_at: 12 }), false);
+      // A recorded ask is never taken again: a stale caller's ask of the same number is refused.
+      assert.equal(journal.ask(DECISION, route, asked), null);
+      assert.deepEqual(picture(journal), recorded);
+
+      // The next ask number is taken once the previous one is recorded.
+      const next = { ...answered, asks: { ...answered.asks, route: 2 } };
+      assert.equal(journal.ask(DECISION, { stage: 'route', ask: 2 }, next), 'taken');
+      // A counter that does not match the ask it names is refused.
+      assert.equal(make().ask(DECISION, route, base), null);
+    });
+
+    test('appends are numbered in order, keep an in-flight ask, and never journal a presented intent as cancelled', () => {
+      const journal = make();
+      const base = checkpoint(DECISION);
+      const asked = { ...base, asks: { ...base.asks, intake: 1 } };
+      const intake = { stage: 'intake', ask: 1 } as const;
+      assert.equal(journal.ask(DECISION, intake, asked), 'taken');
+      const cancelled = decision({ entry: 1, reason: 'cancelled', decided_by: 'rule', choice: 'ask_user' });
+      // An entry that is not the next one is refused.
+      assert.equal(journal.append({ ...cancelled, entry: 2 }), false);
+      // An intent-less cancel appends beside the in-flight ask, which it leaves for a resume to join;
+      // the checkpoint passed with it does not overwrite the asked one.
+      assert.equal(journal.append(cancelled, { checkpoint: base }), true);
+      assert.deepEqual(picture(journal).slot, { phase: 'open', ask: intake });
+      assert.deepEqual(picture(journal).checkpoint, asked);
+      assert.equal(journal.append(cancelled), false, 'the same entry twice is refused');
+      assert.equal(journal.ask(DECISION, intake, asked), 'joined');
+
+      // With no ask in flight, an intent-less append writes its checkpoint in the same record.
+      const fresh = make();
+      assert.equal(fresh.append(cancelled, { checkpoint: base }), true);
+      assert.deepEqual(picture(fresh).checkpoint, base);
+      assert.deepEqual(picture(fresh).slot, { phase: 'open', ask: null });
+
+      // A claimed intent is cancelled before present; once presented it never is.
+      const claimed = make();
+      assert.equal(claimed.claim(DECISION, intent, base), true);
+      assert.equal(claimed.append({ ...pause(1), reason: 'cancelled' }), true);
+      assert.deepEqual(picture(claimed).slot, { phase: 'claimed', intent, attempt: null });
+      const holder = issued(claimed.acquire(DECISION));
+      assert.equal(claimed.present(DECISION, holder), true);
+      assert.throws(() => claimed.append({ ...pause(2), reason: 'cancelled' }, { attempt: holder }), /cancelled/);
+      assert.equal(claimed.append(pause(2), { attempt: holder }), true);
+      assert.deepEqual(picture(claimed).slot, { phase: 'presented', intent, attempt: null });
+
+      // A terminal decision closes the slot and keeps the intent it closed.
+      const settling = issued(claimed.acquire(DECISION));
+      assert.equal(claimed.append(settled(3), { attempt: settling }), true);
+      assert.deepEqual(picture(claimed).slot, { phase: 'terminal', intent });
+      assert.deepEqual(picture(claimed).checkpoint?.intent, intent);
+      assert.equal(claimed.ask(DECISION, { stage: 'intake', ask: 1 }, asked), null);
     });
   });
 }

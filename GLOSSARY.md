@@ -232,6 +232,15 @@ idempotent dispatch port is called, then maps the receipt to a terminal or
 resumable decision. It never writes `routed_input@1` and never treats an
 observation as permission by itself.
 
+### Dispatch slot
+
+The single phase of one dispatch decision id, stored with its checkpoint and
+decisions: `open` (at most one stage ask in flight), `claimed`, `presented` or
+`terminal`. Every journal write is a compare-and-set on it. A local abort is a
+transition on the slot: before present it journals `paused / cancelled`; once
+presented it journals `paused / dispatch_unconfirmed` (presented-unsettled),
+which resolves only through the port's settlement.
+
 ### Parent frame
 
 The sealed `spawn.frame@1` every child brief carries: root and parent decision refs,

@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { attemptOf, isPresented } from './dispatch-journal-contract.js';
 import assert from 'node:assert/strict';
 import type {
   EvaluationOutcome,
@@ -349,7 +350,7 @@ function fact(d: { readonly decide1: { readonly facts: readonly Decide1Fact[] } 
 function untouched(journal: DispatchJournal, id: string) {
   const loaded = journal.load(id);
   assert.deepEqual(
-    [loaded.checkpoint, loaded.decisions.length, loaded.attempt, loaded.presented],
+    [loaded.checkpoint, loaded.decisions.length, attemptOf(loaded), isPresented(loaded)],
     [null, 0, null, false],
   );
 }
@@ -357,7 +358,8 @@ function untouched(journal: DispatchJournal, id: string) {
 function forged(journal: DispatchJournal, id: string, forge: (loaded: any) => any): DispatchJournal {
   return {
     load: (x) => (x === id ? forge(structuredClone(journal.load(x))) : journal.load(x)),
-    checkpoint: (cp) => journal.checkpoint(cp),
+    ask: (id, a, cp) => journal.ask(id, a, cp),
+    record: (id, a, cp) => journal.record(id, a, cp),
     claim: (x, intent, cp) => journal.claim(x, intent, cp),
     acquire: (x, s) => journal.acquire(x, s),
     release: (x, a) => journal.release(x, a),
@@ -370,10 +372,10 @@ function recording(storage: DispatchJournal) {
   const counts = { checkpoint: 0, claim: 0, acquire: 0, present: 0, append: 0 };
   const journal: DispatchJournal = {
     load: (x) => storage.load(x),
-    checkpoint: (cp) => {
+    ...onStageWrite(storage, (cp, write) => {
       counts.checkpoint++;
-      storage.checkpoint(cp);
-    },
+      write();
+    }),
     claim: (x, intent, cp) => {
       counts.claim++;
       return storage.claim(x, intent, cp);
@@ -1401,8 +1403,27 @@ test('P5c1-7 child boundaries extend hold.admission/hold.paused over real facts 
     ],
     ['paused', 'cancelled', 'hold.paused', 'tool_call', 'cancelled', 'rule', 'read'],
   );
-  untouched(s.journal, s.reads[0]!.child_ref);
+  // The child cancel is journaled on the same slot phases as a root, and replays from its checkpoint.
+  const readLoaded = s.journal.load(s.reads[0]!.child_ref);
+  assert.deepEqual(readLoaded.decisions, [read]);
+  assert.deepEqual(readLoaded.slot, { phase: 'open', ask: null });
+  const readCheckpoint = readLoaded.checkpoint!;
+  assert.deepEqual(
+    transitionDispatch(
+      childRequest(s.reads[0]!),
+      readCheckpoint,
+      'cancelled',
+      1,
+      evidenceOf(s.journal, readCheckpoint.child!),
+    ),
+    read,
+  );
+  // A cancelled read is resumable, so a generator that depends on it stays pending until it resumes.
   await runReads(s);
+  const waiting = await run(harness({}, { journal: s.journal }), childRequest(s.gen));
+  assert.equal(waiting.reason, 'dependency_pending');
+  const resumedRead = await run(harness({}, { journal: s.journal }), childRequest(s.reads[0]!, { resume: true }));
+  assert.equal(resumedRead.status, 'dispatched');
   const gen = await run(harness({}, { journal: s.journal }), childRequest(s.gen), controller.signal);
   assert.deepEqual(
     [gen.reason, gen.decide1.rule, gen.decide1.band, fact(gen, 'child.boundary'), gen.choice],
@@ -1418,10 +1439,10 @@ test('P5c1-7 child boundaries extend hold.admission/hold.paused over real facts 
   // The answer lands fresh; the state moves right after its checkpoint, before the claim.
   const moving: DispatchJournal = {
     ...forged(t.journal, '', (l) => l),
-    checkpoint: (cp) => {
-      t.journal.checkpoint(cp);
+    ...onStageWrite(t.journal, (cp, write) => {
+      write();
       if (cp.decision_id === t.gen.child_ref && cp.route !== null) clock.advance();
-    },
+    }),
   };
   const stale = await run(harness({}, { journal: moving, clock }), childRequest(t.gen));
   assert.deepEqual(
@@ -1444,7 +1465,7 @@ test('P5c1-7 child boundaries extend hold.admission/hold.paused over real facts 
 // 8. Abort, race and recovery.
 // ---------------------------------------------------------------------------------------------
 
-test('P5c1-8 abort around claim and presentation keeps D-ENG-048 semantics', async () => {
+test('P5c1-8 abort around claim and presentation is journaled on the child slot (P5c2)', async () => {
   // After claim, before present: nothing presented; resume presents once.
   {
     const s = await parentSpawn();
@@ -1460,7 +1481,21 @@ test('P5c1-8 abort around claim and presentation keeps D-ENG-048 semantics', asy
     const h = harness({}, { journal });
     const d = await run(h, childRequest(s.reads[0]!), controller.signal);
     assert.deepEqual([d.reason, d.decide1.rule, h.dispatchCalls.length], ['cancelled', 'hold.paused', 0]);
-    assert.equal(s.journal.load(s.reads[0]!.child_ref).decisions.length, 0);
+    const loaded = s.journal.load(s.reads[0]!.child_ref);
+    assert.deepEqual(loaded.decisions, [d]);
+    assert.equal(loaded.slot.phase, 'claimed');
+    assert.deepEqual(
+      transitionDispatch(
+        childRequest(s.reads[0]!),
+        loaded.checkpoint!,
+        'cancelled',
+        1,
+        evidenceOf(s.journal, loaded.checkpoint!.child!),
+      ),
+      d,
+    );
+    // Without resume, a second observer reports the same journaled cancel.
+    assert.deepEqual(await run(harness({}, { journal: s.journal }), childRequest(s.reads[0]!)), d);
     const resumed = harness({}, { journal: s.journal });
     assert.equal((await run(resumed, childRequest(s.reads[0]!, { resume: true }))).status, 'dispatched');
     assert.equal(resumed.dispatchCalls.length, 1);
@@ -1484,7 +1519,9 @@ test('P5c1-8 abort around claim and presentation keeps D-ENG-048 semantics', asy
     const d = await run(h, childRequest(s.reads[0]!), controller.signal);
     assert.equal(passed, controller.signal);
     const loaded = s.journal.load(s.reads[0]!.child_ref);
-    assert.deepEqual([d.reason, loaded.decisions.length, loaded.presented], ['cancelled', 0, true]);
+    // Presented: journaled unconfirmed, never `cancelled`; it resolves only through the settlement.
+    assert.deepEqual([d.reason, isPresented(loaded)], ['dispatch_unconfirmed', true]);
+    assert.deepEqual(loaded.decisions, [d]);
     const intent = loaded.checkpoint!.intent!;
     const resumed = harness({}, { journal: s.journal, settlement: () => completedRead(intent) as DispatchReceipt });
     const r = await run(resumed, childRequest(s.reads[0]!, { resume: true }));
@@ -1542,7 +1579,7 @@ test('P5c1-8 same-child races have one winner; distinct reads overlap; retired t
   assert.equal(sink.records.filter((r) => r.kind === 'dispatch.decided').length, 4);
   const id = s.reads[0]!.child_ref;
   assert.equal(s.journal.present(id, `${id}:attempt:1`), false);
-  assert.equal(s.journal.append(winner, `${id}:attempt:1`), false);
+  assert.equal(s.journal.append(winner, { attempt: `${id}:attempt:1` }), false);
   // Concurrent generator calls on a satisfied join: one claim, one implement dispatch.
   const gens = [0, 1].map(() => harness({}, { journal: s.journal }));
   const decided = await Promise.all(gens.map((h) => run(h, childRequest(s.gen))));
@@ -1697,7 +1734,11 @@ test('P5c1-9 each evidence class is challenged independently, on live and pure p
   }
   // Live: a tampered claimed checkpoint throws on resume, abort and terminal-return paths.
   for (const [name, checkpoint] of challenges.filter(([, c, e]) => e === evidence && c !== cp)) {
-    const live = forged(s.journal, id, () => ({ checkpoint, decisions: [], attempt: null, presented: false }));
+    const live = forged(s.journal, id, () => ({
+      checkpoint,
+      decisions: [],
+      slot: { phase: 'open' as const, ask: null },
+    }));
     const h = harness({}, { journal: live });
     await assert.rejects(run(h, childRequest(s.gen, { resume: true })), Error, name);
     const aborted = new AbortController();
@@ -1877,3 +1918,22 @@ test('P5c1-9 record versions, key order, Weft validity, append-only emission and
   const { table, ...trace } = decideBand(decide1Inputs(childRequest(s.gen), cp));
   assert.deepEqual([table, trace], [gen.rule_table, gen.decide1]);
 });
+
+/** A test hook on stage writes: `write` lands the ask or record where the hook calls it; null storage refuses both. */
+function onStageWrite(
+  storage: DispatchJournal | null,
+  hook: (cp: DispatchCheckpoint, write: () => void) => void,
+): Pick<DispatchJournal, 'ask' | 'record'> {
+  return {
+    ask: (id, a, cp) => {
+      let result: ReturnType<DispatchJournal['ask']> = null;
+      hook(cp, () => (result = storage === null ? null : storage.ask(id, a, cp)));
+      return result;
+    },
+    record: (id, a, cp) => {
+      let result = false;
+      hook(cp, () => (result = storage !== null && storage.record(id, a, cp)));
+      return result;
+    },
+  };
+}
