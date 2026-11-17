@@ -75,7 +75,7 @@ a Weft port each receives at composition (W5). Each package declares the port
 as its own type, so Weft imports nothing in-repo, none of them imports Weft,
 and Weft never reaches back into runtime, scheduling or capability-host
 concerns. Optional `@weave/weft/sqlite` stores validated, redacted projections
-in a versioned SQLite schema using Node 22's built-in driver; core never imports
+in a versioned SQLite schema using Node's built-in driver; core never imports
 it. `@weave/weft/intake` maps local OTLP/JSON through the same serializer boundary
 and creates a loopback-only listener only through an injected HTTP factory.
 Atomic batches reject identity conflicts and roll back on failure or cancellation.

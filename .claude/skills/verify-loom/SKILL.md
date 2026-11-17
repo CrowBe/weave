@@ -27,13 +27,13 @@ There is no bin, no server, no UI. "Launch" means build the package tree once; e
 H=.claude/skills/verify-loom/bin/loom-verify.mjs   # run from the repo root; it resolves paths from its own location
 ```
 
-Requirements: Node >= 22.18 (type stripping for the `.ts` examples), `npm ci` already done so `node_modules/@weave/weave` links to `packages/weave`.
+Requirements: Node >= 26 (type stripping for the `.ts` examples), `npm ci` already done so `node_modules/@weave/weave` links to `packages/weave`.
 
 ## Monorepo baseline (required before calling a change "done")
 
 This skill proves Loom behaviour. It does not replace the monorepo gate. "Done" needs real proof: the behaviour exercised for real (a live command, a trace), not green tests alone. Before calling a change done or approving its PR, do all of this (the verify-weave workflow, `/home/box/agent-data/workflows/verify-weave/SKILL.md`):
 
-1. Check out the exact head SHA under review in a **clean clone**. Use **Node 22** (`node -v` must print `v22.x`; switch with nvm/fnm if needed). The repo's engines are `>=22.18`, so a newer Node (this skill was generated on v24) runs, but record the Node 22 requirement and the version you actually used. Run `npm ci`.
+1. Check out the exact head SHA under review in a **clean clone**. Use **Node 26** (`node -v` must print `v26.x`; switch with nvm/fnm if needed). The repo's engines are `>=26`, so a newer Node runs, but record the Node 26 requirement and the version you actually used. Run `npm ci`.
 2. Run **`npm run verify` from the repo root FIRST**, before any package-specific proof, and record the result per package. Loom's parts of it are `npm run check`, `npm run test:checks`, `npm test` (includes `packages/weave/dist/test/**/*.test.js`), `npm run typecheck:examples`, `npm run task-acceptance:offline`, `npm run test:decision-sites`, `npm run test:frontier-weigh` and the example tests (`test:weigh-example`, `test:chatgpt-cli`, ...), which all import `@weave/weave`.
 3. Run **every script under `checks/`**. List the directory first; don't assume names. Each must exit 0. `$H checks` does this and records each result. The checks that cover Loom directly:
    - `checks/import-direction.mjs` (M0-C1): weave imports agentsop, agentfabric and gateway only; weave tests may also import weft, weave source never does; agentfabric never imports weave; examples and benchmarks reach weave only through `@weave/weave`.
@@ -69,7 +69,7 @@ Ready means the built package is importable; Doctor proves it. Launch refuses an
 $H doctor        # read-only; exit 0 = worth driving, exit 1 = something is off
 ```
 
-Prints JSON `{ run, ok, checks: [{ name, ok, detail }] }` and saves `doctor-<ms>.json` in the evidence dir. It checks: run state and evidence dir exist; Node satisfies `>=22.18` (and reports `is_v22`, which the baseline requires you to record); HEAD equals the SHA at launch; `packages/weave/dist/src/index.js` exists; `agentsop`, `agentfabric`, `gateway`, `weft`, `weave` `dist` are not older than their `src`/`test` (stale build); `@weave/weave` resolves into **this** checkout's `packages/weave`; `Runtime`, `ScriptedDecisionLayer`, `replay`, `recover`, `FileJournal`, `MemoryJournal`, `traceCompletenessViolations`, `stableStringify` are functions; `examples/crystallize.ts` and `benchmarks/task-acceptance/frozen-set.json` exist. Run it first, and again whenever anything looks off. A stale-dist or HEAD failure means someone edited after launch: start a new `launch`.
+Prints JSON `{ run, ok, checks: [{ name, ok, detail }] }` and saves `doctor-<ms>.json` in the evidence dir. It checks: run state and evidence dir exist; Node satisfies `>=26` (and reports `is_v26`, which the baseline requires you to record); HEAD equals the SHA at launch; `packages/weave/dist/src/index.js` exists; `agentsop`, `agentfabric`, `gateway`, `weft`, `weave` `dist` are not older than their `src`/`test` (stale build); `@weave/weave` resolves into **this** checkout's `packages/weave`; `Runtime`, `ScriptedDecisionLayer`, `replay`, `recover`, `FileJournal`, `MemoryJournal`, `traceCompletenessViolations`, `stableStringify` are functions; `examples/crystallize.ts` and `benchmarks/task-acceptance/frozen-set.json` exist. Run it first, and again whenever anything looks off. A stale-dist or HEAD failure means someone edited after launch: start a new `launch`.
 
 ## Drive
 

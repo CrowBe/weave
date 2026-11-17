@@ -121,12 +121,12 @@ async function doctor() {
   const state = existsSync(join(scratchDir(run), 'state.json')) ? loadState(run) : null;
   check('run state present', state, state ? join(scratchDir(run), 'state.json') : 'missing: launch first');
   check('evidence dir present', existsSync(evidenceDir(run)), evidenceDir(run));
-  const [major, minor] = process.versions.node.split('.').map(Number);
-  check('node satisfies engines >=22.18', major > 22 || (major === 22 && minor >= 18), process.version);
+  const [major] = process.versions.node.split('.').map(Number);
+  check('node satisfies engines >=26', major >= 26, process.version);
   check(
-    'node is v22.x (monorepo baseline requirement; informational here)',
+    'node is v26.x (monorepo baseline requirement; informational here)',
     true,
-    major === 22 ? 'yes' : `no: ${process.version} (record this in the report)`,
+    major === 26 ? 'yes' : `no: ${process.version} (record this in the report)`,
   );
   const head = git('rev-parse', 'HEAD');
   check('HEAD matches launch SHA', state && state.sha === head, `launch=${state?.sha} head=${head}`);

@@ -4,7 +4,7 @@ This directory is the maintained source for verifying the user-facing behaviour 
 
 ## Baseline preconditions
 
-- `npm ci` done; Node >= 22.18 (record whether it is v22.x, which the monorepo baseline requires).
+- `npm ci` done; Node >= 26 (record whether it is v26.x, which the monorepo baseline requires).
 - `H=.claude/skills/verify-loom/bin/loom-verify.mjs`, run from the repo root.
 - `$H launch` printed `RUN=<id>` and `READY: packages/weave built; run doctor next.`; `export LOOM_VERIFY_RUN=<id>`.
 - `$H doctor` exits 0.
