@@ -165,8 +165,8 @@ test('writable journal reads once per lock tenure and protects its cached record
   }
 });
 test('budget projection and replay binding include all evidence identities', () => {
-  assert.equal(projectedCost('1234567', 0.1), (7 * 0.1) / 1e6);
-  assert.equal(projectedCost('漢😀', 0.1), (7 * 0.1) / 1e6);
+  assert.equal(projectedCost('1234567', 0.1), (7 * 2 * 0.1) / 1e6);
+  assert.equal(projectedCost('漢😀', 0.1), (7 * 2 * 0.1) / 1e6);
   const base = {
     provider: 'p',
     model: 'm',

@@ -15,10 +15,13 @@ import { dirname, resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 export type JournalRecord = Record<string, any>;
 export const digest = (value: string): string => createHash('sha256').update(value).digest('hex');
-// Reserve one input token per UTF-8 byte rather than an average chars/token ratio.
+// Reserve two input tokens per UTF-8 byte rather than an average chars/token ratio.
+// One per byte under-reserved TypeSafe loop.route by 12% (server-side template
+// tokens), and any receipt above its reservation halts the run; 2x leaves headroom.
 // Output is free in every declared benchmark price profile.
+export const RESERVATION_TOKENS_PER_BYTE = 2;
 export const projectedCost = (serialized: string, price: number): number =>
-  (Buffer.byteLength(serialized, 'utf8') * price) / 1e6;
+  (Buffer.byteLength(serialized, 'utf8') * RESERVATION_TOKENS_PER_BYTE * price) / 1e6;
 export function replayKey(r: JournalRecord): string {
   return JSON.stringify([r.provider, r.model, r.site, r.item_id, r.set_digest, r.question_digest, r.request_digest]);
 }

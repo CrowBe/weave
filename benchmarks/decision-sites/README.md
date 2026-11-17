@@ -52,7 +52,7 @@ sites or future resumes. Only provider-level auth, credential, quota, model
 availability or CLI capability failures skip the whole provider.
 
 The default metered decision-spend ceiling is **USD 2.00 per run**. Each HTTP
-attempt reserves `serialized_request_utf8_bytes * input_price / 1e6` before
+attempt reserves `serialized_request_utf8_bytes * 2 * input_price / 1e6` before
 calling. Actual `usage.input_tokens` replaces the reservation after receipt.
 Missing usage retains that conservative estimate; skips before inference cost
 zero. A 429 without usage is therefore charged at its projection on each of its
@@ -69,7 +69,9 @@ The summary's `metered_call_cost_usd` matches `observed_usd` and excludes
 receipt-less projections.
 The OpenAI price remains unconfirmed until a credentialed run; [code](providers.ts)
 records the same source and input-only assumption. The reservation conservatively
-allows one input token per UTF-8 byte. The USD ceiling is a hard preflight bound
+allows two input tokens per UTF-8 byte: at one per byte, TypeSafe `loop.route`
+receipts ran 12% over their reservation (server-side template tokens) and
+halted run `decision-20261117002211792`. The USD ceiling is a hard preflight bound
 on this projection, but a soft bound if a provider bills server-side template
 tokens beyond the byte-based projection: at most one call can overrun. Its actual
 cost is journalled, followed by a durable `budget_stop` that halts all further
