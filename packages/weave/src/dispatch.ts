@@ -1870,13 +1870,16 @@ export function verifyChild(request: DispatchRequest, parent: ChildEvidence['par
  * destinations, no later deadline, no larger limits, no weaker quality, audit only strengthens and
  * every other setting is retained exactly. Prefix fields price a view; never the parent's.
  */
-function admitChildTerms(value: unknown, root: InferenceTerms, share: number): void {
+function admitChildTerms(value: unknown, root: InferenceTerms, share: number, kind: ChildBrief['kind']): void {
   const refuse = (why: string) => new Error(`child terms ${why}`);
   if (!isRecord(value) || Object.keys(value).some((key) => !TERM_KEYS.includes(key)))
     throw refuse('carry an unknown field');
   const terms = value as Record<string, unknown>;
   const parent = root as unknown as Record<string, unknown>;
   if (!natural(terms['cost_ceiling']) || terms['cost_ceiling'] > share) throw refuse('exceed the sealed share');
+  // P5c3: a generator's first D2 ask is charged LOOP_DECISION_REQUESTS ceilings, which must fit.
+  if (kind === 'generate' && LOOP_DECISION_REQUESTS * terms['cost_ceiling'] > share)
+    throw refuse('cannot cover a D2 ask within the sealed share');
   const destinations = terms['destinations'];
   if (
     !Array.isArray(destinations) ||
@@ -1952,12 +1955,15 @@ function covers(checkpoint: DispatchCheckpoint): boolean {
 
 /** A journaled share gate stands only where the next D2 ask really is uncovered. */
 function assertExhausted(checkpoint: DispatchCheckpoint): void {
+  // Admission covers the first ask, so a gate only ever stops a re-ask of a paused D2 answer.
+  const reason = checkpoint.route?.site.observation.reason;
   if (
     checkpoint.child?.brief.kind !== 'generate' ||
     witnessJoin(checkpoint.child) !== 'satisfied' ||
+    (reason !== 'decision_unavailable' && reason !== 'cancelled') ||
     covers(checkpoint)
   )
-    throw new Error('a share gate needs a joined generator whose share cannot cover its next D2 ask');
+    throw new Error('a share gate needs a joined generator re-asking D2 beyond its share');
 }
 
 function completedRead(receipt: unknown): receipt is Extract<DispatchReceipt, { readonly read: ReadResult }> {
@@ -2102,7 +2108,7 @@ function replayChild(request: DispatchRequest, checkpoint: DispatchCheckpoint, e
   const verified = verifyChild(request, evidence.parent);
   if (!sameRecord(request.terms, checkpoint.child_terms))
     throw new Error('child terms differ from the retained child evidence');
-  admitChildTerms(checkpoint.child_terms, verified.terms, verified.brief.share);
+  admitChildTerms(checkpoint.child_terms, verified.terms, verified.brief.share, verified.brief.kind);
   verifyWitness(checkpoint.child, verified, checkpoint.child_terms!, evidence.reads);
   const { asks } = checkpoint;
   if (
@@ -2834,7 +2840,7 @@ function verifySaved(request: DispatchRequest, decisions: readonly DispatchDecis
   if (decisions.length === 0) return;
   const parent = journal.load(request.child!.brief.frame.parent_ref);
   const verified = verifyChild(request, { checkpoint: parent.checkpoint, decisions: parent.decisions });
-  admitChildTerms(request.terms, verified.terms, verified.brief.share);
+  admitChildTerms(request.terms, verified.terms, verified.brief.share, verified.brief.kind);
   for (const decision of decisions) {
     const digested = isRecord(decision.child) ? decision.child['terms_digest'] : undefined;
     if (digested !== digest(request.terms)) throw new Error('child terms differ from the retained child evidence');
@@ -3095,7 +3101,7 @@ async function decideChild(
   assertEntry(captured, loaded);
   const parent = journal.load(captured.child!.brief.frame.parent_ref);
   const verified = verifyChild(captured, { checkpoint: parent.checkpoint, decisions: parent.decisions });
-  admitChildTerms(captured.terms, verified.terms, verified.brief.share);
+  admitChildTerms(captured.terms, verified.terms, verified.brief.share, verified.brief.kind);
   if (loaded.checkpoint !== null && !sameRecord(captured.terms, loaded.checkpoint.child_terms))
     throw new Error('child terms differ from the retained child evidence');
   verifySaved(captured, loaded.decisions, journal);
@@ -3465,7 +3471,7 @@ export function transitionDispatch(
       throw new Error('a share gate needs an unclaimed child');
     replayChild(request, checkpoint, evidence);
     const plan = planFor(childBoundaryTrace(request, checkpoint, 'share_exhausted'), checkpoint, request);
-    if (plan.kind !== 'final') throw new Error('decide1: share gate moved');
+    if (plan.kind !== 'final' || plan.reason !== 'share_exhausted') throw new Error('decide1: share gate moved');
     return makeDecision(request, checkpoint, entry, plan, null, null, plan.status, plan.reason);
   }
   const plan = resolveOutcome(request, checkpoint, evidence);

@@ -303,7 +303,13 @@ function childSet(facts: Facts): boolean {
   if (boundary != null && boundary !== 'stale_answer' && boundary !== 'cancelled' && boundary !== 'share_exhausted')
     return false;
   const dependencies = facts.get('child.dependencies');
-  if (boundary === 'share_exhausted' && (facts.get('child.kind') !== 'generate' || dependencies !== 'satisfied'))
+  // P5c3: the share gate only stops a re-ask of a paused D2 answer.
+  if (
+    boundary === 'share_exhausted' &&
+    (facts.get('child.kind') !== 'generate' ||
+      dependencies !== 'satisfied' ||
+      !['decision_unavailable', 'cancelled'].includes(facts.get('route.reason') as string))
+  )
     return false;
   const route = facts.get('route.choice');
   const recorded = route != null || facts.get('route.status') != null;

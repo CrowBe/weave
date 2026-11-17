@@ -2013,35 +2013,30 @@ test('P5c3-1 a D2 ask makes at most LOOP_DECISION_REQUESTS gateway requests', as
   assert.equal(h.generateCalls.filter(own).length + h.evaluateCalls.filter(own).length, LOOP_DECISION_REQUESTS);
 });
 
-test('P5c3-2 a share that cannot cover the first D2 ask is terminal before any ask', async () => {
+test('P5c3-2 generator terms whose first D2 ask the share cannot cover are refused before any write', async () => {
   const s = await parentSpawn();
   await runReads(s);
-  // 3 × 4 = 12 > 10: admitted (4 <= share) but uncovered.
-  const request = childRequest(s.gen, { terms: childTerms(s.gen, { cost_ceiling: 4 }) });
-  const w = collector();
-  const h = harness({}, { journal: s.journal, weft: w.port });
-  const d = await run(h, request);
-  assert.deepEqual(
-    [d.status, d.reason, d.decide1.rule, d.decide1.band, d.decided_by, d.choice, d.intent, d.receipt],
-    // A hold reports the band of the choice it withheld: the generator's sealed tier.
-    ['paused', 'share_exhausted', 'hold.share_exhausted', 'escalate_gen', 'rule', s.gen.tier, null, null],
+  // 3 × 4 = 12 > 10: within the per-request bound (4 <= share) but not one whole ask.
+  const h = harness({}, { journal: s.journal });
+  await assert.rejects(
+    run(h, childRequest(s.gen, { terms: childTerms(s.gen, { cost_ceiling: 4 }) })),
+    /cannot cover a D2 ask/,
   );
-  assert.equal(fact(d, 'child.boundary'), 'share_exhausted');
-  assert.equal(routeAsks(h, s.gen.child_ref), 0);
-  assert.equal(h.dispatchCalls.length, 0);
-  assert.equal(w.records.length, 1);
-  const loaded = s.journal.load(s.gen.child_ref);
-  assert.deepEqual([loaded.decisions.length, loaded.slot.phase, loaded.checkpoint!.asks.route], [1, 'terminal', 0]);
-  // Closed: neither a poll nor an explicit resume asks, charges or appends again.
-  for (const patch of [{}, { resume: true }]) {
-    const again = harness({}, { journal: s.journal });
-    assert.deepEqual(await run(again, { ...request, ...patch }), d);
-    assert.equal(again.effects(), 0);
-  }
-  assert.equal(s.journal.load(s.gen.child_ref).decisions.length, 1);
-  // Pure replay of the journaled gate, from explicit evidence only.
-  const cp = loaded.checkpoint!;
-  assert.deepEqual(transitionDispatch(request, cp, 'share_exhausted', 1, evidenceOf(s.journal, cp.child!)), d);
+  assert.equal(h.effects(), 0);
+  untouched(s.journal, s.gen.child_ref);
+  // Exactly covered: 3 × 3 = 9 = share. One ask leaves a sealed budget of 0, which shareBudget never spends.
+  const exact = await parentSpawn({ terms: { ...PARENT_TERMS, cost_ceiling: 9 } });
+  await runReads(exact);
+  const d = await run(
+    harness({}, { journal: exact.journal }),
+    childRequest(exact.gen, { terms: childTerms(exact.gen, { cost_ceiling: 3 }) }),
+  );
+  assert.deepEqual([d.status, (d.intent as { readonly budget: number }).budget], ['dispatched', 0]);
+  assert.deepEqual(shareBudget(0, 1)({ requested: 'flash', escalation: false, attempt: 1 }), {
+    status: 'pause',
+    reason: 'no_budget',
+    until: null,
+  });
 });
 
 test('P5c3-3 a resumed re-ask is charged again and the share is never refilled', async () => {
@@ -2059,6 +2054,14 @@ test('P5c3-3 a resumed re-ask is charged again and the share is never refilled',
     ['paused', 'share_exhausted', 'hold.share_exhausted', 'route', 2],
   );
   assert.equal(routeAsks(h, tight.gen.child_ref), 0);
+  assert.equal(fact(resumed, 'child.boundary'), 'share_exhausted');
+  // Closed: neither a poll nor another resume asks, charges or appends again.
+  for (const patch of [{}, { resume: true }]) {
+    const again = harness({}, { journal: tight.journal });
+    assert.deepEqual(await run(again, { ...request, ...patch }), resumed);
+    assert.equal(again.effects(), 0);
+  }
+  assert.equal(tight.journal.load(tight.gen.child_ref).slot.phase, 'terminal');
   const cp = tight.journal.load(tight.gen.child_ref).checkpoint!;
   assert.deepEqual([cp.asks.route, custodyOf(cp)!.charged], [1, 9]);
   assert.deepEqual(
@@ -2098,7 +2101,7 @@ test('P5c3-4 concurrent first callers join one D2 ask and are charged once', asy
   assert.ok(budgets.length >= 1 && budgets.every((b) => b === 7));
 });
 
-test('P5c3-4 an abort mid-ask keeps the charge; the resume joins it and adds none', async () => {
+test('P5c3-4 an abort mid-ask keeps the charge; the resume joins that ask number and is not charged again', async () => {
   const s = await parentSpawn();
   await runReads(s);
   const gate = deferred();
@@ -2150,7 +2153,19 @@ test('P5c3-5 a tampered remainder, share gate or ask count throws with no effect
   const open = { ...cp, intent: null };
   assert.throws(
     () => transitionDispatch(childRequest(t.gen), open, 'share_exhausted', 1, evidenceOf(t.journal, cp.child!)),
-    /share gate/,
+    /share gate|no rule matched/,
+  );
+  // Nor over a D2 answer that was not due a re-ask, even when the remainder is short.
+  const stale = structuredClone(open);
+  (stale.route!.site.observation as { reason: string }).reason = 'stale_answer';
+  assert.throws(() =>
+    transitionDispatch(
+      childRequest(t.gen),
+      { ...stale, asks: { ...stale.asks, route: 3 } },
+      'share_exhausted',
+      1,
+      evidenceOf(t.journal, cp.child!),
+    ),
   );
   // Charges past the share are a defect, not a remainder below zero.
   assert.throws(() => custodyOf({ ...cp, asks: { ...cp.asks, route: 4 } }), /exceed the sealed share/);

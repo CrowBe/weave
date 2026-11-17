@@ -563,47 +563,62 @@ holds it in custody from there down. `custodyOf(checkpoint)` is the pure
 (null on a root): `per_ask` is `LOOP_DECISION_REQUESTS × child_terms.cost_ceiling`
 (`3`: up to two extract attempts and one site evaluation, each bounded by the
 ask's own ceiling), `charged` is `asks.route × per_ask` and `remainder` is
-`share − charged`. A site observation records no spend, so each D2 ask is charged
-at its worst case when it is taken, including a cancelled, crashed or lost one.
-Custody is derived from the journaled ask counter, so it is written atomically
-with every ask, a joiner is not charged again (it reuses the ask it joins), and
-replay rebuilds it without a journal or port read. `charged > share` is a defect
-and throws. Nothing is refunded, refilled or returned on settle.
+`share − charged`. A site observation records no spend, so each D2 ask number is
+charged at its worst case when it is taken, including a cancelled, crashed or lost
+one. Custody is derived from the journaled ask counter, so it is written atomically
+with every ask and replay rebuilds it without a journal or port read. A joiner
+takes no new ask number and is not charged again. `charged > share` is a defect and
+throws. Nothing is refunded, refilled or returned on settle.
+`dispatch.checkpoint@6` marks that `asks.route` is now a charge and that a claimed
+child intent carries `budget`; its keys are unchanged.
 
-The gate is in the child's D2 `askRound`: joining the in-flight ask is free;
-taking the next ask needs `per_ask <= remainder`. A caller whose snapshot another
-writer has moved past adopts that writer's stage instead. An uncovered ask is
-never taken: the child appends `paused / share_exhausted` once, with no D2 ask,
-effect or claim, under the new row `hold.share_exhausted` (after `hold.admission`,
-before `hold.outage` and `hold.paused`). The row reads the gate code fact
-`child.boundary = share_exhausted` on a joined generator, like P5c1's gates; the
-decider is D2 if it ran, else the rule with the sealed tier. `share_exhausted` is
-terminal (`resumeOf` is `closed`): nothing could make a later resume affordable.
-This happens on the first entry when `3 × cost_ceiling > share` (admission still
-only requires `cost_ceiling <= share`), and on a resume that would re-ask D2 after
-an outage or cancelled site answer the share no longer covers.
+Admission adds one rule for a generator: `LOOP_DECISION_REQUESTS × cost_ceiling
+<= share`, so its first D2 ask is always covered. Otherwise the child terms throw
+before any write, like a ceiling above the share. The gate is in the child's D2
+`askRound`: joining the in-flight ask is free; taking the next ask needs
+`per_ask <= remainder`. A caller whose snapshot another writer has moved past
+adopts that writer's stage instead. An uncovered ask is never taken. The gate is
+reached only by a resume re-asking D2 after an outage or a cancelled site answer.
+The child appends `paused / share_exhausted` once, with no D2 ask, effect or claim,
+under the new row `hold.share_exhausted` (after `hold.admission`, before
+`hold.outage` and `hold.paused`). The row reads the gate code fact
+`child.boundary = share_exhausted`, which `childSet` admits only on a joined
+generator whose recorded D2 reason is `decision_unavailable` or `cancelled`; the
+decider is D2. `share_exhausted` is terminal (`resumeOf` is `closed`): nothing
+could make a later resume affordable.
 `transitionDispatch(request, checkpoint, 'share_exhausted', entry, evidence)` replays
-it, and throws unless the checkpoint is an unclaimed joined generator whose next
-ask really is uncovered.
+it. It throws unless the checkpoint is an unclaimed joined generator due a D2
+re-ask that its remainder cannot cover, and the replayed outcome is
+`share_exhausted`.
 
 A generator's implement intent (`child_route` and `child_route_fallback`) carries
 `budget`, its custody `remainder` at claim, between `tier_source` and `child`;
 `dispatch.decision@7` records it. Claim re-derivation covers it, so a tampered
 remainder throws before any port call, and a budget resume re-presents the same
-remainder. A read intent has no budget (share `0`, no model). The implement
-step's spending of `budget` belongs to the composition: `shareBudget(remainder,
-per_attempt)` is the step's budget port for it, allowing attempt `n` at the
-requested tier while `n × per_attempt <= remainder` and pausing `no_budget`
-otherwise. It is pure in the attempt number, so the pause never lifts.
-`per_attempt` is the composition's worst case for one attempt (its generate plus
-the evaluations and checks it can pay for, each under the step's ceiling).
+remainder. A read intent has no budget (share `0`, no model). The remainder can be
+`0` (for example `3 × cost_ceiling = share` after one ask), and then the
+implement step cannot spend. The implement step's spending of `budget` belongs to
+the composition: `shareBudget(remainder, per_attempt)` is the step's budget port
+for it. It allows attempt `n` at the requested tier while
+`n × per_attempt <= remainder` and pauses `no_budget` otherwise. It is pure in the
+attempt number, so the pause never lifts. `per_attempt` is the composition's worst
+case for one attempt (its generate plus the evaluations and checks it can pay for,
+each under the step's ceiling).
+
+Custody bounds ask numbers, not site calls. Under P5c2, a joiner still makes the
+joined ask's site call under the same stage request id. So an abort mid-ask
+followed by resumes, or concurrent joiners, can make more gateway requests than
+one charge covers. Spend stays inside the charge only if the decision gateway
+deduplicates by `request_id`, which no contract requires yet. Closing this means
+either contracting that dedup or charging a join after a journaled cancel as a new
+ask; both change P5c2 and are follow-ups.
 
 Not in P5c3: the root's own intake, triage, route and window asks are not
 charged, and `plan.budget` is the carve, not a remainder (a root has no share;
 that needs thread shares, P5d); actual spend is not reconciled, so worst-case
-charging over-reserves (keep `cost_ceiling` well under the share); unused share
-is not returned; and production still injects no `ports.spawn`, so no
-composition calls `shareBudget` yet.
+charging over-reserves (keep `cost_ceiling` well under a third of the share);
+unused share is not returned; and production still injects no `ports.spawn`, so
+no composition calls `shareBudget` yet.
 
 ## WV-S1 P5c2 dispatch slot and journaled cancellation
 

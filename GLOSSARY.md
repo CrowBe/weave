@@ -282,7 +282,7 @@ What a child holds of the share its root's spawn plan carved for it (P5c3), as t
 pure `dispatch.custody@1` record derived from its checkpoint. Each D2 ask it takes
 is charged at its worst case (three gateway requests at the child's per-request
 ceiling), a joined ask is not charged again, and nothing is refunded or refilled.
-An ask the remainder cannot cover is never taken; the child stops terminally as
+A child whose terms cannot cover its first ask is refused; a re-ask the remainder cannot cover is never taken, and the child stops terminally as
 `share_exhausted`. A generator's implement intent seals the remainder as `budget`,
 which the implement step spends through the `shareBudget` budget port. Custody is
 accounting, not authority: it grants nothing.
