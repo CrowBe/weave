@@ -19,7 +19,8 @@ const DEFAULT_PROVIDERS = ['typesafe-jev', 'amos-small', 'openai-decisions', 'pi
 // Selectable with --providers, never implied: Nous terms flag automated and
 // performance-monitoring use for a captain decision (WV-016 scout report).
 // Muse Spark's destination may train on content, so the operator must classify the sets.
-const OPT_IN_PROVIDERS = ['nous-portal', 'muse-spark'];
+// liquid-d1 needs a local d1-2B server the harness never starts.
+const OPT_IN_PROVIDERS = ['nous-portal', 'muse-spark', 'liquid-d1'];
 const CONTENT_CLASS_REQUIRED = 'Muse Spark requires --content-class public or non_sensitive';
 export function flags(args: string[]) {
   const values: Record<string, string> = {};
@@ -201,6 +202,7 @@ export async function main(
       ...(process.env.OPENAI_API_KEY ? { openaiKey: process.env.OPENAI_API_KEY } : {}),
       ...(process.env.NOUS_API_KEY ? { nousKey: process.env.NOUS_API_KEY } : {}),
       ...(process.env.AMOS_BASE_URL ? { amosBaseURL: process.env.AMOS_BASE_URL } : {}),
+      ...(process.env.D1_BASE_URL ? { d1BaseURL: process.env.D1_BASE_URL } : {}),
       now: Date.now,
       sleep: async (ms: number, signal?: AbortSignal) => {
         await delay(ms, undefined, signal ? { signal } : {});

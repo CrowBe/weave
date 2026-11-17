@@ -28,6 +28,13 @@ Missing keys produce `skipped: no_credential`. Amos uses `AMOS_BASE_URL` or
 `http://127.0.0.1:8766`; the harness never starts, stops or restarts it. It uses
 `amosEvaluator`, discovers listed question types at `/v1/models`, and dispatches
 one request at a time. Run under `nice -n 10` to keep local inference courteous.
+`liquid-d1` is opt-in (`--providers liquid-d1`): LiquidAI d1-2B served by
+llama.cpp on the TypeSafe System One wire at `D1_BASE_URL` or
+`http://127.0.0.1:8082`, loopback only, with no credential. The harness never
+starts it. Each call first checks that `/v1/models` lists `d1-2b` (otherwise
+`skipped: model_not_listed`). It costs nothing and keeps content on this
+machine. Its per-call timeout is 300 s, not 30 s, because d1 takes about 4 s per
+question on CPU and `loop.preselect` sends 24 questions in one request.
 Child processes (quota-axi, pi and fx) inherit only `HOME`, `PATH` and `XDG_*`.
 Neither API-key family nor other ambient environment values reach those CLIs;
 ChatGPT sign-in is discovered through their local authentication configuration.

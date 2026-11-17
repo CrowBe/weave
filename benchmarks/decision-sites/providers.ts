@@ -17,6 +17,14 @@ export const PRICES = Object.freeze({
   // catalogue price or reported usage.cost before an answer is accepted.
   'nous-portal': { input_per_million: 0, source: 'https://inference-api.nousresearch.com/v1/models' },
 });
+/** Local LiquidAI d1-2B under llama.cpp, which serves the TypeSafe System One wire. */
+export const D1_MODEL = 'd1-2b';
+export const D1_DEFAULT_BASE_URL = 'http://127.0.0.1:8082';
+/**
+ * d1 evaluates about one question per 4 s on CPU, so the 24-question
+ * loop.preselect request needs minutes, not the 30 s hosted-provider default.
+ */
+export const D1_TIMEOUT_MS = 300_000;
 /** Free tier: 10 requests per 60 s, so one dispatch per 6 s. */
 export const NOUS_MIN_DISPATCH_INTERVAL_MS = 6_000;
 export interface ProvidersConfig {
@@ -25,6 +33,8 @@ export interface ProvidersConfig {
   /** Nous Portal key, sent only as a Bearer header by the gateway adapter. */
   nousKey?: string;
   amosBaseURL?: string;
+  /** Loopback origin of the local d1 server; defaults to D1_DEFAULT_BASE_URL. */
+  d1BaseURL?: string;
   fetch?: typeof globalThis.fetch;
   timeoutMs?: number;
   /** Required for parsing HTTP-date Retry-After without an ambient clock. */
@@ -61,7 +71,55 @@ export function buildProviders(config: ProvidersConfig): Provider[] {
       config,
     ),
     nousProvider(config),
+    d1Provider(config, (request) => wire.toBody(call(request, D1_MODEL))),
   ];
+}
+/** A loopback http(s) origin with no credentials, path, query or fragment, else undefined. */
+function loopbackOrigin(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+    if (
+      ['http:', 'https:'].includes(url.protocol) &&
+      ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      ['', '/'].includes(url.pathname)
+    )
+      return url.origin;
+  } catch {
+    /* rejected below */
+  }
+  return undefined;
+}
+/**
+ * Local d1-2B over the TypeSafe wire: no credential leaves the process, and
+ * content stays on this machine. Each call first checks that the server lists
+ * d1-2b, as the Amos provider does; an unlisted model skips, an unreachable
+ * server fails that item.
+ */
+function d1Provider(config: ProvidersConfig, body: (request: Request) => unknown): Provider {
+  const origin = loopbackOrigin(config.d1BaseURL ?? D1_DEFAULT_BASE_URL);
+  const fetch = config.fetch ?? globalThis.fetch;
+  return httpProvider('liquid-d1', D1_MODEL, 0, undefined, `${origin}/v1/systemone`, body, config, {
+    auth: false,
+    timeoutMs: config.timeoutMs ?? D1_TIMEOUT_MS,
+    async preflight(signal) {
+      if (origin === undefined) return { status: 'failed', reason: 'non_loopback_base_url' };
+      try {
+        const response = await fetch(`${origin}/v1/models`, { signal, redirect: 'error' });
+        const data: unknown = response.ok ? await response.json() : undefined;
+        if (!record(data) || !Array.isArray(data.models))
+          return { status: 'failed', reason: 'models_unavailable', http_status: response.status };
+        return data.models.some((entry: unknown) => record(entry) && entry.name === D1_MODEL)
+          ? undefined
+          : { status: 'skipped', reason: 'model_not_listed' };
+      } catch {
+        return { status: 'failed', reason: signal.aborted ? 'timeout' : 'models_unavailable' };
+      }
+    },
+  });
 }
 function secrets(config: ProvidersConfig): string[] {
   return [config.typesafeKey, config.openaiKey, config.nousKey].filter((s): s is string => !!s);
@@ -198,6 +256,12 @@ function httpProvider(
   url: string,
   body: (request: Request) => unknown,
   config: ProvidersConfig,
+  local?: {
+    readonly auth: false;
+    readonly timeoutMs: number;
+    /** Runs before dispatch; a returned result is recorded instead of calling. */
+    readonly preflight: (signal: AbortSignal) => Promise<Result | undefined>;
+  },
 ): Provider {
   let skipped: Result | undefined;
   const safe = (value: unknown) => safeMetadata(value, config);
@@ -209,12 +273,19 @@ function httpProvider(
     async request(request, external): Promise<Result> {
       if (external.aborted) return { status: 'failed', reason: 'cancelled' };
       if (skipped) return skipped;
-      if (!key?.trim()) return { status: 'skipped', reason: 'no_credential' };
-      const signal = AbortSignal.any([external, AbortSignal.timeout(config.timeoutMs ?? 30_000)]);
+      if (!local && !key?.trim()) return { status: 'skipped', reason: 'no_credential' };
+      const signal = AbortSignal.any([external, AbortSignal.timeout(local?.timeoutMs ?? config.timeoutMs ?? 30_000)]);
+      if (local) {
+        const refused = await local.preflight(signal);
+        if (external.aborted) return { status: 'failed', reason: 'cancelled' };
+        if (refused) return refused;
+      }
       try {
         const response = await (config.fetch ?? globalThis.fetch)(url, {
           method: 'POST',
-          headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+          headers: local
+            ? { 'content-type': 'application/json' }
+            : { 'content-type': 'application/json', authorization: `Bearer ${key}` },
           body: JSON.stringify(body(request)),
           signal,
           redirect: 'error',
