@@ -83,7 +83,10 @@ const OPTED_IN: readonly string[] = [];
 describe('W5 authority and opt-in', () => {
   it('W5-T40 grant issuance, consumption and revocation are the same with any sink', async () => {
     const plain = await run({});
-    assert.ok(plain.issued.length >= 5);
+    // Four starts, four grants. The fifth inspect is queued and then cancelled,
+    // so it never starts and is never granted (RT-00: grants are issued at start).
+    assert.equal(plain.issued.length, 4);
+    assert.equal(plain.calls.filter((call) => call.startsWith('revoke')).length, 0);
     const throwing = () => {
       throw new Error('sink down');
     };
