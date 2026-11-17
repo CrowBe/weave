@@ -26,6 +26,7 @@ import {
 import {
   decideLoopRoute,
   decideTriage,
+  LOOP_DECISION_REQUESTS,
   transitionLoopDecision,
   type LoopDecision,
   type LoopDecisionAsk,
@@ -161,6 +162,11 @@ export type DispatchIntent =
       readonly tier: ImplementTier;
       readonly ceiling: ImplementTier;
       readonly tier_source: 'child_route' | 'child_route_fallback';
+      /**
+       * P5c3: the child's share remainder (`custodyOf(checkpoint).remainder`) at claim. Every gateway
+       * request the implement step makes for this intent draws on it; it is never refilled.
+       */
+      readonly budget: number;
       /** Equal to the claimed `checkpoint.child`: the adapter resolves only its joined reads. */
       readonly child: DispatchChild;
     }
@@ -234,7 +240,9 @@ export type DispatchReason =
   | 'missing_args'
   /** Transient: never journaled or emitted. */
   | 'dependency_pending'
-  | 'unmet_dependency';
+  | 'unmet_dependency'
+  /** P5c3: a generate child's share cannot cover the D2 ask it would have to take. Terminal. */
+  | 'share_exhausted';
 
 export interface DispatchCheckpoint {
   readonly schema: 'dispatch.checkpoint@6';
@@ -1536,6 +1544,13 @@ function planFor(trace: Decide1Trace, checkpoint: DispatchCheckpoint, request: D
       const pending = trace.rule === 'hold.dependency_pending';
       return final(trace, 'rule', tier, 'paused', pending ? 'dependency_pending' : 'unmet_dependency');
     }
+    case 'hold.share_exhausted': {
+      // Set only at its gate, and only when the next D2 ask cannot be covered (`assertExhausted`).
+      if (facts.get('child.boundary') !== 'share_exhausted') throw new Error('decide1: no share gate');
+      assertExhausted(checkpoint);
+      const decider = childDecider(checkpoint);
+      return final(trace, decider.decided_by, decider.choice, 'paused', 'share_exhausted');
+    }
     case 'act.read': {
       const child = checkpoint.child;
       if (child === null || child.brief.kind !== 'read' || child.brief.target_ref === null)
@@ -1562,6 +1577,7 @@ function planFor(trace: Decide1Trace, checkpoint: DispatchCheckpoint, request: D
         tier,
         ceiling: tier,
         tier_source: accepted ? 'child_route' : 'child_route_fallback',
+        budget: custodyOf(checkpoint)!.remainder,
         child,
       });
     }
@@ -1893,6 +1909,57 @@ function admitChildTerms(value: unknown, root: InferenceTerms, share: number): v
     throw refuse("copy the parent's prefix");
 }
 
+/**
+ * `dispatch.custody@1` (P5c3): what a child holds of its sealed share. The plan carves each share
+ * out of the root's budget once (they sum to `plan.budget`); the child's own D2 asks are charged
+ * at their worst case, `LOOP_DECISION_REQUESTS × terms.cost_ceiling` per ask taken, including a
+ * cancelled, crashed or lost one. Nothing is refunded or refilled, so `charged` only grows, and
+ * `remainder` is what a claimed implement intent may still spend.
+ */
+export interface ChildCustody {
+  readonly schema: 'dispatch.custody@1';
+  readonly share: number;
+  /** The worst case of one D2 ask under the child's admitted terms. */
+  readonly per_ask: number;
+  readonly charged: number;
+  readonly remainder: number;
+}
+
+/**
+ * Pure: the custody of a child checkpoint, derived from its sealed share, admitted ceiling and
+ * journaled D2 ask counter, so it is written atomically with every ask and replays exactly. A
+ * root holds no share (null). Charges beyond the share are a defect: the gate never takes one.
+ */
+export function custodyOf(checkpoint: DispatchCheckpoint): ChildCustody | null {
+  const child = checkpoint.child;
+  if (child === null) return null;
+  const share = child.brief.share;
+  const ceiling = checkpoint.child_terms?.cost_ceiling;
+  if (!natural(share) || !natural(ceiling) || !natural(checkpoint.asks.route))
+    throw new Error('child custody needs a natural share, ceiling and ask count');
+  const per_ask = LOOP_DECISION_REQUESTS * ceiling;
+  const charged = checkpoint.asks.route * per_ask;
+  if (!Number.isSafeInteger(per_ask) || !Number.isSafeInteger(charged) || charged > share)
+    throw new Error('child custody charges exceed the sealed share');
+  return { schema: 'dispatch.custody@1', share, per_ask, charged, remainder: share - charged };
+}
+
+/** Whether the child could take one more D2 ask inside its share. */
+function covers(checkpoint: DispatchCheckpoint): boolean {
+  const custody = custodyOf(checkpoint)!;
+  return custody.per_ask <= custody.remainder;
+}
+
+/** A journaled share gate stands only where the next D2 ask really is uncovered. */
+function assertExhausted(checkpoint: DispatchCheckpoint): void {
+  if (
+    checkpoint.child?.brief.kind !== 'generate' ||
+    witnessJoin(checkpoint.child) !== 'satisfied' ||
+    covers(checkpoint)
+  )
+    throw new Error('a share gate needs a joined generator whose share cannot cover its next D2 ask');
+}
+
 function completedRead(receipt: unknown): receipt is Extract<DispatchReceipt, { readonly read: ReadResult }> {
   return isRecord(receipt) && receipt['status'] === 'dispatched' && isRecord(receipt['read']);
 }
@@ -2119,7 +2186,7 @@ function boundaryTrace(
 function childBoundaryTrace(
   request: DispatchRequest,
   checkpoint: DispatchCheckpoint,
-  reason: 'stale_answer' | 'cancelled',
+  reason: 'stale_answer' | 'cancelled' | 'share_exhausted',
 ): Decide1Trace {
   const inputs = decide1Inputs(request, checkpoint);
   return decideBand({
@@ -2414,6 +2481,7 @@ function resumeOf(reason: DispatchReason): Resume {
     case 'refused':
     case 'dependency_pending':
     case 'unmet_dependency':
+    case 'share_exhausted':
       return 'closed';
     default: {
       const never: never = reason;
@@ -2948,7 +3016,9 @@ function joinReads(
 
 type Round =
   | { readonly kind: 'asked' | 'adopted'; readonly checkpoint: DispatchCheckpoint }
-  | { readonly kind: 'stopped'; readonly decision: DispatchDecision };
+  | { readonly kind: 'stopped'; readonly decision: DispatchDecision }
+  /** P5c3: taking the next ask would exceed the child's share; nothing was taken or written. */
+  | { readonly kind: 'uncovered' };
 
 /**
  * One stage ask under the slot's compare-and-set: join the ask in flight for `stage`, else take
@@ -2971,6 +3041,7 @@ async function askRound(
     readonly observations: readonly SiteObservation[];
   }>,
   recorded: (checkpoint: DispatchCheckpoint) => boolean,
+  covers?: (checkpoint: DispatchCheckpoint) => boolean,
 ): Promise<Round> {
   const decision_id = request.request_id;
   const loaded = journal.load(decision_id);
@@ -2994,6 +3065,12 @@ async function askRound(
       return { kind: 'adopted', checkpoint: makeCheckpoint(now.checkpoint, { spawn_port: checkpoint.spawn_port }) };
     return { kind: 'stopped', decision: yielded(request, journal) };
   };
+  // Joining is free: the joined ask was charged when it was taken. Only taking one is gated, and
+  // a caller whose snapshot another writer has already moved past adopts that writer's stage.
+  if (flight?.stage !== stage && covers !== undefined && !covers(checkpoint)) {
+    if (loaded.checkpoint !== null && askCount(loaded.checkpoint, stage) > askCount(checkpoint, stage)) return adopt();
+    return { kind: 'uncovered' };
+  }
   if (journal.ask(decision_id, ask, asked) === null) return adopt();
   if (signal?.aborted) return { kind: 'stopped', decision: cancel(request, asked, ports, journal, fresh, null) };
   const answer = await run(asked);
@@ -3099,8 +3176,14 @@ async function decideChild(
           return { checkpoint: makeCheckpoint(asked, { route: decision }), observations: [decision.site.observation] };
         },
         (stored) => stored.route !== null,
+        covers,
       );
       if (round.kind === 'stopped') return round.decision;
+      if (round.kind === 'uncovered') {
+        // Terminal and journaled once: no later resume can afford the ask, since nothing refills a share.
+        const plan = planFor(childBoundaryTrace(captured, checkpoint, 'share_exhausted'), checkpoint, captured);
+        return finishFinal(captured, checkpoint, entry, plan, ports, journal, fresh);
+      }
       checkpoint = round.checkpoint;
       if (round.kind === 'adopted') {
         evidence = liveEvidence(journal, captured, checkpoint.child);
@@ -3179,6 +3262,7 @@ async function rootStage(
       (stored) => stored[stage] !== null,
     );
     if (round.kind === 'stopped') return round.decision;
+    if (round.kind === 'uncovered') throw new Error('a root ask holds no share to gate');
     state.checkpoint = round.checkpoint;
     if (round.kind === 'asked') return null;
   }
@@ -3321,6 +3405,7 @@ export async function decideDispatch(
       () => true,
     );
     if (round.kind === 'stopped') return round.decision;
+    if (round.kind === 'uncovered') throw new Error('a root ask holds no share to gate');
     checkpoint = round.checkpoint;
     const next = resolveOutcome(captured, checkpoint);
     // The only move a window may make is a role round admitting gen.route into a spawn.
@@ -3359,7 +3444,7 @@ export async function decideDispatch(
 export function transitionDispatch(
   request: DispatchRequest,
   checkpoint: DispatchCheckpoint,
-  receipt: DispatchReceipt | null | 'cancelled',
+  receipt: DispatchReceipt | null | 'cancelled' | 'share_exhausted',
   entry = 1,
   evidence?: ChildEvidence,
 ): DispatchDecision {
@@ -3372,6 +3457,16 @@ export function transitionDispatch(
     assertCheckpoint(checkpoint);
     if (checkpoint.intent !== null) claimedPlan(request, checkpoint, checkpoint.intent, evidence);
     return cancellation(request, checkpoint, entry);
+  }
+  if (receipt === 'share_exhausted') {
+    // The journaled share gate: replayed over the same evidence, and only where it really held.
+    assertCheckpoint(checkpoint);
+    if (checkpoint.child === null || checkpoint.intent !== null)
+      throw new Error('a share gate needs an unclaimed child');
+    replayChild(request, checkpoint, evidence);
+    const plan = planFor(childBoundaryTrace(request, checkpoint, 'share_exhausted'), checkpoint, request);
+    if (plan.kind !== 'final') throw new Error('decide1: share gate moved');
+    return makeDecision(request, checkpoint, entry, plan, null, null, plan.status, plan.reason);
   }
   const plan = resolveOutcome(request, checkpoint, evidence);
   const intent = plan.kind === 'dispatch' ? (checkpoint.intent ?? plan.intent) : null;

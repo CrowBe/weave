@@ -97,7 +97,8 @@ outside this contract. ScriptedDecisionLayer remains unchanged.
 facts. The frozen table was `decide1.rules@1` with 15 ids; P5b's `decide1.rules@2` adds
 `spawn.preflight` (16 ids) and changes no other row; P5c1's `decide1.rules@3` adds five
 child rows (21 ids, below); P4c's `decide1.rules@4` replaces `act.capability` with the four
-Decide-2 rows (24 ids, below). Its first matching row
+Decide-2 rows (24 ids, below); P5c3 adds `hold.share_exhausted` after `hold.admission`
+(25 ids). Its first matching row
 returns the rule id and coarse band. It imports no dispatch, site or gateway code. It asks
 no new question and changes no `SITE_POLICY` threshold, fallback or request.
 `decideDispatch` validates stored stages through P3a's live pure transitions,
@@ -512,7 +513,7 @@ limits not raised, quality not weakened (`qualityClears`), `audit` only kept or 
 no unknown field. `prefix_digest`/`prefix_cache` are excluded but may never copy the parent's.
 Re-entry with other terms than the retained child evidence throws; concurrent first callers
 keep open-checkpoint semantics and the winning claim freezes its own terms. Allocation is
-unchanged and nothing accounts spending (custody is P5c3; there is no budget port).
+unchanged; P5c3 (below) holds the share in custody and charges the child's own asks.
 
 `dispatch.checkpoint@5` adds `preflight_terms` (a root's detached request terms, set with
 `asks.preflight = 1`), `child_terms` and `child` before `intent`; whenever `preflight_terms`
@@ -552,6 +553,57 @@ child's real facts with its sealed kind's band, never projecting a stage. Childr
 intake, triage, shadow or preflight stage; only a satisfied generator records D2. Weft is
 unchanged: `decided_by` is `rule` or `route`, `tier` stays implement-only. Production still
 injects no `ports.spawn`, enforced by a source scan (`spawn-default-off.test.ts`).
+
+## WV-S1 P5c3 child share custody and the share budget port
+
+A share is carved once, by the root's sealed plan: read children hold `0` and the
+generator holds `plan.budget`, so the shares sum to the plan's budget. The child
+holds it in custody from there down. `custodyOf(checkpoint)` is the pure
+`dispatch.custody@1` record `{ schema, share, per_ask, charged, remainder }`
+(null on a root): `per_ask` is `LOOP_DECISION_REQUESTS × child_terms.cost_ceiling`
+(`3`: up to two extract attempts and one site evaluation, each bounded by the
+ask's own ceiling), `charged` is `asks.route × per_ask` and `remainder` is
+`share − charged`. A site observation records no spend, so each D2 ask is charged
+at its worst case when it is taken, including a cancelled, crashed or lost one.
+Custody is derived from the journaled ask counter, so it is written atomically
+with every ask, a joiner is not charged again (it reuses the ask it joins), and
+replay rebuilds it without a journal or port read. `charged > share` is a defect
+and throws. Nothing is refunded, refilled or returned on settle.
+
+The gate is in the child's D2 `askRound`: joining the in-flight ask is free;
+taking the next ask needs `per_ask <= remainder`. A caller whose snapshot another
+writer has moved past adopts that writer's stage instead. An uncovered ask is
+never taken: the child appends `paused / share_exhausted` once, with no D2 ask,
+effect or claim, under the new row `hold.share_exhausted` (after `hold.admission`,
+before `hold.outage` and `hold.paused`). The row reads the gate code fact
+`child.boundary = share_exhausted` on a joined generator, like P5c1's gates; the
+decider is D2 if it ran, else the rule with the sealed tier. `share_exhausted` is
+terminal (`resumeOf` is `closed`): nothing could make a later resume affordable.
+This happens on the first entry when `3 × cost_ceiling > share` (admission still
+only requires `cost_ceiling <= share`), and on a resume that would re-ask D2 after
+an outage or cancelled site answer the share no longer covers.
+`transitionDispatch(request, checkpoint, 'share_exhausted', entry, evidence)` replays
+it, and throws unless the checkpoint is an unclaimed joined generator whose next
+ask really is uncovered.
+
+A generator's implement intent (`child_route` and `child_route_fallback`) carries
+`budget`, its custody `remainder` at claim, between `tier_source` and `child`;
+`dispatch.decision@7` records it. Claim re-derivation covers it, so a tampered
+remainder throws before any port call, and a budget resume re-presents the same
+remainder. A read intent has no budget (share `0`, no model). The implement
+step's spending of `budget` belongs to the composition: `shareBudget(remainder,
+per_attempt)` is the step's budget port for it, allowing attempt `n` at the
+requested tier while `n × per_attempt <= remainder` and pausing `no_budget`
+otherwise. It is pure in the attempt number, so the pause never lifts.
+`per_attempt` is the composition's worst case for one attempt (its generate plus
+the evaluations and checks it can pay for, each under the step's ceiling).
+
+Not in P5c3: the root's own intake, triage, route and window asks are not
+charged, and `plan.budget` is the carve, not a remainder (a root has no share;
+that needs thread shares, P5d); actual spend is not reconciled, so worst-case
+charging over-reserves (keep `cost_ceiling` well under the share); unused share
+is not returned; and production still injects no `ports.spawn`, so no
+composition calls `shareBudget` yet.
 
 ## WV-S1 P5c2 dispatch slot and journaled cancellation
 

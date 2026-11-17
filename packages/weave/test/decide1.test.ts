@@ -23,6 +23,7 @@ import {
 } from '../src/decide1.js';
 
 const CHILD_ROWS: readonly string[] = [
+  'hold.share_exhausted',
   'hold.dependency_pending',
   'hold.unmet_dependency',
   'act.read',
@@ -274,7 +275,7 @@ function domain(): Case[] {
 test('P4a-1 table shape: frozen, closed, unique, no bare spawn', () => {
   assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@4');
   assert.ok(Object.isFrozen(DECIDE1_RULES));
-  assert.equal(new Set(DECIDE1_RULES.map((row) => row.id)).size, 24);
+  assert.equal(new Set(DECIDE1_RULES.map((row) => row.id)).size, 25);
   for (const row of DECIDE1_RULES) {
     assert.ok(Object.isFrozen(row));
     assert.ok(isCode(row.id));
@@ -828,10 +829,16 @@ const P4C_ROWS = [
   ['act.tool', 'tool_call'],
 ];
 const RULES_V4 = RULES_V3.flatMap((row) => (row[0] === 'act.capability' ? P4C_ROWS : [row]));
-/** The @4 table with the P4c rows folded back into the one act.capability row they replaced. */
+// P5c3: the share gate after hold.admission and before the outage and pause holds.
+const RULES_NOW = [RULES_V4[0]!, ['hold.share_exhausted', 'withheld'], ...RULES_V4.slice(1)];
+/** The live table with the P5c3 share row removed, leaving P4c's snapshot. */
+function asV4(rows: readonly (readonly string[])[]): string[][] {
+  return rows.filter(([id]) => id !== 'hold.share_exhausted').map(([id, band]) => [id!, band!]);
+}
+/** The P4c snapshot with its four rows folded back into the one act.capability row they replaced. */
 function asV3(rows: readonly (readonly string[])[]): string[][] {
   const out: string[][] = [];
-  for (const [id, band] of rows) {
+  for (const [id, band] of asV4(rows)) {
     if (P4C_ROWS.some(([p4c]) => p4c === id)) {
       if (id === 'act.tool') out.push(['act.capability', 'tool_call']);
       continue;
@@ -843,15 +850,12 @@ function asV3(rows: readonly (readonly string[])[]): string[][] {
 
 test('P4c-1 decide1.rules@4 replaces act.capability with the four Decide-2 rows and nothing else', () => {
   assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@4');
-  assert.deepEqual(
-    DECIDE1_RULES.map(({ id, band }) => [id, band]),
-    RULES_V4,
-  );
+  assert.deepEqual(asV4(DECIDE1_RULES.map(({ id, band }) => [id, band])), RULES_V4);
   assert.deepEqual(asV3(DECIDE1_RULES.map(({ id, band }) => [id, band])), RULES_V3);
 });
 
 test('P4b-3 decide1.rules@4 retains the exact P4a ids, order and bands, plus spawn.preflight', () => {
-  // Deliberate P5c1 move: the snapshot is @3 with 21 ids; P4c-1 pins the @4 diff.
+  // Deliberate P5c1, P4c and P5c3 moves: P4c-1 pins the Decide-2 diff; the live table adds the share row.
   assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@4');
   const v3 = asV3(DECIDE1_RULES.map(({ id, band }) => [id, band]));
   assert.deepEqual(v3, RULES_V3);
@@ -905,15 +909,15 @@ function withoutSpawnRow(input: Decide1Inputs): string | undefined {
   return DECIDE1_RULES.filter((row) => row.id !== 'spawn.preflight').find((row) => row.when(facts, judgments))?.id;
 }
 
-test('P5b-1 table @3 keeps spawn.preflight immediately before gen.route', () => {
+test('P5b-1 table keeps spawn.preflight immediately before gen.route', () => {
   assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@4');
   assert.deepEqual(
     DECIDE1_RULES.map(({ id, band }) => [id, band]),
-    RULES_V4,
+    RULES_NOW,
   );
-  assert.equal(DECIDE1_RULES[20]?.id, 'spawn.preflight');
-  assert.equal(DECIDE1_RULES[21]?.id, 'gen.route');
-  assert.equal(DECIDE1_RULES.length, 24);
+  assert.equal(DECIDE1_RULES[21]?.id, 'spawn.preflight');
+  assert.equal(DECIDE1_RULES[22]?.id, 'gen.route');
+  assert.equal(DECIDE1_RULES.length, 25);
 });
 
 test('P5b-2 the spawn row diff is the only behaviour change over the reachable domain', () => {

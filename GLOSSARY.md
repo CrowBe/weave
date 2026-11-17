@@ -276,6 +276,17 @@ share. The `dispatch.child@1` witness binds the lineage, terms digest and frozen
 evidence, identically in the checkpoint and the intent. It grants no authority beyond
 the intent it accompanies.
 
+### Share custody
+
+What a child holds of the share its root's spawn plan carved for it (P5c3), as the
+pure `dispatch.custody@1` record derived from its checkpoint. Each D2 ask it takes
+is charged at its worst case (three gateway requests at the child's per-request
+ceiling), a joined ask is not charged again, and nothing is refunded or refilled.
+An ask the remainder cannot cover is never taken; the child stops terminally as
+`share_exhausted`. A generator's implement intent seals the remainder as `budget`,
+which the implement step spends through the `shareBudget` budget port. Custody is
+accounting, not authority: it grants nothing.
+
 ### Read join
 
 A generate child's dependency gate over its sealed read edges. An edge is satisfied by

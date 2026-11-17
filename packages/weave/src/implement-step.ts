@@ -149,6 +149,32 @@ export type ImplementBudgetDecision =
   | { readonly status: 'allow'; readonly tier: ImplementTier }
   | { readonly status: 'pause'; readonly reason: string; readonly until: number | null };
 /**
+ * P5c3: the implement step's budget port over a child's sealed share remainder (the claimed
+ * intent's `budget`). `per_attempt` is the composition's worst case for one attempt: its generate
+ * request plus every evaluation and check it can pay for, each bounded by the step's own
+ * `terms.cost_ceiling`. Attempt `n` is allowed only while `n × per_attempt` fits the remainder, at
+ * the requested tier (it never downgrades); past that it pauses with `no_budget`. Pure in the
+ * attempt number, so a resumed step re-reads the same answer: nothing refills a share, and the
+ * pause never lifts.
+ */
+export function shareBudget(
+  remainder: number,
+  per_attempt: number,
+): (request: ImplementBudgetRequest) => ImplementBudgetDecision {
+  const natural = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+  if (!natural(remainder) || !natural(per_attempt) || per_attempt === 0)
+    throw new Error('shareBudget needs a natural remainder and a positive natural per-attempt cost');
+  return (request) => {
+    const spend = request.attempt * per_attempt;
+    if (Number.isSafeInteger(request.attempt) && request.attempt >= 1 && spend <= remainder)
+      return { status: 'allow', tier: request.requested };
+    // `no_budget`: the step's existing closed pause reason; the share, not the account, is spent.
+    return { status: 'pause', reason: 'no_budget', until: null };
+  };
+}
+
+/**
  * Composition-root port. One fresh single-use grant equal in scope to `held`,
  * or null. This is not a decision port: a decision answer cannot mint a grant.
  */
