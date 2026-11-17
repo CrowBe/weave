@@ -139,7 +139,7 @@ export async function main(
   injected?: { providers: readonly Provider[] },
 ): Promise<number> {
   const options = flags(args);
-  if (!process.versions.node.startsWith('22.')) throw new Error('Node 22 required');
+  if (!process.versions.node.startsWith('26.')) throw new Error('Node 26 required');
   const root = dirname(fileURLToPath(import.meta.url));
   const dir = join(root, 'results', options.runId);
   if (options.renderOnly && !existsSync(join(dir, 'journal.jsonl'))) throw new Error('Run journal missing');

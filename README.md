@@ -77,7 +77,7 @@ paints that tree. `packages/loom-binding` discloses a workspace view from record
 Loom state and does not hand the renderer a locator or the runtime's internal
 state. `packages/weft` validates `weft.record@1` trace records and imports
 nothing in-repo; `packages/gauge` validates evaluation records, recomputes their
-verdicts and depends on Weft only. Requires Node 22.18 or later and npm 10 or later; offline entailment contract tests also require
+verdicts and depends on Weft only. Requires Node 26 or later and npm 10 or later; offline entailment contract tests also require
 Python 3.
 
 ```bash

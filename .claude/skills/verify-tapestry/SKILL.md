@@ -15,13 +15,13 @@ Everything goes through one helper, a dependency-free Node script that speaks th
 H=.claude/skills/verify-tapestry/bin/tapestry-verify.mjs   # run from the repo root
 ```
 
-Requirements: Node >= 22.18 (it uses the global `WebSocket` and `fetch`), `npm ci` already done, Linux `/proc` (for port and process ownership), and Chrome or Chromium on `PATH` (`google-chrome-stable`, `google-chrome`, `chromium`, or `chromium-browser`; override with `TAPESTRY_VERIFY_CHROME=/path`).
+Requirements: Node >= 26 (it uses the global `WebSocket` and `fetch`), `npm ci` already done, Linux `/proc` (for port and process ownership), and Chrome or Chromium on `PATH` (`google-chrome-stable`, `google-chrome`, `chromium`, or `chromium-browser`; override with `TAPESTRY_VERIFY_CHROME=/path`).
 
 ## Monorepo baseline (required before calling a change "done")
 
 This skill proves Tapestry UI behaviour. It does not replace the monorepo gate. Before calling a change done or approving a PR, also follow the existing verify-weave workflow (the Fleet skill at `/home/box/agent-data/workflows/verify-weave/SKILL.md`):
 
-1. Check out the exact head SHA under review in a clean clone. Use Node 22 (`node -v` must print v22.x; switch with nvm/fnm if needed). The package engines allow `>=22.18`; this skill still records the Node 22 requirement. Run `npm ci`.
+1. Check out the exact head SHA under review in a clean clone. Use Node 26 (`node -v` must print v26.x; switch with nvm/fnm if needed). The package engines allow `>=26`; this skill still records the Node 26 requirement. Run `npm ci`.
 2. Run `npm run verify` from the repo root first, and record the result per package. This is always first, before package-specific UI proof.
 3. Run every script under the repo's `checks/` directory (list it first; don't assume names). Each must exit 0.
 4. Then run this skill's Launch / Doctor / Drive / Evidence / Cleanup for the Tapestry features the change touches.

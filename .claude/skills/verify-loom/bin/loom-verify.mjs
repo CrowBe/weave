@@ -138,11 +138,11 @@ async function doctor() {
   const checks = [];
   const add = (name, ok, detail) => checks.push({ name, ok: Boolean(ok), detail });
   add('run state and evidence dir exist', true, { scratch: run.scratch, evidence: run.evidence });
-  const [maj, min] = process.versions.node.split('.').map(Number);
-  add('node satisfies engines >=22.18', maj > 22 || (maj === 22 && min >= 18), {
+  const [maj] = process.versions.node.split('.').map(Number);
+  add('node satisfies engines >=26', maj >= 26, {
     node: process.version,
-    is_v22: maj === 22,
-    note: 'the monorepo baseline requires recording Node 22; record the version actually used',
+    is_v26: maj === 26,
+    note: 'the monorepo baseline requires recording Node 26; record the version actually used',
   });
   const head = git('rev-parse', 'HEAD');
   add('HEAD unchanged since launch', head === run.state.sha, { launched: run.state.sha, now: head });

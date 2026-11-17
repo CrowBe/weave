@@ -28,13 +28,13 @@ Everything goes through one dependency-free helper (Node built-ins, `@weave/gaug
 H=.claude/skills/verify-gauge/bin/gauge-verify.mjs   # run from the repo root; it resolves paths from its own location
 ```
 
-Requirements: Node >= 22.18 (type stripping for the harness `.ts`), `npm ci` already done so `node_modules/@weave/gauge` links to `packages/gauge`.
+Requirements: Node >= 26 (type stripping for the harness `.ts`), `npm ci` already done so `node_modules/@weave/gauge` links to `packages/gauge`.
 
 ## Monorepo baseline (required before calling a change "done")
 
 This skill proves Gauge behaviour. It does not replace the monorepo gate. "Done" needs real proof: the behaviour exercised for real, not green tests alone. Before calling a change done or approving its PR, do all of this (it is the verify-weave workflow at `/home/box/agent-data/workflows/verify-weave/SKILL.md`):
 
-1. Check out the exact head SHA under review in a **clean clone**. Use **Node 22** (`node -v` must print `v22.x`; switch with nvm/fnm if needed). The repo's engines are `>=22.18`, so a newer Node runs, but record the Node 22 requirement and the version you actually used. Run `npm ci`.
+1. Check out the exact head SHA under review in a **clean clone**. Use **Node 26** (`node -v` must print `v26.x`; switch with nvm/fnm if needed). The repo's engines are `>=26`, so a newer Node runs, but record the Node 26 requirement and the version you actually used. Run `npm ci`.
 2. Run **`npm run verify` from the repo root FIRST**, before any package-specific proof, and record the result per package. Gauge's parts of it are `npm run check` (includes `checks/import-direction.mjs` and `checks/gauge-attribution-contract.mjs`), `npm test` (includes `packages/gauge/dist/test/*.test.js`), `npm run typecheck:benchmarks` and `npm run test:failure-attribution`.
 3. Run **every script under `checks/`**. List the directory first; don't assume names. Each must exit 0. `$H checks` does this and records each result (see Drive). The checks that cover Gauge directly are:
    - `checks/import-direction.mjs`: gauge imports `@weave/weft` only; nothing else in-repo.
@@ -68,7 +68,7 @@ Ready means the built package is importable; Doctor proves it. Launch refuses an
 $H doctor        # read-only; exit 0 = worth driving, exit 1 = something is off
 ```
 
-Prints JSON `{ run, ok, checks: [{ name, ok, detail }] }` and saves a copy as `doctor-<ms>.json` in the evidence dir. It checks: run state and evidence dir exist; Node satisfies `>=22.18` (and says whether it is v22.x, which the baseline requires you to record); HEAD still equals the SHA at launch; `dist/src/index.js` exists; `packages/gauge` and `packages/weft` `dist` are not older than their `src`/`test` (stale build); `@weave/gauge` resolves into **this** checkout's `packages/gauge`; `validate`, `evaluate`, `evaluateInfo`, `compare`, `track`, `costed`, `recordDigest` are functions; `records.json` parses with its four context maps (it prints the valid/invalid/results counts: 30/90/13 at the time of writing); the failure-attribution manifest has only `tune` roles. Run it first, and again whenever anything looks off. A stale-dist failure means someone edited after launch: start a new `launch`.
+Prints JSON `{ run, ok, checks: [{ name, ok, detail }] }` and saves a copy as `doctor-<ms>.json` in the evidence dir. It checks: run state and evidence dir exist; Node satisfies `>=26` (and says whether it is v26.x, which the baseline requires you to record); HEAD still equals the SHA at launch; `dist/src/index.js` exists; `packages/gauge` and `packages/weft` `dist` are not older than their `src`/`test` (stale build); `@weave/gauge` resolves into **this** checkout's `packages/gauge`; `validate`, `evaluate`, `evaluateInfo`, `compare`, `track`, `costed`, `recordDigest` are functions; `records.json` parses with its four context maps (it prints the valid/invalid/results counts: 30/90/13 at the time of writing); the failure-attribution manifest has only `tune` roles. Run it first, and again whenever anything looks off. A stale-dist failure means someone edited after launch: start a new `launch`.
 
 ## Drive
 

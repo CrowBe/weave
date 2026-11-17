@@ -24,13 +24,13 @@ Everything goes through one dependency-free helper (Node built-ins plus `@weave/
 H=.claude/skills/verify-weft/bin/weft-verify.mjs   # run from the repo root; it resolves paths from its own location
 ```
 
-Requirements: Node >= 22.18 with `node:sqlite` (the helper's doctor checks it), `npm ci` already done so `node_modules/@weave/weft` links to `packages/weft`.
+Requirements: Node >= 26 with `node:sqlite` (the helper's doctor checks it), `npm ci` already done so `node_modules/@weave/weft` links to `packages/weft`.
 
 ## Monorepo baseline (required before calling a change "done")
 
 This skill proves Weft behaviour. It does not replace the monorepo gate. "Done" needs real proof: the behaviour exercised for real, not green tests alone. Before calling a change done or approving its PR, do all of this (it is the verify-weave workflow at `/home/box/agent-data/workflows/verify-weave/SKILL.md`):
 
-1. Check out the exact head SHA under review in a **clean clone**. Use **Node 22** (`node -v` must print `v22.x`; switch with nvm/fnm if needed). The repo's engines are `>=22.18`, so a newer Node runs, but record the Node 22 requirement and the version you actually used. Run `npm ci`.
+1. Check out the exact head SHA under review in a **clean clone**. Use **Node 26** (`node -v` must print `v26.x`; switch with nvm/fnm if needed). The repo's engines are `>=26`, so a newer Node runs, but record the Node 26 requirement and the version you actually used. Run `npm ci`.
 2. Run **`npm run verify` from the repo root FIRST**, before any package-specific proof, and record the result per package. (Weft's part of it is `npm test`, which includes `packages/weft/dist/test/*.test.js`.)
 3. Run **every script under `checks/`**. List the directory first; don't assume names. Each must exit 0. `$H checks` does this and records each result (see Drive). The checks that cover Weft directly are:
    - `checks/import-direction.mjs`: Weft imports nothing in-repo; gauge may import only weft; weave tests may import weft, weave source never.
@@ -68,7 +68,7 @@ Teardown is `$H cleanup` (see Cleanup). There is no long-lived process: the only
 $H doctor        # read-only; exit 0 = worth driving, exit 1 = something is off
 ```
 
-Prints JSON `{ run, ok, checks: [{ name, ok, detail }] }` and saves a copy as `doctor-<ms>.json` in the evidence dir. It checks: run state and evidence dir exist; Node satisfies `>=22.18` (and says whether it is v22.x, which the monorepo baseline requires you to record); HEAD still equals the SHA at launch (an edit plus commit since launch fails this); all four `dist/src` entry files exist; `dist` is not older than `src`/`test` (stale build); `@weave/weft` resolves into **this** checkout's `packages/weft`; every public and subpath export named above is a function; the four fixtures parse (it prints the `records.json` valid/invalid counts and the trace line count); `node:sqlite` loads. Run it first, and again whenever anything looks off. If `dist not older than src/test` fails, someone edited Weft after launch: re-run a new `launch`.
+Prints JSON `{ run, ok, checks: [{ name, ok, detail }] }` and saves a copy as `doctor-<ms>.json` in the evidence dir. It checks: run state and evidence dir exist; Node satisfies `>=26` (and says whether it is v26.x, which the monorepo baseline requires you to record); HEAD still equals the SHA at launch (an edit plus commit since launch fails this); all four `dist/src` entry files exist; `dist` is not older than `src`/`test` (stale build); `@weave/weft` resolves into **this** checkout's `packages/weft`; every public and subpath export named above is a function; the four fixtures parse (it prints the `records.json` valid/invalid counts and the trace line count); `node:sqlite` loads. Run it first, and again whenever anything looks off. If `dist not older than src/test` fails, someone edited Weft after launch: re-run a new `launch`.
 
 ## Drive
 
@@ -82,7 +82,7 @@ Each `drive` prints one `PASS`/`FAIL <check>` line per check, then a summary lin
 
 `$H test` runs the package's own script, `npm run test:weft-contract` (= `npm run build && node --test "packages/weft/dist/test/*.test.js"`). Note this runs the **whole-repo** `npm run build` (`tsc -b`), unlike launch. It writes `package-test.json` with the Node version, exit code, summary lines and the names of any failing tests.
 
-**Run `$H test` on Node 22, as CI does** (`.github/workflows/verify.yml` pins `node-version: 22`). `test/otel-isolation.test.ts` runs a nested `node --test` and asserts its TAP line `/# fail 0/`; it passes `--test-reporter=tap` so the line is the same on Node 22 and on Node >= 23 (whose default for piped output is the spec reporter). If that test fails on reporter format again, report it as a failure, not a pass. `$H checks` lists `checks/` and runs each script (step 3 of the baseline) and the `checks/test` suite, one log per script.
+**Run `$H test` on Node 26, as CI does** (`.github/workflows/verify.yml` pins `node-version: 26`). `test/otel-isolation.test.ts` runs a nested `node --test` and asserts its TAP line `/# fail 0/`; it passes `--test-reporter=tap` so the line is the same on Node 22 and on Node >= 23 (whose default for piped output is the spec reporter). If that test fails on reporter format again, report it as a failure, not a pass. `$H checks` lists `checks/` and runs each script (step 3 of the baseline) and the `checks/test` suite, one log per script.
 
 ## Evidence
 

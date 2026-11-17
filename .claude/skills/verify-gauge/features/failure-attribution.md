@@ -39,4 +39,4 @@ Preconditions:
 - The corpus labels are implementer-authored; a 28/28 pass is not evidence of classifier or evaluation quality (`AGENTS.md`, Benchmark evidence).
 - Do not import `createTestReader` (the leaf's import lint, `imports.test.ts`, restricts it to `reader.test.ts`); the drive uses the production `reader.ts` exports only.
 - Any edit to a fixture changes its byte pin and the manifest anchor; the reader then refuses everything. That is the intended fail-closed behaviour, not a drive bug.
-- The drive needs Node >= 22.18 so `.ts` imports strip types without a loader.
+- The drive needs Node >= 26 so `.ts` imports strip types without a loader.

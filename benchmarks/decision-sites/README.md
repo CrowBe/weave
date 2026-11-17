@@ -11,10 +11,9 @@ only to select thresholds, then holdout is reported against both selected and
 production thresholds. Source labels are teacher observations, not independent
 truth; the provenance records their limitations and teacher versions.
 
-Use Node 22 and the existing workspace dependencies:
+Use Node 26 and the existing workspace dependencies:
 
 ```sh
-export PATH=/home/box/.local/node22/bin:$PATH
 npm run test:decision-sites
 npm run bench:decision-sites:live -- --providers fake --run-id offline-dry-run
 # Operator only, after configuring credentials and checking price assumptions:

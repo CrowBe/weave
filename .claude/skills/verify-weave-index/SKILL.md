@@ -13,7 +13,7 @@ Agents pick package skills from the change's paths. This index only selects skil
 
 ## Always first
 
-Run **`npm run verify` from the repo root first**, and record the result per package. Do this before any package-specific skill, including when the path set is empty or unmatched. Then follow the Monorepo baseline in the selected skills (clean SHA, Node 22, `npm ci`, every `checks/` script, CI green on the same SHA). The Fleet skill at `/home/box/agent-data/workflows/verify-weave/SKILL.md` is the same gate.
+Run **`npm run verify` from the repo root first**, and record the result per package. Do this before any package-specific skill, including when the path set is empty or unmatched. Then follow the Monorepo baseline in the selected skills (clean SHA, Node 26, `npm ci`, every `checks/` script, CI green on the same SHA). The Fleet skill at `/home/box/agent-data/workflows/verify-weave/SKILL.md` is the same gate.
 
 ## Select skills
 

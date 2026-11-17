@@ -26,7 +26,7 @@ execution or replace deterministic evidence.
   content policy and the redaction boundary (`serializeRecord`); and the
   `weave.trace@1` JSONL tree envelope it still supports: redaction and
   idempotent importer port (`validateTrace`, `serializeTrace`,
-  `importTraceLines`); optional Node 22 SQLite storage (`@weave/weft/sqlite`)
+  `importTraceLines`); optional Node SQLite storage (`@weave/weft/sqlite`)
   with atomic conflict-rejecting imports, and disclosed local OTLP intake
   (`@weave/weft/intake`) with an explicitly injected loopback listener.
 - [Gauge evaluation](packages/gauge/src/GAUGE-CONTRACT.md): criteria sets,

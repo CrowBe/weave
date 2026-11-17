@@ -205,8 +205,9 @@ test('verify fails at the format step for malformed source or a missing formatte
       assert.ifError(result.error);
       const output = readFileSync(log, 'utf8');
       assert.notEqual(result.status, 0, output);
-      assert.match(output, /> fmt:check\n> vp fmt --check/);
-      assert.doesNotMatch(output, /> check\n/);
+      // npm <= 11 prints `> script`; npm 12 (Node 26) prints `npm notice run script`.
+      assert.match(output, /(?:> |npm notice run )fmt:check\n(?:> |npm notice run )vp fmt --check/);
+      assert.doesNotMatch(output, /(?:> |npm notice run )check\n/);
       assert.match(output, installed ? /malformed\.js/ : /vp: (?:not found|command not found)/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
