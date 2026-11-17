@@ -1350,7 +1350,9 @@ export class Runtime {
       return null;
     }
     const contract = candidate.contract_rev === null ? null : this.describe(candidate.operation);
-    const grant = contract ? this.issueGrant(action_id, candidate, contract) : null;
+    const queued = Object.values(this.current.actions).filter((a) => a.state === 'running').length >= this.slots;
+    const issue = queued ? bindable : this.issueGrant.bind(this);
+    const grant = contract ? issue(action_id, candidate, contract) : null;
     const invocation_id = action_id;
     const started: ActionStartedPayload = {
       action_id,
@@ -1368,8 +1370,6 @@ export class Runtime {
     if (prepared) {
       this.preparedForAction.set(action_id, prepared);
     }
-    const running = Object.values(this.current.actions).filter((a) => a.state === 'running').length;
-    const queued = running >= this.slots;
     this.emitWeft((weft) => weft.dispatch(candidate));
     let recorded: Observation;
     try {
@@ -1810,6 +1810,7 @@ export class Runtime {
         });
         continue;
       }
+      const contract = record.contract_rev === null ? null : this.describe(record.operation);
       const started: ActionStartedPayload = {
         action_id: record.action_id,
         candidate_id: record.candidate_id,
@@ -1819,7 +1820,7 @@ export class Runtime {
         read_set: record.read_set,
         effects: record.effects,
         reservation: record.reservation,
-        grant: record.grant,
+        grant: contract ? this.issueGrant(record.action_id, candidate, contract) : null,
         invocation_id: record.invocation_id ?? record.action_id,
       };
       const recorded = this.append({
@@ -1833,7 +1834,6 @@ export class Runtime {
       if (recorded.validation.status !== 'accepted') {
         continue;
       }
-      const contract = record.contract_rev === null ? null : this.describe(record.operation);
       this.environment.execute(started, contract);
     }
   }
@@ -1844,13 +1844,13 @@ export class Runtime {
 
   private reconcileStep(): void {
     this.abandonUnrecordedInferences();
+    // Pending work is not recovered here. It is left to drainQueue, which may
+    // start it while this loop records results; it then holds a fresh grant
+    // from the current authority and has nothing to reconcile (§9.1).
     const unfinished = Object.values(this.current.actions).filter(
-      (a) => a.state === 'running' || a.state === 'pending' || (a.state === 'uncertain' && !a.reconciled),
+      (a) => a.state === 'running' || (a.state === 'uncertain' && !a.reconciled),
     );
     for (const action of unfinished) {
-      if (action.state === 'pending') {
-        continue;
-      }
       if (this.current.recovery.limit === 0 || this.current.recovery.spent >= this.current.recovery.limit) {
         this.recordRecoveryExhausted('recovery allowance exhausted');
         return;
@@ -2886,4 +2886,16 @@ export function traceCompletenessViolations(trace: Trace): string[] {
     }
   }
   return violations;
+}
+
+/**
+ * Queued work holds no grant until it starts (§9.1), but a grant that could
+ * never be issued is refused at dispatch, before anything is recorded.
+ */
+function bindable(action_id: ActionId, candidate: Candidate, contract: CapabilityContract): null {
+  const bound = bindSelectors(contract.permissions, candidate.inputs);
+  if (!bound.ok) {
+    throw new Error(`cannot issue grant for ${action_id}: ${bound.reason}`);
+  }
+  return null;
 }

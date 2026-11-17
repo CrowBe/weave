@@ -430,6 +430,51 @@ describe('M1 publish under authority', () => {
     assert.equal(world.runtime.state().actions[running.action_id]?.state, 'succeeded');
   });
 
+  it('RT-00 a queued action starts after restart under a grant from the current authority', async () => {
+    const world = m1World({ slots: 1 });
+    const pending = Object.values(world.runtime.state().actions).find((a) => a.state === 'pending')!;
+    assert.equal(pending.operation, 'source.inspect');
+    assert.equal(pending.grant, null);
+    const restored = restoreWorld(world, world.host.snapshot(), world.runtime.trace().observations);
+    assert.ok(restored.host.invocations.some((i) => i.action_id === pending.action_id));
+    const record = restored.runtime.state().actions[pending.action_id]!;
+    assert.equal(record.state, 'running');
+    assert.notEqual(record.grant, null);
+    await release(restored, pending.action_id);
+    const settled = restored.runtime.state().actions[pending.action_id]!;
+    assert.equal(settled.state, 'succeeded', `failure: ${settled.failure ?? 'none'}`);
+    const queued = world.runtime.trace().observations.find((o) => o.payload_type === 'action.queued')!;
+    assert.equal((queued.payload as { grant: unknown }).grant, null);
+    assert.equal(
+      restored.runtime
+        .trace()
+        .observations.some(
+          (o) =>
+            o.payload_type === 'recovery.attempted' &&
+            (o.payload as { action_id: string }).action_id === pending.action_id,
+        ),
+      false,
+    );
+  });
+
+  it('RT-00 a log recorded before the fix, with a grant on action.queued, still restarts the queued action', async () => {
+    const world = m1World({ slots: 1 });
+    const running = Object.values(world.runtime.state().actions).find((a) => a.state === 'running')!;
+    const pending = Object.values(world.runtime.state().actions).find((a) => a.state === 'pending')!;
+    const legacyGrant = { ...running.grant!, action_id: pending.action_id, issued_at: 11 };
+    const legacy = world.runtime
+      .trace()
+      .observations.map((o) =>
+        o.payload_type === 'action.queued' ? { ...o, payload: { ...(o.payload as object), grant: legacyGrant } } : o,
+      );
+    const restored = restoreWorld(world, world.host.snapshot(), legacy);
+    const record = restored.runtime.state().actions[pending.action_id]!;
+    assert.equal(record.state, 'running');
+    assert.notDeepEqual(record.grant, legacyGrant);
+    await release(restored, pending.action_id);
+    assert.equal(restored.runtime.state().actions[pending.action_id]?.state, 'succeeded');
+  });
+
   it('M1-T17 historical replay uses recorded contracts after revocation', async () => {
     const world = m1World();
     await assembleReport(world);
