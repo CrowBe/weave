@@ -1,22 +1,28 @@
-import type {
-  EvaluationKind,
-  EvaluationOutcome,
-  GenerationOutcome,
-  InferenceGateway,
-  InferenceTerms,
-  Tier,
-} from '@weave/gateway';
+import type { InferenceGateway, InferenceTerms, Tier } from '@weave/gateway';
 import { createGrantAuthority } from '@weave/agentsop';
 import { AgentFabricHost, TEXT_NORMALIZE, collapseWhitespace } from '@weave/agentfabric';
 import {
   DECIDE1_BANDS,
   LocalTaskStop,
   evaluateExtract,
+  gateExtract,
   type ExtractSchema,
   type LocalTask,
   type LocalTaskPorts,
   type LocalChild,
 } from '@weave/weave';
+import type { NativeExtractor } from './clairic.ts';
+
+interface AccountedOutcome {
+  readonly request_id: string;
+  readonly site: string;
+  readonly status: string;
+  readonly spent: number;
+  readonly attempts: readonly { model: string; cost: number; disposition: { status: string } }[];
+  readonly routed_unit_id?: string;
+  readonly reason?: string;
+  readonly paused?: unknown;
+}
 
 export interface InferenceEvidence {
   readonly task_id: string;
@@ -41,6 +47,7 @@ export function localTaskPorts(
   limits: LocalInferenceLimits,
   now: () => number,
   evidence: (event: InferenceEvidence) => void,
+  nativeExtract?: NativeExtractor,
 ) {
   const authority = createGrantAuthority();
   const host = new AgentFabricHost({ authority, contracts: [TEXT_NORMALIZE] });
@@ -60,12 +67,12 @@ export function localTaskPorts(
     tier,
     quality: 'baseline',
     destinations: limits.destinations,
-    max_context_tokens: 12_000,
+    max_context_tokens: 4_000,
     deadline: limits.deadline,
     cost_ceiling: limits.per_call_ceiling,
     max_attempts: 1,
   });
-  async function call<T extends GenerationOutcome | EvaluationOutcome<EvaluationKind>>(
+  async function call<T extends AccountedOutcome>(
     task: LocalTask,
     site: string,
     fn: (id: string) => Promise<T>,
@@ -175,25 +182,62 @@ export function localTaskPorts(
       .filter(([key]) => key !== answer.choice)
       .map(([, value]) => value);
     // Provisional experiment threshold, explicitly not a calibrated reliability claim.
-    if (
+    const admitted = !(
       probability === undefined ||
       !Number.isFinite(probability) ||
       probability < 0.7 ||
       probability - Math.max(0, ...others) < 0.15
-    )
+    );
+    evidence({
+      task_id: task.id,
+      site,
+      detail: {
+        choice: answer.choice,
+        probability,
+        probabilities: answer.probabilities,
+        admitted,
+        gate: { probability: 0.7, margin: 0.15 },
+      },
+    });
+    if (!admitted)
       throw new LocalTaskStop(
         'needs_human',
         `${site}: decision did not clear the experimental probability/margin gate.`,
       );
-    evidence({
-      task_id: task.id,
-      site,
-      detail: { choice: answer.choice, probability, probabilities: answer.probabilities },
-    });
     return answer.choice;
   }
   const ports: LocalTaskPorts = {
     async extract(task, signal) {
+      if (nativeExtract) {
+        const outcome = await call(task, 'local.extract', (id) =>
+          nativeExtract(
+            {
+              request_id: id,
+              site: 'local.extract',
+              state: task.input,
+              fields: { intent: 'The complete actionable request, including its constraints, copied verbatim.' },
+            },
+            signal,
+          ),
+        );
+        if (outcome.status !== 'accepted') throw new Error('Native extraction did not settle.');
+        const value = outcome.values['intent'] ?? null;
+        const observation = gateExtract(
+          INTENT,
+          task.input,
+          { intent: { value } },
+          {
+            site: 'local.band',
+            request_id: outcome.request_id,
+            state_revision: 1,
+          },
+        );
+        evidence({ task_id: task.id, site: 'local.extract.native', detail: outcome.evidence });
+        evidence({ task_id: task.id, site: 'local.extract.gate', detail: observation });
+        if (observation.reason !== 'faithful' || observation.residual_ambiguity.count !== 0 || value === null)
+          throw new LocalTaskStop('needs_human', 'Native extraction did not identify a grounded request.');
+        return value;
+      }
       let failure: unknown;
       // evaluateExtract owns grounding and rechecks the unchanged task revision after awaiting.
       const observation = await evaluateExtract(
@@ -292,15 +336,6 @@ export function localTaskPorts(
           'needs_human',
           'No established operation matches. The experiment does not silently generate instead.',
         );
-      const args = await json(
-        task,
-        'local.arguments',
-        'Extract the exact text operand from the task or dependency results. Return {"text":"verbatim operand"}. Do not execute the operation or alter the text.',
-        signal,
-      );
-      if (!args || typeof args !== 'object' || typeof (args as { text?: unknown }).text !== 'string')
-        throw new Error('Invalid operation arguments.');
-      const text = (args as { text: string }).text;
       const dependencyText: string[] = [];
       const strings = (value: unknown): void => {
         if (typeof value === 'string') dependencyText.push(value);
@@ -308,6 +343,35 @@ export function localTaskPorts(
         else if (value && typeof value === 'object') Object.values(value).forEach(strings);
       };
       strings(task.dependencies);
+      const nativeState = [task.input, ...dependencyText].join('\n\n');
+      const args = nativeExtract
+        ? await (async () => {
+            const outcome = await call(task, 'local.arguments', (id) =>
+              nativeExtract(
+                {
+                  request_id: id,
+                  site: 'local.arguments',
+                  state: nativeState,
+                  fields: {
+                    text: 'The exact text operand to normalize. Copy the content inside quotation marks, without the quotes. Preserve every space and newline.',
+                  },
+                },
+                signal,
+              ),
+            );
+            if (outcome.status !== 'accepted') throw new Error('Native argument extraction did not settle.');
+            evidence({ task_id: task.id, site: 'local.arguments.native', detail: outcome.evidence });
+            return { text: outcome.values['text'] };
+          })()
+        : await json(
+            task,
+            'local.arguments',
+            'Extract the exact text operand from the task or dependency results. Return {"text":"verbatim operand"}. Do not execute the operation or alter the text.',
+            signal,
+          );
+      if (!args || typeof args !== 'object' || typeof (args as { text?: unknown }).text !== 'string')
+        throw new Error('Invalid operation arguments.');
+      const text = (args as { text: string }).text;
       if (!task.input.includes(text) && !dependencyText.some((value) => value.includes(text)))
         throw new Error('Operation arguments are not grounded in disclosed text.');
       if (signal?.aborted) throw new LocalTaskStop('cancelled', 'Execution stopped.');

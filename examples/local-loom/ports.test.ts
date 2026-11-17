@@ -9,6 +9,7 @@ import type {
 } from '@weave/gateway';
 import { runLocalTask } from '@weave/weave';
 import { localTaskPorts, type InferenceEvidence } from './ports.ts';
+import { clairicExtractor } from './clairic.ts';
 
 function gateway(options: { low?: boolean; ungrounded?: boolean } = {}): InferenceGateway {
   return {
@@ -81,6 +82,7 @@ test('low decision probabilities and invented operands never reach Fabric', asyn
     const result = await runLocalTask('Normalize " a   b "', local.ports, limits);
     assert.notEqual(result.status, 'completed');
     assert.ok(!evidence.some((event) => event.site === 'local.fabric'));
+    if (options.low) assert.ok(evidence.some((event) => (event.detail as { admitted?: boolean }).admitted === false));
   }
 });
 
@@ -106,4 +108,36 @@ test('inference allowance and thrown extraction ports stop explicitly', async ()
   const failure = await runLocalTask('Normalize " a   b "', stopped.ports, limits);
   assert.equal(failure.status, 'failed');
   assert.ok(!JSON.stringify(failure).includes('secret provider error'));
+});
+
+test('native extraction bypasses text generation while retaining grounding, accounting and Fabric', async () => {
+  const native = clairicExtractor({
+    run: async (body) => {
+      const field = Object.keys(body.fields)[0]!;
+      const value = field === 'intent' ? body.state : ' a   b ';
+      const start = body.state.indexOf(value);
+      return {
+        model: 'clairic',
+        truncated: false,
+        answers: { [field]: { type: 'text', value, span: [start, start + value.length] } },
+        usage: { input_tokens: 10, output_tokens: 0 },
+      };
+    },
+  });
+  const inference = gateway();
+  inference.generate = async () => {
+    throw new Error('Native extraction must not call a text generator.');
+  };
+  const local = localTaskPorts(
+    inference,
+    budget,
+    () => 1,
+    () => {},
+    native,
+  );
+  const result = await runLocalTask('Normalize " a   b "', local.ports, limits);
+  assert.equal(result.status, 'completed', result.reason ?? '');
+  assert.deepEqual(result.output, { text: 'a b' });
+  assert.equal(local.stats().calls, 4);
+  assert.equal(local.stats().spent, 4);
 });

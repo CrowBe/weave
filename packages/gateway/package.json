@@ -8,6 +8,7 @@
   ],
   "type": "module",
   "exports": {
+    "./liquid-local": "./dist/src/adapters/liquid-local.js",
     "./local-text": "./dist/src/adapters/local-text.js",
     ".": "./dist/src/index.js",
     "./vercel-ai-gateway": "./dist/src/adapters/vercel-ai-gateway.js",

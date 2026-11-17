@@ -41,32 +41,83 @@ npm run loom:local
 Open `http://127.0.0.1:5180`. `npm run host:workspace` starts the same host.
 `LOOM_PORT` changes the loopback port. Configuration is read on startup.
 
-Decision routing uses `weave.routes.json` (or the example) and the existing
-`weave.routes.local.json` overlay. Its configured default decision provider is
-used for this experiment's sites: TypeSafe with its configured credential, or
-local Amos. There is no decision-provider fallback.
+## Installed local models and hosted extraction
 
-For local extraction/split proposals, add these to the git-ignored `.env.local`:
+On this machine, the first two models are downloaded and verified in the ignored
+`.local/inference` directory. No system-wide installation is required.
 
 ```sh
-LOOM_LOCAL_BASE_URL=http://127.0.0.1:8000/v1
-LOOM_LOCAL_MODEL=your-installed-text-model
+npm run loom:models:setup   # fetch pinned runtime/weights and verify SHA-256
+npm run loom:models         # keep this terminal open; Ctrl-C stops owned processes
+npm run loom:models:status
 ```
 
-The endpoint must implement OpenAI-compatible chat completions. The workspace
-does not install, download or start a model. The URL and model above are a
-configuration example, not a claim that a service is installed. Configuring a
-local text endpoint replaces hosted **flash** routes for this experiment.
+The CPU launcher uses llama.cpp b12359, a 4K context, one slot per model, four
+execution threads and six batch threads. Model revisions and hashes are pinned
+in `scripts/loom-models.mjs`. Text reasoning is disabled for bounded schema work.
 
-Alternatively supply a non-training-allowed flash `generate` / `transform`
-unit in the existing route document with an available adapter credential.
-Supported generation adapters are `vercel-ai-gateway`, `muse-spark` and
-`nous-portal`; contributor units marked training-allowed are deliberately
-excluded from this submitted-text workspace. A Vercel unit uses
-`AI_GATEWAY_API_KEY`. Frontier text generation requires a separately configured
-**strong** unit; flash extraction never falls through to it. Missing routes
-stop explicitly. CLI generation routes are not used: this experiment grants no
-workspace or process effects.
+| Route                               | Model                                                | Local endpoint                       | Weights |
+| ----------------------------------- | ---------------------------------------------------- | ------------------------------------ | ------- |
+| Text extraction and split proposals | LiquidAI/LFM3-1.7B, Q4_K_M                           | `http://127.0.0.1:8081/v1`           | 1.10 GB |
+| Native decisions                    | LiquidAI/d1-2B, Q8_0                                 | `http://127.0.0.1:8082/v1/systemone` | 1.85 GB |
+| Native extraction                   | Cloudflare Clairic through authenticated `cf ai run` | Cloudflare Workers AI                | Hosted  |
+
+The worktree's ignored `.env.local` selects these routes:
+
+```sh
+LOOM_EXTRACTOR=clairic
+LOOM_LOCAL_BASE_URL=http://127.0.0.1:8081/v1
+LOOM_LOCAL_MODEL=lfm3-1.7b
+LOOM_DECISION_BASE_URL=http://127.0.0.1:8082
+LOOM_DECISION_MODEL=d1-2b
+```
+
+Clairic uses native typed text fields, not generated JSON. Exact spans and
+truncation are checked before values reach Loom; guesses for null answers are
+never promoted. The CLI keeps its own authentication, and request bodies use
+private temporary files removed after settlement. Billing records use returned
+input-token usage at $0.10 per million tokens, including repeated passes, with
+zero output tokens. See [Clairic's model reference](https://developers.cloudflare.com/workers-ai/models/clairic/).
+
+Set `LOOM_EXTRACTOR=` to use LFM3 locally for extraction as well. This is
+**generative schema extraction with a grounding gate**, not native single-pass
+extraction. Native d1 typed extraction is not yet supported by llama.cpp; its
+Noul/Choice/Score endpoint is used for decisions. Liquid documents typed
+extraction through Transformers instead. See [d1 serving support](https://docs.liquid.ai/lfm/models/d1-2b).
+
+Without the local decision override, the existing route document and its overlay
+select TypeSafe or Amos as before. There is no implicit provider fallback.
+Without the local text override, explicitly configured non-training flash routes
+may be used. Extraction needs an `extract` routed unit; split proposals need a
+`transform` unit. Strong generation remains separately configured, and neither
+local text nor Clairic silently enables a frontier route.
+
+### Other LFM3 models
+
+The [six-model release](https://huggingface.co/blog/LiquidAI/lfm3) also includes
+LFM3-VL-2B, LFM3-Audio-2B, LFM3-Omni-2B and d1-omni-2B. These cover vision,
+audio, omni generation and omni decisions. They are not installed by this first
+text-workspace setup. Quantized weights are plausible within this machine's
+32 GiB RAM, but codec/encoder memory, supported serving endpoints and CPU latency
+still need individual checks. The gateway should preserve each model's native
+operation rather than treating every model as chat completions.
+
+### Live wiring probes
+
+```sh
+npm run loom:smoke                         # Clairic + local d1 + Fabric
+npm run loom:smoke -- --all-local           # local LFM3 + local d1 + Fabric
+npm run loom:smoke -- --compound            # inspect a decomposition request
+```
+
+These use only fixed synthetic text, save evidence under `.local/inference`, and
+exit nonzero when the run does not complete. They are wiring probes, not a
+benchmark or an estimate of model reliability. Both single-operation routes
+completed `hello world` on this machine. A two-string request stopped at the
+provisional decision gate before decomposition in the hybrid probe. The fully
+local compound probe stopped at extraction acceptance. These are observed limitations,
+not a reason to lower the gate or a claim that recursive model-driven work is
+already reliable.
 
 Start with `Normalize whitespace in "  hello    world  "`. Compound requests can
 exercise split admission and recursive child execution. With only normalization

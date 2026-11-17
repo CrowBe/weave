@@ -27,6 +27,7 @@ const api = createLocalApi({
       },
       () => Date.now(),
       evidence,
+      config.nativeExtract,
     ),
 });
 
