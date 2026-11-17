@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createLocalApi } from './api.ts';
 import type { LocalTaskPorts } from '@weave/weave';
+import { LocalGaugeStore } from './gauge.ts';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const origin = 'http://127.0.0.1:5180';
 const status = { ready: true, messages: [], routes: [], generation_available: false, scope: 'Text only' };
@@ -21,7 +25,12 @@ function request(path: string, body?: unknown, foreign = false) {
         },
   );
 }
-function api(extra: Partial<LocalTaskPorts> = {}) {
+function api(
+  extra: Partial<LocalTaskPorts> = {},
+  recording: Partial<
+    Pick<Parameters<typeof createLocalApi>[0], 'recordRun' | 'readGauge' | 'initial' | 'resetDisplay'>
+  > = {},
+) {
   const ports: LocalTaskPorts = {
     extract: async (task) => task.input,
     decide: async () => 'tool_call',
@@ -35,6 +44,7 @@ function api(extra: Partial<LocalTaskPorts> = {}) {
     origin,
     status,
     createPorts: () => ({ ports, stats: () => ({ calls: 0, spent: 0, reserved: 0 }) }),
+    ...recording,
   });
 }
 
@@ -79,4 +89,76 @@ test('concurrent submission, stale cancellation, cross-origin and oversized inpu
   >;
   assert.equal(stopped.result?.status, 'cancelled');
   assert.equal((await local.handle(request('/api/runs', { input: 'x'.repeat(16_001) }))).status, 400);
+});
+
+test('settlement archives Gauge evidence and restores the displayed run without re-executing it', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'loom-api-gauge-'));
+  try {
+    const store = new LocalGaugeStore(directory);
+    const local = api(
+      { decide: async () => 'ask_human', clarify: async () => 'Which output format?' },
+      {
+        recordRun: (run) => store.save(run),
+        readGauge: (key) => store.read(key),
+        resetDisplay: () => store.resetDisplay(),
+      },
+    );
+    await local.handle(request('/api/runs', { input: 'Convert the recipe PDF' }));
+    await local.settled();
+    assert.equal(local.snapshot()?.gauge?.verdict, 'meets_bar');
+    const restored = api(
+      {
+        act: async () => {
+          throw new Error('Restore must not execute.');
+        },
+      },
+      { initial: new LocalGaugeStore(directory).latest() },
+    );
+    assert.equal(restored.snapshot()?.result?.question, 'Which output format?');
+    const evidence = (await (await local.handle(request('/api/run/gauge'))).json()) as { records: unknown[] };
+    assert.ok(evidence.records.length > 0);
+    const key = local.snapshot()!.gauge!.key;
+    await local.handle(request('/api/run/reset', {}));
+    assert.equal(store.latest(), null);
+    assert.ok(store.read(key));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('a reply retains the original request and question, and rejects a stale question id', async () => {
+  const inputs: string[] = [];
+  const local = api({
+    extract: async (task) => {
+      inputs.push(task.input);
+      return task.input;
+    },
+    decide: async (task) => (task.input.includes('OPERATOR ANSWER') ? 'tool_call' : 'ask_human'),
+    clarify: async () => 'Which output format?',
+  });
+  await local.handle(request('/api/runs', { input: 'Convert the recipe PDF' }));
+  await local.settled();
+  const parent = local.snapshot()!.id;
+  assert.equal((await local.handle(request('/api/runs', { input: 'Markdown', reply_to: 'wrong-run' }))).status, 409);
+  assert.equal((await local.handle(request('/api/runs', { input: 'Markdown', reply_to: parent }))).status, 202);
+  await local.settled();
+  assert.equal(local.snapshot()?.parent_run, parent);
+  assert.ok(inputs[1]?.includes('Convert the recipe PDF'));
+  assert.ok(inputs[1]?.includes('Which output format?'));
+  assert.ok(inputs[1]?.includes('Markdown'));
+});
+
+test('a recording failure remains visible and does not erase the actual execution result', async () => {
+  const local = api(
+    {},
+    {
+      recordRun: () => {
+        throw new Error('disk unavailable');
+      },
+    },
+  );
+  await local.handle(request('/api/runs', { input: 'a test' }));
+  await local.settled();
+  assert.equal(local.snapshot()?.result?.status, 'completed');
+  assert.ok(local.snapshot()?.recording_error?.includes('could not be saved'));
 });

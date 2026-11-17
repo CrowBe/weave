@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import './local-workspace.css';
 
 interface Status {
@@ -11,10 +11,20 @@ interface Status {
 interface Run {
   id: string;
   input: string;
+  operator_input?: string;
   status: 'running' | 'stopping' | 'settled';
   events: { sequence: number; task_id: string; parent: string | null; stage: string; detail: unknown }[];
-  result: { status: string; output: unknown; reason: string | null; nodes: number; requires_review: boolean } | null;
+  result: {
+    status: string;
+    output: unknown;
+    reason: string | null;
+    nodes: number;
+    requires_review: boolean;
+    question?: string | null;
+  } | null;
   stats: { calls: number; spent: number; reserved: number };
+  gauge?: { key: string; verdict: string; gaps: string[] };
+  recording_error?: string;
 }
 async function api<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(path, {
@@ -55,13 +65,108 @@ function download(run: Run) {
   URL.revokeObjectURL(url);
 }
 
+function RunOutput({ run, current }: { run: Run; current: boolean }) {
+  const active = current && run.status !== 'settled';
+  const answering = current && run.result?.status === 'needs_human' && Boolean(run.result.question);
+  const last = run.events.at(-1);
+  return (
+    <section className="local-run" aria-label="Run output">
+      <p className="local-request">{run.operator_input ?? run.input}</p>
+      <div className="local-run-status" role="status" aria-live="polite">
+        {active
+          ? run.status === 'stopping'
+            ? 'Stopping…'
+            : `Working${last ? ` · ${last.task_id} · ${last.stage}` : '…'}`
+          : run.result?.status === 'completed'
+            ? 'Run completed'
+            : answering
+              ? 'Waiting for your answer'
+              : run.result?.status.replaceAll('_', ' ')}
+      </div>
+      {run.result?.question ? (
+        <p className="local-question" data-testid="clarifying-question">
+          {run.result.question}
+        </p>
+      ) : run.result?.reason ? (
+        <p>{run.result.reason}</p>
+      ) : null}
+      {run.recording_error ? (
+        <p className="local-error" role="alert">
+          {run.recording_error}
+        </p>
+      ) : null}
+      {run.result?.status === 'completed' ? (
+        <div>
+          {run.result.requires_review ? (
+            <p className="local-review">Includes generated text. Review the result.</p>
+          ) : null}
+          <pre className="local-result" data-testid="run-result">
+            {format(run.result.output)}
+          </pre>
+        </div>
+      ) : null}
+      <details className="local-evidence">
+        <summary>
+          Execution evidence{' '}
+          <span>
+            {run.events.length} events · {run.stats.calls} calls · ${(run.stats.spent / 1_000_000).toFixed(4)}
+          </span>
+        </summary>
+        {run.gauge ? (
+          <div className="local-gauge">
+            <p>
+              Gauge feedback checks:{' '}
+              {run.gauge.verdict === 'meets_bar'
+                ? 'passed'
+                : run.gauge.verdict === 'misses_bar'
+                  ? 'gap recorded'
+                  : 'inconclusive'}
+            </p>
+            <ul>
+              {run.gauge.gaps.map((gap) => (
+                <li key={gap}>{gap.replaceAll('_', ' ')}</li>
+              ))}
+            </ul>
+            <a href={`/api/run/gauge?key=${run.gauge.key}`} download={`gauge-${run.id}.json`}>
+              Download Gauge records
+            </a>
+          </div>
+        ) : null}
+        <div className="local-evidence-actions">
+          <button type="button" onClick={() => download(run)}>
+            Download evidence
+          </button>
+        </div>
+        <ol>
+          {run.events.map((event) => (
+            <li key={event.sequence}>
+              <details>
+                <summary>
+                  <span>{event.task_id}</span> {event.stage}
+                  {event.parent ? ` ← ${event.parent}` : ''}
+                </summary>
+                <pre>{JSON.stringify(event.detail, null, 2)}</pre>
+              </details>
+            </li>
+          ))}
+        </ol>
+      </details>
+    </section>
+  );
+}
+
 export function Host() {
   const [status, setStatus] = useState<Status | null>(null);
   const [run, setRun] = useState<Run | null>(null);
+  const [history, setHistory] = useState<Run[]>([]);
+  const transcript = useRef<HTMLDivElement>(null);
+  const textarea = useRef<HTMLTextAreaElement>(null);
+  const following = useRef(true);
   const [input, setInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const active = run !== null && run.status !== 'settled';
+  const answering = run?.result?.status === 'needs_human' && Boolean(run.result.question);
   useEffect(() => {
     const controller = new AbortController();
     void Promise.all([
@@ -105,12 +210,27 @@ export function Host() {
       clearTimeout(timer);
     };
   }, [active]);
+  useLayoutEffect(() => {
+    const element = textarea.current;
+    if (!element) return;
+    element.style.height = '0px';
+    const height = Math.min(66, Math.max(22, element.scrollHeight));
+    element.style.height = `${height}px`;
+    element.style.overflowY = element.scrollHeight > 66 ? 'auto' : 'hidden';
+  }, [input]);
+  useLayoutEffect(() => {
+    const element = transcript.current;
+    if (element && following.current) element.scrollTop = element.scrollHeight;
+  }, [run?.events.length, run?.status, history.length]);
   async function submit() {
     if (!input.trim() || active || pending) return;
     setPending(true);
     setError(null);
     try {
-      setRun(await api<Run>('/api/runs', { input }));
+      const next = await api<Run>('/api/runs', { input, ...(answering && run ? { reply_to: run.id } : {}) });
+      if (run) setHistory((previous) => [...previous, run]);
+      following.current = true;
+      setRun(next);
       setInput('');
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Could not start the run.');
@@ -134,6 +254,8 @@ export function Host() {
     try {
       await api('/api/run/reset', {});
       setRun(null);
+      setHistory([]);
+      setInput('');
       setError(null);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Could not clear the run.');
@@ -141,7 +263,6 @@ export function Host() {
       setPending(false);
     }
   }
-  const last = run?.events.at(-1);
   return (
     <div className="local-workspace">
       <header className="local-header">
@@ -180,7 +301,10 @@ export function Host() {
                   </li>
                 ))}
               </ul>
-              <p>Restart the local server after changing configuration. Runs are held in memory.</p>
+              <p>
+                Restart the local server after changing configuration. Settled runs and Gauge evidence are saved
+                locally.
+              </p>
             </div>
           ) : null}
         </details>
@@ -189,61 +313,27 @@ export function Host() {
             {error}
           </p>
         ) : null}
-        {run ? (
-          <section className="local-run" aria-label="Current run">
-            <p className="local-request">{run.input}</p>
-            <div className="local-run-status" role="status" aria-live="polite">
-              {active
-                ? run.status === 'stopping'
-                  ? 'Stopping…'
-                  : `Working${last ? ` · ${last.task_id} · ${last.stage}` : '…'}`
-                : run.result?.status === 'completed'
-                  ? 'Run completed'
-                  : run.result?.status.replaceAll('_', ' ')}
+        <div
+          className="local-transcript"
+          ref={transcript}
+          role="log"
+          aria-label="Session output"
+          onScroll={() => {
+            const element = transcript.current;
+            if (element) following.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+          }}
+        >
+          {history.map((previous) => (
+            <RunOutput key={previous.id} run={previous} current={false} />
+          ))}
+          {run ? (
+            <RunOutput run={run} current />
+          ) : (
+            <div className="local-empty">
+              <h1>What would you like to test?</h1>
             </div>
-            {run.result?.reason ? <p>{run.result.reason}</p> : null}
-            {run.result?.status === 'completed' ? (
-              <div>
-                {run.result.requires_review ? (
-                  <p className="local-review">Includes generated text. Review the result.</p>
-                ) : null}
-                <pre className="local-result" data-testid="run-result">
-                  {format(run.result.output)}
-                </pre>
-              </div>
-            ) : null}
-            <details className="local-evidence">
-              <summary>
-                Execution evidence{' '}
-                <span>
-                  {run.events.length} events · {run.stats.calls} calls · ${(run.stats.spent / 1_000_000).toFixed(4)}
-                </span>
-              </summary>
-              <div className="local-evidence-actions">
-                <button type="button" onClick={() => download(run)}>
-                  Download evidence
-                </button>
-              </div>
-              <ol>
-                {run.events.map((event) => (
-                  <li key={event.sequence}>
-                    <details>
-                      <summary>
-                        <span>{event.task_id}</span> {event.stage}
-                        {event.parent ? ` ← ${event.parent}` : ''}
-                      </summary>
-                      <pre>{JSON.stringify(event.detail, null, 2)}</pre>
-                    </details>
-                  </li>
-                ))}
-              </ol>
-            </details>
-          </section>
-        ) : (
-          <div className="local-empty">
-            <h1>What would you like to test?</h1>
-          </div>
-        )}
+          )}
+        </div>
         <form
           className="local-input"
           onSubmit={(event) => {
@@ -256,21 +346,22 @@ export function Host() {
           </label>
           <textarea
             id="task-input"
+            ref={textarea}
             value={input}
             onChange={(event) => setInput(event.target.value)}
             maxLength={16_000}
-            rows={3}
-            placeholder="Describe a task…"
+            rows={1}
+            placeholder={answering ? 'Answer Loom’s question…' : 'Describe a task…'}
             disabled={active || pending}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+              if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
                 event.preventDefault();
                 void submit();
               }
             }}
           />
           <div className="local-input-actions">
-            <span>Submitted text only</span>
+            <span>Enter to send · Shift+Enter for a new line</span>
             {active ? (
               <button
                 className="local-primary"
@@ -284,7 +375,7 @@ export function Host() {
               </button>
             ) : (
               <button className="local-primary" type="submit" disabled={!input.trim() || !status?.ready || pending}>
-                {pending ? 'Starting…' : 'Run'}
+                {pending ? 'Starting…' : answering ? 'Reply' : 'Run'}
               </button>
             )}
           </div>

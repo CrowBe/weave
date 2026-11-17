@@ -193,3 +193,103 @@
     margin-left: 0;
   }
 }
+.local-question {
+  font-size: 17px;
+  line-height: 1.65;
+  margin: 16px 0 24px;
+  white-space: pre-wrap;
+}
+.local-gauge {
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid #e4e7df;
+  border-radius: 6px;
+}
+.local-gauge p {
+  margin: 0 0 6px;
+}
+.local-gauge ul {
+  list-style: disc;
+  padding-left: 18px;
+  margin: 6px 0 10px;
+}
+.local-gauge a {
+  text-decoration: underline;
+}
+/* Keep the transcript scrollable while the composer stays at the bottom. */
+.local-workspace {
+  height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.local-header {
+  flex-shrink: 0;
+}
+.local-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 0;
+}
+.local-configuration {
+  flex-shrink: 0;
+  max-height: 28vh;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+.local-transcript {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 5px 24px;
+  scrollbar-width: thin;
+}
+.local-empty {
+  flex: 1;
+  min-height: 0;
+}
+.local-run {
+  flex-shrink: 0;
+  padding-bottom: 28px;
+}
+.local-request {
+  width: fit-content;
+  max-width: 90%;
+  margin-left: auto;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #edf0e8;
+  font-size: 14px;
+}
+.local-input {
+  flex-shrink: 0;
+  margin-top: 8px;
+  padding: 12px 14px;
+}
+.local-input textarea {
+  box-sizing: border-box;
+  height: 22px;
+  min-height: 22px;
+  max-height: 66px;
+  padding: 0;
+  line-height: 22px;
+  resize: none;
+  overflow-y: hidden;
+}
+.local-input-actions {
+  margin-top: 8px;
+}
+.local-input-actions > span {
+  max-width: 75%;
+  line-height: 1.4;
+}
+@media (max-width: 600px) {
+  .local-empty {
+    min-height: 0;
+  }
+}

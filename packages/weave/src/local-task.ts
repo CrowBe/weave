@@ -19,12 +19,23 @@ export interface LocalTaskPorts {
   admitSplit(task: LocalTask, children: readonly LocalChild[], signal?: AbortSignal): Promise<boolean>;
   act(task: LocalTask, signal?: AbortSignal): Promise<unknown>;
   generate(task: LocalTask, signal?: AbortSignal): Promise<unknown>;
+  clarify?(task: LocalTask, reason: string, signal?: AbortSignal): Promise<string>;
 }
 export interface LocalTaskEvent {
   readonly sequence: number;
   readonly task_id: string;
   readonly parent: string | null;
-  readonly stage: 'input' | 'extract' | 'decide' | 'split' | 'act' | 'generate' | 'join' | 'result' | 'stopped';
+  readonly stage:
+    | 'input'
+    | 'extract'
+    | 'decide'
+    | 'split'
+    | 'act'
+    | 'generate'
+    | 'join'
+    | 'result'
+    | 'stopped'
+    | 'clarify';
   readonly detail: unknown;
 }
 export interface LocalTaskLimits {
@@ -38,11 +49,13 @@ export interface LocalTaskResult {
   readonly reason: string | null;
   readonly nodes: number;
   readonly requires_review: boolean;
+  readonly question?: string | null;
 }
 export class LocalTaskStop extends Error {
   constructor(
     readonly status: Exclude<LocalTaskResult['status'], 'completed'>,
     reason: string,
+    readonly task: LocalTask | null = null,
   ) {
     super(reason);
   }
@@ -94,7 +107,8 @@ export async function runLocalTask(
     const band = await step(() => ports.decide(task, intent, abort.signal));
     event(task, 'decide', { band });
     let output: unknown;
-    if (band === 'ask_human') throw new LocalTaskStop('needs_human', 'The task needs clarification or authority.');
+    if (band === 'ask_human')
+      throw new LocalTaskStop('needs_human', 'The task needs clarification or authority.', task);
     if (band === 'spawn_subtasks') {
       const plan = structuredClone(await step(() => ports.split(task, abort.signal)));
       const seen = new Set<string>();
@@ -117,7 +131,11 @@ export async function runLocalTask(
       if (nodes + plan.length > limits.max_nodes || depth === limits.max_depth)
         throw new LocalTaskStop('budget_exhausted', 'Task node or depth allowance exhausted before split.');
       if (!(await step(() => ports.admitSplit(task, plan, abort.signal))))
-        throw new LocalTaskStop('needs_human', 'The proposed split did not establish coverage and useful progress.');
+        throw new LocalTaskStop(
+          'needs_human',
+          'The proposed split did not establish coverage and useful progress.',
+          task,
+        );
       const ids = plan.map(() => `task-${++nodes}`);
       event(task, 'split', { children: plan.map((child, i) => ({ ...child, id: ids[i] })) });
       const jobs: Promise<unknown>[] = [];
@@ -160,10 +178,34 @@ export async function runLocalTask(
     const output = await execute(root, 0, []);
     return { status: 'completed', output, reason: null, nodes, requires_review: requiresReview };
   } catch (error) {
-    const status = signal?.aborted ? 'cancelled' : error instanceof LocalTaskStop ? error.status : 'failed';
+    let status = signal?.aborted ? 'cancelled' : error instanceof LocalTaskStop ? error.status : 'failed';
     const reason = error instanceof Error ? error.message : 'Execution failed.';
+    let question: string | null = null;
+    if (status === 'needs_human' && ports.clarify) {
+      const task = error instanceof LocalTaskStop && error.task ? error.task : root;
+      event(task, 'clarify', { status: 'started', reason });
+      try {
+        // Child work has settled. Only operator cancellation governs this bounded question call.
+        const proposed = await ports.clarify(task, reason, signal);
+        if (signal?.aborted) status = 'cancelled';
+        else {
+          if (typeof proposed !== 'string' || !proposed.trim() || proposed.length > 1000)
+            throw new Error('Invalid question.');
+          question = proposed.trim();
+          event(task, 'clarify', { status: 'provided', question });
+        }
+      } catch (clarificationError) {
+        if (signal?.aborted) status = 'cancelled';
+        else
+          event(task, 'clarify', {
+            status: 'failed',
+            reason: 'clarification_unavailable',
+            failure_status: clarificationError instanceof LocalTaskStop ? clarificationError.status : 'failed',
+          });
+      }
+    }
     event(root, 'stopped', { status, reason });
-    return { status, output: null, reason, nodes, requires_review: requiresReview };
+    return { status, output: null, reason, nodes, requires_review: requiresReview, question };
   } finally {
     signal?.removeEventListener('abort', cancel);
   }

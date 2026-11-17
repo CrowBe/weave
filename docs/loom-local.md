@@ -21,8 +21,8 @@ decision; its result is marked as requiring review. A completed experimental run
 means its admitted operations settled, not that generated prose is proven true.
 
 The workspace starts empty. It offers input, stop, new run, results and expandable
-execution evidence. Runs are held in memory; evidence can be downloaded. Restart
-does not recover work. Bounded call counts, per-call cost reservations, node
+execution evidence. Active work is held in memory; settled evidence is archived
+locally and can be downloaded. Restart does not recover execution. Bounded call counts, per-call cost reservations, node
 counts, a deadline and an abort signal prevent unbounded experiments. Provider
 failures stop visibly; they do not trigger an implicit frontier fallback.
 
@@ -134,3 +134,48 @@ these are experimental thresholds, not measured calibration.
 `npm run test:loom-local` runs the local loop, API and real-Fabric integration
 tests without provider calls. `npm run verify` retains the repository's broader
 checks. Download evidence before clearing a run or restarting the server.
+
+## Clarification and Gauge feedback
+
+When a decision fails its admission gate, or Loom selects `ask_human`, one
+bounded flash-model call formulates a specific question from the original
+request, actual available operations and decision evidence. It shares the run's
+inference allowance and cancellation signal. It cannot dispatch an operation,
+change a grant, select a frontier model, or turn a question into task completion.
+The result stays `needs_human`. If question generation fails, both the original
+stop and the failed attempt remain visible in evidence.
+
+The workspace displays the question and accepts an answer. A reply starts a
+linked attempt retaining the original request and question; it does not grant
+new capabilities. Stale question identifiers are refused.
+
+On settlement, the local host writes immutable run snapshots and validated Gauge
+records to `.local/gauge/runs/`. The original input, model distributions,
+extraction spans, question attempts, results, call counts and accounted costs
+remain available. Gauge uses existing criteria, case sets, governed revisions,
+evaluation results, info-only results and attribution records. It imports no
+Loom implementation and changes no model threshold or routing preference.
+
+The feedback checks ask whether a question was present when needed, whether a
+rejected decision blocked further dispatch, and whether a question was kept
+separate from completion. Passing these narrow checks does not evaluate the
+usefulness of the question or correctness of the original task's output.
+Diagnostic measures retain decision rejections, clarification attempts, exact
+span character coverage, capability no-match observations and inference use.
+Semantic extraction completeness is explicitly unassessed; span grounding does
+not prove it. Root-cause attribution abstains when the existing evidence does
+not establish a supported category. The original missing-question run is
+retained as a failed feedback check, even when a later question is available.
+
+The latest settled run is restored for display after a server restart, without
+executing or recovering work. New run clears that display while retaining the
+archives. Recording failures are shown explicitly. In-flight work is still held
+in memory; this is settlement recording, not crash recovery. CLI smoke probes
+write equivalent Gauge archives to `.local/gauge/smoke/`.
+
+The composer grows from one line to a maximum of three rows, then scrolls
+internally. Enter submits; Shift+Enter inserts a newline, and IME composition
+is preserved. Session output is chronological in its own vertical scroll area.
+New output follows the bottom until the operator scrolls up. Previous attempts
+stay visible during the browser session; New run clears that view. Only the
+latest settled attempt is restored after a page reload or service restart.

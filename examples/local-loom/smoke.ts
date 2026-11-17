@@ -1,8 +1,11 @@
 /** A synthetic live wiring probe, not a benchmark or a model quality estimate. */
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { runLocalTask, type LocalTaskEvent } from '@weave/weave';
+import { runLocalTask } from '@weave/weave';
+import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { localConfiguration } from './config.ts';
 import { localTaskPorts, type InferenceEvidence } from './ports.ts';
+import { LocalGaugeStore, type RunEvidence } from './gauge.ts';
 
 const flags = process.argv.slice(2);
 if (flags.some((flag) => !['--all-local', '--compound'].includes(flag))) throw new Error('Unknown smoke flag.');
@@ -14,7 +17,8 @@ const config = localConfiguration(
 );
 if (!config.status.ready) throw new Error(config.status.messages.join(' '));
 const evidence: InferenceEvidence[] = [];
-const events: LocalTaskEvent[] = [];
+const events: RunEvidence['events'][number][] = [];
+const startedAt = new Date().toISOString();
 const local = localTaskPorts(
   config.gateway,
   {
@@ -25,7 +29,16 @@ const local = localTaskPorts(
     destinations: config.destinations,
   },
   () => Date.now(),
-  (event) => evidence.push(event),
+  (event) => {
+    evidence.push(event);
+    events.push({
+      sequence: events.length + 1,
+      task_id: event.task_id,
+      parent: null,
+      stage: 'inference',
+      detail: { site: event.site, ...(event.detail as object) },
+    });
+  },
   config.nativeExtract,
 );
 const input = compound
@@ -36,8 +49,17 @@ const result = await runLocalTask(
   local.ports,
   { max_nodes: 16, max_depth: 4, concurrency: 2 },
   undefined,
-  (event) => events.push(event),
+  (event) => events.push({ ...event, sequence: events.length + 1 }),
 );
+const gauge = new LocalGaugeStore(fileURLToPath(new URL('../../.local/gauge/smoke/', import.meta.url))).save({
+  id: `smoke-${randomUUID()}`,
+  input,
+  started_at: startedAt,
+  status: 'settled',
+  result,
+  stats: local.stats(),
+  events,
+});
 const directory = new URL('../../.local/inference/', import.meta.url);
 mkdirSync(directory, { recursive: true });
 const file = new URL(`smoke-${allLocal ? 'local' : 'hybrid'}-${compound ? 'compound' : 'single'}.json`, directory);
@@ -52,11 +74,12 @@ writeFileSync(
       stats: local.stats(),
       evidence,
       events,
+      gauge,
     },
     null,
     2,
   ) + '\n',
   { mode: 0o600 },
 );
-console.log(JSON.stringify({ result, stats: local.stats(), evidence: file.pathname }, null, 2));
+console.log(JSON.stringify({ result, stats: local.stats(), gauge, evidence: file.pathname }, null, 2));
 if (result.status !== 'completed') process.exitCode = 1;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { runLocalTask, type LocalTaskPorts, type LocalTaskEvent } from '../src/local-task.js';
+import { runLocalTask, LocalTaskStop, type LocalTaskPorts, type LocalTaskEvent } from '../src/local-task.js';
 
 function ports(overrides: Partial<LocalTaskPorts> = {}): LocalTaskPorts {
   return {
@@ -14,6 +14,65 @@ function ports(overrides: Partial<LocalTaskPorts> = {}): LocalTaskPorts {
   };
 }
 const limits = { max_nodes: 16, max_depth: 8, concurrency: 2 };
+
+test('an unclear decision uses one clarification call and does not execute an action', async () => {
+  let questions = 0;
+  let actions = 0;
+  const result = await runLocalTask(
+    'convert the recipe PDF',
+    ports({
+      decide: async () => {
+        throw new LocalTaskStop('needs_human', 'uncertain band');
+      },
+      clarify: async (task: { input: string }, reason: string) => {
+        questions++;
+        assert.equal(task.input, 'convert the recipe PDF');
+        assert.equal(reason, 'uncertain band');
+        return 'Would you like Markdown or a Word document?';
+      },
+      act: async () => {
+        actions++;
+        return 'must not execute';
+      },
+    }),
+    limits,
+  );
+  assert.equal(result.status, 'needs_human');
+  assert.equal(result.question, 'Would you like Markdown or a Word document?');
+  assert.equal(result.output, null);
+  assert.equal(questions, 1);
+  assert.equal(actions, 0);
+});
+
+test('failed or cancelled clarification never invents a question or completes the task', async () => {
+  const failed = await runLocalTask(
+    'ambiguous request',
+    ports({
+      decide: async () => 'ask_human',
+      clarify: async () => {
+        throw new Error('unavailable');
+      },
+    }),
+    limits,
+  );
+  assert.equal(failed.status, 'needs_human');
+  assert.equal(failed.question, null);
+  const abort = new AbortController();
+  const cancelled = await runLocalTask(
+    'ambiguous request',
+    ports({
+      decide: async () => 'ask_human',
+      clarify: async () => {
+        abort.abort();
+        return 'A late question?';
+      },
+    }),
+    limits,
+    abort.signal,
+  );
+  assert.equal(cancelled.status, 'cancelled');
+  assert.equal(cancelled.question, null);
+});
 
 test('a real operation result is preserved; a capability exception fails the run', async () => {
   const result = await runLocalTask(' normalize this ', ports(), limits);

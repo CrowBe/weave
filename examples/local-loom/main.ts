@@ -5,6 +5,7 @@ import { createServer as createViteServer } from 'vite';
 import { createLocalApi } from './api.ts';
 import { localConfiguration } from './config.ts';
 import { localTaskPorts } from './ports.ts';
+import { LocalGaugeStore } from './gauge.ts';
 
 const root = new URL('../../', import.meta.url);
 const port = Number(process.env['LOOM_PORT'] ?? 5180);
@@ -12,9 +13,14 @@ if (!Number.isInteger(port) || port < 1024 || port > 65535)
   throw new Error('LOOM_PORT must be between 1024 and 65535.');
 const origin = `http://127.0.0.1:${port}`;
 const config = localConfiguration(process.env, root);
+const gauge = new LocalGaugeStore(fileURLToPath(new URL('.local/gauge/runs/', root)));
 const api = createLocalApi({
   origin,
   status: config.status,
+  initial: gauge.latest(),
+  recordRun: (run) => gauge.save(run),
+  readGauge: (key) => gauge.read(key),
+  resetDisplay: () => gauge.resetDisplay(),
   createPorts: (evidence) =>
     localTaskPorts(
       config.gateway,

@@ -141,3 +141,69 @@ test('native extraction bypasses text generation while retaining grounding, acco
   assert.equal(local.stats().calls, 4);
   assert.equal(local.stats().spent, 4);
 });
+
+test('clarification uses the flash route and shares the run allowance', async () => {
+  const inference = gateway();
+  inference.generate = async (request) => {
+    assert.equal(request.site, 'local.clarify');
+    assert.equal(request.terms.tier, 'flash');
+    assert.ok(request.input.prompt.includes('original request'));
+    assert.ok(request.input.prompt.includes('text.normalize'));
+    const text = 'Which output format would you prefer?';
+    assert.equal(request.accept?.(text).status, 'accepted');
+    return {
+      status: 'accepted',
+      request_id: request.request_id,
+      site: request.site,
+      text,
+      routed_unit_id: 'local-text.flash',
+      provider_response_id: undefined,
+      attempts: [],
+      spent: 1,
+      uncertainty: [],
+    };
+  };
+  const local = localTaskPorts(
+    inference,
+    { ...budget, max_calls: 1 },
+    () => 1,
+    () => {},
+  );
+  const task = { id: 'task-1', parent: null, input: 'original request', dependencies: [] };
+  assert.equal(await local.ports.clarify!(task, 'uncertain band'), 'Which output format would you prefer?');
+  await assert.rejects(local.ports.clarify!(task, 'uncertain band'), /allowance exhausted/);
+  assert.equal(local.stats().calls, 1);
+});
+
+test('a valid question followed by a scope note remains a valid clarification', async () => {
+  const inference = gateway();
+  inference.generate = async (request) => {
+    const text = 'Which output format do you prefer? This workspace cannot access files yet.';
+    assert.equal(request.accept?.(text).status, 'accepted');
+    return {
+      status: 'accepted',
+      request_id: request.request_id,
+      site: request.site,
+      text,
+      routed_unit_id: 'local-text.flash',
+      provider_response_id: undefined,
+      attempts: [],
+      spent: 1,
+      uncertainty: [],
+    };
+  };
+  const local = localTaskPorts(
+    inference,
+    budget,
+    () => 1,
+    () => {},
+  );
+  assert.ok(
+    (
+      await local.ports.clarify!(
+        { id: 'task-1', parent: null, input: 'Convert a sample PDF.', dependencies: [] },
+        'uncertain',
+      )
+    ).includes('Which output format'),
+  );
+});
