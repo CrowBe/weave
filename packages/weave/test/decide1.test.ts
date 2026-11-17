@@ -49,6 +49,16 @@ const FACT_NAMES = [
   'route.accepted',
   // P5c1: every trace names its entry; root rows require a root.
   'entry.kind',
+  // P4c: the Decide-2 tool stage and its derived pick.
+  'tool.status',
+  'tool.reason',
+  'decide2.entries',
+  'decide2.top',
+  'decide2.pick',
+  'decide2.margin',
+  'decide2.top_reversible',
+  'decide2.top_plausible',
+  'args.missing',
 ];
 function inputs(patch: Record<string, Decide1Fact['value']> = {}): Decide1Inputs {
   const values: Record<string, Decide1Fact['value']> = {
@@ -67,15 +77,76 @@ function inputs(patch: Record<string, Decide1Fact['value']> = {}): Decide1Inputs
     'route.reason': 'accepted',
     'route.accepted': true,
     'entry.kind': 'root',
+    'decide2.entries': 0,
     ...patch,
   };
   return {
     judgments: [{ name: 'route.confidence', probability: 1 }],
-    facts: FACT_NAMES.map((name) => ({ name, value: values[name]! })),
+    facts: FACT_NAMES.map((name) => ({ name, value: values[name] ?? null })),
   };
 }
 function absent(stage: 'triage' | 'route') {
   return Object.fromEntries(['choice', 'status', 'reason', 'accepted'].map((key) => [`${stage}.${key}`, null]));
+}
+/** Decide-2 facts over an accepted capability triage (P4c). */
+function tool(patch: Record<string, Decide1Fact['value']> = {}): Record<string, Decide1Fact['value']> {
+  return {
+    'triage.choice': 'capability',
+    ...absent('route'),
+    'tool.status': 'transition',
+    'tool.reason': 'answered',
+    'decide2.entries': 2,
+    'decide2.top': 'op.a',
+    'decide2.pick': 'op.a',
+    'decide2.margin': 0.5,
+    'decide2.top_reversible': true,
+    'decide2.top_plausible': true,
+    'args.missing': 0,
+    ...patch,
+  };
+}
+const NO_PICK = { 'decide2.pick': null, 'args.missing': null };
+function toolCases(): [Record<string, Decide1Fact['value']>, string, string][] {
+  return [
+    [tool(), 'act.tool', 'tool_call'],
+    [tool({ 'decide2.top_reversible': false }), 'act.tool', 'tool_call'],
+    [tool({ 'args.missing': 1 }), 'ask.tool_args', 'ask_human'],
+    [tool({ ...NO_PICK, 'decide2.margin': 0.1 }), 'gen.no_tool_margin', 'escalate_gen'],
+    [tool({ ...NO_PICK, 'decide2.top_reversible': false }), 'ask.tool_irreversible', 'ask_human'],
+    // An implausible irreversible top is not operator ambiguity: no ask on low confidence.
+    [
+      tool({ ...NO_PICK, 'decide2.top_reversible': false, 'decide2.top_plausible': false }),
+      'gen.no_tool_margin',
+      'escalate_gen',
+    ],
+    ...['no_answer', 'invalid_answer'].map((reason): [Record<string, Decide1Fact['value']>, string, string] => [
+      tool({
+        ...NO_PICK,
+        'tool.reason': reason,
+        'decide2.top': null,
+        'decide2.margin': null,
+        'decide2.top_reversible': null,
+        'decide2.top_plausible': false,
+      }),
+      'gen.no_tool_margin',
+      'escalate_gen',
+    ]),
+    ...['stale_answer', 'mismatched_answer', 'decision_unavailable', 'cancelled'].map(
+      (reason): [Record<string, Decide1Fact['value']>, string, string] => [
+        tool({
+          ...NO_PICK,
+          'tool.reason': reason,
+          'tool.status': ['decision_unavailable', 'cancelled'].includes(reason) ? 'paused' : 'transition',
+          'decide2.top': null,
+          'decide2.margin': null,
+          'decide2.top_reversible': null,
+          'decide2.top_plausible': false,
+        }),
+        reason === 'decision_unavailable' ? 'hold.outage' : reason === 'cancelled' ? 'hold.paused' : 'hold.admission',
+        'tool_call',
+      ],
+    ),
+  ];
 }
 interface Case {
   input: Decide1Inputs;
@@ -178,8 +249,9 @@ function domain(): Case[] {
       );
     }
   }
+  // P4c: an accepted capability with no catalogue has no tool margin; tool-stage cases follow.
   for (const [choice, rule] of [
-    ['capability', 'act.capability'],
+    ['capability', 'gen.no_tool_margin'],
     ['done_check', 'act.done_check'],
     ['out_of_scope', 'act.decline'],
     ['needs_human', 'ask.triage'],
@@ -191,17 +263,18 @@ function domain(): Case[] {
         ...absent('route'),
       },
       rule!,
-      choice === 'needs_human' ? 'ask_human' : 'tool_call',
+      choice === 'needs_human' ? 'ask_human' : choice === 'capability' ? 'escalate_gen' : 'tool_call',
       'triage',
     );
+  for (const [patch, rule, band] of toolCases()) add(patch, rule, band, 'tool');
   for (const choice of TIERS) add({ 'route.choice': choice }, 'gen.route', 'escalate_gen', 'route');
   return cases;
 }
 
 test('P4a-1 table shape: frozen, closed, unique, no bare spawn', () => {
-  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@3');
+  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@4');
   assert.ok(Object.isFrozen(DECIDE1_RULES));
-  assert.equal(new Set(DECIDE1_RULES.map((row) => row.id)).size, 21);
+  assert.equal(new Set(DECIDE1_RULES.map((row) => row.id)).size, 24);
   for (const row of DECIDE1_RULES) {
     assert.ok(Object.isFrozen(row));
     assert.ok(isCode(row.id));
@@ -232,7 +305,15 @@ test('P4a-2 totality and reachability over reachable stage tuples; impossible ch
     assert.throws(() => decideBand(inputs(patch)), /decide1: no rule matched/);
 });
 test('P4a-3 D-ENG-030: loop fallbacks never ask; admission failures and outages always hold', () => {
-  const asks = ['ask.intake', 'ask.irreversible', 'ask.thread_target', 'ask.triage', 'ask.route'];
+  const asks = [
+    'ask.intake',
+    'ask.irreversible',
+    'ask.thread_target',
+    'ask.triage',
+    'ask.tool_irreversible',
+    'ask.tool_args',
+    'ask.route',
+  ];
   assert.deepEqual(
     DECIDE1_RULES.filter((row) => row.band === 'ask_human').map((row) => row.id),
     asks,
@@ -241,6 +322,13 @@ test('P4a-3 D-ENG-030: loop fallbacks never ask; admission failures and outages 
     const trace = decideBand(input);
     const reason = input.facts.find((fact) => fact.name === `${stage}.reason`)!.value;
     if (stage !== 'intake' && FALLBACKS.includes(reason as string)) assert.notEqual(trace.band, 'ask_human');
+    // P4c: Decide-2 low confidence asks only for a plausible irreversible top (D-ENG-030).
+    if (trace.rule === 'ask.tool_irreversible') {
+      const fact = (name: string) => input.facts.find((item) => item.name === name)?.value;
+      assert.equal(fact('decide2.top_reversible'), false);
+      assert.equal(fact('decide2.top_plausible'), true);
+      assert.equal(fact('tool.reason'), 'answered');
+    }
     if (['stale_answer', 'mismatched_answer', 'decision_unavailable'].includes(reason as string))
       assert.ok(trace.rule.startsWith('hold.'));
     if (trace.band === 'ask_human' && !trace.rule.startsWith('hold.')) assert.ok(asks.includes(trace.rule));
@@ -248,8 +336,11 @@ test('P4a-3 D-ENG-030: loop fallbacks never ask; admission failures and outages 
 });
 test('D-ENG-049: generation rows require a transition status', () => {
   for (const row of DECIDE1_RULES.filter((row) => row.id.startsWith('gen.'))) {
-    const stage = row.id === 'gen.triage_fallback' ? 'triage' : 'route';
-    const base = inputs({ [`${stage}.accepted`]: row.id === 'gen.route' || row.id === 'gen.child' });
+    const stage = row.id === 'gen.triage_fallback' || row.id === 'gen.no_tool_margin' ? 'triage' : 'route';
+    const base =
+      row.id === 'gen.no_tool_margin'
+        ? inputs({ 'triage.choice': 'capability', ...absent('route') })
+        : inputs({ [`${stage}.accepted`]: row.id === 'gen.route' || row.id === 'gen.child' });
     const facts = new Map<string, Decide1Fact['value']>(base.facts.map((fact) => [fact.name, fact.value]));
     // P5c1 child generation rows read a satisfied generate child's D2 stage.
     if (CHILD_ROWS.includes(row.id))
@@ -275,6 +366,8 @@ test('P4a-4 withheld band covers every stage choice, including stale D1 implemen
       choice === 'implement' ? 'escalate_gen' : choice === 'needs_human' ? 'ask_human' : 'tool_call',
     );
   for (const choice of TIERS) assert.equal(bandOfChoice('route', choice), 'escalate_gen');
+  // P4c: a held tool stage withholds the capability call.
+  assert.equal(bandOfChoice('tool', 'capability'), 'tool_call');
   for (const row of domain().filter((row) => row.rule.startsWith('hold.')))
     assert.equal(decideBand(row.input).band, row.band);
   // Merged P3a can pause on reuse after intake, before D1 exists.
@@ -546,7 +639,11 @@ test('P4a-2/3 transitionSite domain crosses choices, statistics, admission, outa
                 break;
               }
               if (value.choice !== 'implement') {
-                expected = [value.choice === 'out_of_scope' ? 'act.decline' : `act.${value.choice}`, 'tool_call'];
+                // P4c: capability with no catalogue disclosed has no tool margin.
+                expected =
+                  value.choice === 'capability'
+                    ? ['gen.no_tool_margin', 'escalate_gen']
+                    : [value.choice === 'out_of_scope' ? 'act.decline' : `act.${value.choice}`, 'tool_call'];
                 break;
               }
             } else expected = [value.observation.accepted ? 'gen.route' : 'gen.route_fallback', 'escalate_gen'];
@@ -661,7 +758,7 @@ test('P4b-2 trace concatenates read then shadow and validates both partitions wi
   assert.deepEqual(input, before);
   assert.deepEqual(decideBand({ ...read, shadow: { judgments: [], facts: [] } } as Decide1Inputs), decideBand(read));
   assert.deepEqual(decideBand(read), {
-    table: 'decide1.rules@3',
+    table: 'decide1.rules@4',
     judgments: read.judgments,
     facts: read.facts,
     rule: 'gen.route',
@@ -723,16 +820,43 @@ const RULES_V3 = [
   ['gen.child_fallback', 'escalate_gen'],
   ...RULES_V2.slice(3),
 ];
+// P4c: Decide-2 replaces act.capability with four rows in its place; nothing else moves.
+const P4C_ROWS = [
+  ['ask.tool_irreversible', 'ask_human'],
+  ['gen.no_tool_margin', 'escalate_gen'],
+  ['ask.tool_args', 'ask_human'],
+  ['act.tool', 'tool_call'],
+];
+const RULES_V4 = RULES_V3.flatMap((row) => (row[0] === 'act.capability' ? P4C_ROWS : [row]));
+/** The @4 table with the P4c rows folded back into the one act.capability row they replaced. */
+function asV3(rows: readonly (readonly string[])[]): string[][] {
+  const out: string[][] = [];
+  for (const [id, band] of rows) {
+    if (P4C_ROWS.some(([p4c]) => p4c === id)) {
+      if (id === 'act.tool') out.push(['act.capability', 'tool_call']);
+      continue;
+    }
+    out.push([id!, band!]);
+  }
+  return out;
+}
 
-test('P4b-3 decide1.rules@3 retains the exact P4a ids, order and bands, plus spawn.preflight', () => {
-  // Deliberate P5c1 move: the snapshot is @3 with 21 ids.
-  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@3');
+test('P4c-1 decide1.rules@4 replaces act.capability with the four Decide-2 rows and nothing else', () => {
+  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@4');
   assert.deepEqual(
     DECIDE1_RULES.map(({ id, band }) => [id, band]),
-    RULES_V3,
+    RULES_V4,
   );
+  assert.deepEqual(asV3(DECIDE1_RULES.map(({ id, band }) => [id, band])), RULES_V3);
+});
+
+test('P4b-3 decide1.rules@4 retains the exact P4a ids, order and bands, plus spawn.preflight', () => {
+  // Deliberate P5c1 move: the snapshot is @3 with 21 ids; P4c-1 pins the @4 diff.
+  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@4');
+  const v3 = asV3(DECIDE1_RULES.map(({ id, band }) => [id, band]));
+  assert.deepEqual(v3, RULES_V3);
   assert.deepEqual(
-    DECIDE1_RULES.filter(({ id }) => !CHILD_ROWS.includes(id)).map(({ id, band }) => [id, band]),
+    v3.filter(([id]) => !CHILD_ROWS.includes(id!)),
     RULES_V2,
   );
   assert.deepEqual(
@@ -782,14 +906,14 @@ function withoutSpawnRow(input: Decide1Inputs): string | undefined {
 }
 
 test('P5b-1 table @3 keeps spawn.preflight immediately before gen.route', () => {
-  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@3');
+  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@4');
   assert.deepEqual(
     DECIDE1_RULES.map(({ id, band }) => [id, band]),
-    RULES_V3,
+    RULES_V4,
   );
-  assert.equal(DECIDE1_RULES[17]?.id, 'spawn.preflight');
-  assert.equal(DECIDE1_RULES[18]?.id, 'gen.route');
-  assert.equal(DECIDE1_RULES.length, 21);
+  assert.equal(DECIDE1_RULES[20]?.id, 'spawn.preflight');
+  assert.equal(DECIDE1_RULES[21]?.id, 'gen.route');
+  assert.equal(DECIDE1_RULES.length, 24);
 });
 
 test('P5b-2 the spawn row diff is the only behaviour change over the reachable domain', () => {

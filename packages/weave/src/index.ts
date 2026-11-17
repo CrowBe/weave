@@ -442,6 +442,27 @@ export {
 } from './sites/spawn-roles.js';
 
 export {
+  DECIDE2_SITE,
+  DECIDE2_ARGS_SITE,
+  DECIDE2_ARGS_SCHEMA,
+  DECIDE2_QUESTION,
+  DECIDE2_POLICY,
+  decide2Pick,
+  plausibleTop,
+  transitionDecide2,
+  askDecide2,
+  decide2ArgsSchema,
+  decideTool,
+  type CatalogueEntry,
+  type Decide2Ask,
+  type Decide2Observation,
+  type Decide2Pick,
+  type Decide2Reason,
+  type RecordedDecide2Answer,
+  type ToolDecision,
+} from './sites/decide2.js';
+
+export {
   DECIDE1_SHADOW_JUDGMENTS,
   DECIDE1_SHADOW_QUESTIONS,
   transitionShadow,

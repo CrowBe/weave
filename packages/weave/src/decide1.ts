@@ -1,7 +1,7 @@
 /** Decide-1 is deterministic policy over bounded observations, never execution authority. */
 export const DECIDE1_BANDS = Object.freeze(['tool_call', 'spawn_subtasks', 'escalate_gen', 'ask_human'] as const);
 export type Band = (typeof DECIDE1_BANDS)[number];
-export const DECIDE1_RULE_TABLE = 'decide1.rules@3' as const;
+export const DECIDE1_RULE_TABLE = 'decide1.rules@4' as const;
 export interface Decide1Judgment {
   readonly name: string;
   readonly probability: number;
@@ -33,7 +33,10 @@ export type Decide1RuleId =
   | 'ask.thread_target'
   | 'act.thread'
   | 'ask.triage'
-  | 'act.capability'
+  | 'ask.tool_irreversible'
+  | 'gen.no_tool_margin'
+  | 'ask.tool_args'
+  | 'act.tool'
   | 'act.done_check'
   | 'act.decline'
   | 'gen.triage_fallback'
@@ -51,7 +54,8 @@ interface Decide1Rule {
   readonly when: (facts: ReadonlyMap<string, Decide1Fact['value']>, judgments: ReadonlyMap<string, number>) => boolean;
   readonly band: Band | 'withheld';
 }
-const STAGES = ['intake', 'triage', 'route'] as const;
+/** P4c: the Decide-2 `tool` stage pauses and holds exactly like the site stages. */
+const STAGES = ['intake', 'triage', 'route', 'tool'] as const;
 const THREADS = ['continue_thread', 'steer', 'queue', 'interrupt'];
 const TIERS = ['flash', 'standard', 'strong'];
 const admission = (reason: unknown) => reason === 'stale_answer' || reason === 'mismatched_answer';
@@ -62,6 +66,13 @@ type Facts = ReadonlyMap<string, Decide1Fact['value']>;
 const root = (f: Facts) => f.get('entry.kind') === 'root';
 const child = (f: Facts, kind: 'read' | 'generate') => f.get('entry.kind') === 'child' && f.get('child.kind') === kind;
 const joined = (f: Facts) => child(f, 'generate') && f.get('child.dependencies') === 'satisfied';
+/** D1 accepted capability: Decide-2 then picks the tool (P4c). */
+const capability = (f: Facts) =>
+  root(f) &&
+  f.get('triage.status') === 'transition' &&
+  f.get('triage.accepted') === true &&
+  f.get('triage.choice') === 'capability';
+const picked = (f: Facts) => capability(f) && f.get('decide2.pick') != null;
 const routed = (f: Facts) => f.get('route.status') === 'transition' && TIERS.includes(f.get('route.choice') as string);
 const CHILD_FACTS = [
   'child.kind',
@@ -88,6 +99,14 @@ const ROOT_FACTS = [
   'spawn.gain',
   'spawn.children',
   'spawn.plan',
+  'tool.status',
+  'tool.reason',
+  'decide2.top',
+  'decide2.pick',
+  'decide2.margin',
+  'decide2.top_reversible',
+  'decide2.top_plausible',
+  'args.missing',
 ];
 
 /** Ordered first-match policy. Later slices add inputs and rows here, never a second dispatch path. */
@@ -148,10 +167,27 @@ export const DECIDE1_RULES: readonly Decide1Rule[] = Object.freeze(
       },
       { id: 'ask.triage', when: (f) => root(f) && f.get('triage.status') === 'needs_human', band: 'ask_human' },
       {
-        id: 'act.capability',
-        when: (f) => root(f) && f.get('triage.accepted') === true && f.get('triage.choice') === 'capability',
-        band: 'tool_call',
+        // No clear margin and a plausible irreversible top: D-ENG-030's one low-confidence ask.
+        id: 'ask.tool_irreversible',
+        when: (f) =>
+          capability(f) &&
+          f.get('decide2.pick') == null &&
+          f.get('decide2.top_plausible') === true &&
+          f.get('decide2.top_reversible') === false,
+        band: 'ask_human',
       },
+      {
+        // Owner decision (Open question 2): generation over the full disclosed index, no narrowing.
+        id: 'gen.no_tool_margin',
+        when: (f) => capability(f) && f.get('decide2.pick') == null,
+        band: 'escalate_gen',
+      },
+      {
+        id: 'ask.tool_args',
+        when: (f) => picked(f) && natural(f.get('args.missing')) && (f.get('args.missing') as number) > 0,
+        band: 'ask_human',
+      },
+      { id: 'act.tool', when: (f) => picked(f) && f.get('args.missing') === 0, band: 'tool_call' },
       {
         id: 'act.done_check',
         when: (f) => root(f) && f.get('triage.accepted') === true && f.get('triage.choice') === 'done_check',
@@ -209,6 +245,10 @@ export const DECIDE1_RULES: readonly Decide1Rule[] = Object.freeze(
   ).map((row) => Object.freeze(row)),
 );
 
+function natural(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
 /** Same bounded-id screen as correlation(), kept local so policy imports no judgment site. */
 function id(value: unknown): value is string {
   return (
@@ -242,6 +282,8 @@ export function bandOfChoice(stage: string, choice: unknown): Band {
     if (choice === 'implement') return 'escalate_gen';
   }
   if (stage === 'route' && TIERS.includes(choice as string)) return 'escalate_gen';
+  // The tool stage withholds the capability call it would have made.
+  if (stage === 'tool') return 'tool_call';
   throw new Error('decide1: no band for choice');
 }
 
@@ -265,6 +307,34 @@ function childSet(facts: Facts): boolean {
   }
 }
 
+/** The tool stage follows only an accepted capability triage over a non-empty catalogue (P4c). */
+function toolSet(facts: Facts): boolean {
+  const reason = facts.get('tool.reason');
+  // Absent means no catalogue was disclosed (a trace from before P4c names no Decide-2 fact).
+  const entries = facts.get('decide2.entries') ?? 0;
+  if (!natural(entries) || entries > 8) return false;
+  const derived = ['decide2.top', 'decide2.pick', 'decide2.margin', 'decide2.top_reversible', 'args.missing'];
+  if (reason == null) {
+    if (facts.get('tool.status') != null || derived.some((name) => facts.get(name) != null)) return false;
+    // An accepted capability over disclosed entries asks Decide-2 before any row reads it, unless a
+    // gate (stale or cancelled) withheld the triage stage first.
+    return !(
+      capability(facts) &&
+      entries > 0 &&
+      facts.get('triage.status') === 'transition' &&
+      facts.get('triage.reason') === 'accepted'
+    );
+  }
+  if (!(capability(facts) && entries > 0 && facts.get('triage.status') === 'transition')) return false;
+  if (facts.get('decide2.pick') != null) {
+    // A picked entry's args extract may itself hold the stage (cancelled, stale or an outage).
+    if (!['answered', 'cancelled', 'stale_answer', 'decision_unavailable'].includes(reason as string)) return false;
+    if (facts.get('decide2.pick') !== facts.get('decide2.top')) return false;
+    if (!natural(facts.get('args.missing'))) return false;
+  } else if (facts.get('args.missing') != null) return false;
+  return true;
+}
+
 /** Impossible stage sets are code defects, not operator ambiguity. */
 function stageSet(facts: ReadonlyMap<string, Decide1Fact['value']>): boolean {
   const entry = facts.get('entry.kind');
@@ -280,6 +350,7 @@ function stageSet(facts: ReadonlyMap<string, Decide1Fact['value']>): boolean {
       return false;
     if (facts.get('triage.accepted') === false && triage !== 'implement') return false;
   }
+  if (!toolSet(facts)) return false;
   if (
     route != null &&
     (triage !== 'implement' ||

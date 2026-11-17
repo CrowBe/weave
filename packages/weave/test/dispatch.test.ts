@@ -402,7 +402,8 @@ test('1. chain: intake -> D1 -> D2 -> one implement dispatch, in dependency orde
 
 test('2. D1 capability, done_check, out_of_scope and needs_human', async () => {
   const cases: readonly [StagePlan, DispatchIntent['kind'] | null, string][] = [
-    [{ choice: 'capability' }, 'capability', 'dispatched'],
+    // P4c: with no catalogue disclosed, an accepted capability has no tool margin (gen.no_tool_margin).
+    [{ choice: 'capability' }, 'implement', 'dispatched'],
     [{ choice: 'done_check' }, 'done_check', 'dispatched'],
     [{ choice: 'out_of_scope' }, 'decline', 'dispatched'],
     [{ choice: 'needs_human' }, null, 'needs_human'],
@@ -411,7 +412,7 @@ test('2. D1 capability, done_check, out_of_scope and needs_human', async () => {
     const h = harness({ triage });
     const decision = await run(h);
     assert.equal(decision.status, status, triage.choice);
-    assert.equal(decision.decided_by, 'triage', triage.choice);
+    assert.equal(decision.decided_by, triage.choice === 'capability' ? 'rule' : 'triage', triage.choice);
     assert.equal(
       h.evaluateCalls.some((request) => request.site === 'loop.route'),
       false,
@@ -427,7 +428,20 @@ test('2. D1 capability, done_check, out_of_scope and needs_human', async () => {
       assert.equal(decision.intent, null, triage.choice);
     } else {
       assert.equal(h.dispatchCalls.length, 1, triage.choice);
-      assert.deepEqual(h.dispatchCalls[0], { kind, dispatch_id: 'd1:dispatch' }, triage.choice);
+      assert.deepEqual(
+        h.dispatchCalls[0],
+        kind === 'implement'
+          ? {
+              kind,
+              dispatch_id: 'd1:dispatch',
+              tier: 'standard',
+              ceiling: 'standard',
+              tier_source: 'no_tool_margin',
+              catalogue_digest: digest([]),
+            }
+          : { kind, dispatch_id: 'd1:dispatch' },
+        triage.choice,
+      );
     }
   }
 });
@@ -1099,6 +1113,7 @@ test('16. records keep their exact key order and carry no authority or copied te
     'intake',
     'triage',
     'route',
+    'tool',
     'shadow',
     'preflight',
   ]);
@@ -1114,6 +1129,8 @@ test('16. records keep their exact key order and carry no authority or copied te
     'intake',
     'triage',
     'route',
+    'tool',
+    'catalogue_digest',
     'shadow',
     'preflight',
     'preflight_budget',
@@ -1123,7 +1140,7 @@ test('16. records keep their exact key order and carry no authority or copied te
     'child',
     'intent',
   ]);
-  assert.deepEqual(Object.keys(checkpoint.asks), ['intake', 'triage', 'route', 'shadow', 'preflight']);
+  assert.deepEqual(Object.keys(checkpoint.asks), ['intake', 'triage', 'route', 'tool', 'shadow', 'preflight']);
   assertNoAuthorityKeys(decision);
   assertNoAuthorityKeys(checkpoint);
   assertRecordCopiesNoText(decision, CANARIES);
@@ -1826,7 +1843,7 @@ test('28. a claimed intent survives a terminal stale pause and append surfaces f
   const request = makeRequest();
   assert.equal(journal.claim('d1', claimed), true);
   const orphan: DispatchDecision = {
-    schema: 'dispatch.decision@6',
+    schema: 'dispatch.decision@7',
     rule_table: DECIDE1_RULE_TABLE,
     decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: 'd1',
@@ -1842,6 +1859,7 @@ test('28. a claimed intent survives a terminal stale pause and append surfaces f
     intake: null,
     triage: null,
     route: null,
+    tool: null,
     shadow: null,
     preflight: null,
   };
@@ -2034,9 +2052,15 @@ test('31. property: every recorded checkpoint replays to the live decision on th
 });
 
 test('32. the journal is a single-writer state machine per decision id', () => {
-  const intent: DispatchIntent = { kind: 'capability', dispatch_id: 'd1:dispatch' };
+  const intent: DispatchIntent = {
+    kind: 'capability',
+    dispatch_id: 'd1:dispatch',
+    entry_ref: 'op.a',
+    catalogue_digest: 'c'.repeat(64),
+    args_ref: null,
+  };
   const decision = (patch: Partial<DispatchDecision>): DispatchDecision => ({
-    schema: 'dispatch.decision@6',
+    schema: 'dispatch.decision@7',
     rule_table: DECIDE1_RULE_TABLE,
     decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: 'd1',
@@ -2052,6 +2076,7 @@ test('32. the journal is a single-writer state machine per decision id', () => {
     intake: null,
     triage: null,
     route: null,
+    tool: null,
     shadow: null,
     preflight: null,
     ...patch,
@@ -2069,13 +2094,15 @@ test('32. the journal is a single-writer state machine per decision id', () => {
   assert.equal(terminal.claim('d1', intent), false);
   assert.equal(terminal.append(decision({ entry: 2, status: 'needs_human', reason: 'low_confidence' })), false);
   terminal.checkpoint({
-    schema: 'dispatch.checkpoint@5',
+    schema: 'dispatch.checkpoint@6',
     decision_id: 'd1',
     ...REVISION,
-    asks: { intake: 9, triage: 0, route: 0, shadow: 0, preflight: 0 },
+    asks: { intake: 9, triage: 0, route: 0, tool: 0, shadow: 0, preflight: 0 },
     intake: null,
     triage: null,
     route: null,
+    tool: null,
+    catalogue_digest: null,
     shadow: null,
     preflight: null,
     preflight_budget: null,
@@ -2245,9 +2272,15 @@ test('34. a crashed attempt ends only on the port settlement, never by time, wit
   assert.equal(journal.append({ ...settled, entry: 2 }, { attempt: crashed }), false);
 
   // The journal contract: one live attempt per claimed intent, single-use ids, no expiry.
-  const intent: DispatchIntent = { kind: 'capability', dispatch_id: 'd1:dispatch' };
+  const intent: DispatchIntent = {
+    kind: 'capability',
+    dispatch_id: 'd1:dispatch',
+    entry_ref: 'op.a',
+    catalogue_digest: 'c'.repeat(64),
+    args_ref: null,
+  };
   const owned = (status: DispatchDecision['status'], reason: DispatchDecision['reason']): DispatchDecision => ({
-    schema: 'dispatch.decision@6',
+    schema: 'dispatch.decision@7',
     rule_table: DECIDE1_RULE_TABLE,
     decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: 'd1',
@@ -2263,6 +2296,7 @@ test('34. a crashed attempt ends only on the port settlement, never by time, wit
     intake: null,
     triage: null,
     route: null,
+    tool: null,
     shadow: null,
     preflight: null,
   });
@@ -2447,7 +2481,13 @@ test('37. a superseded or retired attempt token never regains append authority',
   assert.equal(entered + c.dispatchCalls.length + b.dispatchCalls.length, 2);
 
   // Journal level: a token retired by its own append never appends again.
-  const intent: DispatchIntent = { kind: 'capability', dispatch_id: 'd1:dispatch' };
+  const intent: DispatchIntent = {
+    kind: 'capability',
+    dispatch_id: 'd1:dispatch',
+    entry_ref: 'op.a',
+    catalogue_digest: 'c'.repeat(64),
+    args_ref: null,
+  };
   const plain = new MemoryDispatchJournal();
   assert.equal(plain.claim('d1', intent), true);
   const first = plain.acquire('d1')!;
@@ -2922,6 +2962,16 @@ const FACT_NAMES = [
   'child.read_bytes',
   'child.share',
   'child.boundary',
+  // P4c: the Decide-2 tool stage and its derived pick, after the child facts.
+  'tool.status',
+  'tool.reason',
+  'decide2.entries',
+  'decide2.top',
+  'decide2.pick',
+  'decide2.margin',
+  'decide2.top_reversible',
+  'decide2.top_plausible',
+  'args.missing',
   'residual_ambiguity',
   'clarify.reason',
   'multi_deliverable.reason',
@@ -2929,10 +2979,11 @@ const FACT_NAMES = [
   'veto_bare_gen.reason',
 ];
 /** P4a's 14 facts plus P4b's five shadow facts, selected by name. */
-const P4B_FACT_NAMES = new Set([...FACT_NAMES.slice(0, 14), ...FACT_NAMES.slice(37)]);
+const P4B_FACT_NAMES = new Set([...FACT_NAMES.slice(0, 14), ...FACT_NAMES.slice(46)]);
 const PARITY: readonly [Plan, string, string][] = [
   [{}, 'gen.route', 'escalate_gen'],
-  [{ triage: { choice: 'capability' } }, 'act.capability', 'tool_call'],
+  // P4c: the one deliberate parity move; no catalogue means no tool margin.
+  [{ triage: { choice: 'capability' } }, 'gen.no_tool_margin', 'escalate_gen'],
   [{ triage: { choice: 'done_check' } }, 'act.done_check', 'tool_call'],
   [{ triage: { choice: 'out_of_scope' } }, 'act.decline', 'tool_call'],
   [{ triage: { choice: 'needs_human' } }, 'ask.triage', 'ask_human'],
@@ -3034,7 +3085,7 @@ test('P4a-8 @3 stores exactly the pure trace, fixed facts and bounded judgments 
   const h = harness();
   const decision = await run(h);
   const checkpoint = h.journal.load('d1').checkpoint!;
-  assert.equal(decision.schema, 'dispatch.decision@6');
+  assert.equal(decision.schema, 'dispatch.decision@7');
   assert.equal(decision.rule_table, DECIDE1_RULE_TABLE);
   const { table, ...trace } = decideBand(decide1Inputs(h.request, checkpoint));
   assert.equal(table, decision.rule_table);
@@ -3302,7 +3353,8 @@ test('P4a-14 consequential requests stay identical; only eligible decisions add 
     const consequential = h.evaluateCalls.filter((call) => !call.site.startsWith('decide1.'));
     const shadow = h.evaluateCalls.filter((call) => call.site.startsWith('decide1.'));
     const eligible = [
-      'act.capability',
+      'act.tool',
+      'gen.no_tool_margin',
       'act.done_check',
       'act.decline',
       'gen.triage_fallback',
@@ -3421,7 +3473,7 @@ function p4aProjection(decision: DispatchDecision) {
 }
 
 function shadowReasons(decision: DispatchDecision) {
-  return decision.decide1.facts.slice(38, 42).map((fact) => fact.value);
+  return decision.decide1.facts.slice(47, 51).map((fact) => fact.value);
 }
 
 test('P4b-7/10. shadow modes preserve outcomes for every stage shape and receipt', async () => {
@@ -3444,9 +3496,10 @@ test('P4b-7/10. shadow modes preserve outcomes for every stage shape and receipt
       const h = harness({ ...scenario, shadow });
       const result = await run(h);
       assert.deepEqual(p4aProjection(result), p4aProjection(baseline));
-      assert.equal(result.decide1.facts.length, 42);
+      assert.equal(result.decide1.facts.length, 51);
       const eligible = [
-        'act.capability',
+        'act.tool',
+        'gen.no_tool_margin',
         'act.done_check',
         'act.decline',
         'gen.triage_fallback',
@@ -3777,12 +3830,12 @@ test('P4b-13. residual ambiguity is the final D1 extract count, with fixed fact 
   ] as const) {
     const h = harness(plan);
     const live = await run(h);
-    assert.equal(live.decide1.facts.length, 42);
+    assert.equal(live.decide1.facts.length, 51);
     assert.deepEqual(
-      live.decide1.facts.slice(37, 42).map((f) => f.name),
+      live.decide1.facts.slice(46, 51).map((f) => f.name),
       ['residual_ambiguity', ...SHADOW_NAMES.map((j) => `${j}.reason`)],
     );
-    assert.equal(live.decide1.facts[37]?.value, residual);
+    assert.equal(live.decide1.facts[46]?.value, residual);
     assert.deepEqual(transitionDispatch(h.request, h.journal.load('d1').checkpoint!, live.receipt, live.entry), live);
   }
 });
@@ -3791,10 +3844,10 @@ test('P4b-14. schemas, Weft shadow evidence and text exclusion', async () => {
   const sink = collector();
   const h = harness({}, { weft: sink.port });
   const live = await run(h);
-  assert.equal(live.schema, 'dispatch.decision@6');
-  assert.equal(h.journal.load('d1').checkpoint?.schema, 'dispatch.checkpoint@5');
+  assert.equal(live.schema, 'dispatch.decision@7');
+  assert.equal(h.journal.load('d1').checkpoint?.schema, 'dispatch.checkpoint@6');
   const decided = sink.records.find((r) => r.kind === 'dispatch.decided')!;
-  assert.equal(decided.fields.facts && (decided.fields.facts as unknown[]).length, 42);
+  assert.equal(decided.fields.facts && (decided.fields.facts as unknown[]).length, 51);
   assert.ok((decided.fields.judgments as unknown[]).length <= 14);
   for (const record of sink.records) assert.equal(validateRecord(record).ok, true);
   for (const j of SHADOW_NAMES) {
@@ -4354,7 +4407,7 @@ test('P5a-fix1 every untrusted preflight input fails to null facts without movin
       const expected = decideBand(baseline);
       assert.deepEqual([actual.band, actual.rule], [expected.band, expected.rule]);
       // P5b: pure replay screens targets like live ingress (D-P5b-10), and a non-natural
-      // journaled budget is a malformed dispatch.checkpoint@5.
+      // journaled budget is a malformed dispatch.checkpoint@6.
       if (name.startsWith('budget')) assert.throws(() => transitionDispatch(request, cp, null), /preflight_budget/);
       else if (name.startsWith('target') || name.startsWith('duplicate'))
         assert.throws(() => transitionDispatch(request, cp, null), /Invalid dispatch targets/);
@@ -4447,7 +4500,7 @@ test('P5a-10 parity for every P4b stage shape without targets or with an empty s
     const absent = harness(scenario);
     const empty = harness(scenario, { request: roleRequest({ targets: [] }) });
     const [a, b] = await Promise.all([run(absent), run(empty)]);
-    assert.equal(a.decide1.facts.length, 42);
+    assert.equal(a.decide1.facts.length, 51);
     assert.deepEqual(p4bProjection(a), p4bProjection(b));
     assert.deepEqual(
       a.decide1.facts.slice(14, 29).map((f) => f.value),
@@ -4773,8 +4826,8 @@ test('P5a-16 versioned records, 32 facts, bounded judgments, Weft evidence, disc
   const h = harness({}, { request, weft: sink.port });
   const d = await run(h);
   const cp = h.journal.load('d1').checkpoint!;
-  assert.equal(d.schema, 'dispatch.decision@6');
-  assert.equal(cp.schema, 'dispatch.checkpoint@5');
+  assert.equal(d.schema, 'dispatch.decision@7');
+  assert.equal(cp.schema, 'dispatch.checkpoint@6');
   assert.deepEqual(Object.keys(cp), [
     'schema',
     'decision_id',
@@ -4784,6 +4837,8 @@ test('P5a-16 versioned records, 32 facts, bounded judgments, Weft evidence, disc
     'intake',
     'triage',
     'route',
+    'tool',
+    'catalogue_digest',
     'shadow',
     'preflight',
     'preflight_budget',
@@ -4793,7 +4848,7 @@ test('P5a-16 versioned records, 32 facts, bounded judgments, Weft evidence, disc
     'child',
     'intent',
   ]);
-  assert.deepEqual(Object.keys(cp.asks), ['intake', 'triage', 'route', 'shadow', 'preflight']);
+  assert.deepEqual(Object.keys(cp.asks), ['intake', 'triage', 'route', 'tool', 'shadow', 'preflight']);
   assert.deepEqual(Object.keys(d), [
     'schema',
     'decision_id',
@@ -4811,11 +4866,12 @@ test('P5a-16 versioned records, 32 facts, bounded judgments, Weft evidence, disc
     'intake',
     'triage',
     'route',
+    'tool',
     'shadow',
     'preflight',
   ]);
   const decided = sink.records.find((r) => r.kind === 'dispatch.decided')!;
-  assert.equal((decided.fields.facts as any[]).length, 42);
+  assert.equal((decided.fields.facts as any[]).length, 51);
   assert.ok((decided.fields.judgments as any[]).length <= 30);
   assert.ok(decided.evidence.some((e) => e.source === 'inference_request' && e.ref === 'd1:roles'));
   assert.ok(decided.links.every((l) => !l.record_id.includes(':roles')));
@@ -5779,14 +5835,14 @@ test('P5b-fix1 before claim a top_p that cannot be maximal over four roles is un
     }
 });
 
-test('P5b-13 dispatch.checkpoint@5 and dispatch.decision@6 records; foreign versions are refused', async () => {
+test('P5b-13 dispatch.checkpoint@6 and dispatch.decision@7 records; foreign versions are refused', async () => {
   const ledger = spawnLedger();
   const h = harness({}, { request: roleRequest(), spawn: ledger.port });
   const d = await run(h);
   const cp = h.journal.load('d1').checkpoint!;
   assert.deepEqual(
     [cp.schema, d.schema, d.rule_table],
-    ['dispatch.checkpoint@5', 'dispatch.decision@6', 'decide1.rules@3'],
+    ['dispatch.checkpoint@6', 'dispatch.decision@7', 'decide1.rules@4'],
   );
   assert.deepEqual(Object.keys(cp), [
     'schema',
@@ -5797,6 +5853,8 @@ test('P5b-13 dispatch.checkpoint@5 and dispatch.decision@6 records; foreign vers
     'intake',
     'triage',
     'route',
+    'tool',
+    'catalogue_digest',
     'shadow',
     'preflight',
     'preflight_budget',
@@ -5823,6 +5881,7 @@ test('P5b-13 dispatch.checkpoint@5 and dispatch.decision@6 records; foreign vers
     'intake',
     'triage',
     'route',
+    'tool',
     'shadow',
     'preflight',
   ]);
@@ -5889,7 +5948,7 @@ test('P5b-14 a spawn dispatch.decided is a valid Weft record with no tier and ro
       ['d1', 'rule', 'spawn', status, 'd1:dispatch', 'spawn.preflight', 'spawn_subtasks'],
     );
     assert.ok(!Object.hasOwn(fields, 'tier'));
-    assert.equal(fields['facts'].length, 42);
+    assert.equal(fields['facts'].length, 51);
     assert.ok(fields['judgments'].length <= 30);
     const judgments = sink.records.filter((r) => r.kind === 'judgment');
     assert.deepEqual(

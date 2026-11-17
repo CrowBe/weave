@@ -28,18 +28,26 @@ export function isPresented(loaded: Loaded): boolean {
   return loaded.slot.phase === 'presented';
 }
 
-const intent: DispatchIntent = { kind: 'capability', dispatch_id: 'd1:dispatch' };
+const intent: DispatchIntent = {
+  kind: 'capability',
+  dispatch_id: 'd1:dispatch',
+  entry_ref: 'op.a',
+  catalogue_digest: 'c'.repeat(64),
+  args_ref: null,
+};
 
 function checkpoint(decision_id: string): DispatchCheckpoint {
   return {
-    schema: 'dispatch.checkpoint@5',
+    schema: 'dispatch.checkpoint@6',
     decision_id,
     state_revision: 1,
     state_updated_at: 10,
-    asks: { intake: 0, triage: 0, route: 0, shadow: 0, preflight: 0 },
+    asks: { intake: 0, triage: 0, route: 0, tool: 0, shadow: 0, preflight: 0 },
     intake: null,
     triage: null,
     route: null,
+    tool: null,
+    catalogue_digest: null,
     shadow: null,
     preflight: null,
     preflight_budget: null,
@@ -53,7 +61,7 @@ function checkpoint(decision_id: string): DispatchCheckpoint {
 
 function decision(patch: Partial<DispatchDecision>): DispatchDecision {
   return {
-    schema: 'dispatch.decision@6',
+    schema: 'dispatch.decision@7',
     rule_table: DECIDE1_RULE_TABLE,
     decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: DECISION,
@@ -69,6 +77,7 @@ function decision(patch: Partial<DispatchDecision>): DispatchDecision {
     intake: null,
     triage: null,
     route: null,
+    tool: null,
     shadow: null,
     preflight: null,
     ...patch,
