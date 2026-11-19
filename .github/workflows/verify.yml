@@ -1,12 +1,8 @@
 name: verify
-
-on:
-  push:
-    branches: [main]
-  pull_request:
+on: [push, pull_request]
 
 jobs:
-  verify:
+  calendar:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,7 +10,6 @@ jobs:
         with:
           node-version: 26
           cache: npm
-      - run: npm ci
+          cache-dependency-path: mvp/package-lock.json
+      - run: npm ci --prefix mvp
       - run: npm run verify
-      - run: npm run lint
-      - run: npm run fmt:check

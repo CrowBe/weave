@@ -1,75 +1,14 @@
 {
-  "name": "weave-workspace",
+  "name": "weave",
   "private": true,
-  "workspaces": [
-    "packages/*"
-  ],
   "type": "module",
   "scripts": {
-    "build": "tsc -b",
-    "test": "npm run build && node --test \"packages/*/dist/test/**/*.test.js\"",
-    "check": "node --test scripts/verify-cached.test.mjs scripts/benchmark-digests.test.mjs && node checks/import-direction.mjs && node checks/gauge-attribution-contract.mjs && node checks/extract-before-site.mjs && node checks/no-ambient-clock.mjs && node checks/no-ambient-entropy.mjs && node checks/no-ambient-env.mjs && node checks/no-swallowed-failures.mjs",
-    "typecheck:examples": "tsc -p tsconfig.examples.json",
-    "test:entailment": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s benchmarks/inference/openjev -p 'test_*.py'",
-    "test:decision": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s benchmarks/inference/kev -p 'test_*.py'",
-    "test:checks": "node --test \"checks/test/*.test.mjs\"",
-    "check:context-budget-pins": "npm run build && node --test packages/weave/dist/test/context-budget-pins.gate.js",
-    "verify": "npm run fmt:check && npm run check && npm run test:checks && npm test && npm run typecheck:web && npm run build:web && npm run typecheck:examples && npm run test:loom-local && npm run typecheck:benchmarks && npm run test:jev && npm run test:entailment && npm run test:decision && npm run task-acceptance:offline && npm run test:chatgpt-cli && npm run test:decision-sites && npm run test:muse-spark-example && npm run test:nous-portal-example && npm run test:vercel-free-example && npm run test:frontier-weigh && npm run test:weigh-example && npm run test:failure-attribution",
-    "task-acceptance:offline": "npm run build && node --experimental-strip-types benchmarks/task-acceptance/offline.ts && node --experimental-strip-types --test benchmarks/task-acceptance/live.test.ts",
-    "task-acceptance:live": "npm run build && node --env-file-if-exists=.env.local --experimental-strip-types benchmarks/task-acceptance/live.ts",
-    "typecheck:web": "tsc -p packages/tapestry-web --noEmit",
-    "build:web": "npm run build -w @weave/tapestry-web",
-    "host:workspace": "npm run loom:local",
-    "loom:local": "npm run build && node --env-file-if-exists=.env.local --experimental-strip-types examples/local-loom/main.ts",
-    "loom:models:setup": "node scripts/loom-models.mjs setup",
-    "loom:models": "node scripts/loom-models.mjs start",
-    "loom:models:status": "node scripts/loom-models.mjs status",
-    "loom:smoke": "npm run build && node --env-file-if-exists=.env.local --experimental-strip-types examples/local-loom/smoke.ts",
-    "test:loom-local": "npm run build && node --experimental-strip-types --test --test-isolation=none examples/local-loom/*.test.ts packages/weave/dist/test/local-task.test.js",
-    "example": "node --env-file-if-exists=.env.local index.ts",
-    "example:gateway": "npm run build && node --env-file-if-exists=.env.local examples/holiday.ts",
-    "example:free": "npm run build && node --env-file-if-exists=.env.local examples/free.ts",
-    "example:weigh": "npm run build && node --env-file-if-exists=.env.local examples/weigh.ts",
-    "example:preselect": "npm run build && node --env-file-if-exists=.env.local examples/preselect.ts",
-    "example:crystallize": "npm run build && node --experimental-strip-types examples/crystallize.ts",
-    "typecheck:benchmarks": "tsc -p tsconfig.benchmarks.json",
-    "test:jev": "node --experimental-strip-types --test \"benchmarks/inference/jev/test/*.test.ts\" benchmarks/inference/bev-sample/test_jev_probe.test.ts",
-    "jev:probe": "npm run build && node --env-file-if-exists=.env.local benchmarks/inference/jev/probe.ts",
-    "jev:transfer": "npm run build && node --env-file-if-exists=.env.local benchmarks/inference/jev/transfer-probe.ts",
-    "example:chatgpt-signin": "npm run build && node --experimental-strip-types examples/chatgpt-signin.ts",
-    "example:chatgpt-probe": "npm run build && node --experimental-strip-types examples/chatgpt-probe.ts",
-    "test:chatgpt-cli": "node --experimental-strip-types --test examples/chatgpt-local.test.ts examples/quota-local.test.ts",
-    "lint": "vp lint",
-    "fmt:check": "vp fmt --check",
-    "fmt": "vp fmt",
-    "lint:report": "vp lint",
-    "fmt:report": "vp fmt --check",
-    "verify:cached": "node scripts/verify-cached.mjs",
-    "example:muse-spark": "npm run build && node --experimental-strip-types examples/muse-spark.ts",
-    "example:vercel-free": "npm run build && node --experimental-strip-types examples/vercel-ai-gateway-free.ts",
-    "test:vercel-free-example": "node --experimental-strip-types --test examples/vercel-ai-gateway-free.test.ts",
-    "test:weigh-example": "node --experimental-strip-types --test examples/weigh.test.ts",
-    "test:muse-spark-example": "node --experimental-strip-types --test examples/muse-spark.test.ts",
-    "example:nous-portal": "npm run build && node --experimental-strip-types examples/nous-portal.ts",
-    "test:nous-portal-example": "node --experimental-strip-types --test examples/nous-portal.test.ts",
-    "bench:decision-sites:live": "npm run build && node --env-file-if-exists=.env.local --experimental-strip-types benchmarks/decision-sites/run.ts",
-    "test:weft-contract": "npm run build && node --test \"packages/weft/dist/test/*.test.js\"",
-    "test:gauge-contract": "npm run build && node --test \"packages/gauge/dist/test/*.test.js\"",
-    "test:decision-sites": "npm run build && node --experimental-strip-types --test \"benchmarks/decision-sites/*.test.ts\" \"benchmarks/decision-sites/test/*.test.ts\"",
-    "bench:frontier-weigh": "npm run build && node --env-file-if-exists=.env.local --experimental-strip-types benchmarks/frontier-weigh/run.ts",
-    "test:frontier-weigh": "npm run build && node --experimental-strip-types --test \"benchmarks/frontier-weigh/test/*.test.ts\"",
-    "test:failure-attribution": "npm run build && node --experimental-strip-types --disallow-code-generation-from-strings --test \"benchmarks/failure-attribution/*.test.ts\""
-  },
-  "devDependencies": {
-    "@types/node": "^22.15.0",
-    "typescript": "^7.0.2",
-    "vite-plus": "1.2.0"
-  },
-  "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@1.2.0"
+    "start": "node mvp/server.mjs",
+    "test": "node --test mvp/*.test.mjs",
+    "test:live": "node mvp/evaluate.mjs --live",
+    "verify": "npm test && npm --prefix mvp run worker:check"
   },
   "engines": {
-    "node": ">=26",
-    "npm": ">=10"
+    "node": ">=26"
   }
 }

@@ -1,0 +1,19 @@
+{
+  "name": "weave-calendar-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test *.test.mjs",
+    "worker:dev": "wrangler dev",
+    "worker:check": "wrangler deploy --dry-run --outdir .wrangler/verify && node --test worker.integration.mjs"
+  },
+  "dependencies": {
+    "jose": "^6.2.18"
+  },
+  "devDependencies": {
+    "miniflare": "5.20261118.0-beta",
+    "wrangler": "^4.165.0"
+  }
+}

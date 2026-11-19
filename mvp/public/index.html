@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#fbf8f0" />
+    <title>Dinner plans · Weave</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <header class="masthead">
+      <div class="shell header-content">
+        <a class="wordmark" href="/" aria-label="Weave dinner plans"
+          ><span class="mark" aria-hidden="true"></span>Weave</a
+        >
+        <p class="environment" id="environment">Connecting…</p>
+      </div>
+    </header>
+
+    <main class="shell">
+      <div class="intro">
+        <h1>Dinner plans<span aria-hidden="true">.</span></h1>
+        <p>Find an evening everyone can make and put a hold on the family calendar.</p>
+      </div>
+
+      <p id="error" class="error" role="alert" hidden></p>
+      <div class="workspace">
+        <section class="panel" aria-labelledby="request-title">
+          <h2 id="request-title">Dinner request</h2>
+          <form id="request">
+            <label for="goal">What would you like to plan?</label>
+            <textarea id="goal" name="text" rows="5" maxlength="2000" required disabled>
+Find a free hour for dinner on our calendars next week after 6 pm and put a hold on the family calendar. If several evenings work, ask me which.</textarea>
+            <div class="field" id="scenario-field" hidden>
+              <label for="scenario">Demo availability</label>
+              <select id="scenario" name="scenario" disabled>
+                <option value="many">Several evenings</option>
+                <option value="one">One evening</option>
+                <option value="none">No evenings</option>
+              </select>
+            </div>
+            <button class="primary" id="start" type="submit" disabled>
+              Find a time <span aria-hidden="true">→</span>
+            </button>
+          </form>
+        </section>
+
+        <section class="panel progress" aria-labelledby="progress-title">
+          <h2 id="progress-title">Dinner plan</h2>
+          <div id="status" class="status" role="status" aria-live="polite" aria-atomic="true">
+            Connecting to Weave…
+          </div>
+          <div id="outcome"></div>
+          <div id="actions" class="actions"></div>
+        </section>
+      </div>
+      <details id="activity" hidden>
+        <summary>Activity</summary>
+        <ol id="trace"></ol>
+      </details>
+    </main>
+  </body>
+</html>

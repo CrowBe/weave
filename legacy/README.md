@@ -1,0 +1,270 @@
+# Weave
+
+**Software that builds the capabilities it needs and improves how it works.**
+
+Weave is an experimental, composable agent system. Its reference runtime, Loom, observes evolving state, weighs the actions available to it, runs independent work in parallel, and invokes generative models only when existing software cannot adequately advance the goal.
+
+When repeated reasoning reveals a reusable capability, Weave crystallizes it through real-time TDD:
+
+1. Identify the semantic purpose.
+2. Establish a typed capability contract.
+3. Generate and validate executable tests, then demonstrate red.
+4. Generate one or more implementations and prove green within declared limits.
+5. Admit against recorded evidence; authorize execution separately.
+
+Weave also optimises existing capabilities and operating strategies through bounded experiments: compare a versioned candidate with a baseline, authorise promotion within a declared scope, monitor outcomes, and retain or roll back the change. Improvement includes quality, reliability, human effort, latency, and total cost; the optimiser cannot lower the success bar or expand its authority.
+
+AgentSOP defines what a capability means and what an implementation's resolver context must look like. Fabric is the reference capability subsystem that honours those contracts and owns its capability lifecycle. Both are built as packages in this repository; the external AgentFabric repository is a conceptual reference, not a dependency. Loom uses a capability host port rather than Fabric internals, so another provider can satisfy that boundary. Fabric does not import Loom. Jev is the initial model choice for the decision layer; named judgment sites keep model choice separate from responsibility. Loom owns the loop, policy, state, and authority boundaries.
+
+Start with:
+
+- [VISION.md](./VISION.md) — what Weave is and what it refuses to become.
+- [GLOSSARY.md](./GLOSSARY.md) — the project's ubiquitous language.
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — the high-level plan: layers, the cycle, state, judgment, capabilities, extension, optimisation, and vertical milestones.
+- [docs/design-system.md](./docs/design-system.md) — Tapestry, the reference presentation layer. Weave is the system; Loom and Fabric are its reference runtime and capability subsystem. A plan, not a milestone.
+- [docs/agentfabric-concepts.md](./docs/agentfabric-concepts.md) — which capability-system concepts carry over from the external AgentFabric, which do not, and the in-repo surface to build.
+- [docs/m0-inspect-and-report.md](./docs/m0-inspect-and-report.md) — the behavioral contract and checks for the first milestone.
+- [M1 — publish under authority](./docs/m1-publish-under-authority.md) — approvals,
+  enforced effects, cancellation and crash recovery.
+- [M2 — handle a novel request](./docs/m2-handle-a-novel-request.md) — bounded
+  inference, validated proposals, state views, and stale-judgment rejection.
+- [M3 — fill one capability gap](./docs/m3-fill-a-capability-gap.md) — contract,
+  red, isolated green, admission, and a separate execution grant.
+- [M4 — measure reuse](./docs/m4-measure-reuse.md) — cached conclusions,
+  cross-goal access, and the optimisation baseline.
+- [M5 — improve one operating strategy](./docs/m5-improve-an-operating-strategy.md)
+  — one profile change, a protocol fixed before results, promotion, and rollback.
+- [M6 — route a reconstructed view](./docs/m6-route-a-reconstructed-view.md)
+  — prefix-cache routing, catalogue index and schema slices, read-set
+  destinations, and one shared slice assembly.
+- [M7 — decision-model loop (planned)](./docs/m7-decision-loop.md): P1 adds
+  gateway tier/configuration primitives; the decision loop is not implemented.
+- [H1 — bound the log](./docs/h1-bound-the-log.md) — a follow-up hardening step:
+  reject oversize and duplicate observations before they are durable.
+- [AGENTS.md](./AGENTS.md) — how coding agents should work in this repository.
+
+Weave is early. The first objective is a small scenario that proves authorized concurrent execution, honest handling of stale or interrupted work, and replayable evidence. It then extends to crystallizing one capability from contract through demonstrated red, proven green, admission, and separately authorized execution, followed by a measured optimisation with scoped promotion and rollback.
+
+## Status
+
+M0 (inspect and report), M1 (publish under authority), M2 (handle a novel
+request), M3 (recorded `text.normalize`), M4 (measure reuse), and M5 (improve
+one operating strategy) are implemented. The composition is
+`composition.normalize-report@1`. A cached conclusion is reused only while
+its input digest, read set, contract revision, admitted implementation, and
+authority scope still hold. `conclusion.policy` is the cross-goal record.
+The `profile.frame@1` baseline is recorded from the repeated workload,
+including the failing goal. `profile.frame.narrow@1` is promoted for that
+workload only after a protocol recorded before the comparison, and only when
+quality holds and human corrections do not increase. A cheaper profile that
+misses the quality bar is refused. A protected-case regression selects the
+baseline profile again. The earlier `report.fold` fixture in
+`npm run example:crystallize` remains a separate procedure arm. M6 prices a
+prefix cache at routing time, discloses the catalogue as an index and named
+schemas, narrows destinations from the read set, and shares one slice
+assembly across a read-only review. H1 rejects an oversize, mid-value, or
+duplicate observation before it is durable, refuses a second open of the host
+store, and evicts retained trace records outside the state-transition lock.
+The host refuses to execute a supplied implementation, framing profiles are
+versioned records, and the framing view lists the host catalogue.
+
+`packages/agentsop` holds the contract layer, `packages/agentfabric` the enforcing
+host, and `packages/weave` the runtime. `packages/gateway` supplies bounded
+generation and typed evaluation through replaceable providers. `packages/tapestry`
+holds the presentation core for the first workspace slice: project navigation,
+the conversational surface, and a pending authority request. `packages/tapestry-web`
+paints that tree. `packages/loom-binding` discloses a workspace view from recorded
+Loom state and does not hand the renderer a locator or the runtime's internal
+state. `packages/weft` validates `weft.record@1` trace records and imports
+nothing in-repo; `packages/gauge` validates evaluation records, recomputes their
+verdicts and depends on Weft only. Requires Node 26 or later and npm 10 or later; offline entailment contract tests also require
+Python 3.
+
+```bash
+npm install
+npm run verify           # structural checks, build, suites, the web host, examples, and contract tests
+npm run host:workspace   # local Loom experiment at http://127.0.0.1:5180
+npm run lint:report      # vp lint; exits non-zero on lint errors, changes no files
+npm run fmt:report       # vp fmt --check; exits non-zero on unformatted files, changes no files
+npm run verify:cached    # same checks as verify, replayed by Vite Task when inputs match
+```
+
+On `rethink/loom-local`, the workspace starts empty and runs the bounded local
+Loom experiment. See [local setup and scope](docs/loom-local.md) for model
+configuration, execution limits, and what the first run can test.
+
+`npm run check` also runs repository checks for findings that reviews kept repeating (#203): `checks/no-ambient-env.mjs` keeps environment reads out of package source, and `checks/no-swallowed-failures.mjs` keeps scripts and CI steps from swallowing a failure. `npm run test:checks` shows each one red on a fixture that has the pattern and green on one without it.
+
+`lint:report` and `fmt:report` print Oxlint and Oxfmt findings and exit non-zero when they find a problem. They do not rewrite files and they are not part of `npm run verify`. CI runs them after verify with `continue-on-error`, so a finding, or a crashed or missing `vp`, shows as a soft failure rather than green. Do not treat a green verify run as a clean lint or format result.
+
+`verify:cached` runs the same `npm run verify` command through `vp run` so a repeat can be replayed from the Vite Task cache. `npm run verify` itself stays uncached, and CI uses that command. The cache key covers the files verify reads, the node, npm and python3 versions and paths (passed as `WEAVE_TOOLCHAIN` by `scripts/verify-cached.mjs`), `PATH`, and the variables that gate optional suites (`WEAVE_KEV_*`, `HF_HUB_OFFLINE`, `TRANSFORMERS_OFFLINE`). Vite Task runs tasks in a clean environment, so any other variable, including provider credentials, is not visible to a cached run; use plain `npm run verify` when a suite needs one. The Python suites run with `PYTHONDONTWRITEBYTECODE=1`, so they leave no `__pycache__` in the tree to invalidate the cache.
+
+Vite+ needs Node 22.18 or newer and npm 10 or newer (npm 9 rejects the `npm:` override for `vite`).
+
+Local inference experiments and their recorded evidence live under
+[`benchmarks/inference`](./benchmarks/inference/README.md). OpenJev evaluates
+the distinct `text.assess-entailment` operation. Kev 4B is available as a
+bounded baseline-quality local fallback for typed evaluation, with its source,
+environment and weights kept outside the checkout. See the
+[Kev operating guide](./benchmarks/inference/kev/SERVICE.md) for external
+service registration, privacy-only routing and fallback composition.
+
+Use `npm run example:chatgpt-signin` to continue with ChatGPT, then `npm run example:chatgpt-probe -- --out .local/chatgpt-probe.json` to record live API evidence (create `.local/` first).
+
+The gateway supports TypeSafe System One and a local, no-key Amos decision
+adapter (`@weave/gateway/amos`). `weave.routes.example.json` retains
+`typesafe-jev` / `jev-preview` as the default and overrides `intake.classify`
+to Amos. `loop.preselect` may be overridden to `amos` or `typesafe-jev` when a
+matching Amos boolean evaluate unit is present; the example does not override
+it. `decision.preselect` sets that site's k, floor, and margin gate per
+provider (default k 3, floor 0, max excluded .4, minimum margin .3). Pass the
+parsed `decision` to `createInferenceGateway` and register both evaluators.
+Override selection is exclusive and configuration rejects unknown providers,
+unknown override sites, and an out-of-range
+preselect policy. Run `npm run example:preselect` to print one D3 selection.
+Pass `--provider amos` to use the local adapter. The API key stays in the
+environment and is sent only as a Bearer header.
+
+The direct TypeSafe decision model defaults to `jev-preview` (jev-1.14.0);
+set the decision provider's `model` and the matching evaluate `units[].model`
+in the route configuration to override it.
+Choice criteria keys are shuffled per call with Fisher-Yates while retaining
+key identities. `TypesafeAiOptions.shuffle` accepts an RNG or `false` to disable
+shuffling. `kevLocalEvaluator` shuffles by default too, because local Kev's
+choice answers measured order-sensitive; benchmarks pass `shuffle: false`.
+Answers for unasked ids are ignored, whatever their type. An asked id answered
+with an unsupported type (for example `box`) is a `malformed_response`.
+`TypesafeAiOptions.longContext?: boolean` defaults to false. When true, every
+request sends `TypeSafe-Danger-Zone-Long-Context: true`, raising both context
+limits to 262k tokens on `jev-1.13.0` and `jev-1.14.0`. Without it, the defaults
+remain 64k per request and 32k per question. See [TypeSafe models](https://docs.typesafe.ai/models#long-context).
+`TypesafeAiOptions.images?: boolean` also defaults to false. When true, every
+request sends `TypeSafe-Danger-Zone-Images: true`, required for image assets
+and box questions. This option only adds the header; Weave does not yet support
+asset or box requests. See [TypeSafe images](https://docs.typesafe.ai/images).
+
+The [Jev 1.14 announcement](https://typesafe.ai/blog/jev-1-14) says `jev-latest`
+will move to `jev-1.14.0` about a week after 2026-10-14. TypeSafe intends to give
+60 days' deprecation notice for `jev-1.13.0` and 30 days for `jev-1.14.0`.
+The data-sharing opt-in announced in that blog has no documented request field.
+`dataSharing?: false` defaults to false; Weave sends no data-sharing field.
+
+The composition root passes the configured `decision.providers.amos.base_url`,
+as bound by `bindDecisionProvider`, to `amosEvaluator({ baseURL })`; that is the
+single source, and the example is `http://127.0.0.1:8766`. It is restricted to
+loopback with no authentication. Register an Amos choice routed unit with model
+`amos-1-2b` (amos-1-small) and destination `local` (`AMOS_DESTINATION`): content
+stays on this machine, and intake terms permit `local`. The adapter
+checks that GET `/v1/models` lists the configured model before POST
+`/v1/systemone`, rejects a response naming another model as malformed, and
+bounds HTTP calls with a timeout. Unreachable, non-2xx health, an unlisted
+model or timeout yields `provider_unavailable`;
+intake falls back to `ask_user`, never TypeSafe. A timeout is not retried, so a
+hung Amos delays that fallback by at most one adapter timeout (`timeoutMs`,
+default 30 s), not one per attempt. Raw provider text is excluded
+from Amos failure records. See the [intake contract](packages/weave/src/sites/CONTRACT.md).
+
+Run the opt-in local intake probe after building:
+`AMOS_LIVE=1 node --test packages/gateway/dist/test/amos.test.js`.
+
+### Vercel promotional free example
+
+`npm run example:vercel-free` reads `AI_GATEWAY_API_KEY` only at the composition
+root. It uses the existing AI SDK `createGateway` + `generateText` path, checks a
+fresh key-free `/v1/models` catalogue before each attempt, and requires reported
+zero response cost: every field named like `cost` in the response's provider
+metadata or raw usage, including one added later, must be zero. The five verified IDs are exported as
+`VERCEL_AI_GATEWAY_FREE_MODELS`; Laguna's known expiry is 2026-10-31T00:00Z.
+Unknown, missing, priced, provider-dependent or expired entries fail closed.
+Callers injecting a catalogue snapshot are responsible for its freshness.
+
+Set `destination: 'vercel-ai-gateway-free'` and
+`destination_training_allowed: true` on these routed units. These models report
+`zdr: none` and `no_training: none`; only explicitly `public` or `non_sensitive`
+content is eligible. The example sets `max_attempts_per_route: 1` so a 429 goes
+straight to the next free unit. Post-call cost failure is nonretryable; checks
+cannot undo a charge caused by a price change during a request. Provider errors
+are recorded without their raw messages. P10 competitor registration remains a
+follow-up; benchmark routes are unchanged.
+
+### Muse Spark contributor example
+
+`npm run example:muse-spark` reads `MODEL_API_KEY` from the environment and
+makes one minimal public generation request. The `flash` implementation writers
+in `weave.routes.example.json` put `muse-spark-1.3-contributor` before
+`muse-spark-1.2-contributor`; callers use `max_attempts_per_route: 1` to escalate
+on the primary's first refusal. In the example, an authentication refusal
+(401/402/403) marks the shared adapter `auth_required`, so the fallback does not
+send the same rejected credential again. The JSON price entries are **unknown, flat zero
+placeholders**, not verified prices or a claim of free use. The 8192-token
+context bound is a conservative local configuration, not a provider specification.
+
+Contributor destinations may train on content. Callers must explicitly set
+`terms.content_class` to `public` or `non_sensitive`; absent classification,
+`sensitive`, and `private` are excluded even when the destination is listed in
+terms. Private repositories and operator/captain data must never be classified
+as public or non-sensitive. Before routing, the gateway screens content for the
+repository's credential markers at token starts, including PEM private-key
+headers, Google `AIza` keys, Slack `xoxa-`/`xoxb-`/`xoxp-` tokens, and Bearer
+credentials separated by whitespace. A match excludes every routed
+unit at that training-allowed destination with reason `credential_content`, also
+recorded as a content-free note in outcome `uncertainty`, without consuming attempts.
+A permitted non-training destination may still receive the original content.
+When only excluded training destinations remain, the outcome is blocked with
+`no_route` and nothing is dispatched. Screening does not make sensitive or private work
+eligible. No reasoning parameter is sent. In `weave.routes.example.json` the
+documented 150 RPM / 3M TPM limits are marked `pace: true`, so one gateway holds
+a request on each Muse unit until the requests it started there in the last
+minute fit both budgets, counting worst-case tokens (context bound plus output
+cap) until usage is reported. Pacing only delays: without a timer, or when the
+wait would pass the deadline, the request goes at once. It does not count other
+processes, and the two Muse units are paced separately. After a rate-limit
+refusal, `Retry-After` wins, otherwise the gateway uses 400ms request spacing.
+`MUSE_SPARK_DOCUMENTED_CONTRIBUTOR_LIMITS` itself carries no `pace`, so routes
+built from it stay reactive unless they opt in.
+
+### Nous Portal free models
+
+`@weave/gateway/nous-portal` calls Nous Portal (`https://inference-api.nousresearch.com/v1`)
+through `@ai-sdk/openai-compatible` with `maxRetries: 0`, non-streaming, and the
+top-level `tags: ["user=weave"]` that Nous requires with an API key. The key is
+injected and sent only as a Bearer header. `npm run example:nous-portal` reads
+`NOUS_API_KEY` and makes one public `Reply with the single word: ok` call.
+
+| Routed unit (`weave.routes.example.json`) | Model                         | Notes                                                             |
+| ----------------------------------------- | ----------------------------- | ----------------------------------------------------------------- |
+| `nous-portal.flash.solar-mini4`           | `upstage/solar-mini4:free`    | primary; no mandatory reasoning                                   |
+| `nous-portal.flash.longcat-2.0`           | `meituan/longcat-2.0:free`    | first fallback                                                    |
+| `nous-portal.flash.step-3.7-flash`        | `stepfun/step-3.7-flash:free` | second fallback; mandatory reasoning, at least 1024 output tokens |
+
+The six default IDs are in the free-model allowlist (`NOUS_PORTAL_FREE_MODELS`).
+LongCat 2.5 Preview (`meituan/longcat-2.5-preview:free`) and Beam
+(`reflection/beam-1.0-501b-a23b:free`) are separate opt-in entries exported as
+`NOUS_PORTAL_PROMO_MODELS.longcat25` and `.beam`, each with `id` and `expires_at`
+(epoch milliseconds). Both stop accepting calls at **2026-10-23T10:30:00+11:00**.
+Enable them with `nousPortalAdapter({ apiKey, promoModels: true, now: () => clock.now() })`,
+using the composition root's injected clock. Without opt-in or valid injected time
+they are refused before any request. At/after expiry they are refused before even
+catalogue lookup and remain refused for that adapter instance. Expiry is checked
+again after catalogue resolution, so a cached price pass cannot extend a promotion.
+`isNousPortalFreeModel` and route-file parsing accept only the default allowlist;
+promo routed units use a programmatic route table with the opted-in adapter.
+Route parsing also rejects any non-zero declared Nous price.
+
+Before the first call for an eligible model, the adapter runs a catalogue price check
+on `GET /models`. All prices must satisfy the zero-price rule in GLOSSARY, including
+decimal zero strings such as `"0.0000000000"`; promo opt-in never bypasses this check. It
+also refuses a response whose `usage.cost` is present and is not the number
+`0` (see GLOSSARY). Prices of 0 in the route file come from that catalogue. The 32k context bound
+keeps one request inside the free 80k tokens/minute budget.
+
+A 429 is `rate_limited`. The delay comes from `Retry-After`, otherwise from the
+later of `x-ratelimit-reset-requests` and `x-ratelimit-reset-tokens` (relative
+seconds), otherwise from the declared free limits (10 requests and 80k tokens per
+minute; 420 requests and 3.36M tokens per hour, observed 17 Oct 2026), which
+gives 6 s spacing. A missing model, a 404 or 402, "no longer free" and "requires
+available credits" are retryable `unavailable`; the routed-unit attempt cap
+escalates to the next Nous unit. Nous may store, train on and license prompts
+and outputs by default, so its destination is training-allowed and gets the same privacy rules
+as the Muse contributor tier above. There is no Nous decision (evaluate) option,
+because typed evaluation over a chat model would need a new wire profile.
