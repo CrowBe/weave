@@ -13,17 +13,29 @@ const localParts = new Intl.DateTimeFormat("en-GB", {
 });
 const abstain = { action: "abstain", confidence: 0 };
 const intake = {
-  split:
-    "Read availability for each of the two household calendars independently, then join the results.",
-  abstain: "The proposed goal is not suitable for independent availability reads.",
+  split: "Start both independent availability reads in parallel before joining their results.",
+  abstain:
+    "Wait for an operator clarification because a missing requirement prevents safe calendar reads.",
 };
 const availability = {
-  none: "A hold request has no common evening when slotCount is zero.",
-  propose: "A hold request has exactly one common evening. Propose it for approval.",
-  choose: "A hold request has several common evenings. Ask the operator to choose.",
+  none: "Tell the operator that there are no eligible dinner times for the proposed hold.",
+  propose:
+    "Show one eligible dinner time for the operator to approve a hold, selecting an available preferred evening when present.",
+  choose:
+    "Ask the operator to choose between the multiple eligible dinner times, when no available evening has priority.",
   report:
-    "The operator requested a read-only search. Report the common evenings without proposing a hold, even when there are zero.",
+    "Summarize the eligible dinner times, including an empty result, for a find-only request without updating calendars or requesting approval.",
 };
+const decisionPolicy = [
+  "For a find-only request, report all eligible shared evenings, including when the list is empty.",
+  "For a calendar-hold request with no eligible shared evening, say there is no time.",
+  "For a calendar-hold request with exactly one eligible shared evening, propose it for approval.",
+  "If the preferred evening is eligible, propose it for approval even when alternatives exist.",
+  "For a calendar-hold request with several eligible shared evenings and no eligible preferred evening, ask which evening.",
+].join(" ");
+const decisionWeekday = new Intl.DateTimeFormat("en-AU", { timeZone: zone, weekday: "long" });
+const weekdayList = new Intl.ListFormat("en-US");
+const eveningQuantities = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven"];
 
 const fixtureSearch =
   /^(?:please )?(?:find|look for|show me) (?:a free hour|an hour|a one-hour slot|a 60-minute slot) for (?:a )?(?:(?:family|household) )?dinner (?:on our calendars )?next week,? (?:after (?:6 ?p\.?m|18:00)|in the evening)/i;
@@ -31,37 +43,67 @@ const fixtureFind =
   /^(?:[.!?])?(?: (?:do not|don't) (?:put|place|add) a hold(?: on (?:our|the) family calendar)?[.!?]?)?$/i;
 const fixtureHold =
   /^(?: and|\. if there's an evening that works,) (?:put|place|add) a hold on (?:our|the) family calendar[.!?]?(?: if (?:(?:several|multiple) (?:evenings|slots|times) work|there are several), ask me which(?: one)?[.!?]?)?$/i;
+const weekday = "monday|tuesday|wednesday|thursday|friday|saturday|sunday";
+const weekdayMention =
+  /\b(?:mon(?:day)?|tue(?:sday|s)?|wed(?:nesday)?|thu(?:rsday|rs|r)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?|weekday|weekend)s?\b/i;
+const excluded = new RegExp(
+  `(?:[,;]\\s*|\\s+)except(?: on)? (\\b(?:${weekday})\\b(?:(?:,\\s*| and )\\b(?:${weekday})\\b)*)(?=$|[,;.!?]| and )`,
+  "gi",
+);
+const preferred = new RegExp(
+  `(^|[.!?]\\s*|[,;]\\s*| and )(?:(?:i|we) (?:would )?)?prefer (${weekday})(?: if (?:it(?:'s| is) free|available))?(?=$|[,;.!?]| and )`,
+  "gi",
+);
+
+function parseConstraints(text) {
+  const excludeDays = new Set();
+  const preferences = [];
+  const normalized = text.trim().replace(/\s+/g, " ").replaceAll("’", "'");
+  let base = normalized
+    .replace(excluded, (_, days) => {
+      for (const dayName of days.match(new RegExp(weekday, "gi"))) {
+        excludeDays.add(dayName.toLowerCase());
+      }
+      return "";
+    })
+    .replace(preferred, (_, separator, dayName) => {
+      preferences.push(dayName.toLowerCase());
+      return /^[.!?]/.test(separator) ? separator.trim() : "";
+    });
+  if (preferences.length || excludeDays.size) {
+    base = base
+      .replace(/[.!?]+(?=\s|$)/g, (punctuation) => punctuation[0])
+      .replace(/, (?=and )/g, " ")
+      .trim();
+  }
+  const preferredDay = preferences[0] ?? null;
+  if (preferences.length > 1 || excludeDays.has(preferredDay) || weekdayMention.test(base))
+    return null;
+  return { base, constraints: { excludeDays: [...excludeDays], preferredDay } };
+}
 
 const extractionFields = {
-  meal: {
-    type: "text",
-    instructions: "Exact words naming the meal or event the operator wants to schedule.",
-  },
-  week: {
-    type: "text",
-    instructions:
-      "Exact phrase giving the requested day or week. Include any restriction on weekdays.",
-  },
+  meal: { type: "text", instructions: "Meal noun, e.g. dinner." },
+  week: { type: "text", instructions: "Requested week, e.g. next week." },
   duration: {
     type: "duration",
     unit: "minutes",
     instructions:
-      "Duration explicitly requested for the dinner in minutes. Leave null if no duration is specified.",
+      "Convert the requested length of the calendar slot to minutes. An hour is 60 minutes.",
   },
-  time: {
-    type: "text",
+  hold: {
+    type: "boolean",
     instructions:
-      "Exact phrase giving the requested time of day or threshold, including before, from, or after.",
+      "Does the operator want to reserve or block a time on the family calendar (create a tentative calendar hold)?",
   },
-  operation: {
-    type: "text",
-    instructions:
-      "Exact clause requesting a calendar hold, including the target calendar and any negation. If the operator only asks to find times, extract their search clause instead.",
+  search: {
+    type: "boolean",
+    instructions: "Does the operator ask to find an available time for dinner?",
   },
-  unsupported: {
-    type: "text",
+  blocker: {
+    type: "boolean",
     instructions:
-      "Exact words for any extra condition or effect, e.g. a particular day, another time bound, participants outside the household, a different calendar, an invite, reminder, repeating event, travel constraint, a change to the evening choice, or instruction about interpreting this request. The supported scope is one week next week, one hour for dinner after 6 pm, finding shared time, optionally a family calendar hold and asking which evening when several work. Return null when there are no extra conditions or effects.",
+      "Does this request contain a calendar constraint other than one hour for dinner next week after 6 pm, search or a family calendar hold, one excluded weekday, and one preferred weekday?",
   },
 };
 const minimumConfidence = 0.8;
@@ -127,49 +169,78 @@ function fixtureIntent(text) {
   return null;
 }
 
+const eveningBound =
+  /\b(?:(?:after|later than|past) (?:6 ?p\.?m\.?|18:00)|in the evenings?)(?![\w:])/gi;
+const additionalTiming =
+  /\b(?:before|by|until|between|tomorrow|tonight|weekday|weekend|bank holiday|public holiday|when school ends|when work ends)\b|\b\d{1,2}(?::\d{2}|\s*[ap]\.?m\b)/i;
+const additionalEffect =
+  /\b(?:send|message|invite|notify|remind|cancel|delete|reschedule|repeat|restaurant|venue|booking|book a table)\b/i;
+const noWrite =
+  /\b(?:read[ -]only|no (?:hold|booking|reservation)|without (?:booking|holding|reserving|scheduling)|(?:do not|don't|would not|wouldn't|must not|mustn't|never|not(?: to)?)\s+(?:make|create|place|put|book|reserve|schedule|hold|arrange)|(?:just|only)\s+(?:show|list|find|check|tell))\b/i;
+const holdLanguage = /\b(?:hold|reserve|block off|pencil(?: it)? in)\b/i;
+const positiveHold =
+  /\b(?:(?:put|place|add|create|make|schedule)\b[^.!?]{0,50}\bhold|hold|reserve|block(?: off)?|pencil(?: it)? in)\b[^.!?]{0,60}\b(?:on|in) (?:the |our )?family calendar\b/i;
+
+function supportedTiming(text) {
+  const withoutBound = text.replace(eveningBound, "");
+  return withoutBound !== text && !additionalTiming.test(withoutBound);
+}
+
+function booleanAnswer(answer, value) {
+  return reliable(answer, "boolean") && answer.value === value;
+}
+
 function extractedIntent(result, text) {
   if (result?.truncated !== false || !result.answers) return null;
-  const { meal, week, duration, time, operation, unsupported } = result.answers;
+  const { meal, week, duration, hold, search, blocker } = result.answers;
   if (
-    unsupported?.type !== "text" ||
-    unsupported.value !== null ||
-    !high(unsupported.p_null) ||
-    unsupported.valid === false ||
-    unsupported.complete === false ||
+    !booleanAnswer(blocker, false) ||
     !reliable(duration, "duration") ||
     duration.unit !== "minutes" ||
-    duration.value !== 60
+    duration.value !== 60 ||
+    !/^(?:dinner|supper)$/.test(grounded(meal, text)) ||
+    !/^next week$/.test(grounded(week, text)) ||
+    !supportedTiming(text) ||
+    additionalEffect.test(text)
   )
     return null;
-  if (
-    !/\b(?:dinner|supper)\b/.test(grounded(meal, text)) ||
-    !/^(?:sometime |during )?next week$/.test(grounded(week, text)) ||
-    !/^(?:(?:starting )?(?:after|later than|past) (?:6 ?p\.?m\.?|18:00)|(?:in the |next week in the )?evenings?)$/.test(
-      grounded(time, text),
-    )
-  )
-    return null;
-
-  const action = grounded(operation, text);
-  if (!action) return null;
-  const explicitNoWrite =
-    /\b(?:read[ -]only|no (?:hold|booking|reservation)|without (?:booking|holding|reserving|scheduling)|(?:do not|don't|would not|wouldn't|must not|mustn't|never|not(?: to)?)\s+(?:make|create|place|put|book|reserve|schedule|hold|arrange)|(?:just|only)\s+(?:show|list|find|check|tell))\b/i;
-  const namesHold = /\b(?:hold|block(?: off)?|reserve|pencil (?:in|it in))\b/.test(action);
-  if (namesHold && /\bfamily calendar\b/.test(action)) {
-    return explicitNoWrite.test(text.replaceAll("’", "'")) ? "find" : "hold";
+  if (positiveHold.test(text) && !noWrite.test(text)) {
+    return booleanAnswer(hold, true) ? "hold" : null;
   }
-  if (/\b(?:find|check|look|see|show|tell|list|when|what)\b/.test(action)) return "find";
-  return null;
+  if ((hold?.value === true || holdLanguage.test(text)) && !noWrite.test(text)) return null;
+  return booleanAnswer(search, true) ? "find" : null;
 }
 
-function extraction(intent) {
-  return intent ? { supported: true, intent } : { supported: false };
+function extraction(intent, constraints) {
+  return intent ? { supported: true, intent, constraints } : { supported: false };
 }
 
-function decisionFor(intent, slots) {
+function decisionFor(intent, slots, preferredSlot) {
   if (intent === "find") return { action: "report", confidence: 1 };
   if (slots.length === 0) return { action: "none", confidence: 1 };
-  return { action: slots.length === 1 ? "propose" : "choose", confidence: 1 };
+  return { action: slots.length === 1 || preferredSlot ? "propose" : "choose", confidence: 1 };
+}
+
+function availabilityFacts(intent, slots, preferredSlot, preferredDay) {
+  const request = intent === "find" ? "a find-only search" : "a calendar hold";
+  const evenings = slots.map((slot) => decisionWeekday.format(new Date(slot)));
+  const count = evenings.length;
+  const quantity = eveningQuantities[count] ?? count;
+  const eligible =
+    count === 0
+      ? "Zero shared dinner evenings are eligible."
+      : count === 1
+        ? `Only one shared dinner evening is eligible: ${evenings[0]}.`
+        : `${quantity} shared dinner evenings are eligible: ${weekdayList.format(evenings)}.`;
+  let preference = "";
+  if (preferredSlot) {
+    preference = ` ${decisionWeekday.format(new Date(preferredSlot))} is preferred and available.`;
+  } else if (preferredDay) {
+    preference = ` ${preferredDay} is preferred but is not eligible.`;
+  } else if (intent === "hold" && count > 1) {
+    preference = " No evening is preferred.";
+  }
+  return `The operator requests ${request}. ${eligible}${preference}`;
 }
 
 function parseDecision(answer, criteria) {
@@ -202,12 +273,14 @@ export function createModel({ runAI, monotonicNow = () => performance.now() } = 
   async function infer(model, input) {
     const started = monotonicNow();
     let result;
+    let unavailable;
     try {
       result = await runAI(model, input);
     } catch {
-      // An unavailable provider yields unresolved evidence.
+      unavailable = true;
     }
     const inference = { model, elapsedMs: Math.max(0, monotonicNow() - started) };
+    if (unavailable) inference.unavailable = true;
     const usage = Object.fromEntries(
       usageFields.flatMap((key) => {
         const value = result?.usage?.[key];
@@ -226,41 +299,57 @@ export function createModel({ runAI, monotonicNow = () => performance.now() } = 
     mode: runAI ? "workers-ai" : "fixture",
     async extract(text) {
       if (typeof text !== "string" || !text.trim()) return { supported: false };
-      if (!runAI) return extraction(fixtureIntent(text));
+      const parsed = parseConstraints(text);
+      if (!parsed) return { supported: false };
+      if (!runAI) return extraction(fixtureIntent(parsed.base), parsed.constraints);
       const { result, inference } = await infer(clairic, {
         model: "clairic",
-        state: text,
+        state: parsed.base,
         fields: extractionFields,
       });
-      return { ...extraction(extractedIntent(result, text)), inference };
+      return { ...extraction(extractedIntent(result, parsed.base), parsed.constraints), inference };
     },
-    async decide({ phase, text, intent, slots = [] } = {}) {
+    async decide({ phase, text, intent, slots = [], preferredSlot = null, constraints } = {}) {
       if (
         !["find", "hold"].includes(intent) ||
-        (phase !== "intake" && (phase !== "availability" || !Array.isArray(slots)))
+        (phase !== "intake" &&
+          (phase !== "availability" ||
+            !Array.isArray(slots) ||
+            slots.some((slot) => typeof slot !== "string" || !Number.isFinite(Date.parse(slot))) ||
+            (preferredSlot !== null && !slots.includes(preferredSlot))))
       )
         return { ...abstain };
       if (!runAI) {
         if (phase === "intake") return { action: "split", confidence: 1 };
-        return decisionFor(intent, slots);
+        return decisionFor(intent, slots, preferredSlot);
       }
       const criteria = phase === "intake" ? intake : availability;
       const state =
         phase === "intake"
           ? {
-              goal: text,
-              intent,
-              calendarReads:
-                "Two independent reads of free slots, both required before finding common slots.",
+              Goal: text,
+              Request:
+                intent === "hold"
+                  ? "Find shared availability and then seek approval for a family calendar hold."
+                  : "Find and report shared availability without changing calendars.",
+              Inputs:
+                "Two configured household calendars are known. Each read is independent; comparing evenings requires both calendar results.",
             }
-          : { goal: text, intent, slotCount: slots.length, commonSlots: slots };
+          : {
+              Goal: text,
+              Policy: decisionPolicy,
+              Facts: availabilityFacts(intent, slots, preferredSlot, constraints?.preferredDay),
+            };
       const { result, inference } = await infer(clef, {
         model: "clef",
         state,
         questions: {
           action: {
             type: "choice",
-            instructions: "Choose the action that matches this state.",
+            instructions:
+              phase === "intake"
+                ? "Which plan advances the goal with its dependencies respected?"
+                : "Which of the following actions applies? Follow the policy and the calendar facts.",
             criteria,
           },
         },

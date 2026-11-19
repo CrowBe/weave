@@ -14,6 +14,20 @@ const DINNER_DATE = new Intl.DateTimeFormat("en-AU", {
   timeZone: "Australia/Sydney",
   dateStyle: "short",
 });
+const DINNER_WEEKDAY = new Intl.DateTimeFormat("en-AU", {
+  timeZone: "Australia/Sydney",
+  weekday: "long",
+});
+const WEEKDAYS = new Set([
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+]);
+const NO_CONSTRAINTS = { excludeDays: [], preferredDay: null };
 
 const EMPTY_STATE = {
   revision: 0,
@@ -28,6 +42,7 @@ const EMPTY_STATE = {
   startedAt: null,
   intent: null,
   recovery: null,
+  constraints: NO_CONSTRAINTS,
 };
 
 function slotList(value) {
@@ -64,6 +79,7 @@ function inferenceEvidence(value) {
   if (typeof value?.model !== "string" || !Number.isFinite(value.elapsedMs) || value.elapsedMs < 0)
     return {};
   const inference = { model: value.model.slice(0, 128), elapsedMs: value.elapsedMs };
+  if (value.unavailable === true) inference.unavailable = true;
   const usage = Object.fromEntries(
     USAGE_FIELDS.map((field) => [field, value.usage?.[field]]).filter(
       ([, count]) => Number.isSafeInteger(count) && count >= 0,
@@ -82,6 +98,19 @@ function earliestEachEvening(slots) {
     if (!evenings.has(date)) evenings.set(date, slot);
   }
   return [...evenings.values()];
+}
+
+function validateConstraints(value) {
+  if (value === undefined) return NO_CONSTRAINTS;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const { excludeDays = [], preferredDay = null } = value;
+  if (!Array.isArray(excludeDays) || !excludeDays.every((day) => WEEKDAYS.has(day))) return null;
+  if (preferredDay !== null && !WEEKDAYS.has(preferredDay)) return null;
+  return { excludeDays: [...new Set(excludeDays)], preferredDay };
+}
+
+function weekday(slot) {
+  return DINNER_WEEKDAY.format(new Date(slot)).toLowerCase();
 }
 
 export function createLoop({ load, save, model, calendar, now, newId }) {
@@ -128,34 +157,50 @@ export function createLoop({ load, save, model, calendar, now, newId }) {
   }
 
   async function readShared() {
+    const { excludeDays } = current.constraints;
     const [first, second] = await Promise.all(
       PEOPLE.map(async (person) => slotList(await calendar.read(person))),
     );
     const available = new Set(second);
-    const slots = [...new Set(first)].filter((slot) => available.has(slot)).sort();
+    const shared = [...new Set(first)].filter((slot) => available.has(slot));
+    const slots = shared.filter((slot) => !excludeDays.includes(weekday(slot))).sort();
     return {
       slots,
       evidence: [
         { type: "calendar.read", person: "first", count: first.length },
         { type: "calendar.read", person: "second", count: second.length },
-        { type: "calendar.join", slots },
+        { type: "calendar.join", slots, excludedCount: shared.length - slots.length },
       ],
     };
+  }
+
+  function providerUnavailable(event, preceding = []) {
+    if (!event.inference?.unavailable) return false;
+    finish("blocked", "Workers AI is unavailable. Try the request again.", ...preceding, event, {
+      type: "policy.block",
+      reason: "provider-unavailable",
+    });
+    return true;
   }
 
   async function intake() {
     const { revision, text } = current;
     const extraction = await model.extract(text);
     if (current.revision !== revision) return;
+    const constraints = validateConstraints(extraction?.constraints);
     const supported =
-      extraction?.supported === true && ["find", "hold"].includes(extraction.intent);
+      extraction?.supported === true &&
+      constraints !== null &&
+      ["find", "hold"].includes(extraction.intent);
     const intent = supported ? extraction.intent : null;
     const evidence = {
       type: "goal.extract",
       supported,
       intent,
+      constraints,
       ...inferenceEvidence(extraction?.inference),
     };
+    if (providerUnavailable(evidence)) return;
     if (!supported || (intent === "hold" && readOnly(text))) {
       finish(
         "blocked",
@@ -169,6 +214,7 @@ export function createLoop({ load, save, model, calendar, now, newId }) {
     const answer = await model.decide({ phase: "intake", text, intent, slots: [] });
     if (current.revision !== revision) return;
     const weighed = decision("intake", answer);
+    if (providerUnavailable(weighed, [evidence])) return;
     if (!accepts(answer, "split")) {
       finish(
         "blocked",
@@ -180,7 +226,7 @@ export function createLoop({ load, save, model, calendar, now, newId }) {
       return;
     }
     update(
-      { phase: "availability", intent, message: "Checking both calendars." },
+      { phase: "availability", intent, constraints, message: "Checking both calendars." },
       evidence,
       weighed,
       { type: "calendar.split", people: PEOPLE },
@@ -198,24 +244,46 @@ export function createLoop({ load, save, model, calendar, now, newId }) {
   }
 
   async function availability() {
-    const { revision, text, intent, freshSlots } = current;
+    const { revision, text, intent, freshSlots, constraints } = current;
     const { slots: shared, evidence } = freshSlots
       ? { slots: freshSlots, evidence: [] }
       : await readShared();
     if (current.revision !== revision) return;
     const slots = earliestEachEvening(shared);
+    const preferredSlot = constraints.preferredDay
+      ? (slots.find((slot) => weekday(slot) === constraints.preferredDay) ?? null)
+      : null;
     const action =
       intent === "find"
         ? "report"
         : slots.length === 0
           ? "none"
-          : slots.length === 1
+          : slots.length === 1 || preferredSlot
             ? "propose"
             : "choose";
-    const answer = await model.decide({ phase: "availability", text, intent, slots: [...slots] });
+    const answer = await model.decide({
+      phase: "availability",
+      text,
+      intent,
+      slots: [...slots],
+      preferredSlot,
+      constraints: structuredClone(constraints),
+    });
     if (current.revision !== revision) return;
-    evidence.push(decision("availability", answer));
-    if (!accepts(answer, action) && intent === "find") {
+    evidence.push({ type: "availability.eligible", slots, preferredSlot });
+    const weighed = decision("availability", answer);
+    if (providerUnavailable(weighed, evidence)) return;
+    evidence.push(weighed);
+    const clarify =
+      intent === "hold" &&
+      slots.length > 0 &&
+      answer?.action === action &&
+      Number.isFinite(answer.confidence) &&
+      answer.confidence > 0 &&
+      answer.confidence < MIN_CONFIDENCE;
+    if (clarify) {
+      evidence.push({ type: "clarification.requested", reason: "uncertain-selection" });
+    } else if (!accepts(answer, action) && intent === "find") {
       evidence.push({ type: "policy.block", reason: "read-only-decision" });
     } else if (!accepts(answer, action)) {
       finish(
@@ -227,7 +295,7 @@ export function createLoop({ load, save, model, calendar, now, newId }) {
       return;
     }
 
-    switch (action) {
+    switch (clarify ? "choose" : action) {
       case "report":
         update(
           {
@@ -246,11 +314,19 @@ export function createLoop({ load, save, model, calendar, now, newId }) {
         finish("done", "There is no shared dinner time next week.", ...evidence);
         break;
       case "propose":
-        propose(slots[0], slots, ...evidence);
+        propose(preferredSlot ?? slots[0], slots, ...evidence);
         break;
       case "choose":
         update(
-          { status: "choice", phase: null, slots, message: "Choose a shared dinner time." },
+          {
+            status: "choice",
+            phase: null,
+            slots,
+            selected: null,
+            message: clarify
+              ? "Please choose from the verified times before I propose a hold."
+              : "Choose a shared dinner time.",
+          },
           ...evidence,
         );
         break;

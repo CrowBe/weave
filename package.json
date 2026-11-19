@@ -6,7 +6,7 @@
     "start": "node mvp/server.mjs",
     "test": "node --test mvp/*.test.mjs",
     "test:live": "node mvp/evaluate.mjs --live",
-    "verify": "npm test && npm --prefix mvp run worker:check"
+    "verify": "npm test && node mvp/evaluate.mjs && npm --prefix mvp run worker:check"
   },
   "engines": {
     "node": ">=26"

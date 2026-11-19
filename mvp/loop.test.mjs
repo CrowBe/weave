@@ -31,14 +31,17 @@ function fixture(overrides = {}) {
         calls.push(["extract", input]);
         return { supported: true, intent: "hold" };
       },
-      decide: async ({ phase, slots, intent }) => {
+      decide: async ({ phase, slots, intent, preferredSlot, constraints }) => {
         calls.push(["decide", phase]);
+        if (phase === "availability") calls.push(["eligible", slots, preferredSlot, constraints]);
         const action =
           phase === "intake"
             ? "split"
             : intent === "find"
               ? "report"
-              : ["none", "propose", "choose"][Math.min(slots.length, 2)];
+              : preferredSlot
+                ? "propose"
+                : ["none", "propose", "choose"][Math.min(slots.length, 2)];
         return { action, confidence: 0.95 };
       },
       ...overrides.model,
@@ -385,4 +388,129 @@ test("separate actor stores use distinct hold keys at identical revisions and ti
     );
   }
   assert.notEqual(keys[0], keys[1]);
+});
+
+test("reports eligible evenings and passes the same evidence to the availability decision", async () => {
+  const third = "2026-11-25T08:00:00.000Z";
+  const constraints = { excludeDays: ["monday"], preferredDay: "wednesday" };
+  const { loop, calls } = fixture({
+    model: { extract: async () => ({ supported: true, intent: "find", constraints }) },
+    calendar: { read: async () => [first, second, third] },
+  });
+  const result = await start(loop);
+  assert.equal(result.status, "done");
+  assert.deepEqual(result.slots, [second, third]);
+  assert.deepEqual(
+    calls.find(([type]) => type === "eligible"),
+    ["eligible", [second, third], third, constraints],
+  );
+});
+
+test("replans when the preferred evening disappears and never offers or writes an excluded time", async () => {
+  let available = true;
+  const third = "2026-11-25T08:00:00.000Z";
+  const { loop, calls, restart } = fixture({
+    model: {
+      extract: async () => ({
+        supported: true,
+        intent: "hold",
+        constraints: { excludeDays: ["monday"], preferredDay: "wednesday" },
+      }),
+    },
+    calendar: { read: async () => (available ? [first, second, third] : [first, second]) },
+  });
+  const preferred = await start(loop);
+  assert.equal(preferred.status, "approval");
+  assert.equal(preferred.selected, third);
+  assert.deepEqual(preferred.slots, [second, third]);
+  available = false;
+  const recovered = restart();
+  const alternative = await command(recovered, "approve", preferred.revision);
+  assert.equal(alternative.status, "approval");
+  assert.equal(alternative.selected, second);
+  assert.deepEqual(alternative.slots, [second]);
+  assert.deepEqual(await command(recovered, "approve", preferred.revision), alternative);
+  assert.equal(
+    calls.some(([type]) => type === "hold"),
+    false,
+  );
+  assert.equal((await command(recovered, "approve", alternative.revision)).status, "done");
+  assert.deepEqual(
+    calls.filter(([type]) => type === "hold").map(([, , slot]) => slot),
+    [second],
+  );
+});
+
+test("rejects malformed typed weekday constraints before calendar reads", async () => {
+  const { loop, calls } = fixture({
+    model: {
+      extract: async () => ({
+        supported: true,
+        intent: "hold",
+        constraints: { excludeDays: ["monday", "funday"], preferredDay: null },
+      }),
+    },
+  });
+  assert.equal((await start(loop)).status, "blocked");
+  assert.equal(
+    calls.some(([type]) => type === "read"),
+    false,
+  );
+});
+
+test("provider outage is visible to the operator and does not become a scope refusal", async () => {
+  const { loop, calls } = fixture({
+    model: {
+      extract: async () => ({
+        supported: false,
+        inference: { model: "@cf/cloudflare/clairic", elapsedMs: 12, unavailable: true },
+      }),
+    },
+  });
+  const state = await loop.dispatch({ type: "start", actor, text });
+  assert.equal(state.status, "blocked");
+  assert.match(state.message, /unavailable/i);
+  assert.equal(
+    state.trace.find((event) => event.type === "goal.extract").inference.unavailable,
+    true,
+  );
+  assert.ok(!calls.some(([name]) => name === "read"));
+});
+
+test("uncertain replacement asks for an explicit choice and fresh approval", async () => {
+  let remaining = [first, second];
+  const { loop, calls } = fixture({
+    calendar: { read: async () => remaining },
+    model: {
+      decide: async ({ phase, slots }) =>
+        phase === "intake"
+          ? { action: "split", confidence: 0.99 }
+          : slots.length === 2
+            ? { action: "choose", confidence: 0.99 }
+            : { action: "propose", confidence: 0.76 },
+    },
+  });
+  const options = await start(loop);
+  const initial = await loop.dispatch({
+    type: "choose",
+    actor,
+    slot: first,
+    revision: options.revision,
+  });
+  remaining = [second];
+  const clarification = await command(loop, "approve", initial.revision);
+  assert.equal(clarification.status, "choice");
+  assert.deepEqual(clarification.slots, [second]);
+  assert.ok(clarification.trace.some((e) => e.type === "clarification.requested"));
+  assert.deepEqual(await command(loop, "approve", clarification.revision), clarification);
+  const fresh = await loop.dispatch({
+    type: "choose",
+    actor,
+    revision: clarification.revision,
+    slot: second,
+  });
+  assert.equal(fresh.status, "approval");
+  assert.ok(!calls.some(([type]) => type === "hold"));
+  assert.deepEqual(await command(loop, "approve", initial.revision), fresh);
+  assert.equal((await command(loop, "approve", fresh.revision)).receipt.slot, second);
 });

@@ -12,38 +12,76 @@ const now = () => new Date("2026-04-02T13:00:00Z");
 test("offline model accepts only the supported dinner request", async () => {
   const model = createModel();
   assert.equal(model.mode, "fixture");
-  assert.deepEqual(await model.extract(goal), { supported: true, intent: "hold" });
-  assert.deepEqual(await model.extract(original), { supported: true, intent: "hold" });
-  assert.deepEqual(await model.extract(readOnly), { supported: true, intent: "find" });
+  const neutral = { excludeDays: [], preferredDay: null };
+  assert.deepEqual(await model.extract(goal), {
+    supported: true,
+    intent: "hold",
+    constraints: neutral,
+  });
+  assert.deepEqual(await model.extract(original), {
+    supported: true,
+    intent: "hold",
+    constraints: neutral,
+  });
+  assert.deepEqual(await model.extract(readOnly), {
+    supported: true,
+    intent: "find",
+    constraints: neutral,
+  });
   for (const text of [
     goal.replace("a free hour", "two free hours"),
     goal.replace("next week", "tomorrow"),
     goal.replace("after 6 pm", "after 8 pm"),
-    goal.replace("after 6 pm", "after 6 pm, except Thursday,"),
+    goal.replace("after 6 pm", "after 6 pm, only on Thursday,"),
     goal.replace("family calendar", "work calendar"),
     goal.replace("and put a hold", "and do not put a hold"),
     goal + " Invite the family when you find one.",
   ]) {
     assert.deepEqual(await model.extract(text), { supported: false }, text);
   }
+  const testSlots = ["2026-04-06T09:00:00.000Z", "2026-04-07T09:00:00.000Z"];
+  const constrained = goal + " Except Tuesday. Prefer Thursday if it is free.";
+  assert.deepEqual(await model.extract(constrained), {
+    supported: true,
+    intent: "hold",
+    constraints: { excludeDays: ["tuesday"], preferredDay: "thursday" },
+  });
+  assert.deepEqual(await model.extract(constrained.replace("Tuesday", "Thursday")), {
+    supported: false,
+  });
+  assert.deepEqual(await model.extract(constrained + " Only Friday."), { supported: false });
+  assert.deepEqual(await model.extract(goal + " Do not prefer Thursday."), { supported: false });
+  assert.deepEqual(await model.extract(goal + " I do not prefer Tuesday."), { supported: false });
+  assert.deepEqual(
+    await model.decide({
+      phase: "availability",
+      intent: "hold",
+      slots: testSlots,
+      preferredSlot: testSlots[1],
+    }),
+    { action: "propose", confidence: 1 },
+  );
   assert.deepEqual(await model.decide({ phase: "intake", intent: "hold" }), {
     action: "split",
     confidence: 1,
   });
   for (const [slots, action] of [
     [[], "none"],
-    [["one"], "propose"],
-    [["one", "two"], "choose"],
+    [[testSlots[0]], "propose"],
+    [testSlots, "choose"],
   ]) {
     assert.deepEqual(await model.decide({ phase: "availability", intent: "hold", slots }), {
       action,
       confidence: 1,
     });
   }
-  assert.deepEqual(await model.decide({ phase: "availability", intent: "find", slots: ["one"] }), {
-    action: "report",
-    confidence: 1,
-  });
+  assert.deepEqual(
+    await model.decide({ phase: "availability", intent: "find", slots: [testSlots[0]] }),
+    {
+      action: "report",
+      confidence: 1,
+    },
+  );
 });
 
 test("hosted adapter uses native typed inference and rejects uncertain or invalid output", async () => {
@@ -69,15 +107,16 @@ test("hosted adapter uses native typed inference and rejects uncertain or invali
       p_null: 0.01,
     };
   };
+  const flag = (value) => ({ type: "boolean", value, confidence: 0.99, p_null: 0.01 });
   response = {
     truncated: false,
     answers: {
       meal: textAnswer("dinner"),
       week: textAnswer("next week"),
       duration: { type: "duration", value: 60, unit: "minutes", confidence: 0.99, p_null: 0.01 },
-      time: textAnswer("later than 18:00"),
-      operation: textAnswer("reserve an hour on the family calendar"),
-      unsupported: { type: "text", value: null, confidence: 0.3, p_null: 0.99 },
+      hold: flag(true),
+      search: flag(true),
+      blocker: flag(false),
     },
     usage: { input_tokens: 500, output_tokens: 0, other: 10 },
   };
@@ -92,17 +131,24 @@ test("hosted adapter uses native typed inference and rejects uncertain or invali
   assert.equal(calls[0][1].fields.duration.type, "duration");
   assert.equal(calls[0][1].state, paraphrase);
 
-  const modified = paraphrase + " Only on Thursday.";
-  response.answers.unsupported = textAnswer("Only on Thursday", modified);
-  assert.equal((await model.extract(modified)).supported, false);
-  response.answers.unsupported = { type: "text", value: null, p_null: 0.99 };
+  const constrained = paraphrase + " Except Tuesday. Prefer Thursday if it is free.";
+  const parsed = await model.extract(constrained);
+  assert.deepEqual(parsed.constraints, { excludeDays: ["tuesday"], preferredDay: "thursday" });
+  assert.equal(parsed.intent, "hold");
+  assert.equal((await model.extract(paraphrase + " Only on Thursday.")).supported, false);
+  assert.equal((await model.extract(paraphrase + " Invite my friends.")).supported, false);
+  assert.equal(
+    (await model.extract(paraphrase.replace("family calendar", "work calendar"))).supported,
+    false,
+  );
+  response.answers.blocker.confidence = 0.79;
+  assert.equal((await model.extract(paraphrase)).supported, false);
+  response.answers.blocker = flag(false);
   response.answers.week.span = [1, 3];
   assert.equal((await model.extract(paraphrase)).supported, false);
-  response.answers.week = textAnswer("next week");
-  response.answers.operation = textAnswer("Find a free hour", readOnly);
+  response.answers.hold = flag(false);
   response.answers.meal = textAnswer("dinner", readOnly);
   response.answers.week = textAnswer("next week", readOnly);
-  response.answers.time = textAnswer("after 6 pm", readOnly);
   assert.equal((await model.extract(readOnly)).intent, "find");
   response.answers.duration.confidence = 0.4;
   assert.equal((await model.extract(readOnly)).supported, false);
@@ -117,7 +163,12 @@ test("hosted adapter uses native typed inference and rejects uncertain or invali
       },
     },
   };
-  const args = { phase: "availability", intent: "find", text: readOnly, slots: ["common-slot"] };
+  const args = {
+    phase: "availability",
+    intent: "find",
+    text: readOnly,
+    slots: ["2026-04-07T09:00:00.000Z"],
+  };
   const decision = await model.decide(args);
   assert.equal(decision.action, "report");
   assert.equal(decision.confidence, 0.96);
@@ -125,20 +176,49 @@ test("hosted adapter uses native typed inference and rejects uncertain or invali
   assert.equal(decision.inference.estimatedUsd, undefined);
   assert.equal(calls.at(-1)[0], "@cf/cloudflare/clef");
   assert.equal(calls.at(-1)[1].questions.action.type, "choice");
-  assert.deepEqual(calls.at(-1)[1].state, {
-    goal: readOnly,
-    intent: "find",
-    slotCount: 1,
-    commonSlots: ["common-slot"],
-  });
+  assert.equal(calls.at(-1)[1].state.Goal, readOnly);
+  assert.match(calls.at(-1)[1].state.Policy, /preferred evening is eligible/);
+  assert.equal(
+    calls.at(-1)[1].state.Facts,
+    "The operator requests a find-only search. Only one shared dinner evening is eligible: Tuesday.",
+  );
+  assert.deepEqual(Object.keys(calls.at(-1)[1].questions.action.criteria), [
+    "none",
+    "propose",
+    "choose",
+    "report",
+  ]);
   response.answers.action.probabilities.report = "0.97";
   assert.equal((await model.decide(args)).confidence, 0);
+  response.answers.action = {
+    type: "choice",
+    choice: "propose",
+    probabilities: { none: 0.01, choose: 0.02, propose: 0.96, report: 0.01 },
+    confidence: 0.98,
+  };
+  const preferredSlot = "2026-04-08T09:00:00.000Z";
+  const preferred = await model.decide({
+    phase: "availability",
+    intent: "hold",
+    text: goal,
+    slots: [...args.slots, preferredSlot],
+    preferredSlot,
+    constraints: { excludeDays: ["thursday"], preferredDay: "wednesday" },
+  });
+  assert.equal(preferred.action, "propose");
+  assert.equal(preferred.confidence, 0.96);
+  assert.match(
+    calls.at(-1)[1].state.Facts,
+    /Tuesday and Wednesday. Wednesday is preferred and available./,
+  );
   response = new Error("network");
   const failed = await model.decide({ phase: "intake", intent: "hold", text: goal });
   assert.equal(failed.action, "abstain");
   assert.equal(failed.confidence, 0);
   assert.equal(failed.inference.model, "@cf/cloudflare/clef");
-  assert.equal((await model.extract(goal)).supported, false);
+  const extractionFailure = await model.extract(goal);
+  assert.equal(extractionFailure.supported, false);
+  assert.equal(extractionFailure.inference.unavailable, true);
 });
 
 test("fixture provides independent private availability and durable idempotent holds", () => {

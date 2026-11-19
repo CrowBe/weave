@@ -30,8 +30,9 @@
           <h2 id="request-title">Dinner request</h2>
           <form id="request">
             <label for="goal">What would you like to plan?</label>
-            <textarea id="goal" name="text" rows="5" maxlength="2000" required disabled>
+            <textarea id="goal" name="text" rows="5" maxlength="2000" aria-describedby="request-hint" required disabled>
 Find a free hour for dinner on our calendars next week after 6 pm and put a hold on the family calendar. If several evenings work, ask me which.</textarea>
+            <p class="hint" id="request-hint"></p>
             <div class="field" id="scenario-field" hidden>
               <label for="scenario">Demo availability</label>
               <select id="scenario" name="scenario" disabled>

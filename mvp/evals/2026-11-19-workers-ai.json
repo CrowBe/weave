@@ -1,0 +1,1107 @@
+[
+  {
+    "evaluatedAt": "2026-11-19T04:36:38.565Z",
+    "calendarClock": "2026-11-19T03:00:00Z",
+    "suite": "calendar",
+    "mode": "Workers AI",
+    "passed": true,
+    "summary": {
+      "passed": 9,
+      "total": 9,
+      "inferenceCalls": 26,
+      "reportedInputTokens": 16722,
+      "elapsedMs": 49802
+    },
+    "results": [
+      {
+        "id": "no-overlap",
+        "goal": "Find a free hour for dinner on our calendars next week, after 6 pm. If there’s an evening that works, put a hold on the family calendar. If there are several, ask me which one.",
+        "passed": true,
+        "elapsedMs": 5614,
+        "steps": [
+          {
+            "command": "start",
+            "http": 200,
+            "status": "done",
+            "slots": [],
+            "selected": null,
+            "holds": 0
+          }
+        ],
+        "decisions": [
+          {
+            "phase": "intake",
+            "action": "split",
+            "confidence": 0.9749
+          },
+          {
+            "phase": "availability",
+            "action": "none",
+            "confidence": 0.9334
+          }
+        ],
+        "evidence": [
+          {
+            "type": "goal.extract",
+            "supported": true,
+            "intent": "hold",
+            "constraints": {
+              "excludeDays": [],
+              "preferredDay": null
+            },
+            "inference": {
+              "model": "@cf/cloudflare/clairic",
+              "elapsedMs": 1840.3547959999999,
+              "usage": {
+                "input_tokens": 1290,
+                "output_tokens": 15,
+                "state_tokens": 43,
+                "schema_tokens": 1032,
+                "image_tokens": 0,
+                "passes": 5
+              },
+              "estimatedUsd": 0.0003096
+            },
+            "at": "2026-11-19T03:00:00.000Z",
+            "revision": 2
+          }
+        ],
+        "inference": [
+          {
+            "model": "@cf/cloudflare/clairic",
+            "elapsedMs": 1840.3547959999999,
+            "usage": {
+              "input_tokens": 1290,
+              "output_tokens": 15,
+              "state_tokens": 43,
+              "schema_tokens": 1032,
+              "image_tokens": 0,
+              "passes": 5
+            },
+            "estimatedUsd": 0.0003096
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 2058.0371569999998,
+            "usage": {
+              "input_tokens": 236,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 5.663999999999999e-05
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 1707.3644369999997,
+            "usage": {
+              "input_tokens": 397,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 9.528e-05
+          }
+        ]
+      },
+      {
+        "id": "single",
+        "goal": "Find a free hour for dinner on our calendars next week, after 6 pm. If there’s an evening that works, put a hold on the family calendar. If there are several, ask me which one.",
+        "passed": true,
+        "elapsedMs": 6348,
+        "steps": [
+          {
+            "command": "start",
+            "http": 200,
+            "status": "approval",
+            "slots": [
+              "Tuesday"
+            ],
+            "selected": "Tuesday",
+            "holds": 0
+          },
+          {
+            "command": "approve",
+            "http": 200,
+            "status": "done",
+            "slots": [
+              "Tuesday"
+            ],
+            "selected": "Tuesday",
+            "holds": 1
+          }
+        ],
+        "decisions": [
+          {
+            "phase": "intake",
+            "action": "split",
+            "confidence": 0.9749
+          },
+          {
+            "phase": "availability",
+            "action": "propose",
+            "confidence": 0.8506
+          }
+        ],
+        "evidence": [
+          {
+            "type": "goal.extract",
+            "supported": true,
+            "intent": "hold",
+            "constraints": {
+              "excludeDays": [],
+              "preferredDay": null
+            },
+            "inference": {
+              "model": "@cf/cloudflare/clairic",
+              "elapsedMs": 1842.2084599999998,
+              "usage": {
+                "input_tokens": 1290,
+                "output_tokens": 15,
+                "state_tokens": 43,
+                "schema_tokens": 1032,
+                "image_tokens": 0,
+                "passes": 5
+              },
+              "estimatedUsd": 0.0003096
+            },
+            "at": "2026-11-19T03:00:00.000Z",
+            "revision": 2
+          }
+        ],
+        "inference": [
+          {
+            "model": "@cf/cloudflare/clairic",
+            "elapsedMs": 1842.2084599999998,
+            "usage": {
+              "input_tokens": 1290,
+              "output_tokens": 15,
+              "state_tokens": 43,
+              "schema_tokens": 1032,
+              "image_tokens": 0,
+              "passes": 5
+            },
+            "estimatedUsd": 0.0003096
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 1868.7687290000013,
+            "usage": {
+              "input_tokens": 236,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 5.663999999999999e-05
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 2631.1133659999996,
+            "usage": {
+              "input_tokens": 400,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 9.6e-05
+          }
+        ]
+      },
+      {
+        "id": "several",
+        "goal": "Find a free hour for dinner on our calendars next week, after 6 pm. If there’s an evening that works, put a hold on the family calendar. If there are several, ask me which one.",
+        "passed": true,
+        "elapsedMs": 5931,
+        "steps": [
+          {
+            "command": "start",
+            "http": 200,
+            "status": "choice",
+            "slots": [
+              "Tuesday",
+              "Thursday",
+              "Saturday"
+            ],
+            "selected": null,
+            "holds": 0
+          },
+          {
+            "command": "choose",
+            "http": 200,
+            "status": "approval",
+            "slots": [
+              "Tuesday",
+              "Thursday",
+              "Saturday"
+            ],
+            "selected": "Saturday",
+            "holds": 0
+          },
+          {
+            "command": "approve",
+            "http": 200,
+            "status": "done",
+            "slots": [
+              "Tuesday",
+              "Thursday",
+              "Saturday"
+            ],
+            "selected": "Saturday",
+            "holds": 1
+          }
+        ],
+        "decisions": [
+          {
+            "phase": "intake",
+            "action": "split",
+            "confidence": 0.9749
+          },
+          {
+            "phase": "availability",
+            "action": "choose",
+            "confidence": 0.9541
+          }
+        ],
+        "evidence": [
+          {
+            "type": "goal.extract",
+            "supported": true,
+            "intent": "hold",
+            "constraints": {
+              "excludeDays": [],
+              "preferredDay": null
+            },
+            "inference": {
+              "model": "@cf/cloudflare/clairic",
+              "elapsedMs": 1650.0407219999997,
+              "usage": {
+                "input_tokens": 1290,
+                "output_tokens": 15,
+                "state_tokens": 43,
+                "schema_tokens": 1032,
+                "image_tokens": 0,
+                "passes": 5
+              },
+              "estimatedUsd": 0.0003096
+            },
+            "at": "2026-11-19T03:00:00.000Z",
+            "revision": 2
+          }
+        ],
+        "inference": [
+          {
+            "model": "@cf/cloudflare/clairic",
+            "elapsedMs": 1650.0407219999997,
+            "usage": {
+              "input_tokens": 1290,
+              "output_tokens": 15,
+              "state_tokens": 43,
+              "schema_tokens": 1032,
+              "image_tokens": 0,
+              "passes": 5
+            },
+            "estimatedUsd": 0.0003096
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 2134.0253549999998,
+            "usage": {
+              "input_tokens": 236,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 5.663999999999999e-05
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 2144.018035000001,
+            "usage": {
+              "input_tokens": 409,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 9.816e-05
+          }
+        ]
+      },
+      {
+        "id": "search",
+        "goal": "Find a free hour for dinner on our calendars next week after 6 pm.",
+        "passed": true,
+        "elapsedMs": 5427,
+        "steps": [
+          {
+            "command": "start",
+            "http": 200,
+            "status": "done",
+            "slots": [
+              "Tuesday",
+              "Thursday",
+              "Saturday"
+            ],
+            "selected": null,
+            "holds": 0
+          }
+        ],
+        "decisions": [
+          {
+            "phase": "intake",
+            "action": "split",
+            "confidence": 0.9736
+          },
+          {
+            "phase": "availability",
+            "action": "report",
+            "confidence": 0.9662
+          }
+        ],
+        "evidence": [
+          {
+            "type": "goal.extract",
+            "supported": true,
+            "intent": "find",
+            "constraints": {
+              "excludeDays": [],
+              "preferredDay": null
+            },
+            "inference": {
+              "model": "@cf/cloudflare/clairic",
+              "elapsedMs": 1842.193946000003,
+              "usage": {
+                "input_tokens": 1128,
+                "output_tokens": 15,
+                "state_tokens": 16,
+                "schema_tokens": 1032,
+                "image_tokens": 0,
+                "passes": 5
+              },
+              "estimatedUsd": 0.00027072
+            },
+            "at": "2026-11-19T03:00:00.000Z",
+            "revision": 2
+          }
+        ],
+        "inference": [
+          {
+            "model": "@cf/cloudflare/clairic",
+            "elapsedMs": 1842.193946000003,
+            "usage": {
+              "input_tokens": 1128,
+              "output_tokens": 15,
+              "state_tokens": 16,
+              "schema_tokens": 1032,
+              "image_tokens": 0,
+              "passes": 5
+            },
+            "estimatedUsd": 0.00027072
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 2190.226727999998,
+            "usage": {
+              "input_tokens": 205,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 4.9199999999999997e-05
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 1391.5455490000022,
+            "usage": {
+              "input_tokens": 378,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 9.072e-05
+          }
+        ]
+      },
+      {
+        "id": "out-of-scope",
+        "goal": "Book lunch for tomorrow and invite the neighbours.",
+        "passed": true,
+        "elapsedMs": 1893,
+        "steps": [
+          {
+            "command": "start",
+            "http": 200,
+            "status": "blocked",
+            "slots": [],
+            "selected": null,
+            "holds": 0
+          }
+        ],
+        "decisions": [],
+        "evidence": [
+          {
+            "type": "goal.extract",
+            "supported": false,
+            "intent": null,
+            "constraints": {
+              "excludeDays": [],
+              "preferredDay": null
+            },
+            "inference": {
+              "model": "@cf/cloudflare/clairic",
+              "elapsedMs": 1892.169765999999,
+              "usage": {
+                "input_tokens": 1236,
+                "output_tokens": 15,
+                "state_tokens": 9,
+                "schema_tokens": 1182,
+                "image_tokens": 0,
+                "passes": 5
+              },
+              "estimatedUsd": 0.00029664
+            },
+            "at": "2026-11-19T03:00:00.000Z",
+            "revision": 2
+          },
+          {
+            "type": "policy.block",
+            "reason": "scope",
+            "at": "2026-11-19T03:00:00.000Z",
+            "revision": 2
+          }
+        ],
+        "inference": [
+          {
+            "model": "@cf/cloudflare/clairic",
+            "elapsedMs": 1892.169765999999,
+            "usage": {
+              "input_tokens": 1236,
+              "output_tokens": 15,
+              "state_tokens": 9,
+              "schema_tokens": 1182,
+              "image_tokens": 0,
+              "passes": 5
+            },
+            "estimatedUsd": 0.00029664
+          }
+        ]
+      },
+      {
+        "id": "exclude-read-only",
+        "goal": "Find a free hour for dinner on our calendars next week after 6 pm. Except Thursday.",
+        "passed": true,
+        "elapsedMs": 5484,
+        "steps": [
+          {
+            "command": "start",
+            "http": 200,
+            "status": "done",
+            "slots": [
+              "Tuesday",
+              "Saturday"
+            ],
+            "selected": null,
+            "holds": 0
+          }
+        ],
+        "decisions": [
+          {
+            "phase": "intake",
+            "action": "split",
+            "confidence": 0.9752
+          },
+          {
+            "phase": "availability",
+            "action": "report",
+            "confidence": 0.9576
+          }
+        ],
+        "evidence": [
+          {
+            "type": "goal.extract",
+            "supported": true,
+            "intent": "find",
+            "constraints": {
+              "excludeDays": [
+                "thursday"
+              ],
+              "preferredDay": null
+            },
+            "inference": {
+              "model": "@cf/cloudflare/clairic",
+              "elapsedMs": 1857.353013,
+              "usage": {
+                "input_tokens": 1128,
+                "output_tokens": 15,
+                "state_tokens": 16,
+                "schema_tokens": 1032,
+                "image_tokens": 0,
+                "passes": 5
+              },
+              "estimatedUsd": 0.00027072
+            },
+            "at": "2026-11-19T03:00:00.000Z",
+            "revision": 2
+          }
+        ],
+        "inference": [
+          {
+            "model": "@cf/cloudflare/clairic",
+            "elapsedMs": 1857.353013,
+            "usage": {
+              "input_tokens": 1128,
+              "output_tokens": 15,
+              "state_tokens": 16,
+              "schema_tokens": 1032,
+              "image_tokens": 0,
+              "passes": 5
+            },
+            "estimatedUsd": 0.00027072
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 2051.859668000001,
+            "usage": {
+              "input_tokens": 208,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 4.9919999999999996e-05
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 1573.1525000000001,
+            "usage": {
+              "input_tokens": 378,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 9.072e-05
+          }
+        ]
+      },
+      {
+        "id": "prefer-available",
+        "goal": "Find a free hour for dinner on our calendars next week, after 6 pm. If there’s an evening that works, put a hold on the family calendar. If there are several, ask me which one. Prefer Saturday if it is free.",
+        "passed": true,
+        "elapsedMs": 6166,
+        "steps": [
+          {
+            "command": "start",
+            "http": 200,
+            "status": "approval",
+            "slots": [
+              "Tuesday",
+              "Thursday",
+              "Saturday"
+            ],
+            "selected": "Saturday",
+            "holds": 0
+          },
+          {
+            "command": "approve",
+            "http": 200,
+            "status": "done",
+            "slots": [
+              "Tuesday",
+              "Thursday",
+              "Saturday"
+            ],
+            "selected": "Saturday",
+            "holds": 1
+          }
+        ],
+        "decisions": [
+          {
+            "phase": "intake",
+            "action": "split",
+            "confidence": 0.976
+          },
+          {
+            "phase": "availability",
+            "action": "propose",
+            "confidence": 0.9289
+          }
+        ],
+        "evidence": [
+          {
+            "type": "goal.extract",
+            "supported": true,
+            "intent": "hold",
+            "constraints": {
+              "excludeDays": [],
+              "preferredDay": "saturday"
+            },
+            "inference": {
+              "model": "@cf/cloudflare/clairic",
+              "elapsedMs": 2022.7808149999983,
+              "usage": {
+                "input_tokens": 1290,
+                "output_tokens": 15,
+                "state_tokens": 43,
+                "schema_tokens": 1032,
+                "image_tokens": 0,
+                "passes": 5
+              },
+              "estimatedUsd": 0.0003096
+            },
+            "at": "2026-11-19T03:00:00.000Z",
+            "revision": 2
+          }
+        ],
+        "inference": [
+          {
+            "model": "@cf/cloudflare/clairic",
+            "elapsedMs": 2022.7808149999983,
+            "usage": {
+              "input_tokens": 1290,
+              "output_tokens": 15,
+              "state_tokens": 43,
+              "schema_tokens": 1032,
+              "image_tokens": 0,
+              "passes": 5
+            },
+            "estimatedUsd": 0.0003096
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 1499.8354130000007,
+            "usage": {
+              "input_tokens": 243,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 5.832e-05
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 2639.974092000004,
+            "usage": {
+              "input_tokens": 417,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 0.00010007999999999999
+          }
+        ]
+      },
+      {
+        "id": "prefer-unavailable",
+        "goal": "Find a free hour for dinner on our calendars next week, after 6 pm. If there’s an evening that works, put a hold on the family calendar. If there are several, ask me which one. Except Thursday. Prefer Friday if it is free.",
+        "passed": true,
+        "elapsedMs": 5019,
+        "steps": [
+          {
+            "command": "start",
+            "http": 200,
+            "status": "choice",
+            "slots": [
+              "Tuesday",
+              "Saturday"
+            ],
+            "selected": null,
+            "holds": 0
+          },
+          {
+            "command": "choose",
+            "http": 200,
+            "status": "approval",
+            "slots": [
+              "Tuesday",
+              "Saturday"
+            ],
+            "selected": "Tuesday",
+            "holds": 0
+          },
+          {
+            "command": "approve",
+            "http": 200,
+            "status": "done",
+            "slots": [
+              "Tuesday",
+              "Saturday"
+            ],
+            "selected": "Tuesday",
+            "holds": 1
+          }
+        ],
+        "decisions": [
+          {
+            "phase": "intake",
+            "action": "split",
+            "confidence": 0.9777
+          },
+          {
+            "phase": "availability",
+            "action": "choose",
+            "confidence": 0.8648
+          }
+        ],
+        "evidence": [
+          {
+            "type": "goal.extract",
+            "supported": true,
+            "intent": "hold",
+            "constraints": {
+              "excludeDays": [
+                "thursday"
+              ],
+              "preferredDay": "friday"
+            },
+            "inference": {
+              "model": "@cf/cloudflare/clairic",
+              "elapsedMs": 1691.453582000002,
+              "usage": {
+                "input_tokens": 1290,
+                "output_tokens": 15,
+                "state_tokens": 43,
+                "schema_tokens": 1032,
+                "image_tokens": 0,
+                "passes": 5
+              },
+              "estimatedUsd": 0.0003096
+            },
+            "at": "2026-11-19T03:00:00.000Z",
+            "revision": 2
+          }
+        ],
+        "inference": [
+          {
+            "model": "@cf/cloudflare/clairic",
+            "elapsedMs": 1691.453582000002,
+            "usage": {
+              "input_tokens": 1290,
+              "output_tokens": 15,
+              "state_tokens": 43,
+              "schema_tokens": 1032,
+              "image_tokens": 0,
+              "passes": 5
+            },
+            "estimatedUsd": 0.0003096
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 1955.266036999994,
+            "usage": {
+              "input_tokens": 246,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 5.9040000000000004e-05
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 1368.5490439999994,
+            "usage": {
+              "input_tokens": 419,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 0.00010056
+          }
+        ]
+      },
+      {
+        "id": "replan-after-approval",
+        "goal": "Find a free hour for dinner on our calendars next week, after 6 pm. If there’s an evening that works, put a hold on the family calendar. If there are several, ask me which one. Except Tuesday. Prefer Thursday if it is free.",
+        "passed": true,
+        "elapsedMs": 7920,
+        "steps": [
+          {
+            "command": "start",
+            "http": 200,
+            "status": "approval",
+            "slots": [
+              "Thursday",
+              "Saturday"
+            ],
+            "selected": "Thursday",
+            "holds": 0
+          },
+          {
+            "command": "approve",
+            "http": 200,
+            "status": "choice",
+            "slots": [
+              "Saturday"
+            ],
+            "selected": null,
+            "holds": 0
+          },
+          {
+            "command": "choose",
+            "http": 200,
+            "status": "approval",
+            "slots": [
+              "Saturday"
+            ],
+            "selected": "Saturday",
+            "holds": 0
+          },
+          {
+            "command": "approve",
+            "http": 409,
+            "status": "approval",
+            "slots": [
+              "Saturday"
+            ],
+            "selected": "Saturday",
+            "holds": 0
+          },
+          {
+            "command": "approve",
+            "http": 200,
+            "status": "done",
+            "slots": [
+              "Saturday"
+            ],
+            "selected": "Saturday",
+            "holds": 1
+          }
+        ],
+        "decisions": [
+          {
+            "phase": "intake",
+            "action": "split",
+            "confidence": 0.9753
+          },
+          {
+            "phase": "availability",
+            "action": "propose",
+            "confidence": 0.9001
+          },
+          {
+            "phase": "availability",
+            "action": "propose",
+            "confidence": 0.7895
+          }
+        ],
+        "evidence": [
+          {
+            "type": "goal.extract",
+            "supported": true,
+            "intent": "hold",
+            "constraints": {
+              "excludeDays": [
+                "tuesday"
+              ],
+              "preferredDay": "thursday"
+            },
+            "inference": {
+              "model": "@cf/cloudflare/clairic",
+              "elapsedMs": 1706.7395220000035,
+              "usage": {
+                "input_tokens": 1290,
+                "output_tokens": 15,
+                "state_tokens": 43,
+                "schema_tokens": 1032,
+                "image_tokens": 0,
+                "passes": 5
+              },
+              "estimatedUsd": 0.0003096
+            },
+            "at": "2026-11-19T03:00:00.000Z",
+            "revision": 2
+          },
+          {
+            "type": "clarification.requested",
+            "reason": "uncertain-selection",
+            "at": "2026-11-19T03:00:00.000Z",
+            "revision": 6
+          }
+        ],
+        "inference": [
+          {
+            "model": "@cf/cloudflare/clairic",
+            "elapsedMs": 1706.7395220000035,
+            "usage": {
+              "input_tokens": 1290,
+              "output_tokens": 15,
+              "state_tokens": 43,
+              "schema_tokens": 1032,
+              "image_tokens": 0,
+              "passes": 5
+            },
+            "estimatedUsd": 0.0003096
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 1727.633898,
+            "usage": {
+              "input_tokens": 246,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 5.9040000000000004e-05
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 2480.5284170000014,
+            "usage": {
+              "input_tokens": 417,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 0.00010007999999999999
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 2001.854238,
+            "usage": {
+              "input_tokens": 419,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 0.00010056
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "evaluatedAt": "2026-11-19T04:36:43.012Z",
+    "calendarClock": "2026-11-19T03:00:00Z",
+    "suite": "transfer",
+    "mode": "Workers AI",
+    "passed": true,
+    "summary": {
+      "passed": 2,
+      "total": 2,
+      "inferenceCalls": 4,
+      "reportedInputTokens": 2970,
+      "elapsedMs": 8553
+    },
+    "results": [
+      {
+        "id": "paraphrased-search",
+        "goal": "Could you check our calendars for an hour for dinner next week after 6 pm? Except Saturday. Just show me when we're both free.",
+        "passed": true,
+        "elapsedMs": 6769,
+        "steps": [
+          {
+            "command": "start",
+            "http": 200,
+            "status": "done",
+            "slots": [
+              "Tuesday",
+              "Thursday"
+            ],
+            "selected": null,
+            "holds": 0
+          }
+        ],
+        "decisions": [
+          {
+            "phase": "intake",
+            "action": "split",
+            "confidence": 0.974
+          },
+          {
+            "phase": "availability",
+            "action": "report",
+            "confidence": 0.9577
+          }
+        ],
+        "evidence": [
+          {
+            "type": "goal.extract",
+            "supported": true,
+            "intent": "find",
+            "constraints": {
+              "excludeDays": [
+                "saturday"
+              ],
+              "preferredDay": null
+            },
+            "inference": {
+              "model": "@cf/cloudflare/clairic",
+              "elapsedMs": 2043.2429260000001,
+              "usage": {
+                "input_tokens": 1188,
+                "output_tokens": 15,
+                "state_tokens": 26,
+                "schema_tokens": 1032,
+                "image_tokens": 0,
+                "passes": 5
+              },
+              "estimatedUsd": 0.00028512
+            },
+            "at": "2026-11-19T03:00:00.000Z",
+            "revision": 2
+          }
+        ],
+        "inference": [
+          {
+            "model": "@cf/cloudflare/clairic",
+            "elapsedMs": 2043.2429260000001,
+            "usage": {
+              "input_tokens": 1188,
+              "output_tokens": 15,
+              "state_tokens": 26,
+              "schema_tokens": 1032,
+              "image_tokens": 0,
+              "passes": 5
+            },
+            "estimatedUsd": 0.00028512
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 2739.063643,
+            "usage": {
+              "input_tokens": 218,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 5.232e-05
+          },
+          {
+            "model": "@cf/cloudflare/clef",
+            "elapsedMs": 1978.3850279999997,
+            "usage": {
+              "input_tokens": 388,
+              "output_tokens": 0
+            },
+            "estimatedUsd": 9.312e-05
+          }
+        ]
+      },
+      {
+        "id": "additional-effect",
+        "goal": "Find a free hour for dinner on our calendars next week after 6 pm. Prefer Thursday if it is free. Cancel the dentist appointment if it conflicts.",
+        "passed": true,
+        "elapsedMs": 1784,
+        "steps": [
+          {
+            "command": "start",
+            "http": 200,
+            "status": "blocked",
+            "slots": [],
+            "selected": null,
+            "holds": 0
+          }
+        ],
+        "decisions": [],
+        "evidence": [
+          {
+            "type": "goal.extract",
+            "supported": false,
+            "intent": null,
+            "constraints": {
+              "excludeDays": [],
+              "preferredDay": null
+            },
+            "inference": {
+              "model": "@cf/cloudflare/clairic",
+              "elapsedMs": 1783.3136799999993,
+              "usage": {
+                "input_tokens": 1176,
+                "output_tokens": 15,
+                "state_tokens": 24,
+                "schema_tokens": 1032,
+                "image_tokens": 0,
+                "passes": 5
+              },
+              "estimatedUsd": 0.00028223999999999995
+            },
+            "at": "2026-11-19T03:00:00.000Z",
+            "revision": 2
+          },
+          {
+            "type": "policy.block",
+            "reason": "scope",
+            "at": "2026-11-19T03:00:00.000Z",
+            "revision": 2
+          }
+        ],
+        "inference": [
+          {
+            "model": "@cf/cloudflare/clairic",
+            "elapsedMs": 1783.3136799999993,
+            "usage": {
+              "input_tokens": 1176,
+              "output_tokens": 15,
+              "state_tokens": 24,
+              "schema_tokens": 1032,
+              "image_tokens": 0,
+              "passes": 5
+            },
+            "estimatedUsd": 0.00028223999999999995
+          }
+        ]
+      }
+    ]
+  }
+]

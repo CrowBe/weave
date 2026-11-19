@@ -280,3 +280,8 @@ details li + li {
     min-height: auto;
   }
 }
+
+.activity-detail {
+  display: block;
+  font-size: 0.9rem;
+}

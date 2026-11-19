@@ -1,9 +1,31 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { createServer } from "node:http";
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync, mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { createApplication } from "./application.mjs";
+
+const execFileAsync = promisify(execFile);
+
+// cf manages its own login. Keep input off the command line and out of error messages.
+export async function cliInference(model, input) {
+  const directory = await mkdtemp(join(tmpdir(), "weave-inference-"));
+  try {
+    const file = join(directory, "body.json");
+    await writeFile(file, JSON.stringify(input), { mode: 0o600 });
+    const { stdout } = await execFileAsync("cf", ["ai", "run", model, "--body", "@" + file], {
+      timeout: 60000,
+      maxBuffer: 2_000_000,
+    });
+    return JSON.parse(stdout);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
 
 export function restInference(env) {
   if (!env.CLOUDFLARE_ACCOUNT_ID && !env.CLOUDFLARE_API_TOKEN) return undefined;
@@ -80,7 +102,7 @@ export async function startServer({
   );
   const app = createApplication({
     env,
-    runAI: restInference(env),
+    runAI: env.WEAVE_AI === "cf" ? cliInference : restInference(env),
     get: (key) => JSON.parse(read.get(scope + key)?.value ?? "null"),
     put: (key, value) => write.run(scope + key, JSON.stringify(value)),
     armRecovery,

@@ -18,6 +18,24 @@ const timeFormat = new Intl.DateTimeFormat("en-AU", {
   timeZoneName: "short",
 });
 
+const percent = new Intl.NumberFormat("en-AU", { style: "percent", maximumFractionDigits: 1 });
+const actionLabels = new Map([
+  ["split", "Check both calendars"],
+  ["report", "Report the shared times"],
+  ["none", "Report no shared time"],
+  ["propose", "Propose a time for approval"],
+  ["choose", "Ask which evening works"],
+  ["abstain", "Leave the decision unresolved"],
+]);
+const stopReasons = new Map([
+  ["provider-unavailable", "Workers AI was unavailable."],
+  ["scope", "The request was outside the supported dinner planning scope."],
+  ["intake-decision", "The intake decision did not authorise checking the calendars."],
+  ["availability-decision", "The proposed action did not pass the availability checks."],
+  ["read-only-decision", "The proposed action did not pass the read-only checks."],
+  ["availability-changed", "The selected time was no longer available."],
+]);
+
 let snapshot;
 let sending = false;
 let pollTimer;
@@ -80,6 +98,57 @@ function renderChoices(state) {
   actions.append(confirm);
 }
 
+function describeActivity(item) {
+  const details = [];
+  let title;
+  switch (item.type) {
+    case "goal.extract":
+      title = "Interpret dinner request";
+      details.push(
+        item.inference?.unavailable
+          ? "Inference unavailable"
+          : item.supported
+            ? "Request within scope"
+            : "Request could not be accepted",
+      );
+      break;
+    case "goal.decide":
+      title =
+        item.phase === "intake"
+          ? "Decide how to check availability"
+          : "Decide what to do with available times";
+      details.push(actionLabels.get(item.action) ?? "No recognised action");
+      if (Number.isFinite(item.confidence) && item.confidence >= 0 && item.confidence <= 1) {
+        details.push(`Confidence ${percent.format(item.confidence)}`);
+      }
+      break;
+    case "clarification.requested":
+      title = "Asked you to choose a verified evening";
+      details.push("Decision confidence was below the threshold for an automatic proposal.");
+      break;
+    case "policy.block":
+      title = "Policy stop";
+      details.push(
+        stopReasons.get(item.reason) ?? "The proposed step did not pass a policy check.",
+      );
+      break;
+    default: {
+      const label = item.type.replace(/[_.-]/g, " ");
+      title = label.charAt(0).toUpperCase() + label.slice(1);
+    }
+  }
+  const elapsed = item.inference?.elapsedMs;
+  if (Number.isFinite(elapsed) && elapsed >= 0) {
+    const duration =
+      elapsed < 1000 ? `${Math.round(elapsed)} ms` : `${(elapsed / 1000).toFixed(1)} s`;
+    details.push(`Inference took ${duration}`);
+  }
+  const row = element("li");
+  row.append(element("span", title));
+  if (details.length) row.append(element("span", details.join(" · "), "activity-detail"));
+  return row;
+}
+
 function renderPlan(state) {
   status.textContent = state.message || "Submit a dinner request to see available times.";
   outcome.replaceChildren();
@@ -126,12 +195,7 @@ function renderPlan(state) {
     );
   }
   byId("activity").hidden = !state.trace?.length;
-  byId("trace").replaceChildren(
-    ...(state.trace ?? []).map((item) => {
-      const label = item.type.replace(/[_.-]/g, " ");
-      return element("li", label.charAt(0).toUpperCase() + label.slice(1));
-    }),
-  );
+  byId("trace").replaceChildren(...(state.trace ?? []).map(describeActivity));
 }
 
 function updateControls() {
@@ -159,6 +223,10 @@ function render(next) {
   byId("environment").textContent = fixture
     ? "Demo calendar · " + (next.mode === "fixture" ? "Fixture decisions" : next.mode)
     : "Family calendar · " + (next.mode === "fixture" ? "Fixture decisions" : next.mode);
+  byId("request-hint").textContent =
+    next.mode === "fixture"
+      ? "Try adding “Except Tuesday. Prefer Thursday if it is free.” to the example request."
+      : "You can rule out an evening or name a preferred weekday in your own words.";
   byId("scenario-field").hidden = !fixture;
   if (fixture && (!previous || previous.scenario !== next.scenario)) scenario.value = next.scenario;
   if (next.state.text && (!draftEdited || activeStatuses.has(next.state.status))) {
