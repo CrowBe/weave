@@ -57,3 +57,18 @@ Google checks availability again immediately before event insertion. Another cal
 The Worker serves the same assets and application through a SQLite-backed Durable Object per verified Access subject. Set `ACCESS_TEAM` to the team slug and `ACCESS_AUD` to the Access application's audience. A protected hostname and a route must be configured before deployment. The Worker checks the signed Access JWT and keeps each operator's fixture state private. It uses the Workers AI binding for inference. Real Google access is scoped to the local host until per-person credentials are implemented.
 
 The Worker integration check bundles the application and runs it in workerd with signed test identities, isolated storage, fixture inference and forced eviction. Public deployment and household Google sign-in are separate stages.
+
+## General System 1 loop (`mvp/s1`)
+
+The calendar loop above computes the expected action itself and accepts the model's answer only when it agrees. `mvp/s1` tests the stronger claim: that System 1 can choose. One node runs Extract (Clairic: entities, prohibitions, subtasks) → Decide (Clef: one of `tool_call`, `spawn_subtasks`, `escalate_gen`, `ask_human`) → Act. Clef's choice picks the branch. A tool call goes through a second Clef choice over the tool catalogue, Clairic argument extraction, and the action classifier. Each tool declares a floor (`auto` or `approve`); Clef scores irreversibility, outside visibility, other people's data and breadth, and a fixed rule maps those to `auto`, `notify` or `approve`. The classifier can raise the floor but never lower it, and an uncertain score asks. `spawn_subtasks` fans the parts out as parallel children on a shared blackboard; children inherit the parent's prohibitions and cannot spawn again.
+
+The runtime only refuses: a band or tool below the confidence threshold, an unknown tool, an argument that is not in the request, or an effect above its floor. Each refusal ends in `asked`.
+
+The evaluation runs the ten legacy simulation tasks and eleven household Google tasks (mail, calendar, Drive and Docs, all synthetic) and scores the band, the tool, and whether an effect that needed approval ran without it (`under-asked`) or a safe one stopped (`over-asked`).
+
+```sh
+npm run eval:s1                                  # live Workers AI; writes mvp/evals/s1-<time>.json with a cassette
+node mvp/s1/eval.mjs --replay mvp/evals/s1-<time>.json   # offline rerun from that cassette
+```
+
+All tools run against fixtures. Nothing is sent to a real account.

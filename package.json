@@ -4,9 +4,10 @@
   "type": "module",
   "scripts": {
     "start": "node mvp/server.mjs",
-    "test": "node --test mvp/*.test.mjs",
+    "test": "node --test mvp/*.test.mjs mvp/s1/*.test.mjs",
     "test:live": "node mvp/evaluate.mjs --live",
-    "verify": "npm test && node mvp/evaluate.mjs && npm --prefix mvp run worker:check"
+    "verify": "npm test && node mvp/evaluate.mjs && npm --prefix mvp run worker:check",
+    "eval:s1": "node mvp/s1/eval.mjs --live"
   },
   "engines": {
     "node": ">=26"
