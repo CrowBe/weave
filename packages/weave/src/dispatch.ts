@@ -245,7 +245,7 @@ export type DispatchReason =
   | 'share_exhausted';
 
 export interface DispatchCheckpoint {
-  readonly schema: 'dispatch.checkpoint@6';
+  readonly schema: 'dispatch.checkpoint@7';
   readonly decision_id: string;
   readonly state_revision: number;
   readonly state_updated_at: number;
@@ -279,7 +279,7 @@ export interface DispatchCheckpoint {
 }
 
 export interface DispatchDecision {
-  readonly schema: 'dispatch.decision@7';
+  readonly schema: 'dispatch.decision@8';
   readonly decision_id: string;
   readonly entry: number;
   readonly state_revision: number;
@@ -335,7 +335,9 @@ export type DispatchAskResult = 'taken' | 'joined' | null;
  * At most one stage ask is in flight per decision id. Elapsed time cannot tell a crashed or
  * cancelled asker from a live one, so any caller that would ask that stage joins the in-flight ask
  * id instead of minting the next one, and the first `record` of it wins. Joining does not stop a
- * second site call under the same stage request id; it stops a second ask number.
+ * second site call under the same stage request id; it stops a second ask number. A journaled
+ * cancel of a child's in-flight D2 ask retires that ask: the resume takes the next ask number and
+ * is charged as a new ask. No contract deduplicates gateway calls by `request_id`.
  *
  * Intent identity is not writer ownership. A claimed intent is presented and settled only by the
  * dispatch attempt that holds it: `acquire` issues that attempt, and while it is live no other
@@ -476,6 +478,11 @@ function nextSlot(slot: DispatchSlot, decision: DispatchDecision): DispatchSlot 
   if (!resumable(decision)) return { phase: 'terminal', intent: intentOf(slot) };
   switch (slot.phase) {
     case 'open':
+      // A child's in-flight D2 ask is retired with the journaled cancel, so the resume is a new
+      // ask and a new charge. Root asks stay in flight and a resume still joins them.
+      if (decision.reason === 'cancelled' && decision.child !== null && slot.ask?.stage === 'route')
+        return { phase: 'open', ask: null };
+      return slot;
     case 'terminal':
       return slot;
     case 'claimed':
@@ -644,7 +651,7 @@ function initialCheckpoint(
   child: DispatchChild | null = null,
 ): DispatchCheckpoint {
   return {
-    schema: 'dispatch.checkpoint@6',
+    schema: 'dispatch.checkpoint@7',
     decision_id: request.request_id,
     state_revision: request.state_revision,
     state_updated_at: request.state_updated_at,
@@ -669,7 +676,7 @@ function initialCheckpoint(
 function makeCheckpoint(checkpoint: DispatchCheckpoint, patch: Partial<DispatchCheckpoint> = {}): DispatchCheckpoint {
   const next = { ...checkpoint, ...patch };
   return {
-    schema: 'dispatch.checkpoint@6',
+    schema: 'dispatch.checkpoint@7',
     decision_id: next.decision_id,
     state_revision: next.state_revision,
     state_updated_at: next.state_updated_at,
@@ -715,7 +722,7 @@ function makeDecision(
   reason: DispatchReason,
 ): DispatchDecision {
   return {
-    schema: 'dispatch.decision@7',
+    schema: 'dispatch.decision@8',
     decision_id: checkpoint.decision_id,
     entry,
     state_revision: checkpoint.state_revision,
@@ -1705,8 +1712,8 @@ function planFor(trace: Decide1Trace, checkpoint: DispatchCheckpoint, request: D
 }
 
 function assertCheckpoint(checkpoint: DispatchCheckpoint): void {
-  if (checkpoint.schema !== 'dispatch.checkpoint@6')
-    throw new Error('recorded dispatch checkpoint schema differs from dispatch.checkpoint@6');
+  if (checkpoint.schema !== 'dispatch.checkpoint@7')
+    throw new Error('recorded dispatch checkpoint schema differs from dispatch.checkpoint@7');
   if (typeof checkpoint.spawn_port !== 'boolean') throw new Error('recorded dispatch spawn_port is not a boolean');
   if (checkpoint.preflight_budget !== null && !natural(checkpoint.preflight_budget))
     throw new Error('recorded dispatch preflight_budget is not a safe natural');
@@ -2513,8 +2520,8 @@ function asksStage(slot: DispatchSlot, stage: DispatchAskStage, reason: string |
 }
 
 function assertRuleTable(decision: DispatchDecision): void {
-  if (decision.schema !== 'dispatch.decision@7')
-    throw new Error('recorded dispatch decision schema differs from dispatch.decision@7');
+  if (decision.schema !== 'dispatch.decision@8')
+    throw new Error('recorded dispatch decision schema differs from dispatch.decision@8');
   if (decision.rule_table !== DECIDE1_RULE_TABLE)
     throw new Error(`recorded dispatch rule table differs from ${DECIDE1_RULE_TABLE}`);
 }
@@ -2628,7 +2635,7 @@ function emit(port: WeftPort | undefined, observations: readonly SiteObservation
 function cancellation(request: DispatchRequest, checkpoint: DispatchCheckpoint, entry: number): DispatchDecision {
   const decider = checkpoint.child === null ? lastDecider(checkpoint) : childDecider(checkpoint);
   return {
-    schema: 'dispatch.decision@7',
+    schema: 'dispatch.decision@8',
     decision_id: checkpoint.decision_id,
     entry,
     state_revision: checkpoint.state_revision,
@@ -2653,7 +2660,8 @@ function cancellation(request: DispatchRequest, checkpoint: DispatchCheckpoint, 
 /**
  * A local abort is a transition on the stored slot, journaled like any other decision. Before
  * present (open or claimed) it appends `paused / cancelled`; an open slot keeps its in-flight ask,
- * which a resume joins. Once presented it appends `paused / dispatch_unconfirmed`, so the abort
+ * which a resume joins, except a child's D2 ask, which the cancel retires. Once presented it appends
+ * `paused / dispatch_unconfirmed`, so the abort
  * never reads as "the effect did not happen" and resolves only through the settlement. When the
  * record the abort would append equals the latest stored one, nothing is appended and the stored
  * decision is returned. A caller that cannot append (another attempt is live, or another writer
@@ -3031,7 +3039,8 @@ type Round =
  * the next one (`bump` advances the counter), ask it, then record the answer. A caller that loses
  * either compare-and-set adopts the stage another caller recorded and contributes no fresh
  * observation; it never mints another ask for it. An abort journals the pre-answer checkpoint's
- * cancel, keeping the ask in flight for a resume to join.
+ * cancel. A root ask stays in flight for a resume to join; a child's D2 ask is retired, and the
+ * resume takes the next number.
  */
 async function askRound(
   request: DispatchRequest,
@@ -3071,8 +3080,9 @@ async function askRound(
       return { kind: 'adopted', checkpoint: makeCheckpoint(now.checkpoint, { spawn_port: checkpoint.spawn_port }) };
     return { kind: 'stopped', decision: yielded(request, journal) };
   };
-  // Joining is free: the joined ask was charged when it was taken. Only taking one is gated, and
-  // a caller whose snapshot another writer has already moved past adopts that writer's stage.
+  // Joining an ask still in flight is free: it was charged when it was taken. A journaled cancel
+  // has already retired a child's D2 ask, so that resume takes a new one and is gated again.
+  // A caller whose snapshot another writer has already moved past adopts that writer's stage.
   if (flight?.stage !== stage && covers !== undefined && !covers(checkpoint)) {
     if (loaded.checkpoint !== null && askCount(loaded.checkpoint, stage) > askCount(checkpoint, stage)) return adopt();
     return { kind: 'uncovered' };

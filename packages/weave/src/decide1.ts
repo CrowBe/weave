@@ -1,7 +1,7 @@
 /** Decide-1 is deterministic policy over bounded observations, never execution authority. */
 export const DECIDE1_BANDS = Object.freeze(['tool_call', 'spawn_subtasks', 'escalate_gen', 'ask_human'] as const);
 export type Band = (typeof DECIDE1_BANDS)[number];
-export const DECIDE1_RULE_TABLE = 'decide1.rules@4' as const;
+export const DECIDE1_RULE_TABLE = 'decide1.rules@5' as const;
 export interface Decide1Judgment {
   readonly name: string;
   readonly probability: number;

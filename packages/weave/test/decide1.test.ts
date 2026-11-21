@@ -273,7 +273,7 @@ function domain(): Case[] {
 }
 
 test('P4a-1 table shape: frozen, closed, unique, no bare spawn', () => {
-  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@4');
+  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@5');
   assert.ok(Object.isFrozen(DECIDE1_RULES));
   assert.equal(new Set(DECIDE1_RULES.map((row) => row.id)).size, 25);
   for (const row of DECIDE1_RULES) {
@@ -759,7 +759,7 @@ test('P4b-2 trace concatenates read then shadow and validates both partitions wi
   assert.deepEqual(input, before);
   assert.deepEqual(decideBand({ ...read, shadow: { judgments: [], facts: [] } } as Decide1Inputs), decideBand(read));
   assert.deepEqual(decideBand(read), {
-    table: 'decide1.rules@4',
+    table: 'decide1.rules@5',
     judgments: read.judgments,
     facts: read.facts,
     rule: 'gen.route',
@@ -848,15 +848,15 @@ function asV3(rows: readonly (readonly string[])[]): string[][] {
   return out;
 }
 
-test('P4c-1 decide1.rules@4 replaces act.capability with the four Decide-2 rows and nothing else', () => {
-  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@4');
+test('P4c-1 Decide-2 replaces act.capability with four rows; the live table adds only the share row', () => {
+  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@5');
   assert.deepEqual(asV4(DECIDE1_RULES.map(({ id, band }) => [id, band])), RULES_V4);
   assert.deepEqual(asV3(DECIDE1_RULES.map(({ id, band }) => [id, band])), RULES_V3);
 });
 
-test('P4b-3 decide1.rules@4 retains the exact P4a ids, order and bands, plus spawn.preflight', () => {
+test('P4b-3 decide1.rules@5 retains the exact P4a ids, order and bands, plus spawn.preflight', () => {
   // Deliberate P5c1, P4c and P5c3 moves: P4c-1 pins the Decide-2 diff; the live table adds the share row.
-  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@4');
+  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@5');
   const v3 = asV3(DECIDE1_RULES.map(({ id, band }) => [id, band]));
   assert.deepEqual(v3, RULES_V3);
   assert.deepEqual(
@@ -910,7 +910,7 @@ function withoutSpawnRow(input: Decide1Inputs): string | undefined {
 }
 
 test('P5b-1 table keeps spawn.preflight immediately before gen.route', () => {
-  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@4');
+  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@5');
   assert.deepEqual(
     DECIDE1_RULES.map(({ id, band }) => [id, band]),
     RULES_NOW,

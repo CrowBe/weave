@@ -1291,8 +1291,8 @@ test('P5c1-6 D2 tier table: accepted tiers, bounded fallback, holds and ask.rout
 // 7. Rules/root parity (R1, R2).
 // ---------------------------------------------------------------------------------------------
 
-test('P5c1-7 decide1.rules@4: 25 rows in order, 51 facts and bounded judgments', async () => {
-  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@4');
+test('P5c1-7 decide1.rules@5: 25 rows in order, 51 facts and bounded judgments', async () => {
+  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@5');
   assert.deepEqual(
     DECIDE1_RULES.map((row) => [row.id, row.band]),
     [
@@ -1859,7 +1859,7 @@ test('P5c1-9 record versions, key order, Weft validity, append-only emission and
   ];
   assert.deepEqual(
     [root.schema, s.parent.schema, s.parent.rule_table],
-    ['dispatch.checkpoint@6', 'dispatch.decision@7', 'decide1.rules@4'],
+    ['dispatch.checkpoint@7', 'dispatch.decision@8', 'decide1.rules@5'],
   );
   assert.deepEqual(Object.keys(root), CHECKPOINT_KEYS);
   assert.deepEqual(Object.keys(s.parent), DECISION_KEYS);
@@ -2101,7 +2101,7 @@ test('P5c3-4 concurrent first callers join one D2 ask and are charged once', asy
   assert.ok(budgets.length >= 1 && budgets.every((b) => b === 7));
 });
 
-test('P5c3-4 an abort mid-ask keeps the charge; the resume joins that ask number and is not charged again', async () => {
+test('P5c3-4 an abort mid-ask keeps its charge; the resume after that cancel is a new ask', async () => {
   const s = await parentSpawn();
   await runReads(s);
   const gate = deferred();
@@ -2117,10 +2117,18 @@ test('P5c3-4 an abort mid-ask keeps the charge; the resume joins that ask number
   gate.release();
   const cancelled = await pending;
   assert.deepEqual([cancelled.status, cancelled.reason], ['paused', 'cancelled']);
-  assert.equal(custodyOf(s.journal.load(s.gen.child_ref).checkpoint!)!.charged, 3);
-  const d = await run(harness({}, { journal: s.journal }), { ...childRequest(s.gen), resume: true });
+  const held = s.journal.load(s.gen.child_ref);
+  // The cancelled ask stays charged, and the slot no longer offers it to a joiner.
+  assert.deepEqual([custodyOf(held.checkpoint!)!.charged, held.slot], [3, { phase: 'open', ask: null }]);
+  const again = harness({}, { journal: s.journal });
+  const d = await run(again, { ...childRequest(s.gen), resume: true });
   const cp = s.journal.load(s.gen.child_ref).checkpoint!;
-  assert.deepEqual([d.status, cp.asks.route, (d.intent as { readonly budget: number }).budget], ['dispatched', 1, 7]);
+  // Share 10, ceiling 1: two asks at 3 each leave a sealed remainder of 4. The new call is ask 2.
+  assert.deepEqual(
+    [d.status, cp.asks.route, custodyOf(cp)!.charged, (d.intent as { readonly budget: number }).budget],
+    ['dispatched', 2, 6, 4],
+  );
+  assert.ok(again.evaluateCalls.some((call) => call.request_id === `${s.gen.child_ref}:route:e2`));
 });
 
 test('P5c3-5 a tampered remainder, share gate or ask count throws with no effect', async () => {

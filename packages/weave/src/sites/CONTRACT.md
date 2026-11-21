@@ -44,8 +44,8 @@ present a dispatch intent only after an accepted observation, and only through
 the injected idempotent dispatch port. The intent is checkpointed before the
 call. An unconfirmed intent is returned as paused and is not re-presented
 without an explicit resume; cancellation is a journaled slot transition (P5c2
-below); a stale or mismatched answer pauses. The outcome table is now `decide1.rules@4` (below). A mapped receipt yields a
-`dispatch.decision@7` entry, and fresh site observations become Weft judgment
+below); a stale or mismatched answer pauses. The outcome table is now `decide1.rules@5` (below). A mapped receipt yields a
+`dispatch.decision@8` entry, and fresh site observations become Weft judgment
 records followed by one `dispatch.decided` after the final append. The
 composition never writes `routed_input@1`.
 
@@ -97,8 +97,8 @@ outside this contract. ScriptedDecisionLayer remains unchanged.
 facts. The frozen table was `decide1.rules@1` with 15 ids; P5b's `decide1.rules@2` adds
 `spawn.preflight` (16 ids) and changes no other row; P5c1's `decide1.rules@3` adds five
 child rows (21 ids, below); P4c's `decide1.rules@4` replaces `act.capability` with the four
-Decide-2 rows (24 ids, below); P5c3 adds `hold.share_exhausted` after `hold.admission`
-(25 ids). Its first matching row
+Decide-2 rows (24 ids, below); P5c3's `decide1.rules@5` adds `hold.share_exhausted` after
+`hold.admission` (25 ids). Its first matching row
 returns the rule id and coarse band. It imports no dispatch, site or gateway code. It asks
 no new question and changes no `SITE_POLICY` threshold, fallback or request.
 `decideDispatch` validates stored stages through P3a's live pure transitions,
@@ -147,8 +147,8 @@ accepted intake new-thread choice then withholds `escalate_gen`. Count asks by
 `status = needs_human` and escalations by `band = escalate_gen` together with
 `status = dispatched`, never by band alone.
 
-`dispatch.decision@7` carries `rule_table` and `decide1` after `reason`, and
-`dispatch.checkpoint@6` stores the stages and rounds described in P4b, P5a, P5b, P5c1 and P4c below.
+`dispatch.decision@8` carries `rule_table` and `decide1` after `reason`, and
+`dispatch.checkpoint@7` stores the stages and rounds described in P4b, P5a, P5b, P5c1, P4c and P5c3 below.
 The read partition contains judgments in stage order
 (`intake.confidence`, `intake.top_p`, then D1 and D2), every available probability,
 and 14 code facts in fixed order: intake decided-by, choice, status, reason,
@@ -261,17 +261,17 @@ follow the read judgments (stage, then P5b's role statistics) in judgment order 
 `<judgment>` probability, then `<judgment>.confidence`. P4b supplies at most 14
 judgments with the stage judgments; P5a/P5b add at most 16 below.
 
-`dispatch.checkpoint@6` has ordered keys `schema`, `decision_id`,
+`dispatch.checkpoint@7` has the same ordered keys as P4c's `dispatch.checkpoint@6`: `schema`, `decision_id`,
 `state_revision`, `state_updated_at`, `asks`, `intake`, `triage`, `route`,
 `tool`, `catalogue_digest`, `shadow`, `preflight`, `preflight_budget`, `spawn_port`, `preflight_terms`,
 `child_terms`, `child`, `intent`. Its `asks` keys are
 `intake`, `triage`, `route`, `tool`, `shadow`, `preflight`;
 the last two are each zero or one. D1 and D2 store whole `loop.decision@1` records with
 their extracts and site transitions. `shadow` is null or four observations
-in judgment order. `dispatch.decision@7` has ordered keys `schema`,
+in judgment order. `dispatch.decision@8` has the same ordered keys as P4c's `dispatch.decision@7`: `schema`,
 `decision_id`, `entry`, `state_revision`, `decided_by`, `choice`, `status`,
 `reason`, `rule_table`, `decide1`, `child`, `intent`, `receipt`, `intake`, `triage`,
-`route`, `tool`, `shadow`, `preflight`. Its rule table is `decide1.rules@4`. Foreign decision
+`route`, `tool`, `shadow`, `preflight`. Its rule table is `decide1.rules@5`. Foreign decision
 or checkpoint schemas and foreign table versions throw without compatibility
 conversion.
 
@@ -566,19 +566,23 @@ ask's own ceiling), `charged` is `asks.route × per_ask` and `remainder` is
 `share − charged`. A site observation records no spend, so each D2 ask number is
 charged at its worst case when it is taken, including a cancelled, crashed or lost
 one. Custody is derived from the journaled ask counter, so it is written atomically
-with every ask and replay rebuilds it without a journal or port read. A joiner
-takes no new ask number and is not charged again. `charged > share` is a defect and
-throws. Nothing is refunded, refilled or returned on settle.
-`dispatch.checkpoint@6` marks that `asks.route` is now a charge and that a claimed
-child intent carries `budget`; its keys are unchanged.
+with every ask and replay rebuilds it without a journal or port read. A joiner of an
+ask still in flight takes no new ask number and is not charged again. A resume
+after a journaled cancel is not that joiner: the cancel retires the child's
+in-flight D2 ask, and the resume takes the next ask number, charged again at the
+same worst case. The cancelled ask's charge is kept. `charged > share` is a defect
+and throws. Nothing is refunded, refilled or returned on settle.
+`dispatch.checkpoint@7` marks that a child's `asks.route` is a charge. It adds no
+keys over P4c's `dispatch.checkpoint@6`. A claimed child intent carries `budget`.
 
 Admission adds one rule for a generator: `LOOP_DECISION_REQUESTS × cost_ceiling
 <= share`, so its first D2 ask is always covered. Otherwise the child terms throw
 before any write, like a ceiling above the share. The gate is in the child's D2
-`askRound`: joining the in-flight ask is free; taking the next ask needs
-`per_ask <= remainder`. A caller whose snapshot another writer has moved past
+`askRound`: joining an ask still in flight is free; taking the next ask, including
+the one a resume takes after a journaled cancel, needs `per_ask <= remainder`. A caller whose snapshot another writer has moved past
 adopts that writer's stage instead. An uncovered ask is never taken. The gate is
-reached only by a resume re-asking D2 after an outage or a cancelled site answer.
+reached when a resume takes the next D2 ask: after an outage, after a cancelled
+site answer, or after a journaled cancel that retired the in-flight ask.
 The child appends `paused / share_exhausted` once, with no D2 ask, effect or claim,
 under the new row `hold.share_exhausted` (after `hold.admission`, before
 `hold.outage` and `hold.paused`). The row reads the gate code fact
@@ -593,7 +597,7 @@ re-ask that its remainder cannot cover, and the replayed outcome is
 
 A generator's implement intent (`child_route` and `child_route_fallback`) carries
 `budget`, its custody `remainder` at claim, between `tier_source` and `child`;
-`dispatch.decision@7` records it. Claim re-derivation covers it, so a tampered
+`dispatch.decision@8` records it. Claim re-derivation covers it, so a tampered
 remainder throws before any port call, and a budget resume re-presents the same
 remainder. A read intent has no budget (share `0`, no model). The remainder can be
 `0` (for example `3 × cost_ceiling = share` after one ask), and then the
@@ -605,13 +609,11 @@ attempt number, so the pause never lifts. `per_attempt` is the composition's wor
 case for one attempt (its generate plus the evaluations and checks it can pay for,
 each under the step's ceiling).
 
-Custody bounds ask numbers, not site calls. Under P5c2, a joiner still makes the
-joined ask's site call under the same stage request id. So an abort mid-ask
-followed by resumes, or concurrent joiners, can make more gateway requests than
-one charge covers. Spend stays inside the charge only if the decision gateway
-deduplicates by `request_id`, which no contract requires yet. Closing this means
-either contracting that dedup or charging a join after a journaled cancel as a new
-ask; both change P5c2 and are follow-ups.
+Custody bounds ask numbers, not site calls. Joining an ask that is still in
+flight stays one charge, so concurrent joiners can make more gateway requests
+than that charge covers. No contract deduplicates those calls by `request_id`.
+A join after a journaled cancel is a different case: the cancel retires the
+child's in-flight D2 ask and the resume is charged as a new ask.
 
 Not in P5c3: the root's own intake, triage, route and window asks are not
 charged, and `plan.budget` is the carve, not a remainder (a root has no share;
@@ -649,8 +651,10 @@ terms.
 
 A local abort is a transition on the stored slot, appended and emitted like any
 other decision. Open or claimed, it appends `paused / cancelled` (`hold.paused`),
-which is resumable: an open slot keeps its in-flight ask for a resume to join,
-and a claimed one presents the identical intent again. Presented, it appends
+which is resumable: an open slot keeps its in-flight ask for a resume to join, and
+a claimed one presents the identical intent again. A child's in-flight D2 ask is
+the exception: the cancel retires it, and the resume is charged as a new ask
+(P5c3). Presented, it appends
 `paused / dispatch_unconfirmed` with a null receipt and the claimed plan's rule,
 so it is never read as "the effect did not happen", is never re-asked, and
 resolves only through the settlement; a presented slot never journals
