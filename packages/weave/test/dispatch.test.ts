@@ -1843,7 +1843,7 @@ test('28. a claimed intent survives a terminal stale pause and append surfaces f
   const request = makeRequest();
   assert.equal(journal.claim('d1', claimed), true);
   const orphan: DispatchDecision = {
-    schema: 'dispatch.decision@7',
+    schema: 'dispatch.decision@8',
     rule_table: DECIDE1_RULE_TABLE,
     decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: 'd1',
@@ -2060,7 +2060,7 @@ test('32. the journal is a single-writer state machine per decision id', () => {
     args_ref: null,
   };
   const decision = (patch: Partial<DispatchDecision>): DispatchDecision => ({
-    schema: 'dispatch.decision@7',
+    schema: 'dispatch.decision@8',
     rule_table: DECIDE1_RULE_TABLE,
     decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: 'd1',
@@ -2094,7 +2094,7 @@ test('32. the journal is a single-writer state machine per decision id', () => {
   assert.equal(terminal.claim('d1', intent), false);
   assert.equal(terminal.append(decision({ entry: 2, status: 'needs_human', reason: 'low_confidence' })), false);
   terminal.checkpoint({
-    schema: 'dispatch.checkpoint@6',
+    schema: 'dispatch.checkpoint@7',
     decision_id: 'd1',
     ...REVISION,
     asks: { intake: 9, triage: 0, route: 0, tool: 0, shadow: 0, preflight: 0 },
@@ -2280,7 +2280,7 @@ test('34. a crashed attempt ends only on the port settlement, never by time, wit
     args_ref: null,
   };
   const owned = (status: DispatchDecision['status'], reason: DispatchDecision['reason']): DispatchDecision => ({
-    schema: 'dispatch.decision@7',
+    schema: 'dispatch.decision@8',
     rule_table: DECIDE1_RULE_TABLE,
     decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: 'd1',
@@ -3085,7 +3085,7 @@ test('P4a-8 @3 stores exactly the pure trace, fixed facts and bounded judgments 
   const h = harness();
   const decision = await run(h);
   const checkpoint = h.journal.load('d1').checkpoint!;
-  assert.equal(decision.schema, 'dispatch.decision@7');
+  assert.equal(decision.schema, 'dispatch.decision@8');
   assert.equal(decision.rule_table, DECIDE1_RULE_TABLE);
   const { table, ...trace } = decideBand(decide1Inputs(h.request, checkpoint));
   assert.equal(table, decision.rule_table);
@@ -3844,8 +3844,8 @@ test('P4b-14. schemas, Weft shadow evidence and text exclusion', async () => {
   const sink = collector();
   const h = harness({}, { weft: sink.port });
   const live = await run(h);
-  assert.equal(live.schema, 'dispatch.decision@7');
-  assert.equal(h.journal.load('d1').checkpoint?.schema, 'dispatch.checkpoint@6');
+  assert.equal(live.schema, 'dispatch.decision@8');
+  assert.equal(h.journal.load('d1').checkpoint?.schema, 'dispatch.checkpoint@7');
   const decided = sink.records.find((r) => r.kind === 'dispatch.decided')!;
   assert.equal(decided.fields.facts && (decided.fields.facts as unknown[]).length, 51);
   assert.ok((decided.fields.judgments as unknown[]).length <= 14);
@@ -4407,7 +4407,7 @@ test('P5a-fix1 every untrusted preflight input fails to null facts without movin
       const expected = decideBand(baseline);
       assert.deepEqual([actual.band, actual.rule], [expected.band, expected.rule]);
       // P5b: pure replay screens targets like live ingress (D-P5b-10), and a non-natural
-      // journaled budget is a malformed dispatch.checkpoint@6.
+      // journaled budget is a malformed dispatch.checkpoint@7.
       if (name.startsWith('budget')) assert.throws(() => transitionDispatch(request, cp, null), /preflight_budget/);
       else if (name.startsWith('target') || name.startsWith('duplicate'))
         assert.throws(() => transitionDispatch(request, cp, null), /Invalid dispatch targets/);
@@ -4826,8 +4826,8 @@ test('P5a-16 versioned records, 32 facts, bounded judgments, Weft evidence, disc
   const h = harness({}, { request, weft: sink.port });
   const d = await run(h);
   const cp = h.journal.load('d1').checkpoint!;
-  assert.equal(d.schema, 'dispatch.decision@7');
-  assert.equal(cp.schema, 'dispatch.checkpoint@6');
+  assert.equal(d.schema, 'dispatch.decision@8');
+  assert.equal(cp.schema, 'dispatch.checkpoint@7');
   assert.deepEqual(Object.keys(cp), [
     'schema',
     'decision_id',
@@ -5835,14 +5835,14 @@ test('P5b-fix1 before claim a top_p that cannot be maximal over four roles is un
     }
 });
 
-test('P5b-13 dispatch.checkpoint@6 and dispatch.decision@7 records; foreign versions are refused', async () => {
+test('P5b-13 dispatch.checkpoint@7 and dispatch.decision@8 records; foreign versions are refused', async () => {
   const ledger = spawnLedger();
   const h = harness({}, { request: roleRequest(), spawn: ledger.port });
   const d = await run(h);
   const cp = h.journal.load('d1').checkpoint!;
   assert.deepEqual(
     [cp.schema, d.schema, d.rule_table],
-    ['dispatch.checkpoint@6', 'dispatch.decision@7', 'decide1.rules@4'],
+    ['dispatch.checkpoint@7', 'dispatch.decision@8', 'decide1.rules@5'],
   );
   assert.deepEqual(Object.keys(cp), [
     'schema',

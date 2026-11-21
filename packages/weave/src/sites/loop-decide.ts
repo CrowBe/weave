@@ -112,6 +112,13 @@ function feedbackFor(observation: ExtractObservation): string {
     : 'The previous extraction could not be used. Return only the required JSON object, copying text verbatim from the state, or use null.';
 }
 
+/**
+ * The most gateway requests one D1 or D2 loop ask makes: two extract attempts and one site
+ * evaluation, each bounded by the ask's own `terms.cost_ceiling`. Share custody (P5c3) charges
+ * an ask this many ceilings, the worst case, because a site observation records no spend.
+ */
+export const LOOP_DECISION_REQUESTS = 3;
+
 function needsSecond(observation: ExtractObservation): boolean {
   return (
     observation.verdict === 're_extract' && observation.reason !== 'cancelled' && observation.reason !== 'stale_answer'

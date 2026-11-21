@@ -1,7 +1,7 @@
 /** Decide-1 is deterministic policy over bounded observations, never execution authority. */
 export const DECIDE1_BANDS = Object.freeze(['tool_call', 'spawn_subtasks', 'escalate_gen', 'ask_human'] as const);
 export type Band = (typeof DECIDE1_BANDS)[number];
-export const DECIDE1_RULE_TABLE = 'decide1.rules@4' as const;
+export const DECIDE1_RULE_TABLE = 'decide1.rules@5' as const;
 export interface Decide1Judgment {
   readonly name: string;
   readonly probability: number;
@@ -21,6 +21,7 @@ export interface Decide1Inputs {
 }
 export type Decide1RuleId =
   | 'hold.admission'
+  | 'hold.share_exhausted'
   | 'hold.outage'
   | 'hold.paused'
   | 'hold.dependency_pending'
@@ -118,6 +119,13 @@ export const DECIDE1_RULES: readonly Decide1Rule[] = Object.freeze(
         id: 'hold.admission',
         when: (f) =>
           STAGES.some((stage) => admission(f.get(`${stage}.reason`))) || f.get('child.boundary') === 'stale_answer',
+        band: 'withheld',
+      },
+      {
+        // P5c3: a joined generator's share gate, set only when its next D2 ask is uncovered. It
+        // precedes the outage and pause rows, which a resume could otherwise only re-ask past it.
+        id: 'hold.share_exhausted',
+        when: (f) => joined(f) && f.get('child.boundary') === 'share_exhausted',
         band: 'withheld',
       },
       {
@@ -292,8 +300,17 @@ function childSet(facts: Facts): boolean {
   if (ROOT_FACTS.some((name) => facts.get(name) != null) || facts.get('intake.accepted') === true) return false;
   if (!id(facts.get('child.parent')) || !id(facts.get('child.plan'))) return false;
   const boundary = facts.get('child.boundary');
-  if (boundary != null && boundary !== 'stale_answer' && boundary !== 'cancelled') return false;
+  if (boundary != null && boundary !== 'stale_answer' && boundary !== 'cancelled' && boundary !== 'share_exhausted')
+    return false;
   const dependencies = facts.get('child.dependencies');
+  // P5c3: the share gate only stops a re-ask of a paused D2 answer.
+  if (
+    boundary === 'share_exhausted' &&
+    (facts.get('child.kind') !== 'generate' ||
+      dependencies !== 'satisfied' ||
+      !['decision_unavailable', 'cancelled'].includes(facts.get('route.reason') as string))
+  )
+    return false;
   const route = facts.get('route.choice');
   const recorded = route != null || facts.get('route.status') != null;
   switch (facts.get('child.kind')) {

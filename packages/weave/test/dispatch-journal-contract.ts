@@ -38,7 +38,7 @@ const intent: DispatchIntent = {
 
 function checkpoint(decision_id: string): DispatchCheckpoint {
   return {
-    schema: 'dispatch.checkpoint@6',
+    schema: 'dispatch.checkpoint@7',
     decision_id,
     state_revision: 1,
     state_updated_at: 10,
@@ -61,7 +61,7 @@ function checkpoint(decision_id: string): DispatchCheckpoint {
 
 function decision(patch: Partial<DispatchDecision>): DispatchDecision {
   return {
-    schema: 'dispatch.decision@7',
+    schema: 'dispatch.decision@8',
     rule_table: DECIDE1_RULE_TABLE,
     decide1: { judgments: [], facts: [], rule: 'hold.outage', band: 'tool_call' },
     decision_id: DECISION,

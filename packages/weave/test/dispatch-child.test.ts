@@ -31,7 +31,8 @@ import {
 import * as dispatchModule from '../src/dispatch.js';
 import { DECIDE1_RULE_TABLE, DECIDE1_RULES, decideBand, type Decide1Fact } from '../src/decide1.js';
 import { childRef, sealFrame, type ChildBrief } from '../src/spawn.js';
-import { decideLoopRoute, type LoopDecisionAsk } from '../src/sites/loop-decide.js';
+import { decideLoopRoute, LOOP_DECISION_REQUESTS, type LoopDecisionAsk } from '../src/sites/loop-decide.js';
+import { shareBudget } from '../src/implement-step.js';
 import { SITE_POLICY } from '../src/sites/index.js';
 import { digest } from '../src/digest.js';
 import type { WeftPort, WeftRecordShape } from '../src/weft.js';
@@ -292,9 +293,14 @@ function rootRequest(terms: InferenceTerms = PARENT_TERMS, id = 'd1'): DispatchR
   };
 }
 
+/**
+ * P5c3: a child's ceiling bounds each of its gateway requests, and custody charges every D2 ask
+ * three of them, so the fixture leaves room for several asks inside the share (10 → 1 per request).
+ */
+const childCeiling = (share: number) => Math.floor(share / 10);
 function childTerms(brief: ChildBrief, patch: Record<string, unknown> = {}): InferenceTerms {
   const { prefix_digest: _d, prefix_cache: _c, ...rest } = structuredClone(PARENT_TERMS);
-  return { ...rest, cost_ceiling: brief.share, ...patch } as InferenceTerms;
+  return { ...rest, cost_ceiling: childCeiling(brief.share), ...patch } as InferenceTerms;
 }
 
 function childRequest(brief: ChildBrief, patch: Record<string, unknown> = {}): DispatchRequest {
@@ -1259,6 +1265,8 @@ test('P5c1-6 D2 tier table: accepted tiers, bounded fallback, holds and ask.rout
       tier,
       ceiling: tier,
       tier_source: source,
+      // P5c3: share 10, one D2 ask charged at its worst case of three ceiling-1 requests.
+      budget: 7,
       child: cp.child,
     });
     assert.deepEqual(d.intent, implement[0]);
@@ -1283,12 +1291,13 @@ test('P5c1-6 D2 tier table: accepted tiers, bounded fallback, holds and ask.rout
 // 7. Rules/root parity (R1, R2).
 // ---------------------------------------------------------------------------------------------
 
-test('P5c1-7 decide1.rules@4: 24 rows in order, 51 facts and bounded judgments', async () => {
-  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@4');
+test('P5c1-7 decide1.rules@5: 25 rows in order, 51 facts and bounded judgments', async () => {
+  assert.equal(DECIDE1_RULE_TABLE, 'decide1.rules@5');
   assert.deepEqual(
     DECIDE1_RULES.map((row) => [row.id, row.band]),
     [
       ['hold.admission', 'withheld'],
+      ['hold.share_exhausted', 'withheld'],
       ['hold.outage', 'withheld'],
       ['hold.paused', 'withheld'],
       ['hold.dependency_pending', 'withheld'],
@@ -1850,7 +1859,7 @@ test('P5c1-9 record versions, key order, Weft validity, append-only emission and
   ];
   assert.deepEqual(
     [root.schema, s.parent.schema, s.parent.rule_table],
-    ['dispatch.checkpoint@6', 'dispatch.decision@7', 'decide1.rules@4'],
+    ['dispatch.checkpoint@7', 'dispatch.decision@8', 'decide1.rules@5'],
   );
   assert.deepEqual(Object.keys(root), CHECKPOINT_KEYS);
   assert.deepEqual(Object.keys(s.parent), DECISION_KEYS);
@@ -1953,3 +1962,238 @@ function onStageWrite(
     },
   };
 }
+
+// WV-S1 P5c3: share custody. A child's D2 asks are charged at their worst case against its sealed
+// share; the remainder is sealed into the claimed implement intent; nothing refills a share.
+const { custodyOf } = dispatchModule;
+const routeAsks = (h: Harness, ref: string) =>
+  h.evaluateCalls.filter((c) => c.site === 'loop.route' && c.request_id.startsWith(ref)).length;
+
+test('P5c3-1 custody is derived from the share, admitted ceiling and ask count; the remainder is sealed', async () => {
+  const s = await parentSpawn();
+  const reads = await runReads(s);
+  assert.equal(custodyOf(s.journal.load('d1').checkpoint!), null);
+  for (const read of reads) {
+    const cp = s.journal.load(read.decision_id).checkpoint!;
+    assert.deepEqual(custodyOf(cp), { schema: 'dispatch.custody@1', share: 0, per_ask: 0, charged: 0, remainder: 0 });
+    assert.equal('budget' in read.intent!, false);
+  }
+  const h = harness({}, { journal: s.journal });
+  const gen = await run(h, childRequest(s.gen));
+  const cp = s.journal.load(s.gen.child_ref).checkpoint!;
+  const custody = custodyOf(cp)!;
+  assert.equal(LOOP_DECISION_REQUESTS, 3);
+  assert.deepEqual(custody, { schema: 'dispatch.custody@1', share: 10, per_ask: 3, charged: 3, remainder: 7 });
+  // Conservation from the carve down: charged plus sealed remainder is the share, and shares sum to the plan.
+  const intent = gen.intent as Extract<DispatchIntent, { readonly budget: number }>;
+  assert.equal(custody.charged + intent.budget, s.gen.share);
+  assert.equal(
+    s.plan.children.reduce((sum, child) => sum + child.share, 0),
+    s.plan.budget,
+  );
+  assert.deepEqual(h.dispatchCalls.at(-1), intent);
+  // A poll and a pure replay rebuild the identical sealed remainder with no port or journal read.
+  assert.deepEqual(await run(harness({}, { journal: s.journal }), childRequest(s.gen)), gen);
+  const replayed = transitionDispatch(
+    childRequest(s.gen),
+    cp,
+    gen.receipt,
+    gen.entry,
+    evidenceOf(s.journal, cp.child!),
+  );
+  assert.deepEqual(replayed, gen);
+});
+
+test('P5c3-1 a D2 ask makes at most LOOP_DECISION_REQUESTS gateway requests', async () => {
+  const s = await parentSpawn();
+  await runReads(s);
+  const h = harness({ child: { extract: 'garbage' } }, { journal: s.journal });
+  await run(h, childRequest(s.gen));
+  const own = (c: { readonly request_id: string }) => c.request_id.startsWith(s.gen.child_ref);
+  assert.equal(h.generateCalls.filter(own).length + h.evaluateCalls.filter(own).length, LOOP_DECISION_REQUESTS);
+});
+
+test('P5c3-2 generator terms whose first D2 ask the share cannot cover are refused before any write', async () => {
+  const s = await parentSpawn();
+  await runReads(s);
+  // 3 × 4 = 12 > 10: within the per-request bound (4 <= share) but not one whole ask.
+  const h = harness({}, { journal: s.journal });
+  await assert.rejects(
+    run(h, childRequest(s.gen, { terms: childTerms(s.gen, { cost_ceiling: 4 }) })),
+    /cannot cover a D2 ask/,
+  );
+  assert.equal(h.effects(), 0);
+  untouched(s.journal, s.gen.child_ref);
+  // Exactly covered: 3 × 3 = 9 = share. One ask leaves a sealed budget of 0, which shareBudget never spends.
+  const exact = await parentSpawn({ terms: { ...PARENT_TERMS, cost_ceiling: 9 } });
+  await runReads(exact);
+  const d = await run(
+    harness({}, { journal: exact.journal }),
+    childRequest(exact.gen, { terms: childTerms(exact.gen, { cost_ceiling: 3 }) }),
+  );
+  assert.deepEqual([d.status, (d.intent as { readonly budget: number }).budget], ['dispatched', 0]);
+  assert.deepEqual(shareBudget(0, 1)({ requested: 'flash', escalation: false, attempt: 1 }), {
+    status: 'pause',
+    reason: 'no_budget',
+    until: null,
+  });
+});
+
+test('P5c3-3 a resumed re-ask is charged again and the share is never refilled', async () => {
+  // Ceiling 3: one ask (9) fits the share of 10, a second (18) does not.
+  const tight = await parentSpawn();
+  await runReads(tight);
+  const request = childRequest(tight.gen, { terms: childTerms(tight.gen, { cost_ceiling: 3 }) });
+  const first = await run(harness({ child: { mode: 'outage' } }, { journal: tight.journal }), request);
+  assert.deepEqual([first.reason, first.decide1.rule], ['decision_unavailable', 'hold.outage']);
+  assert.deepEqual(custodyOf(tight.journal.load(tight.gen.child_ref).checkpoint!)?.remainder, 1);
+  const h = harness({}, { journal: tight.journal });
+  const resumed = await run(h, { ...request, resume: true });
+  assert.deepEqual(
+    [resumed.status, resumed.reason, resumed.decide1.rule, resumed.decided_by, resumed.entry],
+    ['paused', 'share_exhausted', 'hold.share_exhausted', 'route', 2],
+  );
+  assert.equal(routeAsks(h, tight.gen.child_ref), 0);
+  assert.equal(fact(resumed, 'child.boundary'), 'share_exhausted');
+  // Closed: neither a poll nor another resume asks, charges or appends again.
+  for (const patch of [{}, { resume: true }]) {
+    const again = harness({}, { journal: tight.journal });
+    assert.deepEqual(await run(again, { ...request, ...patch }), resumed);
+    assert.equal(again.effects(), 0);
+  }
+  assert.equal(tight.journal.load(tight.gen.child_ref).slot.phase, 'terminal');
+  const cp = tight.journal.load(tight.gen.child_ref).checkpoint!;
+  assert.deepEqual([cp.asks.route, custodyOf(cp)!.charged], [1, 9]);
+  assert.deepEqual(
+    transitionDispatch(request, cp, 'share_exhausted', 2, evidenceOf(tight.journal, cp.child!)),
+    resumed,
+  );
+
+  // Ceiling 1: the re-ask fits and is charged; the sealed remainder reflects both asks.
+  const loose = await parentSpawn();
+  await runReads(loose);
+  const again = childRequest(loose.gen);
+  await run(harness({ child: { mode: 'outage' } }, { journal: loose.journal }), again);
+  const ok = harness({}, { journal: loose.journal });
+  const d = await run(ok, { ...again, resume: true });
+  assert.equal(routeAsks(ok, loose.gen.child_ref), 1);
+  assert.deepEqual([d.status, (d.intent as { readonly budget: number }).budget], ['dispatched', 4]);
+});
+
+test('P5c3-4 concurrent first callers join one D2 ask and are charged once', async () => {
+  const s = await parentSpawn();
+  await runReads(s);
+  const gate = deferred();
+  const fake: Fake = { gate: { match: (id) => id.startsWith(`${s.gen.child_ref}:route`), promise: gate.promise } };
+  const a = harness(fake, { journal: s.journal });
+  const b = harness(fake, { journal: s.journal });
+  const first = run(a, childRequest(s.gen));
+  await waitUntil(() => s.journal.load(s.gen.child_ref).checkpoint?.asks.route === 1);
+  const second = run(b, childRequest(s.gen));
+  gate.release();
+  const decisions = await Promise.all([first, second]);
+  const cp = s.journal.load(s.gen.child_ref).checkpoint!;
+  assert.deepEqual([cp.asks.route, custodyOf(cp)!.charged], [1, 3]);
+  const budgets = decisions
+    .map((d) => d.intent)
+    .filter((i) => i !== null)
+    .map((i) => (i as { readonly budget: number }).budget);
+  assert.ok(budgets.length >= 1 && budgets.every((b) => b === 7));
+});
+
+test('P5c3-4 an abort mid-ask keeps its charge; the resume after that cancel is a new ask', async () => {
+  const s = await parentSpawn();
+  await runReads(s);
+  const gate = deferred();
+  const controller = new AbortController();
+  const fake: Fake = { gate: { match: (id) => id.startsWith(`${s.gen.child_ref}:route`), promise: gate.promise } };
+  const pending = run(harness(fake, { journal: s.journal }), childRequest(s.gen), controller.signal);
+  await waitUntil(
+    () =>
+      s.journal.load(s.gen.child_ref).slot.phase === 'open' &&
+      s.journal.load(s.gen.child_ref).checkpoint?.asks.route === 1,
+  );
+  controller.abort();
+  gate.release();
+  const cancelled = await pending;
+  assert.deepEqual([cancelled.status, cancelled.reason], ['paused', 'cancelled']);
+  const held = s.journal.load(s.gen.child_ref);
+  // The cancelled ask stays charged, and the slot no longer offers it to a joiner.
+  assert.deepEqual([custodyOf(held.checkpoint!)!.charged, held.slot], [3, { phase: 'open', ask: null }]);
+  const again = harness({}, { journal: s.journal });
+  const d = await run(again, { ...childRequest(s.gen), resume: true });
+  const cp = s.journal.load(s.gen.child_ref).checkpoint!;
+  // Share 10, ceiling 1: two asks at 3 each leave a sealed remainder of 4. The new call is ask 2.
+  assert.deepEqual(
+    [d.status, cp.asks.route, custodyOf(cp)!.charged, (d.intent as { readonly budget: number }).budget],
+    ['dispatched', 2, 6, 4],
+  );
+  assert.ok(again.evaluateCalls.some((call) => call.request_id === `${s.gen.child_ref}:route:e2`));
+});
+
+test('P5c3-5 a tampered remainder, share gate or ask count throws with no effect', async () => {
+  const s = await parentSpawn();
+  await runReads(s);
+  // A claimed intent whose sealed remainder differs from custody is never presented.
+  let held = false;
+  const claimOnly = harness(
+    {},
+    {
+      journal: s.journal,
+      dispatch: () => new Promise(() => void (held = true)),
+    },
+  );
+  void run(claimOnly, childRequest(s.gen));
+  await waitUntil(() => held);
+  const raised = forged(s.journal, s.gen.child_ref, (l) => {
+    l.checkpoint.intent.budget = 10;
+    l.slot.intent.budget = 10;
+    return l;
+  });
+  const h = harness({}, { journal: raised });
+  await assert.rejects(run(h, { ...childRequest(s.gen), resume: true }), /recorded intent does not match/);
+  assert.equal(h.effects(), 0);
+  // A journaled gate stands only where the next ask really is uncovered.
+  const t = await parentSpawn();
+  await runReads(t);
+  await run(harness({}, { journal: t.journal }), childRequest(t.gen));
+  const cp = t.journal.load(t.gen.child_ref).checkpoint!;
+  const open = { ...cp, intent: null };
+  assert.throws(
+    () => transitionDispatch(childRequest(t.gen), open, 'share_exhausted', 1, evidenceOf(t.journal, cp.child!)),
+    /share gate|no rule matched/,
+  );
+  // Nor over a D2 answer that was not due a re-ask, even when the remainder is short.
+  const stale = structuredClone(open);
+  (stale.route!.site.observation as { reason: string }).reason = 'stale_answer';
+  assert.throws(() =>
+    transitionDispatch(
+      childRequest(t.gen),
+      { ...stale, asks: { ...stale.asks, route: 3 } },
+      'share_exhausted',
+      1,
+      evidenceOf(t.journal, cp.child!),
+    ),
+  );
+  // Charges past the share are a defect, not a remainder below zero.
+  assert.throws(() => custodyOf({ ...cp, asks: { ...cp.asks, route: 4 } }), /exceed the sealed share/);
+});
+
+test('P5c3-6 shareBudget allows attempts at the requested tier while they fit, then pauses for good', () => {
+  const budget = shareBudget(7, 3);
+  assert.deepEqual(budget({ requested: 'strong', escalation: false, attempt: 1 }), { status: 'allow', tier: 'strong' });
+  assert.deepEqual(budget({ requested: 'flash', escalation: true, attempt: 2 }), { status: 'allow', tier: 'flash' });
+  for (const attempt of [3, 4, 0, -1, 1.5])
+    assert.deepEqual(budget({ requested: 'flash', escalation: false, attempt }), {
+      status: 'pause',
+      reason: 'no_budget',
+      until: null,
+    });
+  for (const [remainder, per] of [
+    [-1, 1],
+    [1, 0],
+    [1.5, 1],
+    [1, Number.NaN],
+  ])
+    assert.throws(() => shareBudget(remainder!, per!), /shareBudget needs/);
+});

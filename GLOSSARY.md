@@ -276,6 +276,19 @@ share. The `dispatch.child@1` witness binds the lineage, terms digest and frozen
 evidence, identically in the checkpoint and the intent. It grants no authority beyond
 the intent it accompanies.
 
+### Share custody
+
+What a child holds of the share its root's spawn plan carved for it (P5c3), as the
+pure `dispatch.custody@1` record derived from its checkpoint. Each D2 ask it takes
+is charged at its worst case (three gateway requests at the child's per-request
+ceiling). A join of an ask still in flight is not charged again. A resume after a
+journaled cancel is charged as a new ask, and nothing is refunded or refilled.
+A child whose terms cannot cover its first ask is refused; a re-ask the remainder
+cannot cover is never taken, and the child stops terminally as `share_exhausted`.
+A generator's implement intent seals the remainder as `budget`, which the implement
+step spends through the `shareBudget` budget port. Custody is accounting, not
+authority: it grants nothing.
+
 ### Read join
 
 A generate child's dependency gate over its sealed read edges. An edge is satisfied by
@@ -759,7 +772,7 @@ One closed, versioned entry in a Weft trace: an envelope, a kind, links to other
 
 The deterministic rule table over isolated judgments and code-computed facts
 whose output is the coarse band: `tool_call`, `spawn_subtasks`, `escalate_gen`
-or `ask_human`. `decide1.rules@4` is the ordered, versioned table used by
+or `ask_human`. `decide1.rules@5` is the ordered, versioned table used by
 dispatch authority; its output grants no execution authority of its own.
 
 ### Decide-2
@@ -775,7 +788,7 @@ the pick nor the args extract grants authority.
 
 ### Decide-1 trace
 
-What a `dispatch.decided` Weft record carries about how a dispatch decision was reached (D-ENG-045): each isolated judgment's name and probability, each code-computed fact's name and scalar value, the rule-table row that decided, and the coarse band it returned (`tool_call`, `spawn_subtasks`, `escalate_gen` or `ask_human`). The trace also lists shadow inputs no row of the current table version reads (D-ENG-047). A decision no site answered carries empty judgments. A fact value is never text. Like every Weft record, the trace reports a decision and grants no authority to dispatch. The `dispatch.decision@7` journal record carries the same trace and its rule-table version (`decide1.rules@4`); a paused decision’s band is the band of the choice it withheld.
+What a `dispatch.decided` Weft record carries about how a dispatch decision was reached (D-ENG-045): each isolated judgment's name and probability, each code-computed fact's name and scalar value, the rule-table row that decided, and the coarse band it returned (`tool_call`, `spawn_subtasks`, `escalate_gen` or `ask_human`). The trace also lists shadow inputs no row of the current table version reads (D-ENG-047). A decision no site answered carries empty judgments. A fact value is never text. Like every Weft record, the trace reports a decision and grants no authority to dispatch. The `dispatch.decision@8` journal record carries the same trace and its rule-table version (`decide1.rules@5`); a paused decision’s band is the band of the choice it withheld.
 
 Preflight target roles, role admission, split gain, the spawn plan's digest and whether a spawn port is present are read inputs; the shadow partition holds only the P4b judgments and their facts. None of these inputs carries dispatch authority. The entry kind (`root` or `child`) and, for a child, its sealed kind, parent, plan digest, join state, measured read bytes, share and gate boundary are read facts too; a child boundary is a code fact over the child's own stages, never a projected stage. Decide-2's tool stage status and reason, catalogue size, top and picked refs, margin, the top's reversibility and plausibility, and the count of missing required args are read facts, and each entry's relevance probability and confidence is a judgment.
 
